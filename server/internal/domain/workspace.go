@@ -3,17 +3,35 @@ package domain
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
+
+	"github.com/asaskevich/govalidator"
 )
 
 type Workspace struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	WebsiteURL string    `json:"website_url"`
-	LogoURL    string    `json:"logo_url"`
-	Timezone   string    `json:"timezone"`
+	ID         string    `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name       string    `json:"name" valid:"required,stringlength(1|255)"`
+	WebsiteURL string    `json:"website_url" valid:"url,optional"`
+	LogoURL    string    `json:"logo_url" valid:"url,optional"`
+	Timezone   string    `json:"timezone" valid:"required,timezone"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// Validate performs validation on the workspace fields
+func (w *Workspace) Validate() error {
+	// Register custom validators
+	govalidator.TagMap["timezone"] = govalidator.Validator(func(str string) bool {
+		return IsValidTimezone(str)
+	})
+
+	_, err := govalidator.ValidateStruct(w)
+	if err != nil {
+		return fmt.Errorf("invalid workspace: %w", err)
+	}
+
+	return nil
 }
 
 type WorkspaceRepository interface {

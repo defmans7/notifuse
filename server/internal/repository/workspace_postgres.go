@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	"notifuse/server/config"
 	"notifuse/server/internal/database"
 	"notifuse/server/internal/domain"
@@ -31,19 +29,45 @@ func NewWorkspaceRepository(systemDB *sql.DB, dbConfig *config.DatabaseConfig) d
 	}
 }
 
+// checkWorkspaceIDExists checks if a workspace with the given ID already exists
+func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id string) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`
+	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check workspace ID existence: %w", err)
+	}
+	return exists, nil
+}
+
 func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error {
 	if workspace.ID == "" {
-		workspace.ID = uuid.New().String()
+		return fmt.Errorf("workspace ID is required")
 	}
+
+	// Check if workspace ID already exists
+	exists, err := r.checkWorkspaceIDExists(ctx, workspace.ID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("workspace with ID %s already exists", workspace.ID)
+	}
+
 	now := time.Now()
 	workspace.CreatedAt = now
 	workspace.UpdatedAt = now
+
+	// Validate workspace before creating
+	if err := workspace.Validate(); err != nil {
+		return err
+	}
 
 	query := `
 		INSERT INTO workspaces (id, name, website_url, logo_url, timezone, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
-	_, err := r.systemDB.ExecContext(ctx, query,
+	_, err = r.systemDB.ExecContext(ctx, query,
 		workspace.ID,
 		workspace.Name,
 		workspace.WebsiteURL,
@@ -119,6 +143,12 @@ func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, er
 
 func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
 	workspace.UpdatedAt = time.Now()
+
+	// Validate workspace before updating
+	if err := workspace.Validate(); err != nil {
+		return err
+	}
+
 	query := `
 		UPDATE workspaces
 		SET name = $1, website_url = $2, logo_url = $3, timezone = $4, updated_at = $5

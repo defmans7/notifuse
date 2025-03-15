@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/go-chi/chi/v5"
@@ -62,29 +63,50 @@ type mockAuthService struct {
 	mock.Mock
 }
 
-func (m *mockAuthService) ValidateSession(ctx context.Context, sessionID string) (string, error) {
-	args := m.Called(ctx, sessionID)
-	return args.String(0), args.Error(1)
+func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*service.User, error) {
+	args := m.Called(ctx, userID, sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.User), args.Error(1)
 }
 
 // Test setup helper
-func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *mockAuthService, *chi.Mux) {
+func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *mockAuthService, *chi.Mux, paseto.V4AsymmetricSecretKey) {
 	workspaceSvc := &mockWorkspaceService{}
 	authSvc := &mockAuthService{}
 	handler := NewWorkspaceHandler(workspaceSvc, authSvc)
 
 	router := chi.NewRouter()
-	// Create a dummy public key for testing
-	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
-	require.NoError(t, err)
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
 
 	handler.RegisterRoutes(router, publicKey)
 
-	return handler, workspaceSvc, authSvc, router
+	return handler, workspaceSvc, authSvc, router, secretKey
+}
+
+func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userID string) string {
+	token := paseto.NewToken()
+	token.SetAudience("test")
+	token.SetIssuer("test")
+	token.SetNotBefore(time.Now())
+	token.SetIssuedAt(time.Now())
+	token.SetExpiration(time.Now().Add(24 * time.Hour))
+	token.SetString("user_id", userID)
+	token.SetString("session_id", "test-session")
+
+	signed := token.V4Sign(secretKey, nil)
+	return signed
 }
 
 func TestWorkspaceHandler_Create(t *testing.T) {
-	_, workspaceSvc, _, router := setupTest(t)
+	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+
+	// Setup auth mock expectation
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
+		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
 
 	tests := []struct {
 		name           string
@@ -129,6 +151,7 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 			require.NoError(t, err)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", bytes.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
 			req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 			// Execute request
@@ -153,7 +176,11 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get(t *testing.T) {
-	_, workspaceSvc, _, router := setupTest(t)
+	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+
+	// Setup auth mock expectation
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
+		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
 
 	workspace := &service.Workspace{
 		ID:         "test-id",
@@ -167,6 +194,7 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 		Return(workspace, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=test-id", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
@@ -185,7 +213,11 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 }
 
 func TestWorkspaceHandler_List(t *testing.T) {
-	_, workspaceSvc, _, router := setupTest(t)
+	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+
+	// Setup auth mock expectation
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
+		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
 
 	workspaces := []service.Workspace{
 		{
@@ -208,6 +240,7 @@ func TestWorkspaceHandler_List(t *testing.T) {
 		Return(workspaces, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.list", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
@@ -224,7 +257,11 @@ func TestWorkspaceHandler_List(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update(t *testing.T) {
-	_, workspaceSvc, _, router := setupTest(t)
+	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+
+	// Setup auth mock expectation
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
+		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
 
 	request := updateWorkspaceRequest{
 		ID:         "test-id",
@@ -256,6 +293,7 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
@@ -274,7 +312,11 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete(t *testing.T) {
-	_, workspaceSvc, _, router := setupTest(t)
+	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+
+	// Setup auth mock expectation
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
+		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
 
 	workspaceSvc.On("DeleteWorkspace", mock.Anything, "test-id", "test-user-id").
 		Return(nil)
@@ -284,6 +326,7 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.delete", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
