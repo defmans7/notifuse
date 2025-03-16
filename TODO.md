@@ -1,0 +1,1 @@
+- store magic codes in db

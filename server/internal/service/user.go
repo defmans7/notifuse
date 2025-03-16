@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"time"
 
@@ -19,7 +20,7 @@ type UserService struct {
 }
 
 type EmailSender interface {
-	SendMagicLink(email, token string) error
+	SendMagicCode(email, code string) error
 }
 
 type UserServiceConfig struct {
@@ -59,8 +60,9 @@ type SignUpInput struct {
 	Name  string `json:"name"`
 }
 
-type VerifyTokenInput struct {
-	Token string `json:"token"`
+type VerifyCodeInput struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
 }
 
 type AuthResponse struct {
@@ -72,7 +74,7 @@ type AuthResponse struct {
 type UserServiceInterface interface {
 	SignIn(ctx context.Context, input SignInInput) error
 	SignUp(ctx context.Context, input SignUpInput) error
-	VerifyToken(ctx context.Context, input VerifyTokenInput) (*AuthResponse, error)
+	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
 }
 
 // Ensure UserService implements UserServiceInterface
@@ -85,12 +87,24 @@ func (s *UserService) SignIn(ctx context.Context, input SignInInput) error {
 		return fmt.Errorf("error getting user: %w", err)
 	}
 
-	// Generate magic link token
-	token := s.generateMagicLinkToken(user.Email)
+	// Generate 6-digit magic code
+	code := s.generateMagicCode()
 
-	// Send magic link email
-	if err := s.emailSender.SendMagicLink(user.Email, token); err != nil {
-		return fmt.Errorf("error sending magic link: %w", err)
+	// Create a temporary session with the magic code
+	session := &domain.Session{
+		UserID:           user.ID,
+		MagicCode:        code,
+		MagicCodeExpires: time.Now().Add(15 * time.Minute),
+		ExpiresAt:        time.Now().Add(s.sessionExpiry),
+	}
+
+	if err := s.repo.CreateSession(ctx, session); err != nil {
+		return fmt.Errorf("error creating session: %w", err)
+	}
+
+	// Send magic code email
+	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
+		return fmt.Errorf("error sending magic code: %w", err)
 	}
 
 	return nil
@@ -108,84 +122,99 @@ func (s *UserService) SignUp(ctx context.Context, input SignUpInput) error {
 		return fmt.Errorf("error checking user existence: %w", err)
 	}
 
-	// Generate verification token
-	token := s.generateVerificationToken(input.Email, input.Name)
+	// Generate 6-digit magic code
+	code := s.generateMagicCode()
 
-	// Send verification email
-	if err := s.emailSender.SendMagicLink(input.Email, token); err != nil {
-		return fmt.Errorf("error sending verification email: %w", err)
+	// Create new user
+	user := &domain.User{
+		Email: input.Email,
+		Name:  input.Name,
+	}
+	if err := s.repo.CreateUser(ctx, user); err != nil {
+		return fmt.Errorf("error creating user: %w", err)
+	}
+
+	// Create a temporary session with the magic code
+	session := &domain.Session{
+		UserID:           user.ID,
+		MagicCode:        code,
+		MagicCodeExpires: time.Now().Add(15 * time.Minute),
+		ExpiresAt:        time.Now().Add(s.sessionExpiry),
+	}
+
+	if err := s.repo.CreateSession(ctx, session); err != nil {
+		return fmt.Errorf("error creating session: %w", err)
+	}
+
+	// Send verification code email
+	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
+		return fmt.Errorf("error sending verification code: %w", err)
 	}
 
 	return nil
 }
 
-func (s *UserService) VerifyToken(ctx context.Context, input VerifyTokenInput) (*AuthResponse, error) {
-	parser := paseto.NewParser()
-
-	token, err := parser.ParseV4Public(s.publicKey, input.Token, nil)
-	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
-	}
-
-	email, err := token.GetString("email")
-	if err != nil {
-		return nil, fmt.Errorf("invalid token claims: %w", err)
-	}
-
-	// Check if this is a signup verification
-	name, err := token.GetString("name")
-	if err == nil {
-		// Create new user
-		user := &domain.User{
-			Email: email,
-			Name:  name,
-		}
-		if err := s.repo.CreateUser(ctx, user); err != nil {
-			return nil, fmt.Errorf("error creating user: %w", err)
-		}
-	}
-
-	// Get or create user
-	user, err := s.repo.GetUserByEmail(ctx, email)
+func (s *UserService) VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error) {
+	// Get user by email
+	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
 		return nil, fmt.Errorf("error getting user: %w", err)
 	}
 
-	// Create session
-	expiresAt := time.Now().Add(s.sessionExpiry)
-	session := &domain.Session{
-		UserID:    user.ID,
-		ExpiresAt: expiresAt,
+	// Find session with matching code
+	sessions, err := s.repo.GetSessionsByUserID(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting sessions: %w", err)
 	}
-	if err := s.repo.CreateSession(ctx, session); err != nil {
-		return nil, fmt.Errorf("error creating session: %w", err)
+
+	var validSession *domain.Session
+	for _, session := range sessions {
+		if session.MagicCode == input.Code && time.Now().Before(session.MagicCodeExpires) {
+			validSession = session
+			break
+		}
+	}
+
+	if validSession == nil {
+		return nil, fmt.Errorf("invalid or expired code")
+	}
+
+	// Clear the magic code after successful verification
+	validSession.MagicCode = ""
+	validSession.MagicCodeExpires = time.Time{}
+
+	if err := s.repo.UpdateSession(ctx, validSession); err != nil {
+		return nil, fmt.Errorf("error updating session: %w", err)
 	}
 
 	// Generate auth token
-	signedToken := s.generateAuthToken(user, session.ID, expiresAt)
+	signedToken := s.generateAuthToken(user, validSession.ID, validSession.ExpiresAt)
 
 	return &AuthResponse{
 		Token:     signedToken,
 		User:      *user,
-		ExpiresAt: expiresAt,
+		ExpiresAt: validSession.ExpiresAt,
 	}, nil
 }
 
-func (s *UserService) generateMagicLinkToken(email string) string {
-	token := paseto.NewToken()
-	token.SetExpiration(time.Now().Add(15 * time.Minute))
-	token.SetString("email", email)
+func (s *UserService) generateMagicCode() string {
+	const digits = "0123456789"
+	code := make([]byte, 6)
+	_, err := rand.Read(code)
+	if err != nil {
+		// If we can't generate random numbers, use timestamp as fallback
+		now := time.Now().UnixNano()
+		for i := range code {
+			code[i] = digits[now%10]
+			now /= 10
+		}
+		return string(code)
+	}
 
-	return token.V4Sign(s.privateKey, []byte{})
-}
-
-func (s *UserService) generateVerificationToken(email, name string) string {
-	token := paseto.NewToken()
-	token.SetExpiration(time.Now().Add(15 * time.Minute))
-	token.SetString("email", email)
-	token.SetString("name", name)
-
-	return token.V4Sign(s.privateKey, []byte{})
+	for i := range code {
+		code[i] = digits[int(code[i])%len(digits)]
+	}
+	return string(code)
 }
 
 func (s *UserService) generateAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string {

@@ -14,10 +14,12 @@ type User struct {
 }
 
 type Session struct {
-	ID        string    `json:"id" db:"id"`
-	UserID    string    `json:"user_id" db:"user_id"`
-	ExpiresAt time.Time `json:"expires_at" db:"expires_at"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	ID               string    `json:"id" db:"id"`
+	UserID           string    `json:"user_id" db:"user_id"`
+	ExpiresAt        time.Time `json:"expires_at" db:"expires_at"`
+	CreatedAt        time.Time `json:"created_at" db:"created_at"`
+	MagicCode        string    `json:"magic_code,omitempty" db:"magic_code"`
+	MagicCodeExpires time.Time `json:"magic_code_expires,omitempty" db:"magic_code_expires_at"`
 }
 
 type UserRepository interface {
@@ -35,6 +37,12 @@ type UserRepository interface {
 
 	// GetSessionByID retrieves a session by its ID
 	GetSessionByID(ctx context.Context, id string) (*Session, error)
+
+	// GetSessionsByUserID retrieves all sessions for a user
+	GetSessionsByUserID(ctx context.Context, userID string) ([]*Session, error)
+
+	// UpdateSession updates an existing session
+	UpdateSession(ctx context.Context, session *Session) error
 
 	// DeleteSession deletes a session by its ID
 	DeleteSession(ctx context.Context, id string) error

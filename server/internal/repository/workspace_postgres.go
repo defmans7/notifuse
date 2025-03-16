@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id str
 	query := `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`
 	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(&exists)
 	if err != nil {
+		log.Printf("failed to check workspace ID existence: %v", err)
 		return false, fmt.Errorf("failed to check workspace ID existence: %w", err)
 	}
 	return exists, nil
@@ -43,6 +45,11 @@ func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id str
 func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error {
 	if workspace.ID == "" {
 		return fmt.Errorf("workspace ID is required")
+	}
+
+	// Validate workspace before creating
+	if err := workspace.Validate(); err != nil {
+		return err
 	}
 
 	// Check if workspace ID already exists
@@ -57,11 +64,6 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 	now := time.Now()
 	workspace.CreatedAt = now
 	workspace.UpdatedAt = now
-
-	// Validate workspace before creating
-	if err := workspace.Validate(); err != nil {
-		return err
-	}
 
 	query := `
 		INSERT INTO workspaces (id, name, website_url, logo_url, timezone, created_at, updated_at)
@@ -238,20 +240,12 @@ func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID st
 	}
 	defer db.Close()
 
-	// Create workspace schema (implement your schema creation here)
-	// For example:
+	// Create workspace schema
 	_, err = db.ExecContext(ctx, `
 		CREATE TABLE contacts (
 			id UUID PRIMARY KEY,
 			email VARCHAR(255) UNIQUE NOT NULL,
 			name VARCHAR(255),
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
-		);
-
-		CREATE TABLE subscription_lists (
-			id UUID PRIMARY KEY,
-			name VARCHAR(255) NOT NULL,
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL
 		);
@@ -265,15 +259,13 @@ func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID st
 
 func (r *workspaceRepository) DeleteDatabase(ctx context.Context, workspaceID string) error {
 	// Remove the connection from the pool if it exists
-	if conn, ok := r.connections.Load(workspaceID); ok {
-		db := conn.(*sql.DB)
-		db.Close()
-		r.connections.Delete(workspaceID)
-	}
+	r.connections.Delete(workspaceID)
 
-	// Drop the database
+	// Replace hyphens with underscores for PostgreSQL compatibility
 	safeID := strings.ReplaceAll(workspaceID, "-", "_")
 	dbName := fmt.Sprintf("%s_ws_%s", r.dbConfig.Prefix, safeID)
+
+	// Drop the database
 	_, err := r.systemDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
 	if err != nil {
 		return fmt.Errorf("failed to delete workspace database: %w", err)

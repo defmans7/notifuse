@@ -18,9 +18,9 @@ import (
 
 type emailSender struct{}
 
-func (s *emailSender) SendMagicLink(email, token string) error {
+func (s *emailSender) SendMagicCode(email, code string) error {
 	// TODO: Implement email sending using SMTP
-	log.Printf("Sending magic link to %s with token %s", email, token)
+	log.Printf("Sending magic code to %s: %s", email, code)
 	return nil
 }
 
@@ -41,6 +41,11 @@ func main() {
 	// Test database connection
 	if err := systemDB.Ping(); err != nil {
 		log.Fatalf("Failed to ping system database: %v", err)
+	}
+
+	// Initialize database schema if needed
+	if err := database.InitializeDatabase(systemDB); err != nil {
+		log.Fatalf("Failed to initialize database schema: %v", err)
 	}
 
 	// Set connection pool settings

@@ -2,9 +2,10 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"testing"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -12,7 +13,51 @@ import (
 	"notifuse/server/internal/domain"
 )
 
-func TestWorkspaceRepository_Create(t *testing.T) {
+func generateWorkspaceID() string {
+	return "testworkspace1"
+}
+
+func cleanupTestWorkspace(t *testing.T, repo domain.WorkspaceRepository, id string) {
+	ctx := context.Background()
+
+	// Try to get the connection first
+	conn, err := repo.GetConnection(ctx, id)
+	if err == nil && conn != nil {
+		// Close the connection if it exists
+		conn.Close()
+		// Give it a moment to fully close
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Now try to delete the database
+	if err := repo.DeleteDatabase(ctx, id); err != nil {
+		// Only log if it's not because the database doesn't exist
+		if !isNotExistsError(err) {
+			t.Logf("Warning: Failed to cleanup test workspace database: %v", err)
+		}
+	}
+
+	// Finally try to delete the workspace record
+	if err := repo.Delete(ctx, id); err != nil {
+		// Only log if it's not because the workspace doesn't exist
+		if !isNotFoundError(err) {
+			t.Logf("Warning: Failed to cleanup test workspace record: %v", err)
+		}
+	}
+}
+
+// isNotExistsError checks if the error is because the database doesn't exist
+func isNotExistsError(err error) bool {
+	return err != nil && (err.Error() == "database does not exist" ||
+		err.Error() == "workspace not found")
+}
+
+// isNotFoundError checks if the error is because the workspace doesn't exist
+func isNotFoundError(err error) bool {
+	return err != nil && err.Error() == "workspace not found"
+}
+
+func setupWorkspaceTest(t *testing.T) (*sql.DB, domain.WorkspaceRepository, *config.Config) {
 	// Load test configuration
 	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
 	require.NoError(t, err)
@@ -20,17 +65,28 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewWorkspaceRepository(db, &cfg.Database)
 
+	// Clean up any existing test workspace before starting
+	cleanupTestWorkspace(t, repo, generateWorkspaceID())
+
+	return db, repo, cfg
+}
+
+func TestWorkspaceRepository_Create(t *testing.T) {
+	db, repo, _ := setupWorkspaceTest(t)
+
 	workspace := &domain.Workspace{
-		Name: "Test Workspace",
+		ID:       generateWorkspaceID(),
+		Name:     "Test Workspace",
+		Timezone: "UTC",
 	}
 
-	err = repo.Create(context.Background(), workspace)
-	require.NoError(t, err)
-
 	t.Cleanup(func() {
-		repo.DeleteDatabase(context.Background(), workspace.ID)
+		cleanupTestWorkspace(t, repo, workspace.ID)
 		db.Close()
 	})
+
+	err := repo.Create(context.Background(), workspace)
+	require.NoError(t, err)
 
 	assert.NotEmpty(t, workspace.ID)
 	assert.NotZero(t, workspace.CreatedAt)
@@ -44,26 +100,24 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 }
 
 func TestWorkspaceRepository_GetByID(t *testing.T) {
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
-	db := setupTestDB(t)
-	repo := NewWorkspaceRepository(db, &cfg.Database)
+	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		Name: "Test Workspace",
+		ID:       generateWorkspaceID(),
+		Name:     "Test Workspace",
+		Timezone: "UTC",
 	}
-	err = repo.Create(context.Background(), workspace)
-	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		repo.DeleteDatabase(context.Background(), workspace.ID)
+		cleanupTestWorkspace(t, repo, workspace.ID)
 		db.Close()
 	})
 
+	err := repo.Create(context.Background(), workspace)
+	require.NoError(t, err)
+
 	// Test not found
-	_, err = repo.GetByID(context.Background(), uuid.New().String())
+	_, err = repo.GetByID(context.Background(), "nonexistent1")
 	assert.Error(t, err)
 
 	// Test found
@@ -74,27 +128,30 @@ func TestWorkspaceRepository_GetByID(t *testing.T) {
 }
 
 func TestWorkspaceRepository_List(t *testing.T) {
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
-	db := setupTestDB(t)
-	repo := NewWorkspaceRepository(db, &cfg.Database)
+	db, repo, _ := setupWorkspaceTest(t)
 
 	// Create some workspaces
-	workspace1 := &domain.Workspace{Name: "Workspace 1"}
-	workspace2 := &domain.Workspace{Name: "Workspace 2"}
+	workspace1 := &domain.Workspace{
+		ID:       "testworkspace1",
+		Name:     "Workspace 1",
+		Timezone: "UTC",
+	}
+	workspace2 := &domain.Workspace{
+		ID:       "testworkspace2",
+		Name:     "Workspace 2",
+		Timezone: "UTC",
+	}
 
-	err = repo.Create(context.Background(), workspace1)
+	t.Cleanup(func() {
+		cleanupTestWorkspace(t, repo, workspace1.ID)
+		cleanupTestWorkspace(t, repo, workspace2.ID)
+		db.Close()
+	})
+
+	err := repo.Create(context.Background(), workspace1)
 	require.NoError(t, err)
 	err = repo.Create(context.Background(), workspace2)
 	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		repo.DeleteDatabase(context.Background(), workspace1.ID)
-		repo.DeleteDatabase(context.Background(), workspace2.ID)
-		db.Close()
-	})
 
 	// List workspaces
 	workspaces, err := repo.List(context.Background())
@@ -105,23 +162,21 @@ func TestWorkspaceRepository_List(t *testing.T) {
 }
 
 func TestWorkspaceRepository_Update(t *testing.T) {
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
-	db := setupTestDB(t)
-	repo := NewWorkspaceRepository(db, &cfg.Database)
+	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		Name: "Test Workspace",
+		ID:       generateWorkspaceID(),
+		Name:     "Test Workspace",
+		Timezone: "UTC",
 	}
-	err = repo.Create(context.Background(), workspace)
-	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		repo.DeleteDatabase(context.Background(), workspace.ID)
+		cleanupTestWorkspace(t, repo, workspace.ID)
 		db.Close()
 	})
+
+	err := repo.Create(context.Background(), workspace)
+	require.NoError(t, err)
 
 	// Update workspace
 	workspace.Name = "Updated Workspace"
@@ -136,26 +191,24 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 }
 
 func TestWorkspaceRepository_Delete(t *testing.T) {
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
-	db := setupTestDB(t)
-	repo := NewWorkspaceRepository(db, &cfg.Database)
+	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		Name: "Test Workspace",
+		ID:       generateWorkspaceID(),
+		Name:     "Test Workspace",
+		Timezone: "UTC",
 	}
-	err = repo.Create(context.Background(), workspace)
-	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		repo.DeleteDatabase(context.Background(), workspace.ID)
+		cleanupTestWorkspace(t, repo, workspace.ID)
 		db.Close()
 	})
 
+	err := repo.Create(context.Background(), workspace)
+	require.NoError(t, err)
+
 	// Test delete non-existent workspace
-	err = repo.Delete(context.Background(), uuid.New().String())
+	err = repo.Delete(context.Background(), "nonexistent1")
 	assert.Error(t, err)
 
 	// Delete workspace
@@ -168,23 +221,21 @@ func TestWorkspaceRepository_Delete(t *testing.T) {
 }
 
 func TestWorkspaceRepository_GetConnection(t *testing.T) {
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
-	db := setupTestDB(t)
-	repo := NewWorkspaceRepository(db, &cfg.Database)
+	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		Name: "Test Workspace",
+		ID:       generateWorkspaceID(),
+		Name:     "Test Workspace",
+		Timezone: "UTC",
 	}
-	err = repo.Create(context.Background(), workspace)
-	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		repo.DeleteDatabase(context.Background(), workspace.ID)
+		cleanupTestWorkspace(t, repo, workspace.ID)
 		db.Close()
 	})
+
+	err := repo.Create(context.Background(), workspace)
+	require.NoError(t, err)
 
 	// Get connection
 	conn, err := repo.GetConnection(context.Background(), workspace.ID)

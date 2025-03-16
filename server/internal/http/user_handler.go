@@ -31,7 +31,7 @@ func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Magic link sent to your email",
+		"message": "Magic code sent to your email",
 	})
 }
 
@@ -49,18 +49,18 @@ func (h *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Verification link sent to your email",
+		"message": "Verification code sent to your email",
 	})
 }
 
-func (h *UserHandler) VerifyToken(w http.ResponseWriter, r *http.Request) {
-	var input service.VerifyTokenInput
+func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
+	var input service.VerifyCodeInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	response, err := h.userService.VerifyToken(r.Context(), input)
+	response, err := h.userService.VerifyCode(r.Context(), input)
 	if err != nil {
 		WriteJSONError(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -73,5 +73,5 @@ func (h *UserHandler) VerifyToken(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/user.signin", h.SignIn)
 	mux.HandleFunc("/api/user.signup", h.SignUp)
-	mux.HandleFunc("/api/user.verify", h.VerifyToken)
+	mux.HandleFunc("/api/user.verify", h.VerifyCode)
 }

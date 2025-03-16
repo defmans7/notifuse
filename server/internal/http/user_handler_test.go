@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,7 @@ func (m *mockUserService) SignUp(ctx context.Context, input service.SignUpInput)
 	return args.Error(0)
 }
 
-func (m *mockUserService) VerifyToken(ctx context.Context, input service.VerifyTokenInput) (*service.AuthResponse, error) {
+func (m *mockUserService) VerifyCode(ctx context.Context, input service.VerifyCodeInput) (*service.AuthResponse, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -63,7 +64,7 @@ func TestUserHandler_SignIn(t *testing.T) {
 			},
 			expectedCode: http.StatusOK,
 			expectedBody: map[string]string{
-				"message": "Magic link sent to your email",
+				"message": "Magic code sent to your email",
 			},
 		},
 		{
@@ -90,7 +91,7 @@ func TestUserHandler_SignIn(t *testing.T) {
 			body, err := json.Marshal(tt.input)
 			require.NoError(t, err)
 
-			req := httptest.NewRequest(http.MethodPost, "/api/auth/signin", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/api/user.signin", bytes.NewReader(body))
 			rec := httptest.NewRecorder()
 
 			handler.SignIn(rec, req)
@@ -132,7 +133,7 @@ func TestUserHandler_SignUp(t *testing.T) {
 			},
 			expectedCode: http.StatusOK,
 			expectedBody: map[string]string{
-				"message": "Verification link sent to your email",
+				"message": "Verification code sent to your email",
 			},
 		},
 		{
@@ -161,7 +162,7 @@ func TestUserHandler_SignUp(t *testing.T) {
 			body, err := json.Marshal(tt.input)
 			require.NoError(t, err)
 
-			req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/api/user.signup", bytes.NewReader(body))
 			rec := httptest.NewRecorder()
 
 			handler.SignUp(rec, req)
@@ -178,31 +179,33 @@ func TestUserHandler_SignUp(t *testing.T) {
 	}
 }
 
-func TestUserHandler_VerifyToken(t *testing.T) {
+func TestUserHandler_VerifyCode(t *testing.T) {
 	mockService := new(mockUserService)
 	handler := NewUserHandler(mockService)
 
 	user := &domain.User{
-		ID:    "user-id",
+		ID:    uuid.New().String(),
 		Email: "test@example.com",
 		Name:  "Test User",
 	}
 
 	tests := []struct {
-		name         string
-		input        service.VerifyTokenInput
-		setupMock    func()
-		expectedCode int
-		expectedBody interface{}
+		name          string
+		input         service.VerifyCodeInput
+		setupMock     func()
+		expectedCode  int
+		checkResponse func(t *testing.T, response map[string]interface{})
 	}{
 		{
 			name: "successful verification",
-			input: service.VerifyTokenInput{
-				Token: "valid-token",
+			input: service.VerifyCodeInput{
+				Email: "test@example.com",
+				Code:  "123456",
 			},
 			setupMock: func() {
-				mockService.On("VerifyToken", mock.Anything, service.VerifyTokenInput{
-					Token: "valid-token",
+				mockService.On("VerifyCode", mock.Anything, service.VerifyCodeInput{
+					Email: "test@example.com",
+					Code:  "123456",
 				}).Return(&service.AuthResponse{
 					Token:     "auth-token",
 					User:      *user,
@@ -210,20 +213,29 @@ func TestUserHandler_VerifyToken(t *testing.T) {
 				}, nil)
 			},
 			expectedCode: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				assert.Equal(t, "auth-token", response["token"])
+				assert.Equal(t, user.ID, response["user"].(map[string]interface{})["id"])
+				assert.Equal(t, user.Email, response["user"].(map[string]interface{})["email"])
+				assert.Equal(t, user.Name, response["user"].(map[string]interface{})["name"])
+				assert.NotEmpty(t, response["expires_at"])
+			},
 		},
 		{
-			name: "invalid token",
-			input: service.VerifyTokenInput{
-				Token: "invalid-token",
+			name: "invalid code",
+			input: service.VerifyCodeInput{
+				Email: "test@example.com",
+				Code:  "000000",
 			},
 			setupMock: func() {
-				mockService.On("VerifyToken", mock.Anything, service.VerifyTokenInput{
-					Token: "invalid-token",
-				}).Return(nil, fmt.Errorf("invalid token"))
+				mockService.On("VerifyCode", mock.Anything, service.VerifyCodeInput{
+					Email: "test@example.com",
+					Code:  "000000",
+				}).Return(nil, fmt.Errorf("invalid or expired code"))
 			},
 			expectedCode: http.StatusUnauthorized,
-			expectedBody: map[string]string{
-				"error": "invalid token",
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				assert.Equal(t, "invalid or expired code", response["error"])
 			},
 		},
 	}
@@ -235,19 +247,17 @@ func TestUserHandler_VerifyToken(t *testing.T) {
 			body, err := json.Marshal(tt.input)
 			require.NoError(t, err)
 
-			req := httptest.NewRequest(http.MethodPost, "/api/auth/verify", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/api/user.verify", bytes.NewReader(body))
 			rec := httptest.NewRecorder()
 
-			handler.VerifyToken(rec, req)
+			handler.VerifyCode(rec, req)
 
 			assert.Equal(t, tt.expectedCode, rec.Code)
 
-			if tt.expectedBody != nil {
-				var response map[string]string
-				err = json.NewDecoder(rec.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expectedBody, response)
-			}
+			var response map[string]interface{}
+			err = json.NewDecoder(rec.Body).Decode(&response)
+			require.NoError(t, err)
+			tt.checkResponse(t, response)
 
 			mockService.AssertExpectations(t)
 		})

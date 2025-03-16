@@ -52,6 +52,19 @@ func (m *mockUserRepository) GetSessionByID(ctx context.Context, id string) (*do
 	return args.Get(0).(*domain.Session), args.Error(1)
 }
 
+func (m *mockUserRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]*domain.Session, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Session), args.Error(1)
+}
+
+func (m *mockUserRepository) UpdateSession(ctx context.Context, session *domain.Session) error {
+	args := m.Called(ctx, session)
+	return args.Error(0)
+}
+
 func (m *mockUserRepository) DeleteSession(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
@@ -61,8 +74,8 @@ type mockEmailSender struct {
 	mock.Mock
 }
 
-func (m *mockEmailSender) SendMagicLink(email, token string) error {
-	args := m.Called(email, token)
+func (m *mockEmailSender) SendMagicCode(email, code string) error {
+	args := m.Called(email, code)
 	return args.Error(0)
 }
 
@@ -92,7 +105,12 @@ func TestUserService_SignIn(t *testing.T) {
 
 	// Test successful sign in
 	repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
-	emailSender.On("SendMagicLink", user.Email, mock.AnythingOfType("string")).Return(nil)
+	repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
+		return s.UserID == user.ID && len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
+	})).Return(nil)
+	emailSender.On("SendMagicCode", user.Email, mock.MatchedBy(func(code string) bool {
+		return len(code) == 6
+	})).Return(nil)
 
 	err = service.SignIn(ctx, SignInInput{Email: user.Email})
 	assert.NoError(t, err)
@@ -139,7 +157,15 @@ func TestUserService_SignUp(t *testing.T) {
 		// Test successful sign up
 		repo.On("GetUserByEmail", ctx, input.Email).
 			Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
-		emailSender.On("SendMagicLink", input.Email, mock.AnythingOfType("string")).Return(nil)
+		repo.On("CreateUser", ctx, mock.MatchedBy(func(u *domain.User) bool {
+			return u.Email == input.Email && u.Name == input.Name
+		})).Return(nil)
+		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
+			return len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
+		})).Return(nil)
+		emailSender.On("SendMagicCode", input.Email, mock.MatchedBy(func(code string) bool {
+			return len(code) == 6
+		})).Return(nil)
 
 		err = service.SignUp(ctx, input)
 		assert.NoError(t, err)
@@ -166,7 +192,7 @@ func TestUserService_SignUp(t *testing.T) {
 	})
 }
 
-func TestUserService_VerifyToken(t *testing.T) {
+func TestUserService_VerifyCode(t *testing.T) {
 	repo := new(mockUserRepository)
 	emailSender := new(mockEmailSender)
 
@@ -190,24 +216,75 @@ func TestUserService_VerifyToken(t *testing.T) {
 		Name:  "Test User",
 	}
 
-	// Generate a valid token
-	token := service.generateMagicLinkToken(user.Email)
+	validCode := "123456"
+	validSession := &domain.Session{
+		ID:               uuid.New().String(),
+		UserID:           user.ID,
+		MagicCode:        validCode,
+		MagicCodeExpires: time.Now().Add(15 * time.Minute),
+		ExpiresAt:        time.Now().Add(24 * time.Hour),
+	}
 
-	// Test successful verification
-	repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
-	repo.On("CreateSession", ctx, mock.AnythingOfType("*domain.Session")).Return(nil)
+	t.Run("successful verification", func(t *testing.T) {
+		repo.Mock = mock.Mock{}
 
-	response, err := service.VerifyToken(ctx, VerifyTokenInput{Token: token})
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Equal(t, user.ID, response.User.ID)
-	assert.Equal(t, user.Email, response.User.Email)
-	assert.Equal(t, user.Name, response.User.Name)
-	assert.NotEmpty(t, response.Token)
-	repo.AssertExpectations(t)
+		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
+		repo.On("GetSessionsByUserID", ctx, user.ID).Return([]*domain.Session{validSession}, nil)
+		repo.On("UpdateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
+			return s.ID == validSession.ID && s.MagicCode == "" && s.MagicCodeExpires.IsZero()
+		})).Return(nil)
 
-	// Test invalid token
-	response, err = service.VerifyToken(ctx, VerifyTokenInput{Token: "invalid-token"})
-	assert.Error(t, err)
-	assert.Nil(t, response)
+		response, err := service.VerifyCode(ctx, VerifyCodeInput{
+			Email: user.Email,
+			Code:  validCode,
+		})
+
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+		assert.NotEmpty(t, response.Token)
+		assert.Equal(t, user.ID, response.User.ID)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("invalid code", func(t *testing.T) {
+		repo.Mock = mock.Mock{}
+
+		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
+		repo.On("GetSessionsByUserID", ctx, user.ID).Return([]*domain.Session{validSession}, nil)
+
+		response, err := service.VerifyCode(ctx, VerifyCodeInput{
+			Email: user.Email,
+			Code:  "000000",
+		})
+
+		assert.Error(t, err)
+		assert.Nil(t, response)
+		assert.Contains(t, err.Error(), "invalid or expired code")
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("expired code", func(t *testing.T) {
+		repo.Mock = mock.Mock{}
+
+		expiredSession := &domain.Session{
+			ID:               uuid.New().String(),
+			UserID:           user.ID,
+			MagicCode:        validCode,
+			MagicCodeExpires: time.Now().Add(-1 * time.Minute),
+			ExpiresAt:        time.Now().Add(24 * time.Hour),
+		}
+
+		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
+		repo.On("GetSessionsByUserID", ctx, user.ID).Return([]*domain.Session{expiredSession}, nil)
+
+		response, err := service.VerifyCode(ctx, VerifyCodeInput{
+			Email: user.Email,
+			Code:  validCode,
+		})
+
+		assert.Error(t, err)
+		assert.Nil(t, response)
+		assert.Contains(t, err.Error(), "invalid or expired code")
+		repo.AssertExpectations(t)
+	})
 }
