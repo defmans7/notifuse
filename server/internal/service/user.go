@@ -55,11 +55,6 @@ type SignInInput struct {
 	Email string `json:"email"`
 }
 
-type SignUpInput struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
-}
-
 type VerifyCodeInput struct {
 	Email string `json:"email"`
 	Code  string `json:"code"`
@@ -73,7 +68,6 @@ type AuthResponse struct {
 
 type UserServiceInterface interface {
 	SignIn(ctx context.Context, input SignInInput) error
-	SignUp(ctx context.Context, input SignUpInput) error
 	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
 }
 
@@ -105,50 +99,6 @@ func (s *UserService) SignIn(ctx context.Context, input SignInInput) error {
 	// Send magic code email
 	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
 		return fmt.Errorf("error sending magic code: %w", err)
-	}
-
-	return nil
-}
-
-func (s *UserService) SignUp(ctx context.Context, input SignUpInput) error {
-	// Check if user already exists
-	_, err := s.repo.GetUserByEmail(ctx, input.Email)
-	if err == nil {
-		return fmt.Errorf("user already exists")
-	}
-
-	// Make sure the error is ErrUserNotFound
-	if _, ok := err.(*domain.ErrUserNotFound); !ok {
-		return fmt.Errorf("error checking user existence: %w", err)
-	}
-
-	// Generate 6-digit magic code
-	code := s.generateMagicCode()
-
-	// Create new user
-	user := &domain.User{
-		Email: input.Email,
-		Name:  input.Name,
-	}
-	if err := s.repo.CreateUser(ctx, user); err != nil {
-		return fmt.Errorf("error creating user: %w", err)
-	}
-
-	// Create a temporary session with the magic code
-	session := &domain.Session{
-		UserID:           user.ID,
-		MagicCode:        code,
-		MagicCodeExpires: time.Now().Add(15 * time.Minute),
-		ExpiresAt:        time.Now().Add(s.sessionExpiry),
-	}
-
-	if err := s.repo.CreateSession(ctx, session); err != nil {
-		return fmt.Errorf("error creating session: %w", err)
-	}
-
-	// Send verification code email
-	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
-		return fmt.Errorf("error sending verification code: %w", err)
 	}
 
 	return nil

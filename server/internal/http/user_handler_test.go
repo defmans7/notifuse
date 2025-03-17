@@ -28,11 +28,6 @@ func (m *mockUserService) SignIn(ctx context.Context, input service.SignInInput)
 	return args.Error(0)
 }
 
-func (m *mockUserService) SignUp(ctx context.Context, input service.SignUpInput) error {
-	args := m.Called(ctx, input)
-	return args.Error(0)
-}
-
 func (m *mockUserService) VerifyCode(ctx context.Context, input service.VerifyCodeInput) (*service.AuthResponse, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
@@ -95,77 +90,6 @@ func TestUserHandler_SignIn(t *testing.T) {
 			rec := httptest.NewRecorder()
 
 			handler.SignIn(rec, req)
-
-			assert.Equal(t, tt.expectedCode, rec.Code)
-
-			var response map[string]string
-			err = json.NewDecoder(rec.Body).Decode(&response)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedBody, response)
-
-			mockService.AssertExpectations(t)
-		})
-	}
-}
-
-func TestUserHandler_SignUp(t *testing.T) {
-	mockService := new(mockUserService)
-	handler := NewUserHandler(mockService)
-
-	tests := []struct {
-		name         string
-		input        service.SignUpInput
-		setupMock    func()
-		expectedCode int
-		expectedBody map[string]string
-	}{
-		{
-			name: "successful sign up",
-			input: service.SignUpInput{
-				Email: "test@example.com",
-				Name:  "Test User",
-			},
-			setupMock: func() {
-				mockService.On("SignUp", mock.Anything, service.SignUpInput{
-					Email: "test@example.com",
-					Name:  "Test User",
-				}).Return(nil)
-			},
-			expectedCode: http.StatusOK,
-			expectedBody: map[string]string{
-				"message": "Verification code sent to your email",
-			},
-		},
-		{
-			name: "user already exists",
-			input: service.SignUpInput{
-				Email: "existing@example.com",
-				Name:  "Existing User",
-			},
-			setupMock: func() {
-				mockService.On("SignUp", mock.Anything, service.SignUpInput{
-					Email: "existing@example.com",
-					Name:  "Existing User",
-				}).Return(fmt.Errorf("user already exists"))
-			},
-			expectedCode: http.StatusInternalServerError,
-			expectedBody: map[string]string{
-				"error": "user already exists",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-
-			body, err := json.Marshal(tt.input)
-			require.NoError(t, err)
-
-			req := httptest.NewRequest(http.MethodPost, "/api/user.signup", bytes.NewReader(body))
-			rec := httptest.NewRecorder()
-
-			handler.SignUp(rec, req)
 
 			assert.Equal(t, tt.expectedCode, rec.Code)
 

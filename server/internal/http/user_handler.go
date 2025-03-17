@@ -35,24 +35,6 @@ func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
-	var input service.SignUpInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.userService.SignUp(r.Context(), input); err != nil {
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Verification code sent to your email",
-	})
-}
-
 func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	var input service.VerifyCodeInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -72,6 +54,5 @@ func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/user.signin", h.SignIn)
-	mux.HandleFunc("/api/user.signup", h.SignUp)
 	mux.HandleFunc("/api/user.verify", h.VerifyCode)
 }
