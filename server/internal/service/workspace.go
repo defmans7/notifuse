@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"notifuse/server/internal/domain"
 	"time"
 )
@@ -177,4 +178,43 @@ func (s *WorkspaceService) RemoveUserFromWorkspace(ctx context.Context, workspac
 	}
 
 	return s.repo.RemoveUserFromWorkspace(ctx, userID, workspaceID)
+}
+
+// TransferOwnership transfers the ownership of a workspace from the current owner to a member
+func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID string, newOwnerID string, currentOwnerID string) error {
+	// Check if current owner is actually an owner
+	currentOwnerWorkspace, err := s.repo.GetUserWorkspace(ctx, currentOwnerID, workspaceID)
+	if err != nil {
+		return err
+	}
+
+	if currentOwnerWorkspace.Role != "owner" {
+		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	// Check if new owner exists and is a member
+	newOwnerWorkspace, err := s.repo.GetUserWorkspace(ctx, newOwnerID, workspaceID)
+	if err != nil {
+		return err
+	}
+
+	if newOwnerWorkspace.Role != "member" {
+		return fmt.Errorf("new owner must be a current member of the workspace")
+	}
+
+	// Update new owner's role to owner
+	newOwnerWorkspace.Role = "owner"
+	newOwnerWorkspace.UpdatedAt = time.Now()
+	if err := s.repo.AddUserToWorkspace(ctx, newOwnerWorkspace); err != nil {
+		return err
+	}
+
+	// Update current owner's role to member
+	currentOwnerWorkspace.Role = "member"
+	currentOwnerWorkspace.UpdatedAt = time.Now()
+	if err := s.repo.AddUserToWorkspace(ctx, currentOwnerWorkspace); err != nil {
+		return err
+	}
+
+	return nil
 }

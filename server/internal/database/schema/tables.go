@@ -17,7 +17,7 @@ var TableDefinitions = []string{
 	)`,
 	`CREATE TABLE IF NOT EXISTS user_sessions (
 		id UUID PRIMARY KEY,
-		user_id UUID NOT NULL REFERENCES users(id),
+		user_id UUID NOT NULL,
 		expires_at TIMESTAMP NOT NULL,
 		created_at TIMESTAMP NOT NULL,
 		magic_code VARCHAR(255),
@@ -31,9 +31,9 @@ var TableDefinitions = []string{
 		updated_at TIMESTAMP NOT NULL
 	)`,
 	`CREATE TABLE IF NOT EXISTS user_workspaces (
-		user_id UUID NOT NULL REFERENCES users(id),
-		workspace_id VARCHAR(20) NOT NULL REFERENCES workspaces(id),
-		role VARCHAR(20) NOT NULL CHECK (role IN ('owner', 'member')),
+		user_id UUID NOT NULL,
+		workspace_id VARCHAR(20) NOT NULL,
+		role VARCHAR(20) NOT NULL,
 		created_at TIMESTAMP NOT NULL,
 		updated_at TIMESTAMP NOT NULL,
 		PRIMARY KEY (user_id, workspace_id)

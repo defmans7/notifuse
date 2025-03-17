@@ -381,3 +381,77 @@ func TestWorkspaceService_Unauthorized(t *testing.T) {
 
 	mockRepo.AssertExpectations(t)
 }
+
+func TestWorkspaceService_TransferOwnership(t *testing.T) {
+	mockRepo := new(MockWorkspaceRepository)
+	service := NewWorkspaceService(mockRepo)
+
+	ctx := context.Background()
+	workspaceID := "1"
+	currentOwnerID := "owner-id"
+	newOwnerID := "member-id"
+
+	currentOwnerWorkspace := &domain.UserWorkspace{
+		UserID:      currentOwnerID,
+		WorkspaceID: workspaceID,
+		Role:        "owner",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	newOwnerWorkspace := &domain.UserWorkspace{
+		UserID:      newOwnerID,
+		WorkspaceID: workspaceID,
+		Role:        "member",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	// Test successful transfer
+	mockRepo.On("GetUserWorkspace", ctx, currentOwnerID, workspaceID).Return(currentOwnerWorkspace, nil)
+	mockRepo.On("GetUserWorkspace", ctx, newOwnerID, workspaceID).Return(newOwnerWorkspace, nil)
+
+	// Expect new owner role update
+	mockRepo.On("AddUserToWorkspace", ctx, mock.MatchedBy(func(uw *domain.UserWorkspace) bool {
+		return uw.UserID == newOwnerID &&
+			uw.WorkspaceID == workspaceID &&
+			uw.Role == "owner"
+	})).Return(nil)
+
+	// Expect current owner role update
+	mockRepo.On("AddUserToWorkspace", ctx, mock.MatchedBy(func(uw *domain.UserWorkspace) bool {
+		return uw.UserID == currentOwnerID &&
+			uw.WorkspaceID == workspaceID &&
+			uw.Role == "member"
+	})).Return(nil)
+
+	err := service.TransferOwnership(ctx, workspaceID, newOwnerID, currentOwnerID)
+	require.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+
+	// Test unauthorized transfer (current owner is not an owner)
+	mockRepo = new(MockWorkspaceRepository)
+	service = NewWorkspaceService(mockRepo)
+
+	currentOwnerWorkspace.Role = "member"
+	mockRepo.On("GetUserWorkspace", ctx, currentOwnerID, workspaceID).Return(currentOwnerWorkspace, nil)
+
+	err = service.TransferOwnership(ctx, workspaceID, newOwnerID, currentOwnerID)
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUnauthorized{}, err)
+	mockRepo.AssertExpectations(t)
+
+	// Test invalid transfer (new owner is not a member)
+	mockRepo = new(MockWorkspaceRepository)
+	service = NewWorkspaceService(mockRepo)
+
+	currentOwnerWorkspace.Role = "owner"
+	newOwnerWorkspace.Role = "owner"
+	mockRepo.On("GetUserWorkspace", ctx, currentOwnerID, workspaceID).Return(currentOwnerWorkspace, nil)
+	mockRepo.On("GetUserWorkspace", ctx, newOwnerID, workspaceID).Return(newOwnerWorkspace, nil)
+
+	err = service.TransferOwnership(ctx, workspaceID, newOwnerID, currentOwnerID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "new owner must be a current member")
+	mockRepo.AssertExpectations(t)
+}
