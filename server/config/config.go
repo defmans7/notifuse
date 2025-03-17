@@ -20,6 +20,7 @@ type Config struct {
 type ServerConfig struct {
 	Port int
 	Host string
+	SSL  SSLConfig
 }
 
 type DatabaseConfig struct {
@@ -35,6 +36,12 @@ type SecurityConfig struct {
 	// Raw decoded bytes for PASETO keys
 	PasetoPrivateKey []byte
 	PasetoPublicKey  []byte
+}
+
+type SSLConfig struct {
+	Enabled  bool
+	CertFile string
+	KeyFile  string
 }
 
 // LoadOptions contains options for loading configuration
@@ -114,6 +121,11 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		Server: ServerConfig{
 			Port: v.GetInt("SERVER_PORT"),
 			Host: v.GetString("SERVER_HOST"),
+			SSL: SSLConfig{
+				Enabled:  v.GetBool("SSL_ENABLED"),
+				CertFile: v.GetString("SSL_CERT_FILE"),
+				KeyFile:  v.GetString("SSL_KEY_FILE"),
+			},
 		},
 		Database: DatabaseConfig{
 			Host:     v.GetString("DB_HOST"),

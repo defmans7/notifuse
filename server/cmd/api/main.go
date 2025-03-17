@@ -69,15 +69,25 @@ func main() {
 	}
 
 	userHandler := httpHandler.NewUserHandler(userService)
+	rootHandler := httpHandler.NewRootHandler()
 
 	// Set up routes
 	mux := http.NewServeMux()
+	rootHandler.RegisterRoutes(mux)
 	userHandler.RegisterRoutes(mux)
 
 	// Start server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Server starting on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+
+	if cfg.Server.SSL.Enabled {
+		log.Printf("SSL enabled with certificate: %s", cfg.Server.SSL.CertFile)
+		if err := http.ListenAndServeTLS(addr, cfg.Server.SSL.CertFile, cfg.Server.SSL.KeyFile, mux); err != nil {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	} else {
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.Fatalf("Server failed to start: %v", err)
+		}
 	}
 }

@@ -3,8 +3,9 @@ import { MailOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
-import config from '../config'
 import { createFileRoute } from '@tanstack/react-router'
+import { authService } from '../services/api/auth'
+import { SignInRequest, VerifyCodeRequest } from '../services/api/types'
 
 interface EmailForm {
   email: string
@@ -12,14 +13,6 @@ interface EmailForm {
 
 interface MagicCodeForm {
   code: string
-}
-
-interface VerifyResponse {
-  token: string
-  user: {
-    email: string
-    timezone: string
-  }
 }
 
 function SignIn() {
@@ -33,23 +26,16 @@ function SignIn() {
   const handleEmailSubmit = async (values: EmailForm) => {
     try {
       setLoading(true)
-      const response = await fetch(`${config.API_ENDPOINT}/auth/magic-code`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email: values.email })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to send magic code')
-      }
-
+      await authService.signIn({ email: values.email })
       setEmail(values.email)
       setShowCodeInput(true)
       message.success('Magic code sent to your email')
     } catch (error) {
-      message.error('Failed to send magic code')
+      if (error instanceof Error) {
+        message.error(error.message)
+      } else {
+        message.error('Failed to send magic code')
+      }
     } finally {
       setLoading(false)
     }
@@ -58,21 +44,14 @@ function SignIn() {
   const handleResendCode = async () => {
     try {
       setResendLoading(true)
-      const response = await fetch(`${config.API_ENDPOINT}/auth/magic-code`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to resend magic code')
-      }
-
+      await authService.signIn({ email })
       message.success('New magic code sent to your email')
     } catch (error) {
-      message.error('Failed to resend magic code')
+      if (error instanceof Error) {
+        message.error(error.message)
+      } else {
+        message.error('Failed to resend magic code')
+      }
     } finally {
       setResendLoading(false)
     }
@@ -81,25 +60,12 @@ function SignIn() {
   const handleCodeSubmit = async (values: MagicCodeForm) => {
     try {
       setLoading(true)
-      const response = await fetch(`${config.API_ENDPOINT}/auth/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email,
-          code: values.code
-        })
+      const response = await authService.verifyCode({
+        email,
+        code: values.code
       })
 
-      if (!response.ok) {
-        throw new Error('Invalid magic code')
-      }
-
-      const { token, user } = (await response.json()) as VerifyResponse
-
-      // First login to set the token and user
-      await login(token, user)
+      await login(response.token, response.user)
       message.success('Successfully signed in')
       navigate({ to: '/' })
     } catch (error) {

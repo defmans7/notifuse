@@ -1,4 +1,4 @@
-.PHONY: build test run clean keygen test-service test-repo test-http
+.PHONY: build test run clean keygen test-service test-repo test-http dev
 
 build:
 	go build -o bin/server cmd/api/main.go
@@ -18,8 +18,11 @@ test-http:
 run:
 	go run cmd/api/main.go
 
+dev:
+	air
+
 clean:
-	rm -rf bin/
+	rm -rf bin/ tmp/
 
 migrate:
 	psql -U postgres -d notifuse -f migrations/001_create_tables.sql

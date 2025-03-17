@@ -1,10 +1,11 @@
 import { Card, Form, Input, Button } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../../contexts/AuthContext'
-import config from '../../config'
 import { useState } from 'react'
 import { message } from 'antd'
 import { createFileRoute } from '@tanstack/react-router'
+import { workspaceService } from '../../services/api/workspace'
+import { CreateWorkspaceRequest } from '../../services/api/types'
 
 interface WorkspaceForm {
   name: string
@@ -33,34 +34,18 @@ function CreateWorkspace() {
 
   const handleSubmit = async (values: WorkspaceForm) => {
     try {
-      const authToken = localStorage.getItem('auth_token')
-      if (!authToken) {
-        throw new Error('No authentication token')
+      const request: CreateWorkspaceRequest = {
+        id: values.id,
+        settings: {
+          name: values.name,
+          url: values.url,
+          logo_url: null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
       }
 
-      const response = await fetch(`${config.API_ENDPOINT}/workspaces.create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          id: values.id,
-          settings: {
-            name: values.name,
-            url: values.url,
-            logo_url: null,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          }
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create workspace')
-      }
-
-      const data = await response.json()
-      const workspaceId = data.workspace.id
+      const response = await workspaceService.create(request)
+      const workspaceId = response.workspace.id
 
       await refreshWorkspaces()
       navigate({
@@ -69,7 +54,11 @@ function CreateWorkspace() {
       })
       message.success('Workspace created successfully')
     } catch (error) {
-      message.error('Failed to create workspace')
+      if (error instanceof Error) {
+        message.error(error.message)
+      } else {
+        message.error('Failed to create workspace')
+      }
     }
   }
 
