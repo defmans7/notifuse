@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { createRootRoute } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
+import { isPublicRoute } from '../constants/routes'
 
 const { Header, Content, Sider } = Layout
 
@@ -18,8 +19,7 @@ export function Root() {
   const { user, workspaces } = useAuth()
   const navigate = useNavigate()
   const matchRoute = useMatchRoute()
-  const publicRoutes = ['/signin', '/accept-invitation']
-  const isPublicRoute = publicRoutes.includes(window.location.pathname)
+  const isPublicRoutePath = isPublicRoute(window.location.pathname)
   const hasAttemptedNavigation = useRef(false)
 
   const isCreateWorkspaceRoute = matchRoute({ to: '/workspace/create' })
@@ -45,7 +45,7 @@ export function Root() {
     navigate({ to: '/logout' })
   }
 
-  if (isPublicRoute) {
+  if (isPublicRoutePath) {
     return <Outlet />
   }
 
@@ -69,7 +69,7 @@ export function Root() {
         </div>
       </Header>
       <Layout>
-        {isInWorkspace && workspace && !isCreateWorkspaceRoute && (
+        {isInWorkspace && workspace && (
           <Sider width={200}>
             <Menu
               mode="inline"

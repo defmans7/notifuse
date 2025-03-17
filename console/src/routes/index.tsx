@@ -4,9 +4,9 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import { createFileRoute } from '@tanstack/react-router'
+import { isPublicRoute } from '../constants/routes'
 
 const { Title } = Typography
-const PUBLIC_ROUTES = ['/login', '/accept-invitation', '/logout']
 
 export const Route = createFileRoute('/')({
   component: Index
@@ -16,7 +16,7 @@ function Index() {
   const { workspaces, isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
-  const shouldSignIn = !isAuthenticated && !PUBLIC_ROUTES.includes(window.location.pathname)
+  const shouldSignIn = !isAuthenticated && !isPublicRoute(window.location.pathname)
 
   useEffect(() => {
     if (isAuthenticated && workspaces.length === 0) {

@@ -20,14 +20,20 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => () => ({ component: vi.fn() })
 }))
 
-// Mock Ant Design message
+// Mock Ant Design message and App
 vi.mock('antd', async () => {
   const actual = await vi.importActual('antd')
+  const messageApi = {
+    success: vi.fn(),
+    error: vi.fn()
+  }
   return {
     ...actual,
-    message: {
-      success: vi.fn(),
-      error: vi.fn()
+    message: messageApi,
+    App: {
+      useApp: () => ({
+        message: messageApi
+      })
     }
   }
 })
