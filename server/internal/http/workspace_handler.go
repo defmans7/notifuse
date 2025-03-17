@@ -4,18 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"notifuse/server/internal/domain"
 	"notifuse/server/internal/http/middleware"
-	"notifuse/server/internal/service"
 
 	"aidanwoods.dev/go-paseto"
 )
 
 // WorkspaceServiceInterface defines the interface for workspace operations
 type WorkspaceServiceInterface interface {
-	CreateWorkspace(ctx context.Context, name, websiteURL, logoURL, timezone, ownerID string) (*service.Workspace, error)
-	GetWorkspace(ctx context.Context, id, ownerID string) (*service.Workspace, error)
-	ListWorkspaces(ctx context.Context, ownerID string) ([]service.Workspace, error)
-	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*service.Workspace, error)
+	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error)
+	GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
+	ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
+	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error)
 	DeleteWorkspace(ctx context.Context, id, ownerID string) error
 }
 
@@ -35,6 +35,7 @@ func NewWorkspaceHandler(workspaceService WorkspaceServiceInterface, authService
 
 // Request/Response types
 type createWorkspaceRequest struct {
+	ID         string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
 	Name       string `json:"name"`
 	WebsiteURL string `json:"website_url"`
 	LogoURL    string `json:"logo_url"`
@@ -144,7 +145,13 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	workspace, err := h.workspaceService.CreateWorkspace(r.Context(), req.Name, req.WebsiteURL, req.LogoURL, req.Timezone, authUser.ID)
+	// Validate workspace ID
+	if req.ID == "" {
+		writeError(w, http.StatusBadRequest, "Workspace ID is required")
+		return
+	}
+
+	workspace, err := h.workspaceService.CreateWorkspace(r.Context(), req.ID, req.Name, req.WebsiteURL, req.LogoURL, req.Timezone, authUser.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create workspace")
 		return

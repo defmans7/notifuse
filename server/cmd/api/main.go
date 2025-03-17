@@ -57,6 +57,7 @@ func main() {
 
 	// Initialize components
 	userRepo := repository.NewUserRepository(systemDB)
+	workspaceRepo := repository.NewWorkspaceRepository(systemDB, &cfg.Database)
 	emailSender := &emailSender{}
 
 	userService, err := service.NewUserService(service.UserServiceConfig{
@@ -71,7 +72,7 @@ func main() {
 	}
 
 	// Create workspace service
-	workspaceService := service.NewWorkspaceService(systemDB)
+	workspaceService := service.NewWorkspaceService(workspaceRepo)
 
 	// Parse public key for PASETO
 	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes([]byte(cfg.Security.PasetoPublicKey))
@@ -98,12 +99,12 @@ func main() {
 
 	if cfg.Server.SSL.Enabled {
 		log.Printf("SSL enabled with certificate: %s", cfg.Server.SSL.CertFile)
-		if err := http.ListenAndServeTLS(addr, cfg.Server.SSL.CertFile, cfg.Server.SSL.KeyFile, handler); err != nil {
-			log.Fatalf("Server failed to start: %v", err)
-		}
+		err = http.ListenAndServeTLS(addr, cfg.Server.SSL.CertFile, cfg.Server.SSL.KeyFile, handler)
 	} else {
-		if err := http.ListenAndServe(addr, handler); err != nil {
-			log.Fatalf("Server failed to start: %v", err)
-		}
+		err = http.ListenAndServe(addr, handler)
+	}
+
+	if err != nil {
+		log.Fatalf("Server failed to start: %v", err)
 	}
 }

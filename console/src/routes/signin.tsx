@@ -1,4 +1,4 @@
-import { Button, Card, Form, Input, message, Space } from 'antd'
+import { Button, Card, Form, Input, Space, App } from 'antd'
 import { MailOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../contexts/AuthContext'
@@ -21,6 +21,7 @@ function SignIn() {
   const [showCodeInput, setShowCodeInput] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
+  const { message } = App.useApp()
 
   const handleEmailSubmit = async (values: EmailForm) => {
     try {

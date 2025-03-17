@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"notifuse/server/internal/domain"
 	"notifuse/server/internal/http/middleware"
 	"notifuse/server/internal/service"
 )
@@ -23,33 +24,33 @@ type mockWorkspaceService struct {
 	mock.Mock
 }
 
-func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, name, websiteURL, logoURL, timezone, ownerID string) (*service.Workspace, error) {
-	args := m.Called(ctx, name, websiteURL, logoURL, timezone, ownerID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*service.Workspace), args.Error(1)
-}
-
-func (m *mockWorkspaceService) GetWorkspace(ctx context.Context, id, ownerID string) (*service.Workspace, error) {
-	args := m.Called(ctx, id, ownerID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*service.Workspace), args.Error(1)
-}
-
-func (m *mockWorkspaceService) ListWorkspaces(ctx context.Context, ownerID string) ([]service.Workspace, error) {
-	args := m.Called(ctx, ownerID)
-	return args.Get(0).([]service.Workspace), args.Error(1)
-}
-
-func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*service.Workspace, error) {
+func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
 	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*service.Workspace), args.Error(1)
+	return args.Get(0).(*domain.Workspace), args.Error(1)
+}
+
+func (m *mockWorkspaceService) GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, ownerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Workspace), args.Error(1)
+}
+
+func (m *mockWorkspaceService) ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error) {
+	args := m.Called(ctx, ownerID)
+	return args.Get(0).([]*domain.Workspace), args.Error(1)
+}
+
+func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Workspace), args.Error(1)
 }
 
 func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id, ownerID string) error {
@@ -104,209 +105,204 @@ func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userI
 func TestWorkspaceHandler_Create(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
-	// Setup auth mock expectation
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
-		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
+	// Mock successful user session verification
+	user := &service.User{ID: "test-user"}
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
-	tests := []struct {
-		name           string
-		request        createWorkspaceRequest
-		mockWorkspace  *service.Workspace
-		mockError      error
-		expectedStatus int
-	}{
-		{
-			name: "successful creation",
-			request: createWorkspaceRequest{
-				Name:       "Test Workspace",
-				WebsiteURL: "https://test.com",
-				LogoURL:    "https://test.com/logo.png",
-				Timezone:   "UTC",
-			},
-			mockWorkspace: &service.Workspace{
-				ID:         "test-id",
-				Name:       "Test Workspace",
-				WebsiteURL: "https://test.com",
-				LogoURL:    "https://test.com/logo.png",
-				Timezone:   "UTC",
-			},
-			expectedStatus: http.StatusCreated,
+	// Mock successful workspace creation
+	expectedWorkspace := &domain.Workspace{
+		ID:   "testworkspace1",
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
 		},
 	}
+	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", "test-user").Return(expectedWorkspace, nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Setup mock expectations
-			workspaceSvc.On("CreateWorkspace",
-				mock.Anything,
-				tt.request.Name,
-				tt.request.WebsiteURL,
-				tt.request.LogoURL,
-				tt.request.Timezone,
-				"test-user-id",
-			).Return(tt.mockWorkspace, tt.mockError)
-
-			// Create request
-			body, err := json.Marshal(tt.request)
-			require.NoError(t, err)
-
-			req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", bytes.NewReader(body))
-			req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
-			req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
-
-			// Execute request
-			w := httptest.NewRecorder()
-			mux.ServeHTTP(w, req)
-
-			// Assert response
-			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			if tt.expectedStatus == http.StatusCreated {
-				var response service.Workspace
-				err = json.NewDecoder(w.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Equal(t, tt.mockWorkspace.ID, response.ID)
-				assert.Equal(t, tt.mockWorkspace.Name, response.Name)
-				assert.Equal(t, tt.mockWorkspace.WebsiteURL, response.WebsiteURL)
-				assert.Equal(t, tt.mockWorkspace.LogoURL, response.LogoURL)
-				assert.Equal(t, tt.mockWorkspace.Timezone, response.Timezone)
-			}
-		})
+	// Create request
+	reqBody := createWorkspaceRequest{
+		ID:         "testworkspace1",
+		Name:       "Test Workspace",
+		WebsiteURL: "https://example.com",
+		LogoURL:    "https://example.com/logo.png",
+		Timezone:   "UTC",
 	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	// Execute request
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	var response domain.Workspace
+	err = json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, expectedWorkspace.ID, response.ID)
+	assert.Equal(t, expectedWorkspace.Name, response.Name)
+	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
+
+	// Assert expectations
+	workspaceSvc.AssertExpectations(t)
+	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Get(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
-	// Setup auth mock expectation
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
-		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
+	// Mock successful user session verification
+	user := &service.User{ID: "test-user"}
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
-	workspace := &service.Workspace{
-		ID:         "test-id",
-		Name:       "Test Workspace",
-		WebsiteURL: "https://test.com",
-		LogoURL:    "https://test.com/logo.png",
-		Timezone:   "UTC",
+	// Mock successful workspace retrieval
+	expectedWorkspace := &domain.Workspace{
+		ID:   "testworkspace1",
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
+	workspaceSvc.On("GetWorkspace", mock.Anything, "testworkspace1", "test-user").Return(expectedWorkspace, nil)
 
-	workspaceSvc.On("GetWorkspace", mock.Anything, "test-id", "test-user-id").
-		Return(workspace, nil)
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=testworkspace1", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=test-id", nil)
-	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
-
+	// Execute request
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response service.Workspace
+	var response domain.Workspace
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, workspace.ID, response.ID)
-	assert.Equal(t, workspace.Name, response.Name)
-	assert.Equal(t, workspace.WebsiteURL, response.WebsiteURL)
-	assert.Equal(t, workspace.LogoURL, response.LogoURL)
-	assert.Equal(t, workspace.Timezone, response.Timezone)
+	assert.Equal(t, expectedWorkspace.ID, response.ID)
+	assert.Equal(t, expectedWorkspace.Name, response.Name)
+	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
+
+	// Assert expectations
+	workspaceSvc.AssertExpectations(t)
+	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_List(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
-	// Setup auth mock expectation
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
-		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
+	// Mock successful user session verification
+	user := &service.User{ID: "test-user"}
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
-	workspaces := []service.Workspace{
+	// Mock successful workspace list retrieval
+	expectedWorkspaces := []*domain.Workspace{
 		{
-			ID:         "test-id-1",
-			Name:       "Test Workspace 1",
-			WebsiteURL: "https://test1.com",
-			LogoURL:    "https://test1.com/logo.png",
-			Timezone:   "UTC",
+			ID:   "testworkspace1",
+			Name: "Test Workspace 1",
+			Settings: domain.WorkspaceSettings{
+				WebsiteURL: "https://example1.com",
+				LogoURL:    "https://example1.com/logo.png",
+				Timezone:   "UTC",
+			},
 		},
 		{
-			ID:         "test-id-2",
-			Name:       "Test Workspace 2",
-			WebsiteURL: "https://test2.com",
-			LogoURL:    "https://test2.com/logo.png",
-			Timezone:   "UTC",
+			ID:   "testworkspace2",
+			Name: "Test Workspace 2",
+			Settings: domain.WorkspaceSettings{
+				WebsiteURL: "https://example2.com",
+				LogoURL:    "https://example2.com/logo.png",
+				Timezone:   "UTC",
+			},
 		},
 	}
+	workspaceSvc.On("ListWorkspaces", mock.Anything, "test-user").Return(expectedWorkspaces, nil)
 
-	workspaceSvc.On("ListWorkspaces", mock.Anything, "test-user-id").
-		Return(workspaces, nil)
-
+	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.list", nil)
-	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
+	// Execute request
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response []service.Workspace
+	var response []*domain.Workspace
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Len(t, response, 2)
-	assert.Equal(t, workspaces[0].ID, response[0].ID)
-	assert.Equal(t, workspaces[1].ID, response[1].ID)
+	assert.Equal(t, expectedWorkspaces, response)
+
+	// Assert expectations
+	workspaceSvc.AssertExpectations(t)
+	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Update(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
-	// Setup auth mock expectation
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
-		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
+	// Mock successful user session verification
+	user := &service.User{ID: "test-user"}
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
-	workspace := &service.Workspace{
-		ID:         "test-id",
+	// Mock successful workspace update
+	expectedWorkspace := &domain.Workspace{
+		ID:   "testworkspace1",
+		Name: "Updated Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://updated.com",
+			LogoURL:    "https://updated.com/logo.png",
+			Timezone:   "UTC",
+		},
+	}
+	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "UTC", "test-user").Return(expectedWorkspace, nil)
+
+	// Create request
+	reqBody := updateWorkspaceRequest{
+		ID:         "testworkspace1",
 		Name:       "Updated Workspace",
 		WebsiteURL: "https://updated.com",
 		LogoURL:    "https://updated.com/logo.png",
 		Timezone:   "UTC",
 	}
-
-	workspaceSvc.On("UpdateWorkspace", mock.Anything, "test-id", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "UTC", "test-user-id").
-		Return(workspace, nil)
-
-	request := updateWorkspaceRequest{
-		ID:         "test-id",
-		Name:       "Updated Workspace",
-		WebsiteURL: "https://updated.com",
-		LogoURL:    "https://updated.com/logo.png",
-		Timezone:   "UTC",
-	}
-
-	body, err := json.Marshal(request)
+	body, err := json.Marshal(reqBody)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
+	// Execute request
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response service.Workspace
+	var response domain.Workspace
 	err = json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, workspace.ID, response.ID)
-	assert.Equal(t, workspace.Name, response.Name)
-	assert.Equal(t, workspace.WebsiteURL, response.WebsiteURL)
-	assert.Equal(t, workspace.LogoURL, response.LogoURL)
-	assert.Equal(t, workspace.Timezone, response.Timezone)
+	assert.Equal(t, expectedWorkspace.ID, response.ID)
+	assert.Equal(t, expectedWorkspace.Name, response.Name)
+	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
+
+	// Assert expectations
+	workspaceSvc.AssertExpectations(t)
+	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Delete(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
+	// Mock successful user session verification
 	// Setup auth mock expectation
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
 		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
