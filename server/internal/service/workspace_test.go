@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -66,11 +67,63 @@ func (m *MockWorkspaceRepository) DeleteDatabase(ctx context.Context, workspaceI
 	return args.Error(0)
 }
 
+func (m *MockWorkspaceRepository) AddUserToWorkspace(ctx context.Context, userWorkspace *domain.UserWorkspace) error {
+	args := m.Called(ctx, userWorkspace)
+	return args.Error(0)
+}
+
+func (m *MockWorkspaceRepository) RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error {
+	args := m.Called(ctx, userID, workspaceID)
+	return args.Error(0)
+}
+
+func (m *MockWorkspaceRepository) GetUserWorkspaces(ctx context.Context, userID string) ([]*domain.UserWorkspace, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.UserWorkspace), args.Error(1)
+}
+
+func (m *MockWorkspaceRepository) GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*domain.UserWorkspace, error) {
+	args := m.Called(ctx, workspaceID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.UserWorkspace), args.Error(1)
+}
+
+func (m *MockWorkspaceRepository) GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*domain.UserWorkspace, error) {
+	args := m.Called(ctx, userID, workspaceID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.UserWorkspace), args.Error(1)
+}
+
 func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockRepo := new(MockWorkspaceRepository)
 	service := NewWorkspaceService(mockRepo)
 
 	ctx := context.Background()
+	userID := "test-user"
+	expectedUserWorkspaces := []*domain.UserWorkspace{
+		{
+			UserID:      userID,
+			WorkspaceID: "1",
+			Role:        "owner",
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
+		{
+			UserID:      userID,
+			WorkspaceID: "2",
+			Role:        "member",
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
+	}
+
 	expectedWorkspaces := []*domain.Workspace{
 		{
 			ID:   "1",
@@ -92,9 +145,11 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("List", ctx).Return(expectedWorkspaces, nil)
+	mockRepo.On("GetUserWorkspaces", ctx, userID).Return(expectedUserWorkspaces, nil)
+	mockRepo.On("GetByID", ctx, "1").Return(expectedWorkspaces[0], nil)
+	mockRepo.On("GetByID", ctx, "2").Return(expectedWorkspaces[1], nil)
 
-	workspaces, err := service.ListWorkspaces(ctx, "test-owner")
+	workspaces, err := service.ListWorkspaces(ctx, userID)
 	require.NoError(t, err)
 	assert.Equal(t, expectedWorkspaces, workspaces)
 	mockRepo.AssertExpectations(t)
@@ -105,8 +160,19 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	service := NewWorkspaceService(mockRepo)
 
 	ctx := context.Background()
+	userID := "test-user"
+	workspaceID := "1"
+
+	expectedUserWorkspace := &domain.UserWorkspace{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Role:        "owner",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
 	expectedWorkspace := &domain.Workspace{
-		ID:   "1",
+		ID:   workspaceID,
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
@@ -115,9 +181,10 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetByID", ctx, "1").Return(expectedWorkspace, nil)
+	mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+	mockRepo.On("GetByID", ctx, workspaceID).Return(expectedWorkspace, nil)
 
-	workspace, err := service.GetWorkspace(ctx, "1", "test-owner")
+	workspace, err := service.GetWorkspace(ctx, workspaceID, userID)
 	require.NoError(t, err)
 	assert.Equal(t, expectedWorkspace, workspace)
 	mockRepo.AssertExpectations(t)
@@ -128,14 +195,23 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	service := NewWorkspaceService(mockRepo)
 
 	ctx := context.Background()
+	ownerID := "test-owner"
+	workspaceID := "testworkspace1"
+
 	expectedWorkspace := &domain.Workspace{
-		ID:   "testworkspace1",
+		ID:   workspaceID,
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			Timezone:   "UTC",
 		},
+	}
+
+	expectedUserWorkspace := &domain.UserWorkspace{
+		UserID:      ownerID,
+		WorkspaceID: workspaceID,
+		Role:        "owner",
 	}
 
 	mockRepo.On("Create", ctx, mock.MatchedBy(func(w *domain.Workspace) bool {
@@ -146,7 +222,13 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 			w.Settings.Timezone == expectedWorkspace.Settings.Timezone
 	})).Return(nil)
 
-	workspace, err := service.CreateWorkspace(ctx, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", "test-owner")
+	mockRepo.On("AddUserToWorkspace", ctx, mock.MatchedBy(func(uw *domain.UserWorkspace) bool {
+		return uw.UserID == expectedUserWorkspace.UserID &&
+			uw.WorkspaceID == expectedUserWorkspace.WorkspaceID &&
+			uw.Role == expectedUserWorkspace.Role
+	})).Return(nil)
+
+	workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", ownerID)
 	require.NoError(t, err)
 	assert.Equal(t, expectedWorkspace.ID, workspace.ID)
 	assert.Equal(t, expectedWorkspace.Name, workspace.Name)
@@ -159,8 +241,19 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	service := NewWorkspaceService(mockRepo)
 
 	ctx := context.Background()
+	userID := "test-user"
+	workspaceID := "1"
+
+	expectedUserWorkspace := &domain.UserWorkspace{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Role:        "owner",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
 	expectedWorkspace := &domain.Workspace{
-		ID:   "1",
+		ID:   workspaceID,
 		Name: "Updated Workspace",
 		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://updated.com",
@@ -169,11 +262,20 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("Update", ctx, expectedWorkspace).Return(nil)
+	mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+	mockRepo.On("Update", ctx, mock.MatchedBy(func(w *domain.Workspace) bool {
+		return w.ID == expectedWorkspace.ID &&
+			w.Name == expectedWorkspace.Name &&
+			w.Settings.WebsiteURL == expectedWorkspace.Settings.WebsiteURL &&
+			w.Settings.LogoURL == expectedWorkspace.Settings.LogoURL &&
+			w.Settings.Timezone == expectedWorkspace.Settings.Timezone
+	})).Return(nil)
 
-	workspace, err := service.UpdateWorkspace(ctx, "1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "UTC", "test-owner")
+	workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "UTC", userID)
 	require.NoError(t, err)
-	assert.Equal(t, expectedWorkspace, workspace)
+	assert.Equal(t, expectedWorkspace.ID, workspace.ID)
+	assert.Equal(t, expectedWorkspace.Name, workspace.Name)
+	assert.Equal(t, expectedWorkspace.Settings, workspace.Settings)
 	mockRepo.AssertExpectations(t)
 }
 
@@ -182,10 +284,21 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	service := NewWorkspaceService(mockRepo)
 
 	ctx := context.Background()
+	userID := "test-user"
+	workspaceID := "1"
 
-	mockRepo.On("Delete", ctx, "1").Return(nil)
+	expectedUserWorkspace := &domain.UserWorkspace{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Role:        "owner",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
 
-	err := service.DeleteWorkspace(ctx, "1", "test-owner")
+	mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+	mockRepo.On("Delete", ctx, workspaceID).Return(nil)
+
+	err := service.DeleteWorkspace(ctx, workspaceID, userID)
 	require.NoError(t, err)
 	mockRepo.AssertExpectations(t)
 }
@@ -220,4 +333,51 @@ func TestWorkspaceService_Validation(t *testing.T) {
 	_, err = service.CreateWorkspace(ctx, "test-workspace-1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", "test-owner")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "id: test-workspace-1 does not validate as alphanum")
+}
+
+func TestWorkspaceService_Unauthorized(t *testing.T) {
+	mockRepo := new(MockWorkspaceRepository)
+	service := NewWorkspaceService(mockRepo)
+
+	ctx := context.Background()
+	userID := "test-user"
+	workspaceID := "1"
+
+	// Test unauthorized update
+	userWorkspace := &domain.UserWorkspace{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Role:        "member",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
+
+	_, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "UTC", userID)
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUnauthorized{}, err)
+
+	// Test unauthorized delete
+	mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
+
+	err = service.DeleteWorkspace(ctx, workspaceID, userID)
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUnauthorized{}, err)
+
+	// Test unauthorized add user
+	mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
+
+	err = service.AddUserToWorkspace(ctx, workspaceID, "new-user", "member", userID)
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUnauthorized{}, err)
+
+	// Test unauthorized remove user
+	mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
+
+	err = service.RemoveUserFromWorkspace(ctx, workspaceID, "other-user", userID)
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUnauthorized{}, err)
+
+	mockRepo.AssertExpectations(t)
 }

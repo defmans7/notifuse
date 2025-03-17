@@ -83,6 +83,23 @@ func ScanWorkspace(scanner interface {
 	return w, nil
 }
 
+// UserWorkspace represents the relationship between a user and a workspace
+type UserWorkspace struct {
+	UserID      string    `json:"user_id" db:"user_id"`
+	WorkspaceID string    `json:"workspace_id" db:"workspace_id"`
+	Role        string    `json:"role" db:"role" valid:"required,in(owner|member)"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Validate performs validation on the user workspace fields
+func (uw *UserWorkspace) Validate() error {
+	if _, err := govalidator.ValidateStruct(uw); err != nil {
+		return fmt.Errorf("invalid user workspace: %w", err)
+	}
+	return nil
+}
+
 type WorkspaceRepository interface {
 	Create(ctx context.Context, workspace *Workspace) error
 	GetByID(ctx context.Context, id string) (*Workspace, error)
@@ -90,8 +107,24 @@ type WorkspaceRepository interface {
 	Update(ctx context.Context, workspace *Workspace) error
 	Delete(ctx context.Context, id string) error
 
+	// User workspace management
+	AddUserToWorkspace(ctx context.Context, userWorkspace *UserWorkspace) error
+	RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error
+	GetUserWorkspaces(ctx context.Context, userID string) ([]*UserWorkspace, error)
+	GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*UserWorkspace, error)
+	GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*UserWorkspace, error)
+
 	// Database management
 	GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error)
 	CreateDatabase(ctx context.Context, workspaceID string) error
 	DeleteDatabase(ctx context.Context, workspaceID string) error
+}
+
+// ErrUnauthorized is returned when a user is not authorized to perform an action
+type ErrUnauthorized struct {
+	Message string
+}
+
+func (e *ErrUnauthorized) Error() string {
+	return e.Message
 }

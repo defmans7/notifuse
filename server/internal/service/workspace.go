@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"notifuse/server/internal/domain"
+	"time"
 )
 
 type WorkspaceService struct {
@@ -15,17 +16,37 @@ func NewWorkspaceService(repo domain.WorkspaceRepository) *WorkspaceService {
 	}
 }
 
-// ListWorkspaces returns all workspaces
-func (s *WorkspaceService) ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error) {
-	return s.repo.List(ctx)
+// ListWorkspaces returns all workspaces for a user
+func (s *WorkspaceService) ListWorkspaces(ctx context.Context, userID string) ([]*domain.Workspace, error) {
+	userWorkspaces, err := s.repo.GetUserWorkspaces(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	workspaces := make([]*domain.Workspace, 0, len(userWorkspaces))
+	for _, uw := range userWorkspaces {
+		workspace, err := s.repo.GetByID(ctx, uw.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+		workspaces = append(workspaces, workspace)
+	}
+
+	return workspaces, nil
 }
 
-// GetWorkspace returns a workspace by ID
-func (s *WorkspaceService) GetWorkspace(ctx context.Context, id string, ownerID string) (*domain.Workspace, error) {
+// GetWorkspace returns a workspace by ID if the user has access
+func (s *WorkspaceService) GetWorkspace(ctx context.Context, id string, userID string) (*domain.Workspace, error) {
+	// Check if user has access to the workspace
+	_, err := s.repo.GetUserWorkspace(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+
 	return s.repo.GetByID(ctx, id)
 }
 
-// CreateWorkspace creates a new workspace
+// CreateWorkspace creates a new workspace and adds the creator as owner
 func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, timezone string, ownerID string) (*domain.Workspace, error) {
 	workspace := &domain.Workspace{
 		ID:   id,
@@ -35,6 +56,8 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 			LogoURL:    logoURL,
 			Timezone:   timezone,
 		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := workspace.Validate(); err != nil {
@@ -45,11 +68,38 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
+	// Add the creator as owner
+	userWorkspace := &domain.UserWorkspace{
+		UserID:      ownerID,
+		WorkspaceID: id,
+		Role:        "owner",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := userWorkspace.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.AddUserToWorkspace(ctx, userWorkspace); err != nil {
+		return nil, err
+	}
+
 	return workspace, nil
 }
 
-// UpdateWorkspace updates a workspace
-func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, timezone string, ownerID string) (*domain.Workspace, error) {
+// UpdateWorkspace updates a workspace if the user is an owner
+func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, timezone string, userID string) (*domain.Workspace, error) {
+	// Check if user is an owner
+	userWorkspace, err := s.repo.GetUserWorkspace(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if userWorkspace.Role != "owner" {
+		return nil, &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
 	workspace := &domain.Workspace{
 		ID:   id,
 		Name: name,
@@ -58,6 +108,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 			LogoURL:    logoURL,
 			Timezone:   timezone,
 		},
+		UpdatedAt: time.Now(),
 	}
 
 	if err := workspace.Validate(); err != nil {
@@ -71,7 +122,59 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	return workspace, nil
 }
 
-// DeleteWorkspace deletes a workspace
-func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, id string, ownerID string) error {
+// DeleteWorkspace deletes a workspace if the user is an owner
+func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, id string, userID string) error {
+	// Check if user is an owner
+	userWorkspace, err := s.repo.GetUserWorkspace(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+
+	if userWorkspace.Role != "owner" {
+		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
 	return s.repo.Delete(ctx, id)
+}
+
+// AddUserToWorkspace adds a user to a workspace if the requester is an owner
+func (s *WorkspaceService) AddUserToWorkspace(ctx context.Context, workspaceID string, userID string, role string, requesterID string) error {
+	// Check if requester is an owner
+	requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, requesterID, workspaceID)
+	if err != nil {
+		return err
+	}
+
+	if requesterWorkspace.Role != "owner" {
+		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	userWorkspace := &domain.UserWorkspace{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Role:        role,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := userWorkspace.Validate(); err != nil {
+		return err
+	}
+
+	return s.repo.AddUserToWorkspace(ctx, userWorkspace)
+}
+
+// RemoveUserFromWorkspace removes a user from a workspace if the requester is an owner
+func (s *WorkspaceService) RemoveUserFromWorkspace(ctx context.Context, workspaceID string, userID string, requesterID string) error {
+	// Check if requester is an owner
+	requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, requesterID, workspaceID)
+	if err != nil {
+		return err
+	}
+
+	if requesterWorkspace.Role != "owner" {
+		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	return s.repo.RemoveUserFromWorkspace(ctx, userID, workspaceID)
 }
