@@ -11,9 +11,10 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Security SecurityConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	Security  SecurityConfig
+	RootEmail string
 }
 
 type ServerConfig struct {
@@ -126,6 +127,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			PasetoPrivateKey: privateKey,
 			PasetoPublicKey:  publicKey,
 		},
+		RootEmail: v.GetString("ROOT_EMAIL"),
 	}
 
 	return config, nil

@@ -44,7 +44,7 @@ func main() {
 	}
 
 	// Initialize database schema if needed
-	if err := database.InitializeDatabase(systemDB); err != nil {
+	if err := database.InitializeDatabase(systemDB, cfg.RootEmail); err != nil {
 		log.Fatalf("Failed to initialize database schema: %v", err)
 	}
 

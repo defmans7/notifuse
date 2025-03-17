@@ -34,7 +34,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	}
 
 	// Initialize database with tables
-	if err := database.InitializeDatabase(db); err != nil {
+	if err := database.InitializeDatabase(db, cfg.RootEmail); err != nil {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
 
