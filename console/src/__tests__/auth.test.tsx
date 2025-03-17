@@ -60,7 +60,7 @@ describe('Authentication Flow', () => {
 
     it('should show code input form after submitting email', async () => {
       const { authService } = await import('../services/api/auth')
-      vi.mocked(authService.signIn).mockResolvedValueOnce({ message: 'Code sent' })
+      vi.mocked(authService.signIn).mockResolvedValueOnce({ message: 'Code sent', code: '123456' })
 
       render(<SignIn />, { wrapper })
 
@@ -76,6 +76,108 @@ describe('Authentication Flow', () => {
 
       // Verify success message was shown
       expect(message.success).toHaveBeenCalledWith('Magic code sent to your email')
+    })
+
+    it('should log magic code in development mode', async () => {
+      const consoleSpy = vi.spyOn(console, 'log')
+      const { authService } = await import('../services/api/auth')
+      vi.mocked(authService.signIn).mockResolvedValueOnce({ message: 'Code sent', code: '123456' })
+
+      // Set development mode
+      vi.stubEnv('DEV', true)
+
+      render(<SignIn />, { wrapper })
+
+      // Fill and submit email form
+      await userEvent.type(screen.getByPlaceholderText('Email'), 'test@example.com')
+      await userEvent.click(screen.getByRole('button', { name: /send magic code/i }))
+
+      // Verify magic code was logged
+      expect(consoleSpy).toHaveBeenCalledWith('⚡ Magic code:', '123456')
+      consoleSpy.mockRestore()
+    })
+
+    it('should validate magic code format', async () => {
+      const { authService } = await import('../services/api/auth')
+      vi.mocked(authService.signIn).mockResolvedValueOnce({ message: 'Code sent' })
+
+      render(<SignIn />, { wrapper })
+
+      // Fill and submit email form
+      await userEvent.type(screen.getByPlaceholderText('Email'), 'test@example.com')
+      await userEvent.click(screen.getByRole('button', { name: /send magic code/i }))
+
+      // Wait for code input form
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('000000')).toBeInTheDocument()
+      })
+
+      // Try invalid code formats
+      const codeInput = screen.getByPlaceholderText('000000')
+      await userEvent.type(codeInput, '12345') // Too short
+      await userEvent.click(screen.getByRole('button', { name: /verify code/i }))
+
+      // Wait for validation message
+      await waitFor(() => {
+        const errorMessage = screen.getByText('Please enter a valid 6-digit code!')
+        expect(errorMessage).toBeInTheDocument()
+        expect(errorMessage).toHaveClass('ant-form-item-explain-error')
+      })
+
+      await userEvent.clear(codeInput)
+      await userEvent.type(codeInput, '1234567') // Too long
+      expect(codeInput).toHaveValue('123456') // Should be truncated to 6 digits
+    })
+
+    it('should handle invalid magic code', async () => {
+      const { authService } = await import('../services/api/auth')
+      vi.mocked(authService.signIn).mockResolvedValueOnce({ message: 'Code sent' })
+      vi.mocked(authService.verifyCode).mockRejectedValueOnce(new Error('Invalid code'))
+
+      render(<SignIn />, { wrapper })
+
+      // Fill and submit email form
+      await userEvent.type(screen.getByPlaceholderText('Email'), 'test@example.com')
+      await userEvent.click(screen.getByRole('button', { name: /send magic code/i }))
+
+      // Wait for code input form and submit invalid code
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('000000')).toBeInTheDocument()
+      })
+
+      await userEvent.type(screen.getByPlaceholderText('000000'), '123456')
+      await userEvent.click(screen.getByRole('button', { name: /verify code/i }))
+
+      // Verify error message was shown
+      await waitFor(() => {
+        expect(message.error).toHaveBeenCalledWith('Invalid code')
+      })
+    })
+
+    it('should handle resending magic code', async () => {
+      const { authService } = await import('../services/api/auth')
+      vi.mocked(authService.signIn)
+        .mockResolvedValueOnce({ message: 'Code sent' })
+        .mockResolvedValueOnce({ message: 'Code sent', code: '654321' })
+
+      render(<SignIn />, { wrapper })
+
+      // Fill and submit email form
+      await userEvent.type(screen.getByPlaceholderText('Email'), 'test@example.com')
+      await userEvent.click(screen.getByRole('button', { name: /send magic code/i }))
+
+      // Wait for code input form
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('000000')).toBeInTheDocument()
+      })
+
+      // Click resend code
+      await userEvent.click(screen.getByRole('button', { name: /resend code/i }))
+
+      // Verify success message was shown
+      await waitFor(() => {
+        expect(message.success).toHaveBeenCalledWith('New magic code sent to your email')
+      })
     })
 
     it('should handle successful sign in', async () => {

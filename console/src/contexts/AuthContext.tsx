@@ -34,7 +34,7 @@ const fetchWorkspaces = async (): Promise<Workspace[]> => {
     throw new Error('No authentication token')
   }
 
-  const response = await fetch(`${config.API_ENDPOINT}/workspaces.list`, {
+  const response = await fetch(`${config.API_ENDPOINT}/api/workspaces.list`, {
     headers: {
       Authorization: `Bearer ${authToken}`
     }

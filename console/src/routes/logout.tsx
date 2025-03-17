@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
@@ -6,10 +6,14 @@ import { createFileRoute } from '@tanstack/react-router'
 function Logout() {
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const hasLoggedOut = useRef(false)
 
   useEffect(() => {
-    logout()
-    navigate({ to: '/signin' })
+    if (!hasLoggedOut.current) {
+      hasLoggedOut.current = true
+      logout()
+      navigate({ to: '/signin' })
+    }
   }, [logout, navigate])
 
   return null
