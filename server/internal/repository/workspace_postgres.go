@@ -264,3 +264,106 @@ func (r *workspaceRepository) DeleteDatabase(ctx context.Context, workspaceID st
 
 	return nil
 }
+
+func (r *workspaceRepository) AddUserToWorkspace(ctx context.Context, userWorkspace *domain.UserWorkspace) error {
+	query := `
+		INSERT INTO user_workspaces (user_id, workspace_id, role, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id, workspace_id) DO UPDATE
+		SET role = $3, updated_at = $5
+	`
+	_, err := r.systemDB.ExecContext(ctx, query,
+		userWorkspace.UserID,
+		userWorkspace.WorkspaceID,
+		userWorkspace.Role,
+		userWorkspace.CreatedAt,
+		userWorkspace.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to add user to workspace: %w", err)
+	}
+	return nil
+}
+
+func (r *workspaceRepository) RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error {
+	query := `DELETE FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`
+	result, err := r.systemDB.ExecContext(ctx, query, userID, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to remove user from workspace: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("user is not a member of the workspace")
+	}
+	return nil
+}
+
+func (r *workspaceRepository) GetUserWorkspaces(ctx context.Context, userID string) ([]*domain.UserWorkspace, error) {
+	query := `
+		SELECT user_id, workspace_id, role, created_at, updated_at
+		FROM user_workspaces
+		WHERE user_id = $1
+	`
+	rows, err := r.systemDB.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user workspaces: %w", err)
+	}
+	defer rows.Close()
+
+	var userWorkspaces []*domain.UserWorkspace
+	for rows.Next() {
+		var uw domain.UserWorkspace
+		err := rows.Scan(&uw.UserID, &uw.WorkspaceID, &uw.Role, &uw.CreatedAt, &uw.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user workspace: %w", err)
+		}
+		userWorkspaces = append(userWorkspaces, &uw)
+	}
+	return userWorkspaces, rows.Err()
+}
+
+func (r *workspaceRepository) GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*domain.UserWorkspace, error) {
+	query := `
+		SELECT user_id, workspace_id, role, created_at, updated_at
+		FROM user_workspaces
+		WHERE workspace_id = $1
+	`
+	rows, err := r.systemDB.QueryContext(ctx, query, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace users: %w", err)
+	}
+	defer rows.Close()
+
+	var userWorkspaces []*domain.UserWorkspace
+	for rows.Next() {
+		var uw domain.UserWorkspace
+		err := rows.Scan(&uw.UserID, &uw.WorkspaceID, &uw.Role, &uw.CreatedAt, &uw.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user workspace: %w", err)
+		}
+		userWorkspaces = append(userWorkspaces, &uw)
+	}
+	return userWorkspaces, rows.Err()
+}
+
+func (r *workspaceRepository) GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*domain.UserWorkspace, error) {
+	query := `
+		SELECT user_id, workspace_id, role, created_at, updated_at
+		FROM user_workspaces
+		WHERE user_id = $1 AND workspace_id = $2
+	`
+	var uw domain.UserWorkspace
+	err := r.systemDB.QueryRowContext(ctx, query, userID, workspaceID).Scan(
+		&uw.UserID, &uw.WorkspaceID, &uw.Role, &uw.CreatedAt, &uw.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user is not a member of the workspace")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user workspace: %w", err)
+	}
+	return &uw, nil
+}
