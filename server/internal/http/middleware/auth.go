@@ -42,20 +42,48 @@ func NewAuthMiddleware(publicKey paseto.V4AsymmetricPublicKey) *AuthConfig {
 	}
 }
 
-// RequireAuth creates a middleware that verifies the user session using the auth service
-func RequireAuth(authService AuthServiceInterface) func(http.Handler) http.Handler {
+// RequireAuth creates a middleware that verifies the PASETO token and user session
+func (ac *AuthConfig) RequireAuth(authService AuthServiceInterface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Get user ID and session ID from context (set by VerifyToken middleware)
-			userID, ok := r.Context().Value(UserIDKey).(string)
-			if !ok {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			// Get the Authorization header
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				http.Error(w, "Authorization header is required", http.StatusUnauthorized)
 				return
 			}
 
-			sessionID, ok := r.Context().Value(SessionIDKey).(string)
-			if !ok {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			// Check if it's a Bearer token
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+				return
+			}
+
+			token := parts[1]
+
+			// Parse and verify the token
+			parser := paseto.NewParser()
+			parser.AddRule(paseto.NotExpired())
+
+			// Verify token and get claims
+			verified, err := parser.ParseV4Public(ac.PublicKey, token, nil)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
+				return
+			}
+
+			// Get user ID from claims
+			userID, err := verified.GetString("user_id")
+			if err != nil {
+				http.Error(w, "User ID not found in token", http.StatusUnauthorized)
+				return
+			}
+
+			// Get session ID from claims
+			sessionID, err := verified.GetString("session_id")
+			if err != nil {
+				http.Error(w, "Session ID not found in token", http.StatusUnauthorized)
 				return
 			}
 
@@ -83,57 +111,4 @@ func RequireAuth(authService AuthServiceInterface) func(http.Handler) http.Handl
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
-}
-
-// VerifyToken is a middleware that verifies PASETO tokens from the Authorization header
-func (ac *AuthConfig) VerifyToken(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get the Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header is required", http.StatusUnauthorized)
-			return
-		}
-
-		// Check if it's a Bearer token
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
-			return
-		}
-
-		token := parts[1]
-
-		// Parse and verify the token
-		parser := paseto.NewParser()
-		parser.AddRule(paseto.NotExpired())
-
-		// Verify token and get claims
-		verified, err := parser.ParseV4Public(ac.PublicKey, token, nil)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
-			return
-		}
-
-		// Get user ID from claims
-		userID, err := verified.GetString("user_id")
-		if err != nil {
-			http.Error(w, "User ID not found in token", http.StatusUnauthorized)
-			return
-		}
-
-		// Get session ID from claims
-		sessionID, err := verified.GetString("session_id")
-		if err != nil {
-			http.Error(w, "Session ID not found in token", http.StatusUnauthorized)
-			return
-		}
-
-		// Add user ID and session ID to context
-		ctx := context.WithValue(r.Context(), UserIDKey, userID)
-		ctx = context.WithValue(ctx, SessionIDKey, sessionID)
-
-		// Call the next handler with the updated context
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }

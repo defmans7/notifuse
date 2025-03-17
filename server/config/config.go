@@ -11,10 +11,11 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig
-	Database  DatabaseConfig
-	Security  SecurityConfig
-	RootEmail string
+	Server      ServerConfig
+	Database    DatabaseConfig
+	Security    SecurityConfig
+	RootEmail   string
+	Environment string
 }
 
 type ServerConfig struct {
@@ -67,6 +68,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_PASSWORD", "postgres")
 	v.SetDefault("DB_PREFIX", "notifuse")
 	v.SetDefault("DB_NAME", "${DB_PREFIX}_system")
+	v.SetDefault("ENVIRONMENT", "production")
 
 	// Load environment file if specified
 	if opts.EnvFile != "" {
@@ -139,8 +141,14 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			PasetoPrivateKey: privateKey,
 			PasetoPublicKey:  publicKey,
 		},
-		RootEmail: v.GetString("ROOT_EMAIL"),
+		RootEmail:   v.GetString("ROOT_EMAIL"),
+		Environment: v.GetString("ENVIRONMENT"),
 	}
 
 	return config, nil
+}
+
+// IsDevelopment returns true if the environment is set to development
+func (c *Config) IsDevelopment() bool {
+	return c.Environment == "development"
 }

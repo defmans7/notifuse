@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { authService } from '../services/api/auth'
-import { SignInRequest, VerifyCodeRequest } from '../services/api/types'
 
 interface EmailForm {
   email: string
@@ -26,9 +25,15 @@ function SignIn() {
   const handleEmailSubmit = async (values: EmailForm) => {
     try {
       setLoading(true)
-      await authService.signIn({ email: values.email })
+      const response = await authService.signIn({ email: values.email })
       setEmail(values.email)
       setShowCodeInput(true)
+
+      // In development mode, log the magic code
+      if (import.meta.env.DEV && response.code) {
+        console.log('⚡ Magic code:', response.code)
+      }
+
       message.success('Magic code sent to your email')
     } catch (error) {
       if (error instanceof Error) {

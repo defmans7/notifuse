@@ -79,15 +79,15 @@ func main() {
 		log.Fatalf("Failed to parse PASETO public key: %v", err)
 	}
 
-	userHandler := httpHandler.NewUserHandler(userService)
+	userHandler := httpHandler.NewUserHandler(userService, cfg)
 	rootHandler := httpHandler.NewRootHandler()
 	workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, userService, publicKey)
 
 	// Set up routes
 	mux := http.NewServeMux()
-	rootHandler.RegisterRoutes(mux)
 	userHandler.RegisterRoutes(mux)
 	workspaceHandler.RegisterRoutes(mux)
+	rootHandler.RegisterRoutes(mux)
 
 	// Wrap mux with CORS middleware
 	handler := middleware.CORSMiddleware(mux)

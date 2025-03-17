@@ -3,6 +3,11 @@ export interface SignInRequest {
   email: string
 }
 
+export interface SignInResponse {
+  message: string
+  code?: string
+}
+
 export interface VerifyCodeRequest {
   email: string
   code: string

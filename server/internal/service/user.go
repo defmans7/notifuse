@@ -69,6 +69,7 @@ type AuthResponse struct {
 // UserServiceInterface defines the interface for user operations
 type UserServiceInterface interface {
 	SignIn(ctx context.Context, input SignInInput) error
+	SignInDev(ctx context.Context, input SignInInput) (string, error)
 	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
 	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*User, error)
 }
@@ -212,4 +213,31 @@ func (s *UserService) VerifyUserSession(ctx context.Context, userID string, sess
 	}
 
 	return serviceUser, nil
+}
+
+// SignInDev is a development-only version of SignIn that returns the magic code
+func (s *UserService) SignInDev(ctx context.Context, input SignInInput) (string, error) {
+	// Check if user exists
+	user, err := s.repo.GetUserByEmail(ctx, input.Email)
+	if err != nil {
+		return "", fmt.Errorf("error getting user: %w", err)
+	}
+
+	// Generate 6-digit magic code
+	code := s.generateMagicCode()
+
+	// Create a temporary session with the magic code
+	session := &domain.Session{
+		UserID:           user.ID,
+		MagicCode:        code,
+		MagicCodeExpires: time.Now().Add(15 * time.Minute),
+		ExpiresAt:        time.Now().Add(s.sessionExpiry),
+	}
+
+	if err := s.repo.CreateSession(ctx, session); err != nil {
+		return "", fmt.Errorf("error creating session: %w", err)
+	}
+
+	// In development mode, we don't actually send the email
+	return code, nil
 }

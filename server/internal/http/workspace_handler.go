@@ -75,14 +75,14 @@ func writeError(w http.ResponseWriter, status int, message string) {
 func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Create auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
-	requireAuth := middleware.RequireAuth(h.authService)
+	requireAuth := authMiddleware.RequireAuth(h.authService)
 
 	// Register RPC-style endpoints with dot notation
-	mux.Handle("/api/workspaces.list", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleList))))
-	mux.Handle("/api/workspaces.get", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleGet))))
-	mux.Handle("/api/workspaces.create", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleCreate))))
-	mux.Handle("/api/workspaces.update", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleUpdate))))
-	mux.Handle("/api/workspaces.delete", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleDelete))))
+	mux.Handle("/api/workspaces.list", requireAuth(http.HandlerFunc(h.handleList)))
+	mux.Handle("/api/workspaces.get", requireAuth(http.HandlerFunc(h.handleGet)))
+	mux.Handle("/api/workspaces.create", requireAuth(http.HandlerFunc(h.handleCreate)))
+	mux.Handle("/api/workspaces.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
+	mux.Handle("/api/workspaces.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 }
 
 func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {

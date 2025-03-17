@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"notifuse/server/config"
 	"notifuse/server/internal/domain"
 	"notifuse/server/internal/service"
 )
@@ -26,6 +27,14 @@ type mockUserService struct {
 func (m *mockUserService) SignIn(ctx context.Context, input service.SignInInput) error {
 	args := m.Called(ctx, input)
 	return args.Error(0)
+}
+
+func (m *mockUserService) SignInDev(ctx context.Context, input service.SignInInput) (string, error) {
+	args := m.Called(ctx, input)
+	if args.Get(0) == nil {
+		return "", args.Error(1)
+	}
+	return args.Get(0).(string), args.Error(1)
 }
 
 func (m *mockUserService) VerifyCode(ctx context.Context, input service.VerifyCodeInput) (*service.AuthResponse, error) {
@@ -46,17 +55,22 @@ func (m *mockUserService) VerifyUserSession(ctx context.Context, userID string, 
 
 func TestUserHandler_SignIn(t *testing.T) {
 	mockService := new(mockUserService)
-	handler := NewUserHandler(mockService)
+	devConfig := &config.Config{Environment: "development"}
+	prodConfig := &config.Config{Environment: "production"}
+	devHandler := NewUserHandler(mockService, devConfig)
+	prodHandler := NewUserHandler(mockService, prodConfig)
 
 	tests := []struct {
 		name         string
+		handler      *UserHandler
 		input        service.SignInInput
 		setupMock    func()
 		expectedCode int
 		expectedBody map[string]string
 	}{
 		{
-			name: "successful sign in",
+			name:    "successful sign in production",
+			handler: prodHandler,
 			input: service.SignInInput{
 				Email: "test@example.com",
 			},
@@ -71,7 +85,25 @@ func TestUserHandler_SignIn(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid email",
+			name:    "successful sign in development",
+			handler: devHandler,
+			input: service.SignInInput{
+				Email: "test@example.com",
+			},
+			setupMock: func() {
+				mockService.On("SignInDev", mock.Anything, service.SignInInput{
+					Email: "test@example.com",
+				}).Return("123456", nil)
+			},
+			expectedCode: http.StatusOK,
+			expectedBody: map[string]string{
+				"message": "Magic code sent to your email",
+				"code":    "123456",
+			},
+		},
+		{
+			name:    "invalid email production",
+			handler: prodHandler,
 			input: service.SignInInput{
 				Email: "",
 			},
@@ -79,6 +111,22 @@ func TestUserHandler_SignIn(t *testing.T) {
 				mockService.On("SignIn", mock.Anything, service.SignInInput{
 					Email: "",
 				}).Return(fmt.Errorf("invalid email"))
+			},
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: map[string]string{
+				"error": "invalid email",
+			},
+		},
+		{
+			name:    "invalid email development",
+			handler: devHandler,
+			input: service.SignInInput{
+				Email: "",
+			},
+			setupMock: func() {
+				mockService.On("SignInDev", mock.Anything, service.SignInInput{
+					Email: "",
+				}).Return("", fmt.Errorf("invalid email"))
 			},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: map[string]string{
@@ -97,7 +145,7 @@ func TestUserHandler_SignIn(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/user.signin", bytes.NewReader(body))
 			rec := httptest.NewRecorder()
 
-			handler.SignIn(rec, req)
+			tt.handler.SignIn(rec, req)
 
 			assert.Equal(t, tt.expectedCode, rec.Code)
 
@@ -113,7 +161,8 @@ func TestUserHandler_SignIn(t *testing.T) {
 
 func TestUserHandler_VerifyCode(t *testing.T) {
 	mockService := new(mockUserService)
-	handler := NewUserHandler(mockService)
+	config := &config.Config{Environment: "production"}
+	handler := NewUserHandler(mockService, config)
 
 	user := &domain.User{
 		ID:    uuid.New().String(),
