@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -65,16 +66,20 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 	workspace.CreatedAt = now
 	workspace.UpdatedAt = now
 
+	// Marshal settings to JSON
+	settings, err := json.Marshal(workspace.Settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal settings: %w", err)
+	}
+
 	query := `
-		INSERT INTO workspaces (id, name, website_url, logo_url, timezone, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO workspaces (id, name, settings, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
 	`
 	_, err = r.systemDB.ExecContext(ctx, query,
 		workspace.ID,
 		workspace.Name,
-		workspace.WebsiteURL,
-		workspace.LogoURL,
-		workspace.Timezone,
+		settings,
 		workspace.CreatedAt,
 		workspace.UpdatedAt,
 	)
@@ -87,21 +92,12 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 }
 
 func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.Workspace, error) {
-	workspace := &domain.Workspace{}
 	query := `
-		SELECT id, name, website_url, logo_url, timezone, created_at, updated_at
+		SELECT id, name, settings, created_at, updated_at
 		FROM workspaces
 		WHERE id = $1
 	`
-	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(
-		&workspace.ID,
-		&workspace.Name,
-		&workspace.WebsiteURL,
-		&workspace.LogoURL,
-		&workspace.Timezone,
-		&workspace.CreatedAt,
-		&workspace.UpdatedAt,
-	)
+	workspace, err := domain.ScanWorkspace(r.systemDB.QueryRowContext(ctx, query, id))
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("workspace not found")
 	}
@@ -113,7 +109,7 @@ func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.W
 
 func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, error) {
 	query := `
-		SELECT id, name, website_url, logo_url, timezone, created_at, updated_at
+		SELECT id, name, settings, created_at, updated_at
 		FROM workspaces
 		ORDER BY created_at DESC
 	`
@@ -125,22 +121,13 @@ func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, er
 
 	var workspaces []*domain.Workspace
 	for rows.Next() {
-		workspace := &domain.Workspace{}
-		err := rows.Scan(
-			&workspace.ID,
-			&workspace.Name,
-			&workspace.WebsiteURL,
-			&workspace.LogoURL,
-			&workspace.Timezone,
-			&workspace.CreatedAt,
-			&workspace.UpdatedAt,
-		)
+		workspace, err := domain.ScanWorkspace(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan workspace: %w", err)
 		}
 		workspaces = append(workspaces, workspace)
 	}
-	return workspaces, nil
+	return workspaces, rows.Err()
 }
 
 func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
@@ -151,16 +138,20 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 		return err
 	}
 
+	// Marshal settings to JSON
+	settings, err := json.Marshal(workspace.Settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal settings: %w", err)
+	}
+
 	query := `
 		UPDATE workspaces
-		SET name = $1, website_url = $2, logo_url = $3, timezone = $4, updated_at = $5
-		WHERE id = $6
+		SET name = $1, settings = $2, updated_at = $3
+		WHERE id = $4
 	`
 	result, err := r.systemDB.ExecContext(ctx, query,
 		workspace.Name,
-		workspace.WebsiteURL,
-		workspace.LogoURL,
-		workspace.Timezone,
+		settings,
 		workspace.UpdatedAt,
 		workspace.ID,
 	)

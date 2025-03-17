@@ -1,1 +1,1 @@
-- store magic codes in db
+- test console signup & login

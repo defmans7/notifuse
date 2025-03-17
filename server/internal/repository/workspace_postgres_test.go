@@ -75,9 +75,13 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		ID:       generateWorkspaceID(),
-		Name:     "Test Workspace",
-		Timezone: "UTC",
+		ID:   generateWorkspaceID(),
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 
 	t.Cleanup(func() {
@@ -97,15 +101,22 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workspace.ID, savedWorkspace.ID)
 	assert.Equal(t, workspace.Name, savedWorkspace.Name)
+	assert.Equal(t, workspace.Settings.WebsiteURL, savedWorkspace.Settings.WebsiteURL)
+	assert.Equal(t, workspace.Settings.LogoURL, savedWorkspace.Settings.LogoURL)
+	assert.Equal(t, workspace.Settings.Timezone, savedWorkspace.Settings.Timezone)
 }
 
 func TestWorkspaceRepository_GetByID(t *testing.T) {
 	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		ID:       generateWorkspaceID(),
-		Name:     "Test Workspace",
-		Timezone: "UTC",
+		ID:   generateWorkspaceID(),
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 
 	t.Cleanup(func() {
@@ -125,6 +136,9 @@ func TestWorkspaceRepository_GetByID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workspace.ID, foundWorkspace.ID)
 	assert.Equal(t, workspace.Name, foundWorkspace.Name)
+	assert.Equal(t, workspace.Settings.WebsiteURL, foundWorkspace.Settings.WebsiteURL)
+	assert.Equal(t, workspace.Settings.LogoURL, foundWorkspace.Settings.LogoURL)
+	assert.Equal(t, workspace.Settings.Timezone, foundWorkspace.Settings.Timezone)
 }
 
 func TestWorkspaceRepository_List(t *testing.T) {
@@ -132,14 +146,22 @@ func TestWorkspaceRepository_List(t *testing.T) {
 
 	// Create some workspaces
 	workspace1 := &domain.Workspace{
-		ID:       "testworkspace1",
-		Name:     "Workspace 1",
-		Timezone: "UTC",
+		ID:   "testworkspace1",
+		Name: "Workspace 1",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example1.com",
+			LogoURL:    "https://example1.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 	workspace2 := &domain.Workspace{
-		ID:       "testworkspace2",
-		Name:     "Workspace 2",
-		Timezone: "UTC",
+		ID:   "testworkspace2",
+		Name: "Workspace 2",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example2.com",
+			LogoURL:    "https://example2.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 
 	t.Cleanup(func() {
@@ -165,9 +187,13 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		ID:       generateWorkspaceID(),
-		Name:     "Test Workspace",
-		Timezone: "UTC",
+		ID:   generateWorkspaceID(),
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 
 	t.Cleanup(func() {
@@ -180,6 +206,8 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 
 	// Update workspace
 	workspace.Name = "Updated Workspace"
+	workspace.Settings.WebsiteURL = "https://updated.com"
+	workspace.Settings.LogoURL = "https://updated.com/logo.png"
 	err = repo.Update(context.Background(), workspace)
 	require.NoError(t, err)
 
@@ -187,6 +215,8 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 	updatedWorkspace, err := repo.GetByID(context.Background(), workspace.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Workspace", updatedWorkspace.Name)
+	assert.Equal(t, "https://updated.com", updatedWorkspace.Settings.WebsiteURL)
+	assert.Equal(t, "https://updated.com/logo.png", updatedWorkspace.Settings.LogoURL)
 	assert.True(t, updatedWorkspace.UpdatedAt.After(updatedWorkspace.CreatedAt))
 }
 
@@ -194,9 +224,13 @@ func TestWorkspaceRepository_Delete(t *testing.T) {
 	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		ID:       generateWorkspaceID(),
-		Name:     "Test Workspace",
-		Timezone: "UTC",
+		ID:   generateWorkspaceID(),
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 
 	t.Cleanup(func() {
@@ -224,9 +258,13 @@ func TestWorkspaceRepository_GetConnection(t *testing.T) {
 	db, repo, _ := setupWorkspaceTest(t)
 
 	workspace := &domain.Workspace{
-		ID:       generateWorkspaceID(),
-		Name:     "Test Workspace",
-		Timezone: "UTC",
+		ID:   generateWorkspaceID(),
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 
 	t.Cleanup(func() {

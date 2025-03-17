@@ -6,6 +6,7 @@
 package schema
 
 // TableDefinitions contains all the SQL statements to create the database tables
+// Don't put REFERENCES and don't put CHECK constraints in the CREATE TABLE statements
 var TableDefinitions = []string{
 	`CREATE TABLE IF NOT EXISTS users (
 		id UUID PRIMARY KEY,
@@ -23,11 +24,9 @@ var TableDefinitions = []string{
 		magic_code_expires_at TIMESTAMP
 	)`,
 	`CREATE TABLE IF NOT EXISTS workspaces (
-		id VARCHAR(20) PRIMARY KEY CHECK (id ~ '^[a-zA-Z0-9]+$'),
+		id VARCHAR(20) PRIMARY KEY,
 		name VARCHAR(255) NOT NULL,
-		website_url VARCHAR(255),
-		logo_url VARCHAR(255),
-		timezone VARCHAR(50) NOT NULL,
+		settings JSONB NOT NULL DEFAULT '{"timezone": "UTC"}',
 		created_at TIMESTAMP NOT NULL,
 		updated_at TIMESTAMP NOT NULL
 	)`,
