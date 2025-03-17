@@ -15,6 +15,7 @@ function Logout() {
   return null
 }
 
+export { Logout }
 export const Route = createFileRoute('/logout')({
   component: Logout
 })

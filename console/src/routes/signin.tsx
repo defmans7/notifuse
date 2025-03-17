@@ -160,6 +160,7 @@ function SignIn() {
   )
 }
 
+export { SignIn }
 export const Route = createFileRoute('/signin')({
   component: SignIn
 })
