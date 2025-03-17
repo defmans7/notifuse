@@ -27,66 +27,62 @@ import { Route as WorkspaceWorkspaceIdCampaignsImport } from './routes/workspace
 const SigninRoute = SigninImport.update({
   id: '/signin',
   path: '/signin',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRoute
 } as any)
 
 const LogoutRoute = LogoutImport.update({
   id: '/logout',
   path: '/logout',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRoute
 } as any)
 
 const AcceptInvitationRoute = AcceptInvitationImport.update({
   id: '/accept-invitation',
   path: '/accept-invitation',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRoute
 } as any)
 
 const IndexRoute = IndexImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRoute
 } as any)
 
 const WorkspaceCreateRoute = WorkspaceCreateImport.update({
   id: '/workspace/create',
   path: '/workspace/create',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRoute
 } as any)
 
 const WorkspaceWorkspaceIdRoute = WorkspaceWorkspaceIdImport.update({
   id: '/workspace/$workspaceId',
   path: '/workspace/$workspaceId',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRoute
 } as any)
 
-const WorkspaceWorkspaceIdTemplatesRoute =
-  WorkspaceWorkspaceIdTemplatesImport.update({
-    id: '/templates',
-    path: '/templates',
-    getParentRoute: () => WorkspaceWorkspaceIdRoute,
-  } as any)
+const WorkspaceWorkspaceIdTemplatesRoute = WorkspaceWorkspaceIdTemplatesImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => WorkspaceWorkspaceIdRoute
+} as any)
 
-const WorkspaceWorkspaceIdSettingsRoute =
-  WorkspaceWorkspaceIdSettingsImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => WorkspaceWorkspaceIdRoute,
-  } as any)
+const WorkspaceWorkspaceIdSettingsRoute = WorkspaceWorkspaceIdSettingsImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => WorkspaceWorkspaceIdRoute
+} as any)
 
-const WorkspaceWorkspaceIdContactsRoute =
-  WorkspaceWorkspaceIdContactsImport.update({
-    id: '/contacts',
-    path: '/contacts',
-    getParentRoute: () => WorkspaceWorkspaceIdRoute,
-  } as any)
+const WorkspaceWorkspaceIdContactsRoute = WorkspaceWorkspaceIdContactsImport.update({
+  id: '/contacts',
+  path: '/contacts',
+  getParentRoute: () => WorkspaceWorkspaceIdRoute
+} as any)
 
-const WorkspaceWorkspaceIdCampaignsRoute =
-  WorkspaceWorkspaceIdCampaignsImport.update({
-    id: '/campaigns',
-    path: '/campaigns',
-    getParentRoute: () => WorkspaceWorkspaceIdRoute,
-  } as any)
+const WorkspaceWorkspaceIdCampaignsRoute = WorkspaceWorkspaceIdCampaignsImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
+  getParentRoute: () => WorkspaceWorkspaceIdRoute
+} as any)
 
 // Populate the FileRoutesByPath interface
 
@@ -178,11 +174,12 @@ const WorkspaceWorkspaceIdRouteChildren: WorkspaceWorkspaceIdRouteChildren = {
   WorkspaceWorkspaceIdCampaignsRoute: WorkspaceWorkspaceIdCampaignsRoute,
   WorkspaceWorkspaceIdContactsRoute: WorkspaceWorkspaceIdContactsRoute,
   WorkspaceWorkspaceIdSettingsRoute: WorkspaceWorkspaceIdSettingsRoute,
-  WorkspaceWorkspaceIdTemplatesRoute: WorkspaceWorkspaceIdTemplatesRoute,
+  WorkspaceWorkspaceIdTemplatesRoute: WorkspaceWorkspaceIdTemplatesRoute
 }
 
-const WorkspaceWorkspaceIdRouteWithChildren =
-  WorkspaceWorkspaceIdRoute._addFileChildren(WorkspaceWorkspaceIdRouteChildren)
+const WorkspaceWorkspaceIdRouteWithChildren = WorkspaceWorkspaceIdRoute._addFileChildren(
+  WorkspaceWorkspaceIdRouteChildren
+)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -279,7 +276,7 @@ const rootRouteChildren: RootRouteChildren = {
   LogoutRoute: LogoutRoute,
   SigninRoute: SigninRoute,
   WorkspaceWorkspaceIdRoute: WorkspaceWorkspaceIdRouteWithChildren,
-  WorkspaceCreateRoute: WorkspaceCreateRoute,
+  WorkspaceCreateRoute: WorkspaceCreateRoute
 }
 
 export const routeTree = rootRoute

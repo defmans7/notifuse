@@ -145,6 +145,7 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 		},
 	}
 
+	// Test successful list with workspaces
 	mockRepo.On("GetUserWorkspaces", ctx, userID).Return(expectedUserWorkspaces, nil)
 	mockRepo.On("GetByID", ctx, "1").Return(expectedWorkspaces[0], nil)
 	mockRepo.On("GetByID", ctx, "2").Return(expectedWorkspaces[1], nil)
@@ -152,6 +153,17 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	workspaces, err := service.ListWorkspaces(ctx, userID)
 	require.NoError(t, err)
 	assert.Equal(t, expectedWorkspaces, workspaces)
+	mockRepo.AssertExpectations(t)
+
+	// Test empty list when user has no workspaces
+	mockRepo = new(MockWorkspaceRepository)
+	service = NewWorkspaceService(mockRepo)
+
+	mockRepo.On("GetUserWorkspaces", ctx, userID).Return([]*domain.UserWorkspace{}, nil)
+
+	workspaces, err = service.ListWorkspaces(ctx, userID)
+	require.NoError(t, err)
+	assert.Empty(t, workspaces)
 	mockRepo.AssertExpectations(t)
 }
 

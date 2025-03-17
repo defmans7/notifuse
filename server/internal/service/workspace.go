@@ -24,6 +24,11 @@ func (s *WorkspaceService) ListWorkspaces(ctx context.Context, userID string) ([
 		return nil, err
 	}
 
+	// Return empty array if user has no workspaces
+	if len(userWorkspaces) == 0 {
+		return []*domain.Workspace{}, nil
+	}
+
 	workspaces := make([]*domain.Workspace, 0, len(userWorkspaces))
 	for _, uw := range userWorkspaces {
 		workspace, err := s.repo.GetByID(ctx, uw.WorkspaceID)

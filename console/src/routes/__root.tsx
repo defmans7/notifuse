@@ -10,16 +10,19 @@ import {
 } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { createRootRoute } from '@tanstack/react-router'
+import { useEffect, useRef } from 'react'
 
 const { Header, Content, Sider } = Layout
 
-function Root() {
+export function Root() {
   const { user, workspaces } = useAuth()
   const navigate = useNavigate()
   const matchRoute = useMatchRoute()
   const publicRoutes = ['/signin', '/accept-invitation']
   const isPublicRoute = publicRoutes.includes(window.location.pathname)
+  const hasAttemptedNavigation = useRef(false)
 
+  const isCreateWorkspaceRoute = matchRoute({ to: '/workspace/create' })
   const isInWorkspace =
     matchRoute({ to: '/workspace/$workspaceId' }) ||
     matchRoute({ to: '/workspace/$workspaceId/templates' }) ||
@@ -31,6 +34,13 @@ function Root() {
   const workspaceId = window.location.pathname.split('/workspace/')[1]?.split('/')[0]
   const workspace = workspaceId ? workspaces.find((w) => w.id === workspaceId) : null
 
+  useEffect(() => {
+    if (isInWorkspace && !workspace && !hasAttemptedNavigation.current) {
+      hasAttemptedNavigation.current = true
+      navigate({ to: '/' })
+    }
+  }, [isInWorkspace, workspace, navigate])
+
   const handleLogout = () => {
     navigate({ to: '/logout' })
   }
@@ -40,7 +50,6 @@ function Root() {
   }
 
   if (isInWorkspace && !workspace) {
-    navigate({ to: '/' })
     return null
   }
 
@@ -60,7 +69,7 @@ function Root() {
         </div>
       </Header>
       <Layout>
-        {isInWorkspace && workspace && (
+        {isInWorkspace && workspace && !isCreateWorkspaceRoute && (
           <Sider width={200}>
             <Menu
               mode="inline"
