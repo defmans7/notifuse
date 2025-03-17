@@ -8,7 +8,6 @@ import (
 	"notifuse/server/internal/service"
 
 	"aidanwoods.dev/go-paseto"
-	"github.com/go-chi/chi/v5"
 )
 
 // WorkspaceServiceInterface defines the interface for workspace operations
@@ -23,12 +22,14 @@ type WorkspaceServiceInterface interface {
 type WorkspaceHandler struct {
 	workspaceService WorkspaceServiceInterface
 	authService      middleware.AuthServiceInterface
+	publicKey        paseto.V4AsymmetricPublicKey
 }
 
-func NewWorkspaceHandler(workspaceService WorkspaceServiceInterface, authService middleware.AuthServiceInterface) *WorkspaceHandler {
+func NewWorkspaceHandler(workspaceService WorkspaceServiceInterface, authService middleware.AuthServiceInterface, publicKey paseto.V4AsymmetricPublicKey) *WorkspaceHandler {
 	return &WorkspaceHandler{
 		workspaceService: workspaceService,
 		authService:      authService,
+		publicKey:        publicKey,
 	}
 }
 
@@ -60,26 +61,6 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-// RegisterRoutes registers all workspace RPC-style routes with authentication middleware
-func (h *WorkspaceHandler) RegisterRoutes(r chi.Router, publicKey paseto.V4AsymmetricPublicKey) {
-	// Create a subrouter for workspace routes
-	workspaceRouter := chi.NewRouter()
-
-	// Add authentication middlewares
-	workspaceRouter.Use(middleware.NewAuthMiddleware(publicKey).VerifyToken)
-	workspaceRouter.Use(middleware.RequireAuth(h.authService))
-
-	// Register RPC-style endpoints with dot notation
-	workspaceRouter.Get("/workspaces.list", h.handleList) // GET for listing (no request body needed)
-	workspaceRouter.Get("/workspaces.get", h.handleGet)   // GET with query params
-	workspaceRouter.Post("/workspaces.create", h.handleCreate)
-	workspaceRouter.Post("/workspaces.update", h.handleUpdate)
-	workspaceRouter.Post("/workspaces.delete", h.handleDelete)
-
-	// Mount the router at /api
-	r.Mount("/api", workspaceRouter)
-}
-
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -90,7 +71,26 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, errorResponse{Error: message})
 }
 
+// RegisterRoutes registers all workspace RPC-style routes with authentication middleware
+func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
+	// Create auth middleware
+	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
+	requireAuth := middleware.RequireAuth(h.authService)
+
+	// Register RPC-style endpoints with dot notation
+	mux.Handle("/api/workspaces.list", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleList))))
+	mux.Handle("/api/workspaces.get", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleGet))))
+	mux.Handle("/api/workspaces.create", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleCreate))))
+	mux.Handle("/api/workspaces.update", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleUpdate))))
+	mux.Handle("/api/workspaces.delete", authMiddleware.VerifyToken(requireAuth(http.HandlerFunc(h.handleDelete))))
+}
+
 func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
 
 	workspaces, err := h.workspaceService.ListWorkspaces(r.Context(), authUser.ID)
@@ -103,6 +103,11 @@ func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
 
 	// Get workspace ID from query params
@@ -126,6 +131,11 @@ func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
 
 	var req createWorkspaceRequest
@@ -144,6 +154,11 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
 
 	var req updateWorkspaceRequest
@@ -166,6 +181,11 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
 
 	var req deleteWorkspaceRequest

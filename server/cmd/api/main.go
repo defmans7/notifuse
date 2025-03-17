@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"time"
 
+	"aidanwoods.dev/go-paseto"
 	_ "github.com/lib/pq"
 
 	"notifuse/server/config"
 	"notifuse/server/internal/database"
 	httpHandler "notifuse/server/internal/http"
+	"notifuse/server/internal/http/middleware"
 	"notifuse/server/internal/repository"
 	"notifuse/server/internal/service"
 )
@@ -68,13 +70,27 @@ func main() {
 		log.Fatalf("Failed to create user service: %v", err)
 	}
 
+	// Create workspace service
+	workspaceService := service.NewWorkspaceService(systemDB)
+
+	// Parse public key for PASETO
+	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes([]byte(cfg.Security.PasetoPublicKey))
+	if err != nil {
+		log.Fatalf("Failed to parse PASETO public key: %v", err)
+	}
+
 	userHandler := httpHandler.NewUserHandler(userService)
 	rootHandler := httpHandler.NewRootHandler()
+	workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, userService, publicKey)
 
 	// Set up routes
 	mux := http.NewServeMux()
 	rootHandler.RegisterRoutes(mux)
 	userHandler.RegisterRoutes(mux)
+	workspaceHandler.RegisterRoutes(mux)
+
+	// Wrap mux with CORS middleware
+	handler := middleware.CORSMiddleware(mux)
 
 	// Start server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -82,11 +98,11 @@ func main() {
 
 	if cfg.Server.SSL.Enabled {
 		log.Printf("SSL enabled with certificate: %s", cfg.Server.SSL.CertFile)
-		if err := http.ListenAndServeTLS(addr, cfg.Server.SSL.CertFile, cfg.Server.SSL.KeyFile, mux); err != nil {
+		if err := http.ListenAndServeTLS(addr, cfg.Server.SSL.CertFile, cfg.Server.SSL.KeyFile, handler); err != nil {
 			log.Fatalf("Server failed to start: %v", err)
 		}
 	} else {
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := http.ListenAndServe(addr, handler); err != nil {
 			log.Fatalf("Server failed to start: %v", err)
 		}
 	}

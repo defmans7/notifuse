@@ -66,9 +66,11 @@ type AuthResponse struct {
 	ExpiresAt time.Time   `json:"expires_at"`
 }
 
+// UserServiceInterface defines the interface for user operations
 type UserServiceInterface interface {
 	SignIn(ctx context.Context, input SignInInput) error
 	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
+	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*User, error)
 }
 
 // Ensure UserService implements UserServiceInterface
@@ -176,4 +178,38 @@ func (s *UserService) generateAuthToken(user *domain.User, sessionID string, exp
 	token.SetString("session_id", sessionID)
 
 	return token.V4Sign(s.privateKey, []byte{})
+}
+
+// VerifyUserSession verifies a user session and returns the associated user
+func (s *UserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*User, error) {
+	// Get user by ID
+	domainUser, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+
+	// Get session by ID
+	session, err := s.repo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, ErrSessionExpired
+	}
+
+	// Verify session belongs to user
+	if session.UserID != userID {
+		return nil, ErrSessionExpired
+	}
+
+	// Check if session is expired
+	if time.Now().After(session.ExpiresAt) {
+		return nil, ErrSessionExpired
+	}
+
+	// Convert domain user to service user
+	serviceUser := &User{
+		ID:        domainUser.ID,
+		Email:     domainUser.Email,
+		CreatedAt: domainUser.CreatedAt,
+	}
+
+	return serviceUser, nil
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"aidanwoods.dev/go-paseto"
-	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -72,19 +71,20 @@ func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID string, 
 }
 
 // Test setup helper
-func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *mockAuthService, *chi.Mux, paseto.V4AsymmetricSecretKey) {
+func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *mockAuthService, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
 	workspaceSvc := &mockWorkspaceService{}
 	authSvc := &mockAuthService{}
-	handler := NewWorkspaceHandler(workspaceSvc, authSvc)
 
-	router := chi.NewRouter()
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	handler.RegisterRoutes(router, publicKey)
+	handler := NewWorkspaceHandler(workspaceSvc, authSvc, publicKey)
 
-	return handler, workspaceSvc, authSvc, router, secretKey
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	return handler, workspaceSvc, authSvc, mux, secretKey
 }
 
 func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userID string) string {
@@ -102,7 +102,7 @@ func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userI
 }
 
 func TestWorkspaceHandler_Create(t *testing.T) {
-	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Setup auth mock expectation
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
@@ -156,7 +156,7 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 
 			// Execute request
 			w := httptest.NewRecorder()
-			router.ServeHTTP(w, req)
+			mux.ServeHTTP(w, req)
 
 			// Assert response
 			assert.Equal(t, tt.expectedStatus, w.Code)
@@ -176,7 +176,7 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get(t *testing.T) {
-	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Setup auth mock expectation
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
@@ -198,7 +198,7 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -213,7 +213,7 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 }
 
 func TestWorkspaceHandler_List(t *testing.T) {
-	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Setup auth mock expectation
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
@@ -244,7 +244,7 @@ func TestWorkspaceHandler_List(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -257,11 +257,22 @@ func TestWorkspaceHandler_List(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update(t *testing.T) {
-	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Setup auth mock expectation
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
 		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
+
+	workspace := &service.Workspace{
+		ID:         "test-id",
+		Name:       "Updated Workspace",
+		WebsiteURL: "https://updated.com",
+		LogoURL:    "https://updated.com/logo.png",
+		Timezone:   "UTC",
+	}
+
+	workspaceSvc.On("UpdateWorkspace", mock.Anything, "test-id", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "UTC", "test-user-id").
+		Return(workspace, nil)
 
 	request := updateWorkspaceRequest{
 		ID:         "test-id",
@@ -271,24 +282,6 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 		Timezone:   "UTC",
 	}
 
-	updatedWorkspace := &service.Workspace{
-		ID:         request.ID,
-		Name:       request.Name,
-		WebsiteURL: request.WebsiteURL,
-		LogoURL:    request.LogoURL,
-		Timezone:   request.Timezone,
-	}
-
-	workspaceSvc.On("UpdateWorkspace",
-		mock.Anything,
-		request.ID,
-		request.Name,
-		request.WebsiteURL,
-		request.LogoURL,
-		request.Timezone,
-		"test-user-id",
-	).Return(updatedWorkspace, nil)
-
 	body, err := json.Marshal(request)
 	require.NoError(t, err)
 
@@ -297,22 +290,22 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response service.Workspace
 	err = json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, updatedWorkspace.ID, response.ID)
-	assert.Equal(t, updatedWorkspace.Name, response.Name)
-	assert.Equal(t, updatedWorkspace.WebsiteURL, response.WebsiteURL)
-	assert.Equal(t, updatedWorkspace.LogoURL, response.LogoURL)
-	assert.Equal(t, updatedWorkspace.Timezone, response.Timezone)
+	assert.Equal(t, workspace.ID, response.ID)
+	assert.Equal(t, workspace.Name, response.Name)
+	assert.Equal(t, workspace.WebsiteURL, response.WebsiteURL)
+	assert.Equal(t, workspace.LogoURL, response.LogoURL)
+	assert.Equal(t, workspace.Timezone, response.Timezone)
 }
 
 func TestWorkspaceHandler_Delete(t *testing.T) {
-	_, workspaceSvc, authSvc, router, secretKey := setupTest(t)
+	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Setup auth mock expectation
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
@@ -321,7 +314,10 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 	workspaceSvc.On("DeleteWorkspace", mock.Anything, "test-id", "test-user-id").
 		Return(nil)
 
-	request := deleteWorkspaceRequest{ID: "test-id"}
+	request := deleteWorkspaceRequest{
+		ID: "test-id",
+	}
+
 	body, err := json.Marshal(request)
 	require.NoError(t, err)
 
@@ -330,7 +326,7 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
 
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 

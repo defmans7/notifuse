@@ -36,6 +36,14 @@ func (m *mockUserService) VerifyCode(ctx context.Context, input service.VerifyCo
 	return args.Get(0).(*service.AuthResponse), args.Error(1)
 }
 
+func (m *mockUserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*service.User, error) {
+	args := m.Called(ctx, userID, sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.User), args.Error(1)
+}
+
 func TestUserHandler_SignIn(t *testing.T) {
 	mockService := new(mockUserService)
 	handler := NewUserHandler(mockService)
