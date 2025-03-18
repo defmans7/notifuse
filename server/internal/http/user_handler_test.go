@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -17,6 +18,7 @@ import (
 
 	"notifuse/server/config"
 	"notifuse/server/internal/domain"
+	"notifuse/server/internal/http/middleware"
 	"notifuse/server/internal/service"
 )
 
@@ -53,12 +55,67 @@ func (m *mockUserService) VerifyUserSession(ctx context.Context, userID string, 
 	return args.Get(0).(*service.User), args.Error(1)
 }
 
+func (m *mockUserService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+type mockUserWorkspaceService struct {
+	mock.Mock
+}
+
+func (m *mockUserWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Workspace), args.Error(1)
+}
+
+func (m *mockUserWorkspaceService) GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, ownerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Workspace), args.Error(1)
+}
+
+func (m *mockUserWorkspaceService) ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error) {
+	args := m.Called(ctx, ownerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Workspace), args.Error(1)
+}
+
+func (m *mockUserWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Workspace), args.Error(1)
+}
+
+func (m *mockUserWorkspaceService) DeleteWorkspace(ctx context.Context, id, ownerID string) error {
+	args := m.Called(ctx, id, ownerID)
+	return args.Error(0)
+}
+
 func TestUserHandler_SignIn(t *testing.T) {
 	mockService := new(mockUserService)
+	mockWorkspaceSvc := new(mockUserWorkspaceService)
 	devConfig := &config.Config{Environment: "development"}
 	prodConfig := &config.Config{Environment: "production"}
-	devHandler := NewUserHandler(mockService, devConfig)
-	prodHandler := NewUserHandler(mockService, prodConfig)
+
+	// Create a test key
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	devHandler := NewUserHandler(mockService, mockWorkspaceSvc, devConfig, publicKey)
+	prodHandler := NewUserHandler(mockService, mockWorkspaceSvc, prodConfig, publicKey)
 
 	tests := []struct {
 		name         string
@@ -161,8 +218,14 @@ func TestUserHandler_SignIn(t *testing.T) {
 
 func TestUserHandler_VerifyCode(t *testing.T) {
 	mockService := new(mockUserService)
+	mockWorkspaceSvc := new(mockUserWorkspaceService)
 	config := &config.Config{Environment: "production"}
-	handler := NewUserHandler(mockService, config)
+
+	// Create a test key
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewUserHandler(mockService, mockWorkspaceSvc, config, publicKey)
 
 	user := &domain.User{
 		ID:    uuid.New().String(),
@@ -243,4 +306,117 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 			mockService.AssertExpectations(t)
 		})
 	}
+}
+
+func TestUserHandler_GetCurrentUser(t *testing.T) {
+	mockUserSvc := new(mockUserService)
+	mockWorkspaceSvc := new(mockUserWorkspaceService)
+	config := &config.Config{Environment: "production"}
+
+	// Create a test key
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, config, publicKey)
+
+	userID := uuid.New().String()
+	user := &domain.User{
+		ID:        userID,
+		Email:     "test@example.com",
+		Name:      "Test User",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	workspaces := []*domain.Workspace{
+		{
+			ID:   uuid.New().String(),
+			Name: "Workspace 1",
+			Settings: domain.WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				LogoURL:    "https://example.com/logo.png",
+				Timezone:   "UTC",
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		{
+			ID:   uuid.New().String(),
+			Name: "Workspace 2",
+			Settings: domain.WorkspaceSettings{
+				WebsiteURL: "https://example2.com",
+				LogoURL:    "https://example2.com/logo.png",
+				Timezone:   "UTC",
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+	}
+
+	// Test successful retrieval
+	mockUserSvc.On("GetUserByID", mock.Anything, userID).Return(user, nil)
+	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, userID).Return(workspaces, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
+	// Add authenticated user to context
+	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID:    userID,
+		Email: user.Email,
+	}))
+	rec := httptest.NewRecorder()
+
+	handler.GetCurrentUser(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response map[string]interface{}
+	err := json.NewDecoder(rec.Body).Decode(&response)
+	require.NoError(t, err)
+
+	// Check user data
+	userData := response["user"].(map[string]interface{})
+	assert.Equal(t, user.ID, userData["id"])
+	assert.Equal(t, user.Email, userData["email"])
+	assert.Equal(t, user.Name, userData["name"])
+
+	// Check workspaces data
+	workspacesData := response["workspaces"].([]interface{})
+	assert.Equal(t, 2, len(workspacesData))
+
+	// Test unauthorized access
+	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
+	rec = httptest.NewRecorder()
+
+	handler.GetCurrentUser(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	// Test user not found
+	mockUserSvc.On("GetUserByID", mock.Anything, "unknown-user-id").Return(nil, fmt.Errorf("user not found"))
+
+	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
+	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID:    "unknown-user-id",
+		Email: "unknown@example.com",
+	}))
+	rec = httptest.NewRecorder()
+
+	handler.GetCurrentUser(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	// Test workspaces retrieval error
+	mockUserSvc.On("GetUserByID", mock.Anything, "error-workspace-user").Return(user, nil)
+	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, "error-workspace-user").Return(nil, fmt.Errorf("database error"))
+
+	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
+	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID:    "error-workspace-user",
+		Email: user.Email,
+	}))
+	rec = httptest.NewRecorder()
+
+	handler.GetCurrentUser(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	mockUserSvc.AssertExpectations(t)
+	mockWorkspaceSvc.AssertExpectations(t)
 }

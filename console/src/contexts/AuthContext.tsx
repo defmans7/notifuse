@@ -1,11 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { authService } from '../services/api/auth'
+import { Workspace } from '../services/api/types'
 
-interface Workspace {
-  id: string
-  name: string
-}
-
-interface User {
+export interface User {
   id: string
   email: string
 }
@@ -14,7 +11,7 @@ interface AuthContextType {
   user: User | null
   workspaces: Workspace[]
   isAuthenticated: boolean
-  signin: (email: string, password: string) => Promise<void>
+  signin: (token: string) => Promise<void>
   signout: () => Promise<void>
   loading: boolean
 }
@@ -40,13 +37,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const signin = async (email: string, password: string) => {
+  const signin = async (token: string) => {
     try {
       // TODO: Implement actual signin
+      const currentUserResponse = await authService.getCurrentUser()
+      const { user, workspaces } = currentUserResponse
       // Mock user for now
-      setUser({ id: '1', email })
+      setUser(user)
       // Mock workspaces fetch
-      setWorkspaces([])
+      setWorkspaces(workspaces)
     } catch (error) {
       throw error
     }

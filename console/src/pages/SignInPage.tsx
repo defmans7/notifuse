@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { authService } from '../services/api/auth'
-import { SignInRequest, VerifyCodeRequest, VerifyResponse } from '../services/api/types'
+import { SignInRequest, VerifyCodeRequest } from '../services/api/types'
 
 export function SignInPage() {
   const { signin } = useAuth()
@@ -61,11 +61,10 @@ export function SignInPage() {
       }
 
       const response = await authService.verifyCode(data)
-      const { token, user } = response
-
+      const { token } = response
       // Use the existing signin function for now
       // This might need to be updated in AuthContext
-      await signin(user.email, token)
+      await signin(token)
       message.success('Successfully signed in')
       navigate({ to: '/' })
     } catch (error) {

@@ -72,6 +72,7 @@ type UserServiceInterface interface {
 	SignInDev(ctx context.Context, input SignInInput) (string, error)
 	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
 	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*User, error)
+	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
 }
 
 // Ensure UserService implements UserServiceInterface
@@ -240,4 +241,13 @@ func (s *UserService) SignInDev(ctx context.Context, input SignInInput) (string,
 
 	// In development mode, we don't actually send the email
 	return code, nil
+}
+
+// GetUserByID retrieves a user by their ID
+func (s *UserService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }

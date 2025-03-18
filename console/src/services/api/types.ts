@@ -15,10 +15,15 @@ export interface VerifyCodeRequest {
 
 export interface VerifyResponse {
   token: string
+}
+
+export interface GetCurrentUserResponse {
   user: {
+    id: string
     email: string
     timezone: string
   }
+  workspaces: Workspace[]
 }
 
 // Workspace types

@@ -80,7 +80,7 @@ func main() {
 		log.Fatalf("Failed to parse PASETO public key: %v", err)
 	}
 
-	userHandler := httpHandler.NewUserHandler(userService, cfg)
+	userHandler := httpHandler.NewUserHandler(userService, workspaceService, cfg, publicKey)
 	rootHandler := httpHandler.NewRootHandler()
 	workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, userService, publicKey)
 	faviconHandler := httpHandler.NewFaviconHandler()
