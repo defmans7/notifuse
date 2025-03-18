@@ -1,2 +1,2 @@
-- test console signup & login
 - integrer https://www.npmjs.com/package/disposable-email-domains
+- middleware compression + logger

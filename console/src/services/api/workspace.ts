@@ -10,6 +10,10 @@ import {
   DeleteWorkspaceResponse
 } from './types'
 
+interface DetectFaviconResponse {
+  iconUrl: string
+}
+
 export const workspaceService = {
   list: () => api.get<ListWorkspacesResponse>('/api/workspaces.list'),
 
@@ -22,5 +26,7 @@ export const workspaceService = {
     api.post<UpdateWorkspaceResponse>('/api/workspaces.update', data),
 
   delete: (data: DeleteWorkspaceRequest) =>
-    api.post<DeleteWorkspaceResponse>('/api/workspaces.delete', data)
+    api.post<DeleteWorkspaceResponse>('/api/workspaces.delete', data),
+
+  detectFavicon: (url: string) => api.post<DetectFaviconResponse>('/api/detect-favicon', { url })
 }

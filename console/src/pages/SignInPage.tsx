@@ -1,47 +1,34 @@
-import { Button, Card, Form, Input, Space, App } from 'antd'
+import { Form, Input, Button, Card, message, Space } from 'antd'
 import { MailOutlined } from '@ant-design/icons'
-import { useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { authService } from '../services/api/auth'
+import { SignInRequest, VerifyCodeRequest, VerifyResponse } from '../services/api/types'
 
-interface EmailForm {
-  email: string
-}
-
-interface MagicCodeForm {
-  code: string
-}
-
-function SignIn() {
-  const { login } = useAuth()
+export function SignInPage() {
+  const { signin } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [showCodeInput, setShowCodeInput] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
-  const { message } = App.useApp()
 
-  const handleEmailSubmit = async (values: EmailForm) => {
+  const handleEmailSubmit = async (values: SignInRequest) => {
     try {
       setLoading(true)
-      const response = await authService.signIn({ email: values.email })
+      const response = await authService.signIn(values)
+
+      // Log code if present (for development)
+      if (response.code) {
+        console.log('Magic code for development:', response.code)
+      }
+
       setEmail(values.email)
       setShowCodeInput(true)
-
-      // In development mode, log the magic code
-      if (import.meta.env.DEV && response.code) {
-        console.log('⚡ Magic code:', response.code)
-      }
-
       message.success('Magic code sent to your email')
     } catch (error) {
-      if (error instanceof Error) {
-        message.error(error.message)
-      } else {
-        message.error('Failed to send magic code')
-      }
+      message.error('Failed to send magic code')
     } finally {
       setLoading(false)
     }
@@ -50,36 +37,39 @@ function SignIn() {
   const handleResendCode = async () => {
     try {
       setResendLoading(true)
-      await authService.signIn({ email })
+      const response = await authService.signIn({ email })
+
+      // Log code if present (for development)
+      if (response.code) {
+        console.log('⚡ Magic code for development:', response.code)
+      }
+
       message.success('New magic code sent to your email')
     } catch (error) {
-      if (error instanceof Error) {
-        message.error(error.message)
-      } else {
-        message.error('Failed to resend magic code')
-      }
+      message.error('Failed to resend magic code')
     } finally {
       setResendLoading(false)
     }
   }
 
-  const handleCodeSubmit = async (values: MagicCodeForm) => {
+  const handleCodeSubmit = async (values: { code: string }) => {
     try {
       setLoading(true)
-      const response = await authService.verifyCode({
+      const data: VerifyCodeRequest = {
         email,
         code: values.code
-      })
+      }
 
-      await login(response.token, response.user)
+      const response = await authService.verifyCode(data)
+      const { token, user } = response
+
+      // Use the existing signin function for now
+      // This might need to be updated in AuthContext
+      await signin(user.email, token)
       message.success('Successfully signed in')
       navigate({ to: '/' })
     } catch (error) {
-      if (error instanceof Error) {
-        message.error(error.message)
-      } else {
-        message.error('Failed to sign in')
-      }
+      message.error('Failed to verify code')
     } finally {
       setLoading(false)
     }
@@ -94,10 +84,11 @@ function SignIn() {
         minHeight: '100vh'
       }}
     >
-      <Card title="Sign in to Notifuse" style={{ width: 400 }}>
+      <Card title="Sign In" style={{ width: 400 }}>
         {!showCodeInput ? (
-          <Form name="email" onFinish={handleEmailSubmit}>
+          <Form name="email" onFinish={handleEmailSubmit} layout="vertical">
             <Form.Item
+              label="Email"
               name="email"
               rules={[
                 { required: true, message: 'Please input your email!' },
@@ -108,7 +99,7 @@ function SignIn() {
             </Form.Item>
 
             <Form.Item>
-              <Button type="primary" htmlType="submit" style={{ width: '100%' }} loading={loading}>
+              <Button type="primary" htmlType="submit" block loading={loading}>
                 Send Magic Code
               </Button>
             </Form.Item>
@@ -116,7 +107,7 @@ function SignIn() {
         ) : (
           <>
             <p style={{ marginBottom: 24 }}>Enter the 6-digit code sent to {email}</p>
-            <Form name="code" onFinish={handleCodeSubmit}>
+            <Form name="code" onFinish={handleCodeSubmit} layout="vertical">
               <Form.Item
                 name="code"
                 rules={[
@@ -135,12 +126,7 @@ function SignIn() {
               </Form.Item>
 
               <Form.Item>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  style={{ width: '100%' }}
-                  loading={loading}
-                >
+                <Button type="primary" htmlType="submit" block loading={loading}>
                   Verify Code
                 </Button>
               </Form.Item>
@@ -165,8 +151,3 @@ function SignIn() {
     </div>
   )
 }
-
-export { SignIn }
-export const Route = createFileRoute('/signin')({
-  component: SignIn
-})

@@ -1,6 +1,6 @@
-import { RouterProvider } from '@tanstack/react-router'
 import { ConfigProvider, App as AntApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider } from '@tanstack/react-router'
 import { router } from './router'
 import { AuthProvider } from './contexts/AuthContext'
 
@@ -16,19 +16,19 @@ const queryClient = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AntApp>
-        <ConfigProvider
-          theme={{
-            token: {
-              colorPrimary: '#1677ff'
-            }
-          }}
-        >
-          <AuthProvider>
+      <AuthProvider>
+        <AntApp>
+          <ConfigProvider
+            theme={{
+              token: {
+                colorPrimary: '#1677ff'
+              }
+            }}
+          >
             <RouterProvider router={router} />
-          </AuthProvider>
-        </ConfigProvider>
-      </AntApp>
+          </ConfigProvider>
+        </AntApp>
+      </AuthProvider>
     </QueryClientProvider>
   )
 }

@@ -83,12 +83,14 @@ func main() {
 	userHandler := httpHandler.NewUserHandler(userService, cfg)
 	rootHandler := httpHandler.NewRootHandler()
 	workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, userService, publicKey)
+	faviconHandler := httpHandler.NewFaviconHandler()
 
 	// Set up routes
 	mux := http.NewServeMux()
 	userHandler.RegisterRoutes(mux)
 	workspaceHandler.RegisterRoutes(mux)
 	rootHandler.RegisterRoutes(mux)
+	mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	// Wrap mux with CORS middleware
 	handler := middleware.CORSMiddleware(mux)

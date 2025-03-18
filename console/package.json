@@ -15,13 +15,14 @@
     "@ant-design/icons": "^5.3.0",
     "@tanstack/react-query": "^5.18.1",
     "@tanstack/react-router": "^1.15.7",
-    "@tanstack/router-plugin": "^1.105.0",
+    "@tanstack/router-devtools": "^1.114.23",
     "antd": "^5.14.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
+    "@tanstack/router-vite-plugin": "^1.114.23",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.6.1",
