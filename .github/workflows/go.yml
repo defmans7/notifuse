@@ -10,6 +10,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,3 +32,5 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./server
+          working-directory: ./server
