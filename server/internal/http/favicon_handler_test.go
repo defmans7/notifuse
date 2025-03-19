@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,13 @@ func (t *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}, nil
 	}
 	return resp, nil
+}
+
+// Custom transport that returns an error for all requests
+type errorTransport struct{}
+
+func (t *errorTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, fmt.Errorf("network error")
 }
 
 func TestNewFaviconHandler(t *testing.T) {
@@ -332,4 +340,307 @@ func TestFindManifestIcon(t *testing.T) {
 		result := findManifestIcon(doc, baseURL)
 		assert.Equal(t, "", result)
 	})
+}
+
+func TestFaviconHandler_DetectFavicon_AppleTouchIcon_Success(t *testing.T) {
+	// Save original http.DefaultClient and restore it after the test
+	originalClient := http.DefaultClient
+	defer func() { http.DefaultClient = originalClient }()
+
+	// Create mock responses
+	testURL := "https://example.com"
+	htmlContent := `<!DOCTYPE html>
+	<html>
+	<head>
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+	</head>
+	<body>Test</body>
+	</html>`
+
+	// Setup mock client
+	http.DefaultClient = &http.Client{
+		Transport: &mockTransport{
+			responses: map[string]*http.Response{
+				testURL: {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(htmlContent)),
+					Header:     make(http.Header),
+				},
+				"https://example.com/apple-touch-icon.png": {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("icon content")),
+					Header:     make(http.Header),
+				},
+			},
+		},
+	}
+
+	// Setup handler
+	handler := NewFaviconHandler()
+
+	// Create request
+	reqBody, _ := json.Marshal(FaviconRequest{URL: testURL})
+	req := httptest.NewRequest(http.MethodPost, "/api/detect-favicon", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler.DetectFavicon(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp FaviconResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/apple-touch-icon.png", resp.IconURL)
+}
+
+func TestFaviconHandler_DetectFavicon_ManifestIcon_Success(t *testing.T) {
+	// Save original http.DefaultClient and restore it after the test
+	originalClient := http.DefaultClient
+	defer func() { http.DefaultClient = originalClient }()
+
+	// Create mock responses
+	testURL := "https://example.com"
+	htmlContent := `<!DOCTYPE html>
+	<html>
+	<head>
+		<link rel="manifest" href="/manifest.json">
+	</head>
+	<body>Test</body>
+	</html>`
+
+	manifestContent := `{
+		"icons": [
+			{
+				"src": "/icon-192.png",
+				"sizes": "192x192",
+				"type": "image/png"
+			}
+		]
+	}`
+
+	// Setup mock client
+	http.DefaultClient = &http.Client{
+		Transport: &mockTransport{
+			responses: map[string]*http.Response{
+				testURL: {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(htmlContent)),
+					Header:     make(http.Header),
+				},
+				"https://example.com/manifest.json": {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(manifestContent)),
+					Header:     make(http.Header),
+				},
+				"https://example.com/icon-192.png": {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("icon content")),
+					Header:     make(http.Header),
+				},
+			},
+		},
+	}
+
+	// Setup handler
+	handler := NewFaviconHandler()
+
+	// Create request
+	reqBody, _ := json.Marshal(FaviconRequest{URL: testURL})
+	req := httptest.NewRequest(http.MethodPost, "/api/detect-favicon", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler.DetectFavicon(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp FaviconResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/icon-192.png", resp.IconURL)
+}
+
+func TestFaviconHandler_DetectFavicon_Traditional_Success(t *testing.T) {
+	// Save original http.DefaultClient and restore it after the test
+	originalClient := http.DefaultClient
+	defer func() { http.DefaultClient = originalClient }()
+
+	// Create mock responses
+	testURL := "https://example.com"
+	htmlContent := `<!DOCTYPE html>
+	<html>
+	<head>
+		<link rel="icon" href="/favicon.ico">
+	</head>
+	<body>Test</body>
+	</html>`
+
+	// Setup mock client
+	http.DefaultClient = &http.Client{
+		Transport: &mockTransport{
+			responses: map[string]*http.Response{
+				testURL: {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(htmlContent)),
+					Header:     make(http.Header),
+				},
+				"https://example.com/favicon.ico": {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("icon content")),
+					Header:     make(http.Header),
+				},
+			},
+		},
+	}
+
+	// Setup handler
+	handler := NewFaviconHandler()
+
+	// Create request
+	reqBody, _ := json.Marshal(FaviconRequest{URL: testURL})
+	req := httptest.NewRequest(http.MethodPost, "/api/detect-favicon", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler.DetectFavicon(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp FaviconResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/favicon.ico", resp.IconURL)
+}
+
+func TestFaviconHandler_DetectFavicon_DefaultLocation_Success(t *testing.T) {
+	// Save original http.DefaultClient and restore it after the test
+	originalClient := http.DefaultClient
+	defer func() { http.DefaultClient = originalClient }()
+
+	// Create mock responses
+	testURL := "https://example.com"
+	htmlContent := `<!DOCTYPE html>
+	<html>
+	<head>
+	</head>
+	<body>Test</body>
+	</html>`
+
+	// Setup mock client
+	http.DefaultClient = &http.Client{
+		Transport: &mockTransport{
+			responses: map[string]*http.Response{
+				testURL: {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(htmlContent)),
+					Header:     make(http.Header),
+				},
+				"https://example.com/favicon.ico": {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("icon content")),
+					Header:     make(http.Header),
+				},
+			},
+		},
+	}
+
+	// Setup handler
+	handler := NewFaviconHandler()
+
+	// Create request
+	reqBody, _ := json.Marshal(FaviconRequest{URL: testURL})
+	req := httptest.NewRequest(http.MethodPost, "/api/detect-favicon", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler.DetectFavicon(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp FaviconResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/favicon.ico", resp.IconURL)
+}
+
+func TestFaviconHandler_DetectFavicon_NoFaviconFound(t *testing.T) {
+	// Save original http.DefaultClient and restore it after the test
+	originalClient := http.DefaultClient
+	defer func() { http.DefaultClient = originalClient }()
+
+	// Create mock responses
+	testURL := "https://example.com"
+	htmlContent := `<!DOCTYPE html>
+	<html>
+	<head>
+	</head>
+	<body>Test</body>
+	</html>`
+
+	// Setup mock client
+	http.DefaultClient = &http.Client{
+		Transport: &mockTransport{
+			responses: map[string]*http.Response{
+				testURL: {
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(htmlContent)),
+					Header:     make(http.Header),
+				},
+				"https://example.com/favicon.ico": {
+					StatusCode: http.StatusNotFound,
+					Body:       io.NopCloser(strings.NewReader("not found")),
+					Header:     make(http.Header),
+				},
+			},
+		},
+	}
+
+	// Setup handler
+	handler := NewFaviconHandler()
+
+	// Create request
+	reqBody, _ := json.Marshal(FaviconRequest{URL: testURL})
+	req := httptest.NewRequest(http.MethodPost, "/api/detect-favicon", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler.DetectFavicon(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "No favicon found")
+}
+
+func TestFaviconHandler_DetectFavicon_FailedFetch(t *testing.T) {
+	// Save original http.DefaultClient and restore it after the test
+	originalClient := http.DefaultClient
+	defer func() { http.DefaultClient = originalClient }()
+
+	// Create a custom transport that returns an error for all requests
+	errTransport := &errorTransport{}
+
+	// Setup mock client with the error transport
+	http.DefaultClient = &http.Client{
+		Transport: errTransport,
+	}
+
+	// Setup handler
+	handler := NewFaviconHandler()
+
+	// Create request
+	reqBody, _ := json.Marshal(FaviconRequest{URL: "https://example.com"})
+	req := httptest.NewRequest(http.MethodPost, "/api/detect-favicon", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler.DetectFavicon(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "Error fetching URL")
 }

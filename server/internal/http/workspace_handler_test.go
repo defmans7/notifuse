@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -380,4 +381,293 @@ func TestWriteError(t *testing.T) {
 			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
 		})
 	}
+}
+
+func TestWorkspaceHandler_List_MethodNotAllowed(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Try with POST instead of GET
+	reqBody := bytes.NewBuffer([]byte("{}"))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.list", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleList(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
+	handler, workspaceService, _, _, _ := setupTest(t)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.list", nil)
+	w := httptest.NewRecorder()
+
+	// Mock workspace service to return error
+	workspaceService.On("ListWorkspaces", mock.Anything, "user123").Return(
+		([]*domain.Workspace)(nil), fmt.Errorf("database error"))
+
+	// Setup context with authenticated user - no need for token validation here
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleList(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to list workspaces", response.Error)
+
+	// Verify mocks were called
+	workspaceService.AssertExpectations(t)
+}
+
+func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Try with POST instead of GET
+	reqBody := bytes.NewBuffer([]byte(`{"id": "workspace123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.get", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleGet(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestWorkspaceHandler_Get_MissingID(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Create request without ID
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get", nil)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleGet(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Missing workspace ID", response.Error)
+}
+
+func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
+	handler, workspaceService, _, _, secretKey := setupTest(t)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=workspace123", nil)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Mock workspace service to return error
+	workspaceService.On("GetWorkspace", mock.Anything, "workspace123", "user123").Return(
+		(*domain.Workspace)(nil), fmt.Errorf("database error"))
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleGet(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to get workspace", response.Error)
+
+	// Verify mocks were called
+	workspaceService.AssertExpectations(t)
+}
+
+func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Try with GET instead of POST
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.create", nil)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleCreate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestWorkspaceHandler_Create_InvalidBody(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Create invalid JSON request
+	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleCreate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Invalid request body", response.Error)
+}
+
+func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Create request with missing ID
+	reqBody := bytes.NewBuffer([]byte(`{"name": "Test Workspace"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleCreate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Workspace ID is required", response.Error)
+}
+
+func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
+	handler, workspaceService, _, _, secretKey := setupTest(t)
+
+	// Create valid request
+	reqBody := bytes.NewBuffer([]byte(`{
+		"id": "workspace123",
+		"name": "Test Workspace",
+		"website_url": "https://example.com",
+		"logo_url": "https://example.com/logo.png",
+		"timezone": "UTC"
+	}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Mock workspace service to return error
+	workspaceService.On("CreateWorkspace",
+		mock.Anything,
+		"workspace123",
+		"Test Workspace",
+		"https://example.com",
+		"https://example.com/logo.png",
+		"UTC",
+		"user123").Return(nil, fmt.Errorf("database error"))
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleCreate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to create workspace", response.Error)
+
+	// Verify mocks were called
+	workspaceService.AssertExpectations(t)
 }
