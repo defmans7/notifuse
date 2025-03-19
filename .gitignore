@@ -1,5 +1,4 @@
 .env
-.env.test
 
 *.log
 node_modules
