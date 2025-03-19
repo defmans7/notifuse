@@ -4,12 +4,16 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/require"
 
 	"notifuse/server/config"
 	"notifuse/server/internal/database"
 )
 
+// setupTestDB connects to a real PostgreSQL database for testing
+// This should be used when full database integration is needed
 func setupTestDB(t *testing.T) *sql.DB {
 	// Load test configuration
 	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
@@ -39,4 +43,13 @@ func setupTestDB(t *testing.T) *sql.DB {
 	}
 
 	return db
+}
+
+// setupMockTestDB creates a mock SQL database for testing
+// This should be used for unit tests that don't require a real database
+func setupMockTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
+	// Use regexp matcher instead of exact match for more flexibility with SQL queries
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err, "Failed to create mock database")
+	return db, mock
 }

@@ -13,6 +13,24 @@ jobs:
     defaults:
       run:
         working-directory: ./server
+
+    services:
+      # Optional: Add PostgreSQL service container for integration tests
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: notifuse_system_test
+        ports:
+          - 5432:5432
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,10 +41,30 @@ jobs:
           go-version: '1.21'
 
       - name: Install dependencies
-        run: go mod download
+        run: |
+          go mod download
+          go get github.com/DATA-DOG/go-sqlmock
 
-      - name: Run tests with coverage
-        run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+      - name: Run mock tests
+        run: |
+          # Run only tests with mock in the name
+          go test -race -tags=unit -run ".*WithMock" ./... -v
+
+      - name: Run all tests with coverage
+        run: |
+          # Create a test .env file
+          echo "DB_HOST=localhost" > .env.test
+          echo "DB_PORT=5432" >> .env.test
+          echo "DB_USER=postgres" >> .env.test
+          echo "DB_PASSWORD=postgres" >> .env.test
+          echo "DB_NAME=notifuse_system_test" >> .env.test
+          echo "DB_PREFIX=notifuse_test" >> .env.test
+          echo "PASETO_PRIVATE_KEY=dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHQ=" >> .env.test
+          echo "PASETO_PUBLIC_KEY=dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHQ=" >> .env.test
+          echo "ROOT_EMAIL=admin@example.com" >> .env.test
+
+          # Run all tests with coverage
+          go test -race -coverprofile=coverage.txt -covermode=atomic -tags=integration ./...
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

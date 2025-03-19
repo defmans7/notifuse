@@ -1,5 +1,8 @@
 # Notifuse
 
+[![Go](https://github.com/yourusername/notifuse3/actions/workflows/go.yml/badge.svg)](https://github.com/yourusername/notifuse3/actions/workflows/go.yml)
+[![codecov](https://codecov.io/gh/yourusername/notifuse3/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/notifuse3)
+
 Notifuse is an email marketing platform that allows you to send emails to your contacts.
 
 ## Main Features
@@ -50,4 +53,3 @@ Notifuse is released under the [Elastic License 2.0](LICENSE).
 ## Contact
 
 For support or inquiries, please contact us at [hello@notifuse.com] or visit our [website](https://www.notifuse.com).
-# notifuse

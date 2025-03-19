@@ -44,10 +44,9 @@ func (m *MockLogger) WithField(key string, value interface{}) logger.Logger {
 	return args.Get(0).(logger.Logger)
 }
 
-func TestSQLAuthRepository_GetSessionByID(t *testing.T) {
-	// Create sqlmock
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
+func TestSQLAuthRepository_GetSessionByID_WithMock(t *testing.T) {
+	// Create sqlmock using our helper
+	db, mock := setupMockTestDB(t)
 	defer db.Close()
 
 	mockLogger := new(MockLogger)
@@ -57,9 +56,6 @@ func TestSQLAuthRepository_GetSessionByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successful retrieval", func(t *testing.T) {
-		// Reset expectations
-		mock.ExpectationsWereMet()
-
 		sessionID := "test-session"
 		userID := "test-user"
 		expectedTime := time.Now().Add(time.Hour)
@@ -79,14 +75,10 @@ func TestSQLAuthRepository_GetSessionByID(t *testing.T) {
 		assert.Equal(t, expectedTime.Unix(), expiresAt.Unix())
 
 		// Assert that all expectations were met
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 	})
 
 	t.Run("session not found", func(t *testing.T) {
-		// Reset expectations
-		mock.ExpectationsWereMet()
-
 		sessionID := "nonexistent-session"
 		userID := "test-user"
 
@@ -104,14 +96,10 @@ func TestSQLAuthRepository_GetSessionByID(t *testing.T) {
 		assert.Equal(t, sql.ErrNoRows, err)
 
 		// Assert that all expectations were met
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 	})
 
 	t.Run("database error", func(t *testing.T) {
-		// Reset expectations
-		mock.ExpectationsWereMet()
-
 		sessionID := "test-session"
 		userID := "test-user"
 
@@ -129,15 +117,13 @@ func TestSQLAuthRepository_GetSessionByID(t *testing.T) {
 		assert.Equal(t, sql.ErrConnDone, err)
 
 		// Assert that all expectations were met
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 	})
 }
 
-func TestSQLAuthRepository_GetUserByID(t *testing.T) {
-	// Create sqlmock
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
+func TestSQLAuthRepository_GetUserByID_WithMock(t *testing.T) {
+	// Create sqlmock using our helper
+	db, mock := setupMockTestDB(t)
 	defer db.Close()
 
 	mockLogger := new(MockLogger)
@@ -147,9 +133,6 @@ func TestSQLAuthRepository_GetUserByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successful retrieval", func(t *testing.T) {
-		// Reset expectations
-		mock.ExpectationsWereMet()
-
 		userID := "test-user"
 		expectedEmail := "test@example.com"
 		expectedCreatedAt := time.Now()
@@ -172,14 +155,10 @@ func TestSQLAuthRepository_GetUserByID(t *testing.T) {
 		assert.Equal(t, expectedCreatedAt.Unix(), user.CreatedAt.Unix())
 
 		// Assert that all expectations were met
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 	})
 
 	t.Run("user not found", func(t *testing.T) {
-		// Reset expectations
-		mock.ExpectationsWereMet()
-
 		userID := "nonexistent-user"
 
 		// Set up mock to return no rows
@@ -196,14 +175,10 @@ func TestSQLAuthRepository_GetUserByID(t *testing.T) {
 		assert.Equal(t, sql.ErrNoRows, err)
 
 		// Assert that all expectations were met
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 	})
 
 	t.Run("database error", func(t *testing.T) {
-		// Reset expectations
-		mock.ExpectationsWereMet()
-
 		userID := "test-user"
 
 		// Set up mock to return a database error
@@ -220,7 +195,6 @@ func TestSQLAuthRepository_GetUserByID(t *testing.T) {
 		assert.Equal(t, sql.ErrConnDone, err)
 
 		// Assert that all expectations were met
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 	})
 }
