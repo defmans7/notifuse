@@ -3,7 +3,7 @@
 <html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<title>database: Go Coverage Report</title>
+		<title>api: Go Coverage Report</title>
 		<style>
 			body {
 				background: black;
@@ -55,43 +55,51 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">notifuse/server/internal/database/init.go (100.0%)</option>
+				<option value="file0">notifuse/server/cmd/api/main.go (0.0%)</option>
 				
-				<option value="file1">notifuse/server/internal/database/utils.go (28.6%)</option>
+				<option value="file1">notifuse/server/cmd/keygen/main.go (0.0%)</option>
 				
-				<option value="file2">notifuse/server/internal/domain/timezones.go (100.0%)</option>
+				<option value="file2">notifuse/server/config/config.go (77.5%)</option>
 				
-				<option value="file3">notifuse/server/internal/domain/user.go (100.0%)</option>
+				<option value="file3">notifuse/server/internal/database/init.go (100.0%)</option>
 				
-				<option value="file4">notifuse/server/internal/domain/workspace.go (94.4%)</option>
+				<option value="file4">notifuse/server/internal/database/utils.go (28.6%)</option>
 				
-				<option value="file5">notifuse/server/internal/http/favicon_handler.go (70.4%)</option>
+				<option value="file5">notifuse/server/internal/domain/timezones.go (100.0%)</option>
 				
-				<option value="file6">notifuse/server/internal/http/middleware/auth.go (100.0%)</option>
+				<option value="file6">notifuse/server/internal/domain/user.go (100.0%)</option>
 				
-				<option value="file7">notifuse/server/internal/http/middleware/cors.go (100.0%)</option>
+				<option value="file7">notifuse/server/internal/domain/workspace.go (94.4%)</option>
 				
-				<option value="file8">notifuse/server/internal/http/root_handler.go (100.0%)</option>
+				<option value="file8">notifuse/server/internal/http/favicon_handler.go (70.4%)</option>
 				
-				<option value="file9">notifuse/server/internal/http/user_handler.go (96.0%)</option>
+				<option value="file9">notifuse/server/internal/http/middleware/auth.go (100.0%)</option>
 				
-				<option value="file10">notifuse/server/internal/http/utils.go (100.0%)</option>
+				<option value="file10">notifuse/server/internal/http/middleware/cors.go (100.0%)</option>
 				
-				<option value="file11">notifuse/server/internal/http/workspace_handler.go (58.5%)</option>
+				<option value="file11">notifuse/server/internal/http/root_handler.go (100.0%)</option>
 				
-				<option value="file12">notifuse/server/internal/repository/auth_repository.go (100.0%)</option>
+				<option value="file12">notifuse/server/internal/http/user_handler.go (96.0%)</option>
 				
-				<option value="file13">notifuse/server/internal/repository/test_helper.go (61.5%)</option>
+				<option value="file13">notifuse/server/internal/http/utils.go (100.0%)</option>
 				
-				<option value="file14">notifuse/server/internal/repository/user_postgres.go (86.1%)</option>
+				<option value="file14">notifuse/server/internal/http/workspace_handler.go (58.5%)</option>
 				
-				<option value="file15">notifuse/server/internal/repository/workspace_postgres.go (79.2%)</option>
+				<option value="file15">notifuse/server/internal/repository/auth_repository.go (100.0%)</option>
 				
-				<option value="file16">notifuse/server/internal/service/auth.go (100.0%)</option>
+				<option value="file16">notifuse/server/internal/repository/mock_helper.go (100.0%)</option>
 				
-				<option value="file17">notifuse/server/internal/service/user.go (77.9%)</option>
+				<option value="file17">notifuse/server/internal/repository/user_postgres.go (86.1%)</option>
 				
-				<option value="file18">notifuse/server/internal/service/workspace.go (96.6%)</option>
+				<option value="file18">notifuse/server/internal/repository/workspace_postgres.go (72.1%)</option>
+				
+				<option value="file19">notifuse/server/internal/service/auth.go (100.0%)</option>
+				
+				<option value="file20">notifuse/server/internal/service/user.go (77.9%)</option>
+				
+				<option value="file21">notifuse/server/internal/service/workspace.go (96.6%)</option>
+				
+				<option value="file22">notifuse/server/pkg/logger/logger.go (0.0%)</option>
 				
 				</select>
 			</div>
@@ -105,7 +113,393 @@
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">package database
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "database/sql"
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "aidanwoods.dev/go-paseto"
+        _ "github.com/lib/pq"
+
+        "notifuse/server/config"
+        "notifuse/server/internal/database"
+        httpHandler "notifuse/server/internal/http"
+        "notifuse/server/internal/http/middleware"
+        "notifuse/server/internal/repository"
+        "notifuse/server/internal/service"
+        "notifuse/server/pkg/logger"
+)
+
+type emailSender struct{}
+
+func (s *emailSender) SendMagicCode(email, code string) error <span class="cov0" title="0">{
+        // TODO: Implement email sending using SMTP
+        log.Printf("Sending magic code to %s: %s", email, code)
+        return nil
+}</span>
+
+func main() <span class="cov0" title="0">{
+        // Load configuration
+        cfg, err := config.Load()
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to load configuration: %v", err)
+        }</span>
+
+        // Initialize logger
+        <span class="cov0" title="0">appLogger := logger.NewLogger()
+        appLogger.Info("Starting API server")
+
+        // Connect to system database
+        systemDB, err := sql.Open("postgres", database.GetSystemDSN(&amp;cfg.Database))
+        if err != nil </span><span class="cov0" title="0">{
+                appLogger.WithField("error", err.Error()).Fatal("Failed to connect to system database")
+        }</span>
+        <span class="cov0" title="0">defer systemDB.Close()
+
+        // Test database connection
+        if err := systemDB.Ping(); err != nil </span><span class="cov0" title="0">{
+                appLogger.WithField("error", err.Error()).Fatal("Failed to ping system database")
+        }</span>
+
+        // Initialize database schema if needed
+        <span class="cov0" title="0">if err := database.InitializeDatabase(systemDB, cfg.RootEmail); err != nil </span><span class="cov0" title="0">{
+                appLogger.WithField("error", err.Error()).Fatal("Failed to initialize database schema")
+        }</span>
+
+        // Set connection pool settings
+        <span class="cov0" title="0">systemDB.SetMaxOpenConns(25)
+        systemDB.SetMaxIdleConns(25)
+        systemDB.SetConnMaxLifetime(5 * time.Minute)
+
+        // Initialize components
+        userRepo := repository.NewUserRepository(systemDB)
+        workspaceRepo := repository.NewWorkspaceRepository(systemDB, &amp;cfg.Database)
+        authRepo := repository.NewSQLAuthRepository(systemDB, appLogger)
+        emailSender := &amp;emailSender{}
+
+        userService, err := service.NewUserService(service.UserServiceConfig{
+                Repository:    userRepo,
+                PrivateKey:    []byte(cfg.Security.PasetoPrivateKey),
+                PublicKey:     []byte(cfg.Security.PasetoPublicKey),
+                EmailSender:   emailSender,
+                SessionExpiry: 15 * 24 * time.Hour, // 15 days
+                Logger:        appLogger,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                appLogger.WithField("error", err.Error()).Fatal("Failed to create user service")
+        }</span>
+
+        // Create auth service
+        <span class="cov0" title="0">authService := service.NewAuthService(authRepo, appLogger)
+
+        // Create workspace service
+        workspaceService := service.NewWorkspaceService(workspaceRepo, appLogger)
+
+        // Parse public key for PASETO
+        publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes([]byte(cfg.Security.PasetoPublicKey))
+        if err != nil </span><span class="cov0" title="0">{
+                appLogger.WithField("error", err.Error()).Fatal("Failed to parse PASETO public key")
+        }</span>
+
+        <span class="cov0" title="0">userHandler := httpHandler.NewUserHandler(userService, workspaceService, cfg, publicKey)
+        rootHandler := httpHandler.NewRootHandler()
+        workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, authService, publicKey)
+        faviconHandler := httpHandler.NewFaviconHandler()
+
+        // Set up routes
+        mux := http.NewServeMux()
+        userHandler.RegisterRoutes(mux)
+        workspaceHandler.RegisterRoutes(mux)
+        rootHandler.RegisterRoutes(mux)
+        mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
+
+        // Wrap mux with CORS middleware
+        handler := middleware.CORSMiddleware(mux)
+
+        // Start server
+        addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+        appLogger.WithField("address", addr).Info("Server starting")
+
+        if cfg.Server.SSL.Enabled </span><span class="cov0" title="0">{
+                appLogger.WithField("cert_file", cfg.Server.SSL.CertFile).Info("SSL enabled")
+                err = http.ListenAndServeTLS(addr, cfg.Server.SSL.CertFile, cfg.Server.SSL.KeyFile, handler)
+        }</span> else<span class="cov0" title="0"> {
+                err = http.ListenAndServe(addr, handler)
+        }</span>
+
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                appLogger.WithField("error", err.Error()).Fatal("Server failed to start")
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package main
+
+import (
+        "encoding/base64"
+        "fmt"
+        "log"
+        "os"
+
+        "aidanwoods.dev/go-paseto"
+)
+
+func main() <span class="cov0" title="0">{
+        // Generate a new key pair
+        secretKey := paseto.NewV4AsymmetricSecretKey()
+        publicKey := secretKey.Public()
+
+        // Convert keys to base64 for storage
+        privateKeyBase64 := base64.StdEncoding.EncodeToString(secretKey.ExportBytes())
+        publicKeyBase64 := base64.StdEncoding.EncodeToString(publicKey.ExportBytes())
+
+        // Print the keys
+        fmt.Printf("Generated PASETO v4 key pair:\n\n")
+        fmt.Printf("Private Key (keep this secret!):\n%s\n\n", privateKeyBase64)
+        fmt.Printf("Public Key:\n%s\n\n", publicKeyBase64)
+
+        // If .env file exists, offer to update it
+        if _, err := os.Stat(".env"); err == nil </span><span class="cov0" title="0">{
+                fmt.Print("Would you like to update the .env file with these keys? [y/N]: ")
+                var response string
+                fmt.Scanln(&amp;response)
+                if response == "y" || response == "Y" </span><span class="cov0" title="0">{
+                        content, err := os.ReadFile(".env")
+                        if err != nil </span><span class="cov0" title="0">{
+                                log.Fatalf("Failed to read .env file: %v", err)
+                        }</span>
+
+                        // Update the keys in the .env file
+                        <span class="cov0" title="0">updated := updateEnvContent(string(content), privateKeyBase64, publicKeyBase64)
+
+                        err = os.WriteFile(".env", []byte(updated), 0644)
+                        if err != nil </span><span class="cov0" title="0">{
+                                log.Fatalf("Failed to write .env file: %v", err)
+                        }</span>
+                        <span class="cov0" title="0">fmt.Println("Updated .env file with new keys")</span>
+                }
+        } else<span class="cov0" title="0"> {
+                fmt.Println("Note: Copy these values to your .env file:")
+                fmt.Printf("PASETO_PRIVATE_KEY=%s\n", privateKeyBase64)
+                fmt.Printf("PASETO_PUBLIC_KEY=%s\n", publicKeyBase64)
+        }</span>
+}
+
+func updateEnvContent(content, privateKey, publicKey string) string <span class="cov0" title="0">{
+        var result string
+        var foundPrivate, foundPublic bool
+
+        // Split content into lines
+        lines := make([]string, 0)
+        current := ""
+        for _, char := range content </span><span class="cov0" title="0">{
+                if char == '\n' </span><span class="cov0" title="0">{
+                        lines = append(lines, current)
+                        current = ""
+                }</span> else<span class="cov0" title="0"> {
+                        current += string(char)
+                }</span>
+        }
+        <span class="cov0" title="0">if current != "" </span><span class="cov0" title="0">{
+                lines = append(lines, current)
+        }</span>
+
+        // Update or append keys
+        <span class="cov0" title="0">for _, line := range lines </span><span class="cov0" title="0">{
+                if len(line) == 0 </span><span class="cov0" title="0">{
+                        result += line + "\n"
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if line[0] == '#' </span><span class="cov0" title="0">{
+                        result += line + "\n"
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if len(line) &gt;= 18 &amp;&amp; line[:18] == "PASETO_PRIVATE_KEY" </span><span class="cov0" title="0">{
+                        result += fmt.Sprintf("PASETO_PRIVATE_KEY=%s\n", privateKey)
+                        foundPrivate = true
+                }</span> else<span class="cov0" title="0"> if len(line) &gt;= 17 &amp;&amp; line[:17] == "PASETO_PUBLIC_KEY" </span><span class="cov0" title="0">{
+                        result += fmt.Sprintf("PASETO_PUBLIC_KEY=%s\n", publicKey)
+                        foundPublic = true
+                }</span> else<span class="cov0" title="0"> {
+                        result += line + "\n"
+                }</span>
+        }
+
+        // Append keys if they weren't found
+        <span class="cov0" title="0">if !foundPrivate </span><span class="cov0" title="0">{
+                result += fmt.Sprintf("PASETO_PRIVATE_KEY=%s\n", privateKey)
+        }</span>
+        <span class="cov0" title="0">if !foundPublic </span><span class="cov0" title="0">{
+                result += fmt.Sprintf("PASETO_PUBLIC_KEY=%s\n", publicKey)
+        }</span>
+
+        <span class="cov0" title="0">return result</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package config
+
+import (
+        "encoding/base64"
+        "fmt"
+        "log"
+        "os"
+        "strings"
+
+        "github.com/spf13/viper"
+)
+
+type Config struct {
+        Server      ServerConfig
+        Database    DatabaseConfig
+        Security    SecurityConfig
+        RootEmail   string
+        Environment string
+}
+
+type ServerConfig struct {
+        Port int
+        Host string
+        SSL  SSLConfig
+}
+
+type DatabaseConfig struct {
+        Host     string
+        Port     int
+        User     string
+        Password string
+        DBName   string
+        Prefix   string
+}
+
+type SecurityConfig struct {
+        // Raw decoded bytes for PASETO keys
+        PasetoPrivateKey []byte
+        PasetoPublicKey  []byte
+}
+
+type SSLConfig struct {
+        Enabled  bool
+        CertFile string
+        KeyFile  string
+}
+
+// LoadOptions contains options for loading configuration
+type LoadOptions struct {
+        EnvFile string // Optional environment file to load (e.g., ".env", ".env.test")
+}
+
+// Load loads the configuration with default options
+func Load() (*Config, error) <span class="cov0" title="0">{
+        return LoadWithOptions(LoadOptions{EnvFile: ".env"})
+}</span>
+
+// LoadWithOptions loads the configuration with the specified options
+func LoadWithOptions(opts LoadOptions) (*Config, error) <span class="cov8" title="1">{
+        v := viper.New()
+
+        // Set default values
+        v.SetDefault("SERVER_PORT", 8080)
+        v.SetDefault("SERVER_HOST", "0.0.0.0")
+        v.SetDefault("DB_HOST", "localhost")
+        v.SetDefault("DB_PORT", 5432)
+        v.SetDefault("DB_USER", "postgres")
+        v.SetDefault("DB_PASSWORD", "postgres")
+        v.SetDefault("DB_PREFIX", "notifuse")
+        v.SetDefault("DB_NAME", "${DB_PREFIX}_system")
+        v.SetDefault("ENVIRONMENT", "production")
+
+        // Load environment file if specified
+        if opts.EnvFile != "" </span><span class="cov8" title="1">{
+                v.SetConfigName(opts.EnvFile)
+                v.SetConfigType("env")
+
+                currentPath, err := os.Getwd()
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("error getting current directory: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">configPath := strings.Split(currentPath, "server")[0] + "server/"
+                v.AddConfigPath(configPath)
+
+                if err := v.ReadInConfig(); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error reading config file %v: %v", opts.EnvFile, err)
+                        // It's okay if config file doesn't exist
+                        if _, ok := err.(viper.ConfigFileNotFoundError); !ok </span><span class="cov0" title="0">{
+                                return nil, fmt.Errorf("error reading config file: %w", err)
+                        }</span>
+                }
+        }
+
+        // Read environment variables
+        <span class="cov8" title="1">v.AutomaticEnv()
+        v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+        // Get base64 encoded keys
+        privateKeyBase64 := v.GetString("PASETO_PRIVATE_KEY")
+        publicKeyBase64 := v.GetString("PASETO_PUBLIC_KEY")
+
+        // Validate required configuration
+        if privateKeyBase64 == "" </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("PASETO_PRIVATE_KEY is required")
+        }</span>
+        <span class="cov8" title="1">if publicKeyBase64 == "" </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("PASETO_PUBLIC_KEY is required")
+        }</span>
+
+        // Decode base64 keys
+        <span class="cov8" title="1">privateKey, err := base64.StdEncoding.DecodeString(privateKeyBase64)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("error decoding PASETO_PRIVATE_KEY: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">publicKey, err := base64.StdEncoding.DecodeString(publicKeyBase64)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("error decoding PASETO_PUBLIC_KEY: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">config := &amp;Config{
+                Server: ServerConfig{
+                        Port: v.GetInt("SERVER_PORT"),
+                        Host: v.GetString("SERVER_HOST"),
+                        SSL: SSLConfig{
+                                Enabled:  v.GetBool("SSL_ENABLED"),
+                                CertFile: v.GetString("SSL_CERT_FILE"),
+                                KeyFile:  v.GetString("SSL_KEY_FILE"),
+                        },
+                },
+                Database: DatabaseConfig{
+                        Host:     v.GetString("DB_HOST"),
+                        Port:     v.GetInt("DB_PORT"),
+                        User:     v.GetString("DB_USER"),
+                        Password: v.GetString("DB_PASSWORD"),
+                        DBName:   v.GetString("DB_NAME"),
+                        Prefix:   v.GetString("DB_PREFIX"),
+                },
+                Security: SecurityConfig{
+                        PasetoPrivateKey: privateKey,
+                        PasetoPublicKey:  publicKey,
+                },
+                RootEmail:   v.GetString("ROOT_EMAIL"),
+                Environment: v.GetString("ENVIRONMENT"),
+        }
+
+        return config, nil</span>
+}
+
+// IsDevelopment returns true if the environment is set to development
+func (c *Config) IsDevelopment() bool <span class="cov8" title="1">{
+        return c.Environment == "development"
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package database
 
 import (
         "database/sql"
@@ -179,7 +573,7 @@ func CleanDatabase(db *sql.DB) error <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file1" style="display: none">package database
+		<pre class="file" id="file4" style="display: none">package database
 
 import (
         "database/sql"
@@ -236,7 +630,7 @@ func ConnectToWorkspace(cfg *config.DatabaseConfig, workspaceID string) (*sql.DB
 }
 </pre>
 		
-		<pre class="file" id="file2" style="display: none">package domain
+		<pre class="file" id="file5" style="display: none">package domain
 
 // Timezones contains all valid IANA timezone identifiers
 var Timezones = []string{
@@ -677,7 +1071,7 @@ func IsValidTimezone(timezone string) bool <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file3" style="display: none">package domain
+		<pre class="file" id="file6" style="display: none">package domain
 
 import (
         "context"
@@ -748,7 +1142,7 @@ func (e *ErrSessionNotFound) Error() string <span class="cov8" title="1">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file4" style="display: none">package domain
+		<pre class="file" id="file7" style="display: none">package domain
 
 import (
         "context"
@@ -880,7 +1274,7 @@ func (e *ErrUnauthorized) Error() string <span class="cov8" title="1">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file5" style="display: none">package http
+		<pre class="file" id="file8" style="display: none">package http
 
 import (
         "encoding/json"
@@ -1060,7 +1454,7 @@ func resolveURL(baseURL *url.URL, href string) (string, error) <span class="cov8
 }
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package middleware
+		<pre class="file" id="file9" style="display: none">package middleware
 
 import (
         "context"
@@ -1177,7 +1571,7 @@ func (ac *AuthConfig) RequireAuth(authService AuthServiceInterface) func(http.Ha
 }
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package middleware
+		<pre class="file" id="file10" style="display: none">package middleware
 
 import (
         "net/http"
@@ -1214,7 +1608,7 @@ func CORSMiddleware(next http.Handler) http.Handler <span class="cov8" title="1"
 }
 </pre>
 		
-		<pre class="file" id="file8" style="display: none">package http
+		<pre class="file" id="file11" style="display: none">package http
 
 import (
         "encoding/json"
@@ -1239,7 +1633,7 @@ func (h *RootHandler) RegisterRoutes(mux *http.ServeMux) <span class="cov8" titl
 }</span>
 </pre>
 		
-		<pre class="file" id="file9" style="display: none">package http
+		<pre class="file" id="file12" style="display: none">package http
 
 import (
         "encoding/json"
@@ -1374,7 +1768,7 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) <span class="cov8" titl
 }
 </pre>
 		
-		<pre class="file" id="file10" style="display: none">package http
+		<pre class="file" id="file13" style="display: none">package http
 
 import (
         "encoding/json"
@@ -1393,7 +1787,7 @@ func WriteJSONError(w http.ResponseWriter, message string, statusCode int) <span
 }</span>
 </pre>
 		
-		<pre class="file" id="file11" style="display: none">package http
+		<pre class="file" id="file14" style="display: none">package http
 
 import (
         "context"
@@ -1606,7 +2000,7 @@ func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) 
 }
 </pre>
 		
-		<pre class="file" id="file12" style="display: none">package repository
+		<pre class="file" id="file15" style="display: none">package repository
 
 import (
         "context"
@@ -1661,51 +2055,30 @@ func (r *SQLAuthRepository) GetUserByID(ctx context.Context, userID string) (*do
 }
 </pre>
 		
-		<pre class="file" id="file13" style="display: none">package repository
+		<pre class="file" id="file16" style="display: none">package repository
 
 import (
         "database/sql"
         "testing"
 
-        _ "github.com/lib/pq"
-
-        "notifuse/server/config"
-        "notifuse/server/internal/database"
+        "github.com/DATA-DOG/go-sqlmock"
+        "github.com/stretchr/testify/require"
 )
 
-func setupTestDB(t *testing.T) *sql.DB <span class="cov8" title="1">{
-        // Load test configuration
-        cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-        if err != nil </span><span class="cov0" title="0">{
-                t.Fatalf("Failed to load test config: %v", err)
+// SetupMockDB creates a new mock database and returns the db, mock, and a cleanup function
+func SetupMockDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, func()) <span class="cov8" title="1">{
+        db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+        require.NoError(t, err, "Failed to create mock database")
+
+        cleanup := func() </span><span class="cov8" title="1">{
+                db.Close()
         }</span>
 
-        // Connect to database using configuration
-        <span class="cov8" title="1">db, err := sql.Open("postgres", database.GetSystemDSN(&amp;cfg.Database))
-        if err != nil </span><span class="cov0" title="0">{
-                t.Fatalf("Failed to connect to test database: %v", err)
-        }</span>
-
-        // Test database connection
-        <span class="cov8" title="1">if err := db.Ping(); err != nil </span><span class="cov0" title="0">{
-                t.Fatalf("Failed to ping test database: %v", err)
-        }</span>
-
-        // Clean up database
-        <span class="cov8" title="1">if err := database.CleanDatabase(db); err != nil </span><span class="cov0" title="0">{
-                t.Fatalf("Failed to clean database: %v", err)
-        }</span>
-
-        // Initialize database with tables
-        <span class="cov8" title="1">if err := database.InitializeDatabase(db, cfg.RootEmail); err != nil </span><span class="cov0" title="0">{
-                t.Fatalf("Failed to initialize database: %v", err)
-        }</span>
-
-        <span class="cov8" title="1">return db</span>
+        <span class="cov8" title="1">return db, mock, cleanup</span>
 }
 </pre>
 		
-		<pre class="file" id="file14" style="display: none">package repository
+		<pre class="file" id="file17" style="display: none">package repository
 
 import (
         "context"
@@ -1728,7 +2101,7 @@ func NewUserRepository(db *sql.DB) domain.UserRepository <span class="cov8" titl
 }</span>
 
 func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) error <span class="cov8" title="1">{
-        if user.ID == "" </span><span class="cov8" title="1">{
+        if user.ID == "" </span><span class="cov0" title="0">{
                 user.ID = uuid.New().String()
         }</span>
         <span class="cov8" title="1">now := time.Now().UTC()
@@ -1746,7 +2119,7 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
                 user.CreatedAt,
                 user.UpdatedAt,
         )
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return fmt.Errorf("failed to create user: %w", err)
         }</span>
         <span class="cov8" title="1">return nil</span>
@@ -1769,7 +2142,7 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
         if err == sql.ErrNoRows </span><span class="cov8" title="1">{
                 return nil, &amp;domain.ErrUserNotFound{Message: "user not found"}
         }</span>
-        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
                 return nil, fmt.Errorf("failed to get user: %w", err)
         }</span>
         <span class="cov8" title="1">return &amp;user, nil</span>
@@ -1799,7 +2172,7 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 }
 
 func (r *userRepository) CreateSession(ctx context.Context, session *domain.Session) error <span class="cov8" title="1">{
-        if session.ID == "" </span><span class="cov8" title="1">{
+        if session.ID == "" </span><span class="cov0" title="0">{
                 session.ID = uuid.New().String()
         }</span>
         <span class="cov8" title="1">session.CreatedAt = time.Now().UTC()
@@ -1931,7 +2304,7 @@ func (r *userRepository) UpdateSession(ctx context.Context, session *domain.Sess
 }
 </pre>
 		
-		<pre class="file" id="file15" style="display: none">package repository
+		<pre class="file" id="file18" style="display: none">package repository
 
 import (
         "context"
@@ -2031,10 +2404,10 @@ func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.W
                 WHERE id = $1
         `
         workspace, err := domain.ScanWorkspace(r.systemDB.QueryRowContext(ctx, query, id))
-        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+        if err == sql.ErrNoRows </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("workspace not found")
         }</span>
-        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
                 return nil, fmt.Errorf("failed to get workspace: %w", err)
         }</span>
         <span class="cov8" title="1">return workspace, nil</span>
@@ -2095,7 +2468,7 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
         if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get affected rows: %w", err)
         }</span>
-        <span class="cov8" title="1">if rows == 0 </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if rows == 0 </span><span class="cov8" title="1">{
                 return fmt.Errorf("workspace not found")
         }</span>
         <span class="cov8" title="1">return nil</span>
@@ -2110,25 +2483,25 @@ func (r *workspaceRepository) Delete(ctx context.Context, id string) error <span
         // Then delete the workspace record
         <span class="cov8" title="1">query := `DELETE FROM workspaces WHERE id = $1`
         result, err := r.systemDB.ExecContext(ctx, query, id)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return fmt.Errorf("failed to delete workspace: %w", err)
         }</span>
-        <span class="cov8" title="1">rows, err := result.RowsAffected()
+        <span class="cov0" title="0">rows, err := result.RowsAffected()
         if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get affected rows: %w", err)
         }</span>
-        <span class="cov8" title="1">if rows == 0 </span><span class="cov8" title="1">{
+        <span class="cov0" title="0">if rows == 0 </span><span class="cov0" title="0">{
                 return fmt.Errorf("workspace not found")
         }</span>
-        <span class="cov8" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
 func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error) <span class="cov8" title="1">{
         // Check if we already have a connection
-        if conn, ok := r.connections.Load(workspaceID); ok </span><span class="cov8" title="1">{
+        if conn, ok := r.connections.Load(workspaceID); ok </span><span class="cov0" title="0">{
                 db := conn.(*sql.DB)
                 // Test the connection
-                if err := db.PingContext(ctx); err == nil </span><span class="cov8" title="1">{
+                if err := db.PingContext(ctx); err == nil </span><span class="cov0" title="0">{
                         return db, nil
                 }</span>
                 // If ping fails, remove the connection and create a new one
@@ -2142,7 +2515,7 @@ func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID str
         }</span>
 
         // Store the connection
-        <span class="cov8" title="1">r.connections.Store(workspaceID, db)
+        <span class="cov0" title="0">r.connections.Store(workspaceID, db)
         return db, nil</span>
 }
 
@@ -2159,10 +2532,10 @@ func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID st
 
         // Connect to the new database to create schema
         <span class="cov8" title="1">db, err := database.ConnectToWorkspace(r.dbConfig, workspaceID)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return err
         }</span>
-        <span class="cov8" title="1">defer db.Close()
+        <span class="cov0" title="0">defer db.Close()
 
         // Create workspace schema
         _, err = db.ExecContext(ctx, `
@@ -2178,7 +2551,7 @@ func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID st
                 return fmt.Errorf("failed to create workspace schema: %w", err)
         }</span>
 
-        <span class="cov8" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
 func (r *workspaceRepository) DeleteDatabase(ctx context.Context, workspaceID string) error <span class="cov8" title="1">{
@@ -2292,17 +2665,17 @@ func (r *workspaceRepository) GetUserWorkspace(ctx context.Context, userID strin
         err := r.systemDB.QueryRowContext(ctx, query, userID, workspaceID).Scan(
                 &amp;uw.UserID, &amp;uw.WorkspaceID, &amp;uw.Role, &amp;uw.CreatedAt, &amp;uw.UpdatedAt,
         )
-        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+        if err == sql.ErrNoRows </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("user is not a member of the workspace")
         }</span>
-        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
                 return nil, fmt.Errorf("failed to get user workspace: %w", err)
         }</span>
         <span class="cov8" title="1">return &amp;uw, nil</span>
 }
 </pre>
 		
-		<pre class="file" id="file16" style="display: none">package service
+		<pre class="file" id="file19" style="display: none">package service
 
 import (
         "context"
@@ -2366,7 +2739,7 @@ func (s *AuthService) VerifyUserSession(ctx context.Context, userID, sessionID s
 }
 </pre>
 		
-		<pre class="file" id="file17" style="display: none">package service
+		<pre class="file" id="file20" style="display: none">package service
 
 import (
         "context"
@@ -2683,7 +3056,7 @@ func (s *UserService) GetUserByID(ctx context.Context, userID string) (*domain.U
 }
 </pre>
 		
-		<pre class="file" id="file18" style="display: none">package service
+		<pre class="file" id="file21" style="display: none">package service
 
 import (
         "context"
@@ -2962,6 +3335,61 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 
         <span class="cov8" title="1">return nil</span>
 }
+</pre>
+		
+		<pre class="file" id="file22" style="display: none">package logger
+
+import (
+        "os"
+
+        "github.com/rs/zerolog"
+)
+
+type Logger interface {
+        Debug(msg string)
+        Info(msg string)
+        Warn(msg string)
+        Error(msg string)
+        Fatal(msg string)
+        WithField(key string, value interface{}) Logger
+}
+
+type zerologLogger struct {
+        logger zerolog.Logger
+}
+
+func NewLogger() Logger <span class="cov0" title="0">{
+        logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+        return &amp;zerologLogger{
+                logger: logger,
+        }
+}</span>
+
+func (l *zerologLogger) Debug(msg string) <span class="cov0" title="0">{
+        l.logger.Debug().Msg(msg)
+}</span>
+
+func (l *zerologLogger) Info(msg string) <span class="cov0" title="0">{
+        l.logger.Info().Msg(msg)
+}</span>
+
+func (l *zerologLogger) Warn(msg string) <span class="cov0" title="0">{
+        l.logger.Warn().Msg(msg)
+}</span>
+
+func (l *zerologLogger) Error(msg string) <span class="cov0" title="0">{
+        l.logger.Error().Msg(msg)
+}</span>
+
+func (l *zerologLogger) Fatal(msg string) <span class="cov0" title="0">{
+        l.logger.Fatal().Msg(msg)
+}</span>
+
+func (l *zerologLogger) WithField(key string, value interface{}) Logger <span class="cov0" title="0">{
+        return &amp;zerologLogger{
+                logger: l.logger.With().Interface(key, value).Logger(),
+        }
+}</span>
 </pre>
 		
 		</div>

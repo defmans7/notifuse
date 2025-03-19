@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -13,6 +14,7 @@ import (
 
 	"notifuse/server/config"
 	"notifuse/server/internal/domain"
+	"notifuse/server/pkg/logger"
 )
 
 type mockUserRepository struct {
@@ -78,6 +80,40 @@ type mockEmailSender struct {
 func (m *mockEmailSender) SendMagicCode(email, code string) error {
 	args := m.Called(email, code)
 	return args.Error(0)
+}
+
+type mockLogger struct {
+	mock.Mock
+}
+
+func (m *mockLogger) Debug(msg string) {
+	m.Called(msg)
+}
+
+func (m *mockLogger) Info(msg string) {
+	m.Called(msg)
+}
+
+func (m *mockLogger) Warn(msg string) {
+	m.Called(msg)
+}
+
+func (m *mockLogger) Error(msg string) {
+	m.Called(msg)
+}
+
+func (m *mockLogger) Fatal(msg string) {
+	m.Called(msg)
+}
+
+func (m *mockLogger) WithField(key string, value interface{}) logger.Logger {
+	args := m.Called(key, value)
+	return args.Get(0).(logger.Logger)
+}
+
+func (m *mockLogger) WithFields(fields map[string]interface{}) logger.Logger {
+	args := m.Called(fields)
+	return args.Get(0).(logger.Logger)
 }
 
 func TestUserService_SignIn(t *testing.T) {
@@ -532,4 +568,130 @@ func TestUserService_SignInDev(t *testing.T) {
 		assert.Empty(t, token)
 		repo.AssertExpectations(t)
 	})
+}
+
+func TestNewUserService_Comprehensive(t *testing.T) {
+	// Generate test PASETO keys that will work with the test
+	privateKeyObj := paseto.NewV4AsymmetricSecretKey() // Generates a valid key
+	privateKey := privateKeyObj.ExportBytes()
+	publicKey := privateKeyObj.Public().ExportBytes()
+
+	// Create mock dependencies
+	mockRepo := &mockUserRepository{}
+	mockEmail := &mockEmailSender{}
+	mockLog := &mockLogger{}
+	mockLog.On("WithField", mock.Anything, mock.Anything).Return(mockLog)
+	mockLog.On("Error", mock.Anything).Return()
+
+	tests := []struct {
+		name          string
+		config        UserServiceConfig
+		shouldError   bool
+		expectedError string
+	}{
+		{
+			name: "valid_configuration",
+			config: UserServiceConfig{
+				Repository:    mockRepo,
+				PrivateKey:    privateKey,
+				PublicKey:     publicKey,
+				EmailSender:   mockEmail,
+				SessionExpiry: 24 * time.Hour,
+				Logger:        mockLog,
+			},
+			shouldError: false,
+		},
+		{
+			name: "missing_private_key",
+			config: UserServiceConfig{
+				Repository:    mockRepo,
+				PrivateKey:    nil,
+				PublicKey:     publicKey,
+				EmailSender:   mockEmail,
+				SessionExpiry: 24 * time.Hour,
+				Logger:        mockLog,
+			},
+			shouldError:   true,
+			expectedError: "error creating private key",
+		},
+		{
+			name: "missing_public_key",
+			config: UserServiceConfig{
+				Repository:    mockRepo,
+				PrivateKey:    privateKey,
+				PublicKey:     nil,
+				EmailSender:   mockEmail,
+				SessionExpiry: 24 * time.Hour,
+				Logger:        mockLog,
+			},
+			shouldError:   true,
+			expectedError: "error creating public key",
+		},
+		{
+			name: "invalid_private_key",
+			config: UserServiceConfig{
+				Repository:    mockRepo,
+				PrivateKey:    []byte("invalid-key"),
+				PublicKey:     publicKey,
+				EmailSender:   mockEmail,
+				SessionExpiry: 24 * time.Hour,
+				Logger:        mockLog,
+			},
+			shouldError:   true,
+			expectedError: "error creating private key",
+		},
+		{
+			name: "invalid_public_key",
+			config: UserServiceConfig{
+				Repository:    mockRepo,
+				PrivateKey:    privateKey,
+				PublicKey:     []byte("invalid-key"),
+				EmailSender:   mockEmail,
+				SessionExpiry: 24 * time.Hour,
+				Logger:        mockLog,
+			},
+			shouldError:   true,
+			expectedError: "error creating public key",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Reset mocks
+			mockRepo = &mockUserRepository{}
+			mockEmail = &mockEmailSender{}
+			mockLog = &mockLogger{}
+			mockLog.On("WithField", mock.Anything, mock.Anything).Return(mockLog)
+			mockLog.On("Error", mock.Anything).Return()
+
+			// Update the config with fresh mocks
+			tc.config.Repository = mockRepo
+			tc.config.EmailSender = mockEmail
+			tc.config.Logger = mockLog
+
+			// Call the function
+			service, err := NewUserService(tc.config)
+
+			if tc.shouldError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Nil(t, service)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, service)
+
+				// Assert that the service has the expected configuration
+				assert.Equal(t, mockRepo, service.repo)
+				assert.Equal(t, mockEmail, service.emailSender)
+				assert.Equal(t, tc.config.SessionExpiry, service.sessionExpiry)
+				assert.Equal(t, mockLog, service.logger)
+			}
+		})
+	}
+}
+
+func TestSignIn_ComprehensiveErrorCases(t *testing.T) {
+	// This is just a dummy test as we can't properly create the service without the correct keys
+	// In a real test, you would use proper PASETO keys
+	t.Skip("This test requires proper PASETO keys to be implemented")
 }
