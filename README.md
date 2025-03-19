@@ -1,7 +1,7 @@
 # Notifuse
 
 [![Go](https://github.com/Notifuse/notifuse/actions/workflows/go.yml/badge.svg)](https://github.com/Notifuse/notifuse/actions/workflows/go.yml)
-[![codecov](https://codecov.io/gh/Notifuse/notifuse/branch/main/graph/badge.svg)](https://codecov.io/gh/Notifuse/notifuse)
+[![codecov](https://codecov.io/gh/Notifuse/notifuse/graph/badge.svg?token=VZ0HBEM9OZ)](https://codecov.io/gh/Notifuse/notifuse)
 
 Notifuse is an email marketing platform that allows you to send emails to your contacts.
 
