@@ -29,7 +29,7 @@ export interface GetCurrentUserResponse {
 // Workspace types
 export interface WorkspaceSettings {
   name: string
-  url: string
+  website_url: string
   logo_url: string | null
   timezone: string
 }

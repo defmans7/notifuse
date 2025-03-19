@@ -3,6 +3,7 @@ import { RootLayout } from './layouts/RootLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { SignInPage } from './pages/SignInPage'
 import { LogoutPage } from './pages/LogoutPage'
+import { CreateWorkspacePage } from './pages/CreateWorkspacePage'
 import { createRouter } from '@tanstack/react-router'
 
 // Create the root route
@@ -42,7 +43,7 @@ const acceptInvitationRoute = createRoute({
 const workspaceCreateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workspace/create',
-  component: () => <div>Create Workspace</div>
+  component: CreateWorkspacePage
 })
 
 // Create the workspace route

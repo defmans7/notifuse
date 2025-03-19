@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// User represents a user in the system
 type User struct {
 	ID        string    `json:"id" db:"id"`
 	Email     string    `json:"email" db:"email"`
@@ -13,6 +14,7 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// Session represents a user session
 type Session struct {
 	ID               string    `json:"id" db:"id"`
 	UserID           string    `json:"user_id" db:"user_id"`

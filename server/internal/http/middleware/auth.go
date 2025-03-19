@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"notifuse/server/internal/domain"
 	"notifuse/server/internal/service"
 	"strings"
 
@@ -27,7 +28,7 @@ type AuthenticatedUser struct {
 
 // AuthServiceInterface defines the interface for authentication operations
 type AuthServiceInterface interface {
-	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*service.User, error)
+	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
 }
 
 // AuthConfig holds the configuration for the auth middleware

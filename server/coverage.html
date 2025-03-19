@@ -1,0 +1,2996 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>database: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">notifuse/server/internal/database/init.go (100.0%)</option>
+				
+				<option value="file1">notifuse/server/internal/database/utils.go (28.6%)</option>
+				
+				<option value="file2">notifuse/server/internal/domain/timezones.go (100.0%)</option>
+				
+				<option value="file3">notifuse/server/internal/domain/user.go (100.0%)</option>
+				
+				<option value="file4">notifuse/server/internal/domain/workspace.go (94.4%)</option>
+				
+				<option value="file5">notifuse/server/internal/http/favicon_handler.go (70.4%)</option>
+				
+				<option value="file6">notifuse/server/internal/http/middleware/auth.go (100.0%)</option>
+				
+				<option value="file7">notifuse/server/internal/http/middleware/cors.go (100.0%)</option>
+				
+				<option value="file8">notifuse/server/internal/http/root_handler.go (100.0%)</option>
+				
+				<option value="file9">notifuse/server/internal/http/user_handler.go (96.0%)</option>
+				
+				<option value="file10">notifuse/server/internal/http/utils.go (100.0%)</option>
+				
+				<option value="file11">notifuse/server/internal/http/workspace_handler.go (58.5%)</option>
+				
+				<option value="file12">notifuse/server/internal/repository/auth_repository.go (100.0%)</option>
+				
+				<option value="file13">notifuse/server/internal/repository/test_helper.go (61.5%)</option>
+				
+				<option value="file14">notifuse/server/internal/repository/user_postgres.go (86.1%)</option>
+				
+				<option value="file15">notifuse/server/internal/repository/workspace_postgres.go (79.2%)</option>
+				
+				<option value="file16">notifuse/server/internal/service/auth.go (100.0%)</option>
+				
+				<option value="file17">notifuse/server/internal/service/user.go (77.9%)</option>
+				
+				<option value="file18">notifuse/server/internal/service/workspace.go (96.6%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package database
+
+import (
+        "database/sql"
+        "fmt"
+        "time"
+
+        "github.com/google/uuid"
+
+        "notifuse/server/internal/database/schema"
+        "notifuse/server/internal/domain"
+)
+
+// InitializeDatabase creates all necessary database tables if they don't exist
+func InitializeDatabase(db *sql.DB, rootEmail string) error <span class="cov8" title="1">{
+        // Run all table creation queries
+        for _, query := range schema.TableDefinitions </span><span class="cov8" title="1">{
+                if _, err := db.Exec(query); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to create table: %w", err)
+                }</span>
+        }
+
+        // Create root user if it doesn't exist
+        <span class="cov8" title="1">if rootEmail != "" </span><span class="cov8" title="1">{
+                // Check if root user exists
+                var exists bool
+                err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", rootEmail).Scan(&amp;exists)
+                if err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to check root user existence: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">if !exists </span><span class="cov8" title="1">{
+                        // Create root user
+                        rootUser := &amp;domain.User{
+                                ID:        uuid.New().String(),
+                                Email:     rootEmail,
+                                Name:      "Root User",
+                                CreatedAt: time.Now().UTC(),
+                                UpdatedAt: time.Now().UTC(),
+                        }
+
+                        query := `
+                                INSERT INTO users (id, email, name, created_at, updated_at)
+                                VALUES ($1, $2, $3, $4, $5)
+                        `
+                        _, err = db.Exec(query,
+                                rootUser.ID,
+                                rootUser.Email,
+                                rootUser.Name,
+                                rootUser.CreatedAt,
+                                rootUser.UpdatedAt,
+                        )
+                        if err != nil </span><span class="cov8" title="1">{
+                                return fmt.Errorf("failed to create root user: %w", err)
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// CleanDatabase drops all tables in reverse order
+func CleanDatabase(db *sql.DB) error <span class="cov8" title="1">{
+        // Drop tables in reverse order to handle dependencies
+        for i := len(schema.TableNames) - 1; i &gt;= 0; i-- </span><span class="cov8" title="1">{
+                query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", schema.TableNames[i])
+                if _, err := db.Exec(query); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to drop table %s: %w", schema.TableNames[i], err)
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package database
+
+import (
+        "database/sql"
+        "fmt"
+        "strings"
+
+        "notifuse/server/config"
+)
+
+// GetSystemDSN returns the DSN for the system database
+func GetSystemDSN(cfg *config.DatabaseConfig) string <span class="cov8" title="1">{
+        return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+                cfg.User,
+                cfg.Password,
+                cfg.Host,
+                cfg.Port,
+                cfg.DBName,
+        )
+}</span>
+
+// GetWorkspaceDSN returns the DSN for a workspace database
+func GetWorkspaceDSN(cfg *config.DatabaseConfig, workspaceID string) string <span class="cov8" title="1">{
+        // Replace hyphens with underscores for PostgreSQL compatibility
+        safeID := strings.ReplaceAll(workspaceID, "-", "_")
+        dbName := fmt.Sprintf("%s_ws_%s", cfg.Prefix, safeID)
+        return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+                cfg.User,
+                cfg.Password,
+                cfg.Host,
+                cfg.Port,
+                dbName,
+        )
+}</span>
+
+// ConnectToWorkspace creates a new database connection for a workspace
+func ConnectToWorkspace(cfg *config.DatabaseConfig, workspaceID string) (*sql.DB, error) <span class="cov0" title="0">{
+        dsn := GetWorkspaceDSN(cfg, workspaceID)
+        db, err := sql.Open("postgres", dsn)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to connect to workspace database: %w", err)
+        }</span>
+
+        // Test the connection
+        <span class="cov0" title="0">if err := db.Ping(); err != nil </span><span class="cov0" title="0">{
+                db.Close()
+                return nil, fmt.Errorf("failed to ping workspace database: %w", err)
+        }</span>
+
+        // Set connection pool settings
+        <span class="cov0" title="0">db.SetMaxOpenConns(25)
+        db.SetMaxIdleConns(25)
+
+        return db, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package domain
+
+// Timezones contains all valid IANA timezone identifiers
+var Timezones = []string{
+        "Africa/Abidjan",
+        "Africa/Accra",
+        "Africa/Addis_Ababa",
+        "Africa/Algiers",
+        "Africa/Asmara",
+        "Africa/Bamako",
+        "Africa/Bangui",
+        "Africa/Banjul",
+        "Africa/Bissau",
+        "Africa/Blantyre",
+        "Africa/Brazzaville",
+        "Africa/Bujumbura",
+        "Africa/Cairo",
+        "Africa/Casablanca",
+        "Africa/Ceuta",
+        "Africa/Conakry",
+        "Africa/Dakar",
+        "Africa/Dar_es_Salaam",
+        "Africa/Djibouti",
+        "Africa/Douala",
+        "Africa/El_Aaiun",
+        "Africa/Freetown",
+        "Africa/Gaborone",
+        "Africa/Harare",
+        "Africa/Johannesburg",
+        "Africa/Juba",
+        "Africa/Kampala",
+        "Africa/Khartoum",
+        "Africa/Kigali",
+        "Africa/Kinshasa",
+        "Africa/Lagos",
+        "Africa/Libreville",
+        "Africa/Lome",
+        "Africa/Luanda",
+        "Africa/Lubumbashi",
+        "Africa/Lusaka",
+        "Africa/Malabo",
+        "Africa/Maputo",
+        "Africa/Maseru",
+        "Africa/Mbabane",
+        "Africa/Mogadishu",
+        "Africa/Monrovia",
+        "Africa/Nairobi",
+        "Africa/Ndjamena",
+        "Africa/Niamey",
+        "Africa/Nouakchott",
+        "Africa/Ouagadougou",
+        "Africa/Porto-Novo",
+        "Africa/Sao_Tome",
+        "Africa/Tripoli",
+        "Africa/Tunis",
+        "Africa/Windhoek",
+        "America/Adak",
+        "America/Anchorage",
+        "America/Anguilla",
+        "America/Antigua",
+        "America/Araguaina",
+        "America/Argentina/Buenos_Aires",
+        "America/Argentina/Catamarca",
+        "America/Argentina/Cordoba",
+        "America/Argentina/Jujuy",
+        "America/Argentina/La_Rioja",
+        "America/Argentina/Mendoza",
+        "America/Argentina/Rio_Gallegos",
+        "America/Argentina/Salta",
+        "America/Argentina/San_Juan",
+        "America/Argentina/San_Luis",
+        "America/Argentina/Tucuman",
+        "America/Argentina/Ushuaia",
+        "America/Aruba",
+        "America/Asuncion",
+        "America/Atikokan",
+        "America/Bahia",
+        "America/Bahia_Banderas",
+        "America/Barbados",
+        "America/Belem",
+        "America/Belize",
+        "America/Blanc-Sablon",
+        "America/Boa_Vista",
+        "America/Bogota",
+        "America/Boise",
+        "America/Cambridge_Bay",
+        "America/Campo_Grande",
+        "America/Cancun",
+        "America/Caracas",
+        "America/Cayenne",
+        "America/Cayman",
+        "America/Chicago",
+        "America/Chihuahua",
+        "America/Costa_Rica",
+        "America/Creston",
+        "America/Cuiaba",
+        "America/Curacao",
+        "America/Danmarkshavn",
+        "America/Dawson",
+        "America/Dawson_Creek",
+        "America/Denver",
+        "America/Detroit",
+        "America/Dominica",
+        "America/Edmonton",
+        "America/Eirunepe",
+        "America/El_Salvador",
+        "America/Fort_Nelson",
+        "America/Fortaleza",
+        "America/Glace_Bay",
+        "America/Goose_Bay",
+        "America/Grand_Turk",
+        "America/Grenada",
+        "America/Guadeloupe",
+        "America/Guatemala",
+        "America/Guayaquil",
+        "America/Guyana",
+        "America/Halifax",
+        "America/Havana",
+        "America/Hermosillo",
+        "America/Indiana/Indianapolis",
+        "America/Indiana/Knox",
+        "America/Indiana/Marengo",
+        "America/Indiana/Petersburg",
+        "America/Indiana/Tell_City",
+        "America/Indiana/Vevay",
+        "America/Indiana/Vincennes",
+        "America/Indiana/Winamac",
+        "America/Inuvik",
+        "America/Iqaluit",
+        "America/Jamaica",
+        "America/Juneau",
+        "America/Kentucky/Louisville",
+        "America/Kentucky/Monticello",
+        "America/Kralendijk",
+        "America/La_Paz",
+        "America/Lima",
+        "America/Los_Angeles",
+        "America/Lower_Princes",
+        "America/Maceio",
+        "America/Managua",
+        "America/Manaus",
+        "America/Marigot",
+        "America/Martinique",
+        "America/Matamoros",
+        "America/Mazatlan",
+        "America/Menominee",
+        "America/Merida",
+        "America/Metlakatla",
+        "America/Mexico_City",
+        "America/Miquelon",
+        "America/Moncton",
+        "America/Monterrey",
+        "America/Montevideo",
+        "America/Montserrat",
+        "America/Nassau",
+        "America/New_York",
+        "America/Nipigon",
+        "America/Nome",
+        "America/Noronha",
+        "America/North_Dakota/Beulah",
+        "America/North_Dakota/Center",
+        "America/North_Dakota/New_Salem",
+        "America/Nuuk",
+        "America/Ojinaga",
+        "America/Panama",
+        "America/Pangnirtung",
+        "America/Paramaribo",
+        "America/Phoenix",
+        "America/Port-au-Prince",
+        "America/Port_of_Spain",
+        "America/Porto_Velho",
+        "America/Puerto_Rico",
+        "America/Punta_Arenas",
+        "America/Rainy_River",
+        "America/Rankin_Inlet",
+        "America/Recife",
+        "America/Regina",
+        "America/Resolute",
+        "America/Rio_Branco",
+        "America/Santarem",
+        "America/Santiago",
+        "America/Santo_Domingo",
+        "America/Sao_Paulo",
+        "America/Scoresbysund",
+        "America/Sitka",
+        "America/St_Barthelemy",
+        "America/St_Johns",
+        "America/St_Kitts",
+        "America/St_Lucia",
+        "America/St_Thomas",
+        "America/St_Vincent",
+        "America/Swift_Current",
+        "America/Tegucigalpa",
+        "America/Thule",
+        "America/Thunder_Bay",
+        "America/Tijuana",
+        "America/Toronto",
+        "America/Tortola",
+        "America/Vancouver",
+        "America/Whitehorse",
+        "America/Winnipeg",
+        "America/Yakutat",
+        "America/Yellowknife",
+        "Antarctica/Casey",
+        "Antarctica/Davis",
+        "Antarctica/DumontDUrville",
+        "Antarctica/Macquarie",
+        "Antarctica/Mawson",
+        "Antarctica/McMurdo",
+        "Antarctica/Palmer",
+        "Antarctica/Rothera",
+        "Antarctica/Syowa",
+        "Antarctica/Troll",
+        "Antarctica/Vostok",
+        "Arctic/Longyearbyen",
+        "Asia/Aden",
+        "Asia/Almaty",
+        "Asia/Amman",
+        "Asia/Anadyr",
+        "Asia/Aqtau",
+        "Asia/Aqtobe",
+        "Asia/Ashgabat",
+        "Asia/Atyrau",
+        "Asia/Baghdad",
+        "Asia/Bahrain",
+        "Asia/Baku",
+        "Asia/Bangkok",
+        "Asia/Barnaul",
+        "Asia/Beirut",
+        "Asia/Bishkek",
+        "Asia/Brunei",
+        "Asia/Chita",
+        "Asia/Choibalsan",
+        "Asia/Colombo",
+        "Asia/Damascus",
+        "Asia/Dhaka",
+        "Asia/Dili",
+        "Asia/Dubai",
+        "Asia/Dushanbe",
+        "Asia/Famagusta",
+        "Asia/Gaza",
+        "Asia/Hebron",
+        "Asia/Ho_Chi_Minh",
+        "Asia/Hong_Kong",
+        "Asia/Hovd",
+        "Asia/Irkutsk",
+        "Asia/Jakarta",
+        "Asia/Jayapura",
+        "Asia/Jerusalem",
+        "Asia/Kabul",
+        "Asia/Kamchatka",
+        "Asia/Karachi",
+        "Asia/Kathmandu",
+        "Asia/Khandyga",
+        "Asia/Kolkata",
+        "Asia/Krasnoyarsk",
+        "Asia/Kuala_Lumpur",
+        "Asia/Kuching",
+        "Asia/Kuwait",
+        "Asia/Macau",
+        "Asia/Magadan",
+        "Asia/Makassar",
+        "Asia/Manila",
+        "Asia/Muscat",
+        "Asia/Nicosia",
+        "Asia/Novokuznetsk",
+        "Asia/Novosibirsk",
+        "Asia/Omsk",
+        "Asia/Oral",
+        "Asia/Phnom_Penh",
+        "Asia/Pontianak",
+        "Asia/Pyongyang",
+        "Asia/Qatar",
+        "Asia/Qostanay",
+        "Asia/Qyzylorda",
+        "Asia/Riyadh",
+        "Asia/Sakhalin",
+        "Asia/Samarkand",
+        "Asia/Seoul",
+        "Asia/Shanghai",
+        "Asia/Singapore",
+        "Asia/Srednekolymsk",
+        "Asia/Taipei",
+        "Asia/Tashkent",
+        "Asia/Tbilisi",
+        "Asia/Tehran",
+        "Asia/Thimphu",
+        "Asia/Tokyo",
+        "Asia/Tomsk",
+        "Asia/Ulaanbaatar",
+        "Asia/Urumqi",
+        "Asia/Ust-Nera",
+        "Asia/Vientiane",
+        "Asia/Vladivostok",
+        "Asia/Yakutsk",
+        "Asia/Yangon",
+        "Asia/Yekaterinburg",
+        "Asia/Yerevan",
+        "Atlantic/Azores",
+        "Atlantic/Bermuda",
+        "Atlantic/Canary",
+        "Atlantic/Cape_Verde",
+        "Atlantic/Faroe",
+        "Atlantic/Madeira",
+        "Atlantic/Reykjavik",
+        "Atlantic/South_Georgia",
+        "Atlantic/St_Helena",
+        "Atlantic/Stanley",
+        "Australia/Adelaide",
+        "Australia/Brisbane",
+        "Australia/Broken_Hill",
+        "Australia/Darwin",
+        "Australia/Eucla",
+        "Australia/Hobart",
+        "Australia/Lindeman",
+        "Australia/Lord_Howe",
+        "Australia/Melbourne",
+        "Australia/Perth",
+        "Australia/Sydney",
+        "Europe/Amsterdam",
+        "Europe/Andorra",
+        "Europe/Astrakhan",
+        "Europe/Athens",
+        "Europe/Belgrade",
+        "Europe/Berlin",
+        "Europe/Bratislava",
+        "Europe/Brussels",
+        "Europe/Bucharest",
+        "Europe/Budapest",
+        "Europe/Chisinau",
+        "Europe/Copenhagen",
+        "Europe/Dublin",
+        "Europe/Gibraltar",
+        "Europe/Guernsey",
+        "Europe/Helsinki",
+        "Europe/Isle_of_Man",
+        "Europe/Istanbul",
+        "Europe/Jersey",
+        "Europe/Kaliningrad",
+        "Europe/Kiev",
+        "Europe/Kirov",
+        "Europe/Lisbon",
+        "Europe/Ljubljana",
+        "Europe/London",
+        "Europe/Luxembourg",
+        "Europe/Madrid",
+        "Europe/Malta",
+        "Europe/Mariehamn",
+        "Europe/Minsk",
+        "Europe/Monaco",
+        "Europe/Moscow",
+        "Europe/Oslo",
+        "Europe/Paris",
+        "Europe/Podgorica",
+        "Europe/Prague",
+        "Europe/Riga",
+        "Europe/Rome",
+        "Europe/Samara",
+        "Europe/San_Marino",
+        "Europe/Sarajevo",
+        "Europe/Saratov",
+        "Europe/Simferopol",
+        "Europe/Skopje",
+        "Europe/Sofia",
+        "Europe/Stockholm",
+        "Europe/Tallinn",
+        "Europe/Tirane",
+        "Europe/Ulyanovsk",
+        "Europe/Uzhgorod",
+        "Europe/Vaduz",
+        "Europe/Vatican",
+        "Europe/Vienna",
+        "Europe/Vilnius",
+        "Europe/Volgograd",
+        "Europe/Warsaw",
+        "Europe/Zagreb",
+        "Europe/Zaporozhye",
+        "Europe/Zurich",
+        "Indian/Antananarivo",
+        "Indian/Chagos",
+        "Indian/Christmas",
+        "Indian/Cocos",
+        "Indian/Comoro",
+        "Indian/Kerguelen",
+        "Indian/Mahe",
+        "Indian/Maldives",
+        "Indian/Mauritius",
+        "Indian/Mayotte",
+        "Indian/Reunion",
+        "Pacific/Apia",
+        "Pacific/Auckland",
+        "Pacific/Bougainville",
+        "Pacific/Chatham",
+        "Pacific/Chuuk",
+        "Pacific/Easter",
+        "Pacific/Efate",
+        "Pacific/Enderbury",
+        "Pacific/Fakaofo",
+        "Pacific/Fiji",
+        "Pacific/Funafuti",
+        "Pacific/Galapagos",
+        "Pacific/Gambier",
+        "Pacific/Guadalcanal",
+        "Pacific/Guam",
+        "Pacific/Honolulu",
+        "Pacific/Kiritimati",
+        "Pacific/Kosrae",
+        "Pacific/Kwajalein",
+        "Pacific/Majuro",
+        "Pacific/Marquesas",
+        "Pacific/Midway",
+        "Pacific/Nauru",
+        "Pacific/Niue",
+        "Pacific/Norfolk",
+        "Pacific/Noumea",
+        "Pacific/Pago_Pago",
+        "Pacific/Palau",
+        "Pacific/Pitcairn",
+        "Pacific/Pohnpei",
+        "Pacific/Port_Moresby",
+        "Pacific/Rarotonga",
+        "Pacific/Saipan",
+        "Pacific/Tahiti",
+        "Pacific/Tarawa",
+        "Pacific/Tongatapu",
+        "Pacific/Wake",
+        "Pacific/Wallis",
+        "UTC",
+}
+
+// IsValidTimezone checks if the given timezone is valid
+func IsValidTimezone(timezone string) bool <span class="cov8" title="1">{
+        for _, tz := range Timezones </span><span class="cov8" title="1">{
+                if tz == timezone </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package domain
+
+import (
+        "context"
+        "time"
+)
+
+// User represents a user in the system
+type User struct {
+        ID        string    `json:"id" db:"id"`
+        Email     string    `json:"email" db:"email"`
+        Name      string    `json:"name,omitempty" db:"name"`
+        CreatedAt time.Time `json:"created_at" db:"created_at"`
+        UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Session represents a user session
+type Session struct {
+        ID               string    `json:"id" db:"id"`
+        UserID           string    `json:"user_id" db:"user_id"`
+        ExpiresAt        time.Time `json:"expires_at" db:"expires_at"`
+        CreatedAt        time.Time `json:"created_at" db:"created_at"`
+        MagicCode        string    `json:"magic_code,omitempty" db:"magic_code"`
+        MagicCodeExpires time.Time `json:"magic_code_expires,omitempty" db:"magic_code_expires_at"`
+}
+
+type UserRepository interface {
+        // CreateUser creates a new user in the database
+        CreateUser(ctx context.Context, user *User) error
+
+        // GetUserByEmail retrieves a user by their email address
+        GetUserByEmail(ctx context.Context, email string) (*User, error)
+
+        // GetUserByID retrieves a user by their ID
+        GetUserByID(ctx context.Context, id string) (*User, error)
+
+        // CreateSession creates a new session for a user
+        CreateSession(ctx context.Context, session *Session) error
+
+        // GetSessionByID retrieves a session by its ID
+        GetSessionByID(ctx context.Context, id string) (*Session, error)
+
+        // GetSessionsByUserID retrieves all sessions for a user
+        GetSessionsByUserID(ctx context.Context, userID string) ([]*Session, error)
+
+        // UpdateSession updates an existing session
+        UpdateSession(ctx context.Context, session *Session) error
+
+        // DeleteSession deletes a session by its ID
+        DeleteSession(ctx context.Context, id string) error
+}
+
+// ErrUserNotFound is returned when a user is not found
+type ErrUserNotFound struct {
+        Message string
+}
+
+func (e *ErrUserNotFound) Error() string <span class="cov8" title="1">{
+        return e.Message
+}</span>
+
+// ErrSessionNotFound is returned when a session is not found
+type ErrSessionNotFound struct {
+        Message string
+}
+
+func (e *ErrSessionNotFound) Error() string <span class="cov8" title="1">{
+        return e.Message
+}</span>
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package domain
+
+import (
+        "context"
+        "database/sql"
+        "encoding/json"
+        "fmt"
+        "time"
+
+        "github.com/asaskevich/govalidator"
+)
+
+// WorkspaceSettings contains configurable workspace settings
+type WorkspaceSettings struct {
+        WebsiteURL string `json:"website_url,omitempty" valid:"url,optional"`
+        LogoURL    string `json:"logo_url,omitempty" valid:"url,optional"`
+        Timezone   string `json:"timezone" valid:"required,timezone"`
+}
+
+type Workspace struct {
+        ID        string            `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+        Name      string            `json:"name" valid:"required,stringlength(1|255)"`
+        Settings  WorkspaceSettings `json:"settings"`
+        CreatedAt time.Time         `json:"created_at"`
+        UpdatedAt time.Time         `json:"updated_at"`
+}
+
+// Validate performs validation on the workspace fields
+func (w *Workspace) Validate() error <span class="cov8" title="1">{
+        // Register custom validators
+        govalidator.TagMap["timezone"] = govalidator.Validator(func(str string) bool </span><span class="cov8" title="1">{
+                return IsValidTimezone(str)
+        }</span>)
+
+        // First validate the workspace itself
+        <span class="cov8" title="1">if _, err := govalidator.ValidateStruct(w); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid workspace: %w", err)
+        }</span>
+
+        // Then validate the settings
+        <span class="cov8" title="1">if _, err := govalidator.ValidateStruct(&amp;w.Settings); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("invalid workspace settings: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// For database scanning
+type dbWorkspace struct {
+        ID        string
+        Name      string
+        Settings  []byte
+        CreatedAt time.Time
+        UpdatedAt time.Time
+}
+
+// ScanWorkspace scans a workspace from the database
+func ScanWorkspace(scanner interface {
+        Scan(dest ...interface{}) error
+}) (*Workspace, error) <span class="cov8" title="1">{
+        var dbw dbWorkspace
+        if err := scanner.Scan(
+                &amp;dbw.ID,
+                &amp;dbw.Name,
+                &amp;dbw.Settings,
+                &amp;dbw.CreatedAt,
+                &amp;dbw.UpdatedAt,
+        ); err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">w := &amp;Workspace{
+                ID:        dbw.ID,
+                Name:      dbw.Name,
+                CreatedAt: dbw.CreatedAt,
+                UpdatedAt: dbw.UpdatedAt,
+        }
+
+        if err := json.Unmarshal(dbw.Settings, &amp;w.Settings); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to unmarshal settings: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return w, nil</span>
+}
+
+// UserWorkspace represents the relationship between a user and a workspace
+type UserWorkspace struct {
+        UserID      string    `json:"user_id" db:"user_id"`
+        WorkspaceID string    `json:"workspace_id" db:"workspace_id"`
+        Role        string    `json:"role" db:"role" valid:"required,in(owner|member)"`
+        CreatedAt   time.Time `json:"created_at" db:"created_at"`
+        UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Validate performs validation on the user workspace fields
+func (uw *UserWorkspace) Validate() error <span class="cov8" title="1">{
+        if _, err := govalidator.ValidateStruct(uw); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid user workspace: %w", err)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+type WorkspaceRepository interface {
+        Create(ctx context.Context, workspace *Workspace) error
+        GetByID(ctx context.Context, id string) (*Workspace, error)
+        List(ctx context.Context) ([]*Workspace, error)
+        Update(ctx context.Context, workspace *Workspace) error
+        Delete(ctx context.Context, id string) error
+
+        // User workspace management
+        AddUserToWorkspace(ctx context.Context, userWorkspace *UserWorkspace) error
+        RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error
+        GetUserWorkspaces(ctx context.Context, userID string) ([]*UserWorkspace, error)
+        GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*UserWorkspace, error)
+        GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*UserWorkspace, error)
+
+        // Database management
+        GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error)
+        CreateDatabase(ctx context.Context, workspaceID string) error
+        DeleteDatabase(ctx context.Context, workspaceID string) error
+}
+
+// ErrUnauthorized is returned when a user is not authorized to perform an action
+type ErrUnauthorized struct {
+        Message string
+}
+
+func (e *ErrUnauthorized) Error() string <span class="cov8" title="1">{
+        return e.Message
+}</span>
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package http
+
+import (
+        "encoding/json"
+        "net/http"
+        "net/url"
+        "strings"
+
+        "github.com/PuerkitoBio/goquery"
+)
+
+type FaviconRequest struct {
+        URL string `json:"url"`
+}
+
+type FaviconResponse struct {
+        IconURL string `json:"iconUrl,omitempty"`
+        Message string `json:"message,omitempty"`
+}
+
+type FaviconHandler struct{}
+
+func NewFaviconHandler() *FaviconHandler <span class="cov8" title="1">{
+        return &amp;FaviconHandler{}
+}</span>
+
+func (h *FaviconHandler) DetectFavicon(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        if r.Method != http.MethodPost </span><span class="cov8" title="1">{
+                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req FaviconRequest
+        if err := json.NewDecoder(r.Body).Decode(&amp;req); err != nil </span><span class="cov8" title="1">{
+                http.Error(w, "Invalid request body", http.StatusBadRequest)
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.URL == "" </span><span class="cov8" title="1">{
+                http.Error(w, "URL is required", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Validate URL
+        <span class="cov8" title="1">baseURL, err := url.Parse(req.URL)
+        if err != nil </span><span class="cov8" title="1">{
+                http.Error(w, "Invalid URL", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Fetch the webpage
+        <span class="cov0" title="0">resp, err := http.Get(req.URL)
+        if err != nil </span><span class="cov0" title="0">{
+                http.Error(w, "Error fetching URL", http.StatusInternalServerError)
+                return
+        }</span>
+        <span class="cov0" title="0">defer resp.Body.Close()
+
+        // Parse HTML
+        doc, err := goquery.NewDocumentFromReader(resp.Body)
+        if err != nil </span><span class="cov0" title="0">{
+                http.Error(w, "Error parsing HTML", http.StatusInternalServerError)
+                return
+        }</span>
+
+        // Check for apple-touch-icon
+        <span class="cov0" title="0">if iconURL := findAppleTouchIcon(doc, baseURL); iconURL != "" </span><span class="cov0" title="0">{
+                json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
+                return
+        }</span>
+
+        // Check for manifest.json
+        <span class="cov0" title="0">if iconURL := findManifestIcon(doc, baseURL); iconURL != "" </span><span class="cov0" title="0">{
+                json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
+                return
+        }</span>
+
+        // Check for traditional favicon
+        <span class="cov0" title="0">if iconURL := findTraditionalFavicon(doc, baseURL); iconURL != "" </span><span class="cov0" title="0">{
+                json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
+                return
+        }</span>
+
+        // Try default favicon location
+        <span class="cov0" title="0">if iconURL := tryDefaultFavicon(baseURL); iconURL != "" </span><span class="cov0" title="0">{
+                json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
+                return
+        }</span>
+
+        <span class="cov0" title="0">http.Error(w, "No favicon found", http.StatusNotFound)</span>
+}
+
+func findAppleTouchIcon(doc *goquery.Document, baseURL *url.URL) string <span class="cov8" title="1">{
+        var iconURL string
+        doc.Find("link[rel='apple-touch-icon']").Each(func(_ int, s *goquery.Selection) </span><span class="cov8" title="1">{
+                if href, exists := s.Attr("href"); exists </span><span class="cov8" title="1">{
+                        if resolvedURL, err := resolveURL(baseURL, href); err == nil </span><span class="cov8" title="1">{
+                                iconURL = resolvedURL
+                                return
+                        }</span>
+                }
+        })
+        <span class="cov8" title="1">return iconURL</span>
+}
+
+func findManifestIcon(doc *goquery.Document, baseURL *url.URL) string <span class="cov8" title="1">{
+        var iconURL string
+        doc.Find("link[rel='manifest']").Each(func(_ int, s *goquery.Selection) </span><span class="cov8" title="1">{
+                if href, exists := s.Attr("href"); exists </span><span class="cov8" title="1">{
+                        manifestURL, err := resolveURL(baseURL, href)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return
+                        }</span>
+
+                        <span class="cov8" title="1">resp, err := http.Get(manifestURL)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return
+                        }</span>
+                        <span class="cov8" title="1">defer resp.Body.Close()
+
+                        var manifest struct {
+                                Icons []struct {
+                                        Src   string `json:"src"`
+                                        Sizes string `json:"sizes"`
+                                } `json:"icons"`
+                        }
+
+                        if err := json.NewDecoder(resp.Body).Decode(&amp;manifest); err != nil </span><span class="cov8" title="1">{
+                                return
+                        }</span>
+
+                        <span class="cov8" title="1">if len(manifest.Icons) &gt; 0 </span><span class="cov8" title="1">{
+                                // Find the largest icon
+                                largestIcon := manifest.Icons[0]
+                                for _, icon := range manifest.Icons[1:] </span><span class="cov8" title="1">{
+                                        if icon.Sizes &gt; largestIcon.Sizes </span><span class="cov8" title="1">{
+                                                largestIcon = icon
+                                        }</span>
+                                }
+
+                                <span class="cov8" title="1">if resolvedURL, err := resolveURL(baseURL, largestIcon.Src); err == nil </span><span class="cov8" title="1">{
+                                        iconURL = resolvedURL
+                                }</span>
+                        }
+                }
+        })
+        <span class="cov8" title="1">return iconURL</span>
+}
+
+func findTraditionalFavicon(doc *goquery.Document, baseURL *url.URL) string <span class="cov8" title="1">{
+        var iconURL string
+        doc.Find("link[rel='icon'], link[rel='shortcut icon']").Each(func(_ int, s *goquery.Selection) </span><span class="cov8" title="1">{
+                if href, exists := s.Attr("href"); exists </span><span class="cov8" title="1">{
+                        if resolvedURL, err := resolveURL(baseURL, href); err == nil </span><span class="cov8" title="1">{
+                                iconURL = resolvedURL
+                                return
+                        }</span>
+                }
+        })
+        <span class="cov8" title="1">return iconURL</span>
+}
+
+func tryDefaultFavicon(baseURL *url.URL) string <span class="cov8" title="1">{
+        faviconURL := baseURL.ResolveReference(&amp;url.URL{Path: "/favicon.ico"}).String()
+        resp, err := http.Head(faviconURL)
+        if err == nil &amp;&amp; resp.StatusCode == http.StatusOK </span><span class="cov8" title="1">{
+                return faviconURL
+        }</span>
+        <span class="cov8" title="1">return ""</span>
+}
+
+func resolveURL(baseURL *url.URL, href string) (string, error) <span class="cov8" title="1">{
+        if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") </span><span class="cov8" title="1">{
+                return href, nil
+        }</span>
+        <span class="cov8" title="1">resolvedURL := baseURL.ResolveReference(&amp;url.URL{Path: href})
+        return resolvedURL.String(), nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package middleware
+
+import (
+        "context"
+        "fmt"
+        "net/http"
+        "notifuse/server/internal/domain"
+        "notifuse/server/internal/service"
+        "strings"
+
+        "aidanwoods.dev/go-paseto"
+)
+
+// Key for storing user ID and session ID in context
+type contextKey string
+
+const (
+        UserIDKey    contextKey = "user_id"
+        SessionIDKey contextKey = "session_id"
+        AuthUserKey  contextKey = "auth_user"
+)
+
+// AuthenticatedUser represents a user that has been authenticated
+type AuthenticatedUser struct {
+        ID    string
+        Email string
+}
+
+// AuthServiceInterface defines the interface for authentication operations
+type AuthServiceInterface interface {
+        VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
+}
+
+// AuthConfig holds the configuration for the auth middleware
+type AuthConfig struct {
+        PublicKey paseto.V4AsymmetricPublicKey
+}
+
+// NewAuthMiddleware creates a new auth middleware with the given public key
+func NewAuthMiddleware(publicKey paseto.V4AsymmetricPublicKey) *AuthConfig <span class="cov8" title="1">{
+        return &amp;AuthConfig{
+                PublicKey: publicKey,
+        }
+}</span>
+
+// RequireAuth creates a middleware that verifies the PASETO token and user session
+func (ac *AuthConfig) RequireAuth(authService AuthServiceInterface) func(http.Handler) http.Handler <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Get the Authorization header
+                        authHeader := r.Header.Get("Authorization")
+                        if authHeader == "" </span><span class="cov8" title="1">{
+                                http.Error(w, "Authorization header is required", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // Check if it's a Bearer token
+                        <span class="cov8" title="1">parts := strings.Split(authHeader, " ")
+                        if len(parts) != 2 || parts[0] != "Bearer" </span><span class="cov8" title="1">{
+                                http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        <span class="cov8" title="1">token := parts[1]
+
+                        // Parse and verify the token
+                        parser := paseto.NewParser()
+                        parser.AddRule(paseto.NotExpired())
+
+                        // Verify token and get claims
+                        verified, err := parser.ParseV4Public(ac.PublicKey, token, nil)
+                        if err != nil </span><span class="cov8" title="1">{
+                                http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // Get user ID from claims
+                        <span class="cov8" title="1">userID, err := verified.GetString("user_id")
+                        if err != nil </span><span class="cov8" title="1">{
+                                http.Error(w, "User ID not found in token", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // Get session ID from claims
+                        <span class="cov8" title="1">sessionID, err := verified.GetString("session_id")
+                        if err != nil </span><span class="cov8" title="1">{
+                                http.Error(w, "Session ID not found in token", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // Verify user session
+                        <span class="cov8" title="1">user, err := authService.VerifyUserSession(r.Context(), userID, sessionID)
+                        if err != nil </span><span class="cov8" title="1">{
+                                switch err </span>{
+                                case service.ErrSessionExpired:<span class="cov8" title="1">
+                                        http.Error(w, "Session expired", http.StatusUnauthorized)</span>
+                                case service.ErrUserNotFound:<span class="cov8" title="1">
+                                        http.Error(w, "User not found", http.StatusUnauthorized)</span>
+                                default:<span class="cov8" title="1">
+                                        http.Error(w, "Internal server error", http.StatusInternalServerError)</span>
+                                }
+                                <span class="cov8" title="1">return</span>
+                        }
+
+                        // Add authenticated user to context
+                        <span class="cov8" title="1">authUser := &amp;AuthenticatedUser{
+                                ID:    user.ID,
+                                Email: user.Email,
+                        }
+                        ctx := context.WithValue(r.Context(), AuthUserKey, authUser)
+
+                        next.ServeHTTP(w, r.WithContext(ctx))</span>
+                })
+        }
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package middleware
+
+import (
+        "net/http"
+        "os"
+)
+
+// CORSMiddleware handles CORS headers for all requests
+func CORSMiddleware(next http.Handler) http.Handler <span class="cov8" title="1">{
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                // Get allowed origin from environment variable with default value "*"
+                allowOrigin := os.Getenv("CORS_ALLOW_ORIGIN")
+                if allowOrigin == "" </span><span class="cov8" title="1">{
+                        allowOrigin = "*"
+                }</span>
+                <span class="cov8" title="1">w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+
+                // Allow specific HTTP methods
+                w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+
+                // Allow specific headers
+                w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
+
+                // Allow credentials
+                w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+                // Handle preflight requests
+                if r.Method == "OPTIONS" </span><span class="cov8" title="1">{
+                        w.WriteHeader(http.StatusOK)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">next.ServeHTTP(w, r)</span>
+        })
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package http
+
+import (
+        "encoding/json"
+        "net/http"
+)
+
+type RootHandler struct{}
+
+func NewRootHandler() *RootHandler <span class="cov8" title="1">{
+        return &amp;RootHandler{}
+}</span>
+
+func (h *RootHandler) Handle(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]string{
+                "status": "api running",
+        })
+}</span>
+
+func (h *RootHandler) RegisterRoutes(mux *http.ServeMux) <span class="cov8" title="1">{
+        mux.HandleFunc("/", h.Handle)
+}</span>
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package http
+
+import (
+        "encoding/json"
+        "net/http"
+
+        "aidanwoods.dev/go-paseto"
+
+        "notifuse/server/config"
+        "notifuse/server/internal/http/middleware"
+        "notifuse/server/internal/service"
+)
+
+// WorkspaceServiceInterface is already defined in workspace_handler.go
+// So no need to define it again here
+
+type UserHandler struct {
+        userService      service.UserServiceInterface
+        workspaceService WorkspaceServiceInterface
+        config           *config.Config
+        publicKey        paseto.V4AsymmetricPublicKey
+}
+
+func NewUserHandler(userService service.UserServiceInterface, workspaceService WorkspaceServiceInterface, cfg *config.Config, publicKey paseto.V4AsymmetricPublicKey) *UserHandler <span class="cov8" title="1">{
+        return &amp;UserHandler{
+                userService:      userService,
+                workspaceService: workspaceService,
+                config:           cfg,
+                publicKey:        publicKey,
+        }
+}</span>
+
+func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        var input service.SignInInput
+        if err := json.NewDecoder(r.Body).Decode(&amp;input); err != nil </span><span class="cov8" title="1">{
+                WriteJSONError(w, "Invalid SignIn request body", http.StatusBadRequest)
+                return
+        }</span>
+
+        // In development mode, we'll return the magic code directly
+        <span class="cov8" title="1">if h.config.IsDevelopment() </span><span class="cov8" title="1">{
+                code, err := h.userService.SignInDev(r.Context(), input)
+                if err != nil </span><span class="cov8" title="1">{
+                        WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">w.WriteHeader(http.StatusOK)
+                json.NewEncoder(w).Encode(map[string]string{
+                        "message": "Magic code sent to your email",
+                        "code":    code,
+                })
+                return</span>
+        }
+
+        <span class="cov8" title="1">if err := h.userService.SignIn(r.Context(), input); err != nil </span><span class="cov8" title="1">{
+                WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+                return
+        }</span>
+
+        <span class="cov8" title="1">w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(map[string]string{
+                "message": "Magic code sent to your email",
+        })</span>
+}
+
+func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        var input service.VerifyCodeInput
+        if err := json.NewDecoder(r.Body).Decode(&amp;input); err != nil </span><span class="cov0" title="0">{
+                WriteJSONError(w, "Invalid VerifyCode request body", http.StatusBadRequest)
+                return
+        }</span>
+
+        <span class="cov8" title="1">response, err := h.userService.VerifyCode(r.Context(), input)
+        if err != nil </span><span class="cov8" title="1">{
+                WriteJSONError(w, err.Error(), http.StatusUnauthorized)
+                return
+        }</span>
+
+        <span class="cov8" title="1">w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(response)</span>
+}
+
+// GetCurrentUser returns the authenticated user and their workspaces
+func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        // Get authenticated user from context
+        authUser, ok := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
+        if !ok || authUser == nil </span><span class="cov8" title="1">{
+                WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
+                return
+        }</span>
+
+        // Get user details
+        <span class="cov8" title="1">user, err := h.userService.GetUserByID(r.Context(), authUser.ID)
+        if err != nil </span><span class="cov8" title="1">{
+                WriteJSONError(w, "User not found", http.StatusNotFound)
+                return
+        }</span>
+
+        // Get user's workspaces
+        <span class="cov8" title="1">workspaces, err := h.workspaceService.ListWorkspaces(r.Context(), authUser.ID)
+        if err != nil </span><span class="cov8" title="1">{
+                WriteJSONError(w, "Failed to retrieve workspaces", http.StatusInternalServerError)
+                return
+        }</span>
+
+        // Combine user and workspaces in response
+        <span class="cov8" title="1">response := map[string]interface{}{
+                "user":       user,
+                "workspaces": workspaces,
+        }
+
+        w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(response)</span>
+}
+
+func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) <span class="cov8" title="1">{
+        // Public routes (no auth required)
+        mux.HandleFunc("/api/user.signin", h.SignIn)
+        mux.HandleFunc("/api/user.verify", h.VerifyCode)
+
+        // Protected routes (auth required)
+        // Create auth middleware if we have a userService that implements the AuthServiceInterface
+        authService, ok := h.userService.(middleware.AuthServiceInterface)
+        if ok </span><span class="cov8" title="1">{
+                // Create auth middleware with the public key
+                authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
+                requireAuth := authMiddleware.RequireAuth(authService)
+
+                // Register protected routes
+                mux.Handle("/api/user.me", requireAuth(http.HandlerFunc(h.GetCurrentUser)))
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">package http
+
+import (
+        "encoding/json"
+        "net/http"
+)
+
+// WriteJSONError writes a JSON error response with the given message and status code.
+// It sets the Content-Type header to application/json and automatically formats
+// the response as {"error": "message"}.
+func WriteJSONError(w http.ResponseWriter, message string, statusCode int) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(statusCode)
+        json.NewEncoder(w).Encode(map[string]string{
+                "error": message,
+        })
+}</span>
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package http
+
+import (
+        "context"
+        "encoding/json"
+        "net/http"
+        "notifuse/server/internal/domain"
+        "notifuse/server/internal/http/middleware"
+
+        "aidanwoods.dev/go-paseto"
+)
+
+// WorkspaceServiceInterface defines the interface for workspace operations
+type WorkspaceServiceInterface interface {
+        CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error)
+        GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
+        ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
+        UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error)
+        DeleteWorkspace(ctx context.Context, id, ownerID string) error
+}
+
+type WorkspaceHandler struct {
+        workspaceService WorkspaceServiceInterface
+        authService      middleware.AuthServiceInterface
+        publicKey        paseto.V4AsymmetricPublicKey
+}
+
+func NewWorkspaceHandler(workspaceService WorkspaceServiceInterface, authService middleware.AuthServiceInterface, publicKey paseto.V4AsymmetricPublicKey) *WorkspaceHandler <span class="cov8" title="1">{
+        return &amp;WorkspaceHandler{
+                workspaceService: workspaceService,
+                authService:      authService,
+                publicKey:        publicKey,
+        }
+}</span>
+
+// Request/Response types
+type createWorkspaceRequest struct {
+        ID         string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+        Name       string `json:"name"`
+        WebsiteURL string `json:"website_url"`
+        LogoURL    string `json:"logo_url"`
+        Timezone   string `json:"timezone"`
+}
+
+type getWorkspaceRequest struct {
+        ID string `json:"id"`
+}
+
+type updateWorkspaceRequest struct {
+        ID         string `json:"id"`
+        Name       string `json:"name"`
+        WebsiteURL string `json:"website_url"`
+        LogoURL    string `json:"logo_url"`
+        Timezone   string `json:"timezone"`
+}
+
+type deleteWorkspaceRequest struct {
+        ID string `json:"id"`
+}
+
+type errorResponse struct {
+        Error string `json:"error"`
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(status)
+        json.NewEncoder(w).Encode(v)
+}</span>
+
+func writeError(w http.ResponseWriter, status int, message string) <span class="cov8" title="1">{
+        writeJSON(w, status, errorResponse{Error: message})
+}</span>
+
+// RegisterRoutes registers all workspace RPC-style routes with authentication middleware
+func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) <span class="cov8" title="1">{
+        // Create auth middleware
+        authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
+        requireAuth := authMiddleware.RequireAuth(h.authService)
+
+        // Register RPC-style endpoints with dot notation
+        mux.Handle("/api/workspaces.list", requireAuth(http.HandlerFunc(h.handleList)))
+        mux.Handle("/api/workspaces.get", requireAuth(http.HandlerFunc(h.handleGet)))
+        mux.Handle("/api/workspaces.create", requireAuth(http.HandlerFunc(h.handleCreate)))
+        mux.Handle("/api/workspaces.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
+        mux.Handle("/api/workspaces.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
+}</span>
+
+func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        if r.Method != http.MethodGet </span><span class="cov0" title="0">{
+                writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+                return
+        }</span>
+
+        <span class="cov8" title="1">authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
+
+        workspaces, err := h.workspaceService.ListWorkspaces(r.Context(), authUser.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "Failed to list workspaces")
+                return
+        }</span>
+
+        <span class="cov8" title="1">writeJSON(w, http.StatusOK, workspaces)</span>
+}
+
+func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        if r.Method != http.MethodGet </span><span class="cov0" title="0">{
+                writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+                return
+        }</span>
+
+        <span class="cov8" title="1">authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
+
+        // Get workspace ID from query params
+        workspaceID := r.URL.Query().Get("id")
+        if workspaceID == "" </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "Missing workspace ID")
+                return
+        }</span>
+
+        <span class="cov8" title="1">workspace, err := h.workspaceService.GetWorkspace(r.Context(), workspaceID, authUser.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "Failed to get workspace")
+                return
+        }</span>
+        <span class="cov8" title="1">if workspace == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusNotFound, "Workspace not found")
+                return
+        }</span>
+
+        <span class="cov8" title="1">writeJSON(w, http.StatusOK, workspace)</span>
+}
+
+func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        if r.Method != http.MethodPost </span><span class="cov0" title="0">{
+                writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+                return
+        }</span>
+
+        <span class="cov8" title="1">authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
+
+        var req createWorkspaceRequest
+        if err := json.NewDecoder(r.Body).Decode(&amp;req); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "Invalid request body")
+                return
+        }</span>
+
+        // Validate workspace ID
+        <span class="cov8" title="1">if req.ID == "" </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "Workspace ID is required")
+                return
+        }</span>
+
+        <span class="cov8" title="1">workspace, err := h.workspaceService.CreateWorkspace(r.Context(), req.ID, req.Name, req.WebsiteURL, req.LogoURL, req.Timezone, authUser.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "Failed to create workspace")
+                return
+        }</span>
+
+        <span class="cov8" title="1">writeJSON(w, http.StatusCreated, workspace)</span>
+}
+
+func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        if r.Method != http.MethodPost </span><span class="cov0" title="0">{
+                writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+                return
+        }</span>
+
+        <span class="cov8" title="1">authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
+
+        var req updateWorkspaceRequest
+        if err := json.NewDecoder(r.Body).Decode(&amp;req); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "Invalid request body")
+                return
+        }</span>
+
+        <span class="cov8" title="1">workspace, err := h.workspaceService.UpdateWorkspace(r.Context(), req.ID, req.Name, req.WebsiteURL, req.LogoURL, req.Timezone, authUser.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "Failed to update workspace")
+                return
+        }</span>
+        <span class="cov8" title="1">if workspace == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusNotFound, "Workspace not found")
+                return
+        }</span>
+
+        <span class="cov8" title="1">writeJSON(w, http.StatusOK, workspace)</span>
+}
+
+func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        if r.Method != http.MethodPost </span><span class="cov0" title="0">{
+                writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+                return
+        }</span>
+
+        <span class="cov8" title="1">authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
+
+        var req deleteWorkspaceRequest
+        if err := json.NewDecoder(r.Body).Decode(&amp;req); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "Invalid request body")
+                return
+        }</span>
+
+        <span class="cov8" title="1">err := h.workspaceService.DeleteWorkspace(r.Context(), req.ID, authUser.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "Failed to delete workspace")
+                return
+        }</span>
+
+        <span class="cov8" title="1">writeJSON(w, http.StatusOK, map[string]string{"status": "success"})</span>
+}
+</pre>
+		
+		<pre class="file" id="file12" style="display: none">package repository
+
+import (
+        "context"
+        "database/sql"
+        "notifuse/server/internal/domain"
+        "notifuse/server/pkg/logger"
+        "time"
+)
+
+// SQLAuthRepository is a SQL implementation of the AuthRepository interface
+type SQLAuthRepository struct {
+        db     *sql.DB
+        logger logger.Logger
+}
+
+// NewSQLAuthRepository creates a new SQLAuthRepository
+func NewSQLAuthRepository(db *sql.DB, logger logger.Logger) *SQLAuthRepository <span class="cov8" title="1">{
+        return &amp;SQLAuthRepository{
+                db:     db,
+                logger: logger,
+        }
+}</span>
+
+// GetSessionByID retrieves a session by ID and user ID
+func (r *SQLAuthRepository) GetSessionByID(ctx context.Context, sessionID string, userID string) (*time.Time, error) <span class="cov8" title="1">{
+        var expiresAt time.Time
+        err := r.db.QueryRowContext(ctx,
+                "SELECT expires_at FROM sessions WHERE id = $1 AND user_id = $2",
+                sessionID, userID,
+        ).Scan(&amp;expiresAt)
+
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;expiresAt, nil</span>
+}
+
+// GetUserByID retrieves a user by ID
+func (r *SQLAuthRepository) GetUserByID(ctx context.Context, userID string) (*domain.User, error) <span class="cov8" title="1">{
+        var user domain.User
+        err := r.db.QueryRowContext(ctx,
+                "SELECT id, email, created_at FROM users WHERE id = $1",
+                userID,
+        ).Scan(&amp;user.ID, &amp;user.Email, &amp;user.CreatedAt)
+
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;user, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file13" style="display: none">package repository
+
+import (
+        "database/sql"
+        "testing"
+
+        _ "github.com/lib/pq"
+
+        "notifuse/server/config"
+        "notifuse/server/internal/database"
+)
+
+func setupTestDB(t *testing.T) *sql.DB <span class="cov8" title="1">{
+        // Load test configuration
+        cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
+        if err != nil </span><span class="cov0" title="0">{
+                t.Fatalf("Failed to load test config: %v", err)
+        }</span>
+
+        // Connect to database using configuration
+        <span class="cov8" title="1">db, err := sql.Open("postgres", database.GetSystemDSN(&amp;cfg.Database))
+        if err != nil </span><span class="cov0" title="0">{
+                t.Fatalf("Failed to connect to test database: %v", err)
+        }</span>
+
+        // Test database connection
+        <span class="cov8" title="1">if err := db.Ping(); err != nil </span><span class="cov0" title="0">{
+                t.Fatalf("Failed to ping test database: %v", err)
+        }</span>
+
+        // Clean up database
+        <span class="cov8" title="1">if err := database.CleanDatabase(db); err != nil </span><span class="cov0" title="0">{
+                t.Fatalf("Failed to clean database: %v", err)
+        }</span>
+
+        // Initialize database with tables
+        <span class="cov8" title="1">if err := database.InitializeDatabase(db, cfg.RootEmail); err != nil </span><span class="cov0" title="0">{
+                t.Fatalf("Failed to initialize database: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">return db</span>
+}
+</pre>
+		
+		<pre class="file" id="file14" style="display: none">package repository
+
+import (
+        "context"
+        "database/sql"
+        "fmt"
+        "time"
+
+        "github.com/google/uuid"
+
+        "notifuse/server/internal/domain"
+)
+
+type userRepository struct {
+        db *sql.DB
+}
+
+// NewUserRepository creates a new PostgreSQL user repository
+func NewUserRepository(db *sql.DB) domain.UserRepository <span class="cov8" title="1">{
+        return &amp;userRepository{db: db}
+}</span>
+
+func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) error <span class="cov8" title="1">{
+        if user.ID == "" </span><span class="cov8" title="1">{
+                user.ID = uuid.New().String()
+        }</span>
+        <span class="cov8" title="1">now := time.Now().UTC()
+        user.CreatedAt = now
+        user.UpdatedAt = now
+
+        query := `
+                INSERT INTO users (id, email, name, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5)
+        `
+        _, err := r.db.ExecContext(ctx, query,
+                user.ID,
+                user.Email,
+                user.Name,
+                user.CreatedAt,
+                user.UpdatedAt,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create user: %w", err)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) <span class="cov8" title="1">{
+        var user domain.User
+        query := `
+                SELECT id, email, name, created_at, updated_at
+                FROM users
+                WHERE email = $1
+        `
+        err := r.db.QueryRowContext(ctx, query, email).Scan(
+                &amp;user.ID,
+                &amp;user.Email,
+                &amp;user.Name,
+                &amp;user.CreatedAt,
+                &amp;user.UpdatedAt,
+        )
+        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+                return nil, &amp;domain.ErrUserNotFound{Message: "user not found"}
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get user: %w", err)
+        }</span>
+        <span class="cov8" title="1">return &amp;user, nil</span>
+}
+
+func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) <span class="cov8" title="1">{
+        var user domain.User
+        query := `
+                SELECT id, email, name, created_at, updated_at
+                FROM users
+                WHERE id = $1
+        `
+        err := r.db.QueryRowContext(ctx, query, id).Scan(
+                &amp;user.ID,
+                &amp;user.Email,
+                &amp;user.Name,
+                &amp;user.CreatedAt,
+                &amp;user.UpdatedAt,
+        )
+        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+                return nil, &amp;domain.ErrUserNotFound{Message: "user not found"}
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get user: %w", err)
+        }</span>
+        <span class="cov8" title="1">return &amp;user, nil</span>
+}
+
+func (r *userRepository) CreateSession(ctx context.Context, session *domain.Session) error <span class="cov8" title="1">{
+        if session.ID == "" </span><span class="cov8" title="1">{
+                session.ID = uuid.New().String()
+        }</span>
+        <span class="cov8" title="1">session.CreatedAt = time.Now().UTC()
+        session.ExpiresAt = session.ExpiresAt.UTC()
+        if !session.MagicCodeExpires.IsZero() </span><span class="cov8" title="1">{
+                session.MagicCodeExpires = session.MagicCodeExpires.UTC()
+        }</span>
+
+        <span class="cov8" title="1">query := `
+                INSERT INTO user_sessions (
+                        id, user_id, expires_at, created_at, 
+                        magic_code, magic_code_expires_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6)
+        `
+        _, err := r.db.ExecContext(ctx, query,
+                session.ID,
+                session.UserID,
+                session.ExpiresAt,
+                session.CreatedAt,
+                session.MagicCode,
+                session.MagicCodeExpires,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create session: %w", err)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *userRepository) GetSessionByID(ctx context.Context, id string) (*domain.Session, error) <span class="cov8" title="1">{
+        var session domain.Session
+        query := `
+                SELECT id, user_id, expires_at, created_at, 
+                        magic_code, magic_code_expires_at
+                FROM user_sessions
+                WHERE id = $1
+        `
+        err := r.db.QueryRowContext(ctx, query, id).Scan(
+                &amp;session.ID,
+                &amp;session.UserID,
+                &amp;session.ExpiresAt,
+                &amp;session.CreatedAt,
+                &amp;session.MagicCode,
+                &amp;session.MagicCodeExpires,
+        )
+        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+                return nil, &amp;domain.ErrSessionNotFound{Message: "session not found"}
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get session: %w", err)
+        }</span>
+        <span class="cov8" title="1">return &amp;session, nil</span>
+}
+
+func (r *userRepository) DeleteSession(ctx context.Context, id string) error <span class="cov8" title="1">{
+        query := `DELETE FROM user_sessions WHERE id = $1`
+        result, err := r.db.ExecContext(ctx, query, id)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to delete session: %w", err)
+        }</span>
+        <span class="cov8" title="1">rows, err := result.RowsAffected()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get rows affected: %w", err)
+        }</span>
+        <span class="cov8" title="1">if rows == 0 </span><span class="cov8" title="1">{
+                return &amp;domain.ErrSessionNotFound{Message: "session not found"}
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *userRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]*domain.Session, error) <span class="cov8" title="1">{
+        query := `
+                SELECT id, user_id, expires_at, created_at, magic_code, magic_code_expires_at
+                FROM user_sessions
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+        `
+        rows, err := r.db.QueryContext(ctx, query, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get sessions: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer rows.Close()
+
+        var sessions []*domain.Session
+        for rows.Next() </span><span class="cov8" title="1">{
+                var session domain.Session
+                err := rows.Scan(
+                        &amp;session.ID,
+                        &amp;session.UserID,
+                        &amp;session.ExpiresAt,
+                        &amp;session.CreatedAt,
+                        &amp;session.MagicCode,
+                        &amp;session.MagicCodeExpires,
+                )
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to scan session: %w", err)
+                }</span>
+                <span class="cov8" title="1">sessions = append(sessions, &amp;session)</span>
+        }
+        <span class="cov8" title="1">return sessions, rows.Err()</span>
+}
+
+func (r *userRepository) UpdateSession(ctx context.Context, session *domain.Session) error <span class="cov8" title="1">{
+        query := `
+                UPDATE user_sessions
+                SET expires_at = $1,
+                        magic_code = $2,
+                        magic_code_expires_at = $3
+                WHERE id = $4
+        `
+        result, err := r.db.ExecContext(ctx, query,
+                session.ExpiresAt,
+                session.MagicCode,
+                session.MagicCodeExpires,
+                session.ID,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to update session: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">rows, err := result.RowsAffected()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get rows affected: %w", err)
+        }</span>
+        <span class="cov8" title="1">if rows == 0 </span><span class="cov8" title="1">{
+                return &amp;domain.ErrSessionNotFound{Message: "session not found"}
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file15" style="display: none">package repository
+
+import (
+        "context"
+        "database/sql"
+        "encoding/json"
+        "fmt"
+        "log"
+        "strings"
+        "sync"
+        "time"
+
+        "notifuse/server/config"
+        "notifuse/server/internal/database"
+        "notifuse/server/internal/domain"
+)
+
+type workspaceRepository struct {
+        systemDB *sql.DB
+        dbConfig *config.DatabaseConfig
+
+        // Connection pool for workspace databases
+        connections sync.Map
+}
+
+// NewWorkspaceRepository creates a new PostgreSQL workspace repository
+func NewWorkspaceRepository(systemDB *sql.DB, dbConfig *config.DatabaseConfig) domain.WorkspaceRepository <span class="cov8" title="1">{
+        return &amp;workspaceRepository{
+                systemDB: systemDB,
+                dbConfig: dbConfig,
+        }
+}</span>
+
+// checkWorkspaceIDExists checks if a workspace with the given ID already exists
+func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id string) (bool, error) <span class="cov8" title="1">{
+        var exists bool
+        query := `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`
+        err := r.systemDB.QueryRowContext(ctx, query, id).Scan(&amp;exists)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("failed to check workspace ID existence: %v", err)
+                return false, fmt.Errorf("failed to check workspace ID existence: %w", err)
+        }</span>
+        <span class="cov8" title="1">return exists, nil</span>
+}
+
+func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error <span class="cov8" title="1">{
+        if workspace.ID == "" </span><span class="cov0" title="0">{
+                return fmt.Errorf("workspace ID is required")
+        }</span>
+
+        // Validate workspace before creating
+        <span class="cov8" title="1">if err := workspace.Validate(); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Check if workspace ID already exists
+        <span class="cov8" title="1">exists, err := r.checkWorkspaceIDExists(ctx, workspace.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">if exists </span><span class="cov0" title="0">{
+                return fmt.Errorf("workspace with ID %s already exists", workspace.ID)
+        }</span>
+
+        <span class="cov8" title="1">now := time.Now()
+        workspace.CreatedAt = now
+        workspace.UpdatedAt = now
+
+        // Marshal settings to JSON
+        settings, err := json.Marshal(workspace.Settings)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal settings: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">query := `
+                INSERT INTO workspaces (id, name, settings, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5)
+        `
+        _, err = r.systemDB.ExecContext(ctx, query,
+                workspace.ID,
+                workspace.Name,
+                settings,
+                workspace.CreatedAt,
+                workspace.UpdatedAt,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create workspace: %w", err)
+        }</span>
+
+        // Create the workspace database
+        <span class="cov8" title="1">return r.CreateDatabase(ctx, workspace.ID)</span>
+}
+
+func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.Workspace, error) <span class="cov8" title="1">{
+        query := `
+                SELECT id, name, settings, created_at, updated_at
+                FROM workspaces
+                WHERE id = $1
+        `
+        workspace, err := domain.ScanWorkspace(r.systemDB.QueryRowContext(ctx, query, id))
+        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("workspace not found")
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get workspace: %w", err)
+        }</span>
+        <span class="cov8" title="1">return workspace, nil</span>
+}
+
+func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, error) <span class="cov8" title="1">{
+        query := `
+                SELECT id, name, settings, created_at, updated_at
+                FROM workspaces
+                ORDER BY created_at DESC
+        `
+        rows, err := r.systemDB.QueryContext(ctx, query)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to list workspaces: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer rows.Close()
+
+        var workspaces []*domain.Workspace
+        for rows.Next() </span><span class="cov8" title="1">{
+                workspace, err := domain.ScanWorkspace(rows)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to scan workspace: %w", err)
+                }</span>
+                <span class="cov8" title="1">workspaces = append(workspaces, workspace)</span>
+        }
+        <span class="cov8" title="1">return workspaces, rows.Err()</span>
+}
+
+func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Workspace) error <span class="cov8" title="1">{
+        workspace.UpdatedAt = time.Now()
+
+        // Validate workspace before updating
+        if err := workspace.Validate(); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Marshal settings to JSON
+        <span class="cov8" title="1">settings, err := json.Marshal(workspace.Settings)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal settings: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">query := `
+                UPDATE workspaces
+                SET name = $1, settings = $2, updated_at = $3
+                WHERE id = $4
+        `
+        result, err := r.systemDB.ExecContext(ctx, query,
+                workspace.Name,
+                settings,
+                workspace.UpdatedAt,
+                workspace.ID,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to update workspace: %w", err)
+        }</span>
+        <span class="cov8" title="1">rows, err := result.RowsAffected()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get affected rows: %w", err)
+        }</span>
+        <span class="cov8" title="1">if rows == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("workspace not found")
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *workspaceRepository) Delete(ctx context.Context, id string) error <span class="cov8" title="1">{
+        // Delete the workspace database first
+        if err := r.DeleteDatabase(ctx, id); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Then delete the workspace record
+        <span class="cov8" title="1">query := `DELETE FROM workspaces WHERE id = $1`
+        result, err := r.systemDB.ExecContext(ctx, query, id)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to delete workspace: %w", err)
+        }</span>
+        <span class="cov8" title="1">rows, err := result.RowsAffected()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get affected rows: %w", err)
+        }</span>
+        <span class="cov8" title="1">if rows == 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("workspace not found")
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error) <span class="cov8" title="1">{
+        // Check if we already have a connection
+        if conn, ok := r.connections.Load(workspaceID); ok </span><span class="cov8" title="1">{
+                db := conn.(*sql.DB)
+                // Test the connection
+                if err := db.PingContext(ctx); err == nil </span><span class="cov8" title="1">{
+                        return db, nil
+                }</span>
+                // If ping fails, remove the connection and create a new one
+                <span class="cov0" title="0">r.connections.Delete(workspaceID)</span>
+        }
+
+        // Create a new connection
+        <span class="cov8" title="1">db, err := database.ConnectToWorkspace(r.dbConfig, workspaceID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Store the connection
+        <span class="cov8" title="1">r.connections.Store(workspaceID, db)
+        return db, nil</span>
+}
+
+func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID string) error <span class="cov8" title="1">{
+        // Replace hyphens with underscores for PostgreSQL compatibility
+        safeID := strings.ReplaceAll(workspaceID, "-", "_")
+        dbName := fmt.Sprintf("%s_ws_%s", r.dbConfig.Prefix, safeID)
+
+        // Create the database
+        _, err := r.systemDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", dbName))
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create workspace database: %w", err)
+        }</span>
+
+        // Connect to the new database to create schema
+        <span class="cov8" title="1">db, err := database.ConnectToWorkspace(r.dbConfig, workspaceID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer db.Close()
+
+        // Create workspace schema
+        _, err = db.ExecContext(ctx, `
+                CREATE TABLE contacts (
+                        id UUID PRIMARY KEY,
+                        email VARCHAR(255) UNIQUE NOT NULL,
+                        name VARCHAR(255),
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL
+                );
+        `)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create workspace schema: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *workspaceRepository) DeleteDatabase(ctx context.Context, workspaceID string) error <span class="cov8" title="1">{
+        // Remove the connection from the pool if it exists
+        r.connections.Delete(workspaceID)
+
+        // Replace hyphens with underscores for PostgreSQL compatibility
+        safeID := strings.ReplaceAll(workspaceID, "-", "_")
+        dbName := fmt.Sprintf("%s_ws_%s", r.dbConfig.Prefix, safeID)
+
+        // Drop the database
+        _, err := r.systemDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to delete workspace database: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *workspaceRepository) AddUserToWorkspace(ctx context.Context, userWorkspace *domain.UserWorkspace) error <span class="cov8" title="1">{
+        query := `
+                INSERT INTO user_workspaces (user_id, workspace_id, role, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (user_id, workspace_id) DO UPDATE
+                SET role = $3, updated_at = $5
+        `
+        _, err := r.systemDB.ExecContext(ctx, query,
+                userWorkspace.UserID,
+                userWorkspace.WorkspaceID,
+                userWorkspace.Role,
+                userWorkspace.CreatedAt,
+                userWorkspace.UpdatedAt,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to add user to workspace: %w", err)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *workspaceRepository) RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error <span class="cov8" title="1">{
+        query := `DELETE FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`
+        result, err := r.systemDB.ExecContext(ctx, query, userID, workspaceID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to remove user from workspace: %w", err)
+        }</span>
+        <span class="cov8" title="1">rows, err := result.RowsAffected()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get affected rows: %w", err)
+        }</span>
+        <span class="cov8" title="1">if rows == 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("user is not a member of the workspace")
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (r *workspaceRepository) GetUserWorkspaces(ctx context.Context, userID string) ([]*domain.UserWorkspace, error) <span class="cov8" title="1">{
+        query := `
+                SELECT user_id, workspace_id, role, created_at, updated_at
+                FROM user_workspaces
+                WHERE user_id = $1
+        `
+        rows, err := r.systemDB.QueryContext(ctx, query, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get user workspaces: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer rows.Close()
+
+        var userWorkspaces []*domain.UserWorkspace
+        for rows.Next() </span><span class="cov8" title="1">{
+                var uw domain.UserWorkspace
+                err := rows.Scan(&amp;uw.UserID, &amp;uw.WorkspaceID, &amp;uw.Role, &amp;uw.CreatedAt, &amp;uw.UpdatedAt)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to scan user workspace: %w", err)
+                }</span>
+                <span class="cov8" title="1">userWorkspaces = append(userWorkspaces, &amp;uw)</span>
+        }
+        <span class="cov8" title="1">return userWorkspaces, rows.Err()</span>
+}
+
+func (r *workspaceRepository) GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*domain.UserWorkspace, error) <span class="cov8" title="1">{
+        query := `
+                SELECT user_id, workspace_id, role, created_at, updated_at
+                FROM user_workspaces
+                WHERE workspace_id = $1
+        `
+        rows, err := r.systemDB.QueryContext(ctx, query, workspaceID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get workspace users: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer rows.Close()
+
+        var userWorkspaces []*domain.UserWorkspace
+        for rows.Next() </span><span class="cov8" title="1">{
+                var uw domain.UserWorkspace
+                err := rows.Scan(&amp;uw.UserID, &amp;uw.WorkspaceID, &amp;uw.Role, &amp;uw.CreatedAt, &amp;uw.UpdatedAt)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to scan user workspace: %w", err)
+                }</span>
+                <span class="cov8" title="1">userWorkspaces = append(userWorkspaces, &amp;uw)</span>
+        }
+        <span class="cov8" title="1">return userWorkspaces, rows.Err()</span>
+}
+
+func (r *workspaceRepository) GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*domain.UserWorkspace, error) <span class="cov8" title="1">{
+        query := `
+                SELECT user_id, workspace_id, role, created_at, updated_at
+                FROM user_workspaces
+                WHERE user_id = $1 AND workspace_id = $2
+        `
+        var uw domain.UserWorkspace
+        err := r.systemDB.QueryRowContext(ctx, query, userID, workspaceID).Scan(
+                &amp;uw.UserID, &amp;uw.WorkspaceID, &amp;uw.Role, &amp;uw.CreatedAt, &amp;uw.UpdatedAt,
+        )
+        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("user is not a member of the workspace")
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get user workspace: %w", err)
+        }</span>
+        <span class="cov8" title="1">return &amp;uw, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file16" style="display: none">package service
+
+import (
+        "context"
+        "database/sql"
+        "errors"
+        "notifuse/server/internal/domain"
+        "notifuse/server/pkg/logger"
+        "time"
+)
+
+var (
+        ErrSessionExpired = errors.New("session expired")
+        ErrUserNotFound   = errors.New("user not found")
+)
+
+type AuthService struct {
+        repo   domain.AuthRepository
+        logger logger.Logger
+}
+
+func NewAuthService(repo domain.AuthRepository, logger logger.Logger) *AuthService <span class="cov8" title="1">{
+        return &amp;AuthService{
+                repo:   repo,
+                logger: logger,
+        }
+}</span>
+
+// VerifyUserSession checks if the user exists and the session is valid
+func (s *AuthService) VerifyUserSession(ctx context.Context, userID, sessionID string) (*domain.User, error) <span class="cov8" title="1">{
+        // First check if the session is valid and not expired
+        expiresAt, err := s.repo.GetSessionByID(ctx, sessionID, userID)
+
+        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("session_id", sessionID).Error("Session not found")
+                return nil, ErrSessionExpired
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("error", err.Error()).Error("Failed to query session")
+                return nil, err
+        }</span>
+
+        // Check if session is expired
+        <span class="cov8" title="1">if time.Now().After(*expiresAt) </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("expires_at", expiresAt).Error("Session expired")
+                return nil, ErrSessionExpired
+        }</span>
+
+        // Get user details
+        <span class="cov8" title="1">user, err := s.repo.GetUserByID(ctx, userID)
+
+        if err == sql.ErrNoRows </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).Error("User not found")
+                return nil, ErrUserNotFound
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to query user")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return user, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file17" style="display: none">package service
+
+import (
+        "context"
+        "crypto/rand"
+        "fmt"
+        "time"
+
+        "aidanwoods.dev/go-paseto"
+
+        "notifuse/server/internal/domain"
+        "notifuse/server/pkg/logger"
+)
+
+type UserService struct {
+        repo          domain.UserRepository
+        privateKey    paseto.V4AsymmetricSecretKey
+        publicKey     paseto.V4AsymmetricPublicKey
+        emailSender   EmailSender
+        sessionExpiry time.Duration
+        logger        logger.Logger
+}
+
+type EmailSender interface {
+        SendMagicCode(email, code string) error
+}
+
+type UserServiceConfig struct {
+        Repository    domain.UserRepository
+        PrivateKey    []byte
+        PublicKey     []byte
+        EmailSender   EmailSender
+        SessionExpiry time.Duration
+        Logger        logger.Logger
+}
+
+func NewUserService(cfg UserServiceConfig) (*UserService, error) <span class="cov8" title="1">{
+        privateKey, err := paseto.NewV4AsymmetricSecretKeyFromBytes(cfg.PrivateKey)
+        if err != nil </span><span class="cov0" title="0">{
+                if cfg.Logger != nil </span><span class="cov0" title="0">{
+                        cfg.Logger.WithField("error", err.Error()).Error("Error creating PASETO private key")
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("error creating private key: %w", err)</span>
+        }
+
+        <span class="cov8" title="1">publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes(cfg.PublicKey)
+        if err != nil </span><span class="cov0" title="0">{
+                if cfg.Logger != nil </span><span class="cov0" title="0">{
+                        cfg.Logger.WithField("error", err.Error()).Error("Error creating PASETO public key")
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("error creating public key: %w", err)</span>
+        }
+
+        <span class="cov8" title="1">return &amp;UserService{
+                repo:          cfg.Repository,
+                privateKey:    privateKey,
+                publicKey:     publicKey,
+                emailSender:   cfg.EmailSender,
+                sessionExpiry: cfg.SessionExpiry,
+                logger:        cfg.Logger,
+        }, nil</span>
+}
+
+type SignInInput struct {
+        Email string `json:"email"`
+}
+
+type VerifyCodeInput struct {
+        Email string `json:"email"`
+        Code  string `json:"code"`
+}
+
+type AuthResponse struct {
+        Token     string      `json:"token"`
+        User      domain.User `json:"user"`
+        ExpiresAt time.Time   `json:"expires_at"`
+}
+
+// UserServiceInterface defines the interface for user operations
+type UserServiceInterface interface {
+        SignIn(ctx context.Context, input SignInInput) error
+        SignInDev(ctx context.Context, input SignInInput) (string, error)
+        VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
+        VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
+        GetUserByID(ctx context.Context, userID string) (*domain.User, error)
+}
+
+// Ensure UserService implements UserServiceInterface
+var _ UserServiceInterface = (*UserService)(nil)
+
+func (s *UserService) SignIn(ctx context.Context, input SignInInput) error <span class="cov8" title="1">{
+        // Check if user exists, if not create a new one
+        user, err := s.repo.GetUserByEmail(ctx, input.Email)
+        if err != nil </span><span class="cov8" title="1">{
+                if _, ok := err.(*domain.ErrUserNotFound); !ok </span><span class="cov0" title="0">{
+                        s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email")
+                        return err
+                }</span>
+
+                // User not found, create a new one
+                <span class="cov8" title="1">user = &amp;domain.User{
+                        ID:        generateID(),
+                        Email:     input.Email,
+                        CreatedAt: time.Now(),
+                        UpdatedAt: time.Now(),
+                }
+                if err := s.repo.CreateUser(ctx, user); err != nil </span><span class="cov0" title="0">{
+                        s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to create user")
+                        return err
+                }</span>
+        }
+
+        // Generate magic code
+        <span class="cov8" title="1">code := s.generateMagicCode()
+        expiresAt := time.Now().Add(s.sessionExpiry)
+        codeExpiresAt := time.Now().Add(15 * time.Minute)
+
+        // Create new session
+        session := &amp;domain.Session{
+                ID:               generateID(),
+                UserID:           user.ID,
+                ExpiresAt:        expiresAt,
+                CreatedAt:        time.Now(),
+                MagicCode:        code,
+                MagicCodeExpires: codeExpiresAt,
+        }
+
+        if err := s.repo.CreateSession(ctx, session); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session")
+                return err
+        }</span>
+
+        // Send magic code via email
+        <span class="cov8" title="1">if err := s.emailSender.SendMagicCode(user.Email, code); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("user_id", user.ID).WithField("email", user.Email).WithField("error", err.Error()).Error("Failed to send magic code")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (s *UserService) VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error) <span class="cov8" title="1">{
+        // Find user by email
+        user, err := s.repo.GetUserByEmail(ctx, input.Email)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email for code verification")
+                return nil, err
+        }</span>
+
+        // Find all sessions for this user
+        <span class="cov8" title="1">sessions, err := s.repo.GetSessionsByUserID(ctx, user.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get sessions for user")
+                return nil, err
+        }</span>
+
+        // Find the session with the matching code
+        <span class="cov8" title="1">var matchingSession *domain.Session
+        for _, session := range sessions </span><span class="cov8" title="1">{
+                if session.MagicCode == input.Code </span><span class="cov8" title="1">{
+                        matchingSession = session
+                        break</span>
+                }
+        }
+
+        <span class="cov8" title="1">if matchingSession == nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", user.ID).WithField("email", input.Email).Error("Invalid magic code")
+                return nil, fmt.Errorf("invalid magic code")
+        }</span>
+
+        // Check if magic code is expired
+        <span class="cov8" title="1">if time.Now().After(matchingSession.MagicCodeExpires) </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", user.ID).WithField("email", input.Email).WithField("session_id", matchingSession.ID).Error("Magic code expired")
+                return nil, fmt.Errorf("magic code expired")
+        }</span>
+
+        // Clear the magic code from the session
+        <span class="cov8" title="1">matchingSession.MagicCode = ""
+        matchingSession.MagicCodeExpires = time.Time{}
+
+        if err := s.repo.UpdateSession(ctx, matchingSession); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("user_id", user.ID).WithField("session_id", matchingSession.ID).WithField("error", err.Error()).Error("Failed to update session")
+                return nil, err
+        }</span>
+
+        // Generate authentication token
+        <span class="cov8" title="1">token := s.generateAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
+
+        return &amp;AuthResponse{
+                Token:     token,
+                User:      *user,
+                ExpiresAt: matchingSession.ExpiresAt,
+        }, nil</span>
+}
+
+func (s *UserService) generateMagicCode() string <span class="cov8" title="1">{
+        // Generate a 6-digit code
+        code := make([]byte, 3)
+        _, err := rand.Read(code)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("error", err.Error()).Error("Failed to generate random bytes for magic code")
+                return "123456" // Fallback code in case of error
+        }</span>
+
+        // Convert to 6 digits
+        <span class="cov8" title="1">codeNum := int(code[0])&lt;&lt;16 | int(code[1])&lt;&lt;8 | int(code[2])
+        codeNum = codeNum % 1000000 // Ensure it's 6 digits
+        return fmt.Sprintf("%06d", codeNum)</span>
+}
+
+// generateID generates a random ID
+func generateID() string <span class="cov8" title="1">{
+        return fmt.Sprintf("%x", time.Now().UnixNano())
+}</span>
+
+func (s *UserService) generateAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string <span class="cov8" title="1">{
+        token := paseto.NewToken()
+        token.SetIssuedAt(time.Now())
+        token.SetNotBefore(time.Now())
+        token.SetExpiration(expiresAt)
+        token.SetString("user_id", user.ID)
+        token.SetString("session_id", sessionID)
+        token.SetString("email", user.Email)
+
+        encrypted := token.V4Sign(s.privateKey, nil)
+        if encrypted == "" </span><span class="cov0" title="0">{
+                s.logger.WithField("user_id", user.ID).WithField("session_id", sessionID).Error("Failed to sign authentication token")
+        }</span>
+
+        <span class="cov8" title="1">return encrypted</span>
+}
+
+// VerifyUserSession verifies a user session and returns the associated user
+func (s *UserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) <span class="cov8" title="1">{
+        // First check if the session is valid and not expired
+        session, err := s.repo.GetSessionByID(ctx, sessionID)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("error", err.Error()).Error("Failed to get session by ID")
+                return nil, err
+        }</span>
+
+        // Verify that the session belongs to the user
+        <span class="cov8" title="1">if session.UserID != userID </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("session_user_id", session.UserID).Error("Session does not belong to user")
+                return nil, fmt.Errorf("session does not belong to user")
+        }</span>
+
+        // Check if session is expired
+        <span class="cov8" title="1">if time.Now().After(session.ExpiresAt) </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("expires_at", session.ExpiresAt).Error("Session expired")
+                return nil, ErrSessionExpired
+        }</span>
+
+        // Get user details
+        <span class="cov8" title="1">user, err := s.repo.GetUserByID(ctx, userID)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return user, nil</span>
+}
+
+// SignInDev is a development-only version of SignIn that returns the magic code
+func (s *UserService) SignInDev(ctx context.Context, input SignInInput) (string, error) <span class="cov8" title="1">{
+        // This method is only for development environment
+        // Check if user exists, if not create a new one
+        user, err := s.repo.GetUserByEmail(ctx, input.Email)
+        if err != nil </span><span class="cov8" title="1">{
+                if _, ok := err.(*domain.ErrUserNotFound); !ok </span><span class="cov8" title="1">{
+                        s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email in dev mode")
+                        return "", err
+                }</span>
+
+                // User not found, create a new one
+                <span class="cov8" title="1">user = &amp;domain.User{
+                        ID:        generateID(),
+                        Email:     input.Email,
+                        CreatedAt: time.Now(),
+                        UpdatedAt: time.Now(),
+                }
+                if err := s.repo.CreateUser(ctx, user); err != nil </span><span class="cov0" title="0">{
+                        s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to create user in dev mode")
+                        return "", err
+                }</span>
+        }
+
+        // Create new session
+        <span class="cov8" title="1">expiresAt := time.Now().Add(s.sessionExpiry)
+        session := &amp;domain.Session{
+                ID:        generateID(),
+                UserID:    user.ID,
+                ExpiresAt: expiresAt,
+                CreatedAt: time.Now(),
+        }
+
+        if err := s.repo.CreateSession(ctx, session); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session in dev mode")
+                return "", err
+        }</span>
+
+        // Generate authentication token
+        <span class="cov8" title="1">token := s.generateAuthToken(user, session.ID, expiresAt)
+        return token, nil</span>
+}
+
+// GetUserByID retrieves a user by their ID
+func (s *UserService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) <span class="cov8" title="1">{
+        user, err := s.repo.GetUserByID(ctx, userID)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return user, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file18" style="display: none">package service
+
+import (
+        "context"
+        "fmt"
+        "notifuse/server/internal/domain"
+        "notifuse/server/pkg/logger"
+        "time"
+)
+
+type WorkspaceService struct {
+        repo   domain.WorkspaceRepository
+        logger logger.Logger
+}
+
+func NewWorkspaceService(repo domain.WorkspaceRepository, logger logger.Logger) *WorkspaceService <span class="cov8" title="1">{
+        return &amp;WorkspaceService{
+                repo:   repo,
+                logger: logger,
+        }
+}</span>
+
+// ListWorkspaces returns all workspaces for a user
+func (s *WorkspaceService) ListWorkspaces(ctx context.Context, userID string) ([]*domain.Workspace, error) <span class="cov8" title="1">{
+        userWorkspaces, err := s.repo.GetUserWorkspaces(ctx, userID)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user workspaces")
+                return nil, err
+        }</span>
+
+        // Return empty array if user has no workspaces
+        <span class="cov8" title="1">if len(userWorkspaces) == 0 </span><span class="cov8" title="1">{
+                return []*domain.Workspace{}, nil
+        }</span>
+
+        <span class="cov8" title="1">workspaces := make([]*domain.Workspace, 0, len(userWorkspaces))
+        for _, uw := range userWorkspaces </span><span class="cov8" title="1">{
+                workspace, err := s.repo.GetByID(ctx, uw.WorkspaceID)
+                if err != nil </span><span class="cov8" title="1">{
+                        s.logger.WithField("workspace_id", uw.WorkspaceID).WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get workspace by ID")
+                        return nil, err
+                }</span>
+                <span class="cov8" title="1">workspaces = append(workspaces, workspace)</span>
+        }
+
+        <span class="cov8" title="1">return workspaces, nil</span>
+}
+
+// GetWorkspace returns a workspace by ID if the user has access
+func (s *WorkspaceService) GetWorkspace(ctx context.Context, id string, userID string) (*domain.Workspace, error) <span class="cov8" title="1">{
+        // Check if user has access to the workspace
+        _, err := s.repo.GetUserWorkspace(ctx, userID, id)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user workspace")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">workspace, err := s.repo.GetByID(ctx, id)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get workspace by ID")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return workspace, nil</span>
+}
+
+// CreateWorkspace creates a new workspace and adds the creator as owner
+func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, timezone string, ownerID string) (*domain.Workspace, error) <span class="cov8" title="1">{
+        workspace := &amp;domain.Workspace{
+                ID:   id,
+                Name: name,
+                Settings: domain.WorkspaceSettings{
+                        WebsiteURL: websiteURL,
+                        LogoURL:    logoURL,
+                        Timezone:   timezone,
+                },
+                CreatedAt: time.Now(),
+                UpdatedAt: time.Now(),
+        }
+
+        if err := workspace.Validate(); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if err := s.repo.Create(ctx, workspace); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to create workspace")
+                return nil, err
+        }</span>
+
+        // Add the creator as owner
+        <span class="cov8" title="1">userWorkspace := &amp;domain.UserWorkspace{
+                UserID:      ownerID,
+                WorkspaceID: id,
+                Role:        "owner",
+                CreatedAt:   time.Now(),
+                UpdatedAt:   time.Now(),
+        }
+
+        if err := userWorkspace.Validate(); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("workspace_id", id).WithField("user_id", ownerID).WithField("error", err.Error()).Error("Failed to validate user workspace")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if err := s.repo.AddUserToWorkspace(ctx, userWorkspace); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("user_id", ownerID).WithField("error", err.Error()).Error("Failed to add user to workspace")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return workspace, nil</span>
+}
+
+// UpdateWorkspace updates a workspace if the user is an owner
+func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, timezone string, userID string) (*domain.Workspace, error) <span class="cov8" title="1">{
+        // Check if user is an owner
+        userWorkspace, err := s.repo.GetUserWorkspace(ctx, userID, id)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user workspace")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if userWorkspace.Role != "owner" </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("user_id", userID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
+                return nil, &amp;domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+        }</span>
+
+        <span class="cov8" title="1">workspace := &amp;domain.Workspace{
+                ID:   id,
+                Name: name,
+                Settings: domain.WorkspaceSettings{
+                        WebsiteURL: websiteURL,
+                        LogoURL:    logoURL,
+                        Timezone:   timezone,
+                },
+                UpdatedAt: time.Now(),
+        }
+
+        if err := workspace.Validate(); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if err := s.repo.Update(ctx, workspace); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to update workspace")
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return workspace, nil</span>
+}
+
+// DeleteWorkspace deletes a workspace if the user is an owner
+func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, id string, userID string) error <span class="cov8" title="1">{
+        // Check if user is an owner
+        userWorkspace, err := s.repo.GetUserWorkspace(ctx, userID, id)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if userWorkspace.Role != "owner" </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("user_id", userID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
+                return &amp;domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+        }</span>
+
+        <span class="cov8" title="1">if err := s.repo.Delete(ctx, id); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to delete workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// AddUserToWorkspace adds a user to a workspace if the requester is an owner
+func (s *WorkspaceService) AddUserToWorkspace(ctx context.Context, workspaceID string, userID string, role string, requesterID string) error <span class="cov8" title="1">{
+        // Check if requester is an owner
+        requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, requesterID, workspaceID)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", requesterID).WithField("error", err.Error()).Error("Failed to get requester workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if requesterWorkspace.Role != "owner" </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", requesterID).WithField("role", requesterWorkspace.Role).Error("Requester is not an owner of the workspace")
+                return &amp;domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+        }</span>
+
+        <span class="cov8" title="1">userWorkspace := &amp;domain.UserWorkspace{
+                UserID:      userID,
+                WorkspaceID: workspaceID,
+                Role:        role,
+                CreatedAt:   time.Now(),
+                UpdatedAt:   time.Now(),
+        }
+
+        if err := userWorkspace.Validate(); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to validate user workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if err := s.repo.AddUserToWorkspace(ctx, userWorkspace); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to add user to workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// RemoveUserFromWorkspace removes a user from a workspace if the requester is an owner
+func (s *WorkspaceService) RemoveUserFromWorkspace(ctx context.Context, workspaceID string, userID string, requesterID string) error <span class="cov8" title="1">{
+        // Check if requester is an owner
+        requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, requesterID, workspaceID)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", requesterID).WithField("error", err.Error()).Error("Failed to get requester workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if requesterWorkspace.Role != "owner" </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", requesterID).WithField("role", requesterWorkspace.Role).Error("Requester is not an owner of the workspace")
+                return &amp;domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+        }</span>
+
+        // Prevent users from removing themselves
+        <span class="cov8" title="1">if userID == requesterID </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).Error("Cannot remove self from workspace")
+                return fmt.Errorf("cannot remove yourself from the workspace")
+        }</span>
+
+        <span class="cov8" title="1">if err := s.repo.RemoveUserFromWorkspace(ctx, userID, workspaceID); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to remove user from workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// TransferOwnership transfers the ownership of a workspace from the current owner to a member
+func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID string, newOwnerID string, currentOwnerID string) error <span class="cov8" title="1">{
+        // Check if current owner is actually an owner
+        currentOwnerWorkspace, err := s.repo.GetUserWorkspace(ctx, currentOwnerID, workspaceID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("current_owner_id", currentOwnerID).WithField("new_owner_id", newOwnerID).WithField("error", err.Error()).Error("Failed to get current owner workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if currentOwnerWorkspace.Role != "owner" </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("current_owner_id", currentOwnerID).WithField("role", currentOwnerWorkspace.Role).Error("Current owner is not an owner of the workspace")
+                return &amp;domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+        }</span>
+
+        // Check if new owner exists and is a member
+        <span class="cov8" title="1">newOwnerWorkspace, err := s.repo.GetUserWorkspace(ctx, newOwnerID, workspaceID)
+        if err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("new_owner_id", newOwnerID).WithField("error", err.Error()).Error("Failed to get new owner workspace")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if newOwnerWorkspace.Role != "member" </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("new_owner_id", newOwnerID).WithField("role", newOwnerWorkspace.Role).Error("New owner must be a current member of the workspace")
+                return fmt.Errorf("new owner must be a current member of the workspace")
+        }</span>
+
+        // Update new owner's role to owner
+        <span class="cov8" title="1">newOwnerWorkspace.Role = "owner"
+        newOwnerWorkspace.UpdatedAt = time.Now()
+        if err := s.repo.AddUserToWorkspace(ctx, newOwnerWorkspace); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("new_owner_id", newOwnerID).WithField("error", err.Error()).Error("Failed to update new owner's role")
+                return err
+        }</span>
+
+        // Update current owner's role to member
+        <span class="cov8" title="1">currentOwnerWorkspace.Role = "member"
+        currentOwnerWorkspace.UpdatedAt = time.Now()
+        if err := s.repo.AddUserToWorkspace(ctx, currentOwnerWorkspace); err != nil </span><span class="cov8" title="1">{
+                s.logger.WithField("workspace_id", workspaceID).WithField("current_owner_id", currentOwnerID).WithField("error", err.Error()).Error("Failed to update current owner's role")
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

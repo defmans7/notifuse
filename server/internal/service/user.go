@@ -9,6 +9,7 @@ import (
 	"aidanwoods.dev/go-paseto"
 
 	"notifuse/server/internal/domain"
+	"notifuse/server/pkg/logger"
 )
 
 type UserService struct {
@@ -17,6 +18,7 @@ type UserService struct {
 	publicKey     paseto.V4AsymmetricPublicKey
 	emailSender   EmailSender
 	sessionExpiry time.Duration
+	logger        logger.Logger
 }
 
 type EmailSender interface {
@@ -29,16 +31,23 @@ type UserServiceConfig struct {
 	PublicKey     []byte
 	EmailSender   EmailSender
 	SessionExpiry time.Duration
+	Logger        logger.Logger
 }
 
 func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 	privateKey, err := paseto.NewV4AsymmetricSecretKeyFromBytes(cfg.PrivateKey)
 	if err != nil {
+		if cfg.Logger != nil {
+			cfg.Logger.WithField("error", err.Error()).Error("Error creating PASETO private key")
+		}
 		return nil, fmt.Errorf("error creating private key: %w", err)
 	}
 
 	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes(cfg.PublicKey)
 	if err != nil {
+		if cfg.Logger != nil {
+			cfg.Logger.WithField("error", err.Error()).Error("Error creating PASETO public key")
+		}
 		return nil, fmt.Errorf("error creating public key: %w", err)
 	}
 
@@ -48,6 +57,7 @@ func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 		publicKey:     publicKey,
 		emailSender:   cfg.EmailSender,
 		sessionExpiry: cfg.SessionExpiry,
+		logger:        cfg.Logger,
 	}, nil
 }
 
@@ -71,7 +81,7 @@ type UserServiceInterface interface {
 	SignIn(ctx context.Context, input SignInInput) error
 	SignInDev(ctx context.Context, input SignInInput) (string, error)
 	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
-	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*User, error)
+	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
 	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
 }
 
@@ -79,174 +89,226 @@ type UserServiceInterface interface {
 var _ UserServiceInterface = (*UserService)(nil)
 
 func (s *UserService) SignIn(ctx context.Context, input SignInInput) error {
-	// Check if user exists
+	// Check if user exists, if not create a new one
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
-		return fmt.Errorf("error getting user: %w", err)
+		if _, ok := err.(*domain.ErrUserNotFound); !ok {
+			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email")
+			return err
+		}
+
+		// User not found, create a new one
+		user = &domain.User{
+			ID:        generateID(),
+			Email:     input.Email,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		if err := s.repo.CreateUser(ctx, user); err != nil {
+			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to create user")
+			return err
+		}
 	}
 
-	// Generate 6-digit magic code
+	// Generate magic code
 	code := s.generateMagicCode()
+	expiresAt := time.Now().Add(s.sessionExpiry)
+	codeExpiresAt := time.Now().Add(15 * time.Minute)
 
-	// Create a temporary session with the magic code
+	// Create new session
 	session := &domain.Session{
+		ID:               generateID(),
 		UserID:           user.ID,
+		ExpiresAt:        expiresAt,
+		CreatedAt:        time.Now(),
 		MagicCode:        code,
-		MagicCodeExpires: time.Now().Add(15 * time.Minute),
-		ExpiresAt:        time.Now().Add(s.sessionExpiry),
+		MagicCodeExpires: codeExpiresAt,
 	}
 
 	if err := s.repo.CreateSession(ctx, session); err != nil {
-		return fmt.Errorf("error creating session: %w", err)
+		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session")
+		return err
 	}
 
-	// Send magic code email
+	// Send magic code via email
 	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
-		return fmt.Errorf("error sending magic code: %w", err)
+		s.logger.WithField("user_id", user.ID).WithField("email", user.Email).WithField("error", err.Error()).Error("Failed to send magic code")
+		return err
 	}
 
 	return nil
 }
 
 func (s *UserService) VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error) {
-	// Get user by email
+	// Find user by email
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
-		return nil, fmt.Errorf("error getting user: %w", err)
+		s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email for code verification")
+		return nil, err
 	}
 
-	// Find session with matching code
+	// Find all sessions for this user
 	sessions, err := s.repo.GetSessionsByUserID(ctx, user.ID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting sessions: %w", err)
+		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get sessions for user")
+		return nil, err
 	}
 
-	var validSession *domain.Session
+	// Find the session with the matching code
+	var matchingSession *domain.Session
 	for _, session := range sessions {
-		if session.MagicCode == input.Code && time.Now().Before(session.MagicCodeExpires) {
-			validSession = session
+		if session.MagicCode == input.Code {
+			matchingSession = session
 			break
 		}
 	}
 
-	if validSession == nil {
-		return nil, fmt.Errorf("invalid or expired code")
+	if matchingSession == nil {
+		s.logger.WithField("user_id", user.ID).WithField("email", input.Email).Error("Invalid magic code")
+		return nil, fmt.Errorf("invalid magic code")
 	}
 
-	// Clear the magic code after successful verification
-	validSession.MagicCode = ""
-	validSession.MagicCodeExpires = time.Time{}
-
-	if err := s.repo.UpdateSession(ctx, validSession); err != nil {
-		return nil, fmt.Errorf("error updating session: %w", err)
+	// Check if magic code is expired
+	if time.Now().After(matchingSession.MagicCodeExpires) {
+		s.logger.WithField("user_id", user.ID).WithField("email", input.Email).WithField("session_id", matchingSession.ID).Error("Magic code expired")
+		return nil, fmt.Errorf("magic code expired")
 	}
 
-	// Generate auth token
-	signedToken := s.generateAuthToken(user, validSession.ID, validSession.ExpiresAt)
+	// Clear the magic code from the session
+	matchingSession.MagicCode = ""
+	matchingSession.MagicCodeExpires = time.Time{}
+
+	if err := s.repo.UpdateSession(ctx, matchingSession); err != nil {
+		s.logger.WithField("user_id", user.ID).WithField("session_id", matchingSession.ID).WithField("error", err.Error()).Error("Failed to update session")
+		return nil, err
+	}
+
+	// Generate authentication token
+	token := s.generateAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
 
 	return &AuthResponse{
-		Token:     signedToken,
+		Token:     token,
 		User:      *user,
-		ExpiresAt: validSession.ExpiresAt,
+		ExpiresAt: matchingSession.ExpiresAt,
 	}, nil
 }
 
 func (s *UserService) generateMagicCode() string {
-	const digits = "0123456789"
-	code := make([]byte, 6)
+	// Generate a 6-digit code
+	code := make([]byte, 3)
 	_, err := rand.Read(code)
 	if err != nil {
-		// If we can't generate random numbers, use timestamp as fallback
-		now := time.Now().UnixNano()
-		for i := range code {
-			code[i] = digits[now%10]
-			now /= 10
-		}
-		return string(code)
+		s.logger.WithField("error", err.Error()).Error("Failed to generate random bytes for magic code")
+		return "123456" // Fallback code in case of error
 	}
 
-	for i := range code {
-		code[i] = digits[int(code[i])%len(digits)]
-	}
-	return string(code)
+	// Convert to 6 digits
+	codeNum := int(code[0])<<16 | int(code[1])<<8 | int(code[2])
+	codeNum = codeNum % 1000000 // Ensure it's 6 digits
+	return fmt.Sprintf("%06d", codeNum)
+}
+
+// generateID generates a random ID
+func generateID() string {
+	return fmt.Sprintf("%x", time.Now().UnixNano())
 }
 
 func (s *UserService) generateAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string {
 	token := paseto.NewToken()
+	token.SetIssuedAt(time.Now())
+	token.SetNotBefore(time.Now())
 	token.SetExpiration(expiresAt)
 	token.SetString("user_id", user.ID)
-	token.SetString("email", user.Email)
-	token.SetString("name", user.Name)
 	token.SetString("session_id", sessionID)
+	token.SetString("email", user.Email)
 
-	return token.V4Sign(s.privateKey, []byte{})
+	encrypted := token.V4Sign(s.privateKey, nil)
+	if encrypted == "" {
+		s.logger.WithField("user_id", user.ID).WithField("session_id", sessionID).Error("Failed to sign authentication token")
+	}
+
+	return encrypted
 }
 
 // VerifyUserSession verifies a user session and returns the associated user
-func (s *UserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*User, error) {
-	// Get user by ID
-	domainUser, err := s.repo.GetUserByID(ctx, userID)
-	if err != nil {
-		return nil, ErrUserNotFound
-	}
-
-	// Get session by ID
+func (s *UserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
+	// First check if the session is valid and not expired
 	session, err := s.repo.GetSessionByID(ctx, sessionID)
 	if err != nil {
-		return nil, ErrSessionExpired
+		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("error", err.Error()).Error("Failed to get session by ID")
+		return nil, err
 	}
 
-	// Verify session belongs to user
+	// Verify that the session belongs to the user
 	if session.UserID != userID {
-		return nil, ErrSessionExpired
+		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("session_user_id", session.UserID).Error("Session does not belong to user")
+		return nil, fmt.Errorf("session does not belong to user")
 	}
 
 	// Check if session is expired
 	if time.Now().After(session.ExpiresAt) {
+		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("expires_at", session.ExpiresAt).Error("Session expired")
 		return nil, ErrSessionExpired
 	}
 
-	// Convert domain user to service user
-	serviceUser := &User{
-		ID:        domainUser.ID,
-		Email:     domainUser.Email,
-		CreatedAt: domainUser.CreatedAt,
+	// Get user details
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
+		return nil, err
 	}
 
-	return serviceUser, nil
+	return user, nil
 }
 
 // SignInDev is a development-only version of SignIn that returns the magic code
 func (s *UserService) SignInDev(ctx context.Context, input SignInInput) (string, error) {
-	// Check if user exists
+	// This method is only for development environment
+	// Check if user exists, if not create a new one
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
-		return "", fmt.Errorf("error getting user: %w", err)
+		if _, ok := err.(*domain.ErrUserNotFound); !ok {
+			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email in dev mode")
+			return "", err
+		}
+
+		// User not found, create a new one
+		user = &domain.User{
+			ID:        generateID(),
+			Email:     input.Email,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		if err := s.repo.CreateUser(ctx, user); err != nil {
+			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to create user in dev mode")
+			return "", err
+		}
 	}
 
-	// Generate 6-digit magic code
-	code := s.generateMagicCode()
-
-	// Create a temporary session with the magic code
+	// Create new session
+	expiresAt := time.Now().Add(s.sessionExpiry)
 	session := &domain.Session{
-		UserID:           user.ID,
-		MagicCode:        code,
-		MagicCodeExpires: time.Now().Add(15 * time.Minute),
-		ExpiresAt:        time.Now().Add(s.sessionExpiry),
+		ID:        generateID(),
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
 	}
 
 	if err := s.repo.CreateSession(ctx, session); err != nil {
-		return "", fmt.Errorf("error creating session: %w", err)
+		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session in dev mode")
+		return "", err
 	}
 
-	// In development mode, we don't actually send the email
-	return code, nil
+	// Generate authentication token
+	token := s.generateAuthToken(user, session.ID, expiresAt)
+	return token, nil
 }
 
 // GetUserByID retrieves a user by their ID
 func (s *UserService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
+		s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
 		return nil, err
 	}
 	return user, nil

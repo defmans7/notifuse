@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"notifuse/server/internal/domain"
+	"notifuse/server/pkg/logger"
 	"time"
 )
 
@@ -13,61 +15,48 @@ var (
 )
 
 type AuthService struct {
-	db *sql.DB
+	repo   domain.AuthRepository
+	logger logger.Logger
 }
 
-type User struct {
-	ID        string
-	Email     string
-	CreatedAt time.Time
-}
-
-type Session struct {
-	ID        string
-	UserID    string
-	ExpiresAt time.Time
-}
-
-func NewAuthService(db *sql.DB) *AuthService {
+func NewAuthService(repo domain.AuthRepository, logger logger.Logger) *AuthService {
 	return &AuthService{
-		db: db,
+		repo:   repo,
+		logger: logger,
 	}
 }
 
 // VerifyUserSession checks if the user exists and the session is valid
-func (s *AuthService) VerifyUserSession(ctx context.Context, userID, sessionID string) (*User, error) {
+func (s *AuthService) VerifyUserSession(ctx context.Context, userID, sessionID string) (*domain.User, error) {
 	// First check if the session is valid and not expired
-	var expiresAt time.Time
-	err := s.db.QueryRowContext(ctx,
-		"SELECT expires_at FROM sessions WHERE id = $1 AND user_id = $2",
-		sessionID, userID,
-	).Scan(&expiresAt)
+	expiresAt, err := s.repo.GetSessionByID(ctx, sessionID, userID)
 
 	if err == sql.ErrNoRows {
+		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).Error("Session not found")
 		return nil, ErrSessionExpired
 	}
 	if err != nil {
+		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("error", err.Error()).Error("Failed to query session")
 		return nil, err
 	}
 
 	// Check if session is expired
-	if time.Now().After(expiresAt) {
+	if time.Now().After(*expiresAt) {
+		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("expires_at", expiresAt).Error("Session expired")
 		return nil, ErrSessionExpired
 	}
 
 	// Get user details
-	var user User
-	err = s.db.QueryRowContext(ctx,
-		"SELECT id, email, created_at FROM users WHERE id = $1",
-		userID,
-	).Scan(&user.ID, &user.Email, &user.CreatedAt)
+	user, err := s.repo.GetUserByID(ctx, userID)
 
 	if err == sql.ErrNoRows {
+		s.logger.WithField("user_id", userID).Error("User not found")
 		return nil, ErrUserNotFound
 	}
 	if err != nil {
+		s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to query user")
 		return nil, err
 	}
 
-	return &user, nil
+	return user, nil
 }

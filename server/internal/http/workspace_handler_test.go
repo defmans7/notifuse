@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 
 	"notifuse/server/internal/domain"
 	"notifuse/server/internal/http/middleware"
-	"notifuse/server/internal/service"
 )
 
 // mockWorkspaceService implements WorkspaceServiceInterface
@@ -63,12 +63,12 @@ type mockAuthService struct {
 	mock.Mock
 }
 
-func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*service.User, error) {
+func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
 	args := m.Called(ctx, userID, sessionID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*service.User), args.Error(1)
+	return args.Get(0).(*domain.User), args.Error(1)
 }
 
 // Test setup helper
@@ -106,7 +106,7 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful user session verification
-	user := &service.User{ID: "test-user"}
+	user := &domain.User{ID: "test-user"}
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
 	// Mock successful workspace creation
@@ -158,7 +158,7 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful user session verification
-	user := &service.User{ID: "test-user"}
+	user := &domain.User{ID: "test-user"}
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
 	// Mock successful workspace retrieval
@@ -200,7 +200,7 @@ func TestWorkspaceHandler_List(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful user session verification
-	user := &service.User{ID: "test-user"}
+	user := &domain.User{ID: "test-user"}
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
 	// Mock successful workspace list retrieval
@@ -251,7 +251,7 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful user session verification
-	user := &service.User{ID: "test-user"}
+	user := &domain.User{ID: "test-user"}
 	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
 	// Mock successful workspace update
@@ -303,11 +303,10 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful user session verification
-	// Setup auth mock expectation
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user-id", "test-session").
-		Return(&service.User{ID: "test-user-id", Email: "test@example.com"}, nil)
+	user := &domain.User{ID: "test-user"}
+	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
 
-	workspaceSvc.On("DeleteWorkspace", mock.Anything, "test-id", "test-user-id").
+	workspaceSvc.On("DeleteWorkspace", mock.Anything, "test-id", "test-user").
 		Return(nil)
 
 	request := deleteWorkspaceRequest{
@@ -318,8 +317,8 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.delete", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user-id"))
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user-id"}))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user"}))
 
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -330,4 +329,55 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 	err = json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, "success", response["status"])
+}
+
+func TestWriteError(t *testing.T) {
+	testCases := []struct {
+		name           string
+		status         int
+		errorMessage   string
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "bad request error",
+			status:         http.StatusBadRequest,
+			errorMessage:   "invalid input",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":"invalid input"}`,
+		},
+		{
+			name:           "unauthorized error",
+			status:         http.StatusUnauthorized,
+			errorMessage:   "not authorized",
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"not authorized"}`,
+		},
+		{
+			name:           "internal server error",
+			status:         http.StatusInternalServerError,
+			errorMessage:   "server error",
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":"server error"}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a test response recorder
+			w := httptest.NewRecorder()
+
+			// Call the function being tested
+			writeError(w, tc.status, tc.errorMessage)
+
+			// Assert the response status code
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			// Assert the response content type
+			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+			// Assert the response body, trimming newlines
+			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
+		})
+	}
 }

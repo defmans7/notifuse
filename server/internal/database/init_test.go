@@ -1,0 +1,160 @@
+package database
+
+import (
+	"database/sql"
+	"testing"
+
+	"notifuse/server/internal/database/schema"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestInitializeDatabase(t *testing.T) {
+	t.Run("creates tables successfully", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Setup expectations for table creation
+		for range schema.TableDefinitions {
+			mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
+		}
+
+		err = InitializeDatabase(db, "")
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("creates root user if not exists", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Setup expectations for table creation
+		for range schema.TableDefinitions {
+			mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
+		}
+
+		// Root user doesn't exist
+		mock.ExpectQuery("SELECT EXISTS").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		// Expect insert
+		mock.ExpectExec("INSERT INTO users").
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		err = InitializeDatabase(db, "admin@example.com")
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("skips root user creation if already exists", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Setup expectations for table creation
+		for range schema.TableDefinitions {
+			mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
+		}
+
+		// Root user already exists
+		mock.ExpectQuery("SELECT EXISTS").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+		// No insert should be made
+
+		err = InitializeDatabase(db, "admin@example.com")
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("handles table creation error", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// First table creation fails
+		mock.ExpectExec("").WillReturnError(sql.ErrConnDone)
+
+		err = InitializeDatabase(db, "admin@example.com")
+		assert.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("handles root user query error", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Setup expectations for table creation
+		for range schema.TableDefinitions {
+			mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
+		}
+
+		// Query fails
+		mock.ExpectQuery("SELECT EXISTS").
+			WillReturnError(sql.ErrConnDone)
+
+		err = InitializeDatabase(db, "admin@example.com")
+		assert.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("handles root user insertion error", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Setup expectations for table creation
+		for range schema.TableDefinitions {
+			mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
+		}
+
+		// Root user doesn't exist
+		mock.ExpectQuery("SELECT EXISTS").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		// Insert fails
+		mock.ExpectExec("INSERT INTO users").
+			WillReturnError(sql.ErrConnDone)
+
+		err = InitializeDatabase(db, "admin@example.com")
+		assert.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestCleanDatabase(t *testing.T) {
+	t.Run("drops tables successfully", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Setup expectations for table drops (in reverse order)
+		for range schema.TableNames {
+			mock.ExpectExec("DROP TABLE IF EXISTS").
+				WillReturnResult(sqlmock.NewResult(0, 0))
+		}
+
+		err = CleanDatabase(db)
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("handles table drop error", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// First table drop fails
+		mock.ExpectExec("DROP TABLE IF EXISTS").
+			WillReturnError(sql.ErrConnDone)
+
+		err = CleanDatabase(db)
+		assert.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}

@@ -47,12 +47,12 @@ func (m *mockUserService) VerifyCode(ctx context.Context, input service.VerifyCo
 	return args.Get(0).(*service.AuthResponse), args.Error(1)
 }
 
-func (m *mockUserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*service.User, error) {
+func (m *mockUserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
 	args := m.Called(ctx, userID, sessionID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*service.User), args.Error(1)
+	return args.Get(0).(*domain.User), args.Error(1)
 }
 
 func (m *mockUserService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
@@ -419,4 +419,104 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 
 	mockUserSvc.AssertExpectations(t)
 	mockWorkspaceSvc.AssertExpectations(t)
+}
+
+func TestUserHandler_RegisterRoutes(t *testing.T) {
+	// Generate a PASETO key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	// Test cases for different scenarios
+	testCases := []struct {
+		name            string
+		setupMocks      func(mockUserSvc *mockUserService, mockWorkspaceSvc *mockWorkspaceService)
+		testPath        string
+		expectedHandler bool
+	}{
+		{
+			name: "public routes",
+			setupMocks: func(mockUserSvc *mockUserService, mockWorkspaceSvc *mockWorkspaceService) {
+				// No need to set up AuthServiceInterface expectations
+				// because we're testing that these routes don't require auth
+			},
+			testPath:        "/api/user.signin",
+			expectedHandler: true,
+		},
+		{
+			name: "protected routes with auth service",
+			setupMocks: func(mockUserSvc *mockUserService, mockWorkspaceSvc *mockWorkspaceService) {
+				// Make mockUserService implement AuthServiceInterface
+				mockUserSvc.On("VerifyUserSession", mock.Anything, mock.Anything, mock.Anything).
+					Return(&domain.User{ID: "user1", Email: "test@example.com"}, nil)
+
+				// Mock GetUserByID which is called in GetCurrentUser
+				mockUserSvc.On("GetUserByID", mock.Anything, "user1").
+					Return(&domain.User{ID: "user1", Email: "test@example.com"}, nil)
+
+				// Mock ListWorkspaces which is also called in GetCurrentUser
+				mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, "user1").
+					Return([]*domain.Workspace{}, nil)
+			},
+			testPath:        "/api/user.me",
+			expectedHandler: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup new mock services for each test case to avoid interference
+			mockUserSvc := &mockUserService{}
+			mockWorkspaceSvc := &mockWorkspaceService{}
+
+			// Create a config with test values
+			cfg := &config.Config{
+				Security: config.SecurityConfig{
+					PasetoPublicKey: []byte("key"),
+				},
+			}
+
+			// Create the handler
+			handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, cfg, publicKey)
+
+			// Create a new HTTP multiplexer for each test case
+			mux := http.NewServeMux()
+
+			// Set up mocks for this test case
+			tc.setupMocks(mockUserSvc, mockWorkspaceSvc)
+
+			// Register routes
+			handler.RegisterRoutes(mux)
+
+			// Test server for this multiplexer
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			// Make a request to the test path
+			req, err := http.NewRequest("GET", server.URL+tc.testPath, nil)
+			require.NoError(t, err)
+
+			// For protected routes, we need to add a valid token
+			if tc.testPath == "/api/user.me" {
+				token := paseto.NewToken()
+				token.SetString("user_id", "user1")
+				token.SetString("session_id", "session1")
+				token.SetExpiration(time.Now().Add(time.Hour))
+
+				signedToken := token.V4Sign(secretKey, nil)
+				req.Header.Set("Authorization", "Bearer "+signedToken)
+			}
+
+			// Send the request
+			client := &http.Client{}
+			resp, err := client.Do(req)
+
+			// We don't care about the response content, just that a handler was registered
+			// and it didn't return 404 Not Found
+			if tc.expectedHandler {
+				require.NoError(t, err)
+				defer resp.Body.Close()
+				assert.NotEqual(t, http.StatusNotFound, resp.StatusCode)
+			}
+		})
+	}
 }
