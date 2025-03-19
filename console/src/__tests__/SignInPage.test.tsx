@@ -106,11 +106,7 @@ describe('SignInPage', () => {
 
     // Mock successful verify response
     vi.mocked(authService.authService.verifyCode).mockResolvedValueOnce({
-      token: 'fake-token',
-      user: {
-        email: 'test@example.com',
-        timezone: 'UTC'
-      }
+      token: 'fake-token'
     })
 
     render(

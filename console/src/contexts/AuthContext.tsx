@@ -24,38 +24,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing session
+    // Check for existing session on component mount
     checkAuth()
   }, [])
 
   const checkAuth = async () => {
+    // console.log('checkAuth')
     try {
-      // TODO: Implement actual session check
+      // Check if a token exists in localStorage
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        setLoading(false)
+        return
+      }
+
+      // Token exists, fetch current user data
+      const { user, workspaces } = await authService.getCurrentUser()
+      setUser(user)
+      setWorkspaces(workspaces)
       setLoading(false)
     } catch (error) {
+      // If there's an error (like an expired token), clear the storage
+      localStorage.removeItem('auth_token')
+      setUser(null)
+      setWorkspaces([])
       setLoading(false)
     }
   }
 
   const signin = async (token: string) => {
+    // console.log('signin')
     try {
-      // TODO: Implement actual signin
-      const currentUserResponse = await authService.getCurrentUser()
-      const { user, workspaces } = currentUserResponse
-      // Mock user for now
+      // Store token in localStorage for persistence
+      localStorage.setItem('auth_token', token)
+
+      // Fetch current user data using the token
+      const { user, workspaces } = await authService.getCurrentUser()
       setUser(user)
-      // Mock workspaces fetch
       setWorkspaces(workspaces)
     } catch (error) {
+      // If there's an error, clear the storage
+      localStorage.removeItem('auth_token')
       throw error
     }
   }
 
   const signout = async () => {
-    // TODO: Implement actual signout
+    // Remove token from localStorage
+    localStorage.removeItem('auth_token')
+
+    // Clear user data
     setUser(null)
     setWorkspaces([])
   }
+
+  // console.log('user', user)
 
   return (
     <AuthContext.Provider

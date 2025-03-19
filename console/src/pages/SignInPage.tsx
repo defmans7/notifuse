@@ -1,4 +1,4 @@
-import { Form, Input, Button, Card, message, Space } from 'antd'
+import { Form, Input, Button, Card, App, Space } from 'antd'
 import { MailOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
@@ -13,6 +13,7 @@ export function SignInPage() {
   const [showCodeInput, setShowCodeInput] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
+  const { message } = App.useApp()
 
   const handleEmailSubmit = async (values: SignInRequest) => {
     try {

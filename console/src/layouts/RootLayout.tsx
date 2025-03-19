@@ -14,12 +14,14 @@ export function RootLayout() {
 
   const isPublicRoute = isSigninRoute || isAcceptInvitationRoute || isLogoutRoute
   // If not authenticated and not on public routes, redirect to signin
-  const shouldRedirectToSignin = !isSigninRoute && !isAuthenticated && !isPublicRoute
+  const shouldRedirectToSignin =
+    !isLogoutRoute && !isSigninRoute && !isAuthenticated && !isPublicRoute
 
   // If authenticated and has no workspaces, redirect to workspace creation
   const shouldRedirectToCreateWorkspace =
-    isAuthenticated && workspaces.length === 0 && !isWorkspaceCreateRoute
+    isAuthenticated && workspaces.length === 0 && !isWorkspaceCreateRoute && !isLogoutRoute
 
+  // console.log('isAuthenticated', isAuthenticated)
   // handle redirection...
   useEffect(() => {
     if (loading) return
@@ -40,11 +42,10 @@ export function RootLayout() {
       <div
         style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}
       >
-        <Spin size="large" />
+        <Spin size="large" tip="Signing out..." fullscreen />
       </div>
     )
   }
 
-  console.log('Rendering RootLayout')
   return <Outlet />
 }
