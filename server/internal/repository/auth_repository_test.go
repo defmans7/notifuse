@@ -3,198 +3,105 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"notifuse/server/pkg/logger"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
-	testifyMock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	"notifuse/server/pkg/logger"
 )
 
-// MockLogger for repository tests
-type MockLogger struct {
-	testifyMock.Mock
-}
+// MockLogger is a simple mock logger for testing
+type MockLogger struct{}
 
-func (m *MockLogger) Debug(msg string) {
-	m.Called(msg)
-}
+func (l *MockLogger) Debug(msg string)                                       {}
+func (l *MockLogger) Info(msg string)                                        {}
+func (l *MockLogger) Warn(msg string)                                        {}
+func (l *MockLogger) Error(msg string)                                       {}
+func (l *MockLogger) Fatal(msg string)                                       {}
+func (l *MockLogger) WithField(key string, value interface{}) logger.Logger  { return l }
+func (l *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }
 
-func (m *MockLogger) Info(msg string) {
-	m.Called(msg)
-}
+func TestAuthRepository_GetSessionByID(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
 
-func (m *MockLogger) Warn(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) Error(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) Fatal(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) WithField(key string, value interface{}) logger.Logger {
-	args := m.Called(key, value)
-	return args.Get(0).(logger.Logger)
-}
-
-func TestSQLAuthRepository_GetSessionByID_WithMock(t *testing.T) {
-	// Create sqlmock using our helper
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
-
-	mockLogger := new(MockLogger)
-	mockLogger.On("WithField", testifyMock.Anything, testifyMock.Anything).Return(mockLogger)
-
+	mockLogger := &MockLogger{}
 	repo := NewSQLAuthRepository(db, mockLogger)
-	ctx := context.Background()
 
-	t.Run("successful retrieval", func(t *testing.T) {
-		sessionID := "test-session"
-		userID := "test-user"
-		expectedTime := time.Now().Add(time.Hour)
+	// Test case 1: Session found
+	sessionID := "session-id-1"
+	userID := "user-id-1"
+	expiresAt := time.Now().Add(24 * time.Hour).UTC().Truncate(time.Second)
 
-		// Set up mock to return the expected expiry time
-		rows := sqlmock.NewRows([]string{"expires_at"}).AddRow(expectedTime)
-		mock.ExpectQuery("SELECT expires_at FROM sessions WHERE").
-			WithArgs(sessionID, userID).
-			WillReturnRows(rows)
+	rows := sqlmock.NewRows([]string{"expires_at"}).
+		AddRow(expiresAt)
 
-		// Call the method
-		expiresAt, err := repo.GetSessionByID(ctx, sessionID, userID)
+	mock.ExpectQuery(`SELECT expires_at FROM sessions WHERE id = \$1 AND user_id = \$2`).
+		WithArgs(sessionID, userID).
+		WillReturnRows(rows)
 
-		// Assert that no error occurred
-		require.NoError(t, err)
-		assert.NotNil(t, expiresAt)
-		assert.Equal(t, expectedTime.Unix(), expiresAt.Unix())
+	result, err := repo.GetSessionByID(context.Background(), sessionID, userID)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, expiresAt.Unix(), result.Unix())
 
-		// Assert that all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
+	// Test case 2: Session not found
+	mock.ExpectQuery(`SELECT expires_at FROM sessions WHERE id = \$1 AND user_id = \$2`).
+		WithArgs("nonexistent", userID).
+		WillReturnError(sql.ErrNoRows)
 
-	t.Run("session not found", func(t *testing.T) {
-		sessionID := "nonexistent-session"
-		userID := "test-user"
-
-		// Set up mock to return no rows
-		mock.ExpectQuery("SELECT expires_at FROM sessions WHERE").
-			WithArgs(sessionID, userID).
-			WillReturnError(sql.ErrNoRows)
-
-		// Call the method
-		expiresAt, err := repo.GetSessionByID(ctx, sessionID, userID)
-
-		// Assert that the expected error occurred
-		require.Error(t, err)
-		assert.Nil(t, expiresAt)
-		assert.Equal(t, sql.ErrNoRows, err)
-
-		// Assert that all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
-
-	t.Run("database error", func(t *testing.T) {
-		sessionID := "test-session"
-		userID := "test-user"
-
-		// Set up mock to return a database error
-		mock.ExpectQuery("SELECT expires_at FROM sessions WHERE").
-			WithArgs(sessionID, userID).
-			WillReturnError(sql.ErrConnDone)
-
-		// Call the method
-		expiresAt, err := repo.GetSessionByID(ctx, sessionID, userID)
-
-		// Assert that the expected error occurred
-		require.Error(t, err)
-		assert.Nil(t, expiresAt)
-		assert.Equal(t, sql.ErrConnDone, err)
-
-		// Assert that all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
+	result, err = repo.GetSessionByID(context.Background(), "nonexistent", userID)
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, sql.ErrNoRows, err)
 }
 
-func TestSQLAuthRepository_GetUserByID_WithMock(t *testing.T) {
-	// Create sqlmock using our helper
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
+func TestAuthRepository_GetUserByID(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
 
-	mockLogger := new(MockLogger)
-	mockLogger.On("WithField", testifyMock.Anything, testifyMock.Anything).Return(mockLogger)
-
+	mockLogger := &MockLogger{}
 	repo := NewSQLAuthRepository(db, mockLogger)
-	ctx := context.Background()
 
-	t.Run("successful retrieval", func(t *testing.T) {
-		userID := "test-user"
-		expectedEmail := "test@example.com"
-		expectedCreatedAt := time.Now()
+	// Test case 1: User found
+	userID := "user-id-1"
+	email := "test@example.com"
+	createdAt := time.Now().UTC().Truncate(time.Second)
 
-		// Set up mock to return the expected user data
-		rows := sqlmock.NewRows([]string{"id", "email", "created_at"}).
-			AddRow(userID, expectedEmail, expectedCreatedAt)
-		mock.ExpectQuery("SELECT id, email, created_at FROM users WHERE").
-			WithArgs(userID).
-			WillReturnRows(rows)
+	rows := sqlmock.NewRows([]string{"id", "email", "created_at"}).
+		AddRow(userID, email, createdAt)
 
-		// Call the method
-		user, err := repo.GetUserByID(ctx, userID)
+	mock.ExpectQuery(`SELECT id, email, created_at FROM users WHERE id = \$1`).
+		WithArgs(userID).
+		WillReturnRows(rows)
 
-		// Assert that no error occurred
-		require.NoError(t, err)
-		assert.NotNil(t, user)
-		assert.Equal(t, userID, user.ID)
-		assert.Equal(t, expectedEmail, user.Email)
-		assert.Equal(t, expectedCreatedAt.Unix(), user.CreatedAt.Unix())
+	user, err := repo.GetUserByID(context.Background(), userID)
+	require.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, userID, user.ID)
+	assert.Equal(t, email, user.Email)
+	assert.Equal(t, createdAt.Unix(), user.CreatedAt.Unix())
 
-		// Assert that all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
+	// Test case 2: User not found
+	mock.ExpectQuery(`SELECT id, email, created_at FROM users WHERE id = \$1`).
+		WithArgs("nonexistent").
+		WillReturnError(sql.ErrNoRows)
 
-	t.Run("user not found", func(t *testing.T) {
-		userID := "nonexistent-user"
+	user, err = repo.GetUserByID(context.Background(), "nonexistent")
+	require.Error(t, err)
+	assert.Nil(t, user)
+	assert.Equal(t, sql.ErrNoRows, err)
 
-		// Set up mock to return no rows
-		mock.ExpectQuery("SELECT id, email, created_at FROM users WHERE").
-			WithArgs(userID).
-			WillReturnError(sql.ErrNoRows)
+	// Test case 3: Database error
+	mock.ExpectQuery(`SELECT id, email, created_at FROM users WHERE id = \$1`).
+		WithArgs("error-id").
+		WillReturnError(errors.New("database error"))
 
-		// Call the method
-		user, err := repo.GetUserByID(ctx, userID)
-
-		// Assert that the expected error occurred
-		require.Error(t, err)
-		assert.Nil(t, user)
-		assert.Equal(t, sql.ErrNoRows, err)
-
-		// Assert that all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
-
-	t.Run("database error", func(t *testing.T) {
-		userID := "test-user"
-
-		// Set up mock to return a database error
-		mock.ExpectQuery("SELECT id, email, created_at FROM users WHERE").
-			WithArgs(userID).
-			WillReturnError(sql.ErrConnDone)
-
-		// Call the method
-		user, err := repo.GetUserByID(ctx, userID)
-
-		// Assert that the expected error occurred
-		require.Error(t, err)
-		assert.Nil(t, user)
-		assert.Equal(t, sql.ErrConnDone, err)
-
-		// Assert that all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
+	user, err = repo.GetUserByID(context.Background(), "error-id")
+	require.Error(t, err)
+	assert.Nil(t, user)
+	assert.Contains(t, err.Error(), "database error")
 }

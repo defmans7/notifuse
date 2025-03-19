@@ -10,7 +10,7 @@ import (
 
 // SetupMockDB creates a new mock database and returns the db, mock, and a cleanup function
 func SetupMockDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, func()) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err, "Failed to create mock database")
 
 	cleanup := func() {

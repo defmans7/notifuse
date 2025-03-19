@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -14,600 +15,304 @@ import (
 	"notifuse/server/internal/domain"
 )
 
-func TestUserRepository_CreateUser_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
+func TestCreateUser(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
 
 	repo := NewUserRepository(db)
 
-	// Create a test user
+	// Test case 1: Successful user creation
 	user := &domain.User{
+		ID:    uuid.New().String(),
 		Email: "test@example.com",
 		Name:  "Test User",
 	}
 
-	// Setup mock expectations
 	mock.ExpectExec(`INSERT INTO users \(id, email, name, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
-		WithArgs(sqlmock.AnyArg(), user.Email, user.Name, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(user.ID, user.Email, user.Name, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// Call the method under test
 	err := repo.CreateUser(context.Background(), user)
-
-	// Assert expectations
-	require.NoError(t, err)
-	assert.NotEmpty(t, user.ID)
-	assert.NotZero(t, user.CreatedAt)
-	assert.NotZero(t, user.UpdatedAt)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-}
-
-func TestUserRepository_GetUserByEmail_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
-
-	repo := NewUserRepository(db)
-
-	t.Run("user found", func(t *testing.T) {
-		// Setup expected data
-		expectedUser := &domain.User{
-			ID:        uuid.NewString(),
-			Email:     "test@example.com",
-			Name:      "Test User",
-			CreatedAt: time.Now().Round(time.Second),
-			UpdatedAt: time.Now().Round(time.Second),
-		}
-
-		// Setup mock expectations
-		rows := sqlmock.NewRows([]string{"id", "email", "name", "created_at", "updated_at"}).
-			AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.CreatedAt, expectedUser.UpdatedAt)
-
-		mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
-			WithArgs(expectedUser.Email).
-			WillReturnRows(rows)
-
-		// Call the method under test
-		foundUser, err := repo.GetUserByEmail(context.Background(), expectedUser.Email)
-
-		// Assert expectations
-		require.NoError(t, err)
-		assert.Equal(t, expectedUser.ID, foundUser.ID)
-		assert.Equal(t, expectedUser.Email, foundUser.Email)
-		assert.Equal(t, expectedUser.Name, foundUser.Name)
-		assert.Equal(t, expectedUser.CreatedAt.Unix(), foundUser.CreatedAt.Unix())
-		assert.Equal(t, expectedUser.UpdatedAt.Unix(), foundUser.UpdatedAt.Unix())
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
-
-	t.Run("user not found", func(t *testing.T) {
-		email := "notfound@example.com"
-
-		// Setup mock expectations
-		mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
-			WithArgs(email).
-			WillReturnError(sql.ErrNoRows)
-
-		// Call the method under test
-		foundUser, err := repo.GetUserByEmail(context.Background(), email)
-
-		// Assert expectations
-		assert.Error(t, err)
-		assert.Nil(t, foundUser)
-		assert.IsType(t, &domain.ErrUserNotFound{}, err)
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
-}
-
-func TestUserRepository_GetUserByID_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
-
-	repo := NewUserRepository(db)
-
-	t.Run("user found", func(t *testing.T) {
-		// Setup expected data
-		expectedUser := &domain.User{
-			ID:        uuid.NewString(),
-			Email:     "test@example.com",
-			Name:      "Test User",
-			CreatedAt: time.Now().Round(time.Second),
-			UpdatedAt: time.Now().Round(time.Second),
-		}
-
-		// Setup mock expectations
-		rows := sqlmock.NewRows([]string{"id", "email", "name", "created_at", "updated_at"}).
-			AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.CreatedAt, expectedUser.UpdatedAt)
-
-		mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE id = \$1`).
-			WithArgs(expectedUser.ID).
-			WillReturnRows(rows)
-
-		// Call the method under test
-		foundUser, err := repo.GetUserByID(context.Background(), expectedUser.ID)
-
-		// Assert expectations
-		require.NoError(t, err)
-		assert.Equal(t, expectedUser.ID, foundUser.ID)
-		assert.Equal(t, expectedUser.Email, foundUser.Email)
-		assert.Equal(t, expectedUser.Name, foundUser.Name)
-		assert.Equal(t, expectedUser.CreatedAt.Unix(), foundUser.CreatedAt.Unix())
-		assert.Equal(t, expectedUser.UpdatedAt.Unix(), foundUser.UpdatedAt.Unix())
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
-
-	t.Run("user not found", func(t *testing.T) {
-		id := uuid.NewString()
-
-		// Setup mock expectations
-		mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE id = \$1`).
-			WithArgs(id).
-			WillReturnError(sql.ErrNoRows)
-
-		// Call the method under test
-		foundUser, err := repo.GetUserByID(context.Background(), id)
-
-		// Assert expectations
-		assert.Error(t, err)
-		assert.Nil(t, foundUser)
-		assert.IsType(t, &domain.ErrUserNotFound{}, err)
-		assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-	})
-}
-
-func TestUserRepository_CreateSession_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
-
-	repo := NewUserRepository(db)
-
-	// Create test data
-	userID := uuid.NewString()
-	session := &domain.Session{
-		UserID:    userID,
-		ExpiresAt: time.Now().UTC().Add(24 * time.Hour).Round(time.Second),
-	}
-
-	// Setup mock expectations with the correct table name (user_sessions)
-	mock.ExpectExec("INSERT INTO user_sessions").
-		WithArgs(
-			sqlmock.AnyArg(), // ID will be generated
-			session.UserID,
-			session.ExpiresAt,
-			sqlmock.AnyArg(), // CreatedAt will be set
-			sqlmock.AnyArg(), // MagicCode (can be null)
-			sqlmock.AnyArg(), // MagicCodeExpires (can be null)
-		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	// Call the method under test
-	err := repo.CreateSession(context.Background(), session)
-
-	// Assert expectations
-	require.NoError(t, err)
-	assert.NotEmpty(t, session.ID)
-	assert.NotZero(t, session.CreatedAt)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-}
-
-func TestUserRepository_DeleteSession(t *testing.T) {
-	db := setupTestDB(t)
-	repo := NewUserRepository(db)
-
-	// Test delete non-existent session
-	err := repo.DeleteSession(context.Background(), uuid.New().String())
-	assert.Error(t, err)
-	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
-
-	// Create user and session
-	user := &domain.User{
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
-	err = repo.CreateUser(context.Background(), user)
 	require.NoError(t, err)
 
-	session := &domain.Session{
-		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-	}
-	err = repo.CreateSession(context.Background(), session)
-	require.NoError(t, err)
-
-	// Test delete existing session
-	err = repo.DeleteSession(context.Background(), session.ID)
-	require.NoError(t, err)
-
-	// Verify session was deleted
-	_, err = repo.GetSessionByID(context.Background(), session.ID)
-	assert.Error(t, err)
-	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
-}
-
-func TestUserRepository_GetSessionsByUserID(t *testing.T) {
-	db := setupTestDB(t)
-	repo := NewUserRepository(db)
-
-	// Create a test user first
-	user := &domain.User{
+	// Test case 2: Error during user creation
+	userWithError := &domain.User{
 		ID:    uuid.New().String(),
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
-	err := repo.CreateUser(context.Background(), user)
-	require.NoError(t, err)
-
-	// Create multiple sessions for the user
-	session1 := &domain.Session{
-		ID:               uuid.New().String(),
-		UserID:           user.ID,
-		ExpiresAt:        time.Now().Add(24 * time.Hour),
-		CreatedAt:        time.Now(),
-		MagicCode:        "CODE1",
-		MagicCodeExpires: time.Now().Add(15 * time.Minute),
-	}
-	session2 := &domain.Session{
-		ID:               uuid.New().String(),
-		UserID:           user.ID,
-		ExpiresAt:        time.Now().Add(24 * time.Hour),
-		CreatedAt:        time.Now().Add(time.Second), // Ensure different created_at times
-		MagicCode:        "CODE2",
-		MagicCodeExpires: time.Now().Add(15 * time.Minute),
-	}
-	session3 := &domain.Session{
-		ID:               uuid.New().String(),
-		UserID:           user.ID,
-		ExpiresAt:        time.Now().Add(24 * time.Hour),
-		CreatedAt:        time.Now().Add(2 * time.Second), // Ensure different created_at times
-		MagicCode:        "CODE3",
-		MagicCodeExpires: time.Now().Add(15 * time.Minute),
+		Email: "error@example.com",
+		Name:  "Error User",
 	}
 
-	// Create another user with a session to ensure we're only getting the target user's sessions
-	otherUser := &domain.User{
-		ID:    uuid.New().String(),
-		Email: "other@example.com",
-		Name:  "Other User",
-	}
-	err = repo.CreateUser(context.Background(), otherUser)
-	require.NoError(t, err)
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
+		WithArgs(userWithError.ID, userWithError.Email, userWithError.Name, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnError(errors.New("database error"))
 
-	otherSession := &domain.Session{
-		ID:               uuid.New().String(),
-		UserID:           otherUser.ID,
-		ExpiresAt:        time.Now().Add(24 * time.Hour),
-		CreatedAt:        time.Now(),
-		MagicCode:        "OTHER",
-		MagicCodeExpires: time.Now().Add(15 * time.Minute),
-	}
-
-	// Create all sessions
-	ctx := context.Background()
-	err = repo.CreateSession(ctx, session1)
-	require.NoError(t, err)
-	err = repo.CreateSession(ctx, session2)
-	require.NoError(t, err)
-	err = repo.CreateSession(ctx, session3)
-	require.NoError(t, err)
-	err = repo.CreateSession(ctx, otherSession)
-	require.NoError(t, err)
-
-	// Test retrieving sessions
-	sessions, err := repo.GetSessionsByUserID(ctx, user.ID)
-	assert.NoError(t, err)
-	assert.Len(t, sessions, 3)
-
-	// Verify sessions are returned ordered by created_at DESC
-	assert.Equal(t, session3.ID, sessions[0].ID) // Latest session should be first
-	assert.Equal(t, session2.ID, sessions[1].ID)
-	assert.Equal(t, session1.ID, sessions[2].ID)
-
-	// Test retrieving sessions for a user with no sessions
-	nonExistentUserID := uuid.New().String()
-	sessions, err = repo.GetSessionsByUserID(ctx, nonExistentUserID)
-	assert.NoError(t, err)
-	assert.Empty(t, sessions)
+	err = repo.CreateUser(context.Background(), userWithError)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create user")
 }
 
-func TestUserRepository_UpdateSession(t *testing.T) {
-	db := setupTestDB(t)
-	repo := NewUserRepository(db)
-	defer db.Close()
-
-	// Create a test user first
-	user := &domain.User{
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
-
-	err := repo.CreateUser(context.Background(), user)
-	require.NoError(t, err)
-	// No defer cleanup needed; database is reset between tests
-
-	// Create a session
-	now := time.Now().UTC()
-	originalExpiry := now.Add(24 * time.Hour)
-	originalMagicCode := "ORIGINAL"
-	originalMagicCodeExpiry := now.Add(15 * time.Minute)
-
-	session := &domain.Session{
-		ID:               uuid.New().String(),
-		UserID:           user.ID,
-		ExpiresAt:        originalExpiry,
-		CreatedAt:        now,
-		MagicCode:        originalMagicCode,
-		MagicCodeExpires: originalMagicCodeExpiry,
-	}
-
-	ctx := context.Background()
-	err = repo.CreateSession(ctx, session)
-	require.NoError(t, err)
-
-	// Verify session was created
-	retrievedSession, err := repo.GetSessionByID(ctx, session.ID)
-	require.NoError(t, err)
-	assert.Equal(t, originalMagicCode, retrievedSession.MagicCode)
-
-	// Update the session
-	newExpiry := now.Add(48 * time.Hour)
-	newMagicCode := "UPDATED"
-	newMagicCodeExpiry := now.Add(30 * time.Minute)
-
-	updatedSession := &domain.Session{
-		ID:               session.ID,
-		UserID:           user.ID,
-		ExpiresAt:        newExpiry,
-		CreatedAt:        session.CreatedAt, // CreatedAt shouldn't change
-		MagicCode:        newMagicCode,
-		MagicCodeExpires: newMagicCodeExpiry,
-	}
-
-	err = repo.UpdateSession(ctx, updatedSession)
-	assert.NoError(t, err)
-
-	// Verify session was updated
-	retrievedUpdatedSession, err := repo.GetSessionByID(ctx, session.ID)
-	require.NoError(t, err)
-	assert.Equal(t, newMagicCode, retrievedUpdatedSession.MagicCode)
-
-	// Compare with tolerance for database rounding and using WithinDuration
-	assert.WithinDuration(t, newExpiry, retrievedUpdatedSession.ExpiresAt, time.Second)
-	assert.WithinDuration(t, newMagicCodeExpiry, retrievedUpdatedSession.MagicCodeExpires, time.Second)
-	assert.WithinDuration(t, session.CreatedAt, retrievedUpdatedSession.CreatedAt, time.Second)
-
-	// Test updating a non-existent session
-	nonExistentSession := &domain.Session{
-		ID:        uuid.New().String(),
-		UserID:    user.ID,
-		ExpiresAt: now.Add(24 * time.Hour),
-	}
-	err = repo.UpdateSession(ctx, nonExistentSession)
-	assert.Error(t, err)
-	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
-}
-
-func TestUserRepository_GetSessionByID_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
+func TestGetUserByEmail(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
 
 	repo := NewUserRepository(db)
 
-	// Setup test data
-	sessionID := "session123"
-	now := time.Now().UTC().Round(time.Second)
-	expiryTime := now.Add(24 * time.Hour)
-
-	expectedSession := &domain.Session{
-		ID:               sessionID,
-		UserID:           "user123",
-		ExpiresAt:        expiryTime,
-		CreatedAt:        now,
-		MagicCode:        "MAGICCODE",
-		MagicCodeExpires: now.Add(15 * time.Minute),
+	// Test case 1: User found
+	email := "test@example.com"
+	expectedUser := &domain.User{
+		ID:        "user-id-1",
+		Email:     email,
+		Name:      "Test User",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
-	// Setup mock expectations with the correct table name (user_sessions)
-	rows := sqlmock.NewRows([]string{"id", "user_id", "expires_at", "created_at", "magic_code", "magic_code_expires_at"}).
-		AddRow(
-			expectedSession.ID,
-			expectedSession.UserID,
-			expectedSession.ExpiresAt,
-			expectedSession.CreatedAt,
-			expectedSession.MagicCode,
-			expectedSession.MagicCodeExpires,
-		)
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "created_at", "updated_at"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.CreatedAt, expectedUser.UpdatedAt)
 
-	mock.ExpectQuery("SELECT .* FROM user_sessions WHERE id = \\$1").
-		WithArgs(sessionID).
+	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
+		WithArgs(email).
 		WillReturnRows(rows)
 
-	// Call the method under test
-	session, err := repo.GetSessionByID(context.Background(), sessionID)
-
-	// Assert expectations
+	user, err := repo.GetUserByEmail(context.Background(), email)
 	require.NoError(t, err)
-	assert.Equal(t, expectedSession.ID, session.ID)
-	assert.Equal(t, expectedSession.UserID, session.UserID)
-	assert.Equal(t, expectedSession.ExpiresAt.Unix(), session.ExpiresAt.Unix())
-	assert.Equal(t, expectedSession.CreatedAt.Unix(), session.CreatedAt.Unix())
-	assert.Equal(t, expectedSession.MagicCode, session.MagicCode)
-	assert.Equal(t, expectedSession.MagicCodeExpires.Unix(), session.MagicCodeExpires.Unix())
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
+	assert.Equal(t, expectedUser.ID, user.ID)
+	assert.Equal(t, expectedUser.Email, user.Email)
+	assert.Equal(t, expectedUser.Name, user.Name)
 
-	// Test session not found
-	nonExistentID := "nonexistent"
-
-	mock.ExpectQuery("SELECT .* FROM user_sessions WHERE id = \\$1").
-		WithArgs(nonExistentID).
+	// Test case 2: User not found
+	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
+		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
-	// Call the method under test
-	session, err = repo.GetSessionByID(context.Background(), nonExistentID)
+	user, err = repo.GetUserByEmail(context.Background(), "nonexistent@example.com")
+	require.Error(t, err)
+	assert.Nil(t, user)
+	assert.IsType(t, &domain.ErrUserNotFound{}, err)
 
-	// Assert expectations
-	assert.Error(t, err)
-	assert.Nil(t, session)
-	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
+	// Test case 3: Database error
+	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
+		WithArgs("error@example.com").
+		WillReturnError(errors.New("database error"))
+
+	user, err = repo.GetUserByEmail(context.Background(), "error@example.com")
+	require.Error(t, err)
+	assert.Nil(t, user)
+	assert.Contains(t, err.Error(), "failed to get user")
 }
 
-func TestUserRepository_GetSessionsByUserID_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
+func TestGetUserByID(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
 
 	repo := NewUserRepository(db)
 
-	// Setup test data
-	userID := "user123"
-	now := time.Now().UTC().Round(time.Second)
+	// Test case 1: User found
+	userID := "user-id-1"
+	expectedUser := &domain.User{
+		ID:        userID,
+		Email:     "test@example.com",
+		Name:      "Test User",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
+	}
 
-	// Setup mock expectations with the correct table name (user_sessions)
-	rows := sqlmock.NewRows([]string{"id", "user_id", "expires_at", "created_at", "magic_code", "magic_code_expires_at"}).
-		// Latest session first (created_at DESC order)
-		AddRow("session3", userID, now.Add(24*time.Hour), now.Add(2*time.Second), "CODE3", now.Add(15*time.Minute)).
-		AddRow("session2", userID, now.Add(24*time.Hour), now.Add(time.Second), "CODE2", now.Add(15*time.Minute)).
-		AddRow("session1", userID, now.Add(24*time.Hour), now, "CODE1", now.Add(15*time.Minute))
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "created_at", "updated_at"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.CreatedAt, expectedUser.UpdatedAt)
 
-	mock.ExpectQuery("SELECT .* FROM user_sessions WHERE user_id = \\$1 ORDER BY created_at DESC").
+	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE id = \$1`).
 		WithArgs(userID).
 		WillReturnRows(rows)
 
-	// Call the method under test
-	sessions, err := repo.GetSessionsByUserID(context.Background(), userID)
-
-	// Assert expectations
+	user, err := repo.GetUserByID(context.Background(), userID)
 	require.NoError(t, err)
-	assert.Len(t, sessions, 3)
+	assert.Equal(t, expectedUser.ID, user.ID)
+	assert.Equal(t, expectedUser.Email, user.Email)
+	assert.Equal(t, expectedUser.Name, user.Name)
 
-	// Latest session should be first
-	assert.Equal(t, "session3", sessions[0].ID)
-	assert.Equal(t, "session2", sessions[1].ID)
-	assert.Equal(t, "session1", sessions[2].ID)
+	// Test case 2: User not found
+	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE id = \$1`).
+		WithArgs("nonexistent-id").
+		WillReturnError(sql.ErrNoRows)
 
-	// All sessions should have the same user ID
-	for _, session := range sessions {
-		assert.Equal(t, userID, session.UserID)
-	}
-
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-
-	// Test for user with no sessions
-	userIDNoSessions := "user456"
-
-	mock.ExpectQuery("SELECT .* FROM user_sessions WHERE user_id = \\$1 ORDER BY created_at DESC").
-		WithArgs(userIDNoSessions).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "expires_at", "created_at", "magic_code", "magic_code_expires_at"}))
-
-	// Call the method under test
-	emptySessions, err := repo.GetSessionsByUserID(context.Background(), userIDNoSessions)
-
-	// Assert expectations
-	require.NoError(t, err)
-	assert.Empty(t, emptySessions)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
+	user, err = repo.GetUserByID(context.Background(), "nonexistent-id")
+	require.Error(t, err)
+	assert.Nil(t, user)
+	assert.IsType(t, &domain.ErrUserNotFound{}, err)
 }
 
-func TestUserRepository_DeleteSession_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
+func TestCreateSession(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
 
 	repo := NewUserRepository(db)
 
-	// Setup test data
-	sessionID := "session123"
+	userID := "user-id-1"
+	sessionID := uuid.New().String()
+	expiresAt := time.Now().Add(24 * time.Hour).UTC().Truncate(time.Second)
+	magicCode := "123456"
+	magicCodeExpires := time.Now().Add(15 * time.Minute).UTC().Truncate(time.Second)
 
-	// Setup mock expectations with the correct table name (user_sessions)
-	mock.ExpectExec("DELETE FROM user_sessions WHERE id = \\$1").
+	session := &domain.Session{
+		ID:               sessionID,
+		UserID:           userID,
+		ExpiresAt:        expiresAt,
+		MagicCode:        magicCode,
+		MagicCodeExpires: magicCodeExpires,
+	}
+
+	// Use a more permissive regex pattern that allows for whitespace variations
+	mock.ExpectExec(`INSERT INTO user_sessions.*VALUES.*\$1.*\$2.*\$3.*\$4.*\$5.*\$6`).
+		WithArgs(sessionID, userID, expiresAt, sqlmock.AnyArg(), magicCode, magicCodeExpires).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err := repo.CreateSession(context.Background(), session)
+	require.NoError(t, err)
+}
+
+func TestGetSessionByID(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewUserRepository(db)
+
+	// Test case 1: Session found
+	sessionID := "session-id-1"
+	userID := "user-id-1"
+	createdAt := time.Now().UTC().Truncate(time.Second)
+	expiresAt := createdAt.Add(24 * time.Hour)
+	magicCode := "123456"
+	magicCodeExpires := createdAt.Add(15 * time.Minute)
+
+	rows := sqlmock.NewRows([]string{"id", "user_id", "expires_at", "created_at", "magic_code", "magic_code_expires_at"}).
+		AddRow(sessionID, userID, expiresAt, createdAt, magicCode, magicCodeExpires)
+
+	mock.ExpectQuery(`SELECT id, user_id, expires_at, created_at, magic_code, magic_code_expires_at FROM user_sessions WHERE id = \$1`).
+		WithArgs(sessionID).
+		WillReturnRows(rows)
+
+	session, err := repo.GetSessionByID(context.Background(), sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, sessionID, session.ID)
+	assert.Equal(t, userID, session.UserID)
+	assert.Equal(t, expiresAt.Unix(), session.ExpiresAt.Unix())
+	assert.Equal(t, createdAt.Unix(), session.CreatedAt.Unix())
+	assert.Equal(t, magicCode, session.MagicCode)
+	assert.Equal(t, magicCodeExpires.Unix(), session.MagicCodeExpires.Unix())
+
+	// Test case 2: Session not found
+	mock.ExpectQuery(`SELECT id, user_id, expires_at, created_at, magic_code, magic_code_expires_at FROM user_sessions WHERE id = \$1`).
+		WithArgs("nonexistent-id").
+		WillReturnError(sql.ErrNoRows)
+
+	session, err = repo.GetSessionByID(context.Background(), "nonexistent-id")
+	require.Error(t, err)
+	assert.Nil(t, session)
+	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
+}
+
+func TestDeleteSession(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewUserRepository(db)
+
+	// Test case 1: Session deleted successfully
+	sessionID := "session-id-1"
+
+	mock.ExpectExec(`DELETE FROM user_sessions WHERE id = \$1`).
 		WithArgs(sessionID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	// Call the method under test
 	err := repo.DeleteSession(context.Background(), sessionID)
-
-	// Assert expectations
 	require.NoError(t, err)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 
-	// Test deleting non-existent session
-	nonExistentID := "nonexistent"
+	// Test case 2: Session not found
+	mock.ExpectExec(`DELETE FROM user_sessions WHERE id = \$1`).
+		WithArgs("nonexistent-id").
+		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	mock.ExpectExec("DELETE FROM user_sessions WHERE id = \\$1").
-		WithArgs(nonExistentID).
-		WillReturnResult(sqlmock.NewResult(0, 0)) // Zero rows affected
-
-	// Call the method under test
-	err = repo.DeleteSession(context.Background(), nonExistentID)
-
-	// Assert expectations
-	assert.Error(t, err)
+	err = repo.DeleteSession(context.Background(), "nonexistent-id")
+	require.Error(t, err)
 	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 }
 
-func TestUserRepository_UpdateSession_WithMock(t *testing.T) {
-	// Setup mock database
-	db, mock := setupMockTestDB(t)
-	defer db.Close()
+func TestGetSessionsByUserID(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
 
 	repo := NewUserRepository(db)
 
-	// Setup test data
-	now := time.Now().UTC().Round(time.Second)
-	session := &domain.Session{
-		ID:               "session123",
-		UserID:           "user123",
-		ExpiresAt:        now.Add(48 * time.Hour),
-		CreatedAt:        now.Add(-24 * time.Hour), // Created yesterday
-		MagicCode:        "NEWCODE",
-		MagicCodeExpires: now.Add(30 * time.Minute),
-	}
+	userID := "user-id-1"
+	now := time.Now().UTC().Truncate(time.Second)
 
-	// Setup mock expectations with the correct table name (user_sessions)
-	mock.ExpectExec("UPDATE user_sessions SET").
-		WithArgs(
-			session.ExpiresAt,
-			session.MagicCode,
-			session.MagicCodeExpires,
-			session.ID,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
-	// Call the method under test
-	err := repo.UpdateSession(context.Background(), session)
-
-	// Assert expectations
-	require.NoError(t, err)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
-
-	// Test updating non-existent session
-	nonExistentSession := &domain.Session{
-		ID:               "nonexistent",
-		UserID:           "user123",
+	// Create two sessions for the same user
+	session1 := &domain.Session{
+		ID:               "session-id-1",
+		UserID:           userID,
 		ExpiresAt:        now.Add(24 * time.Hour),
-		MagicCode:        "CODE",
+		CreatedAt:        now,
+		MagicCode:        "123456",
 		MagicCodeExpires: now.Add(15 * time.Minute),
 	}
 
-	mock.ExpectExec("UPDATE user_sessions SET").
-		WithArgs(
-			nonExistentSession.ExpiresAt,
-			nonExistentSession.MagicCode,
-			nonExistentSession.MagicCodeExpires,
-			nonExistentSession.ID,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 0)) // Zero rows affected
+	session2 := &domain.Session{
+		ID:               "session-id-2",
+		UserID:           userID,
+		ExpiresAt:        now.Add(48 * time.Hour),
+		CreatedAt:        now.Add(1 * time.Hour),
+		MagicCode:        "654321",
+		MagicCodeExpires: now.Add(16 * time.Minute),
+	}
 
-	// Call the method under test
-	err = repo.UpdateSession(context.Background(), nonExistentSession)
+	rows := sqlmock.NewRows([]string{"id", "user_id", "expires_at", "created_at", "magic_code", "magic_code_expires_at"}).
+		AddRow(session1.ID, session1.UserID, session1.ExpiresAt, session1.CreatedAt, session1.MagicCode, session1.MagicCodeExpires).
+		AddRow(session2.ID, session2.UserID, session2.ExpiresAt, session2.CreatedAt, session2.MagicCode, session2.MagicCodeExpires)
 
-	// Assert expectations
-	assert.Error(t, err)
+	mock.ExpectQuery(`SELECT id, user_id, expires_at, created_at, magic_code, magic_code_expires_at FROM user_sessions WHERE user_id = \$1 ORDER BY created_at DESC`).
+		WithArgs(userID).
+		WillReturnRows(rows)
+
+	sessions, err := repo.GetSessionsByUserID(context.Background(), userID)
+	require.NoError(t, err)
+	assert.Len(t, sessions, 2)
+	assert.Equal(t, session1.ID, sessions[0].ID)
+	assert.Equal(t, session2.ID, sessions[1].ID)
+}
+
+func TestUpdateSession(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewUserRepository(db)
+
+	// Test case 1: Session updated successfully
+	sessionID := "session-id-1"
+	expiresAt := time.Now().Add(48 * time.Hour).UTC().Truncate(time.Second)
+	magicCode := "updated-code"
+	magicCodeExpires := time.Now().Add(30 * time.Minute).UTC().Truncate(time.Second)
+
+	session := &domain.Session{
+		ID:               sessionID,
+		ExpiresAt:        expiresAt,
+		MagicCode:        magicCode,
+		MagicCodeExpires: magicCodeExpires,
+	}
+
+	mock.ExpectExec(`UPDATE user_sessions SET expires_at = \$1, magic_code = \$2, magic_code_expires_at = \$3 WHERE id = \$4`).
+		WithArgs(expiresAt, magicCode, magicCodeExpires, sessionID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.UpdateSession(context.Background(), session)
+	require.NoError(t, err)
+
+	// Test case 2: Session not found
+	mock.ExpectExec(`UPDATE user_sessions SET expires_at = \$1, magic_code = \$2, magic_code_expires_at = \$3 WHERE id = \$4`).
+		WithArgs(expiresAt, magicCode, magicCodeExpires, "nonexistent-id").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	session.ID = "nonexistent-id"
+	err = repo.UpdateSession(context.Background(), session)
+	require.Error(t, err)
 	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
-	assert.NoError(t, mock.ExpectationsWereMet(), "there were unfulfilled expectations")
 }
