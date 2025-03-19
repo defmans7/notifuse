@@ -406,28 +406,44 @@ func TestGetUserWorkspace(t *testing.T) {
 }
 
 func TestWorkspaceRepository_GetConnection(t *testing.T) {
-	// Skip this test as it requires manipulating low-level database connection behavior
-	// which is challenging to mock correctly
-	t.Skip("Skipping GetConnection test as it requires complex DB connection mocking")
-
-	db, _, cleanup := SetupMockDB(t)
-	defer cleanup()
-
+	// Create a test database config
 	dbConfig := &config.DatabaseConfig{
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
-		Password: "password",
-		DBName:   "notifuse_system",
-		Prefix:   "notifuse",
+		Password: "postgres",
+		DBName:   "test_db", // Add required DBName
+		Prefix:   "test",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
-	workspaceID := "testworkspace"
+	// Create a mock database
+	mockDB, _, cleanup := SetupMockDB(t)
+	defer cleanup()
 
-	// Basic test to increase coverage
-	_, err := repo.GetConnection(context.Background(), workspaceID)
-	require.Error(t, err)
+	// Create a repository instance
+	repo := NewWorkspaceRepository(mockDB, dbConfig).(*workspaceRepository)
+
+	// We need to monkey patch the ConnectToWorkspace function since we can't assign to it directly
+	// Create a test helper for this purpose
+	ctx := context.Background()
+	workspaceID := "test-workspace"
+
+	// Test with a successful mock workspace DB connection
+	mockWorkspaceDB, _, mockWorkspaceCleanup := SetupMockDB(t)
+	defer mockWorkspaceCleanup()
+
+	// Store the mock connection in the repository's connection map directly
+	repo.connections.Store(workspaceID, mockWorkspaceDB)
+
+	// Test case 1: Getting a connection that already exists
+	db1, err := repo.GetConnection(ctx, workspaceID)
+	assert.NoError(t, err)
+	assert.Equal(t, mockWorkspaceDB, db1)
+
+	// Test case 2: Error case can't be fully tested due to monkey patching limitations
+	// But we can test that a non-existent connection returns an error
+	_, err = repo.GetConnection(ctx, "non-existent-workspace")
+	assert.Error(t, err)
 }
 
 func TestDeleteWorkspace_Comprehensive(t *testing.T) {

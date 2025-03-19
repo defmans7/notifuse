@@ -671,3 +671,285 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 	// Verify mocks were called
 	workspaceService.AssertExpectations(t)
 }
+
+func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Try with GET instead of POST
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.update", nil)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleUpdate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestWorkspaceHandler_Update_InvalidBody(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Create invalid JSON request
+	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleUpdate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Invalid request body", response.Error)
+}
+
+func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
+	handler, workspaceService, _, _, secretKey := setupTest(t)
+
+	// Create request with missing ID
+	reqBody := bytes.NewBuffer([]byte(`{"name": "Test Workspace"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Mock the service call - the handler doesn't check for empty ID
+	workspaceService.On("UpdateWorkspace",
+		mock.Anything,
+		"", // Empty ID
+		"Test Workspace",
+		"",
+		"",
+		"",
+		"user123").Return(nil, fmt.Errorf("workspace ID is required"))
+
+	// Call handler directly
+	handler.handleUpdate(w, req)
+
+	// Verify response - since the handler doesn't validate empty ID, we'll get an internal server error
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to update workspace", response.Error)
+
+	// Verify mocks were called
+	workspaceService.AssertExpectations(t)
+}
+
+func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
+	handler, workspaceService, _, _, secretKey := setupTest(t)
+
+	// Create valid request
+	reqBody := bytes.NewBuffer([]byte(`{
+		"id": "workspace123",
+		"name": "Test Workspace",
+		"website_url": "https://example.com",
+		"logo_url": "https://example.com/logo.png",
+		"timezone": "UTC"
+	}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Mock workspace service to return error
+	workspaceService.On("UpdateWorkspace",
+		mock.Anything,
+		"workspace123",
+		"Test Workspace",
+		"https://example.com",
+		"https://example.com/logo.png",
+		"UTC",
+		"user123").Return(nil, fmt.Errorf("database error"))
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleUpdate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to update workspace", response.Error)
+
+	// Verify mocks were called
+	workspaceService.AssertExpectations(t)
+}
+
+func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Try with GET instead of POST
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.delete", nil)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleDelete(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Create invalid JSON request
+	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.delete", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleDelete(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Invalid request body", response.Error)
+}
+
+func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
+	handler, workspaceService, _, _, secretKey := setupTest(t)
+
+	// Create request with missing ID
+	reqBody := bytes.NewBuffer([]byte(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.delete", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Mock the service call - the handler doesn't check for empty ID
+	workspaceService.On("DeleteWorkspace", mock.Anything, "", "user123").
+		Return(fmt.Errorf("workspace ID is required"))
+
+	// Call handler directly
+	handler.handleDelete(w, req)
+
+	// Verify response - since the handler doesn't validate empty ID, we'll get an internal server error
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to delete workspace", response.Error)
+
+	// Verify mocks were called
+	workspaceService.AssertExpectations(t)
+}
+
+func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
+	handler, workspaceService, _, _, secretKey := setupTest(t)
+
+	// Create valid request
+	reqBody := bytes.NewBuffer([]byte(`{"id": "workspace123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.delete", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Mock workspace service to return error
+	workspaceService.On("DeleteWorkspace", mock.Anything, "workspace123", "user123").
+		Return(fmt.Errorf("database error"))
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleDelete(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to delete workspace", response.Error)
+
+	// Verify mocks were called
+	workspaceService.AssertExpectations(t)
+}
