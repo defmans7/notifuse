@@ -15,7 +15,7 @@ jobs:
         working-directory: ./server
 
     services:
-      # Optional: Add PostgreSQL service container for integration tests
+      # PostgreSQL service container for integration tests
       postgres:
         image: postgres:15
         env:
@@ -45,12 +45,26 @@ jobs:
           go mod download
           go get github.com/DATA-DOG/go-sqlmock
 
-      - name: Run mock tests
+      - name: Run mock tests with coverage
         run: |
-          # Run only tests with mock in the name
-          go test -race -tags=unit -run ".*WithMock" ./... -v
+          # Run tests with WithMock in the name and generate coverage report
+          go test -race -coverprofile=coverage.txt -covermode=atomic -run ".*WithMock" ./... -v
+          # Debug - verify file exists
+          ls -la
+          cp coverage.txt ../ # Copy to repo root for codecov action
 
-      - name: Run all tests with coverage
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: Notifuse/notifuse
+          file: coverage.txt # Now in repo root
+          fail_ci_if_error: true
+          verbose: true
+          name: codecov-umbrella
+          override_branch: main
+
+      - name: Run integration tests
         run: |
           # Create a test .env file
           echo "DB_HOST=localhost" > .env.test
@@ -63,13 +77,5 @@ jobs:
           echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
           echo "ROOT_EMAIL=admin@example.com" >> .env.test
 
-          # Run all tests with coverage
-          go test -race -coverprofile=coverage.txt -covermode=atomic -tags=integration ./...
-
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: Notifuse/notifuse
-          directory: ./server
-          working-directory: ./server
+          # Run integration tests (without generating coverage to keep the Codecov report clean)
+          go test -race -tags=integration ./...
