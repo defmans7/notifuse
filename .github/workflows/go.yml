@@ -45,10 +45,30 @@ jobs:
           go mod download
           go get github.com/DATA-DOG/go-sqlmock
 
-      - name: Run mock tests with coverage
+      - name: Run tests and generate coverage
         run: |
-          # Run tests with WithMock in the name and generate coverage report
-          go test -race -coverprofile=coverage.txt -covermode=atomic -run ".*WithMock" ./... -v
+          # First run the unit tests (including mock tests)
+          go test -race -coverprofile=unit_coverage.txt -covermode=atomic $(go list ./... | grep -v integration) -v
+
+          # Create a test .env file for integration tests
+          echo "DB_HOST=localhost" > .env.test
+          echo "DB_PORT=5432" >> .env.test
+          echo "DB_USER=postgres" >> .env.test
+          echo "DB_PASSWORD=postgres" >> .env.test
+          echo "DB_NAME=notifuse_system_test" >> .env.test
+          echo "DB_PREFIX=notifuse_test" >> .env.test
+          echo "PASETO_PRIVATE_KEY=UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw==" >> .env.test
+          echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
+          echo "ROOT_EMAIL=admin@example.com" >> .env.test
+
+          # Then run integration tests with their own coverage profile
+          go test -race -coverprofile=integration_coverage.txt -covermode=atomic -tags=integration ./... -v
+
+          # Merge coverage profiles
+          echo "mode: atomic" > coverage.txt
+          tail -n +2 unit_coverage.txt >> coverage.txt
+          tail -n +2 integration_coverage.txt >> coverage.txt
+
           # Debug - verify file exists
           ls -la
           cp coverage.txt ../ # Copy to repo root for codecov action
@@ -63,19 +83,3 @@ jobs:
           verbose: true
           name: codecov-umbrella
           override_branch: main
-
-      - name: Run integration tests
-        run: |
-          # Create a test .env file
-          echo "DB_HOST=localhost" > .env.test
-          echo "DB_PORT=5432" >> .env.test
-          echo "DB_USER=postgres" >> .env.test
-          echo "DB_PASSWORD=postgres" >> .env.test
-          echo "DB_NAME=notifuse_system_test" >> .env.test
-          echo "DB_PREFIX=notifuse_test" >> .env.test
-          echo "PASETO_PRIVATE_KEY=UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw==" >> .env.test
-          echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
-          echo "ROOT_EMAIL=admin@example.com" >> .env.test
-
-          # Run integration tests (without generating coverage to keep the Codecov report clean)
-          go test -race -tags=integration ./...
