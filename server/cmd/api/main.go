@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"aidanwoods.dev/go-paseto"
 	_ "github.com/lib/pq"
 
 	"notifuse/server/config"
@@ -79,8 +78,8 @@ func main() {
 	// Create auth service first
 	authService, err := service.NewAuthService(service.AuthServiceConfig{
 		Repository: authRepo,
-		PrivateKey: cfg.Security.PasetoPrivateKey,
-		PublicKey:  cfg.Security.PasetoPublicKey,
+		PrivateKey: cfg.Security.PasetoPrivateKeyBytes,
+		PublicKey:  cfg.Security.PasetoPublicKeyBytes,
 		Logger:     appLogger,
 	})
 	if err != nil {
@@ -106,17 +105,10 @@ func main() {
 	// Create workspace service
 	workspaceService := service.NewWorkspaceService(workspaceRepo, appLogger)
 
-	// Parse public key for PASETO
-	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes(cfg.Security.PasetoPublicKey)
-	if err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to parse PASETO public key")
-		osExit(1)
-		return
-	}
-
-	userHandler := httpHandler.NewUserHandler(userService, workspaceService, cfg, publicKey)
+	// Use the already parsed PASETO public key
+	userHandler := httpHandler.NewUserHandler(userService, workspaceService, cfg, cfg.Security.PasetoPublicKey)
 	rootHandler := httpHandler.NewRootHandler()
-	workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, authService, publicKey)
+	workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, authService, cfg.Security.PasetoPublicKey)
 	faviconHandler := httpHandler.NewFaviconHandler()
 
 	// Set up routes

@@ -429,13 +429,13 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 	// Test cases for different scenarios
 	testCases := []struct {
 		name            string
-		setupMocks      func(mockUserSvc *mockUserService, mockWorkspaceSvc *mockWorkspaceService)
+		setupMocks      func(userSvc *mockUserService, workspaceSvc any)
 		testPath        string
 		expectedHandler bool
 	}{
 		{
 			name: "public routes",
-			setupMocks: func(mockUserSvc *mockUserService, mockWorkspaceSvc *mockWorkspaceService) {
+			setupMocks: func(userSvc *mockUserService, workspaceSvc any) {
 				// No need to set up AuthServiceInterface expectations
 				// because we're testing that these routes don't require auth
 			},
@@ -444,18 +444,23 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 		},
 		{
 			name: "protected routes with auth service",
-			setupMocks: func(mockUserSvc *mockUserService, mockWorkspaceSvc *mockWorkspaceService) {
+			setupMocks: func(userSvc *mockUserService, workspaceSvc any) {
 				// Make mockUserService implement AuthServiceInterface
-				mockUserSvc.On("VerifyUserSession", mock.Anything, mock.Anything, mock.Anything).
+				userSvc.On("VerifyUserSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(&domain.User{ID: "user1", Email: "test@example.com"}, nil)
 
 				// Mock GetUserByID which is called in GetCurrentUser
-				mockUserSvc.On("GetUserByID", mock.Anything, "user1").
+				userSvc.On("GetUserByID", mock.Anything, "user1").
 					Return(&domain.User{ID: "user1", Email: "test@example.com"}, nil)
 
 				// Mock ListWorkspaces which is also called in GetCurrentUser
-				mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, "user1").
-					Return([]*domain.Workspace{}, nil)
+				if ws, ok := workspaceSvc.(*mockUserWorkspaceService); ok {
+					ws.On("ListWorkspaces", mock.Anything, "user1").
+						Return([]*domain.Workspace{}, nil)
+				} else if ws, ok := workspaceSvc.(*mockWorkspaceService); ok {
+					ws.On("ListWorkspaces", mock.Anything, "user1").
+						Return([]*domain.Workspace{}, nil)
+				}
 			},
 			testPath:        "/api/user.me",
 			expectedHandler: true,
@@ -471,7 +476,7 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 			// Create a config with test values
 			cfg := &config.Config{
 				Security: config.SecurityConfig{
-					PasetoPublicKey: []byte("key"),
+					PasetoPublicKey: publicKey,
 				},
 			}
 

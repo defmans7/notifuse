@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/spf13/viper"
 )
 
@@ -34,9 +35,13 @@ type DatabaseConfig struct {
 }
 
 type SecurityConfig struct {
-	// Raw decoded bytes for PASETO keys
-	PasetoPrivateKey []byte
-	PasetoPublicKey  []byte
+	// PASETO key types
+	PasetoPrivateKey paseto.V4AsymmetricSecretKey
+	PasetoPublicKey  paseto.V4AsymmetricPublicKey
+
+	// Raw decoded bytes for compatibility
+	PasetoPrivateKeyBytes []byte
+	PasetoPublicKeyBytes  []byte
 }
 
 type SSLConfig struct {
@@ -109,14 +114,25 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	}
 
 	// Decode base64 keys
-	privateKey, err := base64.StdEncoding.DecodeString(privateKeyBase64)
+	privateKeyBytes, err := base64.StdEncoding.DecodeString(privateKeyBase64)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding PASETO_PRIVATE_KEY: %w", err)
 	}
 
-	publicKey, err := base64.StdEncoding.DecodeString(publicKeyBase64)
+	publicKeyBytes, err := base64.StdEncoding.DecodeString(publicKeyBase64)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding PASETO_PUBLIC_KEY: %w", err)
+	}
+
+	// Convert bytes to paseto key types
+	privateKey, err := paseto.NewV4AsymmetricSecretKeyFromBytes(privateKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error creating PASETO private key: %w", err)
+	}
+
+	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes(publicKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error creating PASETO public key: %w", err)
 	}
 
 	config := &Config{
@@ -138,8 +154,10 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			Prefix:   v.GetString("DB_PREFIX"),
 		},
 		Security: SecurityConfig{
-			PasetoPrivateKey: privateKey,
-			PasetoPublicKey:  publicKey,
+			PasetoPrivateKey:      privateKey,
+			PasetoPublicKey:       publicKey,
+			PasetoPrivateKeyBytes: privateKeyBytes,
+			PasetoPublicKeyBytes:  publicKeyBytes,
 		},
 		RootEmail:   v.GetString("ROOT_EMAIL"),
 		Environment: v.GetString("ENVIRONMENT"),

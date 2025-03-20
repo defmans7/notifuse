@@ -30,9 +30,9 @@ func TestIsDevelopment(t *testing.T) {
 }
 
 func TestLoadWithOptions(t *testing.T) {
-	// Mock viper directly using env vars instead of files to avoid path issues
-	privateKey := "YDhVgXcnHQmkHYvzSqz9z7PPJccIWzSKGxXYWjlNs3xTtgx10KZb/XVpbA3EXe68/SLW7Vfv/j7b9LH3t7BMMw=="
-	publicKey := "U7YMddCmW/11aWwNxF3uvP0i1u1X7/4+2/Sx97ewTDM="
+	// Use valid PASETO keys generated with the keygen tool
+	privateKey := "8OSonZEkrCTlDd612EBoORCKVMZ4OjbWlrq03n0FIEgEJK+qb95F4pwewi+Dd++qOjQ9zkviUjFdIaBUz3nzgA=="
+	publicKey := "BCSvqm/eReKcHsIvg3fvqjo0Pc5L4lIxXSGgVM9584A="
 
 	// Set environment variables for the test
 	os.Setenv("PASETO_PRIVATE_KEY", privateKey)
@@ -85,8 +85,12 @@ func TestLoadWithOptions(t *testing.T) {
 	// Check the decoded keys
 	decodedPrivateKey, _ := base64.StdEncoding.DecodeString(privateKey)
 	decodedPublicKey, _ := base64.StdEncoding.DecodeString(publicKey)
-	assert.Equal(t, decodedPrivateKey, cfg.Security.PasetoPrivateKey)
-	assert.Equal(t, decodedPublicKey, cfg.Security.PasetoPublicKey)
+	assert.Equal(t, decodedPrivateKey, cfg.Security.PasetoPrivateKeyBytes)
+	assert.Equal(t, decodedPublicKey, cfg.Security.PasetoPublicKeyBytes)
+
+	// Verify that the parsed keys are not nil
+	assert.NotNil(t, cfg.Security.PasetoPrivateKey)
+	assert.NotNil(t, cfg.Security.PasetoPublicKey)
 
 	// Test development environment flag
 	assert.True(t, cfg.IsDevelopment())
@@ -113,7 +117,7 @@ func TestInvalidKeysHandling(t *testing.T) {
 		os.Unsetenv("PASETO_PUBLIC_KEY")
 
 		// Set valid private key but no public key
-		os.Setenv("PASETO_PRIVATE_KEY", "YDhVgXcnHQmkHYvzSqz9z7PPJccIWzSKGxXYWjlNs3xTtgx10KZb/XVpbA3EXe68/SLW7Vfv/j7b9LH3t7BMMw==")
+		os.Setenv("PASETO_PRIVATE_KEY", "8OSonZEkrCTlDd612EBoORCKVMZ4OjbWlrq03n0FIEgEJK+qb95F4pwewi+Dd++qOjQ9zkviUjFdIaBUz3nzgA==")
 		defer os.Unsetenv("PASETO_PRIVATE_KEY")
 
 		// Should fail with missing public key
@@ -129,7 +133,7 @@ func TestInvalidKeysHandling(t *testing.T) {
 
 		// Set invalid private key but also public key (to pass the presence check)
 		os.Setenv("PASETO_PRIVATE_KEY", "invalid-base64!")
-		os.Setenv("PASETO_PUBLIC_KEY", "U7YMddCmW/11aWwNxF3uvP0i1u1X7/4+2/Sx97ewTDM=")
+		os.Setenv("PASETO_PUBLIC_KEY", "BCSvqm/eReKcHsIvg3fvqjo0Pc5L4lIxXSGgVM9584A=")
 		defer func() {
 			os.Unsetenv("PASETO_PRIVATE_KEY")
 			os.Unsetenv("PASETO_PUBLIC_KEY")
@@ -147,7 +151,7 @@ func TestInvalidKeysHandling(t *testing.T) {
 		os.Unsetenv("PASETO_PUBLIC_KEY")
 
 		// Set valid private key but invalid public key
-		os.Setenv("PASETO_PRIVATE_KEY", "YDhVgXcnHQmkHYvzSqz9z7PPJccIWzSKGxXYWjlNs3xTtgx10KZb/XVpbA3EXe68/SLW7Vfv/j7b9LH3t7BMMw==")
+		os.Setenv("PASETO_PRIVATE_KEY", "8OSonZEkrCTlDd612EBoORCKVMZ4OjbWlrq03n0FIEgEJK+qb95F4pwewi+Dd++qOjQ9zkviUjFdIaBUz3nzgA==")
 		os.Setenv("PASETO_PUBLIC_KEY", "invalid-base64!")
 		defer func() {
 			os.Unsetenv("PASETO_PRIVATE_KEY")
@@ -163,8 +167,8 @@ func TestInvalidKeysHandling(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	// Test the Load function by temporarily setting the required environment variables
-	privateKey := "YDhVgXcnHQmkHYvzSqz9z7PPJccIWzSKGxXYWjlNs3xTtgx10KZb/XVpbA3EXe68/SLW7Vfv/j7b9LH3t7BMMw=="
-	publicKey := "U7YMddCmW/11aWwNxF3uvP0i1u1X7/4+2/Sx97ewTDM="
+	privateKey := "8OSonZEkrCTlDd612EBoORCKVMZ4OjbWlrq03n0FIEgEJK+qb95F4pwewi+Dd++qOjQ9zkviUjFdIaBUz3nzgA=="
+	publicKey := "BCSvqm/eReKcHsIvg3fvqjo0Pc5L4lIxXSGgVM9584A="
 
 	// Set environment variables for the test
 	os.Setenv("PASETO_PRIVATE_KEY", privateKey)
