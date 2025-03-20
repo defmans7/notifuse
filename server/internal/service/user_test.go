@@ -110,59 +110,133 @@ func TestUserService_SignIn(t *testing.T) {
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service, err := NewUserService(UserServiceConfig{
-		Repository:    repo,
-		AuthService:   authService,
-		EmailSender:   emailSender,
-		SessionExpiry: 24 * time.Hour,
-		Logger:        mockLogger,
+	t.Run("production mode", func(t *testing.T) {
+		service, err := NewUserService(UserServiceConfig{
+			Repository:    repo,
+			AuthService:   authService,
+			EmailSender:   emailSender,
+			SessionExpiry: 24 * time.Hour,
+			Logger:        mockLogger,
+			IsDevelopment: false,
+		})
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		user := &domain.User{
+			ID:    uuid.New().String(),
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
+
+		// Test successful sign in
+		repo.Mock = mock.Mock{}
+		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
+		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
+			return s.UserID == user.ID && len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
+		})).Return(nil)
+		emailSender.On("SendMagicCode", user.Email, mock.MatchedBy(func(code string) bool {
+			return len(code) == 6
+		})).Return(nil)
+
+		code, err := service.SignIn(ctx, SignInInput{Email: user.Email})
+		assert.NoError(t, err)
+		assert.Empty(t, code) // In production, no code is returned
+		repo.AssertExpectations(t)
+		emailSender.AssertExpectations(t)
 	})
-	require.NoError(t, err)
 
-	ctx := context.Background()
-	user := &domain.User{
-		ID:    uuid.New().String(),
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
+	t.Run("development mode", func(t *testing.T) {
+		service, err := NewUserService(UserServiceConfig{
+			Repository:    repo,
+			AuthService:   authService,
+			EmailSender:   emailSender,
+			SessionExpiry: 24 * time.Hour,
+			Logger:        mockLogger,
+			IsDevelopment: true,
+		})
+		require.NoError(t, err)
 
-	// Test successful sign in
-	repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
-	repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
-		return s.UserID == user.ID && len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
-	})).Return(nil)
-	emailSender.On("SendMagicCode", user.Email, mock.MatchedBy(func(code string) bool {
-		return len(code) == 6
-	})).Return(nil)
+		ctx := context.Background()
+		user := &domain.User{
+			ID:    uuid.New().String(),
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
 
-	err = service.SignIn(ctx, SignInInput{Email: user.Email})
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-	emailSender.AssertExpectations(t)
+		// Test successful sign in dev mode - existing user
+		repo.Mock = mock.Mock{}
+		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
+		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
+			return s.UserID == user.ID && len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
+		})).Return(nil)
+		// Email should not be sent in dev mode
 
-	// Test user not found
-	repo.On("GetUserByEmail", ctx, "notfound@example.com").
-		Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
+		code, err := service.SignIn(ctx, SignInInput{Email: user.Email})
+		assert.NoError(t, err)
+		assert.NotEmpty(t, code) // In dev mode, code is returned
+		assert.Len(t, code, 6)   // Should be a 6-digit code
+		repo.AssertExpectations(t)
+		emailSender.AssertExpectations(t)
 
-	// When user is not found, expect a new user to be created
-	repo.On("CreateUser", ctx, mock.MatchedBy(func(u *domain.User) bool {
-		return u.Email == "notfound@example.com" && !u.CreatedAt.IsZero() && !u.UpdatedAt.IsZero()
-	})).Return(nil)
+		// Test new user in dev mode
+		repo.Mock = mock.Mock{}
+		// User not found, should create a new one
+		repo.On("GetUserByEmail", ctx, "new@example.com").Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
+		// Should create a new user
+		repo.On("CreateUser", ctx, mock.MatchedBy(func(u *domain.User) bool {
+			return u.Email == "new@example.com" && !u.CreatedAt.IsZero() && !u.UpdatedAt.IsZero()
+		})).Return(nil)
+		// Should create a session for the new user
+		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
+			return s.UserID != "" && s.ExpiresAt.After(time.Now()) &&
+				len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
+		})).Return(nil)
 
-	// Expect a session to be created for the new user
-	repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
-		return s.UserID != "" && len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
-	})).Return(nil)
+		code, err = service.SignIn(ctx, SignInInput{Email: "new@example.com"})
+		require.NoError(t, err)
+		assert.NotEmpty(t, code)
+		assert.Len(t, code, 6) // Ensure it's a 6-digit code
+		repo.AssertExpectations(t)
+	})
 
-	// Expect an email to be sent
-	emailSender.On("SendMagicCode", "notfound@example.com", mock.MatchedBy(func(code string) bool {
-		return len(code) == 6
-	})).Return(nil)
+	t.Run("production mode - user not found", func(t *testing.T) {
+		service, err := NewUserService(UserServiceConfig{
+			Repository:    repo,
+			AuthService:   authService,
+			EmailSender:   emailSender,
+			SessionExpiry: 24 * time.Hour,
+			Logger:        mockLogger,
+			IsDevelopment: false,
+		})
+		require.NoError(t, err)
 
-	err = service.SignIn(ctx, SignInInput{Email: "notfound@example.com"})
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-	emailSender.AssertExpectations(t)
+		ctx := context.Background()
+
+		repo.Mock = mock.Mock{}
+		repo.On("GetUserByEmail", ctx, "notfound@example.com").
+			Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
+
+		// When user is not found, expect a new user to be created
+		repo.On("CreateUser", ctx, mock.MatchedBy(func(u *domain.User) bool {
+			return u.Email == "notfound@example.com" && !u.CreatedAt.IsZero() && !u.UpdatedAt.IsZero()
+		})).Return(nil)
+
+		// Expect a session to be created for the new user
+		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
+			return s.UserID != "" && len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
+		})).Return(nil)
+
+		// Expect an email to be sent
+		emailSender.On("SendMagicCode", "notfound@example.com", mock.MatchedBy(func(code string) bool {
+			return len(code) == 6
+		})).Return(nil)
+
+		code, err := service.SignIn(ctx, SignInInput{Email: "notfound@example.com"})
+		assert.NoError(t, err)
+		assert.Empty(t, code) // In production, no code is returned
+		repo.AssertExpectations(t)
+		emailSender.AssertExpectations(t)
+	})
 }
 
 func TestUserService_VerifyCode(t *testing.T) {
@@ -437,71 +511,6 @@ func TestUserService_GetUserByID(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, user)
 		assert.Contains(t, err.Error(), "user not found")
-		repo.AssertExpectations(t)
-	})
-}
-
-func TestUserService_SignInDev(t *testing.T) {
-	repo := new(mockUserRepository)
-	emailSender := new(mockEmailSender)
-	mockLogger := new(MockLogger)
-	authService := setupAuthService()
-
-	// Setup logger mock to return itself for WithField calls
-	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
-	mockLogger.On("Error", mock.Anything).Return()
-
-	service, err := NewUserService(UserServiceConfig{
-		Repository:    repo,
-		AuthService:   authService,
-		EmailSender:   emailSender,
-		SessionExpiry: 24 * time.Hour,
-		Logger:        mockLogger,
-	})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	user := &domain.User{
-		ID:    uuid.New().String(),
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
-
-	// Test successful sign in dev
-	t.Run("existing user", func(t *testing.T) {
-		repo.Mock = mock.Mock{}
-
-		// Set up expectations
-		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
-		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
-			return s.UserID == user.ID && s.ExpiresAt.After(time.Now())
-		})).Return(nil)
-
-		token, err := service.SignInDev(ctx, SignInInput{Email: user.Email})
-		require.NoError(t, err)
-		assert.NotEmpty(t, token)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("new user", func(t *testing.T) {
-		repo.Mock = mock.Mock{}
-
-		// User not found, should create a new one
-		repo.On("GetUserByEmail", ctx, "new@example.com").Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
-
-		// Should create a new user
-		repo.On("CreateUser", ctx, mock.MatchedBy(func(u *domain.User) bool {
-			return u.Email == "new@example.com" && !u.CreatedAt.IsZero() && !u.UpdatedAt.IsZero()
-		})).Return(nil)
-
-		// Should create a session for the new user
-		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
-			return s.UserID != "" && s.ExpiresAt.After(time.Now())
-		})).Return(nil)
-
-		token, err := service.SignInDev(ctx, SignInInput{Email: "new@example.com"})
-		require.NoError(t, err)
-		assert.NotEmpty(t, token)
 		repo.AssertExpectations(t)
 	})
 }

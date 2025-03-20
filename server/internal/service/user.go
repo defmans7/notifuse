@@ -8,6 +8,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/google/uuid"
 )
 
 type UserService struct {
@@ -16,6 +17,7 @@ type UserService struct {
 	emailSender   EmailSender
 	sessionExpiry time.Duration
 	logger        logger.Logger
+	isDevelopment bool
 }
 
 type EmailSender interface {
@@ -28,6 +30,7 @@ type UserServiceConfig struct {
 	EmailSender   EmailSender
 	SessionExpiry time.Duration
 	Logger        logger.Logger
+	IsDevelopment bool
 }
 
 func NewUserService(cfg UserServiceConfig) (*UserService, error) {
@@ -37,6 +40,7 @@ func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 		emailSender:   cfg.EmailSender,
 		sessionExpiry: cfg.SessionExpiry,
 		logger:        cfg.Logger,
+		isDevelopment: cfg.IsDevelopment,
 	}, nil
 }
 
@@ -57,8 +61,7 @@ type AuthResponse struct {
 
 // UserServiceInterface defines the interface for user operations
 type UserServiceInterface interface {
-	SignIn(ctx context.Context, input SignInInput) error
-	SignInDev(ctx context.Context, input SignInInput) (string, error)
+	SignIn(ctx context.Context, input SignInInput) (string, error)
 	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
 	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
 	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
@@ -67,13 +70,13 @@ type UserServiceInterface interface {
 // Ensure UserService implements UserServiceInterface
 var _ UserServiceInterface = (*UserService)(nil)
 
-func (s *UserService) SignIn(ctx context.Context, input SignInInput) error {
+func (s *UserService) SignIn(ctx context.Context, input SignInInput) (string, error) {
 	// Check if user exists, if not create a new one
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
 		if _, ok := err.(*domain.ErrUserNotFound); !ok {
 			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email")
-			return err
+			return "", err
 		}
 
 		// User not found, create a new one
@@ -85,7 +88,7 @@ func (s *UserService) SignIn(ctx context.Context, input SignInInput) error {
 		}
 		if err := s.repo.CreateUser(ctx, user); err != nil {
 			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to create user")
-			return err
+			return "", err
 		}
 	}
 
@@ -106,16 +109,22 @@ func (s *UserService) SignIn(ctx context.Context, input SignInInput) error {
 
 	if err := s.repo.CreateSession(ctx, session); err != nil {
 		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session")
-		return err
+		return "", err
 	}
 
-	// Send magic code via email
+	// In development mode, return the code directly
+	// In production, send the code via email
+	if s.isDevelopment {
+		return code, nil
+	}
+
+	// Send magic code via email in production
 	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
 		s.logger.WithField("user_id", user.ID).WithField("email", user.Email).WithField("error", err.Error()).Error("Failed to send magic code")
-		return err
+		return "", err
 	}
 
-	return nil
+	return "", nil
 }
 
 func (s *UserService) VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error) {
@@ -187,9 +196,10 @@ func (s *UserService) generateMagicCode() string {
 	return fmt.Sprintf("%06d", codeNum)
 }
 
-// generateID generates a random ID
+// generateID generates a proper UUID
 func generateID() string {
-	return fmt.Sprintf("%x", time.Now().UnixNano())
+	// Use the github.com/google/uuid package to generate a standard UUID
+	return uuid.New().String()
 }
 
 // VerifyUserSession verifies a user session and returns the associated user
@@ -221,49 +231,6 @@ func (s *UserService) VerifyUserSession(ctx context.Context, userID string, sess
 	}
 
 	return user, nil
-}
-
-// SignInDev is a development-only version of SignIn that returns the magic code
-func (s *UserService) SignInDev(ctx context.Context, input SignInInput) (string, error) {
-	// This method is only for development environment
-	// Check if user exists, if not create a new one
-	user, err := s.repo.GetUserByEmail(ctx, input.Email)
-	if err != nil {
-		if _, ok := err.(*domain.ErrUserNotFound); !ok {
-			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email in dev mode")
-			return "", err
-		}
-
-		// User not found, create a new one
-		user = &domain.User{
-			ID:        generateID(),
-			Email:     input.Email,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-		if err := s.repo.CreateUser(ctx, user); err != nil {
-			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to create user in dev mode")
-			return "", err
-		}
-	}
-
-	// Create new session
-	expiresAt := time.Now().Add(s.sessionExpiry)
-	session := &domain.Session{
-		ID:        generateID(),
-		UserID:    user.ID,
-		ExpiresAt: expiresAt,
-		CreatedAt: time.Now(),
-	}
-
-	if err := s.repo.CreateSession(ctx, session); err != nil {
-		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session in dev mode")
-		return "", err
-	}
-
-	// Generate authentication token
-	token := s.authService.GenerateAuthToken(user, session.ID, expiresAt)
-	return token, nil
 }
 
 // GetUserByID retrieves a user by their ID

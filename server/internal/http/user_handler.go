@@ -37,31 +37,24 @@ func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In development mode, we'll return the magic code directly
-	if h.config.IsDevelopment() {
-		code, err := h.userService.SignInDev(r.Context(), input)
-		if err != nil {
-			WriteJSONError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
-			"message": "Magic code sent to your email",
-			"code":    code,
-		})
-		return
-	}
-
-	if err := h.userService.SignIn(r.Context(), input); err != nil {
+	code, err := h.userService.SignIn(r.Context(), input)
+	if err != nil {
 		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	// In development mode, the code will be returned
+	// In production, the code will be empty
+	response := map[string]string{
 		"message": "Magic code sent to your email",
-	})
+	}
+
+	if code != "" {
+		response["code"] = code
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {

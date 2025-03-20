@@ -3,9 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"time"
 )
 
 // SQLAuthRepository is a SQL implementation of the AuthRepository interface
@@ -26,7 +27,7 @@ func NewSQLAuthRepository(db *sql.DB, logger logger.Logger) *SQLAuthRepository {
 func (r *SQLAuthRepository) GetSessionByID(ctx context.Context, sessionID string, userID string) (*time.Time, error) {
 	var expiresAt time.Time
 	err := r.db.QueryRowContext(ctx,
-		"SELECT expires_at FROM sessions WHERE id = $1 AND user_id = $2",
+		"SELECT expires_at FROM user_sessions WHERE id = $1 AND user_id = $2",
 		sessionID, userID,
 	).Scan(&expiresAt)
 

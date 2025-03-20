@@ -26,12 +26,7 @@ type mockUserService struct {
 	mock.Mock
 }
 
-func (m *mockUserService) SignIn(ctx context.Context, input service.SignInInput) error {
-	args := m.Called(ctx, input)
-	return args.Error(0)
-}
-
-func (m *mockUserService) SignInDev(ctx context.Context, input service.SignInInput) (string, error) {
+func (m *mockUserService) SignIn(ctx context.Context, input service.SignInInput) (string, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return "", args.Error(1)
@@ -134,7 +129,7 @@ func TestUserHandler_SignIn(t *testing.T) {
 			setupMock: func() {
 				mockService.On("SignIn", mock.Anything, service.SignInInput{
 					Email: "test@example.com",
-				}).Return(nil)
+				}).Return("", nil)
 			},
 			expectedCode: http.StatusOK,
 			expectedBody: map[string]string{
@@ -148,7 +143,9 @@ func TestUserHandler_SignIn(t *testing.T) {
 				Email: "test@example.com",
 			},
 			setupMock: func() {
-				mockService.On("SignInDev", mock.Anything, service.SignInInput{
+				// Mock the SignIn method to return the 6-digit code for development mode
+				mockService.Mock = mock.Mock{} // Reset mock to avoid conflicts
+				mockService.On("SignIn", mock.Anything, service.SignInInput{
 					Email: "test@example.com",
 				}).Return("123456", nil)
 			},
@@ -167,7 +164,7 @@ func TestUserHandler_SignIn(t *testing.T) {
 			setupMock: func() {
 				mockService.On("SignIn", mock.Anything, service.SignInInput{
 					Email: "",
-				}).Return(fmt.Errorf("invalid email"))
+				}).Return("", fmt.Errorf("invalid email"))
 			},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: map[string]string{
@@ -181,7 +178,7 @@ func TestUserHandler_SignIn(t *testing.T) {
 				Email: "",
 			},
 			setupMock: func() {
-				mockService.On("SignInDev", mock.Anything, service.SignInInput{
+				mockService.On("SignIn", mock.Anything, service.SignInInput{
 					Email: "",
 				}).Return("", fmt.Errorf("invalid email"))
 			},

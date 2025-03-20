@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/Notifuse/notifuse/pkg/logger"
 	"testing"
 	"time"
+
+	"github.com/Notifuse/notifuse/pkg/logger"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +40,7 @@ func TestAuthRepository_GetSessionByID(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"expires_at"}).
 		AddRow(expiresAt)
 
-	mock.ExpectQuery(`SELECT expires_at FROM sessions WHERE id = \$1 AND user_id = \$2`).
+	mock.ExpectQuery(`SELECT expires_at FROM user_sessions WHERE id = \$1 AND user_id = \$2`).
 		WithArgs(sessionID, userID).
 		WillReturnRows(rows)
 
@@ -49,7 +50,7 @@ func TestAuthRepository_GetSessionByID(t *testing.T) {
 	assert.Equal(t, expiresAt.Unix(), result.Unix())
 
 	// Test case 2: Session not found
-	mock.ExpectQuery(`SELECT expires_at FROM sessions WHERE id = \$1 AND user_id = \$2`).
+	mock.ExpectQuery(`SELECT expires_at FROM user_sessions WHERE id = \$1 AND user_id = \$2`).
 		WithArgs("nonexistent", userID).
 		WillReturnError(sql.ErrNoRows)
 

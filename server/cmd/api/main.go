@@ -103,6 +103,7 @@ func main() {
 		EmailSender:   emailSender,
 		SessionExpiry: 15 * 24 * time.Hour, // 15 days
 		Logger:        appLogger,
+		IsDevelopment: cfg.IsDevelopment(),
 	})
 	if err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Failed to create user service")

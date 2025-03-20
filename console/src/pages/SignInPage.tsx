@@ -21,7 +21,7 @@ export function SignInPage() {
       const response = await authService.signIn(values)
 
       // Log code if present (for development)
-      if (response.code) {
+      if (response.code && response.code !== '') {
         console.log('Magic code for development:', response.code)
       }
 

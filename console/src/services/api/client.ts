@@ -1,4 +1,5 @@
 import config from '../../config'
+import { router } from '../../router'
 
 class ApiError extends Error {
   constructor(
@@ -14,6 +15,17 @@ class ApiError extends Error {
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
+
+    if (
+      response.status === 401 ||
+      errorData?.error === 'Session expired' ||
+      errorData?.message === 'Session expired'
+    ) {
+      localStorage.removeItem('auth_token')
+
+      router.navigate({ to: '/signin' })
+    }
+
     throw new ApiError(errorData?.error || 'An error occurred', response.status, errorData)
   }
   return response.json()
