@@ -124,11 +124,13 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 
 	// Create request
 	reqBody := createWorkspaceRequest{
-		ID:         "testworkspace1",
-		Name:       "Test Workspace",
-		WebsiteURL: "https://example.com",
-		LogoURL:    "https://example.com/logo.png",
-		Timezone:   "UTC",
+		ID: "testworkspace1",
+		Settings: workspaceSettingsData{
+			Name:       "Test Workspace",
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+		},
 	}
 	body, err := json.Marshal(reqBody)
 	require.NoError(t, err)
@@ -595,7 +597,12 @@ func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
 	handler, _, _, _, secretKey := setupTest(t)
 
 	// Create request with missing ID
-	reqBody := bytes.NewBuffer([]byte(`{"name": "Test Workspace"}`))
+	reqBody := bytes.NewBuffer([]byte(`{
+		"settings": {
+			"name": "Test Workspace",
+			"timezone": "UTC"
+		}
+	}`))
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
 	w := httptest.NewRecorder()
 
@@ -628,10 +635,12 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 	// Create valid request
 	reqBody := bytes.NewBuffer([]byte(`{
 		"id": "workspace123",
-		"name": "Test Workspace",
-		"website_url": "https://example.com",
-		"logo_url": "https://example.com/logo.png",
-		"timezone": "UTC"
+		"settings": {
+			"name": "Test Workspace",
+			"website_url": "https://example.com",
+			"logo_url": "https://example.com/logo.png",
+			"timezone": "UTC"
+		}
 	}`))
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
 	w := httptest.NewRecorder()
@@ -952,4 +961,78 @@ func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
 
 	// Verify mocks were called
 	workspaceService.AssertExpectations(t)
+}
+
+func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Create request with missing name
+	reqBody := bytes.NewBuffer([]byte(`{
+		"id": "workspace123",
+		"settings": {
+			"name": "",
+			"timezone": "UTC"
+		}
+	}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleCreate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Workspace name is required", response.Error)
+}
+
+func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
+	handler, _, _, _, secretKey := setupTest(t)
+
+	// Create request with missing timezone
+	reqBody := bytes.NewBuffer([]byte(`{
+		"id": "workspace123",
+		"settings": {
+			"name": "Test Workspace",
+			"timezone": ""
+		}
+	}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
+		ID: "user123",
+	})
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleCreate(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Timezone is required", response.Error)
 }

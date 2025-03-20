@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { Topbar } from '../components/Topbar'
 import { InfoCircleOutlined } from '@ant-design/icons'
 import { workspaceService } from '../services/api/workspace'
+import { useAuth } from '../contexts/AuthContext'
 
 const { Content } = Layout
 const { Title } = Typography
@@ -12,6 +13,7 @@ export function CreateWorkspacePage() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [form] = Form.useForm()
+  const { refreshWorkspaces } = useAuth()
 
   // Generate workspace ID from name (alphanumeric only, max 20 chars)
   const generateWorkspaceId = (name: string) => {
@@ -51,18 +53,17 @@ export function CreateWorkspacePage() {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
       // Create workspace with API
-      const createResponse = await workspaceService.create({
+      await workspaceService.create({
         id: values.id,
+        name: values.name,
         settings: {
-          name: values.name,
           website_url: values.website_url || '',
           logo_url: logoUrl,
           timezone: timezone
         }
       })
 
-      // TODO refresh the auth context workspace list
-
+      await refreshWorkspaces()
       message.success(`Workspace "${values.name}" created successfully!`)
 
       // Navigate to the new workspace

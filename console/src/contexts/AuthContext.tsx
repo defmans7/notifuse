@@ -14,6 +14,7 @@ interface AuthContextType {
   signin: (token: string) => Promise<void>
   signout: () => Promise<void>
   loading: boolean
+  refreshWorkspaces: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -78,6 +79,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setWorkspaces([])
   }
 
+  const refreshWorkspaces = async () => {
+    const { workspaces } = await authService.getCurrentUser()
+    setWorkspaces(workspaces)
+  }
+
   // console.log('user', user)
 
   return (
@@ -88,7 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         signin,
         signout,
-        loading
+        loading,
+        refreshWorkspaces
       }}
     >
       {children}

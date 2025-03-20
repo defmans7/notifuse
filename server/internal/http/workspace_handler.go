@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 
@@ -35,7 +36,11 @@ func NewWorkspaceHandler(workspaceService WorkspaceServiceInterface, authService
 
 // Request/Response types
 type createWorkspaceRequest struct {
-	ID         string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	ID       string                `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Settings workspaceSettingsData `json:"settings"`
+}
+
+type workspaceSettingsData struct {
 	Name       string `json:"name"`
 	WebsiteURL string `json:"website_url"`
 	LogoURL    string `json:"logo_url"`
@@ -151,7 +156,18 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	workspace, err := h.workspaceService.CreateWorkspace(r.Context(), req.ID, req.Name, req.WebsiteURL, req.LogoURL, req.Timezone, authUser.ID)
+	// Validate required settings
+	if req.Settings.Name == "" {
+		writeError(w, http.StatusBadRequest, "Workspace name is required")
+		return
+	}
+
+	if req.Settings.Timezone == "" {
+		writeError(w, http.StatusBadRequest, "Timezone is required")
+		return
+	}
+
+	workspace, err := h.workspaceService.CreateWorkspace(r.Context(), req.ID, req.Settings.Name, req.Settings.WebsiteURL, req.Settings.LogoURL, req.Settings.Timezone, authUser.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create workspace")
 		return

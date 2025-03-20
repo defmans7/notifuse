@@ -1,12 +1,24 @@
-import { Layout } from 'antd'
+import { Layout, Select, Space } from 'antd'
 import { LogoutOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import logo from '../assets/logo.png'
+import { useNavigate, useParams } from '@tanstack/react-router'
+import { Workspace } from '../services/api/types'
 
 const { Header } = Layout
 
 export function Topbar() {
-  const { signout } = useAuth()
+  const { signout, workspaces } = useAuth()
+  const navigate = useNavigate()
+  const params = useParams({ from: '/workspace/$workspaceId' })
+  const currentWorkspaceId = params?.workspaceId
+
+  const handleWorkspaceChange = (workspaceId: string) => {
+    navigate({
+      to: '/workspace/$workspaceId/campaigns',
+      params: { workspaceId }
+    })
+  }
 
   return (
     <Header
@@ -21,6 +33,36 @@ export function Topbar() {
     >
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <img src={logo} alt="Logo" style={{ height: '32px' }} />
+
+        {workspaces.length > 0 && (
+          <Select
+            value={currentWorkspaceId}
+            onChange={handleWorkspaceChange}
+            style={{ width: 200, marginLeft: 24 }}
+            placeholder="Select workspace"
+            options={workspaces.map((workspace: Workspace) => ({
+              label: (
+                <Space>
+                  {workspace.settings.logo_url && (
+                    <img
+                      src={workspace.settings.logo_url}
+                      alt=""
+                      style={{
+                        height: '16px',
+                        width: '16px',
+                        marginRight: '8px',
+                        objectFit: 'contain',
+                        verticalAlign: 'middle'
+                      }}
+                    />
+                  )}
+                  {workspace.name}
+                </Space>
+              ),
+              value: workspace.id
+            }))}
+          />
+        )}
       </div>
       <div>
         <LogoutOutlined
