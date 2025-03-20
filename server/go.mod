@@ -1,4 +1,4 @@
-module notifuse/server
+module github.com/Notifuse/notifuse
 
 go 1.23
 
