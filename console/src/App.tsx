@@ -19,6 +19,9 @@ const theme: ThemeConfig = {
     colorLink: '#7763F1'
   },
   components: {
+    Layout: {
+      bodyBg: 'rgb(243, 246, 252)'
+    },
     Button: {
       // primaryColor: '#212121',
       // colorTextLightSolid: '#616161'

@@ -4,6 +4,7 @@ import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { SignInPage } from './pages/SignInPage'
 import { LogoutPage } from './pages/LogoutPage'
 import { CreateWorkspacePage } from './pages/CreateWorkspacePage'
+import { DashboardPage } from './pages/DashboardPage'
 import { createRouter } from '@tanstack/react-router'
 
 // Create the root route
@@ -15,7 +16,7 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: () => <div>Dashboard</div>
+  component: DashboardPage
 })
 
 // Create the signin route

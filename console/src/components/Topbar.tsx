@@ -2,7 +2,7 @@ import { Layout, Select, Space } from 'antd'
 import { LogoutOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import logo from '../assets/logo.png'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { useNavigate, useMatch } from '@tanstack/react-router'
 import { Workspace } from '../services/api/types'
 
 const { Header } = Layout
@@ -10,8 +10,8 @@ const { Header } = Layout
 export function Topbar() {
   const { signout, workspaces } = useAuth()
   const navigate = useNavigate()
-  const params = useParams({ from: '/workspace/$workspaceId' })
-  const currentWorkspaceId = params?.workspaceId
+  const workspaceMatch = useMatch({ from: '/workspace/$workspaceId', shouldThrow: false })
+  const currentWorkspaceId = workspaceMatch?.params?.workspaceId
 
   const handleWorkspaceChange = (workspaceId: string) => {
     navigate({
@@ -32,7 +32,12 @@ export function Topbar() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center' }}>
-        <img src={logo} alt="Logo" style={{ height: '32px' }} />
+        <img
+          src={logo}
+          alt="Logo"
+          style={{ height: '32px', cursor: 'pointer' }}
+          onClick={() => navigate({ to: '/' })}
+        />
 
         {workspaces.length > 0 && (
           <Select

@@ -613,7 +613,7 @@ func TestFaviconHandler_DetectFavicon_NoFaviconFound(t *testing.T) {
 
 	// Check response
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "No favicon found")
+	assert.Contains(t, w.Body.String(), "No favicon or cover image found")
 }
 
 func TestFaviconHandler_DetectFavicon_FailedFetch(t *testing.T) {

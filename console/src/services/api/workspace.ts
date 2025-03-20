@@ -12,6 +12,7 @@ import {
 
 interface DetectFaviconResponse {
   iconUrl: string
+  coverUrl?: string
 }
 
 export const workspaceService = {

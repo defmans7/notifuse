@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,8 +15,9 @@ type FaviconRequest struct {
 }
 
 type FaviconResponse struct {
-	IconURL string `json:"iconUrl,omitempty"`
-	Message string `json:"message,omitempty"`
+	IconURL  string `json:"iconUrl,omitempty"`
+	CoverURL string `json:"coverUrl,omitempty"`
+	Message  string `json:"message,omitempty"`
 }
 
 type FaviconHandler struct{}
@@ -63,31 +65,36 @@ func (h *FaviconHandler) DetectFavicon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prepare response with both icon and cover URLs
+	response := FaviconResponse{}
+
+	// Check for cover image
+	if coverURL := findOpenGraphImage(doc, baseURL); coverURL != "" {
+		response.CoverURL = coverURL
+	} else if coverURL := findTwitterCardImage(doc, baseURL); coverURL != "" {
+		response.CoverURL = coverURL
+	} else if coverURL := findLargeImage(doc, baseURL); coverURL != "" {
+		response.CoverURL = coverURL
+	}
+
 	// Check for apple-touch-icon
 	if iconURL := findAppleTouchIcon(doc, baseURL); iconURL != "" {
-		json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
+		response.IconURL = iconURL
+	} else if iconURL := findManifestIcon(doc, baseURL); iconURL != "" { // Check for manifest.json
+		response.IconURL = iconURL
+	} else if iconURL := findTraditionalFavicon(doc, baseURL); iconURL != "" { // Check for traditional favicon
+		response.IconURL = iconURL
+	} else if iconURL := tryDefaultFavicon(baseURL); iconURL != "" { // Try default favicon location
+		response.IconURL = iconURL
+	}
+
+	// Return the combined results
+	if response.IconURL != "" || response.CoverURL != "" {
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	// Check for manifest.json
-	if iconURL := findManifestIcon(doc, baseURL); iconURL != "" {
-		json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
-		return
-	}
-
-	// Check for traditional favicon
-	if iconURL := findTraditionalFavicon(doc, baseURL); iconURL != "" {
-		json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
-		return
-	}
-
-	// Try default favicon location
-	if iconURL := tryDefaultFavicon(baseURL); iconURL != "" {
-		json.NewEncoder(w).Encode(FaviconResponse{IconURL: iconURL})
-		return
-	}
-
-	http.Error(w, "No favicon found", http.StatusNotFound)
+	http.Error(w, "No favicon or cover image found", http.StatusNotFound)
 }
 
 func findAppleTouchIcon(doc *goquery.Document, baseURL *url.URL) string {
@@ -175,4 +182,74 @@ func resolveURL(baseURL *url.URL, href string) (string, error) {
 	}
 	resolvedURL := baseURL.ResolveReference(&url.URL{Path: href})
 	return resolvedURL.String(), nil
+}
+
+// Add these new functions for finding cover images
+func findOpenGraphImage(doc *goquery.Document, baseURL *url.URL) string {
+	var ogImage string
+	doc.Find("meta[property='og:image']").Each(func(_ int, s *goquery.Selection) {
+		if content, exists := s.Attr("content"); exists && content != "" {
+			if resolvedURL, err := resolveURL(baseURL, content); err == nil {
+				ogImage = resolvedURL
+				return
+			}
+		}
+	})
+	return ogImage
+}
+
+func findTwitterCardImage(doc *goquery.Document, baseURL *url.URL) string {
+	var twitterImage string
+	doc.Find("meta[name='twitter:image']").Each(func(_ int, s *goquery.Selection) {
+		if content, exists := s.Attr("content"); exists && content != "" {
+			if resolvedURL, err := resolveURL(baseURL, content); err == nil {
+				twitterImage = resolvedURL
+				return
+			}
+		}
+	})
+	return twitterImage
+}
+
+func findLargeImage(doc *goquery.Document, baseURL *url.URL) string {
+	var largeImage string
+	var maxWidth, maxHeight int
+
+	doc.Find("img[src]").Each(func(_ int, s *goquery.Selection) {
+		src, exists := s.Attr("src")
+		if !exists || src == "" {
+			return
+		}
+
+		// Check for width and height attributes
+		width := 0
+		height := 0
+		if w, exists := s.Attr("width"); exists {
+			if wInt, err := parseInt(w); err == nil {
+				width = wInt
+			}
+		}
+		if h, exists := s.Attr("height"); exists {
+			if hInt, err := parseInt(h); err == nil {
+				height = hInt
+			}
+		}
+
+		// If this image is larger than previous ones, remember it
+		if width*height > maxWidth*maxHeight {
+			maxWidth = width
+			maxHeight = height
+			if resolvedURL, err := resolveURL(baseURL, src); err == nil {
+				largeImage = resolvedURL
+			}
+		}
+	})
+
+	return largeImage
+}
+
+func parseInt(val string) (int, error) {
+	var result int
+	_, err := fmt.Sscanf(val, "%d", &result)
+	return result, err
 }

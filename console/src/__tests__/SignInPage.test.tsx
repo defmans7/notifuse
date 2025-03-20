@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SignInPage } from '../pages/SignInPage'
 import { AuthProvider } from '../contexts/AuthContext'
 import * as authService from '../services/api/auth'
+import { App } from 'antd'
 
 // Mock the auth service
 vi.mock('../services/api/auth', () => ({
@@ -17,17 +18,33 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(() => ({}))
 }))
 
+// Mock antd message component
+const mockMessage = {
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  warning: vi.fn(),
+  loading: vi.fn()
+}
+
+// Wrap component with necessary providers
+const renderWithProviders = (ui: React.ReactElement) => {
+  return render(
+    <App message={{ maxCount: 3 }}>
+      <AuthProvider>{ui}</AuthProvider>
+    </App>
+  )
+}
+
 describe('SignInPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Clear any previous mock implementations
+    vi.spyOn(App, 'useApp').mockReturnValue({ message: mockMessage } as any)
   })
 
   it('renders the email form initially', () => {
-    render(
-      <AuthProvider>
-        <SignInPage />
-      </AuthProvider>
-    )
+    renderWithProviders(<SignInPage />)
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
     expect(screen.getByText(/send magic code/i)).toBeInTheDocument()
@@ -40,11 +57,7 @@ describe('SignInPage', () => {
       code: '123456'
     })
 
-    render(
-      <AuthProvider>
-        <SignInPage />
-      </AuthProvider>
-    )
+    renderWithProviders(<SignInPage />)
 
     // Fill and submit the email form
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -77,11 +90,7 @@ describe('SignInPage', () => {
       code: '123456'
     })
 
-    render(
-      <AuthProvider>
-        <SignInPage />
-      </AuthProvider>
-    )
+    renderWithProviders(<SignInPage />)
 
     // Fill and submit the email form
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -109,11 +118,7 @@ describe('SignInPage', () => {
       token: 'fake-token'
     })
 
-    render(
-      <AuthProvider>
-        <SignInPage />
-      </AuthProvider>
-    )
+    renderWithProviders(<SignInPage />)
 
     // Fill and submit the email form
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -145,11 +150,7 @@ describe('SignInPage', () => {
     // Mock failed response
     vi.mocked(authService.authService.signIn).mockRejectedValueOnce(new Error('API error'))
 
-    render(
-      <AuthProvider>
-        <SignInPage />
-      </AuthProvider>
-    )
+    renderWithProviders(<SignInPage />)
 
     // Fill and submit the email form
     fireEvent.change(screen.getByLabelText(/email/i), {

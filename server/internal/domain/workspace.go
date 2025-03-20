@@ -14,6 +14,7 @@ import (
 type WorkspaceSettings struct {
 	WebsiteURL string `json:"website_url,omitempty" valid:"url,optional"`
 	LogoURL    string `json:"logo_url,omitempty" valid:"url,optional"`
+	CoverURL   string `json:"cover_url,omitempty" valid:"url,optional"`
 	Timezone   string `json:"timezone" valid:"required,timezone"`
 }
 

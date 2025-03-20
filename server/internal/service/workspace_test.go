@@ -254,6 +254,7 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 			Settings: domain.WorkspaceSettings{
 				WebsiteURL: "https://example.com",
 				LogoURL:    "https://example.com/logo.png",
+				CoverURL:   "https://example.com/cover.png",
 				Timezone:   "UTC",
 			},
 		}
@@ -323,6 +324,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 			Settings: domain.WorkspaceSettings{
 				WebsiteURL: "https://example.com",
 				LogoURL:    "https://example.com/logo.png",
+				CoverURL:   "https://example.com/cover.png",
 				Timezone:   "UTC",
 			},
 		}
@@ -338,6 +340,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 				w.Name == expectedWorkspace.Name &&
 				w.Settings.WebsiteURL == expectedWorkspace.Settings.WebsiteURL &&
 				w.Settings.LogoURL == expectedWorkspace.Settings.LogoURL &&
+				w.Settings.CoverURL == expectedWorkspace.Settings.CoverURL &&
 				w.Settings.Timezone == expectedWorkspace.Settings.Timezone
 		})).Return(nil)
 
@@ -347,7 +350,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 				uw.Role == expectedUserWorkspace.Role
 		})).Return(nil)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", ownerID)
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", ownerID)
 		require.NoError(t, err)
 		assert.Equal(t, expectedWorkspace.ID, workspace.ID)
 		assert.Equal(t, expectedWorkspace.Name, workspace.Name)
@@ -359,7 +362,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.Mock = mock.Mock{}
 
 		// Invalid timezone
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "INVALID_TIMEZONE", ownerID)
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "INVALID_TIMEZONE", ownerID)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Contains(t, err.Error(), "does not validate as timezone")
@@ -371,7 +374,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 		mockRepo.On("Create", ctx, mock.Anything).Return(assert.AnError)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", ownerID)
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", ownerID)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -384,7 +387,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.On("Create", ctx, mock.Anything).Return(nil)
 		mockRepo.On("AddUserToWorkspace", ctx, mock.Anything).Return(assert.AnError)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", ownerID)
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", ownerID)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -417,14 +420,22 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 
 		mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
 		mockRepo.On("Update", ctx, mock.MatchedBy(func(w *domain.Workspace) bool {
-			return w.ID == workspaceID && w.Name == "Updated Workspace"
+			return w.ID == workspaceID &&
+				w.Name == "Updated Workspace" &&
+				w.Settings.WebsiteURL == "https://updated.com" &&
+				w.Settings.LogoURL == "https://updated.com/logo.png" &&
+				w.Settings.CoverURL == "https://updated.com/cover.png" &&
+				w.Settings.Timezone == "Europe/Paris"
 		})).Return(nil)
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "Europe/Paris", userID)
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", userID)
 		require.NoError(t, err)
 		assert.Equal(t, workspaceID, workspace.ID)
 		assert.Equal(t, "Updated Workspace", workspace.Name)
 		assert.Equal(t, "https://updated.com", workspace.Settings.WebsiteURL)
+		assert.Equal(t, "https://updated.com/logo.png", workspace.Settings.LogoURL)
+		assert.Equal(t, "https://updated.com/cover.png", workspace.Settings.CoverURL)
+		assert.Equal(t, "Europe/Paris", workspace.Settings.Timezone)
 		mockRepo.AssertExpectations(t)
 	})
 
@@ -439,7 +450,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 
 		mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "Europe/Paris", userID)
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", userID)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.IsType(t, &domain.ErrUnauthorized{}, err)
@@ -458,7 +469,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
 
 		// Invalid timezone will cause validation error
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "INVALID_TIMEZONE", userID)
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "INVALID_TIMEZONE", userID)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Contains(t, err.Error(), "does not validate as timezone")
@@ -477,7 +488,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(userWorkspace, nil)
 		mockRepo.On("Update", ctx, mock.Anything).Return(assert.AnError)
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "Europe/Paris", userID)
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", userID)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -489,7 +500,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 
 		mockRepo.On("GetUserWorkspace", ctx, userID, workspaceID).Return(nil, assert.AnError)
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "Europe/Paris", userID)
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", userID)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)

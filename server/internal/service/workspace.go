@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"time"
 )
 
 type WorkspaceService struct {
@@ -65,13 +66,14 @@ func (s *WorkspaceService) GetWorkspace(ctx context.Context, id string, userID s
 }
 
 // CreateWorkspace creates a new workspace and adds the creator as owner
-func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, timezone string, ownerID string) (*domain.Workspace, error) {
+func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string, ownerID string) (*domain.Workspace, error) {
 	workspace := &domain.Workspace{
 		ID:   id,
 		Name: name,
 		Settings: domain.WorkspaceSettings{
 			WebsiteURL: websiteURL,
 			LogoURL:    logoURL,
+			CoverURL:   coverURL,
 			Timezone:   timezone,
 		},
 		CreatedAt: time.Now(),
@@ -111,7 +113,7 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 }
 
 // UpdateWorkspace updates a workspace if the user is an owner
-func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, timezone string, userID string) (*domain.Workspace, error) {
+func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string, userID string) (*domain.Workspace, error) {
 	// Check if user is an owner
 	userWorkspace, err := s.repo.GetUserWorkspace(ctx, userID, id)
 	if err != nil {
@@ -130,6 +132,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		Settings: domain.WorkspaceSettings{
 			WebsiteURL: websiteURL,
 			LogoURL:    logoURL,
+			CoverURL:   coverURL,
 			Timezone:   timezone,
 		},
 		UpdatedAt: time.Now(),

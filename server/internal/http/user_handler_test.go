@@ -62,8 +62,8 @@ type mockUserWorkspaceService struct {
 	mock.Mock
 }
 
-func (m *mockUserWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
+func (m *mockUserWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -86,8 +86,8 @@ func (m *mockUserWorkspaceService) ListWorkspaces(ctx context.Context, ownerID s
 	return args.Get(0).([]*domain.Workspace), args.Error(1)
 }
 
-func (m *mockUserWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
+func (m *mockUserWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

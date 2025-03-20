@@ -30,6 +30,7 @@ export interface GetCurrentUserResponse {
 export interface WorkspaceSettings {
   website_url: string
   logo_url: string | null
+  cover_url: string | null
   timezone: string
 }
 

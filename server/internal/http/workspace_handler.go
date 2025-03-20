@@ -1,8 +1,10 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -13,10 +15,10 @@ import (
 
 // WorkspaceServiceInterface defines the interface for workspace operations
 type WorkspaceServiceInterface interface {
-	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error)
+	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
 	GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
 	ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
-	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error)
+	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
 	DeleteWorkspace(ctx context.Context, id, ownerID string) error
 }
 
@@ -37,6 +39,7 @@ func NewWorkspaceHandler(workspaceService WorkspaceServiceInterface, authService
 // Request/Response types
 type createWorkspaceRequest struct {
 	ID       string                `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name     string                `json:"name" valid:"required,stringlength(1|32)"`
 	Settings workspaceSettingsData `json:"settings"`
 }
 
@@ -44,6 +47,7 @@ type workspaceSettingsData struct {
 	Name       string `json:"name"`
 	WebsiteURL string `json:"website_url"`
 	LogoURL    string `json:"logo_url"`
+	CoverURL   string `json:"cover_url"`
 	Timezone   string `json:"timezone"`
 }
 
@@ -56,6 +60,7 @@ type updateWorkspaceRequest struct {
 	Name       string `json:"name"`
 	WebsiteURL string `json:"website_url"`
 	LogoURL    string `json:"logo_url"`
+	CoverURL   string `json:"cover_url"`
 	Timezone   string `json:"timezone"`
 }
 
@@ -150,30 +155,53 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Validate workspace ID
+	// Validate workspace ID first
 	if req.ID == "" {
 		writeError(w, http.StatusBadRequest, "Workspace ID is required")
 		return
 	}
 
-	// Validate required settings
-	if req.Settings.Name == "" {
+	// Support name from either root or settings
+	name := req.Name
+	if name == "" {
+		name = req.Settings.Name
+	}
+
+	// Validate name
+	if name == "" {
 		writeError(w, http.StatusBadRequest, "Workspace name is required")
 		return
 	}
 
+	// Validate timezone
 	if req.Settings.Timezone == "" {
 		writeError(w, http.StatusBadRequest, "Timezone is required")
 		return
 	}
 
-	workspace, err := h.workspaceService.CreateWorkspace(r.Context(), req.ID, req.Settings.Name, req.Settings.WebsiteURL, req.Settings.LogoURL, req.Settings.Timezone, authUser.ID)
+	workspace, err := h.workspaceService.CreateWorkspace(
+		r.Context(),
+		req.ID,
+		name,
+		req.Settings.WebsiteURL,
+		req.Settings.LogoURL,
+		req.Settings.CoverURL,
+		req.Settings.Timezone,
+		authUser.ID,
+	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create workspace")
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, workspace)
+}
+
+// Helper function to get bytes from request body
+func getBytesFromBody(body io.ReadCloser) []byte {
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(body)
+	return buf.Bytes()
 }
 
 func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -190,7 +218,16 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	workspace, err := h.workspaceService.UpdateWorkspace(r.Context(), req.ID, req.Name, req.WebsiteURL, req.LogoURL, req.Timezone, authUser.ID)
+	workspace, err := h.workspaceService.UpdateWorkspace(
+		r.Context(),
+		req.ID,
+		req.Name,
+		req.WebsiteURL,
+		req.LogoURL,
+		req.CoverURL,
+		req.Timezone,
+		authUser.ID,
+	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update workspace")
 		return

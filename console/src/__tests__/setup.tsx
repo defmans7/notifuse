@@ -17,6 +17,21 @@ Object.defineProperty(window, 'matchMedia', {
   }))
 })
 
+// Mock Ant Design message component
+vi.mock('antd', async () => {
+  const actual = await vi.importActual('antd')
+  return {
+    ...actual,
+    message: {
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+      loading: vi.fn()
+    }
+  }
+})
+
 // Setup mocks
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual('@tanstack/react-router')

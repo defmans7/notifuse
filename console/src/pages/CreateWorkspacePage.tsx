@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { Form, Input, Button, Layout, Typography, Card, Tooltip, message } from 'antd'
+import { Form, Input, Button, Typography, Card, Tooltip, message } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
-import { Topbar } from '../components/Topbar'
 import { InfoCircleOutlined } from '@ant-design/icons'
 import { workspaceService } from '../services/api/workspace'
 import { useAuth } from '../contexts/AuthContext'
+import { MainLayout } from '../layouts/MainLayout'
 
-const { Content } = Layout
 const { Title } = Typography
 
 export function CreateWorkspacePage() {
@@ -18,11 +17,10 @@ export function CreateWorkspacePage() {
   // Generate workspace ID from name (alphanumeric only, max 20 chars)
   const generateWorkspaceId = (name: string) => {
     if (!name) return ''
-    // Replace spaces with hyphens and remove non-alphanumeric characters
+    // remove spaces and remove non-alphanumeric characters
     return name
       .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '')
+      .replace(/[^a-z0-9]/g, '')
       .substring(0, 20)
   }
 
@@ -37,15 +35,17 @@ export function CreateWorkspacePage() {
     try {
       setLoading(true)
       let logoUrl = null
+      let coverUrl = null
 
-      // If website URL is provided, detect favicon
+      // If website URL is provided, detect favicon and cover image
       if (values.website_url) {
         try {
           const faviconResponse = await workspaceService.detectFavicon(values.website_url)
           logoUrl = faviconResponse.iconUrl
+          coverUrl = faviconResponse.coverUrl || null
         } catch (error) {
-          console.error('Error detecting favicon:', error)
-          // Don't fail the whole process if favicon detection fails
+          console.error('Error detecting website assets:', error)
+          // Don't fail the whole process if detection fails
         }
       }
 
@@ -54,11 +54,12 @@ export function CreateWorkspacePage() {
 
       // Create workspace with API
       await workspaceService.create({
-        id: values.id,
+        id: generateWorkspaceId(values.name),
         name: values.name,
         settings: {
           website_url: values.website_url || '',
           logo_url: logoUrl,
+          cover_url: coverUrl,
           timezone: timezone
         }
       })
@@ -79,9 +80,8 @@ export function CreateWorkspacePage() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Topbar />
-      <Content style={{ padding: '50px 24px' }}>
+    <MainLayout>
+      <div style={{ padding: '26px 0' }}>
         <Title level={2} style={{ textAlign: 'center', marginBottom: 40 }}>
           Create a New Workspace
         </Title>
@@ -166,7 +166,7 @@ export function CreateWorkspacePage() {
             </Form.Item>
           </Form>
         </Card>
-      </Content>
-    </Layout>
+      </div>
+    </MainLayout>
   )
 }

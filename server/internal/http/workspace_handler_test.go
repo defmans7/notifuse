@@ -25,8 +25,8 @@ type mockWorkspaceService struct {
 	mock.Mock
 }
 
-func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
+func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -46,8 +46,8 @@ func (m *mockWorkspaceService) ListWorkspaces(ctx context.Context, ownerID strin
 	return args.Get(0).([]*domain.Workspace), args.Error(1)
 }
 
-func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, timezone, ownerID)
+func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -117,18 +117,20 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "UTC", "test-user").Return(expectedWorkspace, nil)
+	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", "test-user").Return(expectedWorkspace, nil)
 
 	// Create request
 	reqBody := createWorkspaceRequest{
-		ID: "testworkspace1",
+		ID:   "testworkspace1",
+		Name: "Test Workspace",
 		Settings: workspaceSettingsData{
-			Name:       "Test Workspace",
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
 			Timezone:   "UTC",
 		},
 	}
@@ -264,10 +266,11 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://updated.com",
 			LogoURL:    "https://updated.com/logo.png",
+			CoverURL:   "https://updated.com/cover.png",
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "UTC", "test-user").Return(expectedWorkspace, nil)
+	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC", "test-user").Return(expectedWorkspace, nil)
 
 	// Create request
 	reqBody := updateWorkspaceRequest{
@@ -275,6 +278,7 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 		Name:       "Updated Workspace",
 		WebsiteURL: "https://updated.com",
 		LogoURL:    "https://updated.com/logo.png",
+		CoverURL:   "https://updated.com/cover.png",
 		Timezone:   "UTC",
 	}
 	body, err := json.Marshal(reqBody)
@@ -639,6 +643,7 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 			"name": "Test Workspace",
 			"website_url": "https://example.com",
 			"logo_url": "https://example.com/logo.png",
+			"cover_url": "https://example.com/cover.png",
 			"timezone": "UTC"
 		}
 	}`))
@@ -656,6 +661,7 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 		"Test Workspace",
 		"https://example.com",
 		"https://example.com/logo.png",
+		"https://example.com/cover.png",
 		"UTC",
 		"user123").Return(nil, fmt.Errorf("database error"))
 
@@ -764,6 +770,7 @@ func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
 		"",
 		"",
 		"",
+		"",
 		"user123").Return(nil, fmt.Errorf("workspace ID is required"))
 
 	// Call handler directly
@@ -790,6 +797,7 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 		"name": "Test Workspace",
 		"website_url": "https://example.com",
 		"logo_url": "https://example.com/logo.png",
+		"cover_url": "https://example.com/cover.png",
 		"timezone": "UTC"
 	}`))
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", reqBody)
@@ -806,6 +814,7 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 		"Test Workspace",
 		"https://example.com",
 		"https://example.com/logo.png",
+		"https://example.com/cover.png",
 		"UTC",
 		"user123").Return(nil, fmt.Errorf("database error"))
 
