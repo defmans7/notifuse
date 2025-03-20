@@ -59,6 +59,29 @@ func InitializeDatabase(db *sql.DB, rootEmail string) error {
 	return nil
 }
 
+// InitializeWorkspaceDatabase creates the necessary tables for a workspace database
+func InitializeWorkspaceDatabase(db *sql.DB) error {
+	// Create workspace tables
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS contacts (
+			id UUID PRIMARY KEY,
+			email VARCHAR(255) UNIQUE NOT NULL,
+			name VARCHAR(255),
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		)`,
+	}
+
+	// Run all table creation queries
+	for _, query := range queries {
+		if _, err := db.Exec(query); err != nil {
+			return fmt.Errorf("failed to create workspace table: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // CleanDatabase drops all tables in reverse order
 func CleanDatabase(db *sql.DB) error {
 	// Drop tables in reverse order to handle dependencies

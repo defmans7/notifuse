@@ -214,37 +214,10 @@ func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID str
 }
 
 func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID string) error {
-	// Replace hyphens with underscores for PostgreSQL compatibility
-	safeID := strings.ReplaceAll(workspaceID, "-", "_")
-	dbName := fmt.Sprintf("%s_ws_%s", r.dbConfig.Prefix, safeID)
-
-	// Create the database
-	_, err := r.systemDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", dbName))
-	if err != nil {
-		return fmt.Errorf("failed to create workspace database: %w", err)
+	// Use the utility function to ensure the database exists and initialize it
+	if err := database.EnsureWorkspaceDatabaseExists(r.dbConfig, workspaceID); err != nil {
+		return fmt.Errorf("failed to create and initialize workspace database: %w", err)
 	}
-
-	// Connect to the new database to create schema
-	db, err := database.ConnectToWorkspace(r.dbConfig, workspaceID)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// Create workspace schema
-	_, err = db.ExecContext(ctx, `
-		CREATE TABLE contacts (
-			id UUID PRIMARY KEY,
-			email VARCHAR(255) UNIQUE NOT NULL,
-			name VARCHAR(255),
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
-		);
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create workspace schema: %w", err)
-	}
-
 	return nil
 }
 

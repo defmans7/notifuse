@@ -158,3 +158,34 @@ func TestCleanDatabase(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+func TestInitializeWorkspaceDatabase(t *testing.T) {
+	t.Run("creates workspace tables successfully", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Expect table creation
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contacts").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err = InitializeWorkspaceDatabase(db)
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("handles table creation error", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Table creation fails
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contacts").
+			WillReturnError(sql.ErrConnDone)
+
+		err = InitializeWorkspaceDatabase(db)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create workspace table")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}

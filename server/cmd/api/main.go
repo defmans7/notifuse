@@ -41,6 +41,14 @@ func main() {
 	appLogger := logger.NewLogger()
 	appLogger.Info("Starting API server")
 
+	// Ensure system database exists
+	if err := database.EnsureSystemDatabaseExists(&cfg.Database); err != nil {
+		appLogger.WithField("error", err.Error()).Fatal("Failed to ensure system database exists")
+		osExit(1)
+		return
+	}
+	appLogger.Info("System database check completed")
+
 	// Connect to system database
 	systemDB, err := sql.Open("postgres", database.GetSystemDSN(&cfg.Database))
 	if err != nil {
