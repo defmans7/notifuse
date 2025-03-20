@@ -8,31 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-// MockAuthRepository is a mock implementation of the AuthRepository interface
-type MockAuthRepository struct {
-	mock.Mock
-}
-
-func (m *MockAuthRepository) GetSessionByID(ctx context.Context, sessionID string, userID string) (*time.Time, error) {
-	args := m.Called(ctx, sessionID, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*time.Time), args.Error(1)
-}
-
-func (m *MockAuthRepository) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
 
 func TestAuthService_VerifyUserSession(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
@@ -42,7 +22,19 @@ func TestAuthService_VerifyUserSession(t *testing.T) {
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewAuthService(mockRepo, mockLogger)
+	// Create key pair for testing
+	key := paseto.NewV4AsymmetricSecretKey()
+	privateKey := key.ExportBytes()
+	publicKey := key.Public().ExportBytes()
+
+	// Create service with config
+	service, err := NewAuthService(AuthServiceConfig{
+		Repository: mockRepo,
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+		Logger:     mockLogger,
+	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	userID := "user123"
@@ -148,13 +140,87 @@ func TestAuthService_VerifyUserSession(t *testing.T) {
 	})
 }
 
-// Simple constructor test
+// Test the constructor with config
 func TestAuthService_NewAuthService(t *testing.T) {
-	mockLogger := new(MockLogger)
 	mockRepo := new(MockAuthRepository)
+	mockLogger := new(MockLogger)
 
-	service := NewAuthService(mockRepo, mockLogger)
+	// Create key pair for testing
+	key := paseto.NewV4AsymmetricSecretKey()
+	privateKey := key.ExportBytes()
+	publicKey := key.Public().ExportBytes()
+
+	service, err := NewAuthService(AuthServiceConfig{
+		Repository: mockRepo,
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+		Logger:     mockLogger,
+	})
+
+	require.NoError(t, err)
 	assert.NotNil(t, service)
 	assert.Equal(t, mockRepo, service.repo)
 	assert.Equal(t, mockLogger, service.logger)
+	// Cannot directly compare paseto keys as they are interfaces
+	assert.NotNil(t, service.privateKey)
+	assert.NotNil(t, service.publicKey)
+}
+
+// Test the GenerateAuthToken method
+func TestAuthService_GenerateAuthToken(t *testing.T) {
+	mockRepo := new(MockAuthRepository)
+	mockLogger := new(MockLogger)
+
+	// Setup logger mock to return itself for WithField calls
+	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+	mockLogger.On("Error", mock.Anything).Return()
+
+	// Create key pair for testing
+	key := paseto.NewV4AsymmetricSecretKey()
+	privateKey := key.ExportBytes()
+	publicKey := key.Public().ExportBytes()
+
+	// Create service with config
+	service, err := NewAuthService(AuthServiceConfig{
+		Repository: mockRepo,
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+		Logger:     mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Create a user and session for testing
+	user := &domain.User{
+		ID:        "test-user-id",
+		Email:     "test@example.com",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	sessionID := "test-session-id"
+	expiresAt := time.Now().Add(24 * time.Hour)
+
+	// Generate token
+	token := service.GenerateAuthToken(user, sessionID, expiresAt)
+
+	// Verify the token is not empty
+	assert.NotEmpty(t, token)
+
+	// Parse the token to verify its contents
+	parser := paseto.NewParser()
+	parsedToken, err := parser.ParseV4Public(key.Public(), token, nil)
+	require.NoError(t, err)
+
+	// Verify token claims
+	userId, err := parsedToken.GetString("user_id")
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, userId)
+
+	email, err := parsedToken.GetString("email")
+	require.NoError(t, err)
+	assert.Equal(t, user.Email, email)
+
+	sessionIdFromToken, err := parsedToken.GetString("session_id")
+	require.NoError(t, err)
+	assert.Equal(t, sessionID, sessionIdFromToken)
 }

@@ -11,38 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"notifuse/server/internal/domain"
-	"notifuse/server/pkg/logger"
 )
-
-// MockLogger is a mock implementation of the Logger interface
-type MockLogger struct {
-	mock.Mock
-}
-
-func (m *MockLogger) Debug(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) Info(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) Warn(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) Error(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) Fatal(msg string) {
-	m.Called(msg)
-}
-
-func (m *MockLogger) WithField(key string, value interface{}) logger.Logger {
-	args := m.Called(key, value)
-	return args.Get(0).(logger.Logger)
-}
 
 // MockWorkspaceRepository is a mock implementation of the WorkspaceRepository interface
 type MockWorkspaceRepository struct {

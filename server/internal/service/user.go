@@ -6,16 +6,13 @@ import (
 	"fmt"
 	"time"
 
-	"aidanwoods.dev/go-paseto"
-
 	"notifuse/server/internal/domain"
 	"notifuse/server/pkg/logger"
 )
 
 type UserService struct {
 	repo          domain.UserRepository
-	privateKey    paseto.V4AsymmetricSecretKey
-	publicKey     paseto.V4AsymmetricPublicKey
+	authService   *AuthService
 	emailSender   EmailSender
 	sessionExpiry time.Duration
 	logger        logger.Logger
@@ -27,34 +24,16 @@ type EmailSender interface {
 
 type UserServiceConfig struct {
 	Repository    domain.UserRepository
-	PrivateKey    []byte
-	PublicKey     []byte
+	AuthService   *AuthService
 	EmailSender   EmailSender
 	SessionExpiry time.Duration
 	Logger        logger.Logger
 }
 
 func NewUserService(cfg UserServiceConfig) (*UserService, error) {
-	privateKey, err := paseto.NewV4AsymmetricSecretKeyFromBytes(cfg.PrivateKey)
-	if err != nil {
-		if cfg.Logger != nil {
-			cfg.Logger.WithField("error", err.Error()).Error("Error creating PASETO private key")
-		}
-		return nil, fmt.Errorf("error creating private key: %w", err)
-	}
-
-	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes(cfg.PublicKey)
-	if err != nil {
-		if cfg.Logger != nil {
-			cfg.Logger.WithField("error", err.Error()).Error("Error creating PASETO public key")
-		}
-		return nil, fmt.Errorf("error creating public key: %w", err)
-	}
-
 	return &UserService{
 		repo:          cfg.Repository,
-		privateKey:    privateKey,
-		publicKey:     publicKey,
+		authService:   cfg.AuthService,
 		emailSender:   cfg.EmailSender,
 		sessionExpiry: cfg.SessionExpiry,
 		logger:        cfg.Logger,
@@ -184,7 +163,7 @@ func (s *UserService) VerifyCode(ctx context.Context, input VerifyCodeInput) (*A
 	}
 
 	// Generate authentication token
-	token := s.generateAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
+	token := s.authService.GenerateAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
 
 	return &AuthResponse{
 		Token:     token,
@@ -211,23 +190,6 @@ func (s *UserService) generateMagicCode() string {
 // generateID generates a random ID
 func generateID() string {
 	return fmt.Sprintf("%x", time.Now().UnixNano())
-}
-
-func (s *UserService) generateAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string {
-	token := paseto.NewToken()
-	token.SetIssuedAt(time.Now())
-	token.SetNotBefore(time.Now())
-	token.SetExpiration(expiresAt)
-	token.SetString("user_id", user.ID)
-	token.SetString("session_id", sessionID)
-	token.SetString("email", user.Email)
-
-	encrypted := token.V4Sign(s.privateKey, nil)
-	if encrypted == "" {
-		s.logger.WithField("user_id", user.ID).WithField("session_id", sessionID).Error("Failed to sign authentication token")
-	}
-
-	return encrypted
 }
 
 // VerifyUserSession verifies a user session and returns the associated user
@@ -300,7 +262,7 @@ func (s *UserService) SignInDev(ctx context.Context, input SignInInput) (string,
 	}
 
 	// Generate authentication token
-	token := s.generateAuthToken(user, session.ID, expiresAt)
+	token := s.authService.GenerateAuthToken(user, session.ID, expiresAt)
 	return token, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"aidanwoods.dev/go-paseto"
@@ -27,6 +28,9 @@ func (s *emailSender) SendMagicCode(email, code string) error {
 	return nil
 }
 
+// osExit is a variable to allow mocking os.Exit in tests
+var osExit = os.Exit
+
 func main() {
 	// Load configuration
 	cfg, err := config.Load()
@@ -42,17 +46,23 @@ func main() {
 	systemDB, err := sql.Open("postgres", database.GetSystemDSN(&cfg.Database))
 	if err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Failed to connect to system database")
+		osExit(1)
+		return
 	}
 	defer systemDB.Close()
 
 	// Test database connection
 	if err := systemDB.Ping(); err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Failed to ping system database")
+		osExit(1)
+		return
 	}
 
 	// Initialize database schema if needed
 	if err := database.InitializeDatabase(systemDB, cfg.RootEmail); err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Failed to initialize database schema")
+		osExit(1)
+		return
 	}
 
 	// Set connection pool settings
@@ -60,34 +70,48 @@ func main() {
 	systemDB.SetMaxIdleConns(25)
 	systemDB.SetConnMaxLifetime(5 * time.Minute)
 
-	// Initialize components
+	// Initialize repositories
 	userRepo := repository.NewUserRepository(systemDB)
 	workspaceRepo := repository.NewWorkspaceRepository(systemDB, &cfg.Database)
 	authRepo := repository.NewSQLAuthRepository(systemDB, appLogger)
 	emailSender := &emailSender{}
 
+	// Create auth service first
+	authService, err := service.NewAuthService(service.AuthServiceConfig{
+		Repository: authRepo,
+		PrivateKey: cfg.Security.PasetoPrivateKey,
+		PublicKey:  cfg.Security.PasetoPublicKey,
+		Logger:     appLogger,
+	})
+	if err != nil {
+		appLogger.WithField("error", err.Error()).Fatal("Failed to create auth service")
+		osExit(1)
+		return
+	}
+
+	// Then create user service with auth service as dependency
 	userService, err := service.NewUserService(service.UserServiceConfig{
 		Repository:    userRepo,
-		PrivateKey:    []byte(cfg.Security.PasetoPrivateKey),
-		PublicKey:     []byte(cfg.Security.PasetoPublicKey),
+		AuthService:   authService,
 		EmailSender:   emailSender,
 		SessionExpiry: 15 * 24 * time.Hour, // 15 days
 		Logger:        appLogger,
 	})
 	if err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Failed to create user service")
+		osExit(1)
+		return
 	}
-
-	// Create auth service
-	authService := service.NewAuthService(authRepo, appLogger)
 
 	// Create workspace service
 	workspaceService := service.NewWorkspaceService(workspaceRepo, appLogger)
 
 	// Parse public key for PASETO
-	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes([]byte(cfg.Security.PasetoPublicKey))
+	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes(cfg.Security.PasetoPublicKey)
 	if err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Failed to parse PASETO public key")
+		osExit(1)
+		return
 	}
 
 	userHandler := httpHandler.NewUserHandler(userService, workspaceService, cfg, publicKey)
@@ -118,5 +142,7 @@ func main() {
 
 	if err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Server failed to start")
+		osExit(1)
+		return
 	}
 }

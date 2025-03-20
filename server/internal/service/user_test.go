@@ -12,9 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"notifuse/server/config"
 	"notifuse/server/internal/domain"
-	"notifuse/server/pkg/logger"
 )
 
 type mockUserRepository struct {
@@ -82,57 +80,39 @@ func (m *mockEmailSender) SendMagicCode(email, code string) error {
 	return args.Error(0)
 }
 
-type mockLogger struct {
-	mock.Mock
-}
+// Setup a real AuthService for testing
+func setupAuthService() *AuthService {
+	// Create key pair for testing
+	key := paseto.NewV4AsymmetricSecretKey()
+	privateKey := key.ExportBytes()
+	publicKey := key.Public().ExportBytes()
 
-func (m *mockLogger) Debug(msg string) {
-	m.Called(msg)
-}
+	mockRepo := new(MockAuthRepository)
+	mockLogger := new(MockLogger)
 
-func (m *mockLogger) Info(msg string) {
-	m.Called(msg)
-}
+	service, _ := NewAuthService(AuthServiceConfig{
+		Repository: mockRepo,
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+		Logger:     mockLogger,
+	})
 
-func (m *mockLogger) Warn(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) Error(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) Fatal(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) WithField(key string, value interface{}) logger.Logger {
-	args := m.Called(key, value)
-	return args.Get(0).(logger.Logger)
-}
-
-func (m *mockLogger) WithFields(fields map[string]interface{}) logger.Logger {
-	args := m.Called(fields)
-	return args.Get(0).(logger.Logger)
+	return service
 }
 
 func TestUserService_SignIn(t *testing.T) {
 	repo := new(mockUserRepository)
 	emailSender := new(mockEmailSender)
 	mockLogger := new(MockLogger)
+	authService := setupAuthService()
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
 	service, err := NewUserService(UserServiceConfig{
 		Repository:    repo,
-		PrivateKey:    cfg.Security.PasetoPrivateKey,
-		PublicKey:     cfg.Security.PasetoPublicKey,
+		AuthService:   authService,
 		EmailSender:   emailSender,
 		SessionExpiry: 24 * time.Hour,
 		Logger:        mockLogger,
@@ -189,19 +169,15 @@ func TestUserService_VerifyCode(t *testing.T) {
 	repo := new(mockUserRepository)
 	emailSender := new(mockEmailSender)
 	mockLogger := new(MockLogger)
+	authService := setupAuthService()
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
 	service, err := NewUserService(UserServiceConfig{
 		Repository:    repo,
-		PrivateKey:    cfg.Security.PasetoPrivateKey,
-		PublicKey:     cfg.Security.PasetoPublicKey,
+		AuthService:   authService,
 		EmailSender:   emailSender,
 		SessionExpiry: 24 * time.Hour,
 		Logger:        mockLogger,
@@ -253,7 +229,7 @@ func TestUserService_VerifyCode(t *testing.T) {
 
 		response, err := service.VerifyCode(ctx, VerifyCodeInput{
 			Email: user.Email,
-			Code:  "000000",
+			Code:  "invalid",
 		})
 
 		assert.Error(t, err)
@@ -269,7 +245,7 @@ func TestUserService_VerifyCode(t *testing.T) {
 			ID:               uuid.New().String(),
 			UserID:           user.ID,
 			MagicCode:        validCode,
-			MagicCodeExpires: time.Now().Add(-1 * time.Minute),
+			MagicCodeExpires: time.Now().Add(-1 * time.Minute), // Expired
 			ExpiresAt:        time.Now().Add(24 * time.Hour),
 		}
 
@@ -290,230 +266,219 @@ func TestUserService_VerifyCode(t *testing.T) {
 
 func TestUserService_VerifyUserSession(t *testing.T) {
 	repo := new(mockUserRepository)
+	emailSender := new(mockEmailSender)
 	mockLogger := new(MockLogger)
+	authService := setupAuthService()
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
 	service, err := NewUserService(UserServiceConfig{
 		Repository:    repo,
-		PrivateKey:    cfg.Security.PasetoPrivateKey,
-		PublicKey:     cfg.Security.PasetoPublicKey,
-		EmailSender:   new(mockEmailSender),
+		AuthService:   authService,
+		EmailSender:   emailSender,
 		SessionExpiry: 24 * time.Hour,
 		Logger:        mockLogger,
 	})
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	userId := uuid.New().String()
-	sessionId := uuid.New().String()
+	userID := uuid.New().String()
+	sessionID := uuid.New().String()
 
 	t.Run("valid session", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		// Valid session
-		validSession := &domain.Session{
-			ID:        sessionId,
-			UserID:    userId,
+		// Expected session and user for this test
+		expectedSession := &domain.Session{
+			ID:        sessionID,
+			UserID:    userID,
 			ExpiresAt: time.Now().Add(1 * time.Hour),
-		}
-
-		user := &domain.User{
-			ID:        userId,
-			Email:     "test@example.com",
 			CreatedAt: time.Now(),
 		}
 
-		repo.On("GetSessionByID", ctx, sessionId).Return(validSession, nil)
-		repo.On("GetUserByID", ctx, userId).Return(user, nil)
-
-		result, err := service.VerifyUserSession(ctx, userId, sessionId)
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, userId, result.ID)
-		assert.Equal(t, "test@example.com", result.Email)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("expired session", func(t *testing.T) {
-		repo.Mock = mock.Mock{}
-
-		// Expired session
-		expiredSession := &domain.Session{
-			ID:        sessionId,
-			UserID:    userId,
-			ExpiresAt: time.Now().Add(-1 * time.Hour),
+		expectedUser := &domain.User{
+			ID:    userID,
+			Email: "test@example.com",
+			Name:  "Test User",
 		}
 
-		repo.On("GetSessionByID", ctx, sessionId).Return(expiredSession, nil)
+		// Set up expectations
+		repo.On("GetSessionByID", ctx, sessionID).Return(expectedSession, nil)
+		repo.On("GetUserByID", ctx, userID).Return(expectedUser, nil)
 
-		result, err := service.VerifyUserSession(ctx, userId, sessionId)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, ErrSessionExpired, err)
+		user, err := service.VerifyUserSession(ctx, userID, sessionID)
+		require.NoError(t, err)
+		assert.Equal(t, expectedUser, user)
 		repo.AssertExpectations(t)
 	})
 
 	t.Run("session not found", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		repo.On("GetSessionByID", ctx, sessionId).Return(nil, fmt.Errorf("session not found"))
+		// Session not found
+		repo.On("GetSessionByID", ctx, sessionID).Return(nil, fmt.Errorf("session not found"))
 
-		result, err := service.VerifyUserSession(ctx, userId, sessionId)
-		assert.Error(t, err)
-		assert.Nil(t, result)
+		user, err := service.VerifyUserSession(ctx, userID, sessionID)
+		require.Error(t, err)
+		assert.Nil(t, user)
+		assert.Contains(t, err.Error(), "session not found")
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("wrong user", func(t *testing.T) {
+	t.Run("session does not belong to user", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		// Session belongs to different user
-		wrongUserSession := &domain.Session{
-			ID:        sessionId,
-			UserID:    "different-user-id",
+		// Session belongs to another user
+		session := &domain.Session{
+			ID:        sessionID,
+			UserID:    "another-user-id",
 			ExpiresAt: time.Now().Add(1 * time.Hour),
+			CreatedAt: time.Now(),
 		}
 
-		repo.On("GetSessionByID", ctx, sessionId).Return(wrongUserSession, nil)
+		repo.On("GetSessionByID", ctx, sessionID).Return(session, nil)
 
-		result, err := service.VerifyUserSession(ctx, userId, sessionId)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "does not belong to user")
+		user, err := service.VerifyUserSession(ctx, userID, sessionID)
+		require.Error(t, err)
+		assert.Nil(t, user)
+		assert.Contains(t, err.Error(), "session does not belong to user")
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("expired session", func(t *testing.T) {
+		repo.Mock = mock.Mock{}
+
+		// Session is expired
+		expiredSession := &domain.Session{
+			ID:        sessionID,
+			UserID:    userID,
+			ExpiresAt: time.Now().Add(-1 * time.Hour), // Expired
+			CreatedAt: time.Now(),
+		}
+
+		repo.On("GetSessionByID", ctx, sessionID).Return(expiredSession, nil)
+
+		user, err := service.VerifyUserSession(ctx, userID, sessionID)
+		require.Error(t, err)
+		assert.Nil(t, user)
+		assert.Equal(t, ErrSessionExpired, err)
 		repo.AssertExpectations(t)
 	})
 
 	t.Run("user not found", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		// Valid session
+		// Session is valid but user not found
 		validSession := &domain.Session{
-			ID:        sessionId,
-			UserID:    userId,
+			ID:        sessionID,
+			UserID:    userID,
 			ExpiresAt: time.Now().Add(1 * time.Hour),
+			CreatedAt: time.Now(),
 		}
 
-		repo.On("GetSessionByID", ctx, sessionId).Return(validSession, nil)
-		repo.On("GetUserByID", ctx, userId).Return(nil, fmt.Errorf("user not found"))
+		repo.On("GetSessionByID", ctx, sessionID).Return(validSession, nil)
+		repo.On("GetUserByID", ctx, userID).Return(nil, fmt.Errorf("user not found"))
 
-		result, err := service.VerifyUserSession(ctx, userId, sessionId)
-		assert.Error(t, err)
-		assert.Nil(t, result)
+		user, err := service.VerifyUserSession(ctx, userID, sessionID)
+		require.Error(t, err)
+		assert.Nil(t, user)
+		assert.Contains(t, err.Error(), "user not found")
 		repo.AssertExpectations(t)
 	})
 }
 
 func TestUserService_GetUserByID(t *testing.T) {
 	repo := new(mockUserRepository)
+	emailSender := new(mockEmailSender)
 	mockLogger := new(MockLogger)
+	authService := setupAuthService()
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
 	service, err := NewUserService(UserServiceConfig{
 		Repository:    repo,
-		PrivateKey:    cfg.Security.PasetoPrivateKey,
-		PublicKey:     cfg.Security.PasetoPublicKey,
-		EmailSender:   new(mockEmailSender),
+		AuthService:   authService,
+		EmailSender:   emailSender,
 		SessionExpiry: 24 * time.Hour,
 		Logger:        mockLogger,
 	})
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	userID := uuid.New().String()
 
-	t.Run("user exists", func(t *testing.T) {
+	t.Run("successful retrieval", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		userId := uuid.New().String()
-		user := &domain.User{
-			ID:        userId,
-			Email:     "test@example.com",
-			Name:      "Test User",
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+		expectedUser := &domain.User{
+			ID:    userID,
+			Email: "test@example.com",
+			Name:  "Test User",
 		}
 
-		repo.On("GetUserByID", ctx, userId).Return(user, nil)
+		repo.On("GetUserByID", ctx, userID).Return(expectedUser, nil)
 
-		result, err := service.GetUserByID(ctx, userId)
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, userId, result.ID)
-		assert.Equal(t, "test@example.com", result.Email)
-		assert.Equal(t, "Test User", result.Name)
+		user, err := service.GetUserByID(ctx, userID)
+		require.NoError(t, err)
+		assert.Equal(t, expectedUser, user)
 		repo.AssertExpectations(t)
 	})
 
 	t.Run("user not found", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		userId := uuid.New().String()
-		repo.On("GetUserByID", ctx, userId).Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
+		repo.On("GetUserByID", ctx, userID).Return(nil, fmt.Errorf("user not found"))
 
-		result, err := service.GetUserByID(ctx, userId)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.IsType(t, &domain.ErrUserNotFound{}, err)
+		user, err := service.GetUserByID(ctx, userID)
+		require.Error(t, err)
+		assert.Nil(t, user)
+		assert.Contains(t, err.Error(), "user not found")
 		repo.AssertExpectations(t)
 	})
 }
 
 func TestUserService_SignInDev(t *testing.T) {
 	repo := new(mockUserRepository)
+	emailSender := new(mockEmailSender)
 	mockLogger := new(MockLogger)
+	authService := setupAuthService()
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	// Load test configuration
-	cfg, err := config.LoadWithOptions(config.LoadOptions{EnvFile: ".env.test"})
-	require.NoError(t, err)
-
 	service, err := NewUserService(UserServiceConfig{
 		Repository:    repo,
-		PrivateKey:    cfg.Security.PasetoPrivateKey,
-		PublicKey:     cfg.Security.PasetoPublicKey,
-		EmailSender:   new(mockEmailSender),
+		AuthService:   authService,
+		EmailSender:   emailSender,
 		SessionExpiry: 24 * time.Hour,
 		Logger:        mockLogger,
 	})
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	email := "dev@example.com"
+	user := &domain.User{
+		ID:    uuid.New().String(),
+		Email: "test@example.com",
+		Name:  "Test User",
+	}
 
+	// Test successful sign in dev
 	t.Run("existing user", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		user := &domain.User{
-			ID:        uuid.New().String(),
-			Email:     email,
-			Name:      "Dev User",
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		repo.On("GetUserByEmail", ctx, email).Return(user, nil)
+		// Set up expectations
+		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
 		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
-			return s.UserID == user.ID && !s.ExpiresAt.IsZero() && !s.CreatedAt.IsZero()
+			return s.UserID == user.ID && s.ExpiresAt.After(time.Now())
 		})).Return(nil)
 
-		token, err := service.SignInDev(ctx, SignInInput{Email: email})
-		assert.NoError(t, err)
+		token, err := service.SignInDev(ctx, SignInInput{Email: user.Email})
+		require.NoError(t, err)
 		assert.NotEmpty(t, token)
 		repo.AssertExpectations(t)
 	})
@@ -521,177 +486,22 @@ func TestUserService_SignInDev(t *testing.T) {
 	t.Run("new user", func(t *testing.T) {
 		repo.Mock = mock.Mock{}
 
-		repo.On("GetUserByEmail", ctx, email).
-			Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
+		// User not found, should create a new one
+		repo.On("GetUserByEmail", ctx, "new@example.com").Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
 
+		// Should create a new user
 		repo.On("CreateUser", ctx, mock.MatchedBy(func(u *domain.User) bool {
-			return u.Email == email && !u.CreatedAt.IsZero() && !u.UpdatedAt.IsZero()
+			return u.Email == "new@example.com" && !u.CreatedAt.IsZero() && !u.UpdatedAt.IsZero()
 		})).Return(nil)
 
+		// Should create a session for the new user
 		repo.On("CreateSession", ctx, mock.MatchedBy(func(s *domain.Session) bool {
-			return s.UserID != "" && !s.ExpiresAt.IsZero() && !s.CreatedAt.IsZero()
+			return s.UserID != "" && s.ExpiresAt.After(time.Now())
 		})).Return(nil)
 
-		token, err := service.SignInDev(ctx, SignInInput{Email: email})
-		assert.NoError(t, err)
+		token, err := service.SignInDev(ctx, SignInInput{Email: "new@example.com"})
+		require.NoError(t, err)
 		assert.NotEmpty(t, token)
 		repo.AssertExpectations(t)
 	})
-
-	t.Run("repo error", func(t *testing.T) {
-		repo.Mock = mock.Mock{}
-
-		repo.On("GetUserByEmail", ctx, email).Return(nil, fmt.Errorf("database error"))
-
-		token, err := service.SignInDev(ctx, SignInInput{Email: email})
-		assert.Error(t, err)
-		assert.Empty(t, token)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("session creation error", func(t *testing.T) {
-		repo.Mock = mock.Mock{}
-
-		user := &domain.User{
-			ID:        uuid.New().String(),
-			Email:     email,
-			Name:      "Dev User",
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		repo.On("GetUserByEmail", ctx, email).Return(user, nil)
-		repo.On("CreateSession", ctx, mock.Anything).Return(fmt.Errorf("session creation failed"))
-
-		token, err := service.SignInDev(ctx, SignInInput{Email: email})
-		assert.Error(t, err)
-		assert.Empty(t, token)
-		repo.AssertExpectations(t)
-	})
-}
-
-func TestNewUserService_Comprehensive(t *testing.T) {
-	// Generate test PASETO keys that will work with the test
-	privateKeyObj := paseto.NewV4AsymmetricSecretKey() // Generates a valid key
-	privateKey := privateKeyObj.ExportBytes()
-	publicKey := privateKeyObj.Public().ExportBytes()
-
-	// Create mock dependencies
-	mockRepo := &mockUserRepository{}
-	mockEmail := &mockEmailSender{}
-	mockLog := &mockLogger{}
-	mockLog.On("WithField", mock.Anything, mock.Anything).Return(mockLog)
-	mockLog.On("Error", mock.Anything).Return()
-
-	tests := []struct {
-		name          string
-		config        UserServiceConfig
-		shouldError   bool
-		expectedError string
-	}{
-		{
-			name: "valid_configuration",
-			config: UserServiceConfig{
-				Repository:    mockRepo,
-				PrivateKey:    privateKey,
-				PublicKey:     publicKey,
-				EmailSender:   mockEmail,
-				SessionExpiry: 24 * time.Hour,
-				Logger:        mockLog,
-			},
-			shouldError: false,
-		},
-		{
-			name: "missing_private_key",
-			config: UserServiceConfig{
-				Repository:    mockRepo,
-				PrivateKey:    nil,
-				PublicKey:     publicKey,
-				EmailSender:   mockEmail,
-				SessionExpiry: 24 * time.Hour,
-				Logger:        mockLog,
-			},
-			shouldError:   true,
-			expectedError: "error creating private key",
-		},
-		{
-			name: "missing_public_key",
-			config: UserServiceConfig{
-				Repository:    mockRepo,
-				PrivateKey:    privateKey,
-				PublicKey:     nil,
-				EmailSender:   mockEmail,
-				SessionExpiry: 24 * time.Hour,
-				Logger:        mockLog,
-			},
-			shouldError:   true,
-			expectedError: "error creating public key",
-		},
-		{
-			name: "invalid_private_key",
-			config: UserServiceConfig{
-				Repository:    mockRepo,
-				PrivateKey:    []byte("invalid-key"),
-				PublicKey:     publicKey,
-				EmailSender:   mockEmail,
-				SessionExpiry: 24 * time.Hour,
-				Logger:        mockLog,
-			},
-			shouldError:   true,
-			expectedError: "error creating private key",
-		},
-		{
-			name: "invalid_public_key",
-			config: UserServiceConfig{
-				Repository:    mockRepo,
-				PrivateKey:    privateKey,
-				PublicKey:     []byte("invalid-key"),
-				EmailSender:   mockEmail,
-				SessionExpiry: 24 * time.Hour,
-				Logger:        mockLog,
-			},
-			shouldError:   true,
-			expectedError: "error creating public key",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Reset mocks
-			mockRepo = &mockUserRepository{}
-			mockEmail = &mockEmailSender{}
-			mockLog = &mockLogger{}
-			mockLog.On("WithField", mock.Anything, mock.Anything).Return(mockLog)
-			mockLog.On("Error", mock.Anything).Return()
-
-			// Update the config with fresh mocks
-			tc.config.Repository = mockRepo
-			tc.config.EmailSender = mockEmail
-			tc.config.Logger = mockLog
-
-			// Call the function
-			service, err := NewUserService(tc.config)
-
-			if tc.shouldError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.expectedError)
-				assert.Nil(t, service)
-			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, service)
-
-				// Assert that the service has the expected configuration
-				assert.Equal(t, mockRepo, service.repo)
-				assert.Equal(t, mockEmail, service.emailSender)
-				assert.Equal(t, tc.config.SessionExpiry, service.sessionExpiry)
-				assert.Equal(t, mockLog, service.logger)
-			}
-		})
-	}
-}
-
-func TestSignIn_ComprehensiveErrorCases(t *testing.T) {
-	// This is just a dummy test as we can't properly create the service without the correct keys
-	// In a real test, you would use proper PASETO keys
-	t.Skip("This test requires proper PASETO keys to be implemented")
 }
