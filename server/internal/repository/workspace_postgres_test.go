@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"notifuse/server/config"
-	"notifuse/server/internal/domain"
+	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 func TestWorkspaceRepository_CheckWorkspaceIDExists(t *testing.T) {

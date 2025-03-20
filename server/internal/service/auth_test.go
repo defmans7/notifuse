@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"notifuse/server/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"testing"
 	"time"
 

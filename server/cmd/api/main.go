@@ -10,13 +10,13 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"notifuse/server/config"
-	"notifuse/server/internal/database"
-	httpHandler "notifuse/server/internal/http"
-	"notifuse/server/internal/http/middleware"
-	"notifuse/server/internal/repository"
-	"notifuse/server/internal/service"
-	"notifuse/server/pkg/logger"
+	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/database"
+	httpHandler "github.com/Notifuse/notifuse/internal/http"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
+	"github.com/Notifuse/notifuse/internal/repository"
+	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type emailSender struct{}

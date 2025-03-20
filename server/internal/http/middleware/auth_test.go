@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"notifuse/server/internal/domain"
-	"notifuse/server/internal/service"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/service"
 )
 
 // MockAuthService mocks the AuthServiceInterface

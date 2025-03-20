@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"notifuse/server/internal/domain"
-	"notifuse/server/pkg/logger"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
 	"time"
 
 	"github.com/stretchr/testify/mock"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"notifuse/server/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/logger"
 	"testing"
 	"time"
 

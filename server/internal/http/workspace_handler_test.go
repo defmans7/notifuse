@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"notifuse/server/internal/domain"
-	"notifuse/server/internal/http/middleware"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
 )
 
 // mockWorkspaceService implements WorkspaceServiceInterface

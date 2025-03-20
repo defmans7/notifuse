@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"notifuse/server/internal/domain"
-	"notifuse/server/pkg/logger"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
 	"time"
 )
 

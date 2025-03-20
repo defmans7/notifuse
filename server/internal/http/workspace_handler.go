@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"notifuse/server/internal/domain"
-	"notifuse/server/internal/http/middleware"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
 
 	"aidanwoods.dev/go-paseto"
 )

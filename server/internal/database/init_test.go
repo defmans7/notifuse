@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"notifuse/server/internal/database/schema"
+	"github.com/Notifuse/notifuse/internal/database/schema"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"notifuse/server/internal/domain"
-	"notifuse/server/pkg/logger"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type UserService struct {

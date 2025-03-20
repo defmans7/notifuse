@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"notifuse/server/internal/domain"
-	"notifuse/server/pkg/logger"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
 	"time"
 
 	"aidanwoods.dev/go-paseto"

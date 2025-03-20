@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"notifuse/server/config"
+	"github.com/Notifuse/notifuse/config"
 )
 
 func TestEmailSender_SendMagicCode(t *testing.T) {

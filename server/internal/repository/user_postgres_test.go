@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"notifuse/server/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 func TestCreateUser(t *testing.T) {

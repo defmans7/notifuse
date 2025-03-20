@@ -3,7 +3,7 @@ package database
 import (
 	"testing"
 
-	"notifuse/server/config"
+	"github.com/Notifuse/notifuse/config"
 
 	"github.com/stretchr/testify/assert"
 )

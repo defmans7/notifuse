@@ -6,9 +6,9 @@ import (
 
 	"aidanwoods.dev/go-paseto"
 
-	"notifuse/server/config"
-	"notifuse/server/internal/http/middleware"
-	"notifuse/server/internal/service"
+	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
+	"github.com/Notifuse/notifuse/internal/service"
 )
 
 // WorkspaceServiceInterface is already defined in workspace_handler.go

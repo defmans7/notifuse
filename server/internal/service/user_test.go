@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"notifuse/server/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 type mockUserRepository struct {

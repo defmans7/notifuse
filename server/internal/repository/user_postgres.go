@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"notifuse/server/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 type userRepository struct {

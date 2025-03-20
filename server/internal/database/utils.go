@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"notifuse/server/config"
+	"github.com/Notifuse/notifuse/config"
 )
 
 // GetSystemDSN returns the DSN for the system database

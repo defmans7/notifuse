@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"notifuse/server/internal/database/schema"
-	"notifuse/server/internal/domain"
+	"github.com/Notifuse/notifuse/internal/database/schema"
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 // InitializeDatabase creates all necessary database tables if they don't exist

@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"notifuse/server/config"
-	"notifuse/server/internal/database"
-	"notifuse/server/internal/domain"
+	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/database"
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 type workspaceRepository struct {

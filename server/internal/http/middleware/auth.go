@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"notifuse/server/internal/domain"
-	"notifuse/server/internal/service"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/service"
 	"strings"
 
 	"aidanwoods.dev/go-paseto"
