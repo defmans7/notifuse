@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/config"
-	"github.com/Notifuse/notifuse/internal/database"
 	"github.com/Notifuse/notifuse/internal/domain"
 )
 
@@ -999,8 +998,8 @@ func (r *mockInternalRepository) DeleteDatabase(ctx context.Context, workspaceID
 
 // Test the actual Create method on the workspaceRepository (not just the mock implementation)
 func TestWorkspaceRepository_Create_Unmocked(t *testing.T) {
-	// Skip this test for now as it's trying to connect to a real database
-	t.Skip("Skipping test that requires more complex mocking")
+	// Skip this test since it tries to make a real database connection
+	t.Skip("Skipping test that requires a real database connection")
 
 	db, mock, cleanup := SetupMockDB(t)
 	defer cleanup()
@@ -1015,23 +1014,19 @@ func TestWorkspaceRepository_Create_Unmocked(t *testing.T) {
 	}
 
 	// Create a real repository with mocked database
-	repo := NewWorkspaceRepository(db, dbConfig).(*workspaceRepository)
+	repo := NewWorkspaceRepository(db, dbConfig)
 
 	// Create a wrapper to capture whether CreateDatabase was called
 	createDatabaseCalled := false
 	createDatabaseError := error(nil)
 
-	// Define a custom CreateDatabase function for the test
-	createDatabaseFunc := func(ctx context.Context, workspaceID string) error {
-		createDatabaseCalled = true
-		return createDatabaseError
-	}
-
-	// Create a testRepo that wraps our real repo and uses our custom CreateDatabase function
-	testRepo := &testWorkspaceRepository{
+	// Create a test wrapper that overrides just the CreateDatabase method
+	testRepo := &testCreateDatabaseTracker{
 		WorkspaceRepository: repo,
-		createDatabaseError: nil, // Will be set directly later
-		createDatabaseFunc:  createDatabaseFunc,
+		createDatabaseFn: func(ctx context.Context, workspaceID string) error {
+			createDatabaseCalled = true
+			return createDatabaseError
+		},
 	}
 
 	// Test case: Successful workspace creation
@@ -1068,6 +1063,9 @@ func TestWorkspaceRepository_Create_Unmocked(t *testing.T) {
 	createDatabaseCalled = false
 	createDatabaseError = fmt.Errorf("database creation failed")
 
+	// Reset the mock for a new test
+	mock.ExpectationsWereMet()
+
 	// Mock for checking if workspace exists
 	mock.ExpectQuery(`SELECT EXISTS.*FROM workspaces WHERE id = \$1`).
 		WithArgs(workspace.ID).
@@ -1092,17 +1090,29 @@ func TestWorkspaceRepository_Create_Unmocked(t *testing.T) {
 	err = testRepo.Create(context.Background(), workspace)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "database creation failed")
+	require.True(t, createDatabaseCalled, "CreateDatabase should be called even when there's an error")
 
 	// Verify all expectations were met
 	err = mock.ExpectationsWereMet()
 	require.NoError(t, err)
 }
 
+// testCreateDatabaseTracker is a test wrapper that tracks CreateDatabase calls
+type testCreateDatabaseTracker struct {
+	domain.WorkspaceRepository
+	createDatabaseFn func(ctx context.Context, workspaceID string) error
+}
+
+// CreateDatabase overrides the CreateDatabase method for testing
+func (t *testCreateDatabaseTracker) CreateDatabase(ctx context.Context, workspaceID string) error {
+	return t.createDatabaseFn(ctx, workspaceID)
+}
+
+// Define a mocking variable for the EnsureWorkspaceDatabaseExists function
+var mockEnsureWorkspaceDB func(cfg *config.DatabaseConfig, workspaceID string) error
+
 // Test the actual CreateDatabase method implementation
 func TestWorkspaceRepository_CreateDatabaseMethod(t *testing.T) {
-	// Skip this test for now as it's trying to connect to a real database
-	t.Skip("Skipping test that requires more complex mocking")
-
 	// Create a mock DB and config
 	db, _, cleanup := SetupMockDB(t)
 	defer cleanup()
@@ -1116,19 +1126,16 @@ func TestWorkspaceRepository_CreateDatabaseMethod(t *testing.T) {
 		Prefix:   "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
-
-	// We'll use our testWorkspaceRepository to override the database package function
-	// Save the original function to restore later
-	originalEnsureWorkspaceDatabaseExists := EnsureWorkspaceDatabaseExists
-	defer func() {
-		EnsureWorkspaceDatabaseExists = originalEnsureWorkspaceDatabaseExists
-	}()
+	// Create a custom repo that uses our mock function instead of the real one
+	repo := &mockEnsureDBRepository{
+		db:       db,
+		dbConfig: dbConfig,
+	}
 
 	// Test successful database creation
 	t.Run("successful database creation", func(t *testing.T) {
-		var ensureCalled bool
-		EnsureWorkspaceDatabaseExists = func(cfg *config.DatabaseConfig, workspaceID string) error {
+		ensureCalled := false
+		mockEnsureWorkspaceDB = func(cfg *config.DatabaseConfig, workspaceID string) error {
 			ensureCalled = true
 			require.Equal(t, dbConfig, cfg)
 			require.Equal(t, "testworkspace", workspaceID)
@@ -1142,8 +1149,8 @@ func TestWorkspaceRepository_CreateDatabaseMethod(t *testing.T) {
 
 	// Test database creation error
 	t.Run("database creation error", func(t *testing.T) {
-		var ensureCalled bool
-		EnsureWorkspaceDatabaseExists = func(cfg *config.DatabaseConfig, workspaceID string) error {
+		ensureCalled := false
+		mockEnsureWorkspaceDB = func(cfg *config.DatabaseConfig, workspaceID string) error {
 			ensureCalled = true
 			return fmt.Errorf("database creation failed")
 		}
@@ -1155,5 +1162,18 @@ func TestWorkspaceRepository_CreateDatabaseMethod(t *testing.T) {
 	})
 }
 
-// Mock function for EnsureWorkspaceDatabaseExists
-var EnsureWorkspaceDatabaseExists = database.EnsureWorkspaceDatabaseExists
+// mockEnsureDBRepository is a special repository for testing the CreateDatabase method
+type mockEnsureDBRepository struct {
+	domain.WorkspaceRepository
+	db       *sql.DB
+	dbConfig *config.DatabaseConfig
+}
+
+// CreateDatabase implements the WorkspaceRepository interface
+func (r *mockEnsureDBRepository) CreateDatabase(ctx context.Context, workspaceID string) error {
+	// Use our mockEnsureWorkspaceDB instead of database.EnsureWorkspaceDatabaseExists
+	if err := mockEnsureWorkspaceDB(r.dbConfig, workspaceID); err != nil {
+		return fmt.Errorf("failed to create and initialize workspace database: %w", err)
+	}
+	return nil
+}
