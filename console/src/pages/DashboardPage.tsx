@@ -40,51 +40,55 @@ export function DashboardPage() {
                 hoverable
                 onClick={() => handleWorkspaceClick(workspace.id)}
                 cover={
-                  (workspace.settings.cover_url || workspace.settings.logo_url) && (
-                    <div
-                      style={{
-                        height: '140px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '0',
-                        background: '#f5f5f5',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {workspace.settings.cover_url ? (
-                        <img
-                          alt={workspace.name}
-                          src={workspace.settings.cover_url}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                          }}
-                        />
-                      ) : (
-                        workspace.settings.logo_url && (
-                          <img
-                            alt={workspace.name}
-                            src={workspace.settings.logo_url}
-                            style={{
-                              maxWidth: '100%',
-                              maxHeight: '100%',
-                              padding: '16px',
-                              objectFit: 'contain'
-                            }}
-                          />
-                        )
-                      )}
-                    </div>
-                  )
+                  <div
+                    style={{
+                      height: '140px',
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0',
+                      background:
+                        workspace.settings.cover_url || workspace.settings.logo_url
+                          ? '#f5f5f5'
+                          : '#e6f7ff',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {workspace.settings.cover_url ? (
+                      <img
+                        alt={workspace.name}
+                        src={workspace.settings.cover_url}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    ) : workspace.settings.logo_url ? (
+                      <img
+                        alt={workspace.name}
+                        src={workspace.settings.logo_url}
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          padding: '16px',
+                          objectFit: 'contain'
+                        }}
+                      />
+                    ) : (
+                      <Typography.Text strong style={{ color: '#1890ff' }}>
+                        {workspace.name.substring(0, 2).toUpperCase()}
+                      </Typography.Text>
+                    )}
+                  </div>
                 }
               >
                 <Card.Meta
                   title={workspace.name}
                   description={
                     <Text type="secondary" ellipsis>
-                      Created: {new Date(workspace.created_at).toLocaleDateString()}
+                      ID: {workspace.id}
                     </Text>
                   }
                 />
