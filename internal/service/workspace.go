@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mailer"
 	"github.com/google/uuid"
 )
 
@@ -21,14 +23,25 @@ type WorkspaceService struct {
 	logger      logger.Logger
 	userService *UserService
 	authService AuthServiceInterface
+	mailer      mailer.Mailer
+	config      *config.Config
 }
 
-func NewWorkspaceService(repo domain.WorkspaceRepository, logger logger.Logger, userService *UserService, authService AuthServiceInterface) *WorkspaceService {
+func NewWorkspaceService(
+	repo domain.WorkspaceRepository,
+	logger logger.Logger,
+	userService *UserService,
+	authService AuthServiceInterface,
+	mailerInstance mailer.Mailer,
+	config *config.Config,
+) *WorkspaceService {
 	return &WorkspaceService{
 		repo:        repo,
 		logger:      logger,
 		userService: userService,
 		authService: authService,
+		mailer:      mailerInstance,
+		config:      config,
 	}
 }
 
@@ -338,6 +351,17 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, invite
 		return nil, "", fmt.Errorf("inviter is not a member of the workspace")
 	}
 
+	// Get inviter user details for the email
+	inviter, err := s.userService.GetUserByID(ctx, inviterID)
+	if err != nil {
+		s.logger.WithField("inviter_id", inviterID).WithField("error", err.Error()).Error("Failed to get inviter details")
+		return nil, "", err
+	}
+	inviterName := inviter.Name
+	if inviterName == "" {
+		inviterName = inviter.Email
+	}
+
 	// Check if user already exists with this email
 	user, err := s.userService.GetUserByEmail(ctx, email)
 	if err == nil && user != nil {
@@ -393,6 +417,19 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, invite
 	// Generate a PASETO token with the invitation details
 	token := s.authService.GenerateInvitationToken(invitation)
 
+	// Send invitation email in production mode
+	if !s.config.IsDevelopment() {
+		err = s.mailer.SendWorkspaceInvitation(email, workspace.Name, inviterName, token)
+		if err != nil {
+			s.logger.WithField("workspace_id", workspaceID).WithField("email", email).WithField("error", err.Error()).Error("Failed to send invitation email")
+			// Continue even if email sending fails
+		}
+
+		// Only return the token in development mode
+		return invitation, "", nil
+	}
+
+	// In development mode, return the token
 	return invitation, token, nil
 }
 

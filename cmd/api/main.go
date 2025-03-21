@@ -17,6 +17,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mailer"
 )
 
 type emailSender struct{}
@@ -83,6 +84,26 @@ func main() {
 	authRepo := repository.NewSQLAuthRepository(systemDB, appLogger)
 	emailSender := &emailSender{}
 
+	// Initialize mailer
+	var mailService mailer.Mailer
+	if cfg.IsDevelopment() {
+		// Use console mailer in development
+		mailService = mailer.NewConsoleMailer()
+		appLogger.Info("Using console mailer for development")
+	} else {
+		// Use SMTP mailer in production
+		mailService = mailer.NewSMTPMailer(&mailer.Config{
+			SMTPHost:     os.Getenv("SMTP_HOST"), // Get from environment variables or config
+			SMTPPort:     587,                    // Default SMTP port
+			SMTPUsername: os.Getenv("SMTP_USERNAME"),
+			SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+			FromEmail:    os.Getenv("FROM_EMAIL"),
+			FromName:     "Notifuse",
+			BaseURL:      os.Getenv("BASE_URL"),
+		})
+		appLogger.Info("Using SMTP mailer for production")
+	}
+
 	// Create auth service first
 	authService, err := service.NewAuthService(service.AuthServiceConfig{
 		Repository: authRepo,
@@ -111,12 +132,14 @@ func main() {
 		return
 	}
 
-	// Create workspace service
+	// Create workspace service with mailer
 	workspaceService := service.NewWorkspaceService(
 		workspaceRepo,
 		appLogger,
 		userService,
-		authService)
+		authService,
+		mailService,
+		cfg)
 
 	// Use the already parsed PASETO public key
 	userHandler := httpHandler.NewUserHandler(

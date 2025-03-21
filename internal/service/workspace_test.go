@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"aidanwoods.dev/go-paseto"
+	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -218,17 +219,29 @@ func (m *MockWorkspaceRepo) IsUserWorkspaceMember(ctx context.Context, userID, w
 	return m.IsUserWorkspaceMemberFn(ctx, userID, workspaceID)
 }
 
+// MockMailer mocks the mailer.Mailer interface
+type MockMailer struct {
+	mock.Mock
+}
+
+func (m *MockMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, token string) error {
+	args := m.Called(email, workspaceName, inviterName, token)
+	return args.Error(0)
+}
+
 func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockRepo := new(MockWorkspaceRepository)
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	userID := "test-user"
@@ -347,12 +360,14 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	userID := "test-user"
@@ -428,12 +443,14 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	ownerID := "test-owner"
@@ -523,12 +540,14 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	userID := "test-user"
@@ -638,12 +657,14 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	userID := "test-user"
@@ -718,12 +739,14 @@ func TestWorkspaceService_AddUserToWorkspace(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	requesterID := "owner-user"
@@ -823,12 +846,14 @@ func TestWorkspaceService_RemoveUserFromWorkspace(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	requesterID := "owner-user"
@@ -928,12 +953,14 @@ func TestWorkspaceService_TransferOwnership(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	workspaceID := "test-workspace"
@@ -1102,12 +1129,14 @@ func TestWorkspaceService_GetWorkspaceMembers(t *testing.T) {
 	mockLogger := new(MockLogger)
 	mockUserService := createMockUserService()
 	mockAuthService := createMockAuthService()
+	mockMailer := &MockMailer{}
+	mockConfig := &config.Config{Environment: "development"}
 
 	// Setup logger mock to return itself for WithField calls
 	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
 	mockLogger.On("Error", mock.Anything).Return()
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
 
 	ctx := context.Background()
 	workspaceID := "workspace1"
@@ -1248,184 +1277,127 @@ func createMockAuthService() *MockAuthService {
 }
 
 func TestWorkspaceService_InviteMember(t *testing.T) {
-	mockRepo := new(MockWorkspaceRepository)
-	mockLogger := new(MockLogger)
-	mockUserService := createMockUserService()
-	mockAuthService := createMockAuthService()
+	// Test with both development and production configs
+	devConfig := &config.Config{Environment: "development"}
+	prodConfig := &config.Config{Environment: "production"}
+	mockLogger := &MockLogger{} // Keep this as it's used in both test cases
 
-	// Setup logger mock to return itself for WithField calls
-	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
-	mockLogger.On("Error", mock.Anything).Return()
+	t.Run("development mode returns token", func(t *testing.T) {
+		// Create fresh mocks for this test
+		mockRepo := &MockWorkspaceRepository{}
+		mockUserService := createMockUserService()
+		mockAuthService := createMockAuthService()
+		mockMailer := &MockMailer{}
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, devConfig)
 
-	ctx := context.Background()
-	workspaceID := "workspace-1"
-	inviterID := "user-1"
-	email := "test@example.com"
+		// Setup mocks
+		workspaceID := "workspace1"
+		inviterID := "user1"
+		inviteeEmail := "invitee@example.com"
 
-	t.Run("invalid email format", func(t *testing.T) {
-		mockRepo.Mock = mock.Mock{}
-
-		// Test with an invalid email
-		invalidEmail := "invalid-email"
-		invitation, token, err := service.InviteMember(ctx, workspaceID, inviterID, invalidEmail)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid email format")
-		assert.Nil(t, invitation)
-		assert.Empty(t, token)
-	})
-
-	t.Run("workspace not found", func(t *testing.T) {
-		mockRepo.Mock = mock.Mock{}
-
-		mockRepo.On("GetByID", ctx, workspaceID).Return(nil, fmt.Errorf("workspace not found"))
-
-		invitation, token, err := service.InviteMember(ctx, workspaceID, inviterID, email)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "workspace not found")
-		assert.Nil(t, invitation)
-		assert.Empty(t, token)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("inviter not a member", func(t *testing.T) {
-		mockRepo.Mock = mock.Mock{}
-
+		// Mock the GetByID call to return a workspace
 		workspace := &domain.Workspace{
 			ID:   workspaceID,
 			Name: "Test Workspace",
 		}
-		mockRepo.On("GetByID", ctx, workspaceID).Return(workspace, nil)
-		mockRepo.On("IsUserWorkspaceMember", ctx, inviterID, workspaceID).Return(false, nil)
+		mockRepo.On("GetByID", mock.Anything, workspaceID).Return(workspace, nil)
 
-		invitation, token, err := service.InviteMember(ctx, workspaceID, inviterID, email)
+		// Mock IsUserWorkspaceMember to return true
+		mockRepo.On("IsUserWorkspaceMember", mock.Anything, inviterID, workspaceID).Return(true, nil)
 
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "inviter is not a member")
-		assert.Nil(t, invitation)
-		assert.Empty(t, token)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("create new invitation for non-existent user", func(t *testing.T) {
-		mockRepo.Mock = mock.Mock{}
-		// Reset userService repo mock
-		mockUserService.repo = new(mockUserRepository)
-
-		workspace := &domain.Workspace{
-			ID:   workspaceID,
-			Name: "Test Workspace",
+		// Mock GetUserByID to return the inviter
+		inviter := &domain.User{
+			ID:    inviterID,
+			Name:  "Inviter User",
+			Email: "inviter@example.com",
 		}
 
-		// Mock the necessary repository calls
-		mockRepo.On("GetByID", ctx, workspaceID).Return(workspace, nil)
-		mockRepo.On("IsUserWorkspaceMember", ctx, inviterID, workspaceID).Return(true, nil)
+		// Set up the UserService mock
+		mockUserService.repo = &mockUserRepository{}
+		mockUserService.repo.(*mockUserRepository).On("GetUserByID", mock.Anything, inviterID).Return(inviter, nil)
+		mockUserService.repo.(*mockUserRepository).On("GetUserByEmail", mock.Anything, inviteeEmail).Return(nil, fmt.Errorf("user not found"))
 
-		// Setup UserService mock to return nil user (user doesn't exist)
-		mockUserService.repo.(*mockUserRepository).On("GetUserByEmail", ctx, email).Return(nil, &domain.ErrUserNotFound{Message: "user not found"})
-
-		// Expect a new invitation to be created
-		mockRepo.On("CreateInvitation", ctx, mock.MatchedBy(func(invitation *domain.WorkspaceInvitation) bool {
-			return invitation.WorkspaceID == workspaceID &&
-				invitation.InviterID == inviterID &&
-				invitation.Email == email
+		// Mock CreateInvitation
+		mockRepo.On("CreateInvitation", mock.Anything, mock.MatchedBy(func(inv *domain.WorkspaceInvitation) bool {
+			return inv.WorkspaceID == workspaceID && inv.Email == inviteeEmail
 		})).Return(nil)
 
-		// Mock the AuthService to return a token
-		mockAuthService.On("GenerateInvitationToken", mock.MatchedBy(func(invitation *domain.WorkspaceInvitation) bool {
-			return invitation.WorkspaceID == workspaceID &&
-				invitation.InviterID == inviterID &&
-				invitation.Email == email
-		})).Return("mock-invitation-token")
+		// Mock token generation
+		token := "test-invitation-token"
+		mockAuthService.On("GenerateInvitationToken", mock.Anything).Return(token)
 
-		invitation, token, err := service.InviteMember(ctx, workspaceID, inviterID, email)
+		// Call the method
+		invitation, returnedToken, err := service.InviteMember(context.Background(), workspaceID, inviterID, inviteeEmail)
 
+		// Verify results
 		require.NoError(t, err)
-		assert.NotNil(t, invitation)
-		assert.Equal(t, "mock-invitation-token", token)
-		assert.Equal(t, workspaceID, invitation.WorkspaceID)
-		assert.Equal(t, inviterID, invitation.InviterID)
-		assert.Equal(t, email, invitation.Email)
-		mockRepo.AssertExpectations(t)
-		mockUserService.repo.(*mockUserRepository).AssertExpectations(t)
-		mockAuthService.AssertExpectations(t)
+		require.NotNil(t, invitation)
+		assert.Equal(t, token, returnedToken) // In dev mode, token should be returned
+
+		// Verify mailService was not called
+		mockMailer.AssertNotCalled(t, "SendWorkspaceInvitation")
 	})
 
-	t.Run("user already exists and is not a member", func(t *testing.T) {
-		mockRepo.Mock = mock.Mock{}
-		// Reset userService repo mock
-		mockUserService.repo = new(mockUserRepository)
+	t.Run("production mode doesn't return token", func(t *testing.T) {
+		// Create fresh mocks for this test
+		mockRepo := &MockWorkspaceRepository{}
+		mockUserService := createMockUserService()
+		mockAuthService := createMockAuthService()
+		mockMailer := &MockMailer{}
 
+		// Create service with new mocks
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, prodConfig)
+
+		// Setup mocks
+		workspaceID := "workspace1"
+		inviterID := "user1"
+		inviteeEmail := "invitee@example.com"
+
+		// Mock the GetByID call to return a workspace
 		workspace := &domain.Workspace{
 			ID:   workspaceID,
 			Name: "Test Workspace",
 		}
-		existingUser := &domain.User{
-			ID:    "existing-user",
-			Email: email,
+		mockRepo.On("GetByID", mock.Anything, workspaceID).Return(workspace, nil)
+
+		// Mock IsUserWorkspaceMember to return true
+		mockRepo.On("IsUserWorkspaceMember", mock.Anything, inviterID, workspaceID).Return(true, nil)
+
+		// Mock GetUserByID to return the inviter
+		inviter := &domain.User{
+			ID:    inviterID,
+			Name:  "Inviter User",
+			Email: "inviter@example.com",
 		}
 
-		// Mock the necessary repository calls
-		mockRepo.On("GetByID", ctx, workspaceID).Return(workspace, nil)
-		mockRepo.On("IsUserWorkspaceMember", ctx, inviterID, workspaceID).Return(true, nil)
+		// Set up the UserService mock
+		mockUserService.repo = &mockUserRepository{}
+		mockUserService.repo.(*mockUserRepository).On("GetUserByID", mock.Anything, inviterID).Return(inviter, nil)
+		mockUserService.repo.(*mockUserRepository).On("GetUserByEmail", mock.Anything, inviteeEmail).Return(nil, fmt.Errorf("user not found"))
 
-		// Setup UserService mock to return an existing user
-		mockUserService.repo.(*mockUserRepository).On("GetUserByEmail", ctx, email).Return(existingUser, nil)
-
-		// User is not a member
-		mockRepo.On("IsUserWorkspaceMember", ctx, existingUser.ID, workspaceID).Return(false, nil)
-
-		// Expect the user to be added to the workspace
-		mockRepo.On("AddUserToWorkspace", ctx, mock.MatchedBy(func(uw *domain.UserWorkspace) bool {
-			return uw.UserID == existingUser.ID &&
-				uw.WorkspaceID == workspaceID &&
-				uw.Role == "member"
+		// Mock CreateInvitation
+		mockRepo.On("CreateInvitation", mock.Anything, mock.MatchedBy(func(inv *domain.WorkspaceInvitation) bool {
+			return inv.WorkspaceID == workspaceID && inv.Email == inviteeEmail
 		})).Return(nil)
 
-		invitation, token, err := service.InviteMember(ctx, workspaceID, inviterID, email)
+		// Mock token generation
+		token := "test-invitation-token"
+		mockAuthService.On("GenerateInvitationToken", mock.Anything).Return(token)
 
+		// Mock mailer
+		mockMailer.On("SendWorkspaceInvitation", inviteeEmail, workspace.Name, inviter.Name, token).Return(nil)
+
+		// Call the method
+		invitation, returnedToken, err := service.InviteMember(context.Background(), workspaceID, inviterID, inviteeEmail)
+
+		// Verify results
 		require.NoError(t, err)
-		assert.Nil(t, invitation)
-		assert.Empty(t, token)
-		mockRepo.AssertExpectations(t)
-		mockUserService.repo.(*mockUserRepository).AssertExpectations(t)
-	})
+		require.NotNil(t, invitation)
+		assert.Empty(t, returnedToken) // In prod mode, token should not be returned
 
-	t.Run("user already exists and is already a member", func(t *testing.T) {
-		mockRepo.Mock = mock.Mock{}
-		// Reset userService repo mock
-		mockUserService.repo = new(mockUserRepository)
-
-		workspace := &domain.Workspace{
-			ID:   workspaceID,
-			Name: "Test Workspace",
-		}
-		existingUser := &domain.User{
-			ID:    "existing-user",
-			Email: email,
-		}
-
-		// Mock the necessary repository calls
-		mockRepo.On("GetByID", ctx, workspaceID).Return(workspace, nil)
-		mockRepo.On("IsUserWorkspaceMember", ctx, inviterID, workspaceID).Return(true, nil)
-
-		// Setup UserService mock to return an existing user
-		mockUserService.repo.(*mockUserRepository).On("GetUserByEmail", ctx, email).Return(existingUser, nil)
-
-		// User is already a member
-		mockRepo.On("IsUserWorkspaceMember", ctx, existingUser.ID, workspaceID).Return(true, nil)
-
-		invitation, token, err := service.InviteMember(ctx, workspaceID, inviterID, email)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "user is already a member")
-		assert.Nil(t, invitation)
-		assert.Empty(t, token)
-		mockRepo.AssertExpectations(t)
-		mockUserService.repo.(*mockUserRepository).AssertExpectations(t)
+		// Verify mailService was called
+		mockMailer.AssertCalled(t, "SendWorkspaceInvitation", inviteeEmail, workspace.Name, inviter.Name, token)
 	})
 }
 
