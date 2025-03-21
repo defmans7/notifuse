@@ -20,6 +20,7 @@ type WorkspaceServiceInterface interface {
 	ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
 	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
 	DeleteWorkspace(ctx context.Context, id, ownerID string) error
+	GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error)
 }
 
 type WorkspaceHandler struct {
@@ -94,6 +95,7 @@ func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workspaces.create", requireAuth(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("/api/workspaces.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("/api/workspaces.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
+	mux.Handle("/api/workspaces.members", requireAuth(http.HandlerFunc(h.handleMembers)))
 }
 
 func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -261,4 +263,29 @@ func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "success"})
+}
+
+// handleMembers handles the request to get members of a workspace
+func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
+
+	// Get workspace ID from query params
+	workspaceID := r.URL.Query().Get("id")
+	if workspaceID == "" {
+		writeError(w, http.StatusBadRequest, "Missing workspace ID")
+		return
+	}
+
+	members, err := h.workspaceService.GetWorkspaceMembers(r.Context(), workspaceID, authUser.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to get workspace members")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, members)
 }

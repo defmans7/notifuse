@@ -99,6 +99,14 @@ func (m *mockUserWorkspaceService) DeleteWorkspace(ctx context.Context, id, owne
 	return args.Error(0)
 }
 
+func (m *mockUserWorkspaceService) GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
+	args := m.Called(ctx, id, requesterID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.UserWorkspace), args.Error(1)
+}
+
 func TestUserHandler_SignIn(t *testing.T) {
 	mockService := new(mockUserService)
 	mockWorkspaceSvc := new(mockUserWorkspaceService)

@@ -3,15 +3,32 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	"github.com/Notifuse/notifuse/internal/domain"
 )
+
+// MockWorkspaceRepo is a mock implementation of domain.WorkspaceRepository
+type MockWorkspaceRepo struct {
+	CreateFn                  func(ctx context.Context, workspace *domain.Workspace) error
+	GetByIDFn                 func(ctx context.Context, id string) (*domain.Workspace, error)
+	ListFn                    func(ctx context.Context) ([]*domain.Workspace, error)
+	UpdateFn                  func(ctx context.Context, workspace *domain.Workspace) error
+	DeleteFn                  func(ctx context.Context, id string) error
+	AddUserToWorkspaceFn      func(ctx context.Context, userWorkspace *domain.UserWorkspace) error
+	RemoveUserFromWorkspaceFn func(ctx context.Context, userID, workspaceID string) error
+	GetUserWorkspacesFn       func(ctx context.Context, userID string) ([]*domain.UserWorkspace, error)
+	GetWorkspaceUsersFn       func(ctx context.Context, workspaceID string) ([]*domain.UserWorkspace, error)
+	GetUserWorkspaceFn        func(ctx context.Context, userID, workspaceID string) (*domain.UserWorkspace, error)
+	GetConnectionFn           func(ctx context.Context, workspaceID string) (*sql.DB, error)
+	CreateDatabaseFn          func(ctx context.Context, workspaceID string) error
+	DeleteDatabaseFn          func(ctx context.Context, workspaceID string) error
+}
 
 // MockWorkspaceRepository is a mock implementation of the WorkspaceRepository interface
 type MockWorkspaceRepository struct {
@@ -99,6 +116,59 @@ func (m *MockWorkspaceRepository) GetUserWorkspace(ctx context.Context, userID s
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.UserWorkspace), args.Error(1)
+}
+
+// Implement methods for the MockWorkspaceRepo
+func (m *MockWorkspaceRepo) Create(ctx context.Context, workspace *domain.Workspace) error {
+	return m.CreateFn(ctx, workspace)
+}
+
+func (m *MockWorkspaceRepo) GetByID(ctx context.Context, id string) (*domain.Workspace, error) {
+	return m.GetByIDFn(ctx, id)
+}
+
+func (m *MockWorkspaceRepo) List(ctx context.Context) ([]*domain.Workspace, error) {
+	return m.ListFn(ctx)
+}
+
+func (m *MockWorkspaceRepo) Update(ctx context.Context, workspace *domain.Workspace) error {
+	return m.UpdateFn(ctx, workspace)
+}
+
+func (m *MockWorkspaceRepo) Delete(ctx context.Context, id string) error {
+	return m.DeleteFn(ctx, id)
+}
+
+func (m *MockWorkspaceRepo) AddUserToWorkspace(ctx context.Context, userWorkspace *domain.UserWorkspace) error {
+	return m.AddUserToWorkspaceFn(ctx, userWorkspace)
+}
+
+func (m *MockWorkspaceRepo) RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error {
+	return m.RemoveUserFromWorkspaceFn(ctx, userID, workspaceID)
+}
+
+func (m *MockWorkspaceRepo) GetUserWorkspaces(ctx context.Context, userID string) ([]*domain.UserWorkspace, error) {
+	return m.GetUserWorkspacesFn(ctx, userID)
+}
+
+func (m *MockWorkspaceRepo) GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*domain.UserWorkspace, error) {
+	return m.GetWorkspaceUsersFn(ctx, workspaceID)
+}
+
+func (m *MockWorkspaceRepo) GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*domain.UserWorkspace, error) {
+	return m.GetUserWorkspaceFn(ctx, userID, workspaceID)
+}
+
+func (m *MockWorkspaceRepo) GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error) {
+	return m.GetConnectionFn(ctx, workspaceID)
+}
+
+func (m *MockWorkspaceRepo) CreateDatabase(ctx context.Context, workspaceID string) error {
+	return m.CreateDatabaseFn(ctx, workspaceID)
+}
+
+func (m *MockWorkspaceRepo) DeleteDatabase(ctx context.Context, workspaceID string) error {
+	return m.DeleteDatabaseFn(ctx, workspaceID)
 }
 
 func TestWorkspaceService_ListWorkspaces(t *testing.T) {
@@ -961,5 +1031,102 @@ func TestWorkspaceService_TransferOwnership(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, assert.AnError, err)
 		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestWorkspaceService_GetWorkspaceMembers(t *testing.T) {
+	mockRepo := &MockWorkspaceRepo{}
+	mockLogger := new(MockLogger)
+
+	// Configure the mock logger
+	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+	mockLogger.On("Error", mock.Anything).Return()
+
+	service := NewWorkspaceService(mockRepo, mockLogger)
+
+	t.Run("success", func(t *testing.T) {
+		workspaceID := "workspace1"
+		userID := "user1"
+
+		// Mock user workspace check
+		mockRepo.GetUserWorkspaceFn = func(ctx context.Context, uid, wid string) (*domain.UserWorkspace, error) {
+			assert.Equal(t, userID, uid)
+			assert.Equal(t, workspaceID, wid)
+			return &domain.UserWorkspace{
+				UserID:      userID,
+				WorkspaceID: workspaceID,
+				Role:        "owner",
+			}, nil
+		}
+
+		// Mock get workspace users
+		expectedMembers := []*domain.UserWorkspace{
+			{
+				UserID:      "user1",
+				WorkspaceID: workspaceID,
+				Role:        "owner",
+			},
+			{
+				UserID:      "user2",
+				WorkspaceID: workspaceID,
+				Role:        "member",
+			},
+		}
+		mockRepo.GetWorkspaceUsersFn = func(ctx context.Context, wid string) ([]*domain.UserWorkspace, error) {
+			assert.Equal(t, workspaceID, wid)
+			return expectedMembers, nil
+		}
+
+		// Call the service
+		members, err := service.GetWorkspaceMembers(context.Background(), workspaceID, userID)
+
+		// Check result
+		assert.NoError(t, err)
+		assert.Equal(t, expectedMembers, members)
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		workspaceID := "workspace1"
+		userID := "user1"
+
+		// Mock user workspace check to return error
+		mockRepo.GetUserWorkspaceFn = func(ctx context.Context, uid, wid string) (*domain.UserWorkspace, error) {
+			return nil, fmt.Errorf("user is not a member of the workspace")
+		}
+
+		// Call the service
+		members, err := service.GetWorkspaceMembers(context.Background(), workspaceID, userID)
+
+		// Check result
+		assert.Error(t, err)
+		assert.Nil(t, members)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("error getting members", func(t *testing.T) {
+		workspaceID := "workspace1"
+		userID := "user1"
+
+		// Mock user workspace check
+		mockRepo.GetUserWorkspaceFn = func(ctx context.Context, uid, wid string) (*domain.UserWorkspace, error) {
+			return &domain.UserWorkspace{
+				UserID:      userID,
+				WorkspaceID: workspaceID,
+				Role:        "owner",
+			}, nil
+		}
+
+		// Mock get workspace users to return error
+		mockRepo.GetWorkspaceUsersFn = func(ctx context.Context, wid string) ([]*domain.UserWorkspace, error) {
+			return nil, fmt.Errorf("database error")
+		}
+
+		// Call the service
+		members, err := service.GetWorkspaceMembers(context.Background(), workspaceID, userID)
+
+		// Check result
+		assert.Error(t, err)
+		assert.Nil(t, members)
+		assert.Contains(t, err.Error(), "database error")
 	})
 }

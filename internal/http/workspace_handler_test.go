@@ -23,6 +23,12 @@ import (
 // mockWorkspaceService implements WorkspaceServiceInterface
 type mockWorkspaceService struct {
 	mock.Mock
+	CreateWorkspaceFn     func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
+	GetWorkspaceFn        func(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
+	ListWorkspacesFn      func(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
+	UpdateWorkspaceFn     func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
+	DeleteWorkspaceFn     func(ctx context.Context, id, ownerID string) error
+	GetWorkspaceMembersFn func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error)
 }
 
 func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
@@ -57,6 +63,10 @@ func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, we
 func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id, ownerID string) error {
 	args := m.Called(ctx, id, ownerID)
 	return args.Error(0)
+}
+
+func (m *mockWorkspaceService) GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
+	return m.GetWorkspaceMembersFn(ctx, id, requesterID)
 }
 
 // mockAuthService implements middleware.AuthServiceInterface
@@ -1044,4 +1054,153 @@ func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
 	var response errorResponse
 	json.NewDecoder(w.Body).Decode(&response)
 	assert.Equal(t, "Timezone is required", response.Error)
+}
+
+func TestWorkspaceHandler_HandleMembers(t *testing.T) {
+	mockWorkspaceService := &mockWorkspaceService{}
+	mockAuthService := &mockAuthService{}
+	publicKey := paseto.V4AsymmetricPublicKey{}
+
+	handler := NewWorkspaceHandler(mockWorkspaceService, mockAuthService, publicKey)
+
+	t.Run("success", func(t *testing.T) {
+		// Setup mocks
+		members := []*domain.UserWorkspace{
+			{
+				UserID:      "user1",
+				WorkspaceID: "workspace1",
+				Role:        "owner",
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+			},
+			{
+				UserID:      "user2",
+				WorkspaceID: "workspace1",
+				Role:        "member",
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+			},
+		}
+		mockWorkspaceService.GetWorkspaceMembersFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
+			return members, nil
+		}
+
+		// Setup request
+		req, err := http.NewRequest("GET", "/api/workspaces.members?id=workspace1", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Add authenticated user to context
+		user := &middleware.AuthenticatedUser{
+			ID: "user1",
+		}
+		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
+		req = req.WithContext(ctx)
+
+		// Setup response recorder
+		rr := httptest.NewRecorder()
+
+		// Call the handler
+		handler.handleMembers(rr, req)
+
+		// Check response
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		}
+
+		// Check response body
+		var response []*domain.UserWorkspace
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(response) != 2 {
+			t.Errorf("handler returned wrong number of members: got %v want %v", len(response), 2)
+		}
+	})
+
+	t.Run("missing workspace id", func(t *testing.T) {
+		// Setup request without workspace ID
+		req, err := http.NewRequest("GET", "/api/workspaces.members", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Add authenticated user to context
+		user := &middleware.AuthenticatedUser{
+			ID: "user1",
+		}
+		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
+		req = req.WithContext(ctx)
+
+		// Setup response recorder
+		rr := httptest.NewRecorder()
+
+		// Call the handler
+		handler.handleMembers(rr, req)
+
+		// Check response
+		if status := rr.Code; status != http.StatusBadRequest {
+			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		// Setup POST request
+		req, err := http.NewRequest("POST", "/api/workspaces.members?id=workspace1", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Add authenticated user to context
+		user := &middleware.AuthenticatedUser{
+			ID: "user1",
+		}
+		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
+		req = req.WithContext(ctx)
+
+		// Setup response recorder
+		rr := httptest.NewRecorder()
+
+		// Call the handler
+		handler.handleMembers(rr, req)
+
+		// Check response
+		if status := rr.Code; status != http.StatusMethodNotAllowed {
+			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusMethodNotAllowed)
+		}
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		// Setup mocks to return error
+		mockWorkspaceService.GetWorkspaceMembersFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
+			return nil, fmt.Errorf("service error")
+		}
+
+		// Setup request
+		req, err := http.NewRequest("GET", "/api/workspaces.members?id=workspace1", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Add authenticated user to context
+		user := &middleware.AuthenticatedUser{
+			ID: "user1",
+		}
+		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
+		req = req.WithContext(ctx)
+
+		// Setup response recorder
+		rr := httptest.NewRecorder()
+
+		// Call the handler
+		handler.handleMembers(rr, req)
+
+		// Check response
+		if status := rr.Code; status != http.StatusInternalServerError {
+			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusInternalServerError)
+		}
+	})
 }
