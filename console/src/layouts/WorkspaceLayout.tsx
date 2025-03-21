@@ -1,5 +1,5 @@
 import { Layout, Menu } from 'antd'
-import { Outlet, Link, useParams } from '@tanstack/react-router'
+import { Outlet, Link, useParams, useMatches } from '@tanstack/react-router'
 import { MailOutlined, TeamOutlined, SettingOutlined, FileTextOutlined } from '@ant-design/icons'
 import { Topbar } from '../components/Topbar'
 
@@ -7,6 +7,20 @@ const { Content, Sider } = Layout
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
+
+  // Use useMatches to determine the current route path
+  const matches = useMatches()
+  const currentPath = matches[matches.length - 1]?.pathname || ''
+
+  // Determine which key should be selected based on the current path
+  let selectedKey = 'campaigns'
+  if (currentPath.includes('/settings')) {
+    selectedKey = 'settings'
+  } else if (currentPath.includes('/templates')) {
+    selectedKey = 'templates'
+  } else if (currentPath.includes('/contacts')) {
+    selectedKey = 'contacts'
+  }
 
   const menuItems = [
     {
@@ -54,13 +68,13 @@ export function WorkspaceLayout() {
         <Sider width={200} theme="light">
           <Menu
             mode="inline"
-            defaultSelectedKeys={['campaigns']}
+            selectedKeys={[selectedKey]}
             style={{ height: '100%', borderRight: 0 }}
             items={menuItems}
           />
         </Sider>
         <Layout style={{ padding: '24px' }}>
-          <Content style={{ padding: 24, margin: 0, background: '#fff' }}>
+          <Content>
             <Outlet />
           </Content>
         </Layout>

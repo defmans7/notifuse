@@ -7,7 +7,8 @@ import {
   UpdateWorkspaceRequest,
   UpdateWorkspaceResponse,
   DeleteWorkspaceRequest,
-  DeleteWorkspaceResponse
+  DeleteWorkspaceResponse,
+  GetWorkspaceMembersResponse
 } from './types'
 
 interface DetectFaviconResponse {
@@ -29,5 +30,8 @@ export const workspaceService = {
   delete: (data: DeleteWorkspaceRequest) =>
     api.post<DeleteWorkspaceResponse>('/api/workspaces.delete', data),
 
-  detectFavicon: (url: string) => api.post<DetectFaviconResponse>('/api/detect-favicon', { url })
+  detectFavicon: (url: string) => api.post<DetectFaviconResponse>('/api/detect-favicon', { url }),
+
+  getMembers: (id: string) =>
+    api.get<GetWorkspaceMembersResponse>(`/api/workspaces.members?id=${id}`)
 }

@@ -62,7 +62,13 @@ export interface GetWorkspaceResponse {
 
 export interface UpdateWorkspaceRequest {
   id: string
-  settings: Partial<WorkspaceSettings>
+  name?: string
+  settings?: {
+    website_url?: string
+    logo_url?: string | null
+    cover_url?: string | null
+    timezone?: string
+  }
 }
 
 export interface UpdateWorkspaceResponse {
@@ -75,4 +81,17 @@ export interface DeleteWorkspaceRequest {
 
 export interface DeleteWorkspaceResponse {
   status: string
+}
+
+// Workspace Member types
+export interface WorkspaceMember {
+  user_id: string
+  workspace_id: string
+  role: string
+  created_at: string
+  updated_at: string
+}
+
+export interface GetWorkspaceMembersResponse {
+  members: WorkspaceMember[]
 }

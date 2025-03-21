@@ -5,6 +5,7 @@ import { SignInPage } from './pages/SignInPage'
 import { LogoutPage } from './pages/LogoutPage'
 import { CreateWorkspacePage } from './pages/CreateWorkspacePage'
 import { DashboardPage } from './pages/DashboardPage'
+import { WorkspaceSettingsPage } from './pages/WorkspaceSettingsPage'
 import { createRouter } from '@tanstack/react-router'
 
 // Create the root route
@@ -70,7 +71,7 @@ const workspaceContactsRoute = createRoute({
 const workspaceSettingsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/settings',
-  component: () => <div>Settings</div>
+  component: WorkspaceSettingsPage
 })
 
 const workspaceTemplatesRoute = createRoute({
