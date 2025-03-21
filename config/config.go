@@ -85,8 +85,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			return nil, fmt.Errorf("error getting current directory: %w", err)
 		}
 
-		configPath := strings.Split(currentPath, "server")[0] + "server/"
-		v.AddConfigPath(configPath)
+		v.AddConfigPath(currentPath)
 
 		if err := v.ReadInConfig(); err != nil {
 			log.Printf("Error reading config file %v: %v", opts.EnvFile, err)
