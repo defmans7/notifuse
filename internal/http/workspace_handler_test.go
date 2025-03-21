@@ -199,12 +199,15 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response domain.Workspace
+	// Updated to expect a response with a workspace field
+	var response struct {
+		Workspace domain.Workspace `json:"workspace"`
+	}
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, expectedWorkspace.ID, response.ID)
-	assert.Equal(t, expectedWorkspace.Name, response.Name)
-	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
+	assert.Equal(t, expectedWorkspace.ID, response.Workspace.ID)
+	assert.Equal(t, expectedWorkspace.Name, response.Workspace.Name)
+	assert.Equal(t, expectedWorkspace.Settings, response.Workspace.Settings)
 
 	// Assert expectations
 	workspaceSvc.AssertExpectations(t)
