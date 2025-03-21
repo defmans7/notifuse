@@ -67,7 +67,11 @@ export function SignInPage() {
       // This might need to be updated in AuthContext
       await signin(token)
       message.success('Successfully signed in')
-      navigate({ to: '/' })
+
+      // Add a small delay to ensure auth state is updated before navigation
+      setTimeout(() => {
+        navigate({ to: '/' })
+      }, 100)
     } catch (error) {
       message.error('Failed to verify code')
     } finally {
