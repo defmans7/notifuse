@@ -45,11 +45,11 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AntApp>
-          <ConfigProvider theme={theme}>
+        <ConfigProvider theme={theme}>
+          <AntApp>
             <RouterProvider router={router} />
-          </ConfigProvider>
-        </AntApp>
+          </AntApp>
+        </ConfigProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

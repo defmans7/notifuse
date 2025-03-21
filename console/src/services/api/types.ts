@@ -95,3 +95,15 @@ export interface WorkspaceMember {
 export interface GetWorkspaceMembersResponse {
   members: WorkspaceMember[]
 }
+
+// Workspace Member Invitation types
+export interface InviteMemberRequest {
+  workspace_id: string
+  email: string
+  role: string
+}
+
+export interface InviteMemberResponse {
+  status: string
+  message: string
+}
