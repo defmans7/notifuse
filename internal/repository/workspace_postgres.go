@@ -340,3 +340,95 @@ func (r *workspaceRepository) GetUserWorkspace(ctx context.Context, userID strin
 	}
 	return &uw, nil
 }
+
+// CreateInvitation creates a new workspace invitation
+func (r *workspaceRepository) CreateInvitation(ctx context.Context, invitation *domain.WorkspaceInvitation) error {
+	query := `
+		INSERT INTO workspace_invitations (id, workspace_id, inviter_id, email, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	_, err := r.systemDB.ExecContext(
+		ctx,
+		query,
+		invitation.ID,
+		invitation.WorkspaceID,
+		invitation.InviterID,
+		invitation.Email,
+		invitation.ExpiresAt,
+		invitation.CreatedAt,
+		invitation.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetInvitationByID retrieves a workspace invitation by its ID
+func (r *workspaceRepository) GetInvitationByID(ctx context.Context, id string) (*domain.WorkspaceInvitation, error) {
+	query := `
+		SELECT id, workspace_id, inviter_id, email, expires_at, created_at, updated_at
+		FROM workspace_invitations
+		WHERE id = $1
+	`
+	var invitation domain.WorkspaceInvitation
+	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(
+		&invitation.ID,
+		&invitation.WorkspaceID,
+		&invitation.InviterID,
+		&invitation.Email,
+		&invitation.ExpiresAt,
+		&invitation.CreatedAt,
+		&invitation.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("invitation not found")
+		}
+		return nil, err
+	}
+	return &invitation, nil
+}
+
+// GetInvitationByEmail retrieves a workspace invitation by workspace ID and email
+func (r *workspaceRepository) GetInvitationByEmail(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, error) {
+	query := `
+		SELECT id, workspace_id, inviter_id, email, expires_at, created_at, updated_at
+		FROM workspace_invitations
+		WHERE workspace_id = $1 AND email = $2
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var invitation domain.WorkspaceInvitation
+	err := r.systemDB.QueryRowContext(ctx, query, workspaceID, email).Scan(
+		&invitation.ID,
+		&invitation.WorkspaceID,
+		&invitation.InviterID,
+		&invitation.Email,
+		&invitation.ExpiresAt,
+		&invitation.CreatedAt,
+		&invitation.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("invitation not found")
+		}
+		return nil, err
+	}
+	return &invitation, nil
+}
+
+// IsUserWorkspaceMember checks if a user is a member of a workspace
+func (r *workspaceRepository) IsUserWorkspaceMember(ctx context.Context, userID, workspaceID string) (bool, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM user_workspaces
+		WHERE user_id = $1 AND workspace_id = $2
+	`
+	var count int
+	err := r.systemDB.QueryRowContext(ctx, query, userID, workspaceID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}

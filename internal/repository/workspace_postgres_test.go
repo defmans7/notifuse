@@ -993,7 +993,28 @@ func (r *mockInternalRepository) CreateDatabase(ctx context.Context, workspaceID
 }
 
 func (r *mockInternalRepository) DeleteDatabase(ctx context.Context, workspaceID string) error {
-	return fmt.Errorf("not implemented in mock")
+	// Mocked for tests
+	return nil
+}
+
+func (r *mockInternalRepository) CreateInvitation(ctx context.Context, invitation *domain.WorkspaceInvitation) error {
+	// Mocked for tests
+	return nil
+}
+
+func (r *mockInternalRepository) GetInvitationByID(ctx context.Context, id string) (*domain.WorkspaceInvitation, error) {
+	// Mocked for tests
+	return &domain.WorkspaceInvitation{ID: id}, nil
+}
+
+func (r *mockInternalRepository) GetInvitationByEmail(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, error) {
+	// Mocked for tests
+	return &domain.WorkspaceInvitation{WorkspaceID: workspaceID, Email: email}, nil
+}
+
+func (r *mockInternalRepository) IsUserWorkspaceMember(ctx context.Context, userID, workspaceID string) (bool, error) {
+	// Mocked for tests
+	return true, nil
 }
 
 // Test the actual Create method on the workspaceRepository (not just the mock implementation)

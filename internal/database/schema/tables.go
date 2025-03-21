@@ -38,6 +38,15 @@ var TableDefinitions = []string{
 		updated_at TIMESTAMP NOT NULL,
 		PRIMARY KEY (user_id, workspace_id)
 	)`,
+	`CREATE TABLE IF NOT EXISTS workspace_invitations (
+		id UUID PRIMARY KEY,
+		workspace_id VARCHAR(20) NOT NULL,
+		inviter_id UUID NOT NULL,
+		email VARCHAR(255) NOT NULL,
+		expires_at TIMESTAMP NOT NULL,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
+	)`,
 }
 
 // TableNames returns a list of all table names in creation order
@@ -46,4 +55,5 @@ var TableNames = []string{
 	"user_sessions",
 	"workspaces",
 	"user_workspaces",
+	"workspace_invitations",
 }

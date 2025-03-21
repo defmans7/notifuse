@@ -1,32 +1,45 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"aidanwoods.dev/go-paseto"
 
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 // WorkspaceServiceInterface is already defined in workspace_handler.go
 // So no need to define it again here
 
-type UserHandler struct {
-	userService      service.UserServiceInterface
-	workspaceService WorkspaceServiceInterface
-	config           *config.Config
-	publicKey        paseto.V4AsymmetricPublicKey
+// UserServiceInterface defines the methods required from a user service
+type UserServiceInterface interface {
+	SignIn(ctx context.Context, input service.SignInInput) (string, error)
+	VerifyCode(ctx context.Context, input service.VerifyCodeInput) (*service.AuthResponse, error)
+	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
+	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
 }
 
-func NewUserHandler(userService service.UserServiceInterface, workspaceService WorkspaceServiceInterface, cfg *config.Config, publicKey paseto.V4AsymmetricPublicKey) *UserHandler {
+type UserHandler struct {
+	userService      UserServiceInterface
+	workspaceService domain.WorkspaceServiceInterface
+	config           *config.Config
+	publicKey        paseto.V4AsymmetricPublicKey
+	logger           logger.Logger
+}
+
+func NewUserHandler(userService UserServiceInterface, workspaceService domain.WorkspaceServiceInterface, cfg *config.Config, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger) *UserHandler {
 	return &UserHandler{
 		userService:      userService,
 		workspaceService: workspaceService,
 		config:           cfg,
 		publicKey:        publicKey,
+		logger:           logger,
 	}
 }
 
@@ -107,20 +120,29 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// AuthServiceAdapter adapts UserService to middleware.AuthServiceInterface
+type AuthServiceAdapter struct {
+	userService UserServiceInterface
+}
+
+// VerifyUserSession delegates to the UserService
+func (a *AuthServiceAdapter) VerifyUserSession(ctx context.Context, userID, sessionID string) (*domain.User, error) {
+	return a.userService.VerifyUserSession(ctx, userID, sessionID)
+}
+
 func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Public routes (no auth required)
 	mux.HandleFunc("/api/user.signin", h.SignIn)
 	mux.HandleFunc("/api/user.verify", h.VerifyCode)
 
 	// Protected routes (auth required)
-	// Create auth middleware if we have a userService that implements the AuthServiceInterface
-	authService, ok := h.userService.(middleware.AuthServiceInterface)
-	if ok {
-		// Create auth middleware with the public key
-		authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
-		requireAuth := authMiddleware.RequireAuth(authService)
+	// Create auth adapter
+	authAdapter := &AuthServiceAdapter{userService: h.userService}
 
-		// Register protected routes
-		mux.Handle("/api/user.me", requireAuth(http.HandlerFunc(h.GetCurrentUser)))
-	}
+	// Create auth middleware
+	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
+	requireAuth := authMiddleware.RequireAuth(authAdapter)
+
+	// Register protected routes
+	mux.Handle("/api/user.me", requireAuth(http.HandlerFunc(h.GetCurrentUser)))
 }

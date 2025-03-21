@@ -2,38 +2,37 @@ package http
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
+	"github.com/Notifuse/notifuse/pkg/logger"
 
 	"aidanwoods.dev/go-paseto"
 )
 
-// WorkspaceServiceInterface defines the interface for workspace operations
-type WorkspaceServiceInterface interface {
-	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
-	GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
-	ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
-	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
-	DeleteWorkspace(ctx context.Context, id, ownerID string) error
-	GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error)
-}
-
+// WorkspaceHandler handles HTTP requests for workspace operations
 type WorkspaceHandler struct {
-	workspaceService WorkspaceServiceInterface
+	workspaceService domain.WorkspaceServiceInterface
 	authService      middleware.AuthServiceInterface
 	publicKey        paseto.V4AsymmetricPublicKey
+	logger           logger.Logger
 }
 
-func NewWorkspaceHandler(workspaceService WorkspaceServiceInterface, authService middleware.AuthServiceInterface, publicKey paseto.V4AsymmetricPublicKey) *WorkspaceHandler {
+// NewWorkspaceHandler creates a new workspace handler
+func NewWorkspaceHandler(
+	workspaceService domain.WorkspaceServiceInterface,
+	authService middleware.AuthServiceInterface,
+	publicKey paseto.V4AsymmetricPublicKey,
+	logger logger.Logger,
+) *WorkspaceHandler {
 	return &WorkspaceHandler{
 		workspaceService: workspaceService,
 		authService:      authService,
 		publicKey:        publicKey,
+		logger:           logger,
 	}
 }
 
@@ -307,7 +306,6 @@ func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Req
 	var req struct {
 		WorkspaceID string `json:"workspace_id"`
 		Email       string `json:"email"`
-		Role        string `json:"role"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -325,24 +323,28 @@ func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// No need to store role in a variable since we know it's always "member"
-
-	// Verify that the authenticated user has permission to invite members to this workspace
-	// In a real implementation, we would check if the user is an owner of the workspace
-	_, err := h.workspaceService.GetWorkspace(r.Context(), req.WorkspaceID, authUser.ID)
+	// Create the invitation or add the user directly if they already exist
+	invitation, token, err := h.workspaceService.InviteMember(r.Context(), req.WorkspaceID, authUser.ID, req.Email)
 	if err != nil {
-		writeError(w, http.StatusForbidden, "You don't have permission to invite members to this workspace")
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("email", req.Email).WithField("error", err.Error()).Error("Failed to invite member")
+		writeError(w, http.StatusInternalServerError, "Failed to invite member")
 		return
 	}
 
-	// TODO: In a real implementation, we would:
-	// 1. Check if the user exists, if not create a new user or send an invitation email
-	// 2. Add the user to the workspace with the role "member"
-	// 3. Send notification emails, etc.
+	// If invitation is nil, it means the user was directly added to the workspace
+	if invitation == nil {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status":  "success",
+			"message": "User added to workspace",
+		})
+		return
+	}
 
-	// For now, simply return a success response
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":  "success",
-		"message": "Invitation sent",
+	// Return the invitation details and token
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":     "success",
+		"message":    "Invitation sent",
+		"invitation": invitation,
+		"token":      token,
 	})
 }

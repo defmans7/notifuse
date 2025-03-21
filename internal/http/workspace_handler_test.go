@@ -29,6 +29,7 @@ type mockWorkspaceService struct {
 	UpdateWorkspaceFn     func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
 	DeleteWorkspaceFn     func(ctx context.Context, id, ownerID string) error
 	GetWorkspaceMembersFn func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error)
+	InviteMemberFn        func(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error)
 }
 
 func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
@@ -69,6 +70,14 @@ func (m *mockWorkspaceService) GetWorkspaceMembers(ctx context.Context, id, requ
 	return m.GetWorkspaceMembersFn(ctx, id, requesterID)
 }
 
+func (m *mockWorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {
+	args := m.Called(ctx, workspaceID, inviterID, email)
+	if args.Get(0) == nil {
+		return nil, args.String(1), args.Error(2)
+	}
+	return args.Get(0).(*domain.WorkspaceInvitation), args.String(1), args.Error(2)
+}
+
 // mockAuthService implements middleware.AuthServiceInterface
 type mockAuthService struct {
 	mock.Mock
@@ -84,14 +93,15 @@ func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID string, 
 
 // Test setup helper
 func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *mockAuthService, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
-	workspaceSvc := &mockWorkspaceService{}
-	authSvc := &mockAuthService{}
+	workspaceSvc := new(mockWorkspaceService)
+	authSvc := new(mockAuthService)
 
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	handler := NewWorkspaceHandler(workspaceSvc, authSvc, publicKey)
+	mockLogger := new(MockLogger)
+	handler := NewWorkspaceHandler(workspaceSvc, authSvc, publicKey, mockLogger)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -1064,7 +1074,7 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 	mockAuthService := &mockAuthService{}
 	publicKey := paseto.V4AsymmetricPublicKey{}
 
-	handler := NewWorkspaceHandler(mockWorkspaceService, mockAuthService, publicKey)
+	handler := NewWorkspaceHandler(mockWorkspaceService, mockAuthService, publicKey, new(MockLogger))
 
 	t.Run("success", func(t *testing.T) {
 		// Setup mocks

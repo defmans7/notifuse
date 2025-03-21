@@ -112,12 +112,25 @@ func main() {
 	}
 
 	// Create workspace service
-	workspaceService := service.NewWorkspaceService(workspaceRepo, appLogger)
+	workspaceService := service.NewWorkspaceService(
+		workspaceRepo,
+		appLogger,
+		userService,
+		authService)
 
 	// Use the already parsed PASETO public key
-	userHandler := httpHandler.NewUserHandler(userService, workspaceService, cfg, cfg.Security.PasetoPublicKey)
+	userHandler := httpHandler.NewUserHandler(
+		userService,
+		workspaceService,
+		cfg,
+		cfg.Security.PasetoPublicKey,
+		appLogger)
 	rootHandler := httpHandler.NewRootHandler()
-	workspaceHandler := httpHandler.NewWorkspaceHandler(workspaceService, authService, cfg.Security.PasetoPublicKey)
+	workspaceHandler := httpHandler.NewWorkspaceHandler(
+		workspaceService,
+		authService,
+		cfg.Security.PasetoPublicKey,
+		appLogger)
 	faviconHandler := httpHandler.NewFaviconHandler()
 
 	// Set up routes

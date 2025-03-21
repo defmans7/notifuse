@@ -101,6 +101,17 @@ func (uw *UserWorkspace) Validate() error {
 	return nil
 }
 
+// WorkspaceInvitation represents an invitation to a workspace
+type WorkspaceInvitation struct {
+	ID          string    `json:"id"`
+	WorkspaceID string    `json:"workspace_id"`
+	InviterID   string    `json:"inviter_id"`
+	Email       string    `json:"email"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type WorkspaceRepository interface {
 	Create(ctx context.Context, workspace *Workspace) error
 	GetByID(ctx context.Context, id string) (*Workspace, error)
@@ -115,6 +126,12 @@ type WorkspaceRepository interface {
 	GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*UserWorkspace, error)
 	GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*UserWorkspace, error)
 
+	// Workspace invitation management
+	CreateInvitation(ctx context.Context, invitation *WorkspaceInvitation) error
+	GetInvitationByID(ctx context.Context, id string) (*WorkspaceInvitation, error)
+	GetInvitationByEmail(ctx context.Context, workspaceID, email string) (*WorkspaceInvitation, error)
+	IsUserWorkspaceMember(ctx context.Context, userID, workspaceID string) (bool, error)
+
 	// Database management
 	GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error)
 	CreateDatabase(ctx context.Context, workspaceID string) error
@@ -128,4 +145,15 @@ type ErrUnauthorized struct {
 
 func (e *ErrUnauthorized) Error() string {
 	return e.Message
+}
+
+// WorkspaceServiceInterface defines the interface for workspace operations
+type WorkspaceServiceInterface interface {
+	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*Workspace, error)
+	GetWorkspace(ctx context.Context, id, requesterID string) (*Workspace, error)
+	ListWorkspaces(ctx context.Context, userID string) ([]*Workspace, error)
+	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*Workspace, error)
+	DeleteWorkspace(ctx context.Context, id, requesterID string) error
+	GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*UserWorkspace, error)
+	InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*WorkspaceInvitation, string, error)
 }

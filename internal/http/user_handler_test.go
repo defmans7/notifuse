@@ -20,6 +20,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type mockUserService struct {
@@ -95,8 +96,7 @@ func (m *mockUserWorkspaceService) UpdateWorkspace(ctx context.Context, id, name
 }
 
 func (m *mockUserWorkspaceService) DeleteWorkspace(ctx context.Context, id, ownerID string) error {
-	args := m.Called(ctx, id, ownerID)
-	return args.Error(0)
+	return m.Called(ctx, id, ownerID).Error(0)
 }
 
 func (m *mockUserWorkspaceService) GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
@@ -107,9 +107,19 @@ func (m *mockUserWorkspaceService) GetWorkspaceMembers(ctx context.Context, id, 
 	return args.Get(0).([]*domain.UserWorkspace), args.Error(1)
 }
 
+func (m *mockUserWorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {
+	args := m.Called(ctx, workspaceID, inviterID, email)
+	if args.Get(0) == nil {
+		return nil, args.String(1), args.Error(2)
+	}
+	return args.Get(0).(*domain.WorkspaceInvitation), args.String(1), args.Error(2)
+}
+
 func TestUserHandler_SignIn(t *testing.T) {
 	mockService := new(mockUserService)
 	mockWorkspaceSvc := new(mockUserWorkspaceService)
+
+	// Test with different configs
 	devConfig := &config.Config{Environment: "development"}
 	prodConfig := &config.Config{Environment: "production"}
 
@@ -117,8 +127,11 @@ func TestUserHandler_SignIn(t *testing.T) {
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	devHandler := NewUserHandler(mockService, mockWorkspaceSvc, devConfig, publicKey)
-	prodHandler := NewUserHandler(mockService, mockWorkspaceSvc, prodConfig, publicKey)
+	mockLogger := &MockLogger{}
+
+	// Use type assertion to treat mockService as a service.UserServiceInterface
+	devHandler := NewUserHandler(mockService, mockWorkspaceSvc, devConfig, publicKey, mockLogger)
+	prodHandler := NewUserHandler(mockService, mockWorkspaceSvc, prodConfig, publicKey, mockLogger)
 
 	tests := []struct {
 		name         string
@@ -224,13 +237,16 @@ func TestUserHandler_SignIn(t *testing.T) {
 func TestUserHandler_VerifyCode(t *testing.T) {
 	mockService := new(mockUserService)
 	mockWorkspaceSvc := new(mockUserWorkspaceService)
-	config := &config.Config{Environment: "production"}
+	config := &config.Config{}
 
 	// Create a test key
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	handler := NewUserHandler(mockService, mockWorkspaceSvc, config, publicKey)
+	mockLogger := &MockLogger{}
+
+	// Use type assertion for mockService
+	handler := NewUserHandler(mockService, mockWorkspaceSvc, config, publicKey, mockLogger)
 
 	user := &domain.User{
 		ID:    uuid.New().String(),
@@ -316,13 +332,16 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 func TestUserHandler_GetCurrentUser(t *testing.T) {
 	mockUserSvc := new(mockUserService)
 	mockWorkspaceSvc := new(mockUserWorkspaceService)
-	config := &config.Config{Environment: "production"}
+	config := &config.Config{}
 
 	// Create a test key
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, config, publicKey)
+	mockLogger := &MockLogger{}
+
+	// Use type assertion for mockUserSvc
+	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, config, publicKey, mockLogger)
 
 	userID := uuid.New().String()
 	user := &domain.User{
@@ -427,48 +446,53 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 }
 
 func TestUserHandler_RegisterRoutes(t *testing.T) {
-	// Generate a PASETO key pair for testing
+	mockUserSvc := new(mockUserService)
+	mockWorkspaceSvc := new(mockWorkspaceService)
+	cfg := &config.Config{}
+
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
+	mockLogger := &MockLogger{}
+
+	// Set up mock expectation for VerifyUserSession to prevent unexpected call error
+	mockUserSvc.On("VerifyUserSession", mock.Anything, mock.Anything, mock.Anything).
+		Return(&domain.User{ID: "user1", Email: "user@example.com"}, nil)
+
+	// Set up mock expectation for GetUserByID with specific user ID
+	mockUserSvc.On("GetUserByID", mock.Anything, "user1").
+		Return(&domain.User{ID: "user1", Email: "user@example.com"}, nil)
+
+	// Set up mock expectation for ListWorkspaces
+	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, "user1").
+		Return([]*domain.Workspace{}, nil)
+
+	// Use type assertion for mockUserSvc
+	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, cfg, publicKey, mockLogger)
+
 	// Test cases for different scenarios
 	testCases := []struct {
-		name            string
-		setupMocks      func(userSvc *mockUserService, workspaceSvc any)
-		testPath        string
-		expectedHandler bool
+		name       string
+		route      string
+		setupMocks func(userSvc *mockUserService, workspaceSvc *mockWorkspaceService)
 	}{
 		{
-			name: "public routes",
-			setupMocks: func(userSvc *mockUserService, workspaceSvc any) {
-				// No need to set up AuthServiceInterface expectations
-				// because we're testing that these routes don't require auth
+			name:  "public routes",
+			route: "/api/user.signin",
+			setupMocks: func(userSvc *mockUserService, workspaceSvc *mockWorkspaceService) {
+				// No mock setup needed for testing route registration
 			},
-			testPath:        "/api/user.signin",
-			expectedHandler: true,
 		},
 		{
-			name: "protected routes with auth service",
-			setupMocks: func(userSvc *mockUserService, workspaceSvc any) {
-				// Make mockUserService implement AuthServiceInterface
-				userSvc.On("VerifyUserSession", mock.Anything, mock.Anything, mock.Anything).
-					Return(&domain.User{ID: "user1", Email: "test@example.com"}, nil)
-
-				// Mock GetUserByID which is called in GetCurrentUser
-				userSvc.On("GetUserByID", mock.Anything, "user1").
-					Return(&domain.User{ID: "user1", Email: "test@example.com"}, nil)
-
-				// Mock ListWorkspaces which is also called in GetCurrentUser
-				if ws, ok := workspaceSvc.(*mockUserWorkspaceService); ok {
-					ws.On("ListWorkspaces", mock.Anything, "user1").
-						Return([]*domain.Workspace{}, nil)
-				} else if ws, ok := workspaceSvc.(*mockWorkspaceService); ok {
-					ws.On("ListWorkspaces", mock.Anything, "user1").
-						Return([]*domain.Workspace{}, nil)
-				}
+			name:  "protected routes with auth service",
+			route: "/api/user.me",
+			setupMocks: func(userSvc *mockUserService, workspaceSvc *mockWorkspaceService) {
+				// Setup mock for auth middleware
+				userSvc.On("GetUserByID", mock.Anything, mock.Anything).Return(&domain.User{
+					ID:    "user1",
+					Email: "user@example.com",
+				}, nil)
 			},
-			testPath:        "/api/user.me",
-			expectedHandler: true,
 		},
 	}
 
@@ -478,21 +502,11 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 			mockUserSvc := &mockUserService{}
 			mockWorkspaceSvc := &mockWorkspaceService{}
 
-			// Create a config with test values
-			cfg := &config.Config{
-				Security: config.SecurityConfig{
-					PasetoPublicKey: publicKey,
-				},
-			}
-
-			// Create the handler
-			handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, cfg, publicKey)
+			// Set up mocks for this test case
+			tc.setupMocks(mockUserSvc, mockWorkspaceSvc)
 
 			// Create a new HTTP multiplexer for each test case
 			mux := http.NewServeMux()
-
-			// Set up mocks for this test case
-			tc.setupMocks(mockUserSvc, mockWorkspaceSvc)
 
 			// Register routes
 			handler.RegisterRoutes(mux)
@@ -502,11 +516,11 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 			defer server.Close()
 
 			// Make a request to the test path
-			req, err := http.NewRequest("GET", server.URL+tc.testPath, nil)
+			req, err := http.NewRequest("GET", server.URL+tc.route, nil)
 			require.NoError(t, err)
 
 			// For protected routes, we need to add a valid token
-			if tc.testPath == "/api/user.me" {
+			if tc.route == "/api/user.me" {
 				token := paseto.NewToken()
 				token.SetString("user_id", "user1")
 				token.SetString("session_id", "session1")
@@ -522,11 +536,43 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 
 			// We don't care about the response content, just that a handler was registered
 			// and it didn't return 404 Not Found
-			if tc.expectedHandler {
+			if tc.route == "/api/user.me" {
 				require.NoError(t, err)
 				defer resp.Body.Close()
 				assert.NotEqual(t, http.StatusNotFound, resp.StatusCode)
 			}
 		})
 	}
+}
+
+// Add a mock logger struct
+type MockLogger struct {
+	mock.Mock
+}
+
+func (m *MockLogger) Info(msg string) {
+}
+
+func (m *MockLogger) Error(msg string) {
+}
+
+func (m *MockLogger) Debug(msg string) {
+}
+
+func (m *MockLogger) Warn(msg string) {
+}
+
+func (m *MockLogger) Fatal(msg string) {
+}
+
+func (m *MockLogger) WithField(key string, value interface{}) logger.Logger {
+	return m
+}
+
+func (m *MockLogger) WithFields(fields map[string]interface{}) logger.Logger {
+	return m
+}
+
+func (m *MockLogger) WithError(err error) logger.Logger {
+	return m
 }

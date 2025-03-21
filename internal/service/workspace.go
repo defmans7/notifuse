@@ -3,21 +3,32 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/google/uuid"
 )
 
-type WorkspaceService struct {
-	repo   domain.WorkspaceRepository
-	logger logger.Logger
+// AuthServiceInterface defines the methods needed from the auth service
+type AuthServiceInterface interface {
+	GenerateInvitationToken(invitation *domain.WorkspaceInvitation) string
 }
 
-func NewWorkspaceService(repo domain.WorkspaceRepository, logger logger.Logger) *WorkspaceService {
+type WorkspaceService struct {
+	repo        domain.WorkspaceRepository
+	logger      logger.Logger
+	userService *UserService
+	authService AuthServiceInterface
+}
+
+func NewWorkspaceService(repo domain.WorkspaceRepository, logger logger.Logger, userService *UserService, authService AuthServiceInterface) *WorkspaceService {
 	return &WorkspaceService{
-		repo:   repo,
-		logger: logger,
+		repo:        repo,
+		logger:      logger,
+		userService: userService,
+		authService: authService,
 	}
 }
 
@@ -298,4 +309,95 @@ func (s *WorkspaceService) GetWorkspaceMembers(ctx context.Context, id string, r
 	}
 
 	return members, nil
+}
+
+// InviteMember creates an invitation for a user to join a workspace
+func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {
+	// Validate email format
+	if !isValidEmail(email) {
+		return nil, "", fmt.Errorf("invalid email format")
+	}
+
+	// Check if workspace exists
+	workspace, err := s.repo.GetByID(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Error("Failed to get workspace for invitation")
+		return nil, "", err
+	}
+	if workspace == nil {
+		return nil, "", fmt.Errorf("workspace not found")
+	}
+
+	// Check if the inviter has permission to invite members (is a member of the workspace)
+	isMember, err := s.repo.IsUserWorkspaceMember(ctx, inviterID, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("inviter_id", inviterID).WithField("error", err.Error()).Error("Failed to check if inviter is a member")
+		return nil, "", err
+	}
+	if !isMember {
+		return nil, "", fmt.Errorf("inviter is not a member of the workspace")
+	}
+
+	// Check if user already exists with this email
+	user, err := s.userService.GetUserByEmail(ctx, email)
+	if err == nil && user != nil {
+		// User exists, check if they're already a member
+		isMember, err := s.repo.IsUserWorkspaceMember(ctx, user.ID, workspaceID)
+		if err != nil {
+			s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to check if user is already a member")
+			return nil, "", err
+		}
+		if isMember {
+			return nil, "", fmt.Errorf("user is already a member of the workspace")
+		}
+
+		// User exists but is not a member, add them as a member
+		userWorkspace := &domain.UserWorkspace{
+			UserID:      user.ID,
+			WorkspaceID: workspaceID,
+			Role:        "member", // Always set invited users as members
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+		err = s.repo.AddUserToWorkspace(ctx, userWorkspace)
+		if err != nil {
+			s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to add user to workspace")
+			return nil, "", err
+		}
+
+		// Return nil invitation since user was directly added
+		return nil, "", nil
+	}
+
+	// User doesn't exist or there was an error (treat as user doesn't exist for security)
+	// Create an invitation
+	invitationID := uuid.New().String()
+	expiresAt := time.Now().Add(15 * 24 * time.Hour) // 15 days
+
+	invitation := &domain.WorkspaceInvitation{
+		ID:          invitationID,
+		WorkspaceID: workspaceID,
+		InviterID:   inviterID,
+		Email:       email,
+		ExpiresAt:   expiresAt,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	err = s.repo.CreateInvitation(ctx, invitation)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("email", email).WithField("error", err.Error()).Error("Failed to create workspace invitation")
+		return nil, "", err
+	}
+
+	// Generate a PASETO token with the invitation details
+	token := s.authService.GenerateInvitationToken(invitation)
+
+	return invitation, token, nil
+}
+
+// Helper function to validate email format
+func isValidEmail(email string) bool {
+	// Basic email validation - could be more sophisticated in production
+	return strings.Contains(email, "@") && strings.Contains(email, ".")
 }

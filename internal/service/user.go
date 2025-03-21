@@ -65,6 +65,7 @@ type UserServiceInterface interface {
 	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
 	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
 	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
 }
 
 // Ensure UserService implements UserServiceInterface
@@ -238,6 +239,16 @@ func (s *UserService) GetUserByID(ctx context.Context, userID string) (*domain.U
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
+		return nil, err
+	}
+	return user, nil
+}
+
+// GetUserByEmail retrieves a user by their email address
+func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	user, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		s.logger.WithField("email", email).WithField("error", err.Error()).Error("Failed to get user by email")
 		return nil, err
 	}
 	return user, nil

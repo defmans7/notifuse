@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
+
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"time"
 
 	"aidanwoods.dev/go-paseto"
 )
@@ -103,6 +104,29 @@ func (s *AuthService) GenerateAuthToken(user *domain.User, sessionID string, exp
 	encrypted := token.V4Sign(s.privateKey, nil)
 	if encrypted == "" {
 		s.logger.WithField("user_id", user.ID).WithField("session_id", sessionID).Error("Failed to sign authentication token")
+	}
+
+	return encrypted
+}
+
+// GetPrivateKey returns the private key
+func (s *AuthService) GetPrivateKey() paseto.V4AsymmetricSecretKey {
+	return s.privateKey
+}
+
+// GenerateInvitationToken generates a PASETO token for a workspace invitation
+func (s *AuthService) GenerateInvitationToken(invitation *domain.WorkspaceInvitation) string {
+	token := paseto.NewToken()
+	token.SetIssuedAt(time.Now())
+	token.SetNotBefore(time.Now())
+	token.SetExpiration(invitation.ExpiresAt)
+	token.SetString("invitation_id", invitation.ID)
+	token.SetString("workspace_id", invitation.WorkspaceID)
+	token.SetString("email", invitation.Email)
+
+	encrypted := token.V4Sign(s.privateKey, nil)
+	if encrypted == "" {
+		s.logger.WithField("invitation_id", invitation.ID).Error("Failed to sign invitation token")
 	}
 
 	return encrypted
