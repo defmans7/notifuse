@@ -47,6 +47,58 @@ var TableDefinitions = []string{
 		created_at TIMESTAMP NOT NULL,
 		updated_at TIMESTAMP NOT NULL
 	)`,
+	`CREATE TABLE IF NOT EXISTS contacts (
+		uuid UUID PRIMARY KEY,
+		external_id VARCHAR(255) NOT NULL,
+		email VARCHAR(255) NOT NULL,
+		timezone VARCHAR(50) NOT NULL,
+		first_name VARCHAR(255),
+		last_name VARCHAR(255),
+		phone VARCHAR(50),
+		address_line_1 VARCHAR(255),
+		address_line_2 VARCHAR(255),
+		country VARCHAR(50),
+		postcode VARCHAR(20),
+		state VARCHAR(50),
+		job_title VARCHAR(100),
+		lifetime_value DECIMAL(15, 2),
+		orders_count INTEGER,
+		last_order_at TIMESTAMP,
+		custom_string_1 VARCHAR(255),
+		custom_string_2 VARCHAR(255),
+		custom_string_3 VARCHAR(255),
+		custom_string_4 VARCHAR(255),
+		custom_string_5 VARCHAR(255),
+		custom_number_1 DECIMAL(15, 2),
+		custom_number_2 DECIMAL(15, 2),
+		custom_number_3 DECIMAL(15, 2),
+		custom_number_4 DECIMAL(15, 2),
+		custom_number_5 DECIMAL(15, 2),
+		custom_datetime_1 TIMESTAMP,
+		custom_datetime_2 TIMESTAMP,
+		custom_datetime_3 TIMESTAMP,
+		custom_datetime_4 TIMESTAMP,
+		custom_datetime_5 TIMESTAMP,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS lists (
+		id VARCHAR(20) PRIMARY KEY,
+		name VARCHAR(255) NOT NULL,
+		type VARCHAR(20) NOT NULL,
+		is_double_optin BOOLEAN NOT NULL DEFAULT FALSE,
+		description TEXT,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS contact_lists (
+		contact_id UUID NOT NULL,
+		list_id VARCHAR(20) NOT NULL,
+		status VARCHAR(20) NOT NULL,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL,
+		PRIMARY KEY (contact_id, list_id)
+	)`,
 }
 
 // TableNames returns a list of all table names in creation order
@@ -56,4 +108,7 @@ var TableNames = []string{
 	"workspaces",
 	"user_workspaces",
 	"workspace_invitations",
+	"contacts",
+	"lists",
+	"contact_lists",
 }
