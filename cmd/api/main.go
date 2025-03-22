@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/database"
-	"github.com/Notifuse/notifuse/internal/domain"
 	httpHandler "github.com/Notifuse/notifuse/internal/http"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/internal/repository"
@@ -24,41 +22,6 @@ import (
 
 // osExit is a variable to allow mocking os.Exit in tests
 var osExit = os.Exit
-
-// authServiceMiddlewareAdapter adapts AuthService to implement middleware.AuthServiceInterface
-type authServiceMiddlewareAdapter struct {
-	authService *service.AuthService
-}
-
-func (a *authServiceMiddlewareAdapter) VerifyUserSession(ctx context.Context, userID, sessionID string) (*domain.User, error) {
-	return a.authService.VerifyUserSession(ctx, userID, sessionID)
-}
-
-func (a *authServiceMiddlewareAdapter) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
-	return a.authService.GetUserByID(ctx, userID)
-}
-
-// userServiceAdapter adapts AuthService to implement httpHandler.UserServiceInterface
-type userServiceAdapter struct {
-	authService *service.AuthService
-	userService *service.UserService
-}
-
-func (a *userServiceAdapter) SignIn(ctx context.Context, input service.SignInInput) (string, error) {
-	return a.userService.SignIn(ctx, input)
-}
-
-func (a *userServiceAdapter) VerifyCode(ctx context.Context, input service.VerifyCodeInput) (*service.AuthResponse, error) {
-	return a.userService.VerifyCode(ctx, input)
-}
-
-func (a *userServiceAdapter) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
-	return a.authService.VerifyUserSession(ctx, userID, sessionID)
-}
-
-func (a *userServiceAdapter) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
-	return a.authService.GetUserByID(ctx, userID)
-}
 
 func main() {
 	// Load configuration
@@ -149,7 +112,7 @@ func main() {
 	}
 
 	// Create adapter for AuthService to implement middleware.AuthServiceInterface
-	authServiceAdapter := &authServiceMiddlewareAdapter{authService: authService}
+	authServiceAdapter := httpHandler.NewAuthServiceMiddlewareAdapter(authService)
 
 	// Then create user service with auth service as dependency
 	userService, err := service.NewUserService(service.UserServiceConfig{
@@ -167,10 +130,7 @@ func main() {
 	}
 
 	// Create adapter for UserService
-	userServiceAdapter := &userServiceAdapter{
-		authService: authService,
-		userService: userService,
-	}
+	userServiceAdapter := httpHandler.NewUserServiceAdapter(authService, userService)
 
 	// Create workspace service with mailer
 	workspaceService := service.NewWorkspaceService(
