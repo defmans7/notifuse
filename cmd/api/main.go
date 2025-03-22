@@ -22,14 +22,6 @@ import (
 	"github.com/Notifuse/notifuse/pkg/mailer"
 )
 
-type emailSender struct{}
-
-func (s *emailSender) SendMagicCode(email, code string) error {
-	// TODO: Implement email sending using SMTP
-	log.Printf("Sending magic code to %s: %s", email, code)
-	return nil
-}
-
 // osExit is a variable to allow mocking os.Exit in tests
 var osExit = os.Exit
 
@@ -119,7 +111,6 @@ func main() {
 	userRepo := repository.NewUserRepository(systemDB)
 	workspaceRepo := repository.NewWorkspaceRepository(systemDB, &cfg.Database)
 	authRepo := repository.NewSQLAuthRepository(systemDB, appLogger)
-	emailSender := &emailSender{}
 	contactRepo := repository.NewContactRepository(systemDB)
 	listRepo := repository.NewListRepository(systemDB)
 	contactListRepo := repository.NewContactListRepository(systemDB)
@@ -164,7 +155,7 @@ func main() {
 	userService, err := service.NewUserService(service.UserServiceConfig{
 		Repository:    userRepo,
 		AuthService:   authService,
-		EmailSender:   emailSender,
+		EmailSender:   mailService,
 		SessionExpiry: 15 * 24 * time.Hour, // 15 days
 		Logger:        appLogger,
 		IsDevelopment: cfg.IsDevelopment(),

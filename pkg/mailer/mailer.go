@@ -9,6 +9,8 @@ import (
 type Mailer interface {
 	// SendWorkspaceInvitation sends an invitation email with the given token
 	SendWorkspaceInvitation(email, workspaceName, inviterName, token string) error
+	// SendMagicCode sends a magic code for authentication purposes
+	SendMagicCode(email, code string) error
 }
 
 // Config holds the configuration for the mailer
@@ -53,6 +55,20 @@ func (m *SMTPMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, 
 	return nil
 }
 
+// SendMagicCode sends an authentication magic code email
+func (m *SMTPMailer) SendMagicCode(email, code string) error {
+	// For now, just log the email details
+	// In a real implementation, use a real SMTP client to send the email
+	log.Printf("Sending magic code to %s: %s", email, code)
+
+	// In a real implementation, you would:
+	// 1. Create a proper HTML/text email template
+	// 2. Set up SMTP client with authentication
+	// 3. Send the email through the SMTP server
+
+	return nil
+}
+
 // ConsoleMailer is a development implementation that just logs emails
 type ConsoleMailer struct{}
 
@@ -72,6 +88,21 @@ func (m *ConsoleMailer) SendWorkspaceInvitation(email, workspaceName, inviterNam
 	fmt.Printf("Hello,\n\n")
 	fmt.Printf("%s has invited you to join the %s workspace on Notifuse.\n\n", inviterName, workspaceName)
 	fmt.Printf("Use the following token to join: %s\n\n", token)
+	fmt.Println("==============================================================")
+
+	return nil
+}
+
+// SendMagicCode logs the magic code details to console
+func (m *ConsoleMailer) SendMagicCode(email, code string) error {
+	fmt.Println("==============================================================")
+	fmt.Println("                 AUTHENTICATION MAGIC CODE                    ")
+	fmt.Println("==============================================================")
+	fmt.Printf("To: %s\n", email)
+	fmt.Printf("Subject: Your authentication code\n\n")
+	fmt.Println("Email Content:")
+	fmt.Printf("Hello,\n\n")
+	fmt.Printf("Your authentication code is: %s\n\n", code)
 	fmt.Println("==============================================================")
 
 	return nil

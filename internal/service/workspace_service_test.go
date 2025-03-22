@@ -231,6 +231,11 @@ func (m *MockMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, 
 	return args.Error(0)
 }
 
+func (m *MockMailer) SendMagicCode(email, code string) error {
+	args := m.Called(email, code)
+	return args.Error(0)
+}
+
 func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockRepo := new(MockWorkspaceRepository)
 	mockLogger := new(MockLogger)

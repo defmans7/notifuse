@@ -3,33 +3,42 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
-	"log"
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/pkg/mailer"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestEmailSender_SendMagicCode(t *testing.T) {
-	// Redirect log output for testing
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	defer log.SetOutput(os.Stderr) // Restore default output
+func TestConsoleMailer_SendMagicCode(t *testing.T) {
+	// Redirect stdout output for testing
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
 
-	// Create email sender
-	sender := &emailSender{}
+	// Create console mailer
+	mailerService := mailer.NewConsoleMailer()
 
 	// Test sending a magic code
-	err := sender.SendMagicCode("test@example.com", "123456")
+	err := mailerService.SendMagicCode("test@example.com", "123456")
+
+	// Close the pipe to capture output
+	w.Close()
+	os.Stdout = oldStdout
+
+	// Read the captured output
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
 
 	// Verify no error
 	assert.NoError(t, err)
 
-	// Verify log output contains the expected message
-	logOutput := buf.String()
-	assert.Contains(t, logOutput, "Sending magic code to test@example.com: 123456")
+	// Verify the output contains the expected message
+	assert.Contains(t, output, "AUTHENTICATION MAGIC CODE")
+	assert.Contains(t, output, "test@example.com")
+	assert.Contains(t, output, "123456")
 }
 
 func TestConfigLoading(t *testing.T) {
