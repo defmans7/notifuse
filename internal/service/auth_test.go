@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/Notifuse/notifuse/internal/domain"
 	"testing"
 	"time"
+
+	"github.com/Notifuse/notifuse/internal/domain"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/stretchr/testify/assert"
@@ -223,4 +224,66 @@ func TestAuthService_GenerateAuthToken(t *testing.T) {
 	sessionIdFromToken, err := parsedToken.GetString("session_id")
 	require.NoError(t, err)
 	assert.Equal(t, sessionID, sessionIdFromToken)
+}
+
+// Test the GenerateInvitationToken method
+func TestAuthService_GenerateInvitationToken(t *testing.T) {
+	mockRepo := new(MockAuthRepository)
+	mockLogger := new(MockLogger)
+
+	// Setup logger mock to return itself for WithField calls
+	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+	mockLogger.On("Error", mock.Anything).Return()
+
+	// Create key pair for testing
+	key := paseto.NewV4AsymmetricSecretKey()
+	privateKey := key.ExportBytes()
+	publicKey := key.Public().ExportBytes()
+
+	// Create service with config
+	service, err := NewAuthService(AuthServiceConfig{
+		Repository: mockRepo,
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+		Logger:     mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Create a workspace invitation for testing
+	invitationID := "test-invitation-id"
+	workspaceID := "test-workspace-id"
+	email := "test@example.com"
+	expiresAt := time.Now().Add(24 * time.Hour)
+
+	invitation := &domain.WorkspaceInvitation{
+		ID:          invitationID,
+		WorkspaceID: workspaceID,
+		Email:       email,
+		ExpiresAt:   expiresAt,
+		CreatedAt:   time.Now(),
+	}
+
+	// Generate token
+	token := service.GenerateInvitationToken(invitation)
+
+	// Verify the token is not empty
+	assert.NotEmpty(t, token)
+
+	// Parse the token to verify its contents
+	parser := paseto.NewParser()
+	parsedToken, err := parser.ParseV4Public(key.Public(), token, nil)
+	require.NoError(t, err)
+
+	// Verify token claims
+	invitationIdFromToken, err := parsedToken.GetString("invitation_id")
+	require.NoError(t, err)
+	assert.Equal(t, invitationID, invitationIdFromToken)
+
+	workspaceIdFromToken, err := parsedToken.GetString("workspace_id")
+	require.NoError(t, err)
+	assert.Equal(t, workspaceID, workspaceIdFromToken)
+
+	emailFromToken, err := parsedToken.GetString("email")
+	require.NoError(t, err)
+	assert.Equal(t, email, emailFromToken)
 }

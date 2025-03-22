@@ -1152,20 +1152,22 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		// Parse response body
-		var response []*domain.UserWorkspaceWithEmail
+		var response struct {
+			Members []*domain.UserWorkspaceWithEmail `json:"members"`
+		}
 		err = json.Unmarshal(rr.Body.Bytes(), &response)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
 		// Verify response content
-		assert.Len(t, response, 2)
-		assert.Equal(t, "user1", response[0].UserID)
-		assert.Equal(t, "user1@example.com", response[0].Email)
-		assert.Equal(t, "owner", response[0].Role)
-		assert.Equal(t, "user2", response[1].UserID)
-		assert.Equal(t, "user2@example.com", response[1].Email)
-		assert.Equal(t, "member", response[1].Role)
+		assert.Len(t, response.Members, 2)
+		assert.Equal(t, "user1", response.Members[0].UserID)
+		assert.Equal(t, "user1@example.com", response.Members[0].Email)
+		assert.Equal(t, "owner", response.Members[0].Role)
+		assert.Equal(t, "user2", response.Members[1].UserID)
+		assert.Equal(t, "user2@example.com", response.Members[1].Email)
+		assert.Equal(t, "member", response.Members[1].Role)
 	})
 
 	t.Run("missing workspace id", func(t *testing.T) {

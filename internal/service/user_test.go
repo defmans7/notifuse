@@ -514,3 +514,71 @@ func TestUserService_GetUserByID(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 }
+
+func TestUserService_GetUserByEmail(t *testing.T) {
+	repo := new(mockUserRepository)
+	emailSender := new(mockEmailSender)
+	mockLogger := new(MockLogger)
+	authService := setupAuthService()
+
+	// Setup logger mock to return itself for WithField calls
+	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+	mockLogger.On("Error", mock.Anything).Return()
+
+	service, err := NewUserService(UserServiceConfig{
+		Repository:    repo,
+		AuthService:   authService,
+		EmailSender:   emailSender,
+		SessionExpiry: 24 * time.Hour,
+		Logger:        mockLogger,
+		IsDevelopment: false,
+	})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	userEmail := "test@example.com"
+
+	t.Run("successfully gets user by email", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID:        uuid.New().String(),
+			Email:     userEmail,
+			Name:      "Test User",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		repo.On("GetUserByEmail", ctx, userEmail).Return(expectedUser, nil).Once()
+
+		user, err := service.GetUserByEmail(ctx, userEmail)
+
+		require.NoError(t, err)
+		require.NotNil(t, user)
+		assert.Equal(t, expectedUser.ID, user.ID)
+		assert.Equal(t, expectedUser.Email, user.Email)
+		assert.Equal(t, expectedUser.Name, user.Name)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("user not found", func(t *testing.T) {
+		repo.On("GetUserByEmail", ctx, userEmail).Return(nil, &domain.ErrUserNotFound{Message: "user not found"}).Once()
+
+		user, err := service.GetUserByEmail(ctx, userEmail)
+
+		require.Error(t, err)
+		require.Nil(t, user)
+		assert.IsType(t, &domain.ErrUserNotFound{}, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("repository error", func(t *testing.T) {
+		repoErr := fmt.Errorf("database error")
+		repo.On("GetUserByEmail", ctx, userEmail).Return(nil, repoErr).Once()
+
+		user, err := service.GetUserByEmail(ctx, userEmail)
+
+		require.Error(t, err)
+		require.Nil(t, user)
+		assert.Equal(t, repoErr, err)
+		repo.AssertExpectations(t)
+	})
+}
