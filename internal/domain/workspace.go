@@ -93,6 +93,12 @@ type UserWorkspace struct {
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// UserWorkspaceWithEmail extends UserWorkspace to include user email
+type UserWorkspaceWithEmail struct {
+	UserWorkspace
+	Email string `json:"email" db:"email"`
+}
+
 // Validate performs validation on the user workspace fields
 func (uw *UserWorkspace) Validate() error {
 	if _, err := govalidator.ValidateStruct(uw); err != nil {
@@ -123,7 +129,7 @@ type WorkspaceRepository interface {
 	AddUserToWorkspace(ctx context.Context, userWorkspace *UserWorkspace) error
 	RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error
 	GetUserWorkspaces(ctx context.Context, userID string) ([]*UserWorkspace, error)
-	GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*UserWorkspace, error)
+	GetWorkspaceUsersWithEmail(ctx context.Context, workspaceID string) ([]*UserWorkspaceWithEmail, error)
 	GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*UserWorkspace, error)
 
 	// Workspace invitation management
@@ -154,6 +160,6 @@ type WorkspaceServiceInterface interface {
 	ListWorkspaces(ctx context.Context, userID string) ([]*Workspace, error)
 	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*Workspace, error)
 	DeleteWorkspace(ctx context.Context, id, requesterID string) error
-	GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*UserWorkspace, error)
+	GetWorkspaceMembersWithEmail(ctx context.Context, id, requesterID string) ([]*UserWorkspaceWithEmail, error)
 	InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*WorkspaceInvitation, string, error)
 }

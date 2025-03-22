@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
+
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/service"
-	"strings"
 
 	"aidanwoods.dev/go-paseto"
 )
@@ -29,6 +30,7 @@ type AuthenticatedUser struct {
 // AuthServiceInterface defines the interface for authentication operations
 type AuthServiceInterface interface {
 	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
+	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
 }
 
 // AuthConfig holds the configuration for the auth middleware

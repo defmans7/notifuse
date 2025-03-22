@@ -99,12 +99,12 @@ func (m *mockUserWorkspaceService) DeleteWorkspace(ctx context.Context, id, owne
 	return m.Called(ctx, id, ownerID).Error(0)
 }
 
-func (m *mockUserWorkspaceService) GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
+func (m *mockUserWorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
 	args := m.Called(ctx, id, requesterID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.UserWorkspace), args.Error(1)
+	return args.Get(0).([]*domain.UserWorkspaceWithEmail), args.Error(1)
 }
 
 func (m *mockUserWorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {

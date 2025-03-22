@@ -131,3 +131,17 @@ func (s *AuthService) GenerateInvitationToken(invitation *domain.WorkspaceInvita
 
 	return encrypted
 }
+
+// GetUserByID retrieves a user by their ID
+func (s *AuthService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
+	// Delegate to the repository
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		s.logger.WithField("error", err.Error()).WithField("user_id", userID).Error("Failed to get user by ID")
+		return nil, err
+	}
+	return user, nil
+}

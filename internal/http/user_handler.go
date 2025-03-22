@@ -130,6 +130,11 @@ func (a *AuthServiceAdapter) VerifyUserSession(ctx context.Context, userID, sess
 	return a.userService.VerifyUserSession(ctx, userID, sessionID)
 }
 
+// GetUserByID delegates to the UserService
+func (a *AuthServiceAdapter) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
+	return a.userService.GetUserByID(ctx, userID)
+}
+
 func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Public routes (no auth required)
 	mux.HandleFunc("/api/user.signin", h.SignIn)

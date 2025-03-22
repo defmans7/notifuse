@@ -305,25 +305,6 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 	return nil
 }
 
-// GetWorkspaceMembers returns all users for a workspace, verifying the requester has access
-func (s *WorkspaceService) GetWorkspaceMembers(ctx context.Context, id string, requesterID string) ([]*domain.UserWorkspace, error) {
-	// Check if requester has access to the workspace
-	_, err := s.repo.GetUserWorkspace(ctx, requesterID, id)
-	if err != nil {
-		s.logger.WithField("workspace_id", id).WithField("user_id", requesterID).WithField("error", err.Error()).Error("Failed to get user workspace")
-		return nil, &domain.ErrUnauthorized{Message: "You do not have access to this workspace"}
-	}
-
-	// Get all workspace users
-	members, err := s.repo.GetWorkspaceUsers(ctx, id)
-	if err != nil {
-		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get workspace users")
-		return nil, err
-	}
-
-	return members, nil
-}
-
 // InviteMember creates an invitation for a user to join a workspace
 func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {
 	// Validate email format
@@ -437,4 +418,23 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, invite
 func isValidEmail(email string) bool {
 	// Basic email validation - could be more sophisticated in production
 	return strings.Contains(email, "@") && strings.Contains(email, ".")
+}
+
+// GetWorkspaceMembersWithEmail returns all users with emails for a workspace, verifying the requester has access
+func (s *WorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id string, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
+	// Check if requester has access to the workspace
+	_, err := s.repo.GetUserWorkspace(ctx, requesterID, id)
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("user_id", requesterID).WithField("error", err.Error()).Error("Failed to get user workspace")
+		return nil, &domain.ErrUnauthorized{Message: "You do not have access to this workspace"}
+	}
+
+	// Get all workspace users with emails
+	members, err := s.repo.GetWorkspaceUsersWithEmail(ctx, id)
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get workspace users with email")
+		return nil, err
+	}
+
+	return members, nil
 }

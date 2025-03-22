@@ -298,30 +298,6 @@ func (r *workspaceRepository) GetUserWorkspaces(ctx context.Context, userID stri
 	return userWorkspaces, rows.Err()
 }
 
-func (r *workspaceRepository) GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*domain.UserWorkspace, error) {
-	query := `
-		SELECT user_id, workspace_id, role, created_at, updated_at
-		FROM user_workspaces
-		WHERE workspace_id = $1
-	`
-	rows, err := r.systemDB.QueryContext(ctx, query, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get workspace users: %w", err)
-	}
-	defer rows.Close()
-
-	var userWorkspaces []*domain.UserWorkspace
-	for rows.Next() {
-		var uw domain.UserWorkspace
-		err := rows.Scan(&uw.UserID, &uw.WorkspaceID, &uw.Role, &uw.CreatedAt, &uw.UpdatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan user workspace: %w", err)
-		}
-		userWorkspaces = append(userWorkspaces, &uw)
-	}
-	return userWorkspaces, rows.Err()
-}
-
 func (r *workspaceRepository) GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*domain.UserWorkspace, error) {
 	query := `
 		SELECT user_id, workspace_id, role, created_at, updated_at
@@ -431,4 +407,42 @@ func (r *workspaceRepository) IsUserWorkspaceMember(ctx context.Context, userID,
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// GetWorkspaceUsersWithEmail returns all users for a workspace including email information
+func (r *workspaceRepository) GetWorkspaceUsersWithEmail(ctx context.Context, workspaceID string) ([]*domain.UserWorkspaceWithEmail, error) {
+	query := `
+		SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email
+		FROM user_workspaces uw
+		JOIN users u ON uw.user_id = u.id
+		WHERE uw.workspace_id = $1
+	`
+	rows, err := r.systemDB.QueryContext(ctx, query, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace users with email: %w", err)
+	}
+	defer rows.Close()
+
+	var userWorkspaces []*domain.UserWorkspaceWithEmail
+	for rows.Next() {
+		var uw domain.UserWorkspaceWithEmail
+		err := rows.Scan(
+			&uw.UserID,
+			&uw.WorkspaceID,
+			&uw.Role,
+			&uw.CreatedAt,
+			&uw.UpdatedAt,
+			&uw.Email,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user workspace with email: %w", err)
+		}
+		userWorkspaces = append(userWorkspaces, &uw)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating workspace users rows: %w", err)
+	}
+
+	return userWorkspaces, nil
 }

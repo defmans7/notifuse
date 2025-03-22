@@ -777,56 +777,6 @@ func TestWorkspaceRepository_GetUserWorkspaces(t *testing.T) {
 	assert.Empty(t, emptyWorkspaces)
 }
 
-func TestWorkspaceRepository_GetWorkspaceUsers(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
-	defer cleanup()
-
-	dbConfig := &config.DatabaseConfig{
-		Prefix: "notifuse",
-	}
-
-	repo := NewWorkspaceRepository(db, dbConfig)
-	workspaceID := "workspace123"
-
-	// Test success case
-	now := time.Now().Truncate(time.Second)
-
-	rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at"}).
-		AddRow("user1", workspaceID, "owner", now, now).
-		AddRow("user2", workspaceID, "member", now, now)
-
-	mock.ExpectQuery(`SELECT user_id, workspace_id, role, created_at, updated_at FROM user_workspaces WHERE workspace_id = \$1`).
-		WithArgs(workspaceID).
-		WillReturnRows(rows)
-
-	workspaceUsers, err := repo.GetWorkspaceUsers(context.Background(), workspaceID)
-	require.NoError(t, err)
-	assert.Len(t, workspaceUsers, 2)
-	assert.Equal(t, "user1", workspaceUsers[0].UserID)
-	assert.Equal(t, "owner", workspaceUsers[0].Role)
-	assert.Equal(t, "user2", workspaceUsers[1].UserID)
-	assert.Equal(t, "member", workspaceUsers[1].Role)
-
-	// Test database query error
-	mock.ExpectQuery(`SELECT user_id, workspace_id, role, created_at, updated_at FROM user_workspaces WHERE workspace_id = \$1`).
-		WithArgs(workspaceID).
-		WillReturnError(fmt.Errorf("database error"))
-
-	_, err = repo.GetWorkspaceUsers(context.Background(), workspaceID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get workspace users")
-
-	// Test empty result
-	emptyRows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at"})
-	mock.ExpectQuery(`SELECT user_id, workspace_id, role, created_at, updated_at FROM user_workspaces WHERE workspace_id = \$1`).
-		WithArgs(workspaceID).
-		WillReturnRows(emptyRows)
-
-	emptyUsers, err := repo.GetWorkspaceUsers(context.Background(), workspaceID)
-	require.NoError(t, err)
-	assert.Empty(t, emptyUsers)
-}
-
 func TestWorkspaceRepository_GetUserWorkspace(t *testing.T) {
 	db, mock, cleanup := SetupMockDB(t)
 	defer cleanup()
@@ -972,11 +922,17 @@ func (r *mockInternalRepository) RemoveUserFromWorkspace(ctx context.Context, us
 }
 
 func (r *mockInternalRepository) GetUserWorkspaces(ctx context.Context, userID string) ([]*domain.UserWorkspace, error) {
-	return nil, fmt.Errorf("not implemented in mock")
-}
-
-func (r *mockInternalRepository) GetWorkspaceUsers(ctx context.Context, workspaceID string) ([]*domain.UserWorkspace, error) {
-	return nil, fmt.Errorf("not implemented in mock")
+	args := ctx.Value("mockGetUserWorkspaces")
+	if args == nil {
+		return []*domain.UserWorkspace{}, nil
+	}
+	if err, ok := args.(error); ok {
+		return nil, err
+	}
+	if users, ok := args.([]*domain.UserWorkspace); ok {
+		return users, nil
+	}
+	return []*domain.UserWorkspace{}, nil
 }
 
 func (r *mockInternalRepository) GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*domain.UserWorkspace, error) {
@@ -1015,6 +971,20 @@ func (r *mockInternalRepository) GetInvitationByEmail(ctx context.Context, works
 func (r *mockInternalRepository) IsUserWorkspaceMember(ctx context.Context, userID, workspaceID string) (bool, error) {
 	// Mocked for tests
 	return true, nil
+}
+
+func (r *mockInternalRepository) GetWorkspaceUsersWithEmail(ctx context.Context, workspaceID string) ([]*domain.UserWorkspaceWithEmail, error) {
+	args := ctx.Value("mockGetWorkspaceUsersWithEmail")
+	if args == nil {
+		return []*domain.UserWorkspaceWithEmail{}, nil
+	}
+	if err, ok := args.(error); ok {
+		return nil, err
+	}
+	if users, ok := args.([]*domain.UserWorkspaceWithEmail); ok {
+		return users, nil
+	}
+	return []*domain.UserWorkspaceWithEmail{}, nil
 }
 
 // Test the actual Create method on the workspaceRepository (not just the mock implementation)

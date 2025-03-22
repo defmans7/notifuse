@@ -23,13 +23,15 @@ import (
 // mockWorkspaceService implements WorkspaceServiceInterface
 type mockWorkspaceService struct {
 	mock.Mock
-	CreateWorkspaceFn     func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
-	GetWorkspaceFn        func(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
-	ListWorkspacesFn      func(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
-	UpdateWorkspaceFn     func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
-	DeleteWorkspaceFn     func(ctx context.Context, id, ownerID string) error
-	GetWorkspaceMembersFn func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error)
-	InviteMemberFn        func(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error)
+	CreateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
+	GetWorkspaceFn    func(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
+	ListWorkspacesFn  func(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
+	UpdateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
+	DeleteWorkspaceFn func(ctx context.Context, id, ownerID string) error
+	InviteMemberFn    func(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error)
+
+	GetWorkspaceMembersWithEmailFn func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error)
+	GetUserWorkspaceFn             func(ctx context.Context, userID, workspaceID string) (*domain.UserWorkspace, error)
 }
 
 func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
@@ -66,16 +68,31 @@ func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id, ownerID 
 	return args.Error(0)
 }
 
-func (m *mockWorkspaceService) GetWorkspaceMembers(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
-	return m.GetWorkspaceMembersFn(ctx, id, requesterID)
-}
-
 func (m *mockWorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {
 	args := m.Called(ctx, workspaceID, inviterID, email)
 	if args.Get(0) == nil {
 		return nil, args.String(1), args.Error(2)
 	}
 	return args.Get(0).(*domain.WorkspaceInvitation), args.String(1), args.Error(2)
+}
+
+func (m *mockWorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
+	if m.GetWorkspaceMembersWithEmailFn != nil {
+		return m.GetWorkspaceMembersWithEmailFn(ctx, id, requesterID)
+	}
+	args := m.Called(ctx, id, requesterID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.UserWorkspaceWithEmail), args.Error(1)
+}
+
+func (m *mockWorkspaceService) GetUserWorkspace(ctx context.Context, userID, workspaceID string) (*domain.UserWorkspace, error) {
+	args := m.Called(ctx, userID, workspaceID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.UserWorkspace), args.Error(1)
 }
 
 // mockAuthService implements middleware.AuthServiceInterface
@@ -85,6 +102,14 @@ type mockAuthService struct {
 
 func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
 	args := m.Called(ctx, userID, sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *mockAuthService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
+	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -1078,24 +1103,30 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		// Setup mocks
-		members := []*domain.UserWorkspace{
+		membersWithEmail := []*domain.UserWorkspaceWithEmail{
 			{
-				UserID:      "user1",
-				WorkspaceID: "workspace1",
-				Role:        "owner",
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
+				UserWorkspace: domain.UserWorkspace{
+					UserID:      "user1",
+					WorkspaceID: "workspace1",
+					Role:        "owner",
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				},
+				Email: "user1@example.com",
 			},
 			{
-				UserID:      "user2",
-				WorkspaceID: "workspace1",
-				Role:        "member",
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
+				UserWorkspace: domain.UserWorkspace{
+					UserID:      "user2",
+					WorkspaceID: "workspace1",
+					Role:        "member",
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				},
+				Email: "user2@example.com",
 			},
 		}
-		mockWorkspaceService.GetWorkspaceMembersFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
-			return members, nil
+		mockWorkspaceService.GetWorkspaceMembersWithEmailFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
+			return membersWithEmail, nil
 		}
 
 		// Setup request
@@ -1118,20 +1149,23 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 		handler.handleMembers(rr, req)
 
 		// Check response
-		if status := rr.Code; status != http.StatusOK {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-		}
+		assert.Equal(t, http.StatusOK, rr.Code)
 
-		// Check response body
-		var response []*domain.UserWorkspace
+		// Parse response body
+		var response []*domain.UserWorkspaceWithEmail
 		err = json.Unmarshal(rr.Body.Bytes(), &response)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		if len(response) != 2 {
-			t.Errorf("handler returned wrong number of members: got %v want %v", len(response), 2)
-		}
+		// Verify response content
+		assert.Len(t, response, 2)
+		assert.Equal(t, "user1", response[0].UserID)
+		assert.Equal(t, "user1@example.com", response[0].Email)
+		assert.Equal(t, "owner", response[0].Role)
+		assert.Equal(t, "user2", response[1].UserID)
+		assert.Equal(t, "user2@example.com", response[1].Email)
+		assert.Equal(t, "member", response[1].Role)
 	})
 
 	t.Run("missing workspace id", func(t *testing.T) {
@@ -1188,7 +1222,7 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 
 	t.Run("service error", func(t *testing.T) {
 		// Setup mocks to return error
-		mockWorkspaceService.GetWorkspaceMembersFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspace, error) {
+		mockWorkspaceService.GetWorkspaceMembersWithEmailFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
 			return nil, fmt.Errorf("service error")
 		}
 

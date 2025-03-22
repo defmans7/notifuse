@@ -284,13 +284,16 @@ func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	members, err := h.workspaceService.GetWorkspaceMembers(r.Context(), workspaceID, authUser.ID)
+	// Use the new method that includes emails
+	members, err := h.workspaceService.GetWorkspaceMembersWithEmail(r.Context(), workspaceID, authUser.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get workspace members")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, members)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"members": members,
+	})
 }
 
 // handleInviteMember handles the request to invite a member to a workspace

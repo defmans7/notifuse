@@ -88,6 +88,7 @@ export interface WorkspaceMember {
   user_id: string
   workspace_id: string
   role: string
+  email: string
   created_at: string
   updated_at: string
 }

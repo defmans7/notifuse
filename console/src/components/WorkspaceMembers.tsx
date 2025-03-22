@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Typography, Badge, Spin, Button, Modal, Form, Input, App } from 'antd'
-import { UserOutlined, PlusOutlined, MailOutlined } from '@ant-design/icons'
+import { Card, Table, Typography, Spin, Button, Modal, Form, Input, App, Tag } from 'antd'
+import { MailOutlined } from '@ant-design/icons'
 import { Space } from 'antd'
 import { WorkspaceMember } from '../services/api/types'
 import { workspaceService } from '../services/api/workspace'
@@ -28,6 +28,7 @@ export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
     try {
       const response = await workspaceService.getMembers(workspaceId)
       setMembers(response.members)
+      console.log(response)
     } catch (error) {
       console.error('Failed to fetch workspace members', error)
       message.error('Failed to fetch workspace members')
@@ -38,24 +39,29 @@ export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
 
   const columns = [
     {
-      title: 'User ID',
-      dataIndex: 'user_id',
-      key: 'user_id',
-      render: (text: string) => <Text ellipsis>{text}</Text>
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
+      render: (email: string) => {
+        return (
+          <Space>
+            <Text ellipsis>{email}</Text>
+          </Space>
+        )
+      }
     },
     {
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
       render: (role: string) => (
-        <Badge
-          color={role === 'owner' ? 'gold' : 'blue'}
-          text={role.charAt(0).toUpperCase() + role.slice(1)}
-        />
+        <Tag color={role === 'owner' ? 'gold' : 'blue'}>
+          {role.charAt(0).toUpperCase() + role.slice(1)}
+        </Tag>
       )
     },
     {
-      title: 'Member Since',
+      title: 'Since',
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleDateString()
@@ -94,18 +100,9 @@ export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
   return (
     <>
       <Card
-        title={
-          <Space>
-            <UserOutlined />
-            <span>Workspace Members</span>
-          </Space>
-        }
+        title="Members"
         extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setInviteModalVisible(true)}
-          >
+          <Button type="primary" size="small" ghost onClick={() => setInviteModalVisible(true)}>
             Invite Member
           </Button>
         }
@@ -157,10 +154,6 @@ export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
               prefix={<MailOutlined />}
             />
           </Form.Item>
-
-          <p>
-            <small>Invited users will join as members of the workspace.</small>
-          </p>
         </Form>
       </Modal>
     </>

@@ -1,17 +1,6 @@
 import { useState } from 'react'
-import {
-  Card,
-  Typography,
-  Space,
-  Descriptions,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Select,
-  App
-} from 'antd'
-import { SettingOutlined, EditOutlined } from '@ant-design/icons'
+import { Card, Space, Descriptions, Button, Modal, Form, Input, Select, App } from 'antd'
+import { EditOutlined } from '@ant-design/icons'
 import { Workspace } from '../services/api/types'
 import { workspaceService } from '../services/api/workspace'
 
@@ -79,14 +68,15 @@ export function WorkspaceSettings({
   return (
     <>
       <Card
-        title={
-          <Space>
-            <SettingOutlined />
-            <span>General Settings</span>
-          </Space>
-        }
+        title="General Settings"
         extra={
-          <Button icon={<EditOutlined />} onClick={showEditModal} disabled={loading || !workspace}>
+          <Button
+            type="primary"
+            size="small"
+            ghost
+            onClick={showEditModal}
+            disabled={loading || !workspace}
+          >
             Edit
           </Button>
         }
