@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestConsoleMailer_SendMagicCode tests the ConsoleMailer's SendMagicCode method
 func TestConsoleMailer_SendMagicCode(t *testing.T) {
 	// Redirect stdout output for testing
 	oldStdout := os.Stdout
@@ -60,7 +61,7 @@ func TestConfigLoading(t *testing.T) {
 	assert.NotNil(t, cfg)
 }
 
-// TestSetupMinimalConfig tests a minimal config setup without actually running the server
+// TestSetupMinimalConfig tests a minimal config setup
 func TestSetupMinimalConfig(t *testing.T) {
 	// Set environment variables directly instead of using a file
 	privateKey := "YDhVgXcnHQmkHYvzSqz9z7PPJccIWzSKGxXYWjlNs3xTtgx10KZb/XVpbA3EXe68/SLW7Vfv/j7b9LH3t7BMMw=="

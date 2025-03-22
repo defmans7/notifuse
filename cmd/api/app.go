@@ -1,0 +1,309 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/database"
+	"github.com/Notifuse/notifuse/internal/domain"
+	httpHandler "github.com/Notifuse/notifuse/internal/http"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
+	"github.com/Notifuse/notifuse/internal/repository"
+	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mailer"
+)
+
+// App encapsulates the application dependencies and configuration
+type App struct {
+	config *config.Config
+	logger logger.Logger
+	db     *sql.DB
+	mailer mailer.Mailer
+
+	// Repositories
+	userRepo        domain.UserRepository
+	workspaceRepo   domain.WorkspaceRepository
+	authRepo        domain.AuthRepository
+	contactRepo     domain.ContactRepository
+	listRepo        domain.ListRepository
+	contactListRepo domain.ContactListRepository
+
+	// Services
+	authService        *service.AuthService
+	userService        *service.UserService
+	workspaceService   *service.WorkspaceService
+	contactService     *service.ContactService
+	listService        *service.ListService
+	contactListService *service.ContactListService
+
+	// HTTP handlers
+	mux    *http.ServeMux
+	server *http.Server
+}
+
+// AppOption defines a functional option for configuring the App
+type AppOption func(*App)
+
+// WithMockDB configures the app to use a mock database
+func WithMockDB(db *sql.DB) AppOption {
+	return func(a *App) {
+		a.db = db
+	}
+}
+
+// WithMockMailer configures the app to use a mock mailer
+func WithMockMailer(m mailer.Mailer) AppOption {
+	return func(a *App) {
+		a.mailer = m
+	}
+}
+
+// WithLogger sets a custom logger
+func WithLogger(logger logger.Logger) AppOption {
+	return func(a *App) {
+		a.logger = logger
+	}
+}
+
+// NewApp creates a new application instance
+func NewApp(cfg *config.Config, opts ...AppOption) *App {
+	app := &App{
+		config: cfg,
+		logger: logger.NewLogger(), // Default logger
+		mux:    http.NewServeMux(),
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(app)
+	}
+
+	return app
+}
+
+// InitDB initializes the database connection
+func (a *App) InitDB() error {
+	// Ensure system database exists
+	if err := database.EnsureSystemDatabaseExists(&a.config.Database); err != nil {
+		return fmt.Errorf("failed to ensure system database exists: %w", err)
+	}
+	a.logger.Info("System database check completed")
+
+	// Connect to system database
+	db, err := sql.Open("postgres", database.GetSystemDSN(&a.config.Database))
+	if err != nil {
+		return fmt.Errorf("failed to connect to system database: %w", err)
+	}
+
+	// Test database connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("failed to ping system database: %w", err)
+	}
+
+	// Initialize database schema if needed
+	if err := database.InitializeDatabase(db, a.config.RootEmail); err != nil {
+		db.Close()
+		return fmt.Errorf("failed to initialize database schema: %w", err)
+	}
+
+	// Set connection pool settings
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	a.db = db
+	return nil
+}
+
+// InitMailer initializes the mailer service
+func (a *App) InitMailer() error {
+	// Skip if mailer already set (e.g., by mock)
+	if a.mailer != nil {
+		return nil
+	}
+
+	if a.config.IsDevelopment() {
+		// Use console mailer in development
+		a.mailer = mailer.NewConsoleMailer()
+		a.logger.Info("Using console mailer for development")
+	} else {
+		// Use SMTP mailer in production
+		a.mailer = mailer.NewSMTPMailer(&mailer.Config{
+			SMTPHost:     os.Getenv("SMTP_HOST"),
+			SMTPPort:     587,
+			SMTPUsername: os.Getenv("SMTP_USERNAME"),
+			SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+			FromEmail:    os.Getenv("FROM_EMAIL"),
+			FromName:     "Notifuse",
+			BaseURL:      os.Getenv("BASE_URL"),
+		})
+		a.logger.Info("Using SMTP mailer for production")
+	}
+
+	return nil
+}
+
+// InitRepositories initializes all repositories
+func (a *App) InitRepositories() error {
+	if a.db == nil {
+		return fmt.Errorf("database must be initialized before repositories")
+	}
+
+	a.userRepo = repository.NewUserRepository(a.db)
+	a.workspaceRepo = repository.NewWorkspaceRepository(a.db, &a.config.Database)
+	a.authRepo = repository.NewSQLAuthRepository(a.db, a.logger)
+	a.contactRepo = repository.NewContactRepository(a.db)
+	a.listRepo = repository.NewListRepository(a.db)
+	a.contactListRepo = repository.NewContactListRepository(a.db)
+
+	return nil
+}
+
+// InitServices initializes all services
+func (a *App) InitServices() error {
+	var err error
+
+	// Create auth service first
+	a.authService, err = service.NewAuthService(service.AuthServiceConfig{
+		Repository: a.authRepo,
+		PrivateKey: a.config.Security.PasetoPrivateKeyBytes,
+		PublicKey:  a.config.Security.PasetoPublicKeyBytes,
+		Logger:     a.logger,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create auth service: %w", err)
+	}
+
+	// Then create user service with auth service as dependency
+	a.userService, err = service.NewUserService(service.UserServiceConfig{
+		Repository:    a.userRepo,
+		AuthService:   a.authService,
+		EmailSender:   a.mailer,
+		SessionExpiry: 15 * 24 * time.Hour, // 15 days
+		Logger:        a.logger,
+		IsDevelopment: a.config.IsDevelopment(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create user service: %w", err)
+	}
+
+	// Create workspace service with mailer
+	a.workspaceService = service.NewWorkspaceService(
+		a.workspaceRepo,
+		a.logger,
+		a.userService,
+		a.authService,
+		a.mailer,
+		a.config)
+
+	// Initialize other services
+	a.contactService = service.NewContactService(a.contactRepo, a.logger)
+	a.listService = service.NewListService(a.listRepo, a.logger)
+	a.contactListService = service.NewContactListService(a.contactListRepo, a.contactRepo, a.listRepo, a.logger)
+
+	return nil
+}
+
+// InitHandlers initializes all HTTP handlers and routes
+func (a *App) InitHandlers() error {
+	// Create adapters for services
+	authServiceAdapter := httpHandler.NewAuthServiceMiddlewareAdapter(a.authService)
+	userServiceAdapter := httpHandler.NewUserServiceAdapter(a.authService, a.userService)
+
+	// Initialize handlers
+	userHandler := httpHandler.NewUserHandler(
+		userServiceAdapter,
+		a.workspaceService,
+		a.config,
+		a.config.Security.PasetoPublicKey,
+		a.logger)
+	rootHandler := httpHandler.NewRootHandler()
+	workspaceHandler := httpHandler.NewWorkspaceHandler(
+		a.workspaceService,
+		authServiceAdapter,
+		a.config.Security.PasetoPublicKey,
+		a.logger)
+	faviconHandler := httpHandler.NewFaviconHandler()
+	contactHandler := httpHandler.NewContactHandler(a.contactService, a.logger)
+	listHandler := httpHandler.NewListHandler(a.listService, a.logger)
+	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, a.logger)
+
+	// Register routes
+	userHandler.RegisterRoutes(a.mux)
+	workspaceHandler.RegisterRoutes(a.mux)
+	rootHandler.RegisterRoutes(a.mux)
+	contactHandler.RegisterRoutes(a.mux)
+	listHandler.RegisterRoutes(a.mux)
+	contactListHandler.RegisterRoutes(a.mux)
+	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
+
+	return nil
+}
+
+// Start starts the HTTP server
+func (a *App) Start() error {
+	// Create server with wrapped handler for CORS
+	handler := middleware.CORSMiddleware(a.mux)
+
+	addr := fmt.Sprintf("%s:%d", a.config.Server.Host, a.config.Server.Port)
+	a.logger.WithField("address", addr).Info("Server starting")
+
+	a.server = &http.Server{
+		Addr:    addr,
+		Handler: handler,
+	}
+
+	// Start the server based on SSL configuration
+	if a.config.Server.SSL.Enabled {
+		a.logger.WithField("cert_file", a.config.Server.SSL.CertFile).Info("SSL enabled")
+		return a.server.ListenAndServeTLS(a.config.Server.SSL.CertFile, a.config.Server.SSL.KeyFile)
+	}
+
+	return a.server.ListenAndServe()
+}
+
+// Shutdown gracefully shuts down the server
+func (a *App) Shutdown(ctx context.Context) error {
+	if a.server != nil {
+		return a.server.Shutdown(ctx)
+	}
+
+	// Close database connection if it exists
+	if a.db != nil {
+		a.db.Close()
+	}
+
+	return nil
+}
+
+// Initialize sets up all components of the application
+func (a *App) Initialize() error {
+	if err := a.InitDB(); err != nil {
+		return err
+	}
+
+	if err := a.InitMailer(); err != nil {
+		return err
+	}
+
+	if err := a.InitRepositories(); err != nil {
+		return err
+	}
+
+	if err := a.InitServices(); err != nil {
+		return err
+	}
+
+	if err := a.InitHandlers(); err != nil {
+		return err
+	}
+
+	return nil
+}

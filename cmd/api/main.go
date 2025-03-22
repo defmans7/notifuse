@@ -1,23 +1,17 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
+	"context"
 	"log"
-	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
 
 	"github.com/Notifuse/notifuse/config"
-	"github.com/Notifuse/notifuse/internal/database"
-	httpHandler "github.com/Notifuse/notifuse/internal/http"
-	"github.com/Notifuse/notifuse/internal/http/middleware"
-	"github.com/Notifuse/notifuse/internal/repository"
-	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mailer"
 )
 
 // osExit is a variable to allow mocking os.Exit in tests
@@ -34,163 +28,46 @@ func main() {
 	appLogger := logger.NewLogger()
 	appLogger.Info("Starting API server")
 
-	// Ensure system database exists
-	if err := database.EnsureSystemDatabaseExists(&cfg.Database); err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to ensure system database exists")
-		osExit(1)
-		return
-	}
-	appLogger.Info("System database check completed")
+	// Create app instance
+	app := NewApp(cfg, WithLogger(appLogger))
 
-	// Connect to system database
-	systemDB, err := sql.Open("postgres", database.GetSystemDSN(&cfg.Database))
-	if err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to connect to system database")
-		osExit(1)
-		return
-	}
-	defer systemDB.Close()
-
-	// Test database connection
-	if err := systemDB.Ping(); err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to ping system database")
+	// Initialize all components
+	if err := app.Initialize(); err != nil {
+		appLogger.WithField("error", err.Error()).Fatal("Failed to initialize application")
 		osExit(1)
 		return
 	}
 
-	// Initialize database schema if needed
-	if err := database.InitializeDatabase(systemDB, cfg.RootEmail); err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to initialize database schema")
-		osExit(1)
-		return
-	}
+	// Set up graceful shutdown
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
-	// Set connection pool settings
-	systemDB.SetMaxOpenConns(25)
-	systemDB.SetMaxIdleConns(25)
-	systemDB.SetConnMaxLifetime(5 * time.Minute)
+	// Start server in a goroutine
+	serverError := make(chan error, 1)
+	go func() {
+		appLogger.Info("Server started successfully")
+		serverError <- app.Start()
+	}()
 
-	// Initialize repositories
-	userRepo := repository.NewUserRepository(systemDB)
-	workspaceRepo := repository.NewWorkspaceRepository(systemDB, &cfg.Database)
-	authRepo := repository.NewSQLAuthRepository(systemDB, appLogger)
-	contactRepo := repository.NewContactRepository(systemDB)
-	listRepo := repository.NewListRepository(systemDB)
-	contactListRepo := repository.NewContactListRepository(systemDB)
+	// Wait for shutdown signal or server error
+	select {
+	case err := <-serverError:
+		if err != nil {
+			appLogger.WithField("error", err.Error()).Error("Server error")
+		}
+	case sig := <-shutdown:
+		appLogger.WithField("signal", sig.String()).Info("Shutdown signal received")
 
-	// Initialize mailer
-	var mailService mailer.Mailer
-	if cfg.IsDevelopment() {
-		// Use console mailer in development
-		mailService = mailer.NewConsoleMailer()
-		appLogger.Info("Using console mailer for development")
-	} else {
-		// Use SMTP mailer in production
-		mailService = mailer.NewSMTPMailer(&mailer.Config{
-			SMTPHost:     os.Getenv("SMTP_HOST"), // Get from environment variables or config
-			SMTPPort:     587,                    // Default SMTP port
-			SMTPUsername: os.Getenv("SMTP_USERNAME"),
-			SMTPPassword: os.Getenv("SMTP_PASSWORD"),
-			FromEmail:    os.Getenv("FROM_EMAIL"),
-			FromName:     "Notifuse",
-			BaseURL:      os.Getenv("BASE_URL"),
-		})
-		appLogger.Info("Using SMTP mailer for production")
-	}
+		// Create a context with timeout for graceful shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-	// Create auth service first
-	authService, err := service.NewAuthService(service.AuthServiceConfig{
-		Repository: authRepo,
-		PrivateKey: cfg.Security.PasetoPrivateKeyBytes,
-		PublicKey:  cfg.Security.PasetoPublicKeyBytes,
-		Logger:     appLogger,
-	})
-	if err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to create auth service")
-		osExit(1)
-		return
-	}
+		// Attempt graceful shutdown
+		if err := app.Shutdown(ctx); err != nil {
+			appLogger.WithField("error", err.Error()).Error("Error during shutdown")
+			osExit(1)
+		}
 
-	// Create adapter for AuthService to implement middleware.AuthServiceInterface
-	authServiceAdapter := httpHandler.NewAuthServiceMiddlewareAdapter(authService)
-
-	// Then create user service with auth service as dependency
-	userService, err := service.NewUserService(service.UserServiceConfig{
-		Repository:    userRepo,
-		AuthService:   authService,
-		EmailSender:   mailService,
-		SessionExpiry: 15 * 24 * time.Hour, // 15 days
-		Logger:        appLogger,
-		IsDevelopment: cfg.IsDevelopment(),
-	})
-	if err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to create user service")
-		osExit(1)
-		return
-	}
-
-	// Create adapter for UserService
-	userServiceAdapter := httpHandler.NewUserServiceAdapter(authService, userService)
-
-	// Create workspace service with mailer
-	workspaceService := service.NewWorkspaceService(
-		workspaceRepo,
-		appLogger,
-		userService,
-		authService,
-		mailService,
-		cfg)
-
-	// Initialize services
-	contactService := service.NewContactService(contactRepo, appLogger)
-	listService := service.NewListService(listRepo, appLogger)
-	contactListService := service.NewContactListService(contactListRepo, contactRepo, listRepo, appLogger)
-
-	// Initialize handlers
-	userHandler := httpHandler.NewUserHandler(
-		userServiceAdapter,
-		workspaceService,
-		cfg,
-		cfg.Security.PasetoPublicKey,
-		appLogger)
-	rootHandler := httpHandler.NewRootHandler()
-	workspaceHandler := httpHandler.NewWorkspaceHandler(
-		workspaceService,
-		authServiceAdapter,
-		cfg.Security.PasetoPublicKey,
-		appLogger)
-	faviconHandler := httpHandler.NewFaviconHandler()
-	contactHandler := httpHandler.NewContactHandler(contactService, appLogger)
-	listHandler := httpHandler.NewListHandler(listService, appLogger)
-	contactListHandler := httpHandler.NewContactListHandler(contactListService, appLogger)
-
-	// Set up routes
-	mux := http.NewServeMux()
-	userHandler.RegisterRoutes(mux)
-	workspaceHandler.RegisterRoutes(mux)
-	rootHandler.RegisterRoutes(mux)
-	contactHandler.RegisterRoutes(mux)
-	listHandler.RegisterRoutes(mux)
-	contactListHandler.RegisterRoutes(mux)
-	mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
-
-	// Wrap mux with CORS middleware
-	handler := middleware.CORSMiddleware(mux)
-
-	// Start server
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-	appLogger.WithField("address", addr).Info("Server starting")
-
-	if cfg.Server.SSL.Enabled {
-		appLogger.WithField("cert_file", cfg.Server.SSL.CertFile).Info("SSL enabled")
-		err = http.ListenAndServeTLS(addr, cfg.Server.SSL.CertFile, cfg.Server.SSL.KeyFile, handler)
-	} else {
-		err = http.ListenAndServe(addr, handler)
-	}
-
-	if err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Server failed to start")
-		osExit(1)
-		return
+		appLogger.Info("Server shut down gracefully")
 	}
 }

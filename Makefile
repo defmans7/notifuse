@@ -1,7 +1,7 @@
 .PHONY: build test run clean keygen test-service test-repo test-http dev coverage
 
 build:
-	go build -o bin/server cmd/api/main.go
+	go build -o bin/server ./cmd/api
 
 test:
 	go test -v ./...
@@ -25,7 +25,7 @@ coverage:
 	@echo "Detailed HTML coverage report generated: coverage.html"
 
 run:
-	go run cmd/api/main.go
+	go run ./cmd/api
 
 dev:
 	air
