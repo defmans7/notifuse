@@ -17,30 +17,23 @@ import (
 // osExit is a variable to allow mocking os.Exit in tests
 var osExit = os.Exit
 
-func main() {
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
+// For testing purposes - allows us to mock the signal channel
+var signalNotify = signal.Notify
 
-	// Initialize logger
-	appLogger := logger.NewLogger()
-	appLogger.Info("Starting API server")
-
+// runServer contains the core server logic, extracted for testability
+func runServer(cfg *config.Config, appLogger logger.Logger) error {
 	// Create app instance
 	app := NewApp(cfg, WithLogger(appLogger))
 
 	// Initialize all components
 	if err := app.Initialize(); err != nil {
 		appLogger.WithField("error", err.Error()).Fatal("Failed to initialize application")
-		osExit(1)
-		return
+		return err
 	}
 
 	// Set up graceful shutdown
 	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+	signalNotify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	// Start server in a goroutine
 	serverError := make(chan error, 1)
@@ -55,6 +48,7 @@ func main() {
 		if err != nil {
 			appLogger.WithField("error", err.Error()).Error("Server error")
 		}
+		return err
 	case sig := <-shutdown:
 		appLogger.WithField("signal", sig.String()).Info("Shutdown signal received")
 
@@ -65,9 +59,27 @@ func main() {
 		// Attempt graceful shutdown
 		if err := app.Shutdown(ctx); err != nil {
 			appLogger.WithField("error", err.Error()).Error("Error during shutdown")
-			osExit(1)
+			return err
 		}
 
 		appLogger.Info("Server shut down gracefully")
+		return nil
+	}
+}
+
+func main() {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Initialize logger
+	appLogger := logger.NewLogger()
+	appLogger.Info("Starting API server")
+
+	// Run the server
+	if err := runServer(cfg, appLogger); err != nil {
+		osExit(1)
 	}
 }

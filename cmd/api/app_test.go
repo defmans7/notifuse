@@ -384,14 +384,79 @@ func TestInitialize(t *testing.T) {
 	assert.False(t, tApp.initServicesCalled)
 }
 
-// TestAppInitServices_SkippedDueToKeyIssues is a placeholder test for InitServices
-// Skipped until we can resolve the key generation issues
-func TestAppInitServices_SkippedDueToKeyIssues(t *testing.T) {
-	t.Skip("Skipping service initialization tests due to PASETO key issues")
+// TestAppInitServices tests the InitServices method with our hardcoded keys
+func TestAppInitServices(t *testing.T) {
+	// Get hardcoded keys for testing
+	keys, err := GetHardcodedTestKeys()
+	if err != nil {
+		t.Fatalf("Failed to get hardcoded keys: %v", err)
+	}
+
+	// Set up mock DB
+	mockDB, _, err := setupTestDBMock()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	// Create app with test config and mocks
+	cfg := createTestConfig()
+	// Override config with our hardcoded keys
+	cfg.Security.PasetoPrivateKeyBytes = keys.PrivateKeyBytes
+	cfg.Security.PasetoPublicKeyBytes = keys.PublicKeyBytes
+
+	app := NewApp(cfg, WithLogger(&MockLogger{}), WithMockDB(mockDB))
+
+	// Setup repositories (required for services)
+	err = app.InitRepositories()
+	assert.NoError(t, err)
+
+	// Test service initialization
+	err = app.InitServices()
+	assert.NoError(t, err)
+
+	// Verify services were initialized
+	assert.NotNil(t, app.authService, "Auth service should be initialized")
+	assert.NotNil(t, app.userService, "User service should be initialized")
+	assert.NotNil(t, app.workspaceService, "Workspace service should be initialized")
+	assert.NotNil(t, app.contactService, "Contact service should be initialized")
+	assert.NotNil(t, app.listService, "List service should be initialized")
+	assert.NotNil(t, app.contactListService, "ContactList service should be initialized")
 }
 
-// TestAppInitHandlers_SkippedDueToKeyIssues is a placeholder test for InitHandlers
-// Skipped until we can resolve the key generation issues
-func TestAppInitHandlers_SkippedDueToKeyIssues(t *testing.T) {
-	t.Skip("Skipping handler initialization tests due to PASETO key issues")
+// TestAppInitHandlers tests the InitHandlers method
+func TestAppInitHandlers(t *testing.T) {
+	// Get hardcoded keys for testing
+	keys, err := GetHardcodedTestKeys()
+	if err != nil {
+		t.Fatalf("Failed to get hardcoded keys: %v", err)
+	}
+
+	// Set up mock DB
+	mockDB, _, err := setupTestDBMock()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	// Create app with test config and mocks
+	cfg := createTestConfig()
+	// Override config with our hardcoded keys
+	cfg.Security.PasetoPrivateKeyBytes = keys.PrivateKeyBytes
+	cfg.Security.PasetoPublicKeyBytes = keys.PublicKeyBytes
+
+	app := NewApp(cfg, WithLogger(&MockLogger{}), WithMockDB(mockDB))
+
+	// Setup repositories (required for services)
+	err = app.InitRepositories()
+	assert.NoError(t, err)
+
+	// Initialize services (required for handlers)
+	err = app.InitServices()
+	assert.NoError(t, err)
+
+	// Test handler initialization
+	err = app.InitHandlers()
+	assert.NoError(t, err)
+
+	// Verify handlers were initialized - since handlers are not directly exposed,
+	// we can only check that the mux has routes registered
+	assert.NotNil(t, app.mux, "HTTP mux should be initialized")
+	// We could add more specific assertions by checking specific routes if needed
 }
