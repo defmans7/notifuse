@@ -1,6 +1,6 @@
 # Notifuse
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/Notifuse/notifuse)](https://goreportcard.com/report/github.com/Notifuse/notifuse)
+[![Go Report Card](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)](https://goreportcard.com/report/github.com/Notifuse/notifuse)
 [![Go](https://github.com/Notifuse/notifuse/actions/workflows/go.yml/badge.svg)](https://github.com/Notifuse/notifuse/actions/workflows/go.yml)
 [![codecov](https://codecov.io/gh/Notifuse/notifuse/graph/badge.svg?token=VZ0HBEM9OZ)](https://codecov.io/gh/Notifuse/notifuse)
 
