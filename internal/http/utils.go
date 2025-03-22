@@ -15,3 +15,11 @@ func WriteJSONError(w http.ResponseWriter, message string, statusCode int) {
 		"error": message,
 	})
 }
+
+// writeJSON writes a JSON response with the given status code and data.
+// It sets the Content-Type header to application/json.
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}

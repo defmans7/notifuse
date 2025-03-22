@@ -120,6 +120,9 @@ func main() {
 	workspaceRepo := repository.NewWorkspaceRepository(systemDB, &cfg.Database)
 	authRepo := repository.NewSQLAuthRepository(systemDB, appLogger)
 	emailSender := &emailSender{}
+	contactRepo := repository.NewContactRepository(systemDB)
+	listRepo := repository.NewListRepository(systemDB)
+	contactListRepo := repository.NewContactListRepository(systemDB)
 
 	// Initialize mailer
 	var mailService mailer.Mailer
@@ -187,7 +190,12 @@ func main() {
 		mailService,
 		cfg)
 
-	// Use the already parsed PASETO public key
+	// Initialize services
+	contactService := service.NewContactService(contactRepo, appLogger)
+	listService := service.NewListService(listRepo, appLogger)
+	contactListService := service.NewContactListService(contactListRepo, contactRepo, listRepo, appLogger)
+
+	// Initialize handlers
 	userHandler := httpHandler.NewUserHandler(
 		userServiceAdapter,
 		workspaceService,
@@ -201,12 +209,18 @@ func main() {
 		cfg.Security.PasetoPublicKey,
 		appLogger)
 	faviconHandler := httpHandler.NewFaviconHandler()
+	contactHandler := httpHandler.NewContactHandler(contactService, appLogger)
+	listHandler := httpHandler.NewListHandler(listService, appLogger)
+	contactListHandler := httpHandler.NewContactListHandler(contactListService, appLogger)
 
 	// Set up routes
 	mux := http.NewServeMux()
 	userHandler.RegisterRoutes(mux)
 	workspaceHandler.RegisterRoutes(mux)
 	rootHandler.RegisterRoutes(mux)
+	contactHandler.RegisterRoutes(mux)
+	listHandler.RegisterRoutes(mux)
+	contactListHandler.RegisterRoutes(mux)
 	mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	// Wrap mux with CORS middleware
