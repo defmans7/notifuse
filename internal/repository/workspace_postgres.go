@@ -174,6 +174,18 @@ func (r *workspaceRepository) Delete(ctx context.Context, id string) error {
 		return err
 	}
 
+	// Delete all user_workspaces entries for this workspace
+	deleteUserWorkspacesQuery := `DELETE FROM user_workspaces WHERE workspace_id = $1`
+	if _, err := r.systemDB.ExecContext(ctx, deleteUserWorkspacesQuery, id); err != nil {
+		return fmt.Errorf("failed to delete user workspaces: %w", err)
+	}
+
+	// Delete all workspace invitations for this workspace
+	deleteInvitationsQuery := `DELETE FROM workspace_invitations WHERE workspace_id = $1`
+	if _, err := r.systemDB.ExecContext(ctx, deleteInvitationsQuery, id); err != nil {
+		return fmt.Errorf("failed to delete workspace invitations: %w", err)
+	}
+
 	// Then delete the workspace record
 	query := `DELETE FROM workspaces WHERE id = $1`
 	result, err := r.systemDB.ExecContext(ctx, query, id)

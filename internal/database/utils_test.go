@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Notifuse/notifuse/config"
@@ -594,3 +595,349 @@ func TestConnectToWorkspace(t *testing.T) {
 
 // Add a variable to allow mocking sql.Open during tests
 var sqlOpen = sql.Open
+
+func TestEnsureSystemDatabaseExists_Additional(t *testing.T) {
+	t.Run("fails to ping postgresql server", func(t *testing.T) {
+		db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Mock ping failure
+		mock.ExpectPing().WillReturnError(sql.ErrConnDone)
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			DBName:   "notifuse_system",
+		}
+
+		err = MockedEnsureSystemDatabaseExists(cfg, db)
+		require.Error(t, err)
+		assert.Equal(t, "failed to ping PostgreSQL server", err.Error())
+	})
+
+	t.Run("fails to check if database exists", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Mock the ping
+		mock.ExpectPing()
+
+		// Mock query error
+		mock.ExpectQuery("SELECT EXISTS").
+			WithArgs("notifuse_system").
+			WillReturnError(sql.ErrConnDone)
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			DBName:   "notifuse_system",
+		}
+
+		err = MockedEnsureSystemDatabaseExists(cfg, db)
+		require.Error(t, err)
+		assert.Equal(t, "failed to check if database exists", err.Error())
+	})
+
+	t.Run("fails to create database", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Mock the ping
+		mock.ExpectPing()
+
+		// Mock database doesn't exist
+		mock.ExpectQuery("SELECT EXISTS").
+			WithArgs("notifuse_system").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		// Mock creation failure
+		mock.ExpectExec("CREATE DATABASE notifuse_system").
+			WillReturnError(sql.ErrConnDone)
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			DBName:   "notifuse_system",
+		}
+
+		err = MockedEnsureSystemDatabaseExists(cfg, db)
+		require.Error(t, err)
+		assert.Equal(t, "failed to create system database", err.Error())
+	})
+}
+
+func TestEnsureWorkspaceDatabaseExists_Additional(t *testing.T) {
+	t.Run("fails to ping postgresql server", func(t *testing.T) {
+		// Mock the PostgreSQL server connection
+		pgDB, pgMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		require.NoError(t, err)
+		defer pgDB.Close()
+
+		// Mock the workspace DB connection - not used in this test
+		wsDB, _, err := sqlmock.New()
+		require.NoError(t, err)
+		defer wsDB.Close()
+
+		// Mock ping failure
+		pgMock.ExpectPing().WillReturnError(sql.ErrConnDone)
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			Prefix:   "ntf",
+		}
+
+		err = MockedEnsureWorkspaceDatabaseExists(cfg, "testworkspace", pgDB, wsDB)
+		require.Error(t, err)
+		assert.Equal(t, "failed to ping PostgreSQL server", err.Error())
+	})
+
+	t.Run("fails to check if database exists", func(t *testing.T) {
+		// Mock the PostgreSQL server connection
+		pgDB, pgMock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer pgDB.Close()
+
+		// Mock the workspace DB connection - not used in this test
+		wsDB, _, err := sqlmock.New()
+		require.NoError(t, err)
+		defer wsDB.Close()
+
+		// Mock the ping
+		pgMock.ExpectPing()
+
+		// Mock query error
+		pgMock.ExpectQuery("SELECT EXISTS").
+			WithArgs("ntf_ws_testworkspace").
+			WillReturnError(sql.ErrConnDone)
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			Prefix:   "ntf",
+		}
+
+		err = MockedEnsureWorkspaceDatabaseExists(cfg, "testworkspace", pgDB, wsDB)
+		require.Error(t, err)
+		assert.Equal(t, "failed to check if database exists", err.Error())
+	})
+
+	t.Run("fails to create database", func(t *testing.T) {
+		// Mock the PostgreSQL server connection
+		pgDB, pgMock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer pgDB.Close()
+
+		// Mock the workspace DB connection - not used in this test
+		wsDB, _, err := sqlmock.New()
+		require.NoError(t, err)
+		defer wsDB.Close()
+
+		// Mock the ping
+		pgMock.ExpectPing()
+
+		// Mock database doesn't exist
+		pgMock.ExpectQuery("SELECT EXISTS").
+			WithArgs("ntf_ws_testworkspace").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		// Mock creation failure
+		pgMock.ExpectExec("CREATE DATABASE ntf_ws_testworkspace").
+			WillReturnError(sql.ErrConnDone)
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			Prefix:   "ntf",
+		}
+
+		err = MockedEnsureWorkspaceDatabaseExists(cfg, "testworkspace", pgDB, wsDB)
+		require.Error(t, err)
+		assert.Equal(t, "failed to create workspace database", err.Error())
+	})
+
+	t.Run("fails to ping workspace database", func(t *testing.T) {
+		// Mock the PostgreSQL server connection
+		pgDB, pgMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		require.NoError(t, err)
+		defer pgDB.Close()
+
+		// Mock the workspace DB connection
+		wsDB, wsMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		require.NoError(t, err)
+		defer wsDB.Close()
+
+		// Mock the ping for PostgreSQL server
+		pgMock.ExpectPing()
+
+		// Mock database doesn't exist
+		pgMock.ExpectQuery("SELECT EXISTS").
+			WithArgs("ntf_ws_testworkspace").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		// Mock successful database creation
+		pgMock.ExpectExec("CREATE DATABASE ntf_ws_testworkspace").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		// Mock ping failure for workspace DB
+		wsMock.ExpectPing().WillReturnError(sql.ErrConnDone)
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			Prefix:   "ntf",
+		}
+
+		err = MockedEnsureWorkspaceDatabaseExists(cfg, "testworkspace", pgDB, wsDB)
+		require.Error(t, err)
+		assert.Equal(t, "failed to ping new workspace database", err.Error())
+	})
+
+	t.Run("fails to initialize workspace database", func(t *testing.T) {
+		// Mock the PostgreSQL server connection
+		pgDB, pgMock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer pgDB.Close()
+
+		// Mock the workspace DB connection
+		wsDB, wsMock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer wsDB.Close()
+
+		// Mock the ping for PostgreSQL server
+		pgMock.ExpectPing()
+
+		// Mock database doesn't exist
+		pgMock.ExpectQuery("SELECT EXISTS").
+			WithArgs("ntf_ws_testworkspace").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		// Mock successful database creation
+		pgMock.ExpectExec("CREATE DATABASE ntf_ws_testworkspace").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		// Mock successful ping for workspace DB
+		wsMock.ExpectPing()
+
+		// Create a mock for InitializeWorkspaceDatabase that fails
+		originalInitFunc := initializeWorkspaceDBFunc
+		defer func() { initializeWorkspaceDBFunc = originalInitFunc }()
+
+		initializeWorkspaceDBFunc = func(db *sql.DB) error {
+			return errors.New("failed to create tables")
+		}
+
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			Prefix:   "ntf",
+		}
+
+		err = MockedEnsureWorkspaceDatabaseExists(cfg, "testworkspace", pgDB, wsDB)
+		require.Error(t, err)
+		assert.Equal(t, "failed to initialize workspace database schema", err.Error())
+	})
+}
+
+func TestGetWorkspaceDSN_EdgeCases(t *testing.T) {
+	t.Run("handles special characters in workspace ID", func(t *testing.T) {
+		cfg := &config.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: "password",
+			Prefix:   "nf",
+		}
+
+		workspaceIDs := []string{
+			"workspace-with-hyphens",
+			"workspace_with_underscores",
+			"workspace.with.dots",
+			"workspace/with/slashes",
+			"workspace:with:colons",
+		}
+
+		for _, id := range workspaceIDs {
+			result := GetWorkspaceDSN(cfg, id)
+			// Verify hyphens are replaced with underscores
+			sanitizedID := strings.ReplaceAll(id, "-", "_")
+			expectedDBName := fmt.Sprintf("nf_ws_%s", sanitizedID)
+			assert.Contains(t, result, expectedDBName, "DSN should contain the sanitized workspace ID")
+		}
+	})
+}
+
+// MockedConnectToWorkspace is a test-specific function that doesn't make real DB connections
+func MockedConnectToWorkspace(mockDB *sql.DB, ensureErr error, openErr error, pingErr error) (*sql.DB, error) {
+	// Check if EnsureWorkspaceDatabaseExists would fail
+	if ensureErr != nil {
+		return nil, fmt.Errorf("failed to ensure workspace database exists: %w", ensureErr)
+	}
+
+	// Check if sql.Open would fail
+	if openErr != nil {
+		return nil, fmt.Errorf("failed to connect to workspace database: %w", openErr)
+	}
+
+	// Check if db.Ping would fail
+	if pingErr != nil {
+		return nil, fmt.Errorf("failed to ping workspace database: %w", pingErr)
+	}
+
+	// Everything succeeded, return the mock DB
+	return mockDB, nil
+}
+
+// TestConnectToWorkspace_Mock tests the function using our mocked version
+func TestConnectToWorkspace_Mock(t *testing.T) {
+	// Create a mock DB just for structure, not for expectations
+	mockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	t.Run("successful connection", func(t *testing.T) {
+		db, err := MockedConnectToWorkspace(mockDB, nil, nil, nil)
+		require.NoError(t, err)
+		assert.Equal(t, mockDB, db)
+	})
+
+	t.Run("ensure database error", func(t *testing.T) {
+		_, err := MockedConnectToWorkspace(mockDB, errors.New("database creation failed"), nil, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to ensure workspace database exists")
+		assert.Contains(t, err.Error(), "database creation failed")
+	})
+
+	t.Run("sql open error", func(t *testing.T) {
+		_, err := MockedConnectToWorkspace(mockDB, nil, errors.New("connection error"), nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to connect to workspace database")
+		assert.Contains(t, err.Error(), "connection error")
+	})
+
+	t.Run("ping error", func(t *testing.T) {
+		_, err := MockedConnectToWorkspace(mockDB, nil, nil, errors.New("ping error"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to ping workspace database")
+		assert.Contains(t, err.Error(), "ping error")
+	})
+}

@@ -470,6 +470,16 @@ func TestWorkspaceRepository_Delete(t *testing.T) {
 	dropDBQuery := fmt.Sprintf("DROP DATABASE IF EXISTS %s_ws_%s", dbConfig.Prefix, workspaceID)
 	mock.ExpectExec(dropDBQuery).WillReturnResult(sqlmock.NewResult(0, 0))
 
+	// Mock for deleting user_workspaces
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 2)) // Assume 2 users were removed
+
+	// Mock for deleting workspace_invitations
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1)) // Assume 1 invitation was removed
+
 	// Mock for deleting workspace record
 	mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
 		WithArgs(workspaceID).
@@ -486,9 +496,45 @@ func TestWorkspaceRepository_Delete(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 
+	// Test case: Error when deleting user_workspaces
+	mock.ExpectExec("DROP DATABASE IF EXISTS.*").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnError(errors.New("user_workspaces deletion failed"))
+
+	err = repo.Delete(context.Background(), workspaceID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to delete user workspaces")
+
+	// Test case: Error when deleting workspace_invitations
+	mock.ExpectExec("DROP DATABASE IF EXISTS.*").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnError(errors.New("invitations deletion failed"))
+
+	err = repo.Delete(context.Background(), workspaceID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to delete workspace invitations")
+
 	// Test case: Workspace record deletion error
 	mock.ExpectExec("DROP DATABASE IF EXISTS.*").
 		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
 		WithArgs(workspaceID).
@@ -500,6 +546,14 @@ func TestWorkspaceRepository_Delete(t *testing.T) {
 
 	// Test case: No rows affected (workspace not found)
 	mock.ExpectExec("DROP DATABASE IF EXISTS.*").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
@@ -985,107 +1039,6 @@ func (r *mockInternalRepository) GetWorkspaceUsersWithEmail(ctx context.Context,
 		return users, nil
 	}
 	return []*domain.UserWorkspaceWithEmail{}, nil
-}
-
-// Test the actual Create method on the workspaceRepository (not just the mock implementation)
-func TestWorkspaceRepository_Create_Unmocked(t *testing.T) {
-	// Skip this test since it tries to make a real database connection
-	t.Skip("Skipping test that requires a real database connection")
-
-	db, mock, cleanup := SetupMockDB(t)
-	defer cleanup()
-
-	dbConfig := &config.DatabaseConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "password",
-		DBName:   "notifuse_system",
-		Prefix:   "notifuse",
-	}
-
-	// Create a real repository with mocked database
-	repo := NewWorkspaceRepository(db, dbConfig)
-
-	// Create a wrapper to capture whether CreateDatabase was called
-	createDatabaseCalled := false
-	createDatabaseError := error(nil)
-
-	// Create a test wrapper that overrides just the CreateDatabase method
-	testRepo := &testCreateDatabaseTracker{
-		WorkspaceRepository: repo,
-		createDatabaseFn: func(ctx context.Context, workspaceID string) error {
-			createDatabaseCalled = true
-			return createDatabaseError
-		},
-	}
-
-	// Test case: Successful workspace creation
-	workspace := &domain.Workspace{
-		ID:   "testworkspace",
-		Name: "Test Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
-
-	// Mock for checking if workspace exists
-	mock.ExpectQuery(`SELECT EXISTS.*FROM workspaces WHERE id = \$1`).
-		WithArgs(workspace.ID).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-
-	// Mock for inserting workspace
-	settings, _ := json.Marshal(workspace.Settings)
-	mock.ExpectExec(`INSERT INTO workspaces.*VALUES.*`).
-		WithArgs(
-			workspace.ID,
-			workspace.Name,
-			settings,
-			sqlmock.AnyArg(), // created_at
-			sqlmock.AnyArg(), // updated_at
-		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	err := testRepo.Create(context.Background(), workspace)
-	require.NoError(t, err)
-	require.True(t, createDatabaseCalled, "CreateDatabase should be called")
-
-	// Test case: Create workspace with database creation error
-	createDatabaseCalled = false
-	createDatabaseError = fmt.Errorf("database creation failed")
-
-	// Reset the mock for a new test
-	mock.ExpectationsWereMet()
-
-	// Mock for checking if workspace exists
-	mock.ExpectQuery(`SELECT EXISTS.*FROM workspaces WHERE id = \$1`).
-		WithArgs(workspace.ID).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-
-	// Mock for inserting workspace
-	mock.ExpectExec(`INSERT INTO workspaces.*VALUES.*`).
-		WithArgs(
-			workspace.ID,
-			workspace.Name,
-			settings,
-			sqlmock.AnyArg(), // created_at
-			sqlmock.AnyArg(), // updated_at
-		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	// Mock for deleting workspace (rollback)
-	mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
-		WithArgs(workspace.ID).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
-	err = testRepo.Create(context.Background(), workspace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "database creation failed")
-	require.True(t, createDatabaseCalled, "CreateDatabase should be called even when there's an error")
-
-	// Verify all expectations were met
-	err = mock.ExpectationsWereMet()
-	require.NoError(t, err)
 }
 
 // testCreateDatabaseTracker is a test wrapper that tracks CreateDatabase calls

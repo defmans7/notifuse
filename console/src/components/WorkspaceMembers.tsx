@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Card, Table, Typography, Spin, Button, Modal, Form, Input, App, Tag } from 'antd'
 import { MailOutlined } from '@ant-design/icons'
 import { Space } from 'antd'
@@ -9,33 +9,23 @@ const { Text } = Typography
 
 interface WorkspaceMembersProps {
   workspaceId: string
+  members: WorkspaceMember[]
+  loading: boolean
+  onMembersChange: () => void
+  isOwner: boolean
 }
 
-export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
-  const [members, setMembers] = useState<WorkspaceMember[]>([])
-  const [loading, setLoading] = useState(false)
+export function WorkspaceMembers({
+  workspaceId,
+  members,
+  loading,
+  onMembersChange,
+  isOwner
+}: WorkspaceMembersProps) {
   const [inviteModalVisible, setInviteModalVisible] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
   const { message } = App.useApp()
-
-  useEffect(() => {
-    fetchMembers()
-  }, [workspaceId])
-
-  const fetchMembers = async () => {
-    setLoading(true)
-    try {
-      const response = await workspaceService.getMembers(workspaceId)
-      setMembers(response.members)
-      console.log(response)
-    } catch (error) {
-      console.error('Failed to fetch workspace members', error)
-      message.error('Failed to fetch workspace members')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const columns = [
     {
@@ -88,7 +78,7 @@ export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
       setInviteEmail('')
 
       // Refresh the members list
-      fetchMembers()
+      onMembersChange()
     } catch (error) {
       console.error('Failed to invite member', error)
       message.error('Failed to invite member')
@@ -102,9 +92,11 @@ export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
       <Card
         title="Members"
         extra={
-          <Button type="primary" size="small" ghost onClick={() => setInviteModalVisible(true)}>
-            Invite Member
-          </Button>
+          isOwner && (
+            <Button type="primary" size="small" ghost onClick={() => setInviteModalVisible(true)}>
+              Invite Member
+            </Button>
+          )
         }
       >
         {loading ? (

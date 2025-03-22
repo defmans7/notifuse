@@ -1,26 +1,49 @@
 import { useState } from 'react'
-import { Card, Space, Descriptions, Button, Modal, Form, Input, Select, App } from 'antd'
-import { EditOutlined } from '@ant-design/icons'
+import {
+  Card,
+  Space,
+  Descriptions,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Select,
+  App,
+  Typography,
+  Divider,
+  Tooltip
+} from 'antd'
+import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { Workspace } from '../services/api/types'
 import { workspaceService } from '../services/api/workspace'
+import { useNavigate } from '@tanstack/react-router'
 
 const { Option } = Select
+const { Text } = Typography
 
 interface WorkspaceSettingsProps {
   workspace: Workspace | null
   loading: boolean
   onWorkspaceUpdate: (workspace: Workspace) => void
+  onWorkspaceDelete?: () => void
+  isOwner: boolean
 }
 
 export function WorkspaceSettings({
   workspace,
   loading,
-  onWorkspaceUpdate
+  onWorkspaceUpdate,
+  onWorkspaceDelete,
+  isOwner
 }: WorkspaceSettingsProps) {
   const [editModalVisible, setEditModalVisible] = useState(false)
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false)
+  const [confirmWorkspaceId, setConfirmWorkspaceId] = useState('')
   const [form] = Form.useForm()
   const { message } = App.useApp()
+  const navigate = useNavigate()
 
   const showEditModal = () => {
     // Set form values from workspace data
@@ -65,20 +88,69 @@ export function WorkspaceSettings({
     }
   }
 
+  const showDeleteModal = () => {
+    setDeleteModalVisible(true)
+    setConfirmWorkspaceId('')
+  }
+
+  const handleDeleteWorkspace = async () => {
+    if (!workspace) return
+
+    if (confirmWorkspaceId !== workspace.id) {
+      message.error('Workspace ID does not match')
+      return
+    }
+
+    setDeletingWorkspace(true)
+    try {
+      await workspaceService.delete({ id: workspace.id })
+      message.success('Workspace deleted successfully')
+      // Call parent callback to refresh workspaces
+      if (onWorkspaceDelete) {
+        onWorkspaceDelete()
+      } else {
+        // Fallback if no callback provided
+        navigate({ to: '/' })
+      }
+    } catch (error) {
+      console.error('Failed to delete workspace', error)
+      message.error('Failed to delete workspace')
+    } finally {
+      setDeletingWorkspace(false)
+      setDeleteModalVisible(false)
+    }
+  }
+
   return (
     <>
       <Card
         title="General Settings"
         extra={
-          <Button
-            type="primary"
-            size="small"
-            ghost
-            onClick={showEditModal}
-            disabled={loading || !workspace}
-          >
-            Edit
-          </Button>
+          <Space>
+            {workspace && isOwner && (
+              <>
+                <Tooltip title="Delete workspace">
+                  <Button
+                    danger
+                    type="text"
+                    ghost
+                    size="small"
+                    onClick={showDeleteModal}
+                    icon={<DeleteOutlined />}
+                  />
+                </Tooltip>
+                <Button
+                  type="primary"
+                  size="small"
+                  ghost
+                  onClick={showEditModal}
+                  disabled={loading || !workspace}
+                >
+                  <EditOutlined /> Edit
+                </Button>
+              </>
+            )}
+          </Space>
         }
         loading={loading}
       >
@@ -93,6 +165,7 @@ export function WorkspaceSettings({
         )}
       </Card>
 
+      {/* Edit Workspace Modal */}
       <Modal
         title="Edit Workspace Settings"
         open={editModalVisible}
@@ -138,6 +211,51 @@ export function WorkspaceSettings({
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Delete Workspace Confirmation Modal */}
+      <Modal
+        title={
+          <span>
+            <ExclamationCircleOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
+            Delete Workspace
+          </span>
+        }
+        open={deleteModalVisible}
+        onCancel={() => setDeleteModalVisible(false)}
+        footer={null}
+      >
+        <div>
+          <Text strong>Warning: This action cannot be undone.</Text>
+          <p style={{ marginTop: 16 }}>
+            This will permanently delete the workspace "{workspace?.name}" and all of its data.
+          </p>
+          <p>
+            To confirm, please enter the workspace ID: <Text code>{workspace?.id}</Text>
+          </p>
+
+          <Input
+            value={confirmWorkspaceId}
+            onChange={(e) => setConfirmWorkspaceId(e.target.value)}
+            placeholder="Enter workspace ID"
+            style={{ marginBottom: 16 }}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+            <Space>
+              <Button onClick={() => setDeleteModalVisible(false)}>Cancel</Button>
+              <Button
+                danger
+                type="primary"
+                loading={deletingWorkspace}
+                disabled={confirmWorkspaceId !== workspace?.id}
+                onClick={handleDeleteWorkspace}
+              >
+                Delete Workspace
+              </Button>
+            </Space>
+          </div>
+        </div>
       </Modal>
     </>
   )

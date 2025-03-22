@@ -1,5 +1,4 @@
 import { Form, Input, Button, Card, App, Space } from 'antd'
-import { MailOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -99,7 +98,7 @@ export function SignInPage() {
                 { type: 'email', message: 'Please enter a valid email!' }
               ]}
             >
-              <Input prefix={<MailOutlined />} placeholder="Email" type="email" />
+              <Input placeholder="Email" type="email" />
             </Form.Item>
 
             <Form.Item>
