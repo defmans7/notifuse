@@ -14,10 +14,6 @@ import (
 
 // TestRunServerMocked tests the runServer function with mocking
 func TestRunServerMocked(t *testing.T) {
-	// Skip this test in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping in CI environment")
-	}
 
 	// Get hardcoded keys for testing
 	keys, err := GetHardcodedTestKeys()
@@ -74,10 +70,6 @@ func TestRunServerMocked(t *testing.T) {
 }
 
 func TestConfigLoading(t *testing.T) {
-	// Skip this test in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping in CI environment")
-	}
 
 	// Try to load config from .env.test
 	_, err := config.Load()
