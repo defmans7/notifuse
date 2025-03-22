@@ -244,6 +244,33 @@ func TestConsoleMailer_SendWorkspaceInvitation(t *testing.T) {
 	}
 }
 
+func TestConsoleMailer_SendMagicCode(t *testing.T) {
+	// Create the mailer
+	mailer := NewConsoleMailer()
+
+	// Capture output
+	output := captureOutput(func() {
+		err := mailer.SendMagicCode("test@example.com", "123456")
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+	})
+
+	// Verify the output contains the expected information
+	expectedStrings := []string{
+		"AUTHENTICATION MAGIC CODE",
+		"To: test@example.com",
+		"Subject: Your authentication code",
+		"123456",
+	}
+
+	for _, expected := range expectedStrings {
+		if !strings.Contains(output, expected) {
+			t.Errorf("Expected output to contain '%s', but it didn't. Output: %s", expected, output)
+		}
+	}
+}
+
 func TestSMTPMailer_SendWorkspaceInvitation(t *testing.T) {
 	// Setup test data
 	email := "test@example.com"

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -10,7 +9,6 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mailer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -73,40 +71,6 @@ func TestRunServerMocked(t *testing.T) {
 	// Run the test function
 	err = testRunServer(cfg, mockLogger)
 	assert.NoError(t, err)
-}
-
-func TestConsoleMailer_SendMagicCode(t *testing.T) {
-	// Creating a ConsoleMailer
-	m := mailer.NewConsoleMailer()
-
-	// Capturing stdout
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	assert.NoError(t, err)
-	os.Stdout = w
-
-	// Make sure we restore stdout when we're done
-	defer func() {
-		os.Stdout = oldStdout
-	}()
-
-	// Call the function we're testing
-	err = m.SendMagicCode("test@example.com", "123456")
-	assert.NoError(t, err)
-
-	// Close write end of pipe so we can read all data
-	w.Close()
-
-	// Read captured output
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(r)
-	assert.NoError(t, err)
-	output := buf.String()
-
-	// Check if output contains the magic code message - update the string to match actual output
-	assert.Contains(t, output, "AUTHENTICATION MAGIC CODE")
-	assert.Contains(t, output, "test@example.com")
-	assert.Contains(t, output, "123456")
 }
 
 func TestConfigLoading(t *testing.T) {
