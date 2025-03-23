@@ -131,14 +131,14 @@ func (r *contactRepository) DeleteContact(ctx context.Context, email string) err
 }
 
 func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
-	// Start a transaction
+	// Prepare a transaction
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() // Rollback if there's a panic or error
 
-	// Prepare the statement for reuse
+	// Prepare a statement for contact insertion
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO contacts (
 			email, external_id, timezone, 
@@ -191,44 +191,154 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 	}
 	defer stmt.Close()
 
-	// Execute for each contact
-	for _, contact := range contacts {
-		_, err = stmt.ExecContext(ctx,
-			contact.Email,
-			contact.ExternalID,
-			contact.Timezone,
-			contact.FirstName,
-			contact.LastName,
-			contact.Phone,
-			contact.AddressLine1,
-			contact.AddressLine2,
-			contact.Country,
-			contact.Postcode,
-			contact.State,
-			contact.JobTitle,
-			contact.LifetimeValue,
-			contact.OrdersCount,
-			contact.LastOrderAt,
-			contact.CustomString1,
-			contact.CustomString2,
-			contact.CustomString3,
-			contact.CustomString4,
-			contact.CustomString5,
-			contact.CustomNumber1,
-			contact.CustomNumber2,
-			contact.CustomNumber3,
-			contact.CustomNumber4,
-			contact.CustomNumber5,
-			contact.CustomDatetime1,
-			contact.CustomDatetime2,
-			contact.CustomDatetime3,
-			contact.CustomDatetime4,
-			contact.CustomDatetime5,
-			contact.CreatedAt,
-			contact.UpdatedAt,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to execute statement: %w", err)
+	// Execute in batches
+	const batchSize = 100
+	for i := 0; i < len(contacts); i += batchSize {
+		end := i + batchSize
+		if end > len(contacts) {
+			end = len(contacts)
+		}
+
+		batch := contacts[i:end]
+		for _, contact := range batch {
+			// Convert domain nullable types to SQL nullable types
+			var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
+			var countrySQL, postcodeSQL, stateSQL, jobTitleSQL sql.NullString
+			var customString1SQL, customString2SQL, customString3SQL, customString4SQL, customString5SQL sql.NullString
+			var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
+			var customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL sql.NullFloat64
+			var lastOrderAtSQL, customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL sql.NullTime
+
+			// String fields
+			if !contact.FirstName.IsNull {
+				firstNameSQL = sql.NullString{String: contact.FirstName.String, Valid: true}
+			}
+			if !contact.LastName.IsNull {
+				lastNameSQL = sql.NullString{String: contact.LastName.String, Valid: true}
+			}
+			if !contact.Phone.IsNull {
+				phoneSQL = sql.NullString{String: contact.Phone.String, Valid: true}
+			}
+			if !contact.AddressLine1.IsNull {
+				addressLine1SQL = sql.NullString{String: contact.AddressLine1.String, Valid: true}
+			}
+			if !contact.AddressLine2.IsNull {
+				addressLine2SQL = sql.NullString{String: contact.AddressLine2.String, Valid: true}
+			}
+			if !contact.Country.IsNull {
+				countrySQL = sql.NullString{String: contact.Country.String, Valid: true}
+			}
+			if !contact.Postcode.IsNull {
+				postcodeSQL = sql.NullString{String: contact.Postcode.String, Valid: true}
+			}
+			if !contact.State.IsNull {
+				stateSQL = sql.NullString{String: contact.State.String, Valid: true}
+			}
+			if !contact.JobTitle.IsNull {
+				jobTitleSQL = sql.NullString{String: contact.JobTitle.String, Valid: true}
+			}
+
+			// Custom string fields
+			if !contact.CustomString1.IsNull {
+				customString1SQL = sql.NullString{String: contact.CustomString1.String, Valid: true}
+			}
+			if !contact.CustomString2.IsNull {
+				customString2SQL = sql.NullString{String: contact.CustomString2.String, Valid: true}
+			}
+			if !contact.CustomString3.IsNull {
+				customString3SQL = sql.NullString{String: contact.CustomString3.String, Valid: true}
+			}
+			if !contact.CustomString4.IsNull {
+				customString4SQL = sql.NullString{String: contact.CustomString4.String, Valid: true}
+			}
+			if !contact.CustomString5.IsNull {
+				customString5SQL = sql.NullString{String: contact.CustomString5.String, Valid: true}
+			}
+
+			// Number fields
+			if !contact.LifetimeValue.IsNull {
+				lifetimeValueSQL = sql.NullFloat64{Float64: contact.LifetimeValue.Float64, Valid: true}
+			}
+			if !contact.OrdersCount.IsNull {
+				ordersCountSQL = sql.NullFloat64{Float64: contact.OrdersCount.Float64, Valid: true}
+			}
+
+			// Custom number fields
+			if !contact.CustomNumber1.IsNull {
+				customNumber1SQL = sql.NullFloat64{Float64: contact.CustomNumber1.Float64, Valid: true}
+			}
+			if !contact.CustomNumber2.IsNull {
+				customNumber2SQL = sql.NullFloat64{Float64: contact.CustomNumber2.Float64, Valid: true}
+			}
+			if !contact.CustomNumber3.IsNull {
+				customNumber3SQL = sql.NullFloat64{Float64: contact.CustomNumber3.Float64, Valid: true}
+			}
+			if !contact.CustomNumber4.IsNull {
+				customNumber4SQL = sql.NullFloat64{Float64: contact.CustomNumber4.Float64, Valid: true}
+			}
+			if !contact.CustomNumber5.IsNull {
+				customNumber5SQL = sql.NullFloat64{Float64: contact.CustomNumber5.Float64, Valid: true}
+			}
+
+			// Datetime fields
+			if !contact.LastOrderAt.IsNull {
+				lastOrderAtSQL = sql.NullTime{Time: contact.LastOrderAt.Time, Valid: true}
+			}
+
+			// Custom datetime fields
+			if !contact.CustomDatetime1.IsNull {
+				customDatetime1SQL = sql.NullTime{Time: contact.CustomDatetime1.Time, Valid: true}
+			}
+			if !contact.CustomDatetime2.IsNull {
+				customDatetime2SQL = sql.NullTime{Time: contact.CustomDatetime2.Time, Valid: true}
+			}
+			if !contact.CustomDatetime3.IsNull {
+				customDatetime3SQL = sql.NullTime{Time: contact.CustomDatetime3.Time, Valid: true}
+			}
+			if !contact.CustomDatetime4.IsNull {
+				customDatetime4SQL = sql.NullTime{Time: contact.CustomDatetime4.Time, Valid: true}
+			}
+			if !contact.CustomDatetime5.IsNull {
+				customDatetime5SQL = sql.NullTime{Time: contact.CustomDatetime5.Time, Valid: true}
+			}
+
+			_, err := stmt.ExecContext(ctx,
+				contact.Email,
+				contact.ExternalID,
+				contact.Timezone,
+				firstNameSQL,
+				lastNameSQL,
+				phoneSQL,
+				addressLine1SQL,
+				addressLine2SQL,
+				countrySQL,
+				postcodeSQL,
+				stateSQL,
+				jobTitleSQL,
+				lifetimeValueSQL,
+				ordersCountSQL,
+				lastOrderAtSQL,
+				customString1SQL,
+				customString2SQL,
+				customString3SQL,
+				customString4SQL,
+				customString5SQL,
+				customNumber1SQL,
+				customNumber2SQL,
+				customNumber3SQL,
+				customNumber4SQL,
+				customNumber5SQL,
+				customDatetime1SQL,
+				customDatetime2SQL,
+				customDatetime3SQL,
+				customDatetime4SQL,
+				customDatetime5SQL,
+				contact.CreatedAt,
+				contact.UpdatedAt,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to execute statement for contact %s: %w", contact.Email, err)
+			}
 		}
 	}
 
@@ -298,37 +408,138 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 			updated_at = EXCLUDED.updated_at
 	`
 
+	// Convert domain nullable types to SQL nullable types
+	var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
+	var countrySQL, postcodeSQL, stateSQL, jobTitleSQL sql.NullString
+	var customString1SQL, customString2SQL, customString3SQL, customString4SQL, customString5SQL sql.NullString
+	var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
+	var customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL sql.NullFloat64
+	var lastOrderAtSQL, customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL sql.NullTime
+
+	// String fields
+	if !contact.FirstName.IsNull {
+		firstNameSQL = sql.NullString{String: contact.FirstName.String, Valid: true}
+	}
+	if !contact.LastName.IsNull {
+		lastNameSQL = sql.NullString{String: contact.LastName.String, Valid: true}
+	}
+	if !contact.Phone.IsNull {
+		phoneSQL = sql.NullString{String: contact.Phone.String, Valid: true}
+	}
+	if !contact.AddressLine1.IsNull {
+		addressLine1SQL = sql.NullString{String: contact.AddressLine1.String, Valid: true}
+	}
+	if !contact.AddressLine2.IsNull {
+		addressLine2SQL = sql.NullString{String: contact.AddressLine2.String, Valid: true}
+	}
+	if !contact.Country.IsNull {
+		countrySQL = sql.NullString{String: contact.Country.String, Valid: true}
+	}
+	if !contact.Postcode.IsNull {
+		postcodeSQL = sql.NullString{String: contact.Postcode.String, Valid: true}
+	}
+	if !contact.State.IsNull {
+		stateSQL = sql.NullString{String: contact.State.String, Valid: true}
+	}
+	if !contact.JobTitle.IsNull {
+		jobTitleSQL = sql.NullString{String: contact.JobTitle.String, Valid: true}
+	}
+
+	// Custom string fields
+	if !contact.CustomString1.IsNull {
+		customString1SQL = sql.NullString{String: contact.CustomString1.String, Valid: true}
+	}
+	if !contact.CustomString2.IsNull {
+		customString2SQL = sql.NullString{String: contact.CustomString2.String, Valid: true}
+	}
+	if !contact.CustomString3.IsNull {
+		customString3SQL = sql.NullString{String: contact.CustomString3.String, Valid: true}
+	}
+	if !contact.CustomString4.IsNull {
+		customString4SQL = sql.NullString{String: contact.CustomString4.String, Valid: true}
+	}
+	if !contact.CustomString5.IsNull {
+		customString5SQL = sql.NullString{String: contact.CustomString5.String, Valid: true}
+	}
+
+	// Number fields
+	if !contact.LifetimeValue.IsNull {
+		lifetimeValueSQL = sql.NullFloat64{Float64: contact.LifetimeValue.Float64, Valid: true}
+	}
+	if !contact.OrdersCount.IsNull {
+		ordersCountSQL = sql.NullFloat64{Float64: contact.OrdersCount.Float64, Valid: true}
+	}
+
+	// Custom number fields
+	if !contact.CustomNumber1.IsNull {
+		customNumber1SQL = sql.NullFloat64{Float64: contact.CustomNumber1.Float64, Valid: true}
+	}
+	if !contact.CustomNumber2.IsNull {
+		customNumber2SQL = sql.NullFloat64{Float64: contact.CustomNumber2.Float64, Valid: true}
+	}
+	if !contact.CustomNumber3.IsNull {
+		customNumber3SQL = sql.NullFloat64{Float64: contact.CustomNumber3.Float64, Valid: true}
+	}
+	if !contact.CustomNumber4.IsNull {
+		customNumber4SQL = sql.NullFloat64{Float64: contact.CustomNumber4.Float64, Valid: true}
+	}
+	if !contact.CustomNumber5.IsNull {
+		customNumber5SQL = sql.NullFloat64{Float64: contact.CustomNumber5.Float64, Valid: true}
+	}
+
+	// Datetime fields
+	if !contact.LastOrderAt.IsNull {
+		lastOrderAtSQL = sql.NullTime{Time: contact.LastOrderAt.Time, Valid: true}
+	}
+
+	// Custom datetime fields
+	if !contact.CustomDatetime1.IsNull {
+		customDatetime1SQL = sql.NullTime{Time: contact.CustomDatetime1.Time, Valid: true}
+	}
+	if !contact.CustomDatetime2.IsNull {
+		customDatetime2SQL = sql.NullTime{Time: contact.CustomDatetime2.Time, Valid: true}
+	}
+	if !contact.CustomDatetime3.IsNull {
+		customDatetime3SQL = sql.NullTime{Time: contact.CustomDatetime3.Time, Valid: true}
+	}
+	if !contact.CustomDatetime4.IsNull {
+		customDatetime4SQL = sql.NullTime{Time: contact.CustomDatetime4.Time, Valid: true}
+	}
+	if !contact.CustomDatetime5.IsNull {
+		customDatetime5SQL = sql.NullTime{Time: contact.CustomDatetime5.Time, Valid: true}
+	}
+
 	_, err = r.db.ExecContext(ctx, query,
 		contact.Email,
 		contact.ExternalID,
 		contact.Timezone,
-		contact.FirstName,
-		contact.LastName,
-		contact.Phone,
-		contact.AddressLine1,
-		contact.AddressLine2,
-		contact.Country,
-		contact.Postcode,
-		contact.State,
-		contact.JobTitle,
-		contact.LifetimeValue,
-		contact.OrdersCount,
-		contact.LastOrderAt,
-		contact.CustomString1,
-		contact.CustomString2,
-		contact.CustomString3,
-		contact.CustomString4,
-		contact.CustomString5,
-		contact.CustomNumber1,
-		contact.CustomNumber2,
-		contact.CustomNumber3,
-		contact.CustomNumber4,
-		contact.CustomNumber5,
-		contact.CustomDatetime1,
-		contact.CustomDatetime2,
-		contact.CustomDatetime3,
-		contact.CustomDatetime4,
-		contact.CustomDatetime5,
+		firstNameSQL,
+		lastNameSQL,
+		phoneSQL,
+		addressLine1SQL,
+		addressLine2SQL,
+		countrySQL,
+		postcodeSQL,
+		stateSQL,
+		jobTitleSQL,
+		lifetimeValueSQL,
+		ordersCountSQL,
+		lastOrderAtSQL,
+		customString1SQL,
+		customString2SQL,
+		customString3SQL,
+		customString4SQL,
+		customString5SQL,
+		customNumber1SQL,
+		customNumber2SQL,
+		customNumber3SQL,
+		customNumber4SQL,
+		customNumber5SQL,
+		customDatetime1SQL,
+		customDatetime2SQL,
+		customDatetime3SQL,
+		customDatetime4SQL,
+		customDatetime5SQL,
 		contact.CreatedAt,
 		contact.UpdatedAt,
 	)

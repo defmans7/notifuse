@@ -237,8 +237,8 @@ func TestBatchImportContacts(t *testing.T) {
 		Email:      "contact1@example.com",
 		ExternalID: "ext1",
 		Timezone:   "Europe/Paris",
-		FirstName:  "John",
-		LastName:   "Doe",
+		FirstName:  domain.NullableString{String: "John", IsNull: false},
+		LastName:   domain.NullableString{String: "Doe", IsNull: false},
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -247,8 +247,8 @@ func TestBatchImportContacts(t *testing.T) {
 		Email:      "contact2@example.com",
 		ExternalID: "ext2",
 		Timezone:   "America/New_York",
-		FirstName:  "Jane",
-		LastName:   "Smith",
+		FirstName:  domain.NullableString{String: "Jane", IsNull: false},
+		LastName:   domain.NullableString{String: "Smith", IsNull: false},
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -318,8 +318,8 @@ func TestUpsertContact(t *testing.T) {
 		Email:      email,
 		ExternalID: "ext123",
 		Timezone:   "Europe/Paris",
-		FirstName:  "John",
-		LastName:   "Doe",
+		FirstName:  domain.NullableString{String: "John", IsNull: false},
+		LastName:   domain.NullableString{String: "Doe", IsNull: false},
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}

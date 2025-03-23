@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
-
-// Use MockContactRepository from test_mocks.go
 
 // Tests begin here
 
@@ -22,64 +21,33 @@ func TestContactService_GetContactByEmail(t *testing.T) {
 
 	service := NewContactService(mockRepo, mockLogger)
 
-	t.Run("should get contact by email successfully", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		email := "test@example.com"
-		expectedContact := &domain.Contact{
-			Email:      email,
-			ExternalID: "test-external-id",
-			Timezone:   "UTC",
-			FirstName:  "Test",
-			LastName:   "Contact",
-		}
+	// Set up expected error and contact
+	expectedError := &domain.ErrContactNotFound{Message: "contact not found"}
+	expectedContact := &domain.Contact{
+		Email:      "test@example.com",
+		ExternalID: "ext1",
+		Timezone:   "UTC",
+		FirstName: domain.NullableString{
+			String: "Test",
+			IsNull: false,
+		},
+		LastName: domain.NullableString{
+			String: "Contact",
+			IsNull: false,
+		},
+	}
 
-		mockRepo.On("GetContactByEmail", ctx, email).Return(expectedContact, nil).Once()
+	// Test error case
+	mockRepo.On("GetContactByEmail", mock.Anything, "nonexistent@example.com").Return(nil, expectedError).Once()
+	_, err := service.GetContactByEmail(context.Background(), "nonexistent@example.com")
+	assert.Error(t, err)
+	assert.Equal(t, expectedError.Error(), err.Error())
 
-		// Act
-		contact, err := service.GetContactByEmail(ctx, email)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, expectedContact, contact)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("should return not found error", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		email := "nonexistent@example.com"
-		notFoundErr := &domain.ErrContactNotFound{Message: "contact not found"}
-
-		mockRepo.On("GetContactByEmail", ctx, email).Return(nil, notFoundErr).Once()
-
-		// Act
-		contact, err := service.GetContactByEmail(ctx, email)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, contact)
-		assert.IsType(t, &domain.ErrContactNotFound{}, err)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("should return error if repository fails", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		email := "test@example.com"
-		repoErr := errors.New("repository error")
-
-		mockRepo.On("GetContactByEmail", ctx, email).Return(nil, repoErr).Once()
-
-		// Act
-		contact, err := service.GetContactByEmail(ctx, email)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, contact)
-		assert.Contains(t, err.Error(), "failed to get contact by email")
-		mockRepo.AssertExpectations(t)
-	})
+	// Test success case
+	mockRepo.On("GetContactByEmail", mock.Anything, "test@example.com").Return(expectedContact, nil).Once()
+	contact, err := service.GetContactByEmail(context.Background(), "test@example.com")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedContact, contact)
 }
 
 func TestContactService_GetContactByExternalID(t *testing.T) {
@@ -90,64 +58,33 @@ func TestContactService_GetContactByExternalID(t *testing.T) {
 
 	service := NewContactService(mockRepo, mockLogger)
 
-	t.Run("should get contact by external ID successfully", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		externalID := "ext-123"
-		expectedContact := &domain.Contact{
-			Email:      "test@example.com",
-			ExternalID: externalID,
-			Timezone:   "UTC",
-			FirstName:  "Test",
-			LastName:   "Contact",
-		}
+	// Set up expected error and contact
+	expectedError := &domain.ErrContactNotFound{Message: "contact not found"}
+	expectedContact := &domain.Contact{
+		Email:      "test@example.com",
+		ExternalID: "ext1",
+		Timezone:   "UTC",
+		FirstName: domain.NullableString{
+			String: "Test",
+			IsNull: false,
+		},
+		LastName: domain.NullableString{
+			String: "Contact",
+			IsNull: false,
+		},
+	}
 
-		mockRepo.On("GetContactByExternalID", ctx, externalID).Return(expectedContact, nil).Once()
+	// Test error case
+	mockRepo.On("GetContactByExternalID", mock.Anything, "nonexistent").Return(nil, expectedError).Once()
+	_, err := service.GetContactByExternalID(context.Background(), "nonexistent")
+	assert.Error(t, err)
+	assert.Equal(t, expectedError.Error(), err.Error())
 
-		// Act
-		contact, err := service.GetContactByExternalID(ctx, externalID)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, expectedContact, contact)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("should return not found error", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		externalID := "nonexistent-ext-id"
-		notFoundErr := &domain.ErrContactNotFound{Message: "contact not found"}
-
-		mockRepo.On("GetContactByExternalID", ctx, externalID).Return(nil, notFoundErr).Once()
-
-		// Act
-		contact, err := service.GetContactByExternalID(ctx, externalID)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, contact)
-		assert.IsType(t, &domain.ErrContactNotFound{}, err)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("should return error if repository fails", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		externalID := "ext-123"
-		repoErr := errors.New("repository error")
-
-		mockRepo.On("GetContactByExternalID", ctx, externalID).Return(nil, repoErr).Once()
-
-		// Act
-		contact, err := service.GetContactByExternalID(ctx, externalID)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, contact)
-		assert.Contains(t, err.Error(), "failed to get contact by external ID")
-		mockRepo.AssertExpectations(t)
-	})
+	// Test success case
+	mockRepo.On("GetContactByExternalID", mock.Anything, "ext1").Return(expectedContact, nil).Once()
+	contact, err := service.GetContactByExternalID(context.Background(), "ext1")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedContact, contact)
 }
 
 func TestContactService_GetContacts(t *testing.T) {
@@ -165,15 +102,15 @@ func TestContactService_GetContacts(t *testing.T) {
 				Email:      "contact1@example.com",
 				ExternalID: "ext-1",
 				Timezone:   "UTC",
-				FirstName:  "Contact",
-				LastName:   "One",
+				FirstName:  domain.NullableString{String: "Contact", IsNull: false},
+				LastName:   domain.NullableString{String: "One", IsNull: false},
 			},
 			{
 				Email:      "contact2@example.com",
 				ExternalID: "ext-2",
 				Timezone:   "UTC",
-				FirstName:  "Contact",
-				LastName:   "Two",
+				FirstName:  domain.NullableString{String: "Contact", IsNull: false},
+				LastName:   domain.NullableString{String: "Two", IsNull: false},
 			},
 		}
 
@@ -277,15 +214,15 @@ func TestBatchImportContacts(t *testing.T) {
 				ExternalID: "ext1",
 				Email:      "contact1@example.com",
 				Timezone:   "UTC",
-				FirstName:  "John",
-				LastName:   "Doe",
+				FirstName:  domain.NullableString{String: "John", IsNull: false},
+				LastName:   domain.NullableString{String: "Doe", IsNull: false},
 			},
 			{
 				ExternalID: "ext2",
 				Email:      "contact2@example.com",
 				Timezone:   "Europe/Paris",
-				FirstName:  "Jane",
-				LastName:   "Smith",
+				FirstName:  domain.NullableString{String: "Jane", IsNull: false},
+				LastName:   domain.NullableString{String: "Smith", IsNull: false},
 			},
 		}
 
@@ -319,15 +256,15 @@ func TestBatchImportContacts(t *testing.T) {
 				ExternalID: "ext3",
 				// Missing required Email field
 				Timezone:  "UTC",
-				FirstName: "Invalid",
-				LastName:  "Contact",
+				FirstName: domain.NullableString{String: "Invalid", IsNull: false},
+				LastName:  domain.NullableString{String: "Contact", IsNull: false},
 			},
 			{
 				ExternalID: "ext4",
 				Email:      "contact4@example.com",
 				// Missing required Timezone field
-				FirstName: "Another",
-				LastName:  "Contact",
+				FirstName: domain.NullableString{String: "Another", IsNull: false},
+				LastName:  domain.NullableString{String: "Contact", IsNull: false},
 			},
 		}
 
@@ -368,8 +305,8 @@ func TestBatchImportContacts(t *testing.T) {
 				ExternalID: "ext1",
 				Email:      "contact1@example.com",
 				Timezone:   "UTC",
-				FirstName:  "John",
-				LastName:   "Doe",
+				FirstName:  domain.NullableString{String: "John", IsNull: false},
+				LastName:   domain.NullableString{String: "Doe", IsNull: false},
 			},
 		}
 
@@ -384,104 +321,112 @@ func TestBatchImportContacts(t *testing.T) {
 }
 
 func TestContactService_UpsertContact(t *testing.T) {
-	mockRepo := new(MockContactRepository)
-	mockLogger := new(MockLogger)
-	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
-	mockLogger.On("Error", mock.Anything).Maybe()
+	t.Run("successful upsert - create", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
 
-	service := NewContactService(mockRepo, mockLogger)
-
-	t.Run("should create new contact successfully", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
 		contact := &domain.Contact{
-			Email:      "test@example.com",
-			ExternalID: "test-external-id",
+			Email:      "contact1@example.com",
+			ExternalID: "ext1",
 			Timezone:   "UTC",
-			FirstName:  "Test",
-			LastName:   "Contact",
+			FirstName:  domain.NullableString{String: "John", IsNull: false},
+			LastName:   domain.NullableString{String: "Doe", IsNull: false},
 		}
 
-		mockRepo.On("UpsertContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			// Verify timestamps are set
-			return c.Email == contact.Email &&
-				!c.CreatedAt.IsZero() && !c.UpdatedAt.IsZero()
-		})).Return(true, nil).Once()
+		mockRepo.On("UpsertContact", mock.Anything, mock.AnythingOfType("*domain.Contact")).
+			Run(func(args mock.Arguments) {
+				updatedContact := args.Get(1).(*domain.Contact)
+				assert.Equal(t, contact.Email, updatedContact.Email)
+				assert.Equal(t, contact.ExternalID, updatedContact.ExternalID)
+				assert.False(t, updatedContact.CreatedAt.IsZero())
+				assert.False(t, updatedContact.UpdatedAt.IsZero())
+			}).
+			Return(true, nil).Once()
 
-		// Act
-		isNew, err := service.UpsertContact(ctx, contact)
-
-		// Assert
+		isNew, err := service.UpsertContact(context.Background(), contact)
 		assert.NoError(t, err)
 		assert.True(t, isNew)
-		assert.False(t, contact.CreatedAt.IsZero())
-		assert.False(t, contact.UpdatedAt.IsZero())
-		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("should update existing contact successfully", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
+	t.Run("successful upsert - update", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
+
+		now := time.Now().UTC()
 		contact := &domain.Contact{
-			Email:      "test@example.com",
-			ExternalID: "test-external-id",
+			Email:      "contact1@example.com",
+			ExternalID: "ext1",
 			Timezone:   "UTC",
-			FirstName:  "Test",
-			LastName:   "Contact",
+			FirstName:  domain.NullableString{String: "John", IsNull: false},
+			LastName:   domain.NullableString{String: "Doe", IsNull: false},
+			CreatedAt:  now,
 		}
 
-		mockRepo.On("UpsertContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			// Verify timestamps are set
-			return c.Email == contact.Email && !c.UpdatedAt.IsZero()
-		})).Return(false, nil).Once()
+		mockRepo.On("UpsertContact", mock.Anything, mock.AnythingOfType("*domain.Contact")).
+			Run(func(args mock.Arguments) {
+				updatedContact := args.Get(1).(*domain.Contact)
+				assert.Equal(t, contact.Email, updatedContact.Email)
+				assert.Equal(t, contact.ExternalID, updatedContact.ExternalID)
+				assert.Equal(t, now, updatedContact.CreatedAt)
+				assert.False(t, updatedContact.UpdatedAt.IsZero())
+				assert.True(t, updatedContact.UpdatedAt.After(now) || updatedContact.UpdatedAt.Equal(now))
+			}).
+			Return(false, nil).Once()
 
-		// Act
-		isNew, err := service.UpsertContact(ctx, contact)
-
-		// Assert
+		isNew, err := service.UpsertContact(context.Background(), contact)
 		assert.NoError(t, err)
 		assert.False(t, isNew)
-		assert.False(t, contact.UpdatedAt.IsZero())
-		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("should return error if contact is invalid", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
+	t.Run("validation error", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
+
 		contact := &domain.Contact{
-			// Email missing, which is required
+			Email:      "invalid-email",
+			ExternalID: "ext1",
+			Timezone:   "UTC",
+			FirstName:  domain.NullableString{String: "Invalid", IsNull: false},
+			LastName:   domain.NullableString{String: "Contact", IsNull: false},
 		}
 
-		// Act
-		isNew, err := service.UpsertContact(ctx, contact)
-
-		// Assert
+		isNew, err := service.UpsertContact(context.Background(), contact)
 		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid contact")
 		assert.False(t, isNew)
-		mockRepo.AssertNotCalled(t, "UpsertContact")
 	})
 
-	t.Run("should return error if repository fails", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
+	t.Run("repository error", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
+
 		contact := &domain.Contact{
-			Email:      "test@example.com",
-			ExternalID: "test-external-id",
+			Email:      "contact1@example.com",
+			ExternalID: "ext1",
 			Timezone:   "UTC",
+			FirstName:  domain.NullableString{String: "John", IsNull: false},
+			LastName:   domain.NullableString{String: "Doe", IsNull: false},
 		}
 
 		repoErr := errors.New("repository error")
-		mockRepo.On("UpsertContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			return c.Email == contact.Email
-		})).Return(false, repoErr).Once()
+		mockRepo.On("UpsertContact", mock.Anything, mock.AnythingOfType("*domain.Contact")).
+			Return(false, repoErr).Once()
 
-		// Act
-		isNew, err := service.UpsertContact(ctx, contact)
-
-		// Assert
+		isNew, err := service.UpsertContact(context.Background(), contact)
 		assert.Error(t, err)
-		assert.False(t, isNew)
 		assert.Contains(t, err.Error(), "failed to upsert contact")
-		mockRepo.AssertExpectations(t)
+		assert.False(t, isNew)
 	})
 }

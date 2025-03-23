@@ -2,10 +2,13 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/tidwall/gjson"
 )
 
 type ContactHandler struct {
@@ -170,41 +173,41 @@ func (h *ContactHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req batchImportContactsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
-		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+	// Read the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to read request body")
+		WriteJSONError(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
 
-	// Check if batch size is within limit
-	if len(req.Contacts) > 50 {
-		WriteJSONError(w, "Batch size exceeds maximum limit of 50 contacts", http.StatusBadRequest)
+	// Extract contacts array
+	contactsArray := gjson.GetBytes(body, "contacts").Array()
+	if len(contactsArray) == 0 {
+		WriteJSONError(w, "No contacts provided in request", http.StatusBadRequest)
 		return
 	}
 
-	// Convert request to domain contacts
-	contacts := make([]*domain.Contact, len(req.Contacts))
-	for i, contactReq := range req.Contacts {
-		contacts[i] = &domain.Contact{
-			Email:      contactReq.Email,
-			ExternalID: contactReq.ExternalID,
-			FirstName:  contactReq.FirstName,
-			LastName:   contactReq.LastName,
-			Timezone:   contactReq.Timezone,
+	// Parse each contact
+	contacts := make([]*domain.Contact, 0, len(contactsArray))
+	for i, contactJson := range contactsArray {
+		contact, err := domain.FromJSON(contactJson)
+		if err != nil {
+			WriteJSONError(w, fmt.Sprintf("Contact at index %d: %s", i, err.Error()), http.StatusBadRequest)
+			return
 		}
+		contacts = append(contacts, contact)
 	}
 
-	// Process the batch
 	if err := h.service.BatchImportContacts(r.Context(), contacts); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to import contacts")
 		WriteJSONError(w, "Failed to import contacts", http.StatusInternalServerError)
 		return
 	}
 
-	// Return success response with imported contacts
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message": "Successfully imported contacts",
+		"success": true,
+		"message": fmt.Sprintf("Successfully imported %d contacts", len(contacts)),
 		"count":   len(contacts),
 	})
 }
@@ -215,19 +218,19 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req upsertContactRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
-		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+	// Read the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to read request body")
+		WriteJSONError(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
 
-	contact := &domain.Contact{
-		Email:      req.Email,
-		ExternalID: req.ExternalID,
-		FirstName:  req.FirstName,
-		LastName:   req.LastName,
-		Timezone:   req.Timezone,
+	// Parse the contact using domain method
+	contact, err := domain.FromJSON(body)
+	if err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	isNew, err := h.service.UpsertContact(r.Context(), contact)
