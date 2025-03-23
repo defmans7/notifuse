@@ -21,10 +21,6 @@ func NewContactHandler(service domain.ContactService, logger logger.Logger) *Con
 }
 
 // Request/Response types
-type getContactRequest struct {
-	UUID string `json:"uuid"`
-}
-
 type getContactByEmailRequest struct {
 	Email string `json:"email" valid:"required,email"`
 }
@@ -34,7 +30,7 @@ type getContactByExternalIDRequest struct {
 }
 
 type deleteContactRequest struct {
-	UUID string `json:"uuid" valid:"required,uuid"`
+	Email string `json:"email" valid:"required,email"`
 }
 
 // Add the request type for batch importing contacts
@@ -44,7 +40,6 @@ type batchImportContactsRequest struct {
 
 // Add upsert request type that combines create and update
 type upsertContactRequest struct {
-	UUID       string `json:"uuid,omitempty"`
 	ExternalID string `json:"external_id" valid:"required"`
 	Email      string `json:"email" valid:"required,email"`
 	FirstName  string `json:"first_name,omitempty"`
@@ -55,7 +50,6 @@ type upsertContactRequest struct {
 func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Register RPC-style endpoints with dot notation
 	mux.HandleFunc("/api/contacts.list", h.handleList)
-	mux.HandleFunc("/api/contacts.get", h.handleGet)
 	mux.HandleFunc("/api/contacts.getByEmail", h.handleGetByEmail)
 	mux.HandleFunc("/api/contacts.getByExternalID", h.handleGetByExternalID)
 	mux.HandleFunc("/api/contacts.delete", h.handleDelete)
@@ -77,35 +71,6 @@ func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, contacts)
-}
-
-func (h *ContactHandler) handleGet(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get contact UUID from query params
-	uuid := r.URL.Query().Get("uuid")
-	if uuid == "" {
-		WriteJSONError(w, "Missing UUID", http.StatusBadRequest)
-		return
-	}
-
-	contact, err := h.service.GetContactByUUID(r.Context(), uuid)
-	if err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
-			WriteJSONError(w, "Contact not found", http.StatusNotFound)
-			return
-		}
-		h.logger.WithField("error", err.Error()).Error("Failed to get contact")
-		WriteJSONError(w, "Failed to get contact", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"contact": contact,
-	})
 }
 
 func (h *ContactHandler) handleGetByEmail(w http.ResponseWriter, r *http.Request) {
@@ -179,12 +144,12 @@ func (h *ContactHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.UUID == "" {
-		WriteJSONError(w, "Missing UUID", http.StatusBadRequest)
+	if req.Email == "" {
+		WriteJSONError(w, "Missing email", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.service.DeleteContact(r.Context(), req.UUID); err != nil {
+	if err := h.service.DeleteContact(r.Context(), req.Email); err != nil {
 		if _, ok := err.(*domain.ErrContactNotFound); ok {
 			WriteJSONError(w, "Contact not found", http.StatusNotFound)
 			return
@@ -222,9 +187,8 @@ func (h *ContactHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 	contacts := make([]*domain.Contact, len(req.Contacts))
 	for i, contactReq := range req.Contacts {
 		contacts[i] = &domain.Contact{
-			UUID:       contactReq.UUID,
-			ExternalID: contactReq.ExternalID,
 			Email:      contactReq.Email,
+			ExternalID: contactReq.ExternalID,
 			FirstName:  contactReq.FirstName,
 			LastName:   contactReq.LastName,
 			Timezone:   contactReq.Timezone,
@@ -259,9 +223,8 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contact := &domain.Contact{
-		UUID:       req.UUID,
-		ExternalID: req.ExternalID,
 		Email:      req.Email,
+		ExternalID: req.ExternalID,
 		FirstName:  req.FirstName,
 		LastName:   req.LastName,
 		Timezone:   req.Timezone,

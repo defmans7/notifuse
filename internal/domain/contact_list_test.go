@@ -19,18 +19,18 @@ func TestContactList_Validate(t *testing.T) {
 		{
 			name: "valid contact list",
 			contactList: domain.ContactList{
-				ContactID: "123e4567-e89b-12d3-a456-426614174000",
-				ListID:    "list123",
-				Status:    domain.ContactListStatusActive,
+				Email:  "test@example.com",
+				ListID: "list123",
+				Status: domain.ContactListStatusActive,
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid contact list with pending status",
 			contactList: domain.ContactList{
-				ContactID: "123e4567-e89b-12d3-a456-426614174000",
-				ListID:    "list123",
-				Status:    domain.ContactListStatusPending,
+				Email:  "test@example.com",
+				ListID: "list123",
+				Status: domain.ContactListStatusPending,
 			},
 			wantErr: false,
 		},
@@ -45,43 +45,43 @@ func TestContactList_Validate(t *testing.T) {
 		{
 			name: "invalid contact ID format",
 			contactList: domain.ContactList{
-				ContactID: "not-a-uuid",
-				ListID:    "list123",
-				Status:    domain.ContactListStatusActive,
+				Email:  "not-an-email",
+				ListID: "list123",
+				Status: domain.ContactListStatusActive,
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing list ID",
 			contactList: domain.ContactList{
-				ContactID: "123e4567-e89b-12d3-a456-426614174000",
-				Status:    domain.ContactListStatusActive,
+				Email:  "test@example.com",
+				Status: domain.ContactListStatusActive,
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid list ID format",
 			contactList: domain.ContactList{
-				ContactID: "123e4567-e89b-12d3-a456-426614174000",
-				ListID:    "invalid@list&id",
-				Status:    domain.ContactListStatusActive,
+				Email:  "test@example.com",
+				ListID: "invalid@list&id",
+				Status: domain.ContactListStatusActive,
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing status",
 			contactList: domain.ContactList{
-				ContactID: "123e4567-e89b-12d3-a456-426614174000",
-				ListID:    "list123",
+				Email:  "test@example.com",
+				ListID: "list123",
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid status",
 			contactList: domain.ContactList{
-				ContactID: "123e4567-e89b-12d3-a456-426614174000",
-				ListID:    "list123",
-				Status:    "invalid-status",
+				Email:  "test@example.com",
+				ListID: "list123",
+				Status: "invalid-status",
 			},
 			wantErr: true,
 		},
@@ -116,18 +116,18 @@ func TestScanContactList(t *testing.T) {
 			// Create mock scanner
 			scanner := &contactListMockScanner{
 				data: []interface{}{
-					"123e4567-e89b-12d3-a456-426614174000", // ContactID
-					"list123",                              // ListID
-					status,                                 // Status
-					now,                                    // CreatedAt
-					now,                                    // UpdatedAt
+					"test@example.com", // Email
+					"list123",          // ListID
+					status,             // Status
+					now,                // CreatedAt
+					now,                // UpdatedAt
 				},
 			}
 
 			// Test successful scan
 			contactList, err := domain.ScanContactList(scanner)
 			assert.NoError(t, err)
-			assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", contactList.ContactID)
+			assert.Equal(t, "test@example.com", contactList.Email)
 			assert.Equal(t, "list123", contactList.ListID)
 			assert.Equal(t, domain.ContactListStatus(status), contactList.Status)
 			assert.Equal(t, now, contactList.CreatedAt)

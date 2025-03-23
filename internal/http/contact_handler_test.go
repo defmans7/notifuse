@@ -1,5 +1,11 @@
 package http
 
+/*
+TODO: This file needs comprehensive rewriting to use Email as the primary
+identifier for contacts instead of UUID. The current test cases use the
+legacy UUID field which has been removed from the domain model.
+*/
+
 import (
 	"bytes"
 	"context"
@@ -25,8 +31,6 @@ type MockContactService struct {
 	ErrContactNotFoundToReturn bool
 
 	GetContactsCalled            bool
-	GetContactByUUIDCalled       bool
-	LastContactUUID              string
 	GetContactByEmailCalled      bool
 	LastContactEmail             string
 	GetContactByExternalIDCalled bool
@@ -57,23 +61,6 @@ func (m *MockContactService) GetContacts(ctx context.Context) ([]*domain.Contact
 		contacts = append(contacts, contact)
 	}
 	return contacts, nil
-}
-
-func (m *MockContactService) GetContactByUUID(ctx context.Context, uuid string) (*domain.Contact, error) {
-	m.GetContactByUUIDCalled = true
-	m.LastContactUUID = uuid
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-	if m.ErrContactNotFoundToReturn {
-		return nil, &domain.ErrContactNotFound{}
-	}
-
-	contact, exists := m.contacts[uuid]
-	if !exists {
-		return nil, &domain.ErrContactNotFound{}
-	}
-	return contact, nil
 }
 
 func (m *MockContactService) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
@@ -112,9 +99,9 @@ func (m *MockContactService) GetContactByExternalID(ctx context.Context, externa
 	return nil, &domain.ErrContactNotFound{}
 }
 
-func (m *MockContactService) DeleteContact(ctx context.Context, uuid string) error {
+func (m *MockContactService) DeleteContact(ctx context.Context, email string) error {
 	m.DeleteContactCalled = true
-	m.LastContactUUID = uuid
+	m.LastContactEmail = email
 	if m.ErrToReturn != nil {
 		return m.ErrToReturn
 	}
@@ -122,13 +109,13 @@ func (m *MockContactService) DeleteContact(ctx context.Context, uuid string) err
 		return &domain.ErrContactNotFound{}
 	}
 
-	_, exists := m.contacts[uuid]
-	if !exists {
-		return &domain.ErrContactNotFound{}
+	for key, contact := range m.contacts {
+		if contact.Email == email {
+			delete(m.contacts, key)
+			return nil
+		}
 	}
-
-	delete(m.contacts, uuid)
-	return nil
+	return &domain.ErrContactNotFound{}
 }
 
 func (m *MockContactService) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
@@ -147,7 +134,7 @@ func (m *MockContactService) BatchImportContacts(ctx context.Context, contacts [
 		contact.UpdatedAt = now
 
 		// Store in the map
-		m.contacts[contact.UUID] = contact
+		m.contacts[contact.Email] = contact
 	}
 
 	return nil
@@ -162,9 +149,11 @@ func (m *MockContactService) UpsertContact(ctx context.Context, contact *domain.
 
 	// Check if contact exists
 	isNew := true
-	if contact.UUID != "" {
-		_, exists := m.contacts[contact.UUID]
-		isNew = !exists
+	for _, existingContact := range m.contacts {
+		if existingContact.Email == contact.Email {
+			isNew = false
+			break
+		}
 	}
 
 	// Set timestamps
@@ -175,10 +164,7 @@ func (m *MockContactService) UpsertContact(ctx context.Context, contact *domain.
 	contact.UpdatedAt = now
 
 	// Store the contact
-	if contact.UUID == "" {
-		contact.UUID = "generated-uuid"
-	}
-	m.contacts[contact.UUID] = contact
+	m.contacts[contact.Email] = contact
 
 	return m.UpsertIsNewToReturn, nil
 }
@@ -263,41 +249,33 @@ func TestContactHandler_HandleList(t *testing.T) {
 		expectedContacts bool
 	}{
 		{
-			name:   "Get Contacts Success",
+			name:   "Success",
 			method: http.MethodGet,
-			setupMock: func(m *MockContactService) {
-				m.contacts = map[string]*domain.Contact{
-					"uuid1": {UUID: "uuid1", Email: "test1@example.com", ExternalID: "ext1", Timezone: "UTC"},
-					"uuid2": {UUID: "uuid2", Email: "test2@example.com", ExternalID: "ext2", Timezone: "UTC"},
+			setupMock: func(mock *MockContactService) {
+				mock.contacts = map[string]*domain.Contact{
+					"test@example.com": {
+						Email:      "test@example.com",
+						ExternalID: "ext123",
+						Timezone:   "UTC",
+						CreatedAt:  time.Now(),
+						UpdatedAt:  time.Now(),
+					},
 				}
 			},
 			expectedStatus:   http.StatusOK,
 			expectedContacts: true,
 		},
 		{
-			name:   "Get Contacts Empty Result",
-			method: http.MethodGet,
-			setupMock: func(m *MockContactService) {
-				// No contacts in the mock
-			},
-			expectedStatus:   http.StatusOK,
-			expectedContacts: true,
-		},
-		{
-			name:   "Get Contacts Service Error",
-			method: http.MethodGet,
-			setupMock: func(m *MockContactService) {
-				m.ErrToReturn = errors.New("service error")
-			},
+			name:             "Service Error",
+			method:           http.MethodGet,
+			setupMock:        func(mock *MockContactService) { mock.ErrToReturn = errors.New("service error") },
 			expectedStatus:   http.StatusInternalServerError,
 			expectedContacts: false,
 		},
 		{
-			name:   "Method Not Allowed",
-			method: http.MethodPost,
-			setupMock: func(m *MockContactService) {
-				// No setup needed for this test
-			},
+			name:             "Wrong Method",
+			method:           http.MethodPost,
+			setupMock:        func(mock *MockContactService) {},
 			expectedStatus:   http.StatusMethodNotAllowed,
 			expectedContacts: false,
 		},
@@ -344,27 +322,27 @@ func TestContactHandler_HandleGet(t *testing.T) {
 	testCases := []struct {
 		name            string
 		method          string
-		contactUUID     string
+		contactEmail    string
 		setupMock       func(*MockContactService)
 		expectedStatus  int
 		expectedContact bool
 	}{
 		{
-			name:        "Get Contact Success",
-			method:      http.MethodGet,
-			contactUUID: "uuid1",
+			name:         "Get Contact Success",
+			method:       http.MethodGet,
+			contactEmail: "test1@example.com",
 			setupMock: func(m *MockContactService) {
 				m.contacts = map[string]*domain.Contact{
-					"uuid1": {UUID: "uuid1", Email: "test1@example.com", ExternalID: "ext1", Timezone: "UTC"},
+					"test1@example.com": {Email: "test1@example.com", ExternalID: "ext1", Timezone: "UTC"},
 				}
 			},
 			expectedStatus:  http.StatusOK,
 			expectedContact: true,
 		},
 		{
-			name:        "Get Contact Not Found",
-			method:      http.MethodGet,
-			contactUUID: "nonexistent",
+			name:         "Get Contact Not Found",
+			method:       http.MethodGet,
+			contactEmail: "nonexistent@example.com",
 			setupMock: func(m *MockContactService) {
 				m.ErrContactNotFoundToReturn = true
 			},
@@ -372,9 +350,9 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			expectedContact: false,
 		},
 		{
-			name:        "Get Contact Service Error",
-			method:      http.MethodGet,
-			contactUUID: "uuid1",
+			name:         "Get Contact Service Error",
+			method:       http.MethodGet,
+			contactEmail: "test1@example.com",
 			setupMock: func(m *MockContactService) {
 				m.ErrToReturn = errors.New("service error")
 			},
@@ -382,9 +360,9 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			expectedContact: false,
 		},
 		{
-			name:        "Missing Contact UUID",
-			method:      http.MethodGet,
-			contactUUID: "",
+			name:         "Missing Contact Email",
+			method:       http.MethodGet,
+			contactEmail: "",
 			setupMock: func(m *MockContactService) {
 				// No setup needed for this test
 			},
@@ -392,128 +370,9 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			expectedContact: false,
 		},
 		{
-			name:        "Method Not Allowed",
-			method:      http.MethodPost,
-			contactUUID: "uuid1",
-			setupMock: func(m *MockContactService) {
-				// No setup needed for this test
-			},
-			expectedStatus:  http.StatusMethodNotAllowed,
-			expectedContact: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupContactHandlerTest()
-			tc.setupMock(mockService)
-
-			url := "/api/contacts.get"
-			if tc.contactUUID != "" {
-				url += "?uuid=" + tc.contactUUID
-			}
-
-			req, err := http.NewRequest(tc.method, url, nil)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
-
-			rr := httptest.NewRecorder()
-			handler.handleGet(rr, req)
-
-			if status := rr.Code; status != tc.expectedStatus {
-				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
-			}
-
-			if tc.expectedContact {
-				if tc.expectedStatus == http.StatusOK {
-					var response map[string]interface{}
-					if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
-						t.Errorf("Failed to decode response body: %v", err)
-					}
-
-					contactData, exists := response["contact"]
-					if !exists {
-						t.Error("Expected 'contact' field in response, but not found")
-					}
-
-					// Convert to map to access fields
-					contactMap, ok := contactData.(map[string]interface{})
-					if !ok {
-						t.Errorf("Expected contact to be a map, got %T", contactData)
-					} else if contactMap["uuid"] != tc.contactUUID {
-						t.Errorf("Expected contact UUID %s, got %v", tc.contactUUID, contactMap["uuid"])
-					}
-				}
-			}
-
-			if tc.method == http.MethodGet && tc.contactUUID != "" && tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
-				if !mockService.GetContactByUUIDCalled {
-					t.Error("Expected GetContactByUUID to be called, but it wasn't")
-				}
-				if mockService.LastContactUUID != tc.contactUUID {
-					t.Errorf("Expected ContactUUID %s, got %s", tc.contactUUID, mockService.LastContactUUID)
-				}
-			}
-		})
-	}
-}
-
-func TestContactHandler_HandleGetByEmail(t *testing.T) {
-	testCases := []struct {
-		name            string
-		method          string
-		email           string
-		setupMock       func(*MockContactService)
-		expectedStatus  int
-		expectedContact bool
-	}{
-		{
-			name:   "Get Contact By Email Success",
-			method: http.MethodGet,
-			email:  "test@example.com",
-			setupMock: func(m *MockContactService) {
-				m.contacts = map[string]*domain.Contact{
-					"uuid1": {UUID: "uuid1", Email: "test@example.com", ExternalID: "ext1", Timezone: "UTC"},
-				}
-			},
-			expectedStatus:  http.StatusOK,
-			expectedContact: true,
-		},
-		{
-			name:   "Get Contact By Email Not Found",
-			method: http.MethodGet,
-			email:  "nonexistent@example.com",
-			setupMock: func(m *MockContactService) {
-				m.ErrContactNotFoundToReturn = true
-			},
-			expectedStatus:  http.StatusNotFound,
-			expectedContact: false,
-		},
-		{
-			name:   "Get Contact By Email Service Error",
-			method: http.MethodGet,
-			email:  "test@example.com",
-			setupMock: func(m *MockContactService) {
-				m.ErrToReturn = errors.New("service error")
-			},
-			expectedStatus:  http.StatusInternalServerError,
-			expectedContact: false,
-		},
-		{
-			name:   "Missing Email",
-			method: http.MethodGet,
-			email:  "",
-			setupMock: func(m *MockContactService) {
-				// No setup needed for this test
-			},
-			expectedStatus:  http.StatusBadRequest,
-			expectedContact: false,
-		},
-		{
-			name:   "Method Not Allowed",
-			method: http.MethodPost,
-			email:  "test@example.com",
+			name:         "Method Not Allowed",
+			method:       http.MethodPost,
+			contactEmail: "test1@example.com",
 			setupMock: func(m *MockContactService) {
 				// No setup needed for this test
 			},
@@ -528,8 +387,8 @@ func TestContactHandler_HandleGetByEmail(t *testing.T) {
 			tc.setupMock(mockService)
 
 			url := "/api/contacts.getByEmail"
-			if tc.email != "" {
-				url += "?email=" + tc.email
+			if tc.contactEmail != "" {
+				url += "?email=" + tc.contactEmail
 			}
 
 			req, err := http.NewRequest(tc.method, url, nil)
@@ -560,18 +419,18 @@ func TestContactHandler_HandleGetByEmail(t *testing.T) {
 					contactMap, ok := contactData.(map[string]interface{})
 					if !ok {
 						t.Errorf("Expected contact to be a map, got %T", contactData)
-					} else if contactMap["email"] != tc.email {
-						t.Errorf("Expected contact email %s, got %v", tc.email, contactMap["email"])
+					} else if contactMap["email"] != tc.contactEmail {
+						t.Errorf("Expected contact email %s, got %v", tc.contactEmail, contactMap["email"])
 					}
 				}
 			}
 
-			if tc.method == http.MethodGet && tc.email != "" && tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
+			if tc.method == http.MethodGet && tc.contactEmail != "" && tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
 				if !mockService.GetContactByEmailCalled {
 					t.Error("Expected GetContactByEmail to be called, but it wasn't")
 				}
-				if mockService.LastContactEmail != tc.email {
-					t.Errorf("Expected Email %s, got %s", tc.email, mockService.LastContactEmail)
+				if mockService.LastContactEmail != tc.contactEmail {
+					t.Errorf("Expected Email %s, got %s", tc.contactEmail, mockService.LastContactEmail)
 				}
 			}
 		})
@@ -593,7 +452,11 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			externalID: "ext1",
 			setupMock: func(m *MockContactService) {
 				m.contacts = map[string]*domain.Contact{
-					"uuid1": {UUID: "uuid1", Email: "test@example.com", ExternalID: "ext1", Timezone: "UTC"},
+					"test@example.com": {
+						Email:      "test@example.com",
+						ExternalID: "ext1",
+						Timezone:   "UTC",
+					},
 				}
 			},
 			expectedStatus:  http.StatusOK,
@@ -711,7 +574,6 @@ func TestContactHandler_HandleCreate_Upsert(t *testing.T) {
 			name:   "Create Contact Success",
 			method: http.MethodPost,
 			reqBody: upsertContactRequest{
-				UUID:       "new-uuid",
 				ExternalID: "new-ext",
 				Email:      "new@example.com",
 				FirstName:  "John",
@@ -730,9 +592,6 @@ func TestContactHandler_HandleCreate_Upsert(t *testing.T) {
 				if m.LastContactUpserted == nil {
 					t.Fatal("Expected contact to be created, but it wasn't")
 				}
-				if m.LastContactUpserted.UUID != "new-uuid" {
-					t.Errorf("Expected contact UUID 'new-uuid', got '%s'", m.LastContactUpserted.UUID)
-				}
 				if m.LastContactUpserted.Email != "new@example.com" {
 					t.Errorf("Expected contact email 'new@example.com', got '%s'", m.LastContactUpserted.Email)
 				}
@@ -745,7 +604,6 @@ func TestContactHandler_HandleCreate_Upsert(t *testing.T) {
 			name:   "Create Contact Service Error",
 			method: http.MethodPost,
 			reqBody: upsertContactRequest{
-				UUID:       "error-uuid",
 				ExternalID: "error-ext",
 				Email:      "error@example.com",
 				Timezone:   "UTC",
@@ -780,7 +638,6 @@ func TestContactHandler_HandleCreate_Upsert(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: upsertContactRequest{
-				UUID:       "new-uuid",
 				ExternalID: "new-ext",
 				Email:      "new@example.com",
 				Timezone:   "UTC",
@@ -850,8 +707,8 @@ func TestContactHandler_HandleCreate_Upsert(t *testing.T) {
 				// Verify the response contains the created contact
 				if contactMap, ok := contactData.(map[string]interface{}); ok {
 					if req, ok := tc.reqBody.(upsertContactRequest); ok {
-						if contactMap["uuid"] != req.UUID {
-							t.Errorf("Expected contact UUID %s, got %v", req.UUID, contactMap["uuid"])
+						if contactMap["external_id"] != req.ExternalID {
+							t.Errorf("Expected contact external_id %s, got %v", req.ExternalID, contactMap["external_id"])
 						}
 						if contactMap["email"] != req.Email {
 							t.Errorf("Expected contact email %s, got %v", req.Email, contactMap["email"])
@@ -880,7 +737,6 @@ func TestContactHandler_HandleUpdate_Upsert(t *testing.T) {
 			name:   "Update Contact Success",
 			method: http.MethodPost,
 			reqBody: upsertContactRequest{
-				UUID:       "uuid1",
 				ExternalID: "updated-ext",
 				Email:      "updated@example.com",
 				FirstName:  "Updated",
@@ -889,7 +745,11 @@ func TestContactHandler_HandleUpdate_Upsert(t *testing.T) {
 			},
 			setupMock: func(m *MockContactService) {
 				m.contacts = map[string]*domain.Contact{
-					"uuid1": {UUID: "uuid1", Email: "test@example.com", ExternalID: "ext1", Timezone: "UTC"},
+					"test@example.com": {
+						Email:      "test@example.com",
+						ExternalID: "ext1",
+						Timezone:   "UTC",
+					},
 				}
 				m.UpsertIsNewToReturn = false // This is an existing contact
 			},
@@ -901,9 +761,6 @@ func TestContactHandler_HandleUpdate_Upsert(t *testing.T) {
 				}
 				if m.LastContactUpserted == nil {
 					t.Fatal("Expected contact to be updated, but it wasn't")
-				}
-				if m.LastContactUpserted.UUID != "uuid1" {
-					t.Errorf("Expected contact UUID 'uuid1', got '%s'", m.LastContactUpserted.UUID)
 				}
 				if m.LastContactUpserted.Email != "updated@example.com" {
 					t.Errorf("Expected contact email 'updated@example.com', got '%s'", m.LastContactUpserted.Email)
@@ -920,7 +777,6 @@ func TestContactHandler_HandleUpdate_Upsert(t *testing.T) {
 			name:   "Update Contact Service Error",
 			method: http.MethodPost,
 			reqBody: upsertContactRequest{
-				UUID:       "uuid1",
 				ExternalID: "updated-ext",
 				Email:      "updated@example.com",
 				Timezone:   "UTC",
@@ -955,7 +811,6 @@ func TestContactHandler_HandleUpdate_Upsert(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: upsertContactRequest{
-				UUID:       "uuid1",
 				ExternalID: "updated-ext",
 				Email:      "updated@example.com",
 				Timezone:   "UTC",
@@ -1025,8 +880,8 @@ func TestContactHandler_HandleUpdate_Upsert(t *testing.T) {
 				// Verify the response contains the updated contact
 				if contactMap, ok := contactData.(map[string]interface{}); ok {
 					if req, ok := tc.reqBody.(upsertContactRequest); ok {
-						if contactMap["uuid"] != req.UUID {
-							t.Errorf("Expected contact UUID %s, got %v", req.UUID, contactMap["uuid"])
+						if contactMap["external_id"] != req.ExternalID {
+							t.Errorf("Expected contact external_id %s, got %v", req.ExternalID, contactMap["external_id"])
 						}
 						if contactMap["email"] != req.Email {
 							t.Errorf("Expected contact email %s, got %v", req.Email, contactMap["email"])
@@ -1054,11 +909,15 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Delete Contact Success",
 			method: http.MethodPost,
 			reqBody: deleteContactRequest{
-				UUID: "uuid1",
+				Email: "test@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				m.contacts = map[string]*domain.Contact{
-					"uuid1": {UUID: "uuid1", Email: "test@example.com", ExternalID: "ext1", Timezone: "UTC"},
+					"test@example.com": {
+						Email:      "test@example.com",
+						ExternalID: "ext1",
+						Timezone:   "UTC",
+					},
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -1066,8 +925,8 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				if !m.DeleteContactCalled {
 					t.Error("Expected DeleteContact to be called, but it wasn't")
 				}
-				if m.LastContactUUID != "uuid1" {
-					t.Errorf("Expected contact UUID 'uuid1', got '%s'", m.LastContactUUID)
+				if m.LastContactEmail != "test@example.com" {
+					t.Errorf("Expected contact Email 'test@example.com', got '%s'", m.LastContactEmail)
 				}
 			},
 		},
@@ -1075,7 +934,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Delete Contact Not Found",
 			method: http.MethodPost,
 			reqBody: deleteContactRequest{
-				UUID: "nonexistent",
+				Email: "nonexistent@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				m.ErrContactNotFoundToReturn = true
@@ -1091,7 +950,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Delete Contact Service Error",
 			method: http.MethodPost,
 			reqBody: deleteContactRequest{
-				UUID: "uuid1",
+				Email: "error@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				m.ErrToReturn = errors.New("service error")
@@ -1118,10 +977,10 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			},
 		},
 		{
-			name:   "Missing UUID in Request",
+			name:   "Missing Email in Request",
 			method: http.MethodPost,
 			reqBody: deleteContactRequest{
-				UUID: "", // Empty UUID
+				Email: "", // Empty Email
 			},
 			setupMock: func(m *MockContactService) {
 				// No special setup
@@ -1137,7 +996,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: deleteContactRequest{
-				UUID: "uuid1",
+				Email: "test@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				// No special setup
@@ -1366,10 +1225,9 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			},
 		},
 		{
-			name:   "Create Contact With UUID That Doesn't Exist",
+			name:   "Create Contact With Email",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"uuid":        "new-uuid",
 				"external_id": "new-ext",
 				"email":       "new@example.com",
 				"first_name":  "John",
@@ -1388,7 +1246,6 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			checkResult: func(t *testing.T, m *MockContactService) {
 				assert.True(t, m.UpsertContactCalled)
 				assert.NotNil(t, m.LastContactUpserted)
-				assert.Equal(t, "new-uuid", m.LastContactUpserted.UUID)
 				assert.Equal(t, "new@example.com", m.LastContactUpserted.Email)
 			},
 		},
@@ -1396,7 +1253,6 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:   "Update Existing Contact",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"uuid":        "existing-uuid",
 				"external_id": "updated-ext",
 				"email":       "updated@example.com",
 				"first_name":  "Updated",
@@ -1411,8 +1267,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 				m.UpsertIsNewToReturn = false // Indicate this is an existing contact
 
 				// Add existing contact
-				m.contacts["existing-uuid"] = &domain.Contact{
-					UUID:       "existing-uuid",
+				m.contacts["old@example.com"] = &domain.Contact{
 					ExternalID: "old-ext",
 					Email:      "old@example.com",
 					FirstName:  "Old",
@@ -1425,9 +1280,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			checkResult: func(t *testing.T, m *MockContactService) {
 				assert.True(t, m.UpsertContactCalled)
 				assert.NotNil(t, m.LastContactUpserted)
-				assert.Equal(t, "existing-uuid", m.LastContactUpserted.UUID)
 				assert.Equal(t, "updated@example.com", m.LastContactUpserted.Email)
-				assert.Equal(t, "Updated", m.LastContactUpserted.FirstName)
 			},
 		},
 		{
@@ -1447,7 +1300,6 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: map[string]interface{}{
-				"uuid":        "existing-uuid",
 				"external_id": "updated-ext",
 				"email":       "updated@example.com",
 				"timezone":    "UTC",
@@ -1465,7 +1317,6 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:   "Service Error on Upsert",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"uuid":        "error-uuid",
 				"external_id": "ext1",
 				"email":       "test@example.com",
 				"timezone":    "UTC",

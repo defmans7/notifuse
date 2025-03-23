@@ -165,8 +165,12 @@ func TestInitializeWorkspaceDatabase(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
-		// Expect table creation
+		// Expect table creation for all three tables
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contacts").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS lists").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_lists").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err = InitializeWorkspaceDatabase(db)

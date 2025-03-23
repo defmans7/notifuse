@@ -68,6 +68,24 @@ func ScanList(scanner interface {
 	return l, nil
 }
 
+// ListService provides operations for managing lists
+type ListService interface {
+	// CreateList creates a new list
+	CreateList(ctx context.Context, list *List) error
+
+	// GetListByID retrieves a list by ID
+	GetListByID(ctx context.Context, id string) (*List, error)
+
+	// GetLists retrieves all lists
+	GetLists(ctx context.Context) ([]*List, error)
+
+	// UpdateList updates an existing list
+	UpdateList(ctx context.Context, list *List) error
+
+	// DeleteList deletes a list by ID
+	DeleteList(ctx context.Context, id string) error
+}
+
 type ListRepository interface {
 	// CreateList creates a new list in the database
 	CreateList(ctx context.Context, list *List) error

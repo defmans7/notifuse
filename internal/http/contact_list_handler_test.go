@@ -15,19 +15,37 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
+// Request types for testing
+type addContactToListRequest struct {
+	Email  string `json:"email"`
+	ListID string `json:"list_id"`
+	Status string `json:"status"`
+}
+
+type updateContactListStatusRequest struct {
+	Email  string `json:"email"`
+	ListID string `json:"list_id"`
+	Status string `json:"status"`
+}
+
+type removeContactFromListRequest struct {
+	Email  string `json:"email"`
+	ListID string `json:"list_id"`
+}
+
 // MockContactListService is a mock implementation of domain.ContactListService
 type MockContactListService struct {
-	contactLists map[string]map[string]*domain.ContactList // map[listID]map[contactID]*ContactList
+	contactLists map[string]map[string]*domain.ContactList // map[listID]map[Email]*ContactList
 
 	// Function call trackers
 	AddContactToListCalled        bool
 	GetContactListByIDsCalled     bool
 	GetContactsByListIDCalled     bool
-	GetListsByContactIDCalled     bool
+	GetListsByEmailCalled         bool
 	UpdateContactListStatusCalled bool
 	RemoveContactFromListCalled   bool
 
-	LastContactID   string
+	LastEmail       string
 	LastListID      string
 	LastStatus      domain.ContactListStatus
 	LastContactList *domain.ContactList
@@ -44,7 +62,7 @@ func NewMockContactListService() *MockContactListService {
 
 func (m *MockContactListService) AddContactToList(ctx context.Context, contactList *domain.ContactList) error {
 	m.AddContactToListCalled = true
-	m.LastContactID = contactList.ContactID
+	m.LastEmail = contactList.Email
 	m.LastListID = contactList.ListID
 	m.LastStatus = contactList.Status
 	m.LastContactList = contactList
@@ -63,13 +81,13 @@ func (m *MockContactListService) AddContactToList(ctx context.Context, contactLi
 	contactList.UpdatedAt = contactList.CreatedAt
 
 	// Store contact list
-	m.contactLists[contactList.ListID][contactList.ContactID] = contactList
+	m.contactLists[contactList.ListID][contactList.Email] = contactList
 	return nil
 }
 
-func (m *MockContactListService) GetContactListByIDs(ctx context.Context, contactID, listID string) (*domain.ContactList, error) {
+func (m *MockContactListService) GetContactListByIDs(ctx context.Context, email, listID string) (*domain.ContactList, error) {
 	m.GetContactListByIDsCalled = true
-	m.LastContactID = contactID
+	m.LastEmail = email
 	m.LastListID = listID
 
 	if m.ErrToReturn != nil {
@@ -87,7 +105,7 @@ func (m *MockContactListService) GetContactListByIDs(ctx context.Context, contac
 	}
 
 	// Check if contact exists in list
-	contactList, exists := contacts[contactID]
+	contactList, exists := contacts[email]
 	if !exists {
 		return nil, &domain.ErrContactListNotFound{}
 	}
@@ -118,9 +136,9 @@ func (m *MockContactListService) GetContactsByListID(ctx context.Context, listID
 	return results, nil
 }
 
-func (m *MockContactListService) GetListsByContactID(ctx context.Context, contactID string) ([]*domain.ContactList, error) {
-	m.GetListsByContactIDCalled = true
-	m.LastContactID = contactID
+func (m *MockContactListService) GetListsByEmail(ctx context.Context, email string) ([]*domain.ContactList, error) {
+	m.GetListsByEmailCalled = true
+	m.LastEmail = email
 
 	if m.ErrToReturn != nil {
 		return nil, m.ErrToReturn
@@ -131,7 +149,7 @@ func (m *MockContactListService) GetListsByContactID(ctx context.Context, contac
 
 	// Find all lists that contain this contact
 	for _, contacts := range m.contactLists {
-		if cl, exists := contacts[contactID]; exists {
+		if cl, exists := contacts[email]; exists {
 			results = append(results, cl)
 		}
 	}
@@ -139,9 +157,9 @@ func (m *MockContactListService) GetListsByContactID(ctx context.Context, contac
 	return results, nil
 }
 
-func (m *MockContactListService) UpdateContactListStatus(ctx context.Context, contactID, listID string, status domain.ContactListStatus) error {
+func (m *MockContactListService) UpdateContactListStatus(ctx context.Context, email, listID string, status domain.ContactListStatus) error {
 	m.UpdateContactListStatusCalled = true
-	m.LastContactID = contactID
+	m.LastEmail = email
 	m.LastListID = listID
 	m.LastStatus = status
 
@@ -160,7 +178,7 @@ func (m *MockContactListService) UpdateContactListStatus(ctx context.Context, co
 	}
 
 	// Check if contact exists in list
-	contactList, exists := contacts[contactID]
+	contactList, exists := contacts[email]
 	if !exists {
 		return &domain.ErrContactListNotFound{}
 	}
@@ -171,9 +189,9 @@ func (m *MockContactListService) UpdateContactListStatus(ctx context.Context, co
 	return nil
 }
 
-func (m *MockContactListService) RemoveContactFromList(ctx context.Context, contactID, listID string) error {
+func (m *MockContactListService) RemoveContactFromList(ctx context.Context, email, listID string) error {
 	m.RemoveContactFromListCalled = true
-	m.LastContactID = contactID
+	m.LastEmail = email
 	m.LastListID = listID
 
 	if m.ErrToReturn != nil {
@@ -187,7 +205,7 @@ func (m *MockContactListService) RemoveContactFromList(ctx context.Context, cont
 	}
 
 	// Remove contact from list
-	delete(contacts, contactID)
+	delete(contacts, email)
 	return nil
 }
 
@@ -274,9 +292,9 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 			name:   "Add Contact to List Success",
 			method: http.MethodPost,
 			reqBody: addContactToListRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
-				Status:    string(domain.ContactListStatusActive),
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
+				Status: string(domain.ContactListStatusActive),
 			},
 			setupMock: func(m *MockContactListService) {
 				// No special setup
@@ -286,8 +304,8 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 				if !m.AddContactToListCalled {
 					t.Error("Expected AddContactToList to be called, but it wasn't")
 				}
-				if m.LastContactID != "contact-uuid-1" {
-					t.Errorf("Expected contact ID 'contact-uuid-1', got '%s'", m.LastContactID)
+				if m.LastEmail != "contact-uuid-1" {
+					t.Errorf("Expected email 'contact-uuid-1', got '%s'", m.LastEmail)
 				}
 				if m.LastListID != "list-id-1" {
 					t.Errorf("Expected list ID 'list-id-1', got '%s'", m.LastListID)
@@ -301,8 +319,8 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 			name:   "Add Contact to List Default Status",
 			method: http.MethodPost,
 			reqBody: addContactToListRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
 				// No status provided - should default to Active
 			},
 			setupMock: func(m *MockContactListService) {
@@ -322,8 +340,8 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 			name:   "Add Contact to List Service Error",
 			method: http.MethodPost,
 			reqBody: addContactToListRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
 			},
 			setupMock: func(m *MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
@@ -353,8 +371,8 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: addContactToListRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
 			},
 			setupMock: func(m *MockContactListService) {
 				// No special setup
@@ -412,8 +430,8 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 				// Verify the response contains the contact list with correct data
 				if contactListMap, ok := contactListData.(map[string]interface{}); ok {
 					if req, ok := tc.reqBody.(addContactToListRequest); ok {
-						if contactListMap["contact_id"] != req.ContactID {
-							t.Errorf("Expected contact_id %s, got %v", req.ContactID, contactListMap["contact_id"])
+						if contactListMap["email"] != req.Email {
+							t.Errorf("Expected email %s, got %v", req.Email, contactListMap["email"])
 						}
 						if contactListMap["list_id"] != req.ListID {
 							t.Errorf("Expected list_id %s, got %v", req.ListID, contactListMap["list_id"])
@@ -432,23 +450,23 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 	testCases := []struct {
 		name                string
 		method              string
-		contactID           string
+		email               string
 		listID              string
 		setupMock           func(*MockContactListService)
 		expectedStatus      int
 		expectedContactList bool
 	}{
 		{
-			name:      "Get Contact List Success",
-			method:    http.MethodGet,
-			contactID: "contact-uuid-1",
-			listID:    "list-id-1",
+			name:   "Get Contact List Success",
+			method: http.MethodGet,
+			email:  "contact-uuid-1",
+			listID: "list-id-1",
 			setupMock: func(m *MockContactListService) {
 				// Initialize the map structure
 				m.contactLists = map[string]map[string]*domain.ContactList{
 					"list-id-1": {
 						"contact-uuid-1": {
-							ContactID: "contact-uuid-1",
+							Email:     "contact-uuid-1",
 							ListID:    "list-id-1",
 							Status:    domain.ContactListStatusActive,
 							CreatedAt: time.Now(),
@@ -461,10 +479,10 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			expectedContactList: true,
 		},
 		{
-			name:      "Get Contact List Not Found",
-			method:    http.MethodGet,
-			contactID: "nonexistent",
-			listID:    "list-id-1",
+			name:   "Get Contact List Not Found",
+			method: http.MethodGet,
+			email:  "nonexistent",
+			listID: "list-id-1",
 			setupMock: func(m *MockContactListService) {
 				m.ErrContactListNotFoundToReturn = true
 			},
@@ -472,10 +490,10 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			expectedContactList: false,
 		},
 		{
-			name:      "Get Contact List Service Error",
-			method:    http.MethodGet,
-			contactID: "contact-uuid-1",
-			listID:    "list-id-1",
+			name:   "Get Contact List Service Error",
+			method: http.MethodGet,
+			email:  "contact-uuid-1",
+			listID: "list-id-1",
 			setupMock: func(m *MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
@@ -483,10 +501,10 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			expectedContactList: false,
 		},
 		{
-			name:      "Missing Contact ID",
-			method:    http.MethodGet,
-			contactID: "",
-			listID:    "list-id-1",
+			name:   "Missing Contact ID",
+			method: http.MethodGet,
+			email:  "",
+			listID: "list-id-1",
 			setupMock: func(m *MockContactListService) {
 				// No setup needed
 			},
@@ -494,10 +512,10 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			expectedContactList: false,
 		},
 		{
-			name:      "Missing List ID",
-			method:    http.MethodGet,
-			contactID: "contact-uuid-1",
-			listID:    "",
+			name:   "Missing List ID",
+			method: http.MethodGet,
+			email:  "contact-uuid-1",
+			listID: "",
 			setupMock: func(m *MockContactListService) {
 				// No setup needed
 			},
@@ -505,10 +523,10 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			expectedContactList: false,
 		},
 		{
-			name:      "Method Not Allowed",
-			method:    http.MethodPost,
-			contactID: "contact-uuid-1",
-			listID:    "list-id-1",
+			name:   "Method Not Allowed",
+			method: http.MethodPost,
+			email:  "contact-uuid-1",
+			listID: "list-id-1",
 			setupMock: func(m *MockContactListService) {
 				// No setup needed
 			},
@@ -523,12 +541,12 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			tc.setupMock(mockService)
 
 			url := "/api/contactLists.getByIDs"
-			if tc.contactID != "" || tc.listID != "" {
+			if tc.email != "" || tc.listID != "" {
 				url += "?"
-				if tc.contactID != "" {
-					url += "contact_id=" + tc.contactID
+				if tc.email != "" {
+					url += "email=" + tc.email
 				}
-				if tc.contactID != "" && tc.listID != "" {
+				if tc.email != "" && tc.listID != "" {
 					url += "&"
 				}
 				if tc.listID != "" {
@@ -562,8 +580,8 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 
 					// Verify the response contains the contact list with correct data
 					if contactListMap, ok := contactListData.(map[string]interface{}); ok {
-						if contactListMap["contact_id"] != tc.contactID {
-							t.Errorf("Expected contact_id %s, got %v", tc.contactID, contactListMap["contact_id"])
+						if contactListMap["email"] != tc.email {
+							t.Errorf("Expected email %s, got %v", tc.email, contactListMap["email"])
 						}
 						if contactListMap["list_id"] != tc.listID {
 							t.Errorf("Expected list_id %s, got %v", tc.listID, contactListMap["list_id"])
@@ -572,13 +590,13 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 				}
 			}
 
-			if tc.method == http.MethodGet && tc.contactID != "" && tc.listID != "" &&
+			if tc.method == http.MethodGet && tc.email != "" && tc.listID != "" &&
 				tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
 				if !mockService.GetContactListByIDsCalled {
 					t.Error("Expected GetContactListByIDs to be called, but it wasn't")
 				}
-				if mockService.LastContactID != tc.contactID {
-					t.Errorf("Expected ContactID %s, got %s", tc.contactID, mockService.LastContactID)
+				if mockService.LastEmail != tc.email {
+					t.Errorf("Expected Email %s, got %s", tc.email, mockService.LastEmail)
 				}
 				if mockService.LastListID != tc.listID {
 					t.Errorf("Expected ListID %s, got %s", tc.listID, mockService.LastListID)
@@ -606,14 +624,14 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 				m.contactLists = map[string]map[string]*domain.ContactList{
 					"list-id-1": {
 						"contact-uuid-1": {
-							ContactID: "contact-uuid-1",
-							ListID:    "list-id-1",
-							Status:    domain.ContactListStatusActive,
+							Email:  "contact-uuid-1",
+							ListID: "list-id-1",
+							Status: domain.ContactListStatusActive,
 						},
 						"contact-uuid-2": {
-							ContactID: "contact-uuid-2",
-							ListID:    "list-id-1",
-							Status:    domain.ContactListStatusPending,
+							Email:  "contact-uuid-2",
+							ListID: "list-id-1",
+							Status: domain.ContactListStatusPending,
 						},
 					},
 				}
@@ -724,30 +742,30 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		method               string
-		contactID            string
+		email                string
 		setupMock            func(*MockContactListService)
 		expectedStatus       int
 		expectedContactLists bool
 	}{
 		{
-			name:      "Get Lists By Contact Success",
-			method:    http.MethodGet,
-			contactID: "contact-uuid-1",
+			name:   "Get Lists By Contact Success",
+			method: http.MethodGet,
+			email:  "contact-uuid-1",
 			setupMock: func(m *MockContactListService) {
 				// Initialize the map structure with one contact in multiple lists
 				m.contactLists = map[string]map[string]*domain.ContactList{
 					"list-id-1": {
 						"contact-uuid-1": {
-							ContactID: "contact-uuid-1",
-							ListID:    "list-id-1",
-							Status:    domain.ContactListStatusActive,
+							Email:  "contact-uuid-1",
+							ListID: "list-id-1",
+							Status: domain.ContactListStatusActive,
 						},
 					},
 					"list-id-2": {
 						"contact-uuid-1": {
-							ContactID: "contact-uuid-1",
-							ListID:    "list-id-2",
-							Status:    domain.ContactListStatusPending,
+							Email:  "contact-uuid-1",
+							ListID: "list-id-2",
+							Status: domain.ContactListStatusPending,
 						},
 					},
 				}
@@ -756,9 +774,9 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			expectedContactLists: true,
 		},
 		{
-			name:      "Get Lists By Contact Empty Result",
-			method:    http.MethodGet,
-			contactID: "contact-with-no-lists",
+			name:   "Get Lists By Contact Empty Result",
+			method: http.MethodGet,
+			email:  "contact-with-no-lists",
 			setupMock: func(m *MockContactListService) {
 				// Return empty array but not nil
 				// This simulates what the actual service would do
@@ -767,9 +785,9 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			expectedContactLists: true,
 		},
 		{
-			name:      "Get Lists By Contact Service Error",
-			method:    http.MethodGet,
-			contactID: "contact-uuid-1",
+			name:   "Get Lists By Contact Service Error",
+			method: http.MethodGet,
+			email:  "contact-uuid-1",
 			setupMock: func(m *MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
@@ -777,9 +795,9 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			expectedContactLists: false,
 		},
 		{
-			name:      "Missing Contact ID",
-			method:    http.MethodGet,
-			contactID: "",
+			name:   "Missing Contact ID",
+			method: http.MethodGet,
+			email:  "",
 			setupMock: func(m *MockContactListService) {
 				// No setup needed
 			},
@@ -787,9 +805,9 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			expectedContactLists: false,
 		},
 		{
-			name:      "Method Not Allowed",
-			method:    http.MethodPost,
-			contactID: "contact-uuid-1",
+			name:   "Method Not Allowed",
+			method: http.MethodPost,
+			email:  "contact-uuid-1",
 			setupMock: func(m *MockContactListService) {
 				// No setup needed
 			},
@@ -804,8 +822,8 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			tc.setupMock(mockService)
 
 			url := "/api/contactLists.getListsByContact"
-			if tc.contactID != "" {
-				url += "?contact_id=" + tc.contactID
+			if tc.email != "" {
+				url += "?email=" + tc.email
 			}
 
 			req, err := http.NewRequest(tc.method, url, nil)
@@ -847,13 +865,13 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 				}
 			}
 
-			if tc.method == http.MethodGet && tc.contactID != "" &&
+			if tc.method == http.MethodGet && tc.email != "" &&
 				tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
-				if !mockService.GetListsByContactIDCalled {
-					t.Error("Expected GetListsByContactID to be called, but it wasn't")
+				if !mockService.GetListsByEmailCalled {
+					t.Error("Expected GetListsByEmail to be called, but it wasn't")
 				}
-				if mockService.LastContactID != tc.contactID {
-					t.Errorf("Expected ContactID %s, got %s", tc.contactID, mockService.LastContactID)
+				if mockService.LastEmail != tc.email {
+					t.Errorf("Expected Email %s, got %s", tc.email, mockService.LastEmail)
 				}
 			}
 		})
@@ -873,18 +891,18 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 			name:   "Update Contact List Status Success",
 			method: http.MethodPost,
 			reqBody: updateContactListStatusRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
-				Status:    string(domain.ContactListStatusActive),
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
+				Status: string(domain.ContactListStatusActive),
 			},
 			setupMock: func(m *MockContactListService) {
 				// Initialize the contact list in the mock
 				m.contactLists = map[string]map[string]*domain.ContactList{
 					"list-id-1": {
 						"contact-uuid-1": {
-							ContactID: "contact-uuid-1",
-							ListID:    "list-id-1",
-							Status:    domain.ContactListStatusPending,
+							Email:  "contact-uuid-1",
+							ListID: "list-id-1",
+							Status: domain.ContactListStatusPending,
 						},
 					},
 				}
@@ -894,8 +912,8 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 				if !m.UpdateContactListStatusCalled {
 					t.Error("Expected UpdateContactListStatus to be called, but it wasn't")
 				}
-				if m.LastContactID != "contact-uuid-1" {
-					t.Errorf("Expected contact ID 'contact-uuid-1', got '%s'", m.LastContactID)
+				if m.LastEmail != "contact-uuid-1" {
+					t.Errorf("Expected email 'contact-uuid-1', got '%s'", m.LastEmail)
 				}
 				if m.LastListID != "list-id-1" {
 					t.Errorf("Expected list ID 'list-id-1', got '%s'", m.LastListID)
@@ -909,9 +927,9 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 			name:   "Update Contact List Status Not Found",
 			method: http.MethodPost,
 			reqBody: updateContactListStatusRequest{
-				ContactID: "nonexistent",
-				ListID:    "list-id-1",
-				Status:    string(domain.ContactListStatusActive),
+				Email:  "nonexistent",
+				ListID: "list-id-1",
+				Status: string(domain.ContactListStatusActive),
 			},
 			setupMock: func(m *MockContactListService) {
 				m.ErrContactListNotFoundToReturn = true
@@ -927,9 +945,9 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 			name:   "Update Contact List Status Service Error",
 			method: http.MethodPost,
 			reqBody: updateContactListStatusRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
-				Status:    string(domain.ContactListStatusActive),
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
+				Status: string(domain.ContactListStatusActive),
 			},
 			setupMock: func(m *MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
@@ -959,7 +977,7 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 			name:   "Missing Required Fields",
 			method: http.MethodPost,
 			reqBody: updateContactListStatusRequest{
-				ContactID: "contact-uuid-1",
+				Email: "contact-uuid-1",
 				// ListID and Status are missing
 			},
 			setupMock: func(m *MockContactListService) {
@@ -976,9 +994,9 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: updateContactListStatusRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
-				Status:    string(domain.ContactListStatusActive),
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
+				Status: string(domain.ContactListStatusActive),
 			},
 			setupMock: func(m *MockContactListService) {
 				// No setup needed
@@ -1056,17 +1074,17 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 			name:   "Remove Contact from List Success",
 			method: http.MethodPost,
 			reqBody: removeContactFromListRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
 			},
 			setupMock: func(m *MockContactListService) {
 				// Initialize the contact list in the mock
 				m.contactLists = map[string]map[string]*domain.ContactList{
 					"list-id-1": {
 						"contact-uuid-1": {
-							ContactID: "contact-uuid-1",
-							ListID:    "list-id-1",
-							Status:    domain.ContactListStatusActive,
+							Email:  "contact-uuid-1",
+							ListID: "list-id-1",
+							Status: domain.ContactListStatusActive,
 						},
 					},
 				}
@@ -1076,8 +1094,8 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 				if !m.RemoveContactFromListCalled {
 					t.Error("Expected RemoveContactFromList to be called, but it wasn't")
 				}
-				if m.LastContactID != "contact-uuid-1" {
-					t.Errorf("Expected contact ID 'contact-uuid-1', got '%s'", m.LastContactID)
+				if m.LastEmail != "contact-uuid-1" {
+					t.Errorf("Expected email 'contact-uuid-1', got '%s'", m.LastEmail)
 				}
 				if m.LastListID != "list-id-1" {
 					t.Errorf("Expected list ID 'list-id-1', got '%s'", m.LastListID)
@@ -1088,8 +1106,8 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 			name:   "Remove Contact from List Service Error",
 			method: http.MethodPost,
 			reqBody: removeContactFromListRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
 			},
 			setupMock: func(m *MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
@@ -1119,7 +1137,7 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 			name:   "Missing Required Fields",
 			method: http.MethodPost,
 			reqBody: removeContactFromListRequest{
-				ContactID: "contact-uuid-1",
+				Email: "contact-uuid-1",
 				// ListID is missing
 			},
 			setupMock: func(m *MockContactListService) {
@@ -1136,8 +1154,8 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: removeContactFromListRequest{
-				ContactID: "contact-uuid-1",
-				ListID:    "list-id-1",
+				Email:  "contact-uuid-1",
+				ListID: "list-id-1",
 			},
 			setupMock: func(m *MockContactListService) {
 				// No setup needed

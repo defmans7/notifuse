@@ -11,9 +11,8 @@ import (
 // Contact represents a contact in the system
 type Contact struct {
 	// Required fields
-	UUID       string `json:"uuid" valid:"required,uuid"`
-	ExternalID string `json:"external_id" valid:"required"`
 	Email      string `json:"email" valid:"required,email"`
+	ExternalID string `json:"external_id" valid:"required"`
 	Timezone   string `json:"timezone" valid:"required,timezone"`
 
 	// Optional fields
@@ -71,9 +70,8 @@ func (c *Contact) Validate() error {
 
 // For database scanning
 type dbContact struct {
-	UUID       string
-	ExternalID string
 	Email      string
+	ExternalID string
 	Timezone   string
 
 	FirstName    string
@@ -118,9 +116,8 @@ func ScanContact(scanner interface {
 }) (*Contact, error) {
 	var dbc dbContact
 	if err := scanner.Scan(
-		&dbc.UUID,
-		&dbc.ExternalID,
 		&dbc.Email,
+		&dbc.ExternalID,
 		&dbc.Timezone,
 		&dbc.FirstName,
 		&dbc.LastName,
@@ -156,9 +153,8 @@ func ScanContact(scanner interface {
 	}
 
 	c := &Contact{
-		UUID:            dbc.UUID,
-		ExternalID:      dbc.ExternalID,
 		Email:           dbc.Email,
+		ExternalID:      dbc.ExternalID,
 		Timezone:        dbc.Timezone,
 		FirstName:       dbc.FirstName,
 		LastName:        dbc.LastName,
@@ -194,10 +190,29 @@ func ScanContact(scanner interface {
 	return c, nil
 }
 
-type ContactRepository interface {
-	// GetContactByUUID retrieves a contact by its UUID
-	GetContactByUUID(ctx context.Context, uuid string) (*Contact, error)
+// ContactService provides operations for managing contacts
+type ContactService interface {
+	// GetContactByEmail retrieves a contact by email
+	GetContactByEmail(ctx context.Context, email string) (*Contact, error)
 
+	// GetContactByExternalID retrieves a contact by external ID
+	GetContactByExternalID(ctx context.Context, externalID string) (*Contact, error)
+
+	// GetContacts retrieves all contacts
+	GetContacts(ctx context.Context) ([]*Contact, error)
+
+	// DeleteContact deletes a contact by email
+	DeleteContact(ctx context.Context, email string) error
+
+	// BatchImportContacts imports a batch of contacts (create or update)
+	BatchImportContacts(ctx context.Context, contacts []*Contact) error
+
+	// UpsertContact creates a new contact or updates an existing one
+	// Returns a boolean indicating whether a new contact was created (true) or an existing one was updated (false)
+	UpsertContact(ctx context.Context, contact *Contact) (bool, error)
+}
+
+type ContactRepository interface {
 	// GetContactByEmail retrieves a contact by its email
 	GetContactByEmail(ctx context.Context, email string) (*Contact, error)
 
@@ -208,7 +223,7 @@ type ContactRepository interface {
 	GetContacts(ctx context.Context) ([]*Contact, error)
 
 	// DeleteContact deletes a contact
-	DeleteContact(ctx context.Context, uuid string) error
+	DeleteContact(ctx context.Context, email string) error
 
 	// BatchImportContacts inserts or updates multiple contacts in a batch operation
 	BatchImportContacts(ctx context.Context, contacts []*Contact) error

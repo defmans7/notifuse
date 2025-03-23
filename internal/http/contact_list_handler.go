@@ -21,34 +21,34 @@ func NewContactListHandler(service domain.ContactListService, logger logger.Logg
 }
 
 // Request/Response types
-type addContactToListRequest struct {
-	ContactID string `json:"contact_id" valid:"required,uuid"`
-	ListID    string `json:"list_id" valid:"required,alphanum"`
-	Status    string `json:"status,omitempty"`
+type AddContactToListRequest struct {
+	Email  string `json:"email" valid:"required,email"`
+	ListID string `json:"list_id" valid:"required"`
+	Status string `json:"status" valid:"required,in(active|pending|unsubscribed|blacklisted)"`
 }
 
-type getContactListRequest struct {
-	ContactID string `json:"contact_id" valid:"required,uuid"`
-	ListID    string `json:"list_id" valid:"required,alphanum"`
+type GetContactListRequest struct {
+	Email  string `json:"email" valid:"required,email"`
+	ListID string `json:"list_id" valid:"required"`
 }
 
-type getContactsByListRequest struct {
+type GetContactsByListRequest struct {
 	ListID string `json:"list_id" valid:"required,alphanum"`
 }
 
-type getListsByContactRequest struct {
-	ContactID string `json:"contact_id" valid:"required,uuid"`
+type GetListsByContactRequest struct {
+	Email string `json:"email" valid:"required,email"`
 }
 
-type updateContactListStatusRequest struct {
-	ContactID string `json:"contact_id" valid:"required,uuid"`
-	ListID    string `json:"list_id" valid:"required,alphanum"`
-	Status    string `json:"status" valid:"required"`
+type UpdateContactListStatusRequest struct {
+	Email  string `json:"email" valid:"required,email"`
+	ListID string `json:"list_id" valid:"required"`
+	Status string `json:"status" valid:"required,in(active|pending|unsubscribed|blacklisted)"`
 }
 
-type removeContactFromListRequest struct {
-	ContactID string `json:"contact_id" valid:"required,uuid"`
-	ListID    string `json:"list_id" valid:"required,alphanum"`
+type RemoveContactFromListRequest struct {
+	Email  string `json:"email" valid:"required,email"`
+	ListID string `json:"list_id" valid:"required"`
 }
 
 func (h *ContactListHandler) RegisterRoutes(mux *http.ServeMux) {
@@ -67,7 +67,7 @@ func (h *ContactListHandler) handleAddContact(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var req addContactToListRequest
+	var req AddContactToListRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
@@ -75,8 +75,8 @@ func (h *ContactListHandler) handleAddContact(w http.ResponseWriter, r *http.Req
 	}
 
 	contactList := &domain.ContactList{
-		ContactID: req.ContactID,
-		ListID:    req.ListID,
+		Email:  req.Email,
+		ListID: req.ListID,
 	}
 
 	if req.Status != "" {
@@ -103,15 +103,15 @@ func (h *ContactListHandler) handleGetByIDs(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Get IDs from query params
-	contactID := r.URL.Query().Get("contact_id")
+	email := r.URL.Query().Get("email")
 	listID := r.URL.Query().Get("list_id")
 
-	if contactID == "" || listID == "" {
-		WriteJSONError(w, "Missing contactID or listID", http.StatusBadRequest)
+	if email == "" || listID == "" {
+		WriteJSONError(w, "Missing email or listID", http.StatusBadRequest)
 		return
 	}
 
-	contactList, err := h.service.GetContactListByIDs(r.Context(), contactID, listID)
+	contactList, err := h.service.GetContactListByIDs(r.Context(), email, listID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrContactListNotFound); ok {
 			WriteJSONError(w, "Contact list relationship not found", http.StatusNotFound)
@@ -159,13 +159,13 @@ func (h *ContactListHandler) handleGetListsByContact(w http.ResponseWriter, r *h
 	}
 
 	// Get contact ID from query params
-	contactID := r.URL.Query().Get("contact_id")
-	if contactID == "" {
+	email := r.URL.Query().Get("email")
+	if email == "" {
 		WriteJSONError(w, "Missing contact ID", http.StatusBadRequest)
 		return
 	}
 
-	contactLists, err := h.service.GetListsByContactID(r.Context(), contactID)
+	contactLists, err := h.service.GetListsByEmail(r.Context(), email)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get lists by contact")
 		WriteJSONError(w, "Failed to get lists by contact", http.StatusInternalServerError)
@@ -183,26 +183,26 @@ func (h *ContactListHandler) handleUpdateStatus(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	var req updateContactListStatusRequest
+	var req UpdateContactListStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.ContactID == "" || req.ListID == "" || req.Status == "" {
+	if req.Email == "" || req.Status == "" || req.ListID == "" {
 		WriteJSONError(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	err := h.service.UpdateContactListStatus(r.Context(), req.ContactID, req.ListID, domain.ContactListStatus(req.Status))
+	err := h.service.UpdateContactListStatus(r.Context(), req.Email, req.ListID, domain.ContactListStatus(req.Status))
 	if err != nil {
 		if _, ok := err.(*domain.ErrContactListNotFound); ok {
-			WriteJSONError(w, "Contact list relationship not found", http.StatusNotFound)
+			WriteJSONError(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to update contact list status")
-		WriteJSONError(w, "Failed to update contact list status", http.StatusInternalServerError)
+		WriteJSONError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -217,19 +217,19 @@ func (h *ContactListHandler) handleRemoveContact(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var req removeContactFromListRequest
+	var req RemoveContactFromListRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.ContactID == "" || req.ListID == "" {
+	if req.Email == "" || req.ListID == "" {
 		WriteJSONError(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	err := h.service.RemoveContactFromList(r.Context(), req.ContactID, req.ListID)
+	err := h.service.RemoveContactFromList(r.Context(), req.Email, req.ListID)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to remove contact from list")
 		WriteJSONError(w, "Failed to remove contact from list", http.StatusInternalServerError)

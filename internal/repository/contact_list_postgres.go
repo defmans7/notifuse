@@ -24,13 +24,13 @@ func (r *contactListRepository) AddContactToList(ctx context.Context, contactLis
 	contactList.UpdatedAt = now
 
 	query := `
-		INSERT INTO contact_lists (contact_id, list_id, status, created_at, updated_at)
+		INSERT INTO contact_lists (email, list_id, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (contact_id, list_id) DO UPDATE
+		ON CONFLICT (email, list_id) DO UPDATE
 		SET status = $3, updated_at = $5
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		contactList.ContactID,
+		contactList.Email,
 		contactList.ListID,
 		contactList.Status,
 		contactList.CreatedAt,
@@ -42,14 +42,14 @@ func (r *contactListRepository) AddContactToList(ctx context.Context, contactLis
 	return nil
 }
 
-func (r *contactListRepository) GetContactListByIDs(ctx context.Context, contactID, listID string) (*domain.ContactList, error) {
+func (r *contactListRepository) GetContactListByIDs(ctx context.Context, email, listID string) (*domain.ContactList, error) {
 	query := `
-		SELECT contact_id, list_id, status, created_at, updated_at
+		SELECT email, list_id, status, created_at, updated_at
 		FROM contact_lists
-		WHERE contact_id = $1 AND list_id = $2
+		WHERE email = $1 AND list_id = $2
 	`
 
-	row := r.db.QueryRowContext(ctx, query, contactID, listID)
+	row := r.db.QueryRowContext(ctx, query, email, listID)
 	contactList, err := domain.ScanContactList(row)
 
 	if err == sql.ErrNoRows {
@@ -64,7 +64,7 @@ func (r *contactListRepository) GetContactListByIDs(ctx context.Context, contact
 
 func (r *contactListRepository) GetContactsByListID(ctx context.Context, listID string) ([]*domain.ContactList, error) {
 	query := `
-		SELECT contact_id, list_id, status, created_at, updated_at
+		SELECT email, list_id, status, created_at, updated_at
 		FROM contact_lists
 		WHERE list_id = $1
 		ORDER BY created_at DESC
@@ -92,15 +92,15 @@ func (r *contactListRepository) GetContactsByListID(ctx context.Context, listID 
 	return contactLists, nil
 }
 
-func (r *contactListRepository) GetListsByContactID(ctx context.Context, contactID string) ([]*domain.ContactList, error) {
+func (r *contactListRepository) GetListsByEmail(ctx context.Context, email string) ([]*domain.ContactList, error) {
 	query := `
-		SELECT contact_id, list_id, status, created_at, updated_at
+		SELECT email, list_id, status, created_at, updated_at
 		FROM contact_lists
-		WHERE contact_id = $1
+		WHERE email = $1
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, contactID)
+	rows, err := r.db.QueryContext(ctx, query, email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get lists for contact: %w", err)
 	}
@@ -122,19 +122,19 @@ func (r *contactListRepository) GetListsByContactID(ctx context.Context, contact
 	return contactLists, nil
 }
 
-func (r *contactListRepository) UpdateContactListStatus(ctx context.Context, contactID, listID string, status domain.ContactListStatus) error {
+func (r *contactListRepository) UpdateContactListStatus(ctx context.Context, email, listID string, status domain.ContactListStatus) error {
 	now := time.Now().UTC()
 
 	query := `
 		UPDATE contact_lists
 		SET status = $1, updated_at = $2
-		WHERE contact_id = $3 AND list_id = $4
+		WHERE email = $3 AND list_id = $4
 	`
 
 	result, err := r.db.ExecContext(ctx, query,
 		status,
 		now,
-		contactID,
+		email,
 		listID,
 	)
 
@@ -154,10 +154,10 @@ func (r *contactListRepository) UpdateContactListStatus(ctx context.Context, con
 	return nil
 }
 
-func (r *contactListRepository) RemoveContactFromList(ctx context.Context, contactID, listID string) error {
-	query := `DELETE FROM contact_lists WHERE contact_id = $1 AND list_id = $2`
+func (r *contactListRepository) RemoveContactFromList(ctx context.Context, email, listID string) error {
+	query := `DELETE FROM contact_lists WHERE email = $1 AND list_id = $2`
 
-	result, err := r.db.ExecContext(ctx, query, contactID, listID)
+	result, err := r.db.ExecContext(ctx, query, email, listID)
 	if err != nil {
 		return fmt.Errorf("failed to remove contact from list: %w", err)
 	}

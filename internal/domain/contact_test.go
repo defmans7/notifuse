@@ -19,9 +19,8 @@ func TestContact_Validate(t *testing.T) {
 		{
 			name: "valid contact with all required fields",
 			contact: domain.Contact{
-				UUID:       "123e4567-e89b-12d3-a456-426614174000",
-				ExternalID: "ext123",
 				Email:      "test@example.com",
+				ExternalID: "ext123",
 				Timezone:   "Europe/Paris",
 			},
 			wantErr: false,
@@ -29,9 +28,8 @@ func TestContact_Validate(t *testing.T) {
 		{
 			name: "valid contact with all fields",
 			contact: domain.Contact{
-				UUID:            "123e4567-e89b-12d3-a456-426614174000",
-				ExternalID:      "ext123",
 				Email:           "test@example.com",
+				ExternalID:      "ext123",
 				Timezone:        "Europe/Paris",
 				FirstName:       "John",
 				LastName:        "Doe",
@@ -52,18 +50,8 @@ func TestContact_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "missing UUID",
-			contact: domain.Contact{
-				ExternalID: "ext123",
-				Email:      "test@example.com",
-				Timezone:   "Europe/Paris",
-			},
-			wantErr: true,
-		},
-		{
 			name: "missing external ID",
 			contact: domain.Contact{
-				UUID:     "123e4567-e89b-12d3-a456-426614174000",
 				Email:    "test@example.com",
 				Timezone: "Europe/Paris",
 			},
@@ -72,7 +60,6 @@ func TestContact_Validate(t *testing.T) {
 		{
 			name: "missing email",
 			contact: domain.Contact{
-				UUID:       "123e4567-e89b-12d3-a456-426614174000",
 				ExternalID: "ext123",
 				Timezone:   "Europe/Paris",
 			},
@@ -81,18 +68,16 @@ func TestContact_Validate(t *testing.T) {
 		{
 			name: "missing timezone",
 			contact: domain.Contact{
-				UUID:       "123e4567-e89b-12d3-a456-426614174000",
-				ExternalID: "ext123",
 				Email:      "test@example.com",
+				ExternalID: "ext123",
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid email",
 			contact: domain.Contact{
-				UUID:       "123e4567-e89b-12d3-a456-426614174000",
-				ExternalID: "ext123",
 				Email:      "invalid-email",
+				ExternalID: "ext123",
 				Timezone:   "Europe/Paris",
 			},
 			wantErr: true,
@@ -100,9 +85,8 @@ func TestContact_Validate(t *testing.T) {
 		{
 			name: "invalid timezone",
 			contact: domain.Contact{
-				UUID:       "123e4567-e89b-12d3-a456-426614174000",
-				ExternalID: "ext123",
 				Email:      "test@example.com",
+				ExternalID: "ext123",
 				Timezone:   "InvalidTimezone",
 			},
 			wantErr: true,
@@ -127,48 +111,46 @@ func TestScanContact(t *testing.T) {
 	// Create mock scanner
 	scanner := &contactMockScanner{
 		data: []interface{}{
-			"123e4567-e89b-12d3-a456-426614174000", // UUID
-			"ext123",                               // ExternalID
-			"test@example.com",                     // Email
-			"Europe/Paris",                         // Timezone
-			"John",                                 // FirstName
-			"Doe",                                  // LastName
-			"+1234567890",                          // Phone
-			"123 Main St",                          // AddressLine1
-			"Apt 4B",                               // AddressLine2
-			"USA",                                  // Country
-			"12345",                                // Postcode
-			"CA",                                   // State
-			"Developer",                            // JobTitle
-			100.50,                                 // LifetimeValue
-			5,                                      // OrdersCount
-			now,                                    // LastOrderAt
-			"Custom 1",                             // CustomString1
-			"Custom 2",                             // CustomString2
-			"Custom 3",                             // CustomString3
-			"Custom 4",                             // CustomString4
-			"Custom 5",                             // CustomString5
-			42.0,                                   // CustomNumber1
-			43.0,                                   // CustomNumber2
-			44.0,                                   // CustomNumber3
-			45.0,                                   // CustomNumber4
-			46.0,                                   // CustomNumber5
-			now,                                    // CustomDatetime1
-			now,                                    // CustomDatetime2
-			now,                                    // CustomDatetime3
-			now,                                    // CustomDatetime4
-			now,                                    // CustomDatetime5
-			now,                                    // CreatedAt
-			now,                                    // UpdatedAt
+			"test@example.com", // Email
+			"ext123",           // ExternalID
+			"Europe/Paris",     // Timezone
+			"John",             // FirstName
+			"Doe",              // LastName
+			"+1234567890",      // Phone
+			"123 Main St",      // AddressLine1
+			"Apt 4B",           // AddressLine2
+			"USA",              // Country
+			"12345",            // Postcode
+			"CA",               // State
+			"Developer",        // JobTitle
+			100.50,             // LifetimeValue
+			5,                  // OrdersCount
+			now,                // LastOrderAt
+			"Custom 1",         // CustomString1
+			"Custom 2",         // CustomString2
+			"Custom 3",         // CustomString3
+			"Custom 4",         // CustomString4
+			"Custom 5",         // CustomString5
+			42.0,               // CustomNumber1
+			43.0,               // CustomNumber2
+			44.0,               // CustomNumber3
+			45.0,               // CustomNumber4
+			46.0,               // CustomNumber5
+			now,                // CustomDatetime1
+			now,                // CustomDatetime2
+			now,                // CustomDatetime3
+			now,                // CustomDatetime4
+			now,                // CustomDatetime5
+			now,                // CreatedAt
+			now,                // UpdatedAt
 		},
 	}
 
 	// Test successful scan
 	contact, err := domain.ScanContact(scanner)
 	assert.NoError(t, err)
-	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", contact.UUID)
-	assert.Equal(t, "ext123", contact.ExternalID)
 	assert.Equal(t, "test@example.com", contact.Email)
+	assert.Equal(t, "ext123", contact.ExternalID)
 	assert.Equal(t, "Europe/Paris", contact.Timezone)
 	assert.Equal(t, "John", contact.FirstName)
 	assert.Equal(t, "Doe", contact.LastName)

@@ -70,6 +70,23 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS lists (
+			id VARCHAR(20) PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			type VARCHAR(20) NOT NULL,
+			is_double_optin BOOLEAN NOT NULL DEFAULT FALSE,
+			description TEXT,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS contact_lists (
+			email VARCHAR(255) NOT NULL,
+			list_id VARCHAR(20) NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL,
+			PRIMARY KEY (email, list_id)
+		)`,
 	}
 
 	// Run all table creation queries

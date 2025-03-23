@@ -26,7 +26,7 @@ const (
 
 // ContactList represents the relationship between a contact and a list
 type ContactList struct {
-	ContactID string            `json:"contact_id" valid:"required,uuid"`
+	Email     string            `json:"email" valid:"required,email"`
 	ListID    string            `json:"list_id" valid:"required,alphanum,stringlength(1|20)"`
 	Status    ContactListStatus `json:"status" valid:"required,in(active|pending|unsubscribed|bounced|complained)"`
 	CreatedAt time.Time         `json:"created_at"`
@@ -43,7 +43,7 @@ func (cl *ContactList) Validate() error {
 
 // For database scanning
 type dbContactList struct {
-	ContactID string
+	Email     string
 	ListID    string
 	Status    string
 	CreatedAt time.Time
@@ -56,7 +56,7 @@ func ScanContactList(scanner interface {
 }) (*ContactList, error) {
 	var dbcl dbContactList
 	if err := scanner.Scan(
-		&dbcl.ContactID,
+		&dbcl.Email,
 		&dbcl.ListID,
 		&dbcl.Status,
 		&dbcl.CreatedAt,
@@ -66,7 +66,7 @@ func ScanContactList(scanner interface {
 	}
 
 	cl := &ContactList{
-		ContactID: dbcl.ContactID,
+		Email:     dbcl.Email,
 		ListID:    dbcl.ListID,
 		Status:    ContactListStatus(dbcl.Status),
 		CreatedAt: dbcl.CreatedAt,
@@ -76,24 +76,45 @@ func ScanContactList(scanner interface {
 	return cl, nil
 }
 
-type ContactListRepository interface {
+// ContactListService provides operations for managing contact list relationships
+type ContactListService interface {
 	// AddContactToList adds a contact to a list
 	AddContactToList(ctx context.Context, contactList *ContactList) error
 
-	// GetContactListByIDs retrieves a contact list by contact ID and list ID
-	GetContactListByIDs(ctx context.Context, contactID, listID string) (*ContactList, error)
+	// GetContactListByIDs retrieves a contact list by email and list ID
+	GetContactListByIDs(ctx context.Context, email, listID string) (*ContactList, error)
 
 	// GetContactsByListID retrieves all contacts for a list
 	GetContactsByListID(ctx context.Context, listID string) ([]*ContactList, error)
 
-	// GetListsByContactID retrieves all lists for a contact
-	GetListsByContactID(ctx context.Context, contactID string) ([]*ContactList, error)
+	// GetListsByEmail retrieves all lists for a contact
+	GetListsByEmail(ctx context.Context, email string) ([]*ContactList, error)
 
 	// UpdateContactListStatus updates the status of a contact on a list
-	UpdateContactListStatus(ctx context.Context, contactID, listID string, status ContactListStatus) error
+	UpdateContactListStatus(ctx context.Context, email, listID string, status ContactListStatus) error
 
 	// RemoveContactFromList removes a contact from a list
-	RemoveContactFromList(ctx context.Context, contactID, listID string) error
+	RemoveContactFromList(ctx context.Context, email, listID string) error
+}
+
+type ContactListRepository interface {
+	// AddContactToList adds a contact to a list
+	AddContactToList(ctx context.Context, contactList *ContactList) error
+
+	// GetContactListByIDs retrieves a contact list by email and list ID
+	GetContactListByIDs(ctx context.Context, email, listID string) (*ContactList, error)
+
+	// GetContactsByListID retrieves all contacts for a list
+	GetContactsByListID(ctx context.Context, listID string) ([]*ContactList, error)
+
+	// GetListsByEmail retrieves all lists for a contact
+	GetListsByEmail(ctx context.Context, email string) ([]*ContactList, error)
+
+	// UpdateContactListStatus updates the status of a contact on a list
+	UpdateContactListStatus(ctx context.Context, email, listID string, status ContactListStatus) error
+
+	// RemoveContactFromList removes a contact from a list
+	RemoveContactFromList(ctx context.Context, email, listID string) error
 }
 
 // ErrContactListNotFound is returned when a contact list is not found

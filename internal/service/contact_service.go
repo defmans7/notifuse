@@ -7,7 +7,6 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/google/uuid"
 )
 
 type ContactService struct {
@@ -20,19 +19,6 @@ func NewContactService(repo domain.ContactRepository, logger logger.Logger) *Con
 		repo:   repo,
 		logger: logger,
 	}
-}
-
-func (s *ContactService) GetContactByUUID(ctx context.Context, uuid string) (*domain.Contact, error) {
-	contact, err := s.repo.GetContactByUUID(ctx, uuid)
-	if err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
-			return nil, err
-		}
-		s.logger.WithField("contact_uuid", uuid).Error(fmt.Sprintf("Failed to get contact: %v", err))
-		return nil, fmt.Errorf("failed to get contact: %w", err)
-	}
-
-	return contact, nil
 }
 
 func (s *ContactService) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
@@ -71,9 +57,9 @@ func (s *ContactService) GetContacts(ctx context.Context) ([]*domain.Contact, er
 	return contacts, nil
 }
 
-func (s *ContactService) DeleteContact(ctx context.Context, uuid string) error {
-	if err := s.repo.DeleteContact(ctx, uuid); err != nil {
-		s.logger.WithField("contact_uuid", uuid).Error(fmt.Sprintf("Failed to delete contact: %v", err))
+func (s *ContactService) DeleteContact(ctx context.Context, email string) error {
+	if err := s.repo.DeleteContact(ctx, email); err != nil {
+		s.logger.WithField("email", email).Error(fmt.Sprintf("Failed to delete contact: %v", err))
 		return fmt.Errorf("failed to delete contact: %w", err)
 	}
 
@@ -83,10 +69,6 @@ func (s *ContactService) DeleteContact(ctx context.Context, uuid string) error {
 func (s *ContactService) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
 	// Validate all contacts first
 	for i, contact := range contacts {
-		if contact.UUID == "" {
-			contact.UUID = uuid.New().String()
-		}
-
 		now := time.Now().UTC()
 		contact.CreatedAt = now
 		contact.UpdatedAt = now
@@ -106,10 +88,6 @@ func (s *ContactService) BatchImportContacts(ctx context.Context, contacts []*do
 }
 
 func (s *ContactService) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
-	if contact.UUID == "" {
-		contact.UUID = uuid.New().String()
-	}
-
 	now := time.Now().UTC()
 	// Only set CreatedAt for new contacts
 	if contact.CreatedAt.IsZero() {
@@ -123,7 +101,7 @@ func (s *ContactService) UpsertContact(ctx context.Context, contact *domain.Cont
 
 	created, err := s.repo.UpsertContact(ctx, contact)
 	if err != nil {
-		s.logger.WithField("contact_uuid", contact.UUID).Error(fmt.Sprintf("Failed to upsert contact: %v", err))
+		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Failed to upsert contact: %v", err))
 		return false, fmt.Errorf("failed to upsert contact: %w", err)
 	}
 

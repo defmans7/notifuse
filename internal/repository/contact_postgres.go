@@ -17,38 +17,10 @@ func NewContactRepository(db *sql.DB) domain.ContactRepository {
 	return &contactRepository{db: db}
 }
 
-func (r *contactRepository) GetContactByUUID(ctx context.Context, uuid string) (*domain.Contact, error) {
-	query := `
-		SELECT 
-			uuid, external_id, email, timezone, 
-			first_name, last_name, phone, address_line_1, address_line_2,
-			country, postcode, state, job_title,
-			lifetime_value, orders_count, last_order_at,
-			custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
-			custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
-			custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
-			created_at, updated_at
-		FROM contacts
-		WHERE uuid = $1
-	`
-
-	row := r.db.QueryRowContext(ctx, query, uuid)
-	contact, err := domain.ScanContact(row)
-
-	if err == sql.ErrNoRows {
-		return nil, &domain.ErrContactNotFound{Message: "contact not found"}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get contact: %w", err)
-	}
-
-	return contact, nil
-}
-
 func (r *contactRepository) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
 	query := `
 		SELECT 
-			uuid, external_id, email, timezone, 
+			email, external_id, timezone, 
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -76,7 +48,7 @@ func (r *contactRepository) GetContactByEmail(ctx context.Context, email string)
 func (r *contactRepository) GetContactByExternalID(ctx context.Context, externalID string) (*domain.Contact, error) {
 	query := `
 		SELECT 
-			uuid, external_id, email, timezone, 
+			email, external_id, timezone, 
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -104,7 +76,7 @@ func (r *contactRepository) GetContactByExternalID(ctx context.Context, external
 func (r *contactRepository) GetContacts(ctx context.Context) ([]*domain.Contact, error) {
 	query := `
 		SELECT 
-			uuid, external_id, email, timezone, 
+			email, external_id, timezone, 
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -138,10 +110,10 @@ func (r *contactRepository) GetContacts(ctx context.Context) ([]*domain.Contact,
 	return contacts, nil
 }
 
-func (r *contactRepository) DeleteContact(ctx context.Context, uuid string) error {
-	query := `DELETE FROM contacts WHERE uuid = $1`
+func (r *contactRepository) DeleteContact(ctx context.Context, email string) error {
+	query := `DELETE FROM contacts WHERE email = $1`
 
-	result, err := r.db.ExecContext(ctx, query, uuid)
+	result, err := r.db.ExecContext(ctx, query, email)
 	if err != nil {
 		return fmt.Errorf("failed to delete contact: %w", err)
 	}
@@ -169,7 +141,7 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 	// Prepare the statement for reuse
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO contacts (
-			uuid, external_id, email, timezone, 
+			email, external_id, timezone, 
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -180,11 +152,10 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
+			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
 		)
-		ON CONFLICT (uuid) DO UPDATE SET
+		ON CONFLICT (email) DO UPDATE SET
 			external_id = EXCLUDED.external_id,
-			email = EXCLUDED.email,
 			timezone = EXCLUDED.timezone,
 			first_name = EXCLUDED.first_name,
 			last_name = EXCLUDED.last_name,
@@ -223,9 +194,8 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 	// Execute for each contact
 	for _, contact := range contacts {
 		_, err = stmt.ExecContext(ctx,
-			contact.UUID,
-			contact.ExternalID,
 			contact.Email,
+			contact.ExternalID,
 			contact.Timezone,
 			contact.FirstName,
 			contact.LastName,
@@ -272,7 +242,7 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 
 func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
 	// Check if contact exists first
-	_, err := r.GetContactByUUID(ctx, contact.UUID)
+	_, err := r.GetContactByEmail(ctx, contact.Email)
 	isNew := err != nil && err.Error() == (&domain.ErrContactNotFound{Message: "contact not found"}).Error()
 
 	// If there was an error other than "not found", return it
@@ -282,7 +252,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 
 	query := `
 		INSERT INTO contacts (
-			uuid, external_id, email, timezone, 
+			email, external_id, timezone, 
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -293,11 +263,10 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
+			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
 		)
-		ON CONFLICT (uuid) DO UPDATE SET
+		ON CONFLICT (email) DO UPDATE SET
 			external_id = EXCLUDED.external_id,
-			email = EXCLUDED.email,
 			timezone = EXCLUDED.timezone,
 			first_name = EXCLUDED.first_name,
 			last_name = EXCLUDED.last_name,
@@ -330,9 +299,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
-		contact.UUID,
-		contact.ExternalID,
 		contact.Email,
+		contact.ExternalID,
 		contact.Timezone,
 		contact.FirstName,
 		contact.LastName,
