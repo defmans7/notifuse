@@ -71,8 +71,8 @@ func WithLogger(logger logger.Logger) AppOption {
 	}
 }
 
-// NewApp creates a new application instance
-func NewApp(cfg *config.Config, opts ...AppOption) *App {
+// NewRealApp creates a new application instance
+func NewRealApp(cfg *config.Config, opts ...AppOption) AppInterface {
 	app := &App{
 		config: cfg,
 		logger: logger.NewLogger(), // Default logger
@@ -307,3 +307,31 @@ func (a *App) Initialize() error {
 
 	return nil
 }
+
+// GetConfig returns the app's configuration
+func (a *App) GetConfig() *config.Config {
+	return a.config
+}
+
+// GetLogger returns the app's logger
+func (a *App) GetLogger() logger.Logger {
+	return a.logger
+}
+
+// GetMux returns the app's HTTP multiplexer
+func (a *App) GetMux() *http.ServeMux {
+	return a.mux
+}
+
+// GetDB returns the app's database connection
+func (a *App) GetDB() *sql.DB {
+	return a.db
+}
+
+// GetMailer returns the app's mailer
+func (a *App) GetMailer() mailer.Mailer {
+	return a.mailer
+}
+
+// Ensure App implements AppInterface
+var _ AppInterface = (*App)(nil)

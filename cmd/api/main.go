@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mailer"
 )
 
 // osExit is a variable to allow mocking os.Exit in tests
@@ -19,6 +22,35 @@ var osExit = os.Exit
 
 // For testing purposes - allows us to mock the signal channel
 var signalNotify = signal.Notify
+
+// AppInterface defines the interface for the App
+type AppInterface interface {
+	Initialize() error
+	Start() error
+	Shutdown(ctx context.Context) error
+
+	// Getters for app components accessed in tests
+	GetConfig() *config.Config
+	GetLogger() logger.Logger
+	GetMux() *http.ServeMux
+	GetDB() *sql.DB
+	GetMailer() mailer.Mailer
+
+	// Methods for initialization steps
+	InitDB() error
+	InitMailer() error
+	InitRepositories() error
+	InitServices() error
+	InitHandlers() error
+}
+
+// NewAppFunc defines the function signature for creating a new app
+type NewAppFunc func(cfg *config.Config, opts ...AppOption) AppInterface
+
+// Default implementation of NewApp
+var NewApp NewAppFunc = func(cfg *config.Config, opts ...AppOption) AppInterface {
+	return NewRealApp(cfg, opts...)
+}
 
 // runServer contains the core server logic, extracted for testability
 func runServer(cfg *config.Config, appLogger logger.Logger) error {

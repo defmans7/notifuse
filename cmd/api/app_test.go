@@ -5,8 +5,8 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -109,9 +109,9 @@ func TestNewApp(t *testing.T) {
 	// Test creating a new app with default logger
 	app := NewApp(cfg)
 	assert.NotNil(t, app)
-	assert.Equal(t, cfg, app.config)
-	assert.NotNil(t, app.logger)
-	assert.NotNil(t, app.mux)
+	assert.Equal(t, cfg, app.GetConfig())
+	assert.NotNil(t, app.GetLogger())
+	assert.NotNil(t, app.GetMux())
 
 	// Test creating a new app with custom options
 	mockLogger := &MockLogger{}
@@ -126,9 +126,9 @@ func TestNewApp(t *testing.T) {
 		WithMockMailer(mockMailer),
 	)
 
-	assert.Equal(t, mockLogger, app.logger)
-	assert.Equal(t, mockDB, app.db)
-	assert.Equal(t, mockMailer, app.mailer)
+	assert.Equal(t, mockLogger, app.GetLogger())
+	assert.Equal(t, mockDB, app.GetDB())
+	assert.Equal(t, mockMailer, app.GetMailer())
 }
 
 func TestAppInitMailer(t *testing.T) {
@@ -141,10 +141,10 @@ func TestAppInitMailer(t *testing.T) {
 	app := NewApp(cfg, WithLogger(&MockLogger{}))
 	err := app.InitMailer()
 	assert.NoError(t, err)
-	assert.NotNil(t, app.mailer)
+	assert.NotNil(t, app.GetMailer())
 
 	// Check if correctly used development mailer
-	_, isConsoleMailer := app.mailer.(*mailer.ConsoleMailer)
+	_, isConsoleMailer := app.GetMailer().(*mailer.ConsoleMailer)
 	assert.True(t, isConsoleMailer)
 
 	// Test with pre-existing mailer (should be skipped)
@@ -152,7 +152,7 @@ func TestAppInitMailer(t *testing.T) {
 	app = NewApp(cfg, WithLogger(&MockLogger{}), WithMockMailer(mockMailer))
 	err = app.InitMailer()
 	assert.NoError(t, err)
-	assert.Equal(t, mockMailer, app.mailer) // Should still be the mock mailer
+	assert.Equal(t, mockMailer, app.GetMailer()) // Should still be the mock mailer
 }
 
 func TestAppShutdown(t *testing.T) {
@@ -188,21 +188,21 @@ func TestAppInitRepositories(t *testing.T) {
 	err = app.InitRepositories()
 	assert.NoError(t, err)
 
+	// We need to cast to *App to access the internal fields for testing
+	appImpl, ok := app.(*App)
+	require.True(t, ok, "app should be *App")
+
 	// Verify repositories were initialized
-	assert.NotNil(t, app.userRepo)
-	assert.NotNil(t, app.workspaceRepo)
-	assert.NotNil(t, app.authRepo)
-	assert.NotNil(t, app.contactRepo)
-	assert.NotNil(t, app.listRepo)
-	assert.NotNil(t, app.contactListRepo)
+	assert.NotNil(t, appImpl.userRepo)
+	assert.NotNil(t, appImpl.workspaceRepo)
+	assert.NotNil(t, appImpl.authRepo)
+	assert.NotNil(t, appImpl.contactRepo)
+	assert.NotNil(t, appImpl.listRepo)
+	assert.NotNil(t, appImpl.contactListRepo)
 }
 
 // TestAppStart tests the Start method
 func TestAppStart(t *testing.T) {
-	// Skip this test in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping in CI environment")
-	}
 
 	// Use a special config with high port number to avoid conflicts
 	cfg := createTestConfig()
@@ -228,8 +228,12 @@ func TestAppStart(t *testing.T) {
 	// Give server time to start
 	time.Sleep(100 * time.Millisecond)
 
+	// Cast to *App to access server field
+	appImpl, ok := app.(*App)
+	require.True(t, ok, "app should be *App")
+
 	// Check that server was created and is listening
-	assert.NotNil(t, app.server)
+	assert.NotNil(t, appImpl.server)
 
 	// Shutdown the server
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -254,7 +258,7 @@ func TestAppStart(t *testing.T) {
 func TestInitialize(t *testing.T) {
 	// Create test app with modified Initialize method for testing
 	type testApp struct {
-		*App
+		App                    *App // Change to pointer instead of embedding
 		initDBCalled           bool
 		initMailerCalled       bool
 		initRepositoriesCalled bool
@@ -268,7 +272,9 @@ func TestInitialize(t *testing.T) {
 
 	// Create wrapper for App
 	newTestApp := func(cfg *config.Config) *testApp {
-		app := NewApp(cfg)
+		appInterface := NewApp(cfg)
+		app, ok := appInterface.(*App)
+		require.True(t, ok, "appInterface should be *App")
 		return &testApp{
 			App: app,
 		}
@@ -413,13 +419,17 @@ func TestAppInitServices(t *testing.T) {
 	err = app.InitServices()
 	assert.NoError(t, err)
 
+	// Cast to *App to access service fields
+	appImpl, ok := app.(*App)
+	require.True(t, ok, "app should be *App")
+
 	// Verify services were initialized
-	assert.NotNil(t, app.authService, "Auth service should be initialized")
-	assert.NotNil(t, app.userService, "User service should be initialized")
-	assert.NotNil(t, app.workspaceService, "Workspace service should be initialized")
-	assert.NotNil(t, app.contactService, "Contact service should be initialized")
-	assert.NotNil(t, app.listService, "List service should be initialized")
-	assert.NotNil(t, app.contactListService, "ContactList service should be initialized")
+	assert.NotNil(t, appImpl.authService, "Auth service should be initialized")
+	assert.NotNil(t, appImpl.userService, "User service should be initialized")
+	assert.NotNil(t, appImpl.workspaceService, "Workspace service should be initialized")
+	assert.NotNil(t, appImpl.contactService, "Contact service should be initialized")
+	assert.NotNil(t, appImpl.listService, "List service should be initialized")
+	assert.NotNil(t, appImpl.contactListService, "ContactList service should be initialized")
 }
 
 // TestAppInitHandlers tests the InitHandlers method
@@ -457,6 +467,43 @@ func TestAppInitHandlers(t *testing.T) {
 
 	// Verify handlers were initialized - since handlers are not directly exposed,
 	// we can only check that the mux has routes registered
-	assert.NotNil(t, app.mux, "HTTP mux should be initialized")
+	assert.NotNil(t, app.GetMux(), "HTTP mux should be initialized")
 	// We could add more specific assertions by checking specific routes if needed
 }
+
+// AppMockForRunServer is a mock App for testing the runServer function
+type AppMockForRunServer struct {
+	initCalled          bool
+	startCalled         bool
+	shutdownCalled      bool
+	returnInitError     bool
+	returnStartError    bool
+	returnShutdownError bool
+}
+
+func (a *AppMockForRunServer) Initialize() error {
+	a.initCalled = true
+	if a.returnInitError {
+		return fmt.Errorf("initialize error")
+	}
+	return nil
+}
+
+func (a *AppMockForRunServer) Start() error {
+	a.startCalled = true
+	if a.returnStartError {
+		return fmt.Errorf("start error")
+	}
+	return nil
+}
+
+func (a *AppMockForRunServer) Shutdown(ctx context.Context) error {
+	a.shutdownCalled = true
+	if a.returnShutdownError {
+		return fmt.Errorf("shutdown error")
+	}
+	return nil
+}
+
+// Note: The runServer function is now properly tested in main_test.go
+// with TestActualRunServer, which tests the real implementation directly.
