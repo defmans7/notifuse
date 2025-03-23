@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/Notifuse/notifuse/config"
@@ -45,6 +46,10 @@ type App struct {
 	// HTTP handlers
 	mux    *http.ServeMux
 	server *http.Server
+
+	// Server synchronization
+	serverMu      sync.RWMutex
+	serverStarted chan struct{}
 }
 
 // AppOption defines a functional option for configuring the App
@@ -74,9 +79,10 @@ func WithLogger(logger logger.Logger) AppOption {
 // NewRealApp creates a new application instance
 func NewRealApp(cfg *config.Config, opts ...AppOption) AppInterface {
 	app := &App{
-		config: cfg,
-		logger: logger.NewLogger(), // Default logger
-		mux:    http.NewServeMux(),
+		config:        cfg,
+		logger:        logger.NewLogger(), // Default logger
+		mux:           http.NewServeMux(),
+		serverStarted: make(chan struct{}),
 	}
 
 	// Apply options
@@ -255,10 +261,26 @@ func (a *App) Start() error {
 	addr := fmt.Sprintf("%s:%d", a.config.Server.Host, a.config.Server.Port)
 	a.logger.WithField("address", addr).Info("Server starting")
 
+	// Create a fresh notification channel and update the server
+	a.serverMu.Lock()
+	// Close the existing channel if it exists
+	if a.serverStarted != nil {
+		close(a.serverStarted)
+	}
+	a.serverStarted = make(chan struct{})
+
+	// Create the server
 	a.server = &http.Server{
 		Addr:    addr,
 		Handler: handler,
 	}
+
+	// Get a reference to the channel before unlocking
+	serverStarted := a.serverStarted
+	a.serverMu.Unlock()
+
+	// Signal that the server has been created and is about to start
+	close(serverStarted)
 
 	// Start the server based on SSL configuration
 	if a.config.Server.SSL.Enabled {
@@ -271,8 +293,12 @@ func (a *App) Start() error {
 
 // Shutdown gracefully shuts down the server
 func (a *App) Shutdown(ctx context.Context) error {
-	if a.server != nil {
-		return a.server.Shutdown(ctx)
+	a.serverMu.RLock()
+	server := a.server
+	a.serverMu.RUnlock()
+
+	if server != nil {
+		return server.Shutdown(ctx)
 	}
 
 	// Close database connection if it exists
@@ -281,6 +307,39 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// IsServerCreated safely checks if the server has been created
+func (a *App) IsServerCreated() bool {
+	a.serverMu.RLock()
+	defer a.serverMu.RUnlock()
+	return a.server != nil
+}
+
+// WaitForServerStart waits for the server to be created and initialized
+// Returns true if the server started successfully, false if context expired
+func (a *App) WaitForServerStart(ctx context.Context) bool {
+	// Get the current channel under lock
+	a.serverMu.RLock()
+	started := a.serverStarted
+	a.serverMu.RUnlock()
+
+	// If the channel is nil, that's a logic error - just wait on the context
+	if started == nil {
+		a.logger.Error("serverStarted channel is nil - server initialization error")
+		select {
+		case <-ctx.Done():
+			return false
+		}
+	}
+
+	// Wait for signal or timeout
+	select {
+	case <-started:
+		return a.IsServerCreated() // Double-check server was created
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // Initialize sets up all components of the application
@@ -331,6 +390,11 @@ func (a *App) GetDB() *sql.DB {
 // GetMailer returns the app's mailer
 func (a *App) GetMailer() mailer.Mailer {
 	return a.mailer
+}
+
+// SetHandler allows setting a custom HTTP handler
+func (a *App) SetHandler(handler http.Handler) {
+	a.mux = handler.(*http.ServeMux)
 }
 
 // Ensure App implements AppInterface

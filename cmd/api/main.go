@@ -36,6 +36,10 @@ type AppInterface interface {
 	GetDB() *sql.DB
 	GetMailer() mailer.Mailer
 
+	// Server status methods
+	IsServerCreated() bool
+	WaitForServerStart(ctx context.Context) bool
+
 	// Methods for initialization steps
 	InitDB() error
 	InitMailer() error

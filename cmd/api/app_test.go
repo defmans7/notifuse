@@ -203,7 +203,6 @@ func TestAppInitRepositories(t *testing.T) {
 
 // TestAppStart tests the Start method
 func TestAppStart(t *testing.T) {
-
 	// Use a special config with high port number to avoid conflicts
 	cfg := createTestConfig()
 	// Use a random high port to avoid conflicts
@@ -225,21 +224,21 @@ func TestAppStart(t *testing.T) {
 		errCh <- app.Start()
 	}()
 
-	// Give server time to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Cast to *App to access server field
-	appImpl, ok := app.(*App)
-	require.True(t, ok, "app should be *App")
-
-	// Check that server was created and is listening
-	assert.NotNil(t, appImpl.server)
-
-	// Shutdown the server
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	// Wait for server to be initialized with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = app.Shutdown(ctx)
+	started := app.WaitForServerStart(ctx)
+	require.True(t, started, "Server should have started within timeout")
+
+	// Verify server was created
+	assert.True(t, app.IsServerCreated(), "Server should be created")
+
+	// Shutdown the server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer shutdownCancel()
+
+	err = app.Shutdown(shutdownCtx)
 	assert.NoError(t, err)
 
 	// Check for any server errors
