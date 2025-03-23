@@ -115,3 +115,28 @@ func (s *ContactService) DeleteContact(ctx context.Context, uuid string) error {
 
 	return nil
 }
+
+func (s *ContactService) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+	// Validate all contacts first
+	for i, contact := range contacts {
+		if contact.UUID == "" {
+			contact.UUID = uuid.New().String()
+		}
+
+		now := time.Now().UTC()
+		contact.CreatedAt = now
+		contact.UpdatedAt = now
+
+		if err := contact.Validate(); err != nil {
+			return fmt.Errorf("invalid contact at index %d: %w", i, err)
+		}
+	}
+
+	// Process the batch
+	if err := s.repo.BatchImportContacts(ctx, contacts); err != nil {
+		s.logger.WithField("contacts_count", len(contacts)).Error(fmt.Sprintf("Failed to batch import contacts: %v", err))
+		return fmt.Errorf("failed to batch import contacts: %w", err)
+	}
+
+	return nil
+}

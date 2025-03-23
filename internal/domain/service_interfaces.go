@@ -26,6 +26,9 @@ type ContactService interface {
 
 	// DeleteContact deletes a contact by UUID
 	DeleteContact(ctx context.Context, uuid string) error
+
+	// BatchImportContacts imports a batch of contacts (create or update)
+	BatchImportContacts(ctx context.Context, contacts []*Contact) error
 }
 
 // ListService provides operations for managing lists

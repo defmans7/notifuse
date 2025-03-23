@@ -67,6 +67,11 @@ func (m *MockContactRepository) DeleteContact(ctx context.Context, uuid string) 
 	return args.Error(0)
 }
 
+func (m *MockContactRepository) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+	args := m.Called(ctx, contacts)
+	return args.Error(0)
+}
+
 // Tests begin here
 
 func TestContactService_CreateContact(t *testing.T) {
@@ -566,6 +571,126 @@ func TestContactService_DeleteContact(t *testing.T) {
 		// Assert
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to delete contact")
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestBatchImportContacts(t *testing.T) {
+	t.Run("successful batch import", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
+
+		contacts := []*domain.Contact{
+			{
+				ExternalID: "ext1",
+				Email:      "contact1@example.com",
+				Timezone:   "UTC",
+				FirstName:  "John",
+				LastName:   "Doe",
+			},
+			{
+				ExternalID: "ext2",
+				Email:      "contact2@example.com",
+				Timezone:   "Europe/Paris",
+				FirstName:  "Jane",
+				LastName:   "Smith",
+			},
+		}
+
+		mockRepo.On("BatchImportContacts", mock.Anything, mock.AnythingOfType("[]*domain.Contact")).
+			Run(func(args mock.Arguments) {
+				importedContacts := args.Get(1).([]*domain.Contact)
+				assert.Len(t, importedContacts, 2)
+
+				// Verify UUIDs and timestamps were set
+				for _, contact := range importedContacts {
+					assert.NotEmpty(t, contact.UUID)
+					assert.False(t, contact.CreatedAt.IsZero())
+					assert.False(t, contact.UpdatedAt.IsZero())
+				}
+			}).
+			Return(nil).Once()
+
+		err := service.BatchImportContacts(context.Background(), contacts)
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("invalid contact in batch", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
+
+		invalidContacts := []*domain.Contact{
+			{
+				ExternalID: "ext3",
+				// Missing required Email field
+				Timezone:  "UTC",
+				FirstName: "Invalid",
+				LastName:  "Contact",
+			},
+			{
+				ExternalID: "ext4",
+				Email:      "contact4@example.com",
+				// Missing required Timezone field
+				FirstName: "Another",
+				LastName:  "Contact",
+			},
+		}
+
+		err := service.BatchImportContacts(context.Background(), invalidContacts)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid contact at index 0")
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("empty batch", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
+
+		emptyBatch := []*domain.Contact{}
+
+		// Add expectation for empty batch (the service may still call the repository)
+		mockRepo.On("BatchImportContacts", mock.Anything, mock.AnythingOfType("[]*domain.Contact")).
+			Return(nil).Once()
+
+		// For an empty batch, we expect no error
+		err := service.BatchImportContacts(context.Background(), emptyBatch)
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("repository error", func(t *testing.T) {
+		mockRepo := new(MockContactRepository)
+		mockLogger := new(MockLogger)
+		mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		service := NewContactService(mockRepo, mockLogger)
+
+		contacts := []*domain.Contact{
+			{
+				ExternalID: "ext1",
+				Email:      "contact1@example.com",
+				Timezone:   "UTC",
+				FirstName:  "John",
+				LastName:   "Doe",
+			},
+		}
+
+		mockRepo.On("BatchImportContacts", mock.Anything, mock.AnythingOfType("[]*domain.Contact")).
+			Return(errors.New("repository error")).Once()
+
+		err := service.BatchImportContacts(context.Background(), contacts)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "repository error")
 		mockRepo.AssertExpectations(t)
 	})
 }

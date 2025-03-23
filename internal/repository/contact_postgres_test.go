@@ -405,3 +405,119 @@ func TestDeleteContact(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to delete contact")
 }
+
+func TestBatchImportContacts(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewContactRepository(db)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	// Create test contacts
+	contacts := []*domain.Contact{
+		{
+			UUID:       uuid.New().String(),
+			ExternalID: "ext1",
+			Email:      "contact1@example.com",
+			Timezone:   "UTC",
+			FirstName:  "John",
+			LastName:   "Doe",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+		{
+			UUID:       uuid.New().String(),
+			ExternalID: "ext2",
+			Email:      "contact2@example.com",
+			Timezone:   "Europe/Paris",
+			FirstName:  "Jane",
+			LastName:   "Smith",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+
+	// Test case 1: Successful batch import
+	mock.ExpectBegin()
+
+	// Prepare statement expectation
+	mock.ExpectPrepare("INSERT INTO contacts")
+
+	// Execute for each contact expectation
+	for _, contact := range contacts {
+		mock.ExpectExec("INSERT INTO contacts").
+			WithArgs(
+				contact.UUID, contact.ExternalID, contact.Email, contact.Timezone,
+				contact.FirstName, contact.LastName, contact.Phone, contact.AddressLine1, contact.AddressLine2,
+				contact.Country, contact.Postcode, contact.State, contact.JobTitle,
+				contact.LifetimeValue, contact.OrdersCount, contact.LastOrderAt,
+				contact.CustomString1, contact.CustomString2, contact.CustomString3, contact.CustomString4, contact.CustomString5,
+				contact.CustomNumber1, contact.CustomNumber2, contact.CustomNumber3, contact.CustomNumber4, contact.CustomNumber5,
+				contact.CustomDatetime1, contact.CustomDatetime2, contact.CustomDatetime3, contact.CustomDatetime4, contact.CustomDatetime5,
+				contact.CreatedAt, contact.UpdatedAt,
+			).WillReturnResult(sqlmock.NewResult(1, 1))
+	}
+
+	mock.ExpectCommit()
+
+	err := repo.BatchImportContacts(context.Background(), contacts)
+	require.NoError(t, err)
+
+	// Test case 2: Transaction begin fails
+	mock.ExpectBegin().WillReturnError(errors.New("transaction begin error"))
+
+	err = repo.BatchImportContacts(context.Background(), contacts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to begin transaction")
+
+	// Test case 3: Statement preparation fails
+	mock.ExpectBegin()
+	mock.ExpectPrepare("INSERT INTO contacts").WillReturnError(errors.New("prepare statement error"))
+	mock.ExpectRollback()
+
+	err = repo.BatchImportContacts(context.Background(), contacts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to prepare statement")
+
+	// Test case 4: Execute fails for one of the contacts
+	mock.ExpectBegin()
+	mock.ExpectPrepare("INSERT INTO contacts")
+	mock.ExpectExec("INSERT INTO contacts").
+		WithArgs(
+			contacts[0].UUID, contacts[0].ExternalID, contacts[0].Email, contacts[0].Timezone,
+			contacts[0].FirstName, contacts[0].LastName, contacts[0].Phone, contacts[0].AddressLine1, contacts[0].AddressLine2,
+			contacts[0].Country, contacts[0].Postcode, contacts[0].State, contacts[0].JobTitle,
+			contacts[0].LifetimeValue, contacts[0].OrdersCount, contacts[0].LastOrderAt,
+			contacts[0].CustomString1, contacts[0].CustomString2, contacts[0].CustomString3, contacts[0].CustomString4, contacts[0].CustomString5,
+			contacts[0].CustomNumber1, contacts[0].CustomNumber2, contacts[0].CustomNumber3, contacts[0].CustomNumber4, contacts[0].CustomNumber5,
+			contacts[0].CustomDatetime1, contacts[0].CustomDatetime2, contacts[0].CustomDatetime3, contacts[0].CustomDatetime4, contacts[0].CustomDatetime5,
+			contacts[0].CreatedAt, contacts[0].UpdatedAt,
+		).WillReturnError(errors.New("execution error"))
+	mock.ExpectRollback()
+
+	err = repo.BatchImportContacts(context.Background(), contacts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to upsert contact")
+
+	// Test case 5: Commit fails
+	mock.ExpectBegin()
+	mock.ExpectPrepare("INSERT INTO contacts")
+	for _, contact := range contacts {
+		mock.ExpectExec("INSERT INTO contacts").
+			WithArgs(
+				contact.UUID, contact.ExternalID, contact.Email, contact.Timezone,
+				contact.FirstName, contact.LastName, contact.Phone, contact.AddressLine1, contact.AddressLine2,
+				contact.Country, contact.Postcode, contact.State, contact.JobTitle,
+				contact.LifetimeValue, contact.OrdersCount, contact.LastOrderAt,
+				contact.CustomString1, contact.CustomString2, contact.CustomString3, contact.CustomString4, contact.CustomString5,
+				contact.CustomNumber1, contact.CustomNumber2, contact.CustomNumber3, contact.CustomNumber4, contact.CustomNumber5,
+				contact.CustomDatetime1, contact.CustomDatetime2, contact.CustomDatetime3, contact.CustomDatetime4, contact.CustomDatetime5,
+				contact.CreatedAt, contact.UpdatedAt,
+			).WillReturnResult(sqlmock.NewResult(1, 1))
+	}
+	mock.ExpectCommit().WillReturnError(errors.New("commit error"))
+
+	err = repo.BatchImportContacts(context.Background(), contacts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to commit transaction")
+}

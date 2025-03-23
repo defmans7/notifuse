@@ -55,6 +55,11 @@ type deleteContactRequest struct {
 	UUID string `json:"uuid" valid:"required,uuid"`
 }
 
+// Add the request type for batch importing contacts
+type batchImportContactsRequest struct {
+	Contacts []createContactRequest `json:"contacts" valid:"required"`
+}
+
 func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Register RPC-style endpoints with dot notation
 	mux.HandleFunc("/api/contacts.list", h.handleList)
@@ -64,6 +69,7 @@ func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/contacts.create", h.handleCreate)
 	mux.HandleFunc("/api/contacts.update", h.handleUpdate)
 	mux.HandleFunc("/api/contacts.delete", h.handleDelete)
+	mux.HandleFunc("/api/contacts.import", h.handleImport)
 }
 
 func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -274,5 +280,51 @@ func (h *ContactHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
+	})
+}
+
+func (h *ContactHandler) handleImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req batchImportContactsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Check if batch size is within limit
+	if len(req.Contacts) > 50 {
+		WriteJSONError(w, "Batch size exceeds maximum limit of 50 contacts", http.StatusBadRequest)
+		return
+	}
+
+	// Convert request to domain contacts
+	contacts := make([]*domain.Contact, len(req.Contacts))
+	for i, contactReq := range req.Contacts {
+		contacts[i] = &domain.Contact{
+			UUID:       contactReq.UUID,
+			ExternalID: contactReq.ExternalID,
+			Email:      contactReq.Email,
+			FirstName:  contactReq.FirstName,
+			LastName:   contactReq.LastName,
+			Timezone:   contactReq.Timezone,
+		}
+	}
+
+	// Process the batch
+	if err := h.service.BatchImportContacts(r.Context(), contacts); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to import contacts")
+		WriteJSONError(w, "Failed to import contacts", http.StatusInternalServerError)
+		return
+	}
+
+	// Return success response with imported contacts
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Successfully imported contacts",
+		"count":   len(contacts),
 	})
 }

@@ -5,14 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/stretchr/testify/assert"
 )
 
 // MockContactService is a mock implementation of domain.ContactService
@@ -27,11 +30,13 @@ type MockContactService struct {
 	CreateContactCalled          bool
 	UpdateContactCalled          bool
 	DeleteContactCalled          bool
+	BatchImportContactsCalled    bool
 	LastContactUUID              string
 	LastContactEmail             string
 	LastContactExternalID        string
 	LastContactCreated           *domain.Contact
 	LastContactUpdated           *domain.Contact
+	LastBatchImported            []*domain.Contact
 	ErrToReturn                  error
 	ErrContactNotFoundToReturn   bool
 }
@@ -164,6 +169,27 @@ func (m *MockContactService) DeleteContact(ctx context.Context, uuid string) err
 	return nil
 }
 
+func (m *MockContactService) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+	m.BatchImportContactsCalled = true
+	m.LastBatchImported = contacts
+	if m.ErrToReturn != nil {
+		return m.ErrToReturn
+	}
+
+	now := time.Now()
+	for _, contact := range contacts {
+		// Set timestamps if not set
+		if contact.CreatedAt.IsZero() {
+			contact.CreatedAt = now
+		}
+		contact.UpdatedAt = now
+
+		// Store in internal map
+		m.contacts[contact.UUID] = contact
+	}
+	return nil
+}
+
 // MockLoggerForContact is a mock implementation of logger.Logger for contact tests
 type MockLoggerForContact struct {
 	LoggedMessages []string
@@ -173,16 +199,16 @@ func (l *MockLoggerForContact) Info(message string) {
 	l.LoggedMessages = append(l.LoggedMessages, "INFO: "+message)
 }
 
+func (l *MockLoggerForContact) Error(message string) {
+	l.LoggedMessages = append(l.LoggedMessages, "ERROR: "+message)
+}
+
 func (l *MockLoggerForContact) Debug(message string) {
 	l.LoggedMessages = append(l.LoggedMessages, "DEBUG: "+message)
 }
 
 func (l *MockLoggerForContact) Warn(message string) {
 	l.LoggedMessages = append(l.LoggedMessages, "WARN: "+message)
-}
-
-func (l *MockLoggerForContact) Error(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "ERROR: "+message)
 }
 
 func (l *MockLoggerForContact) WithField(key string, value interface{}) logger.Logger {
@@ -1192,4 +1218,132 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			tc.checkDeleted(t, mockService)
 		})
 	}
+}
+
+func TestContactHandler_HandleImport(t *testing.T) {
+	mockService := &MockContactService{
+		contacts: make(map[string]*domain.Contact),
+	}
+	mockLogger := &MockLoggerForContact{}
+	handler := NewContactHandler(mockService, mockLogger)
+
+	t.Run("successful batch import", func(t *testing.T) {
+		// Setup request with valid contacts
+		reqBody := `{
+			"contacts": [
+				{
+					"external_id": "ext1",
+					"email": "contact1@example.com",
+					"timezone": "UTC",
+					"first_name": "John",
+					"last_name": "Doe"
+				},
+				{
+					"external_id": "ext2",
+					"email": "contact2@example.com",
+					"timezone": "Europe/Paris",
+					"first_name": "Jane",
+					"last_name": "Smith"
+				}
+			]
+		}`
+
+		req := httptest.NewRequest(http.MethodPost, "/api/contacts.import", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Reset service state
+		mockService.BatchImportContactsCalled = false
+		mockService.LastBatchImported = nil
+		mockService.ErrToReturn = nil
+
+		// Execute
+		handler.handleImport(w, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		assert.Equal(t, "Successfully imported contacts", resp["message"])
+		assert.Equal(t, float64(2), resp["count"])
+
+		// Verify service was called with contacts
+		assert.True(t, mockService.BatchImportContactsCalled)
+		assert.Len(t, mockService.LastBatchImported, 2)
+		assert.Equal(t, "contact1@example.com", mockService.LastBatchImported[0].Email)
+		assert.Equal(t, "contact2@example.com", mockService.LastBatchImported[1].Email)
+	})
+
+	t.Run("invalid request method", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/contacts.import", nil)
+		w := httptest.NewRecorder()
+
+		handler.handleImport(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		reqBody := `{ "contacts": [ invalid json ] }`
+		req := httptest.NewRequest(http.MethodPost, "/api/contacts.import", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.handleImport(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("batch size exceeds limit", func(t *testing.T) {
+		// Create a request with 51 contacts (exceeding the limit of 50)
+		contacts := make([]map[string]string, 51)
+		for i := 0; i < 51; i++ {
+			contacts[i] = map[string]string{
+				"external_id": fmt.Sprintf("ext%d", i),
+				"email":       fmt.Sprintf("contact%d@example.com", i),
+				"timezone":    "UTC",
+				"first_name":  "John",
+				"last_name":   "Doe",
+			}
+		}
+
+		reqData := map[string]interface{}{
+			"contacts": contacts,
+		}
+		reqBytes, _ := json.Marshal(reqData)
+		req := httptest.NewRequest(http.MethodPost, "/api/contacts.import", bytes.NewReader(reqBytes))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.handleImport(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("service returns error", func(t *testing.T) {
+		reqBody := `{
+			"contacts": [
+				{
+					"external_id": "ext1",
+					"email": "contact1@example.com",
+					"timezone": "UTC",
+					"first_name": "John",
+					"last_name": "Doe"
+				}
+			]
+		}`
+
+		req := httptest.NewRequest(http.MethodPost, "/api/contacts.import", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Set service to return error
+		mockService.ErrToReturn = errors.New("service error")
+
+		handler.handleImport(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
 }

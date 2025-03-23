@@ -316,3 +316,125 @@ func (r *contactRepository) DeleteContact(ctx context.Context, uuid string) erro
 
 	return nil
 }
+
+func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+	// Begin a transaction for atomicity
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Ensure the transaction is either committed or rolled back
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Prepare the insert/update query (upsert operation)
+	query := `
+		INSERT INTO contacts (
+			uuid, external_id, email, timezone, 
+			first_name, last_name, phone, address_line_1, address_line_2,
+			country, postcode, state, job_title,
+			lifetime_value, orders_count, last_order_at,
+			custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
+			custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
+			custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
+			created_at, updated_at
+		)
+		VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
+		)
+		ON CONFLICT (uuid) DO UPDATE
+		SET 
+			external_id = EXCLUDED.external_id,
+			email = EXCLUDED.email,
+			timezone = EXCLUDED.timezone,
+			first_name = EXCLUDED.first_name,
+			last_name = EXCLUDED.last_name,
+			phone = EXCLUDED.phone,
+			address_line_1 = EXCLUDED.address_line_1,
+			address_line_2 = EXCLUDED.address_line_2,
+			country = EXCLUDED.country,
+			postcode = EXCLUDED.postcode,
+			state = EXCLUDED.state,
+			job_title = EXCLUDED.job_title,
+			lifetime_value = EXCLUDED.lifetime_value,
+			orders_count = EXCLUDED.orders_count,
+			last_order_at = EXCLUDED.last_order_at,
+			custom_string_1 = EXCLUDED.custom_string_1,
+			custom_string_2 = EXCLUDED.custom_string_2,
+			custom_string_3 = EXCLUDED.custom_string_3,
+			custom_string_4 = EXCLUDED.custom_string_4,
+			custom_string_5 = EXCLUDED.custom_string_5,
+			custom_number_1 = EXCLUDED.custom_number_1,
+			custom_number_2 = EXCLUDED.custom_number_2,
+			custom_number_3 = EXCLUDED.custom_number_3,
+			custom_number_4 = EXCLUDED.custom_number_4,
+			custom_number_5 = EXCLUDED.custom_number_5,
+			custom_datetime_1 = EXCLUDED.custom_datetime_1,
+			custom_datetime_2 = EXCLUDED.custom_datetime_2,
+			custom_datetime_3 = EXCLUDED.custom_datetime_3,
+			custom_datetime_4 = EXCLUDED.custom_datetime_4,
+			custom_datetime_5 = EXCLUDED.custom_datetime_5,
+			updated_at = EXCLUDED.updated_at
+	`
+
+	// Prepare the statement for better performance with multiple executions
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Execute for each contact
+	for _, contact := range contacts {
+		_, err = stmt.ExecContext(ctx,
+			contact.UUID,
+			contact.ExternalID,
+			contact.Email,
+			contact.Timezone,
+			contact.FirstName,
+			contact.LastName,
+			contact.Phone,
+			contact.AddressLine1,
+			contact.AddressLine2,
+			contact.Country,
+			contact.Postcode,
+			contact.State,
+			contact.JobTitle,
+			contact.LifetimeValue,
+			contact.OrdersCount,
+			contact.LastOrderAt,
+			contact.CustomString1,
+			contact.CustomString2,
+			contact.CustomString3,
+			contact.CustomString4,
+			contact.CustomString5,
+			contact.CustomNumber1,
+			contact.CustomNumber2,
+			contact.CustomNumber3,
+			contact.CustomNumber4,
+			contact.CustomNumber5,
+			contact.CustomDatetime1,
+			contact.CustomDatetime2,
+			contact.CustomDatetime3,
+			contact.CustomDatetime4,
+			contact.CustomDatetime5,
+			contact.CreatedAt,
+			contact.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to upsert contact: %w", err)
+		}
+	}
+
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}

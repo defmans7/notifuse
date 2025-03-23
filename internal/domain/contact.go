@@ -215,6 +215,9 @@ type ContactRepository interface {
 
 	// DeleteContact deletes a contact
 	DeleteContact(ctx context.Context, uuid string) error
+
+	// BatchImportContacts inserts or updates multiple contacts in a batch operation
+	BatchImportContacts(ctx context.Context, contacts []*Contact) error
 }
 
 // ErrContactNotFound is returned when a contact is not found
