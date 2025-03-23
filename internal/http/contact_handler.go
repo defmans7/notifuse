@@ -21,15 +21,6 @@ func NewContactHandler(service domain.ContactService, logger logger.Logger) *Con
 }
 
 // Request/Response types
-type createContactRequest struct {
-	UUID       string `json:"uuid,omitempty"`
-	ExternalID string `json:"external_id" valid:"required"`
-	Email      string `json:"email" valid:"required,email"`
-	FirstName  string `json:"first_name,omitempty"`
-	LastName   string `json:"last_name,omitempty"`
-	Timezone   string `json:"timezone" valid:"required"`
-}
-
 type getContactRequest struct {
 	UUID string `json:"uuid"`
 }
@@ -42,22 +33,23 @@ type getContactByExternalIDRequest struct {
 	ExternalID string `json:"external_id" valid:"required"`
 }
 
-type updateContactRequest struct {
-	UUID       string `json:"uuid" valid:"required,uuid"`
-	ExternalID string `json:"external_id" valid:"required"`
-	Email      string `json:"email" valid:"required,email"`
-	FirstName  string `json:"first_name,omitempty"`
-	LastName   string `json:"last_name,omitempty"`
-	Timezone   string `json:"timezone" valid:"required"`
-}
-
 type deleteContactRequest struct {
 	UUID string `json:"uuid" valid:"required,uuid"`
 }
 
 // Add the request type for batch importing contacts
 type batchImportContactsRequest struct {
-	Contacts []createContactRequest `json:"contacts" valid:"required"`
+	Contacts []upsertContactRequest `json:"contacts" valid:"required"`
+}
+
+// Add upsert request type that combines create and update
+type upsertContactRequest struct {
+	UUID       string `json:"uuid,omitempty"`
+	ExternalID string `json:"external_id" valid:"required"`
+	Email      string `json:"email" valid:"required,email"`
+	FirstName  string `json:"first_name,omitempty"`
+	LastName   string `json:"last_name,omitempty"`
+	Timezone   string `json:"timezone" valid:"required"`
 }
 
 func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
@@ -66,10 +58,9 @@ func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/contacts.get", h.handleGet)
 	mux.HandleFunc("/api/contacts.getByEmail", h.handleGetByEmail)
 	mux.HandleFunc("/api/contacts.getByExternalID", h.handleGetByExternalID)
-	mux.HandleFunc("/api/contacts.create", h.handleCreate)
-	mux.HandleFunc("/api/contacts.update", h.handleUpdate)
 	mux.HandleFunc("/api/contacts.delete", h.handleDelete)
 	mux.HandleFunc("/api/contacts.import", h.handleImport)
+	mux.HandleFunc("/api/contacts.upsert", h.handleUpsert)
 }
 
 func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -175,81 +166,6 @@ func (h *ContactHandler) handleGetByExternalID(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (h *ContactHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req createContactRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
-		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	contact := &domain.Contact{
-		UUID:       req.UUID,
-		ExternalID: req.ExternalID,
-		Email:      req.Email,
-		FirstName:  req.FirstName,
-		LastName:   req.LastName,
-		Timezone:   req.Timezone,
-	}
-
-	if err := h.service.CreateContact(r.Context(), contact); err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to create contact")
-		WriteJSONError(w, "Failed to create contact", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"contact": contact,
-	})
-}
-
-func (h *ContactHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req updateContactRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
-		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.UUID == "" {
-		WriteJSONError(w, "Missing UUID", http.StatusBadRequest)
-		return
-	}
-
-	contact := &domain.Contact{
-		UUID:       req.UUID,
-		ExternalID: req.ExternalID,
-		Email:      req.Email,
-		FirstName:  req.FirstName,
-		LastName:   req.LastName,
-		Timezone:   req.Timezone,
-	}
-
-	if err := h.service.UpdateContact(r.Context(), contact); err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
-			WriteJSONError(w, "Contact not found", http.StatusNotFound)
-			return
-		}
-		h.logger.WithField("error", err.Error()).Error("Failed to update contact")
-		WriteJSONError(w, "Failed to update contact", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"contact": contact,
-	})
-}
-
 func (h *ContactHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -326,5 +242,47 @@ func (h *ContactHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Successfully imported contacts",
 		"count":   len(contacts),
+	})
+}
+
+func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req upsertContactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	contact := &domain.Contact{
+		UUID:       req.UUID,
+		ExternalID: req.ExternalID,
+		Email:      req.Email,
+		FirstName:  req.FirstName,
+		LastName:   req.LastName,
+		Timezone:   req.Timezone,
+	}
+
+	isNew, err := h.service.UpsertContact(r.Context(), contact)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to upsert contact")
+		WriteJSONError(w, "Failed to upsert contact", http.StatusInternalServerError)
+		return
+	}
+
+	statusCode := http.StatusOK
+	action := "updated"
+	if isNew {
+		statusCode = http.StatusCreated
+		action = "created"
+	}
+
+	writeJSON(w, statusCode, map[string]interface{}{
+		"contact": contact,
+		"action":  action,
 	})
 }

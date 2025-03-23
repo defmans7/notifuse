@@ -22,27 +22,6 @@ func NewContactService(repo domain.ContactRepository, logger logger.Logger) *Con
 	}
 }
 
-func (s *ContactService) CreateContact(ctx context.Context, contact *domain.Contact) error {
-	if contact.UUID == "" {
-		contact.UUID = uuid.New().String()
-	}
-
-	now := time.Now().UTC()
-	contact.CreatedAt = now
-	contact.UpdatedAt = now
-
-	if err := contact.Validate(); err != nil {
-		return fmt.Errorf("invalid contact: %w", err)
-	}
-
-	if err := s.repo.CreateContact(ctx, contact); err != nil {
-		s.logger.WithField("contact_uuid", contact.UUID).Error(fmt.Sprintf("Failed to create contact: %v", err))
-		return fmt.Errorf("failed to create contact: %w", err)
-	}
-
-	return nil
-}
-
 func (s *ContactService) GetContactByUUID(ctx context.Context, uuid string) (*domain.Contact, error) {
 	contact, err := s.repo.GetContactByUUID(ctx, uuid)
 	if err != nil {
@@ -92,21 +71,6 @@ func (s *ContactService) GetContacts(ctx context.Context) ([]*domain.Contact, er
 	return contacts, nil
 }
 
-func (s *ContactService) UpdateContact(ctx context.Context, contact *domain.Contact) error {
-	contact.UpdatedAt = time.Now().UTC()
-
-	if err := contact.Validate(); err != nil {
-		return fmt.Errorf("invalid contact: %w", err)
-	}
-
-	if err := s.repo.UpdateContact(ctx, contact); err != nil {
-		s.logger.WithField("contact_uuid", contact.UUID).Error(fmt.Sprintf("Failed to update contact: %v", err))
-		return fmt.Errorf("failed to update contact: %w", err)
-	}
-
-	return nil
-}
-
 func (s *ContactService) DeleteContact(ctx context.Context, uuid string) error {
 	if err := s.repo.DeleteContact(ctx, uuid); err != nil {
 		s.logger.WithField("contact_uuid", uuid).Error(fmt.Sprintf("Failed to delete contact: %v", err))
@@ -139,4 +103,29 @@ func (s *ContactService) BatchImportContacts(ctx context.Context, contacts []*do
 	}
 
 	return nil
+}
+
+func (s *ContactService) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
+	if contact.UUID == "" {
+		contact.UUID = uuid.New().String()
+	}
+
+	now := time.Now().UTC()
+	// Only set CreatedAt for new contacts
+	if contact.CreatedAt.IsZero() {
+		contact.CreatedAt = now
+	}
+	contact.UpdatedAt = now
+
+	if err := contact.Validate(); err != nil {
+		return false, fmt.Errorf("invalid contact: %w", err)
+	}
+
+	created, err := s.repo.UpsertContact(ctx, contact)
+	if err != nil {
+		s.logger.WithField("contact_uuid", contact.UUID).Error(fmt.Sprintf("Failed to upsert contact: %v", err))
+		return false, fmt.Errorf("failed to upsert contact: %w", err)
+	}
+
+	return created, nil
 }

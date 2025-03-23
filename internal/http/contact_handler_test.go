@@ -18,29 +18,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// MockContactService is a mock implementation of domain.ContactService
+// MockContactService is a mock implementation of domain.ContactService for testing
 type MockContactService struct {
-	contacts map[string]*domain.Contact
+	contacts                   map[string]*domain.Contact
+	ErrToReturn                error
+	ErrContactNotFoundToReturn bool
 
-	// Function call trackers
 	GetContactsCalled            bool
 	GetContactByUUIDCalled       bool
+	LastContactUUID              string
 	GetContactByEmailCalled      bool
+	LastContactEmail             string
 	GetContactByExternalIDCalled bool
-	CreateContactCalled          bool
-	UpdateContactCalled          bool
+	LastContactExternalID        string
 	DeleteContactCalled          bool
 	BatchImportContactsCalled    bool
-	LastContactUUID              string
-	LastContactEmail             string
-	LastContactExternalID        string
-	LastContactCreated           *domain.Contact
-	LastContactUpdated           *domain.Contact
 	LastBatchImported            []*domain.Contact
-	ErrToReturn                  error
-	ErrContactNotFoundToReturn   bool
+	UpsertContactCalled          bool
+	LastContactUpserted          *domain.Contact
+	UpsertIsNewToReturn          bool
 }
 
+// NewMockContactService creates a new mock contact service for testing
 func NewMockContactService() *MockContactService {
 	return &MockContactService{
 		contacts: make(map[string]*domain.Contact),
@@ -113,43 +112,6 @@ func (m *MockContactService) GetContactByExternalID(ctx context.Context, externa
 	return nil, &domain.ErrContactNotFound{}
 }
 
-func (m *MockContactService) CreateContact(ctx context.Context, contact *domain.Contact) error {
-	m.CreateContactCalled = true
-	m.LastContactCreated = contact
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-
-	// Set timestamps
-	contact.CreatedAt = time.Now()
-	contact.UpdatedAt = contact.CreatedAt
-
-	m.contacts[contact.UUID] = contact
-	return nil
-}
-
-func (m *MockContactService) UpdateContact(ctx context.Context, contact *domain.Contact) error {
-	m.UpdateContactCalled = true
-	m.LastContactUpdated = contact
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-	if m.ErrContactNotFoundToReturn {
-		return &domain.ErrContactNotFound{}
-	}
-
-	_, exists := m.contacts[contact.UUID]
-	if !exists {
-		return &domain.ErrContactNotFound{}
-	}
-
-	// Update timestamp
-	contact.UpdatedAt = time.Now()
-
-	m.contacts[contact.UUID] = contact
-	return nil
-}
-
 func (m *MockContactService) DeleteContact(ctx context.Context, uuid string) error {
 	m.DeleteContactCalled = true
 	m.LastContactUUID = uuid
@@ -176,18 +138,49 @@ func (m *MockContactService) BatchImportContacts(ctx context.Context, contacts [
 		return m.ErrToReturn
 	}
 
+	// Set timestamps for all contacts
 	now := time.Now()
 	for _, contact := range contacts {
-		// Set timestamps if not set
 		if contact.CreatedAt.IsZero() {
 			contact.CreatedAt = now
 		}
 		contact.UpdatedAt = now
 
-		// Store in internal map
+		// Store in the map
 		m.contacts[contact.UUID] = contact
 	}
+
 	return nil
+}
+
+func (m *MockContactService) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
+	m.UpsertContactCalled = true
+	m.LastContactUpserted = contact
+	if m.ErrToReturn != nil {
+		return false, m.ErrToReturn
+	}
+
+	// Check if contact exists
+	isNew := true
+	if contact.UUID != "" {
+		_, exists := m.contacts[contact.UUID]
+		isNew = !exists
+	}
+
+	// Set timestamps
+	now := time.Now()
+	if isNew || contact.CreatedAt.IsZero() {
+		contact.CreatedAt = now
+	}
+	contact.UpdatedAt = now
+
+	// Store the contact
+	if contact.UUID == "" {
+		contact.UUID = "generated-uuid"
+	}
+	m.contacts[contact.UUID] = contact
+
+	return m.UpsertIsNewToReturn, nil
 }
 
 // MockLoggerForContact is a mock implementation of logger.Logger for contact tests
@@ -247,9 +240,9 @@ func TestContactHandler_RegisterRoutes(t *testing.T) {
 		"/api/contacts.get",
 		"/api/contacts.getByEmail",
 		"/api/contacts.getByExternalID",
-		"/api/contacts.create",
-		"/api/contacts.update",
 		"/api/contacts.delete",
+		"/api/contacts.import",
+		"/api/contacts.upsert",
 	}
 
 	for _, endpoint := range endpoints {
@@ -704,19 +697,20 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 	}
 }
 
-func TestContactHandler_HandleCreate(t *testing.T) {
+func TestContactHandler_HandleCreate_Upsert(t *testing.T) {
 	testCases := []struct {
 		name           string
 		method         string
 		reqBody        interface{}
 		setupMock      func(*MockContactService)
 		expectedStatus int
+		expectedAction string
 		checkCreated   func(*testing.T, *MockContactService)
 	}{
 		{
 			name:   "Create Contact Success",
 			method: http.MethodPost,
-			reqBody: createContactRequest{
+			reqBody: upsertContactRequest{
 				UUID:       "new-uuid",
 				ExternalID: "new-ext",
 				Email:      "new@example.com",
@@ -725,31 +719,32 @@ func TestContactHandler_HandleCreate(t *testing.T) {
 				Timezone:   "UTC",
 			},
 			setupMock: func(m *MockContactService) {
-				// No special setup
+				m.UpsertIsNewToReturn = true // This is a new contact
 			},
 			expectedStatus: http.StatusCreated,
+			expectedAction: "created",
 			checkCreated: func(t *testing.T, m *MockContactService) {
-				if !m.CreateContactCalled {
-					t.Error("Expected CreateContact to be called, but it wasn't")
+				if !m.UpsertContactCalled {
+					t.Error("Expected UpsertContact to be called, but it wasn't")
 				}
-				if m.LastContactCreated == nil {
+				if m.LastContactUpserted == nil {
 					t.Fatal("Expected contact to be created, but it wasn't")
 				}
-				if m.LastContactCreated.UUID != "new-uuid" {
-					t.Errorf("Expected contact UUID 'new-uuid', got '%s'", m.LastContactCreated.UUID)
+				if m.LastContactUpserted.UUID != "new-uuid" {
+					t.Errorf("Expected contact UUID 'new-uuid', got '%s'", m.LastContactUpserted.UUID)
 				}
-				if m.LastContactCreated.Email != "new@example.com" {
-					t.Errorf("Expected contact email 'new@example.com', got '%s'", m.LastContactCreated.Email)
+				if m.LastContactUpserted.Email != "new@example.com" {
+					t.Errorf("Expected contact email 'new@example.com', got '%s'", m.LastContactUpserted.Email)
 				}
-				if m.LastContactCreated.FirstName != "John" {
-					t.Errorf("Expected contact first name 'John', got '%s'", m.LastContactCreated.FirstName)
+				if m.LastContactUpserted.FirstName != "John" {
+					t.Errorf("Expected contact first name 'John', got '%s'", m.LastContactUpserted.FirstName)
 				}
 			},
 		},
 		{
 			name:   "Create Contact Service Error",
 			method: http.MethodPost,
-			reqBody: createContactRequest{
+			reqBody: upsertContactRequest{
 				UUID:       "error-uuid",
 				ExternalID: "error-ext",
 				Email:      "error@example.com",
@@ -759,9 +754,10 @@ func TestContactHandler_HandleCreate(t *testing.T) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
+			expectedAction: "",
 			checkCreated: func(t *testing.T, m *MockContactService) {
-				if !m.CreateContactCalled {
-					t.Error("Expected CreateContact to be called, but it wasn't")
+				if !m.UpsertContactCalled {
+					t.Error("Expected UpsertContact to be called, but it wasn't")
 				}
 			},
 		},
@@ -773,16 +769,17 @@ func TestContactHandler_HandleCreate(t *testing.T) {
 				// No special setup
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedAction: "",
 			checkCreated: func(t *testing.T, m *MockContactService) {
-				if m.CreateContactCalled {
-					t.Error("Expected CreateContact not to be called, but it was")
+				if m.UpsertContactCalled {
+					t.Error("Expected UpsertContact not to be called, but it was")
 				}
 			},
 		},
 		{
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
-			reqBody: createContactRequest{
+			reqBody: upsertContactRequest{
 				UUID:       "new-uuid",
 				ExternalID: "new-ext",
 				Email:      "new@example.com",
@@ -792,9 +789,10 @@ func TestContactHandler_HandleCreate(t *testing.T) {
 				// No special setup
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
+			expectedAction: "",
 			checkCreated: func(t *testing.T, m *MockContactService) {
-				if m.CreateContactCalled {
-					t.Error("Expected CreateContact not to be called, but it was")
+				if m.UpsertContactCalled {
+					t.Error("Expected UpsertContact not to be called, but it was")
 				}
 			},
 		},
@@ -818,13 +816,13 @@ func TestContactHandler_HandleCreate(t *testing.T) {
 				}
 			}
 
-			req, err := http.NewRequest(tc.method, "/api/contacts.create", &reqBody)
+			req, err := http.NewRequest(tc.method, "/api/contacts.upsert", &reqBody)
 			if err != nil {
 				t.Fatalf("Failed to create request: %v", err)
 			}
 
 			rr := httptest.NewRecorder()
-			handler.handleCreate(rr, req)
+			handler.handleUpsert(rr, req)
 
 			if status := rr.Code; status != tc.expectedStatus {
 				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
@@ -841,9 +839,17 @@ func TestContactHandler_HandleCreate(t *testing.T) {
 					t.Error("Expected 'contact' field in response, but not found")
 				}
 
+				action, exists := response["action"]
+				if !exists {
+					t.Error("Expected 'action' field in response, but not found")
+				}
+				if exists && tc.expectedAction != "" && action != tc.expectedAction {
+					t.Errorf("Expected action '%s', got '%s'", tc.expectedAction, action)
+				}
+
 				// Verify the response contains the created contact
 				if contactMap, ok := contactData.(map[string]interface{}); ok {
-					if req, ok := tc.reqBody.(createContactRequest); ok {
+					if req, ok := tc.reqBody.(upsertContactRequest); ok {
 						if contactMap["uuid"] != req.UUID {
 							t.Errorf("Expected contact UUID %s, got %v", req.UUID, contactMap["uuid"])
 						}
@@ -854,25 +860,26 @@ func TestContactHandler_HandleCreate(t *testing.T) {
 				}
 			}
 
-			// Run additional checks
+			// Run specific checks
 			tc.checkCreated(t, mockService)
 		})
 	}
 }
 
-func TestContactHandler_HandleUpdate(t *testing.T) {
+func TestContactHandler_HandleUpdate_Upsert(t *testing.T) {
 	testCases := []struct {
 		name           string
 		method         string
 		reqBody        interface{}
 		setupMock      func(*MockContactService)
 		expectedStatus int
+		expectedAction string
 		checkUpdated   func(*testing.T, *MockContactService)
 	}{
 		{
 			name:   "Update Contact Success",
 			method: http.MethodPost,
-			reqBody: updateContactRequest{
+			reqBody: upsertContactRequest{
 				UUID:       "uuid1",
 				ExternalID: "updated-ext",
 				Email:      "updated@example.com",
@@ -884,52 +891,35 @@ func TestContactHandler_HandleUpdate(t *testing.T) {
 				m.contacts = map[string]*domain.Contact{
 					"uuid1": {UUID: "uuid1", Email: "test@example.com", ExternalID: "ext1", Timezone: "UTC"},
 				}
+				m.UpsertIsNewToReturn = false // This is an existing contact
 			},
 			expectedStatus: http.StatusOK,
+			expectedAction: "updated",
 			checkUpdated: func(t *testing.T, m *MockContactService) {
-				if !m.UpdateContactCalled {
-					t.Error("Expected UpdateContact to be called, but it wasn't")
+				if !m.UpsertContactCalled {
+					t.Error("Expected UpsertContact to be called, but it wasn't")
 				}
-				if m.LastContactUpdated == nil {
+				if m.LastContactUpserted == nil {
 					t.Fatal("Expected contact to be updated, but it wasn't")
 				}
-				if m.LastContactUpdated.UUID != "uuid1" {
-					t.Errorf("Expected contact UUID 'uuid1', got '%s'", m.LastContactUpdated.UUID)
+				if m.LastContactUpserted.UUID != "uuid1" {
+					t.Errorf("Expected contact UUID 'uuid1', got '%s'", m.LastContactUpserted.UUID)
 				}
-				if m.LastContactUpdated.Email != "updated@example.com" {
-					t.Errorf("Expected contact email 'updated@example.com', got '%s'", m.LastContactUpdated.Email)
+				if m.LastContactUpserted.Email != "updated@example.com" {
+					t.Errorf("Expected contact email 'updated@example.com', got '%s'", m.LastContactUpserted.Email)
 				}
-				if m.LastContactUpdated.FirstName != "Updated" {
-					t.Errorf("Expected contact first name 'Updated', got '%s'", m.LastContactUpdated.FirstName)
+				if m.LastContactUpserted.FirstName != "Updated" {
+					t.Errorf("Expected contact first name 'Updated', got '%s'", m.LastContactUpserted.FirstName)
 				}
-				if m.LastContactUpdated.Timezone != "Europe/London" {
-					t.Errorf("Expected contact timezone 'Europe/London', got '%s'", m.LastContactUpdated.Timezone)
-				}
-			},
-		},
-		{
-			name:   "Update Contact Not Found",
-			method: http.MethodPost,
-			reqBody: updateContactRequest{
-				UUID:       "nonexistent",
-				ExternalID: "updated-ext",
-				Email:      "updated@example.com",
-				Timezone:   "UTC",
-			},
-			setupMock: func(m *MockContactService) {
-				m.ErrContactNotFoundToReturn = true
-			},
-			expectedStatus: http.StatusNotFound,
-			checkUpdated: func(t *testing.T, m *MockContactService) {
-				if !m.UpdateContactCalled {
-					t.Error("Expected UpdateContact to be called, but it wasn't")
+				if m.LastContactUpserted.Timezone != "Europe/London" {
+					t.Errorf("Expected contact timezone 'Europe/London', got '%s'", m.LastContactUpserted.Timezone)
 				}
 			},
 		},
 		{
 			name:   "Update Contact Service Error",
 			method: http.MethodPost,
-			reqBody: updateContactRequest{
+			reqBody: upsertContactRequest{
 				UUID:       "uuid1",
 				ExternalID: "updated-ext",
 				Email:      "updated@example.com",
@@ -939,9 +929,10 @@ func TestContactHandler_HandleUpdate(t *testing.T) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
+			expectedAction: "",
 			checkUpdated: func(t *testing.T, m *MockContactService) {
-				if !m.UpdateContactCalled {
-					t.Error("Expected UpdateContact to be called, but it wasn't")
+				if !m.UpsertContactCalled {
+					t.Error("Expected UpsertContact to be called, but it wasn't")
 				}
 			},
 		},
@@ -953,35 +944,17 @@ func TestContactHandler_HandleUpdate(t *testing.T) {
 				// No special setup
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedAction: "",
 			checkUpdated: func(t *testing.T, m *MockContactService) {
-				if m.UpdateContactCalled {
-					t.Error("Expected UpdateContact not to be called, but it was")
-				}
-			},
-		},
-		{
-			name:   "Missing UUID in Request",
-			method: http.MethodPost,
-			reqBody: updateContactRequest{
-				UUID:       "", // Empty UUID
-				ExternalID: "updated-ext",
-				Email:      "updated@example.com",
-				Timezone:   "UTC",
-			},
-			setupMock: func(m *MockContactService) {
-				// No special setup
-			},
-			expectedStatus: http.StatusBadRequest,
-			checkUpdated: func(t *testing.T, m *MockContactService) {
-				if m.UpdateContactCalled {
-					t.Error("Expected UpdateContact not to be called, but it was")
+				if m.UpsertContactCalled {
+					t.Error("Expected UpsertContact not to be called, but it was")
 				}
 			},
 		},
 		{
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
-			reqBody: updateContactRequest{
+			reqBody: upsertContactRequest{
 				UUID:       "uuid1",
 				ExternalID: "updated-ext",
 				Email:      "updated@example.com",
@@ -991,9 +964,10 @@ func TestContactHandler_HandleUpdate(t *testing.T) {
 				// No special setup
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
+			expectedAction: "",
 			checkUpdated: func(t *testing.T, m *MockContactService) {
-				if m.UpdateContactCalled {
-					t.Error("Expected UpdateContact not to be called, but it was")
+				if m.UpsertContactCalled {
+					t.Error("Expected UpsertContact not to be called, but it was")
 				}
 			},
 		},
@@ -1017,13 +991,13 @@ func TestContactHandler_HandleUpdate(t *testing.T) {
 				}
 			}
 
-			req, err := http.NewRequest(tc.method, "/api/contacts.update", &reqBody)
+			req, err := http.NewRequest(tc.method, "/api/contacts.upsert", &reqBody)
 			if err != nil {
 				t.Fatalf("Failed to create request: %v", err)
 			}
 
 			rr := httptest.NewRecorder()
-			handler.handleUpdate(rr, req)
+			handler.handleUpsert(rr, req)
 
 			if status := rr.Code; status != tc.expectedStatus {
 				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
@@ -1040,9 +1014,17 @@ func TestContactHandler_HandleUpdate(t *testing.T) {
 					t.Error("Expected 'contact' field in response, but not found")
 				}
 
+				action, exists := response["action"]
+				if !exists {
+					t.Error("Expected 'action' field in response, but not found")
+				}
+				if exists && tc.expectedAction != "" && action != tc.expectedAction {
+					t.Errorf("Expected action '%s', got '%s'", tc.expectedAction, action)
+				}
+
 				// Verify the response contains the updated contact
 				if contactMap, ok := contactData.(map[string]interface{}); ok {
-					if req, ok := tc.reqBody.(updateContactRequest); ok {
+					if req, ok := tc.reqBody.(upsertContactRequest); ok {
 						if contactMap["uuid"] != req.UUID {
 							t.Errorf("Expected contact UUID %s, got %v", req.UUID, contactMap["uuid"])
 						}
@@ -1053,7 +1035,7 @@ func TestContactHandler_HandleUpdate(t *testing.T) {
 				}
 			}
 
-			// Run additional checks
+			// Run specific checks
 			tc.checkUpdated(t, mockService)
 		})
 	}
@@ -1214,7 +1196,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				}
 			}
 
-			// Run additional checks
+			// Run specific checks
 			tc.checkDeleted(t, mockService)
 		})
 	}
@@ -1347,3 +1329,216 @@ func TestContactHandler_HandleImport(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }
+
+func TestContactHandler_HandleUpsert(t *testing.T) {
+	testCases := []struct {
+		name           string
+		method         string
+		reqBody        interface{}
+		setupMock      func(*MockContactService)
+		expectedStatus int
+		expectedAction string
+		checkResult    func(*testing.T, *MockContactService)
+	}{
+		{
+			name:   "Create Contact Without UUID",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"external_id": "new-ext",
+				"email":       "new@example.com",
+				"first_name":  "John",
+				"last_name":   "Doe",
+				"timezone":    "UTC",
+			},
+			setupMock: func(m *MockContactService) {
+				// Reset mock state
+				m.UpsertContactCalled = false
+				m.LastContactUpserted = nil
+				m.ErrToReturn = nil
+				m.UpsertIsNewToReturn = true // Indicate this is a new contact
+			},
+			expectedStatus: http.StatusCreated,
+			expectedAction: "created",
+			checkResult: func(t *testing.T, m *MockContactService) {
+				assert.True(t, m.UpsertContactCalled)
+				assert.NotNil(t, m.LastContactUpserted)
+				assert.Equal(t, "new@example.com", m.LastContactUpserted.Email)
+			},
+		},
+		{
+			name:   "Create Contact With UUID That Doesn't Exist",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"uuid":        "new-uuid",
+				"external_id": "new-ext",
+				"email":       "new@example.com",
+				"first_name":  "John",
+				"last_name":   "Doe",
+				"timezone":    "UTC",
+			},
+			setupMock: func(m *MockContactService) {
+				// Reset mock state
+				m.UpsertContactCalled = false
+				m.LastContactUpserted = nil
+				m.ErrToReturn = nil
+				m.UpsertIsNewToReturn = true // Indicate this is a new contact
+			},
+			expectedStatus: http.StatusCreated,
+			expectedAction: "created",
+			checkResult: func(t *testing.T, m *MockContactService) {
+				assert.True(t, m.UpsertContactCalled)
+				assert.NotNil(t, m.LastContactUpserted)
+				assert.Equal(t, "new-uuid", m.LastContactUpserted.UUID)
+				assert.Equal(t, "new@example.com", m.LastContactUpserted.Email)
+			},
+		},
+		{
+			name:   "Update Existing Contact",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"uuid":        "existing-uuid",
+				"external_id": "updated-ext",
+				"email":       "updated@example.com",
+				"first_name":  "Updated",
+				"last_name":   "Name",
+				"timezone":    "Europe/London",
+			},
+			setupMock: func(m *MockContactService) {
+				// Reset mock state
+				m.UpsertContactCalled = false
+				m.LastContactUpserted = nil
+				m.ErrToReturn = nil
+				m.UpsertIsNewToReturn = false // Indicate this is an existing contact
+
+				// Add existing contact
+				m.contacts["existing-uuid"] = &domain.Contact{
+					UUID:       "existing-uuid",
+					ExternalID: "old-ext",
+					Email:      "old@example.com",
+					FirstName:  "Old",
+					LastName:   "Name",
+					Timezone:   "UTC",
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectedAction: "updated",
+			checkResult: func(t *testing.T, m *MockContactService) {
+				assert.True(t, m.UpsertContactCalled)
+				assert.NotNil(t, m.LastContactUpserted)
+				assert.Equal(t, "existing-uuid", m.LastContactUpserted.UUID)
+				assert.Equal(t, "updated@example.com", m.LastContactUpserted.Email)
+				assert.Equal(t, "Updated", m.LastContactUpserted.FirstName)
+			},
+		},
+		{
+			name:    "Invalid Request Body",
+			method:  http.MethodPost,
+			reqBody: "invalid json",
+			setupMock: func(m *MockContactService) {
+				m.UpsertContactCalled = false
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedAction: "",
+			checkResult: func(t *testing.T, m *MockContactService) {
+				assert.False(t, m.UpsertContactCalled)
+			},
+		},
+		{
+			name:   "Method Not Allowed",
+			method: http.MethodGet,
+			reqBody: map[string]interface{}{
+				"uuid":        "existing-uuid",
+				"external_id": "updated-ext",
+				"email":       "updated@example.com",
+				"timezone":    "UTC",
+			},
+			setupMock: func(m *MockContactService) {
+				m.UpsertContactCalled = false
+			},
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedAction: "",
+			checkResult: func(t *testing.T, m *MockContactService) {
+				assert.False(t, m.UpsertContactCalled)
+			},
+		},
+		{
+			name:   "Service Error on Upsert",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"uuid":        "error-uuid",
+				"external_id": "ext1",
+				"email":       "test@example.com",
+				"timezone":    "UTC",
+			},
+			setupMock: func(m *MockContactService) {
+				m.UpsertContactCalled = false
+				m.ErrToReturn = errors.New("service error")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedAction: "",
+			checkResult: func(t *testing.T, m *MockContactService) {
+				assert.True(t, m.UpsertContactCalled)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockService := &MockContactService{
+				contacts: make(map[string]*domain.Contact),
+			}
+			mockLogger := &MockLoggerForContact{}
+			handler := NewContactHandler(mockService, mockLogger)
+
+			tc.setupMock(mockService)
+
+			var reqBody bytes.Buffer
+			if tc.reqBody != nil {
+				// If it's a string, just use it directly
+				if str, ok := tc.reqBody.(string); ok {
+					reqBody = *bytes.NewBufferString(str)
+				} else {
+					// Otherwise encode as JSON
+					if err := json.NewEncoder(&reqBody).Encode(tc.reqBody); err != nil {
+						t.Fatalf("Failed to encode request body: %v", err)
+					}
+				}
+			}
+
+			req := httptest.NewRequest(tc.method, "/api/contacts.upsert", &reqBody)
+			if err := req.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			handler.handleUpsert(rr, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+
+			// Check response body for success cases
+			if tc.expectedStatus == http.StatusOK || tc.expectedStatus == http.StatusCreated {
+				var response map[string]interface{}
+				err := json.Unmarshal(rr.Body.Bytes(), &response)
+				assert.NoError(t, err)
+
+				// Check action field
+				action, exists := response["action"]
+				assert.True(t, exists)
+				assert.Equal(t, tc.expectedAction, action)
+
+				// Check contact exists
+				_, exists = response["contact"]
+				assert.True(t, exists)
+			}
+
+			// Run specific checks
+			tc.checkResult(t, mockService)
+		})
+	}
+}
+
+// CreateContact and UpdateContact stubs are redirecting to UpsertContact and were previously defined
+// in the HTTP test file as stubs. We need to keep these stubs to maintain compatibility with existing tests,
+// but they should just call UpsertContact.

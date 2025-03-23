@@ -20,11 +20,6 @@ type MockContactRepository struct {
 	mock.Mock
 }
 
-func (m *MockContactRepository) CreateContact(ctx context.Context, contact *domain.Contact) error {
-	args := m.Called(ctx, contact)
-	return args.Error(0)
-}
-
 func (m *MockContactRepository) GetContactByUUID(ctx context.Context, uuid string) (*domain.Contact, error) {
 	args := m.Called(ctx, uuid)
 	if args.Get(0) == nil {
@@ -57,11 +52,6 @@ func (m *MockContactRepository) GetContacts(ctx context.Context) ([]*domain.Cont
 	return args.Get(0).([]*domain.Contact), args.Error(1)
 }
 
-func (m *MockContactRepository) UpdateContact(ctx context.Context, contact *domain.Contact) error {
-	args := m.Called(ctx, contact)
-	return args.Error(0)
-}
-
 func (m *MockContactRepository) DeleteContact(ctx context.Context, uuid string) error {
 	args := m.Called(ctx, uuid)
 	return args.Error(0)
@@ -72,108 +62,12 @@ func (m *MockContactRepository) BatchImportContacts(ctx context.Context, contact
 	return args.Error(0)
 }
 
-// Tests begin here
-
-func TestContactService_CreateContact(t *testing.T) {
-	mockRepo := new(MockContactRepository)
-	mockLogger := new(MockLogger)
-	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
-	mockLogger.On("Error", mock.Anything).Maybe()
-
-	service := NewContactService(mockRepo, mockLogger)
-
-	t.Run("should create contact successfully", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		contact := &domain.Contact{
-			UUID:       testContactUUID1,
-			Email:      "test@example.com",
-			ExternalID: "test-external-id",
-			Timezone:   "UTC",
-			FirstName:  "Test",
-			LastName:   "Contact",
-		}
-
-		mockRepo.On("CreateContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			// Verify timestamps are set
-			return c.UUID == contact.UUID && c.Email == contact.Email &&
-				!c.CreatedAt.IsZero() && !c.UpdatedAt.IsZero()
-		})).Return(nil).Once()
-
-		// Act
-		err := service.CreateContact(ctx, contact)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.False(t, contact.CreatedAt.IsZero())
-		assert.False(t, contact.UpdatedAt.IsZero())
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("should generate UUID if not provided", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		contact := &domain.Contact{
-			Email:      "test@example.com",
-			ExternalID: "test-external-id",
-			Timezone:   "UTC",
-			FirstName:  "Test",
-			LastName:   "Contact",
-		}
-
-		mockRepo.On("CreateContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			return c.UUID != "" && c.Email == contact.Email
-		})).Return(nil).Once()
-
-		// Act
-		err := service.CreateContact(ctx, contact)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.NotEmpty(t, contact.UUID)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("should return error if contact is invalid", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		contact := &domain.Contact{
-			UUID: "invalid-uuid", // Invalid UUID format
-			// Email missing, which is required
-		}
-
-		// Act
-		err := service.CreateContact(ctx, contact)
-
-		// Assert
-		assert.Error(t, err)
-		mockRepo.AssertNotCalled(t, "CreateContact")
-	})
-
-	t.Run("should return error if repository fails", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		contact := &domain.Contact{
-			UUID:       testContactUUID1,
-			Email:      "test@example.com",
-			ExternalID: "test-external-id",
-			Timezone:   "UTC",
-		}
-
-		repoErr := errors.New("repository error")
-		mockRepo.On("CreateContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			return c.UUID == contact.UUID && c.Email == contact.Email
-		})).Return(repoErr).Once()
-
-		// Act
-		err := service.CreateContact(ctx, contact)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to create contact")
-		mockRepo.AssertExpectations(t)
-	})
+func (m *MockContactRepository) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
+	args := m.Called(ctx, contact)
+	return args.Bool(0), args.Error(1)
 }
+
+// Tests begin here
 
 func TestContactService_GetContactByUUID(t *testing.T) {
 	mockRepo := new(MockContactRepository)
@@ -457,83 +351,6 @@ func TestContactService_GetContacts(t *testing.T) {
 	})
 }
 
-func TestContactService_UpdateContact(t *testing.T) {
-	mockRepo := new(MockContactRepository)
-	mockLogger := new(MockLogger)
-	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
-	mockLogger.On("Error", mock.Anything).Maybe()
-
-	service := NewContactService(mockRepo, mockLogger)
-
-	t.Run("should update contact successfully", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		contact := &domain.Contact{
-			UUID:       testContactUUID1,
-			Email:      "updated@example.com",
-			ExternalID: "test-external-id",
-			Timezone:   "UTC",
-			FirstName:  "Updated",
-			LastName:   "Name",
-		}
-
-		mockRepo.On("UpdateContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			return c.UUID == contact.UUID &&
-				c.Email == contact.Email &&
-				c.FirstName == contact.FirstName &&
-				!c.UpdatedAt.IsZero()
-		})).Return(nil).Once()
-
-		// Act
-		err := service.UpdateContact(ctx, contact)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.False(t, contact.UpdatedAt.IsZero())
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("should return error if contact is invalid", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		contact := &domain.Contact{
-			UUID: "invalid-uuid", // Invalid UUID format
-			// Email missing, which is required
-		}
-
-		// Act
-		err := service.UpdateContact(ctx, contact)
-
-		// Assert
-		assert.Error(t, err)
-		mockRepo.AssertNotCalled(t, "UpdateContact")
-	})
-
-	t.Run("should return error if repository fails", func(t *testing.T) {
-		// Arrange
-		ctx := context.Background()
-		contact := &domain.Contact{
-			UUID:       testContactUUID1,
-			Email:      "test@example.com",
-			ExternalID: "test-external-id",
-			Timezone:   "UTC",
-		}
-
-		repoErr := errors.New("repository error")
-		mockRepo.On("UpdateContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
-			return c.UUID == contact.UUID && c.Email == contact.Email
-		})).Return(repoErr).Once()
-
-		// Act
-		err := service.UpdateContact(ctx, contact)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to update contact")
-		mockRepo.AssertExpectations(t)
-	})
-}
-
 func TestContactService_DeleteContact(t *testing.T) {
 	mockRepo := new(MockContactRepository)
 	mockLogger := new(MockLogger)
@@ -691,6 +508,138 @@ func TestBatchImportContacts(t *testing.T) {
 		err := service.BatchImportContacts(context.Background(), contacts)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository error")
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestContactService_UpsertContact(t *testing.T) {
+	mockRepo := new(MockContactRepository)
+	mockLogger := new(MockLogger)
+	mockLogger.On("WithField", mock.Anything, mock.Anything).Return(mockLogger)
+	mockLogger.On("Error", mock.Anything).Maybe()
+
+	service := NewContactService(mockRepo, mockLogger)
+
+	t.Run("should create new contact successfully", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		contact := &domain.Contact{
+			UUID:       testContactUUID1,
+			Email:      "test@example.com",
+			ExternalID: "test-external-id",
+			Timezone:   "UTC",
+			FirstName:  "Test",
+			LastName:   "Contact",
+		}
+
+		mockRepo.On("UpsertContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
+			// Verify timestamps are set
+			return c.UUID == contact.UUID && c.Email == contact.Email &&
+				!c.CreatedAt.IsZero() && !c.UpdatedAt.IsZero()
+		})).Return(true, nil).Once()
+
+		// Act
+		isNew, err := service.UpsertContact(ctx, contact)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.True(t, isNew)
+		assert.False(t, contact.CreatedAt.IsZero())
+		assert.False(t, contact.UpdatedAt.IsZero())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("should update existing contact successfully", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		contact := &domain.Contact{
+			UUID:       testContactUUID1,
+			Email:      "test@example.com",
+			ExternalID: "test-external-id",
+			Timezone:   "UTC",
+			FirstName:  "Test",
+			LastName:   "Contact",
+		}
+
+		mockRepo.On("UpsertContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
+			// Verify timestamps are set
+			return c.UUID == contact.UUID && c.Email == contact.Email && !c.UpdatedAt.IsZero()
+		})).Return(false, nil).Once()
+
+		// Act
+		isNew, err := service.UpsertContact(ctx, contact)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.False(t, isNew)
+		assert.False(t, contact.UpdatedAt.IsZero())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("should generate UUID if not provided", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		contact := &domain.Contact{
+			Email:      "test@example.com",
+			ExternalID: "test-external-id",
+			Timezone:   "UTC",
+			FirstName:  "Test",
+			LastName:   "Contact",
+		}
+
+		mockRepo.On("UpsertContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
+			return c.UUID != "" && c.Email == contact.Email
+		})).Return(true, nil).Once()
+
+		// Act
+		isNew, err := service.UpsertContact(ctx, contact)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.True(t, isNew)
+		assert.NotEmpty(t, contact.UUID)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("should return error if contact is invalid", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		contact := &domain.Contact{
+			UUID: "invalid-uuid", // Invalid UUID format
+			// Email missing, which is required
+		}
+
+		// Act
+		isNew, err := service.UpsertContact(ctx, contact)
+
+		// Assert
+		assert.Error(t, err)
+		assert.False(t, isNew)
+		mockRepo.AssertNotCalled(t, "UpsertContact")
+	})
+
+	t.Run("should return error if repository fails", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		contact := &domain.Contact{
+			UUID:       testContactUUID1,
+			Email:      "test@example.com",
+			ExternalID: "test-external-id",
+			Timezone:   "UTC",
+		}
+
+		repoErr := errors.New("repository error")
+		mockRepo.On("UpsertContact", ctx, mock.MatchedBy(func(c *domain.Contact) bool {
+			return c.UUID == contact.UUID && c.Email == contact.Email
+		})).Return(false, repoErr).Once()
+
+		// Act
+		isNew, err := service.UpsertContact(ctx, contact)
+
+		// Assert
+		assert.Error(t, err)
+		assert.False(t, isNew)
+		assert.Contains(t, err.Error(), "failed to upsert contact")
 		mockRepo.AssertExpectations(t)
 	})
 }

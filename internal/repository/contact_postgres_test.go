@@ -15,65 +15,6 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 )
 
-func TestCreateContact(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
-	defer cleanup()
-
-	repo := NewContactRepository(db)
-	contactUUID := uuid.New().String()
-
-	// Test case 1: Successful contact creation
-	contact := &domain.Contact{
-		UUID:       contactUUID,
-		ExternalID: "ext123",
-		Email:      "test@example.com",
-		Timezone:   "Europe/Paris",
-		FirstName:  "John",
-		LastName:   "Doe",
-	}
-
-	mock.ExpectExec(`INSERT INTO contacts`).
-		WithArgs(
-			contact.UUID, contact.ExternalID, contact.Email, contact.Timezone,
-			contact.FirstName, contact.LastName, contact.Phone, contact.AddressLine1, contact.AddressLine2,
-			contact.Country, contact.Postcode, contact.State, contact.JobTitle,
-			contact.LifetimeValue, contact.OrdersCount, contact.LastOrderAt,
-			contact.CustomString1, contact.CustomString2, contact.CustomString3, contact.CustomString4, contact.CustomString5,
-			contact.CustomNumber1, contact.CustomNumber2, contact.CustomNumber3, contact.CustomNumber4, contact.CustomNumber5,
-			contact.CustomDatetime1, contact.CustomDatetime2, contact.CustomDatetime3, contact.CustomDatetime4, contact.CustomDatetime5,
-			sqlmock.AnyArg(), sqlmock.AnyArg(),
-		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	err := repo.CreateContact(context.Background(), contact)
-	require.NoError(t, err)
-
-	// Test case 2: Error during contact creation
-	contactWithError := &domain.Contact{
-		UUID:       uuid.New().String(),
-		ExternalID: "ext456",
-		Email:      "error@example.com",
-		Timezone:   "Europe/Paris",
-	}
-
-	mock.ExpectExec(`INSERT INTO contacts`).
-		WithArgs(
-			contactWithError.UUID, contactWithError.ExternalID, contactWithError.Email, contactWithError.Timezone,
-			contactWithError.FirstName, contactWithError.LastName, contactWithError.Phone, contactWithError.AddressLine1, contactWithError.AddressLine2,
-			contactWithError.Country, contactWithError.Postcode, contactWithError.State, contactWithError.JobTitle,
-			contactWithError.LifetimeValue, contactWithError.OrdersCount, contactWithError.LastOrderAt,
-			contactWithError.CustomString1, contactWithError.CustomString2, contactWithError.CustomString3, contactWithError.CustomString4, contactWithError.CustomString5,
-			contactWithError.CustomNumber1, contactWithError.CustomNumber2, contactWithError.CustomNumber3, contactWithError.CustomNumber4, contactWithError.CustomNumber5,
-			contactWithError.CustomDatetime1, contactWithError.CustomDatetime2, contactWithError.CustomDatetime3, contactWithError.CustomDatetime4, contactWithError.CustomDatetime5,
-			sqlmock.AnyArg(), sqlmock.AnyArg(),
-		).
-		WillReturnError(errors.New("database error"))
-
-	err = repo.CreateContact(context.Background(), contactWithError)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create contact")
-}
-
 func TestGetContactByUUID(t *testing.T) {
 	db, mock, cleanup := SetupMockDB(t)
 	defer cleanup()
@@ -313,65 +254,6 @@ func TestGetContacts(t *testing.T) {
 	assert.Nil(t, contacts)
 }
 
-func TestUpdateContact(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
-	defer cleanup()
-
-	repo := NewContactRepository(db)
-	contactUUID := uuid.New().String()
-
-	// Test case 1: Successful update
-	contact := &domain.Contact{
-		UUID:       contactUUID,
-		ExternalID: "ext123",
-		Email:      "test@example.com",
-		Timezone:   "Europe/Paris",
-		FirstName:  "John",
-		LastName:   "Doe",
-	}
-
-	mock.ExpectExec(`UPDATE contacts SET (.+) WHERE uuid = \$32`).
-		WithArgs(
-			contact.ExternalID, contact.Email, contact.Timezone,
-			contact.FirstName, contact.LastName, contact.Phone, contact.AddressLine1, contact.AddressLine2,
-			contact.Country, contact.Postcode, contact.State, contact.JobTitle,
-			contact.LifetimeValue, contact.OrdersCount, contact.LastOrderAt,
-			contact.CustomString1, contact.CustomString2, contact.CustomString3, contact.CustomString4, contact.CustomString5,
-			contact.CustomNumber1, contact.CustomNumber2, contact.CustomNumber3, contact.CustomNumber4, contact.CustomNumber5,
-			contact.CustomDatetime1, contact.CustomDatetime2, contact.CustomDatetime3, contact.CustomDatetime4, contact.CustomDatetime5,
-			sqlmock.AnyArg(), contact.UUID,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
-	err := repo.UpdateContact(context.Background(), contact)
-	require.NoError(t, err)
-
-	// Test case 2: Contact not found
-	nonExistentContact := &domain.Contact{
-		UUID:       "non-existent-uuid",
-		ExternalID: "ext456",
-		Email:      "nonexistent@example.com",
-		Timezone:   "Europe/Paris",
-	}
-
-	mock.ExpectExec(`UPDATE contacts SET (.+) WHERE uuid = \$32`).
-		WithArgs(
-			nonExistentContact.ExternalID, nonExistentContact.Email, nonExistentContact.Timezone,
-			nonExistentContact.FirstName, nonExistentContact.LastName, nonExistentContact.Phone, nonExistentContact.AddressLine1, nonExistentContact.AddressLine2,
-			nonExistentContact.Country, nonExistentContact.Postcode, nonExistentContact.State, nonExistentContact.JobTitle,
-			nonExistentContact.LifetimeValue, nonExistentContact.OrdersCount, nonExistentContact.LastOrderAt,
-			nonExistentContact.CustomString1, nonExistentContact.CustomString2, nonExistentContact.CustomString3, nonExistentContact.CustomString4, nonExistentContact.CustomString5,
-			nonExistentContact.CustomNumber1, nonExistentContact.CustomNumber2, nonExistentContact.CustomNumber3, nonExistentContact.CustomNumber4, nonExistentContact.CustomNumber5,
-			nonExistentContact.CustomDatetime1, nonExistentContact.CustomDatetime2, nonExistentContact.CustomDatetime3, nonExistentContact.CustomDatetime4, nonExistentContact.CustomDatetime5,
-			sqlmock.AnyArg(), nonExistentContact.UUID,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-
-	err = repo.UpdateContact(context.Background(), nonExistentContact)
-	require.Error(t, err)
-	assert.IsType(t, &domain.ErrContactNotFound{}, err)
-}
-
 func TestDeleteContact(t *testing.T) {
 	db, mock, cleanup := SetupMockDB(t)
 	defer cleanup()
@@ -497,7 +379,7 @@ func TestBatchImportContacts(t *testing.T) {
 
 	err = repo.BatchImportContacts(context.Background(), contacts)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to upsert contact")
+	assert.Contains(t, err.Error(), "failed to execute statement")
 
 	// Test case 5: Commit fails
 	mock.ExpectBegin()
@@ -520,4 +402,186 @@ func TestBatchImportContacts(t *testing.T) {
 	err = repo.BatchImportContacts(context.Background(), contacts)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to commit transaction")
+}
+
+func TestUpsertContact(t *testing.T) {
+	db, mock, cleanup := SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewContactRepository(db)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	contactUUID := uuid.New().String()
+
+	t.Run("Create new contact", func(t *testing.T) {
+		// First, contact doesn't exist
+		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE uuid = \$1`).
+			WithArgs(contactUUID).
+			WillReturnError(sql.ErrNoRows)
+
+		// Then the INSERT with ON CONFLICT clause
+		mock.ExpectExec(`INSERT INTO contacts`).
+			WithArgs(
+				contactUUID, "ext123", "test@example.com", "Europe/Paris",
+				"John", "Doe", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(),
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		contact := &domain.Contact{
+			UUID:       contactUUID,
+			ExternalID: "ext123",
+			Email:      "test@example.com",
+			Timezone:   "Europe/Paris",
+			FirstName:  "John",
+			LastName:   "Doe",
+		}
+
+		isNew, err := repo.UpsertContact(context.Background(), contact)
+		require.NoError(t, err)
+		assert.True(t, isNew, "Expected isNew to be true for a new contact")
+		mock.ExpectationsWereMet()
+	})
+
+	t.Run("Update existing contact", func(t *testing.T) {
+		// Reset expectations
+		var err error
+		db.Close()
+		db, mock, err = sqlmock.New()
+		require.NoError(t, err)
+		cleanup = func() { db.Close() }
+		repo = NewContactRepository(db)
+
+		// Create a mock row with empty strings instead of NULLs to avoid Scan issues
+		var emptyTime time.Time
+		var zeroFloat float64
+		var zeroInt int
+
+		columns := []string{
+			"uuid", "external_id", "email", "timezone",
+			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+			"country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"created_at", "updated_at",
+		}
+
+		mockRow := sqlmock.NewRows(columns).
+			AddRow(
+				contactUUID, "old-ext", "old@example.com", "UTC",
+				"Old", "Name", "", "", "", // Empty strings instead of NULL
+				"", "", "", "",
+				zeroFloat, zeroInt, emptyTime,
+				"", "", "", "", "",
+				zeroFloat, zeroFloat, zeroFloat, zeroFloat, zeroFloat,
+				emptyTime, emptyTime, emptyTime, emptyTime, emptyTime,
+				now, now,
+			)
+
+		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE uuid = \$1`).
+			WithArgs(contactUUID).
+			WillReturnRows(mockRow)
+
+		// Then the INSERT with ON CONFLICT clause (acts as an update)
+		mock.ExpectExec(`INSERT INTO contacts`).
+			WithArgs(
+				contactUUID, "ext123", "test@example.com", "Europe/Paris",
+				"John", "Doe", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(),
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		contact := &domain.Contact{
+			UUID:       contactUUID,
+			ExternalID: "ext123",
+			Email:      "test@example.com",
+			Timezone:   "Europe/Paris",
+			FirstName:  "John",
+			LastName:   "Doe",
+		}
+
+		isNew, err := repo.UpsertContact(context.Background(), contact)
+		require.NoError(t, err)
+		assert.False(t, isNew, "Expected isNew to be false for an existing contact")
+		mock.ExpectationsWereMet()
+	})
+
+	t.Run("Error checking if contact exists", func(t *testing.T) {
+		// Reset expectations
+		var err error
+		db.Close()
+		db, mock, err = sqlmock.New()
+		require.NoError(t, err)
+		cleanup = func() { db.Close() }
+		repo = NewContactRepository(db)
+
+		// Error when checking if contact exists
+		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE uuid = \$1`).
+			WithArgs(contactUUID).
+			WillReturnError(errors.New("database error"))
+
+		contact := &domain.Contact{
+			UUID:       contactUUID,
+			ExternalID: "ext123",
+			Email:      "test@example.com",
+			Timezone:   "Europe/Paris",
+		}
+
+		_, err = repo.UpsertContact(context.Background(), contact)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to check if contact exists")
+		mock.ExpectationsWereMet()
+	})
+
+	t.Run("Error during upsert", func(t *testing.T) {
+		// Reset expectations
+		var err error
+		db.Close()
+		db, mock, err = sqlmock.New()
+		require.NoError(t, err)
+		cleanup = func() { db.Close() }
+		repo = NewContactRepository(db)
+
+		// Contact doesn't exist
+		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE uuid = \$1`).
+			WithArgs(contactUUID).
+			WillReturnError(sql.ErrNoRows)
+
+		// Error during upsert
+		mock.ExpectExec(`INSERT INTO contacts`).
+			WithArgs(
+				contactUUID, "ext123", "test@example.com", "Europe/Paris",
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(),
+			).
+			WillReturnError(errors.New("database error"))
+
+		contact := &domain.Contact{
+			UUID:       contactUUID,
+			ExternalID: "ext123",
+			Email:      "test@example.com",
+			Timezone:   "Europe/Paris",
+		}
+
+		_, err = repo.UpsertContact(context.Background(), contact)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to upsert contact")
+		mock.ExpectationsWereMet()
+	})
 }

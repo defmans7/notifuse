@@ -6,9 +6,6 @@ import (
 
 // ContactService provides operations for managing contacts
 type ContactService interface {
-	// CreateContact creates a new contact
-	CreateContact(ctx context.Context, contact *Contact) error
-
 	// GetContactByUUID retrieves a contact by its UUID
 	GetContactByUUID(ctx context.Context, uuid string) (*Contact, error)
 
@@ -21,14 +18,15 @@ type ContactService interface {
 	// GetContacts retrieves all contacts
 	GetContacts(ctx context.Context) ([]*Contact, error)
 
-	// UpdateContact updates an existing contact
-	UpdateContact(ctx context.Context, contact *Contact) error
-
 	// DeleteContact deletes a contact by UUID
 	DeleteContact(ctx context.Context, uuid string) error
 
 	// BatchImportContacts imports a batch of contacts (create or update)
 	BatchImportContacts(ctx context.Context, contacts []*Contact) error
+
+	// UpsertContact creates a new contact or updates an existing one
+	// Returns a boolean indicating whether a new contact was created (true) or an existing one was updated (false)
+	UpsertContact(ctx context.Context, contact *Contact) (bool, error)
 }
 
 // ListService provides operations for managing lists

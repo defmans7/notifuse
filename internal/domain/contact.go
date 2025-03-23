@@ -195,9 +195,6 @@ func ScanContact(scanner interface {
 }
 
 type ContactRepository interface {
-	// CreateContact creates a new contact in the database
-	CreateContact(ctx context.Context, contact *Contact) error
-
 	// GetContactByUUID retrieves a contact by its UUID
 	GetContactByUUID(ctx context.Context, uuid string) (*Contact, error)
 
@@ -210,14 +207,14 @@ type ContactRepository interface {
 	// GetContacts retrieves all contacts
 	GetContacts(ctx context.Context) ([]*Contact, error)
 
-	// UpdateContact updates an existing contact
-	UpdateContact(ctx context.Context, contact *Contact) error
-
 	// DeleteContact deletes a contact
 	DeleteContact(ctx context.Context, uuid string) error
 
 	// BatchImportContacts inserts or updates multiple contacts in a batch operation
 	BatchImportContacts(ctx context.Context, contacts []*Contact) error
+
+	// UpsertContact creates a new contact or updates an existing one
+	UpsertContact(ctx context.Context, contact *Contact) (bool, error)
 }
 
 // ErrContactNotFound is returned when a contact is not found
