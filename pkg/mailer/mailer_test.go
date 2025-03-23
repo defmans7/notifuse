@@ -60,6 +60,13 @@ func (m *MockMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, 
 	return nil
 }
 
+func (m *MockMailer) SendMagicCode(email, code string) error {
+	if m.shouldFail {
+		return errors.New("mock mailer error")
+	}
+	return nil
+}
+
 // ValidatingMailer is a mock implementation that validates inputs
 type ValidatingMailer struct {
 	config *Config
@@ -290,7 +297,8 @@ func TestSMTPMailer_SendWorkspaceInvitation(t *testing.T) {
 		BaseURL:      baseURL,
 	}
 
-	mailer := NewSMTPMailer(config)
+	// Create a test mode mailer
+	mailer := NewTestSMTPMailer(config)
 
 	// Capture log output
 	logOutput := captureLog(func() {
@@ -333,7 +341,7 @@ func TestSMTPMailer_WithEdgeCases(t *testing.T) {
 			inviterName:   "",
 			token:         "",
 			baseURL:       "",
-			expectError:   false, // current implementation doesn't validate inputs
+			expectError:   true, // empty email should cause error
 		},
 		{
 			name:          "special characters in workspace name",
@@ -367,7 +375,8 @@ func TestSMTPMailer_WithEdgeCases(t *testing.T) {
 				BaseURL:      tc.baseURL,
 			}
 
-			mailer := NewSMTPMailer(config)
+			// Use test mode mailer
+			mailer := NewTestSMTPMailer(config)
 
 			logOutput := captureLog(func() {
 				err := mailer.SendWorkspaceInvitation(tc.email, tc.workspaceName, tc.inviterName, tc.token)
@@ -379,16 +388,17 @@ func TestSMTPMailer_WithEdgeCases(t *testing.T) {
 				}
 			})
 
-			// For the empty fields case, verify that no error occurs and the log contains the empty values
-			if tc.name == "all fields empty" {
-				if !strings.Contains(logOutput, "Sending invitation email to: ") {
-					t.Errorf("Expected log to contain empty email, but it didn't. Log: %s", logOutput)
+			// For non-empty email cases, verify log contains info
+			if tc.email != "" && !tc.expectError {
+				if !strings.Contains(logOutput, "Sending invitation email to: "+tc.email) {
+					t.Errorf("Expected log to contain email '%s', but it didn't. Log: %s", tc.email, logOutput)
 				}
 			}
 
-			// For the special characters case, verify that the log contains the workspace name
-			if tc.name == "special characters in workspace name" {
-				if !strings.Contains(logOutput, "Subject: You've been invited to join "+tc.workspaceName) {
+			// For the special characters case, verify the log contains the workspace name
+			if tc.name == "special characters in workspace name" && !tc.expectError {
+				expectedSubject := "Subject: You've been invited to join " + tc.workspaceName
+				if !strings.Contains(logOutput, expectedSubject) {
 					t.Errorf("Expected log to contain workspace name with special characters, but it didn't. Log: %s", logOutput)
 				}
 			}
@@ -496,5 +506,48 @@ func TestMailerConfig(t *testing.T) {
 			// Run additional validation
 			tc.validate(t, mailer.config)
 		})
+	}
+}
+
+func TestSMTPMailer_SendMagicCode(t *testing.T) {
+	// Setup test data
+	email := "test@example.com"
+	code := "123456"
+	baseURL := "https://notifuse.example.com"
+
+	// Create the config and mailer
+	config := &Config{
+		SMTPHost:     "smtp.example.com",
+		SMTPPort:     587,
+		SMTPUsername: "username",
+		SMTPPassword: "password",
+		FromEmail:    "noreply@example.com",
+		FromName:     "Notifuse",
+		BaseURL:      baseURL,
+	}
+
+	// Create a test mode mailer
+	mailer := NewTestSMTPMailer(config)
+
+	// Capture log output
+	logOutput := captureLog(func() {
+		err := mailer.SendMagicCode(email, code)
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+	})
+
+	// Verify log output contains expected information
+	expectedLogLines := []string{
+		"Sending magic code to: " + email,
+		"From: " + config.FromName + " <" + config.FromEmail + ">",
+		"Subject: Your Notifuse authentication code",
+		"Code: " + code,
+	}
+
+	for _, expected := range expectedLogLines {
+		if !strings.Contains(logOutput, expected) {
+			t.Errorf("Expected log to contain '%s', but it didn't. Log: %s", expected, logOutput)
+		}
 	}
 }
