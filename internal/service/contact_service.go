@@ -47,14 +47,19 @@ func (s *ContactService) GetContactByExternalID(ctx context.Context, externalID 
 	return contact, nil
 }
 
-func (s *ContactService) GetContacts(ctx context.Context) ([]*domain.Contact, error) {
-	contacts, err := s.repo.GetContacts(ctx)
+func (s *ContactService) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid request: %w", err)
+	}
+
+	response, err := s.repo.GetContacts(ctx, req)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to get contacts: %v", err))
 		return nil, fmt.Errorf("failed to get contacts: %w", err)
 	}
 
-	return contacts, nil
+	return response, nil
 }
 
 func (s *ContactService) DeleteContact(ctx context.Context, email string) error {

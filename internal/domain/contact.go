@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/mail"
 	"time"
@@ -51,6 +52,12 @@ type Contact struct {
 	CustomDatetime3 NullableTime `json:"custom_datetime_3,omitempty" valid:"optional"`
 	CustomDatetime4 NullableTime `json:"custom_datetime_4,omitempty" valid:"optional"`
 	CustomDatetime5 NullableTime `json:"custom_datetime_5,omitempty" valid:"optional"`
+
+	CustomJSON1 NullableJSON `json:"custom_json_1,omitempty" valid:"optional"`
+	CustomJSON2 NullableJSON `json:"custom_json_2,omitempty" valid:"optional"`
+	CustomJSON3 NullableJSON `json:"custom_json_3,omitempty" valid:"optional"`
+	CustomJSON4 NullableJSON `json:"custom_json_4,omitempty" valid:"optional"`
+	CustomJSON5 NullableJSON `json:"custom_json_5,omitempty" valid:"optional"`
 
 	// Timestamps
 	CreatedAt time.Time `json:"created_at"`
@@ -118,6 +125,12 @@ type dbContact struct {
 	CustomDatetime4 sql.NullTime
 	CustomDatetime5 sql.NullTime
 
+	CustomJSON1 []byte
+	CustomJSON2 []byte
+	CustomJSON3 []byte
+	CustomJSON4 []byte
+	CustomJSON5 []byte
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -158,6 +171,11 @@ func ScanContact(scanner interface {
 		&dbc.CustomDatetime3,
 		&dbc.CustomDatetime4,
 		&dbc.CustomDatetime5,
+		&dbc.CustomJSON1,
+		&dbc.CustomJSON2,
+		&dbc.CustomJSON3,
+		&dbc.CustomJSON4,
+		&dbc.CustomJSON5,
 		&dbc.CreatedAt,
 		&dbc.UpdatedAt,
 	); err != nil {
@@ -286,7 +304,82 @@ func ScanContact(scanner interface {
 		UpdatedAt: dbc.UpdatedAt,
 	}
 
+	// Handle custom JSON fields
+	if len(dbc.CustomJSON1) > 0 {
+		var data interface{}
+		if err := json.Unmarshal(dbc.CustomJSON1, &data); err == nil {
+			c.CustomJSON1 = NullableJSON{Data: data, Valid: true}
+		}
+	}
+	if len(dbc.CustomJSON2) > 0 {
+		var data interface{}
+		if err := json.Unmarshal(dbc.CustomJSON2, &data); err == nil {
+			c.CustomJSON2 = NullableJSON{Data: data, Valid: true}
+		}
+	}
+	if len(dbc.CustomJSON3) > 0 {
+		var data interface{}
+		if err := json.Unmarshal(dbc.CustomJSON3, &data); err == nil {
+			c.CustomJSON3 = NullableJSON{Data: data, Valid: true}
+		}
+	}
+	if len(dbc.CustomJSON4) > 0 {
+		var data interface{}
+		if err := json.Unmarshal(dbc.CustomJSON4, &data); err == nil {
+			c.CustomJSON4 = NullableJSON{Data: data, Valid: true}
+		}
+	}
+	if len(dbc.CustomJSON5) > 0 {
+		var data interface{}
+		if err := json.Unmarshal(dbc.CustomJSON5, &data); err == nil {
+			c.CustomJSON5 = NullableJSON{Data: data, Valid: true}
+		}
+	}
+
 	return c, nil
+}
+
+// GetContactsRequest represents a request to get contacts with filters and pagination
+type GetContactsRequest struct {
+	// Required fields
+	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+
+	// Optional filters
+	Email      string `json:"email,omitempty" valid:"optional,email"`
+	ExternalID string `json:"external_id,omitempty" valid:"optional"`
+	FirstName  string `json:"first_name,omitempty" valid:"optional"`
+	LastName   string `json:"last_name,omitempty" valid:"optional"`
+	Phone      string `json:"phone,omitempty" valid:"optional"`
+	Country    string `json:"country,omitempty" valid:"optional"`
+
+	// Pagination
+	Limit  int    `json:"limit,omitempty" valid:"optional,range(1|100)"`
+	Cursor string `json:"cursor,omitempty" valid:"optional"`
+}
+
+// GetContactsResponse represents the response from getting contacts
+type GetContactsResponse struct {
+	Contacts   []*Contact `json:"contacts"`
+	NextCursor string     `json:"next_cursor,omitempty"`
+}
+
+// Validate ensures that the request has all required fields and valid values
+func (r *GetContactsRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	// Set default limit if not provided
+	if r.Limit == 0 {
+		r.Limit = 20
+	}
+
+	// Enforce maximum limit
+	if r.Limit > 100 {
+		r.Limit = 100
+	}
+
+	return nil
 }
 
 // ContactService provides operations for managing contacts
@@ -297,8 +390,8 @@ type ContactService interface {
 	// GetContactByExternalID retrieves a contact by external ID
 	GetContactByExternalID(ctx context.Context, externalID string) (*Contact, error)
 
-	// GetContacts retrieves all contacts
-	GetContacts(ctx context.Context) ([]*Contact, error)
+	// GetContacts retrieves contacts with filters and pagination
+	GetContacts(ctx context.Context, req *GetContactsRequest) (*GetContactsResponse, error)
 
 	// DeleteContact deletes a contact by email
 	DeleteContact(ctx context.Context, email string) error
@@ -318,8 +411,8 @@ type ContactRepository interface {
 	// GetContactByExternalID retrieves a contact by its external ID
 	GetContactByExternalID(ctx context.Context, externalID string) (*Contact, error)
 
-	// GetContacts retrieves all contacts
-	GetContacts(ctx context.Context) ([]*Contact, error)
+	// GetContacts retrieves contacts with filters and pagination
+	GetContacts(ctx context.Context, req *GetContactsRequest) (*GetContactsResponse, error)
 
 	// DeleteContact deletes a contact
 	DeleteContact(ctx context.Context, email string) error

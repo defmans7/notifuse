@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"database/sql"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -24,26 +25,33 @@ func TestContact_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid contact with all fields",
+			name: "valid contact with all fields including custom JSON",
 			contact: domain.Contact{
-				Email:           "test@example.com",
-				ExternalID:      "ext123",
-				Timezone:        "Europe/Paris",
-				FirstName:       domain.NullableString{String: "John", IsNull: false},
-				LastName:        domain.NullableString{String: "Doe", IsNull: false},
-				Phone:           domain.NullableString{String: "+1234567890", IsNull: false},
-				AddressLine1:    domain.NullableString{String: "123 Main St", IsNull: false},
-				AddressLine2:    domain.NullableString{String: "Apt 4B", IsNull: false},
-				Country:         domain.NullableString{String: "USA", IsNull: false},
-				Postcode:        domain.NullableString{String: "12345", IsNull: false},
-				State:           domain.NullableString{String: "CA", IsNull: false},
-				JobTitle:        domain.NullableString{String: "Developer", IsNull: false},
-				LifetimeValue:   domain.NullableFloat64{Float64: 100.50, IsNull: false},
-				OrdersCount:     domain.NullableFloat64{Float64: 5, IsNull: false},
-				LastOrderAt:     domain.NullableTime{Time: time.Now(), IsNull: false},
-				CustomString1:   domain.NullableString{String: "Custom 1", IsNull: false},
-				CustomNumber1:   domain.NullableFloat64{Float64: 42.0, IsNull: false},
-				CustomDatetime1: domain.NullableTime{Time: time.Now(), IsNull: false},
+				Email:      "test@example.com",
+				ExternalID: "ext123",
+				Timezone:   "Europe/Paris",
+				FirstName:  domain.NullableString{String: "John", IsNull: false},
+				LastName:   domain.NullableString{String: "Doe", IsNull: false},
+				CustomJSON1: domain.NullableJSON{
+					Data:  map[string]interface{}{"preferences": map[string]interface{}{"theme": "dark"}},
+					Valid: true,
+				},
+				CustomJSON2: domain.NullableJSON{
+					Data:  []interface{}{"tag1", "tag2"},
+					Valid: true,
+				},
+				CustomJSON3: domain.NullableJSON{
+					Data:  42.5,
+					Valid: true,
+				},
+				CustomJSON4: domain.NullableJSON{
+					Data:  "string value",
+					Valid: true,
+				},
+				CustomJSON5: domain.NullableJSON{
+					Data:  true,
+					Valid: true,
+				},
 			},
 			wantErr: false,
 		},
@@ -81,6 +89,13 @@ func TestContact_Validate(t *testing.T) {
 func TestScanContact(t *testing.T) {
 	now := time.Now()
 
+	// Create JSON test data
+	jsonData1, _ := json.Marshal(map[string]interface{}{"preferences": map[string]interface{}{"theme": "dark"}})
+	jsonData2, _ := json.Marshal([]interface{}{"tag1", "tag2"})
+	jsonData3, _ := json.Marshal(42.5)
+	jsonData4, _ := json.Marshal("string value")
+	jsonData5, _ := json.Marshal(true)
+
 	// Create mock scanner
 	scanner := &contactMockScanner{
 		data: []interface{}{
@@ -114,6 +129,11 @@ func TestScanContact(t *testing.T) {
 			sql.NullTime{Time: now, Valid: true},               // CustomDatetime3
 			sql.NullTime{Time: now, Valid: true},               // CustomDatetime4
 			sql.NullTime{Time: now, Valid: true},               // CustomDatetime5
+			jsonData1,                                          // CustomJSON1
+			jsonData2,                                          // CustomJSON2
+			jsonData3,                                          // CustomJSON3
+			jsonData4,                                          // CustomJSON4
+			jsonData5,                                          // CustomJSON5
 			now,                                                // CreatedAt
 			now,                                                // UpdatedAt
 		},
@@ -156,6 +176,29 @@ func TestScanContact(t *testing.T) {
 	assert.Equal(t, now, contact.CustomDatetime1.Time)
 	assert.False(t, contact.CustomDatetime1.IsNull)
 
+	// Test custom JSON fields
+	assert.True(t, contact.CustomJSON1.Valid)
+	preferences, ok := contact.CustomJSON1.Data.(map[string]interface{})
+	assert.True(t, ok)
+	theme, ok := preferences["preferences"].(map[string]interface{})["theme"].(string)
+	assert.True(t, ok)
+	assert.Equal(t, "dark", theme)
+
+	assert.True(t, contact.CustomJSON2.Valid)
+	tags, ok := contact.CustomJSON2.Data.([]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "tag1", tags[0])
+	assert.Equal(t, "tag2", tags[1])
+
+	assert.True(t, contact.CustomJSON3.Valid)
+	assert.Equal(t, 42.5, contact.CustomJSON3.Data)
+
+	assert.True(t, contact.CustomJSON4.Valid)
+	assert.Equal(t, "string value", contact.CustomJSON4.Data)
+
+	assert.True(t, contact.CustomJSON5.Valid)
+	assert.Equal(t, true, contact.CustomJSON5.Data)
+
 	// Test scan error
 	scanner.err = sql.ErrNoRows
 	_, err = domain.ScanContact(scanner)
@@ -194,6 +237,13 @@ func (m *contactMockScanner) Scan(dest ...interface{}) error {
 		case *sql.NullTime:
 			if t, ok := m.data[i].(sql.NullTime); ok {
 				*v = t
+			}
+		case *[]byte:
+			switch data := m.data[i].(type) {
+			case []byte:
+				*v = data
+			case string:
+				*v = []byte(data)
 			}
 		case *int:
 			if n, ok := m.data[i].(int); ok {

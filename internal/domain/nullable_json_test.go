@@ -1,0 +1,226 @@
+package domain
+
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestNullableJSON_Scan(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected NullableJSON
+		wantErr  bool
+	}{
+		{
+			name:  "nil value",
+			input: nil,
+			expected: NullableJSON{
+				Data:  nil,
+				Valid: false,
+			},
+		},
+		{
+			name:  "empty byte slice",
+			input: []byte{},
+			expected: NullableJSON{
+				Data:  nil,
+				Valid: false,
+			},
+		},
+		{
+			name:  "valid JSON object",
+			input: []byte(`{"key":"value"}`),
+			expected: NullableJSON{
+				Data:  map[string]interface{}{"key": "value"},
+				Valid: true,
+			},
+		},
+		{
+			name:  "valid JSON array",
+			input: []byte(`[1,2,3]`),
+			expected: NullableJSON{
+				Data:  []interface{}{float64(1), float64(2), float64(3)},
+				Valid: true,
+			},
+		},
+		{
+			name:    "invalid JSON",
+			input:   []byte(`{invalid}`),
+			wantErr: true,
+		},
+		{
+			name:    "invalid type",
+			input:   123,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var nj NullableJSON
+			err := nj.Scan(tt.input)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, nj)
+			}
+		})
+	}
+}
+
+func TestNullableJSON_Value(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    NullableJSON
+		expected driver.Value
+		wantErr  bool
+	}{
+		{
+			name: "nil value",
+			input: NullableJSON{
+				Data:  nil,
+				Valid: false,
+			},
+			expected: nil,
+		},
+		{
+			name: "valid object",
+			input: NullableJSON{
+				Data:  map[string]interface{}{"key": "value"},
+				Valid: true,
+			},
+			expected: []byte(`{"key":"value"}`),
+		},
+		{
+			name: "valid array",
+			input: NullableJSON{
+				Data:  []interface{}{1, 2, 3},
+				Valid: true,
+			},
+			expected: []byte(`[1,2,3]`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value, err := tt.input.Value()
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.expected == nil {
+					assert.Nil(t, value)
+				} else {
+					assert.JSONEq(t, string(tt.expected.([]byte)), string(value.([]byte)))
+				}
+			}
+		})
+	}
+}
+
+func TestNullableJSON_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    NullableJSON
+		expected string
+		wantErr  bool
+	}{
+		{
+			name: "null value",
+			input: NullableJSON{
+				Data:  nil,
+				Valid: false,
+			},
+			expected: "null",
+		},
+		{
+			name: "valid object",
+			input: NullableJSON{
+				Data:  map[string]interface{}{"key": "value"},
+				Valid: true,
+			},
+			expected: `{"key":"value"}`,
+		},
+		{
+			name: "valid array",
+			input: NullableJSON{
+				Data:  []interface{}{1, 2, 3},
+				Valid: true,
+			},
+			expected: `[1,2,3]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.input)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.JSONEq(t, tt.expected, string(data))
+			}
+		})
+	}
+}
+
+func TestNullableJSON_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected NullableJSON
+		wantErr  bool
+	}{
+		{
+			name:  "null value",
+			input: "null",
+			expected: NullableJSON{
+				Data:  nil,
+				Valid: false,
+			},
+		},
+		{
+			name:  "valid object",
+			input: `{"key":"value"}`,
+			expected: NullableJSON{
+				Data:  map[string]interface{}{"key": "value"},
+				Valid: true,
+			},
+		},
+		{
+			name:  "valid array",
+			input: `[1,2,3]`,
+			expected: NullableJSON{
+				Data:  []interface{}{float64(1), float64(2), float64(3)},
+				Valid: true,
+			},
+		},
+		{
+			name:    "invalid JSON",
+			input:   `{invalid}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var nj NullableJSON
+			err := json.Unmarshal([]byte(tt.input), &nj)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, nj)
+			}
+		})
+	}
+}

@@ -21,6 +21,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 // MockContactService is a mock implementation of domain.ContactService for testing
@@ -49,17 +50,24 @@ func NewMockContactService() *MockContactService {
 	}
 }
 
-func (m *MockContactService) GetContacts(ctx context.Context) ([]*domain.Contact, error) {
+func (m *MockContactService) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
 	m.GetContactsCalled = true
 	if m.ErrToReturn != nil {
 		return nil, m.ErrToReturn
 	}
 
+	// Convert map to slice
 	contacts := make([]*domain.Contact, 0, len(m.contacts))
 	for _, contact := range m.contacts {
 		contacts = append(contacts, contact)
 	}
-	return contacts, nil
+
+	// For testing purposes, we'll just return all contacts
+	// In a real implementation, we would handle pagination and filtering
+	return &domain.GetContactsResponse{
+		Contacts:   contacts,
+		NextCursor: "", // For testing, we don't implement cursor pagination
+	}, nil
 }
 
 func (m *MockContactService) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
@@ -243,84 +251,82 @@ func TestContactHandler_RegisterRoutes(t *testing.T) {
 }
 
 func TestContactHandler_HandleList(t *testing.T) {
-	testCases := []struct {
-		name             string
-		method           string
-		setupMock        func(*MockContactService)
-		expectedStatus   int
-		expectedContacts bool
-	}{
-		{
-			name:   "Success",
-			method: http.MethodGet,
-			setupMock: func(mock *MockContactService) {
-				mock.contacts = map[string]*domain.Contact{
-					"test@example.com": {
-						Email:      "test@example.com",
-						ExternalID: "ext123",
-						Timezone:   "UTC",
-						CreatedAt:  time.Now(),
-						UpdatedAt:  time.Now(),
-						FirstName: domain.NullableString{
-							String: "Old",
-							IsNull: false,
-						},
-						LastName: domain.NullableString{
-							String: "Name",
-							IsNull: false,
-						},
-					},
-				}
-			},
-			expectedStatus:   http.StatusOK,
-			expectedContacts: true,
-		},
-		{
-			name:             "Service Error",
-			method:           http.MethodGet,
-			setupMock:        func(mock *MockContactService) { mock.ErrToReturn = errors.New("service error") },
-			expectedStatus:   http.StatusInternalServerError,
-			expectedContacts: false,
-		},
-		{
-			name:             "Wrong Method",
-			method:           http.MethodPost,
-			setupMock:        func(mock *MockContactService) {},
-			expectedStatus:   http.StatusMethodNotAllowed,
-			expectedContacts: false,
-		},
-	}
+	t.Run("Success", func(t *testing.T) {
+		// Arrange
+		mockService := NewMockContactService()
+		mockLogger := new(MockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		handler := NewContactHandler(mockService, mockLogger)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupContactHandlerTest()
-			tc.setupMock(mockService)
+		// Create request with query parameters
+		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspaceId=workspace123&limit=2", nil)
+		response := httptest.NewRecorder()
 
-			req, err := http.NewRequest(tc.method, "/api/contacts.list", nil)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
+		// Act
+		handler.handleList(response, request)
 
-			rr := httptest.NewRecorder()
-			handler.handleList(rr, req)
+		// Assert
+		assert.Equal(t, http.StatusOK, response.Code)
+		assert.True(t, mockService.GetContactsCalled)
+	})
 
-			if status := rr.Code; status != tc.expectedStatus {
-				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
-			}
+	t.Run("Service_Error", func(t *testing.T) {
+		// Arrange
+		mockService := NewMockContactService()
+		mockLogger := new(MockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		handler := NewContactHandler(mockService, mockLogger)
 
-			if tc.expectedContacts {
-				if tc.expectedStatus == http.StatusOK {
-					// Skip JSON decoding for this test since we're only checking if the service was called
-					// and that the status code is correct. The JSON structure has changed with nullable fields.
-					assert.NotEmpty(t, rr.Body.String(), "Response body should not be empty")
-				}
-			}
+		mockService.ErrToReturn = errors.New("service error")
 
-			if !mockService.GetContactsCalled && tc.method == http.MethodGet {
-				t.Error("Expected GetContacts to be called, but it wasn't")
-			}
-		})
-	}
+		// Create request with query parameters
+		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspaceId=workspace123&limit=2", nil)
+		response := httptest.NewRecorder()
+
+		// Act
+		handler.handleList(response, request)
+
+		// Assert
+		assert.Equal(t, http.StatusInternalServerError, response.Code)
+		assert.True(t, mockService.GetContactsCalled)
+	})
+
+	t.Run("Wrong_Method", func(t *testing.T) {
+		// Arrange
+		mockService := NewMockContactService()
+		mockLogger := new(MockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		handler := NewContactHandler(mockService, mockLogger)
+
+		request := httptest.NewRequest(http.MethodPost, "/api/contacts.list", nil)
+		response := httptest.NewRecorder()
+
+		// Act
+		handler.handleList(response, request)
+
+		// Assert
+		assert.Equal(t, http.StatusMethodNotAllowed, response.Code)
+		assert.False(t, mockService.GetContactsCalled)
+	})
+
+	t.Run("Invalid_Request", func(t *testing.T) {
+		// Arrange
+		mockService := NewMockContactService()
+		mockLogger := new(MockLogger)
+		mockLogger.On("Error", mock.Anything).Maybe()
+		handler := NewContactHandler(mockService, mockLogger)
+
+		// Create request without required workspaceId
+		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list", nil)
+		response := httptest.NewRecorder()
+
+		// Act
+		handler.handleList(response, request)
+
+		// Assert
+		assert.Equal(t, http.StatusBadRequest, response.Code)
+		assert.False(t, mockService.GetContactsCalled)
+	})
 }
 
 func TestContactHandler_HandleGet(t *testing.T) {
@@ -1477,6 +1483,240 @@ func TestContactHandler_HandleUpsertWithNullFields(t *testing.T) {
 	assert.True(t, mockService.LastContactUpserted.OrdersCount.IsNull)
 }
 
-// CreateContact and UpdateContact stubs are redirecting to UpsertContact and were previously defined
-// in the HTTP test file as stubs. We need to keep these stubs to maintain compatibility with existing tests,
-// but they should just call UpsertContact.
+type mockContactService struct {
+	mock.Mock
+}
+
+func (m *mockContactService) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
+	args := m.Called(ctx, contact)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *mockContactService) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+	args := m.Called(ctx, contacts)
+	return args.Error(0)
+}
+
+func (m *mockContactService) DeleteContact(ctx context.Context, email string) error {
+	args := m.Called(ctx, email)
+	return args.Error(0)
+}
+
+func (m *mockContactService) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
+	args := m.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Contact), args.Error(1)
+}
+
+func (m *mockContactService) GetContactByExternalID(ctx context.Context, externalID string) (*domain.Contact, error) {
+	args := m.Called(ctx, externalID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Contact), args.Error(1)
+}
+
+func (m *mockContactService) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.GetContactsResponse), args.Error(1)
+}
+
+type mockLogger struct {
+	logger.Logger
+}
+
+func (m *mockLogger) WithField(key string, value interface{}) logger.Logger {
+	return m
+}
+
+func (m *mockLogger) Error(msg string) {}
+
+func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    map[string]interface{}
+		expectedStatus int
+		expectedJSON   bool
+		setupMock      func(*mockContactService)
+	}{
+		{
+			name: "successful upsert with all custom JSON fields",
+			requestBody: map[string]interface{}{
+				"email": "test@example.com",
+				"custom_json_1": map[string]interface{}{
+					"key": "value1",
+				},
+				"custom_json_2": map[string]interface{}{
+					"key": "value2",
+				},
+				"custom_json_3": map[string]interface{}{
+					"key": "value3",
+				},
+				"custom_json_4": map[string]interface{}{
+					"key": "value4",
+				},
+				"custom_json_5": map[string]interface{}{
+					"key": "value5",
+				},
+			},
+			expectedStatus: http.StatusCreated,
+			expectedJSON:   true,
+			setupMock: func(m *mockContactService) {
+				m.On("UpsertContact", mock.Anything, mock.MatchedBy(func(contact *domain.Contact) bool {
+					assert.True(t, contact.CustomJSON1.Valid)
+					assert.True(t, contact.CustomJSON2.Valid)
+					assert.True(t, contact.CustomJSON3.Valid)
+					assert.True(t, contact.CustomJSON4.Valid)
+					assert.True(t, contact.CustomJSON5.Valid)
+					return true
+				})).Return(true, nil)
+			},
+		},
+		{
+			name: "successful upsert with null custom JSON fields",
+			requestBody: map[string]interface{}{
+				"email":         "test@example.com",
+				"custom_json_1": nil,
+				"custom_json_2": nil,
+			},
+			expectedStatus: http.StatusCreated,
+			expectedJSON:   true,
+			setupMock: func(m *mockContactService) {
+				m.On("UpsertContact", mock.Anything, mock.MatchedBy(func(contact *domain.Contact) bool {
+					assert.False(t, contact.CustomJSON1.Valid)
+					assert.False(t, contact.CustomJSON2.Valid)
+					assert.False(t, contact.CustomJSON3.Valid)
+					assert.False(t, contact.CustomJSON4.Valid)
+					assert.False(t, contact.CustomJSON5.Valid)
+					return true
+				})).Return(true, nil)
+			},
+		},
+		{
+			name: "successful upsert with mixed JSON types",
+			requestBody: map[string]interface{}{
+				"email": "test@example.com",
+				"custom_json_1": map[string]interface{}{
+					"number": 42,
+					"string": "value",
+					"array":  []interface{}{1, 2, 3},
+					"object": map[string]interface{}{
+						"nested": true,
+					},
+				},
+			},
+			expectedStatus: http.StatusCreated,
+			expectedJSON:   true,
+			setupMock: func(m *mockContactService) {
+				m.On("UpsertContact", mock.Anything, mock.MatchedBy(func(contact *domain.Contact) bool {
+					assert.True(t, contact.CustomJSON1.Valid)
+					data, ok := contact.CustomJSON1.Data.(map[string]interface{})
+					assert.True(t, ok)
+					assert.Equal(t, float64(42), data["number"])
+					assert.Equal(t, "value", data["string"])
+					assert.IsType(t, []interface{}{}, data["array"])
+					assert.IsType(t, map[string]interface{}{}, data["object"])
+					return true
+				})).Return(true, nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock service
+			mockService := new(mockContactService)
+			if tt.setupMock != nil {
+				tt.setupMock(mockService)
+			}
+
+			// Create handler
+			mockLogger := &mockLogger{}
+			handler := NewContactHandler(mockService, mockLogger)
+
+			// Create request
+			body, err := json.Marshal(tt.requestBody)
+			assert.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/contacts.upsert", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+
+			// Create response recorder
+			w := httptest.NewRecorder()
+
+			// Handle request
+			handler.handleUpsert(w, req)
+
+			// Assert response
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.expectedJSON {
+				var response map[string]interface{}
+				err = json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Contains(t, response, "contact")
+				assert.Contains(t, response, "action")
+			}
+
+			// Verify mock expectations
+			mockService.AssertExpectations(t)
+		})
+	}
+}
+
+func TestContactHandler_HandleUpsertWithInvalidJSON(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    string
+		expectedStatus int
+	}{
+		{
+			name:           "invalid JSON syntax",
+			requestBody:    `{"email": "test@example.com", "custom_json_1": {invalid}}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "empty request body",
+			requestBody:    "",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock service
+			mockService := new(mockContactService)
+			// No need to set up expectations as the request should fail before reaching the service
+
+			// Create handler
+			mockLogger := &mockLogger{}
+			handler := NewContactHandler(mockService, mockLogger)
+
+			// Create request
+			req := httptest.NewRequest(http.MethodPost, "/api/contacts.upsert", bytes.NewBufferString(tt.requestBody))
+			req.Header.Set("Content-Type", "application/json")
+
+			// Create response recorder
+			w := httptest.NewRecorder()
+
+			// Handle request
+			handler.handleUpsert(w, req)
+
+			// Assert response
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+			assert.Contains(t, response, "error")
+
+			// Verify that no mock expectations were called
+			mockService.AssertExpectations(t)
+		})
+	}
+}

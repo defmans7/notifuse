@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute } from '@tanstack/react-router'
+import { createRootRoute, createRoute, Route, Router } from '@tanstack/react-router'
 import { RootLayout } from './layouts/RootLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { SignInPage } from './pages/SignInPage'
@@ -6,7 +6,19 @@ import { LogoutPage } from './pages/LogoutPage'
 import { CreateWorkspacePage } from './pages/CreateWorkspacePage'
 import { DashboardPage } from './pages/DashboardPage'
 import { WorkspaceSettingsPage } from './pages/WorkspaceSettingsPage'
+import { ContactsPage } from './pages/ContactsPage'
 import { createRouter } from '@tanstack/react-router'
+
+export interface ContactsSearch {
+  cursor?: string
+  email?: string
+  externalId?: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+  country?: string
+  limit?: number
+}
 
 // Create the root route
 const rootRoute = createRootRoute({
@@ -62,10 +74,20 @@ const workspaceCampaignsRoute = createRoute({
   component: () => <div>Campaigns</div>
 })
 
-const workspaceContactsRoute = createRoute({
+export const contactsRoute = new Route({
   getParentRoute: () => workspaceRoute,
-  path: '/contacts',
-  component: () => <div>Contacts</div>
+  path: 'contacts',
+  component: ContactsPage,
+  validateSearch: (search: Record<string, unknown>): ContactsSearch => ({
+    cursor: search.cursor as string | undefined,
+    email: search.email as string | undefined,
+    externalId: search.externalId as string | undefined,
+    firstName: search.firstName as string | undefined,
+    lastName: search.lastName as string | undefined,
+    phone: search.phone as string | undefined,
+    country: search.country as string | undefined,
+    limit: search.limit ? Number(search.limit) : 20
+  })
 })
 
 const workspaceSettingsRoute = createRoute({
@@ -89,7 +111,7 @@ const routeTree = rootRoute.addChildren([
   workspaceCreateRoute,
   workspaceRoute.addChildren([
     workspaceCampaignsRoute,
-    workspaceContactsRoute,
+    contactsRoute,
     workspaceSettingsRoute,
     workspaceTemplatesRoute
   ])

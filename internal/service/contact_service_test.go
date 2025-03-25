@@ -94,68 +94,148 @@ func TestContactService_GetContacts(t *testing.T) {
 
 	service := NewContactService(mockRepo, mockLogger)
 
-	t.Run("should get all contacts successfully", func(t *testing.T) {
+	t.Run("should get contacts successfully with pagination", func(t *testing.T) {
 		// Arrange
 		ctx := context.Background()
-		expectedContacts := []*domain.Contact{
-			{
-				Email:      "contact1@example.com",
-				ExternalID: "ext-1",
-				Timezone:   "UTC",
-				FirstName:  domain.NullableString{String: "Contact", IsNull: false},
-				LastName:   domain.NullableString{String: "One", IsNull: false},
-			},
-			{
-				Email:      "contact2@example.com",
-				ExternalID: "ext-2",
-				Timezone:   "UTC",
-				FirstName:  domain.NullableString{String: "Contact", IsNull: false},
-				LastName:   domain.NullableString{String: "Two", IsNull: false},
-			},
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Limit:       2,
 		}
 
-		mockRepo.On("GetContacts", ctx).Return(expectedContacts, nil).Once()
+		expectedResponse := &domain.GetContactsResponse{
+			Contacts: []*domain.Contact{
+				{
+					Email:      "contact1@example.com",
+					ExternalID: "ext-1",
+					Timezone:   "UTC",
+					FirstName:  domain.NullableString{String: "Contact", IsNull: false},
+					LastName:   domain.NullableString{String: "One", IsNull: false},
+				},
+				{
+					Email:      "contact2@example.com",
+					ExternalID: "ext-2",
+					Timezone:   "UTC",
+					FirstName:  domain.NullableString{String: "Contact", IsNull: false},
+					LastName:   domain.NullableString{String: "Two", IsNull: false},
+				},
+			},
+			NextCursor: "2024-03-20T10:00:00Z",
+		}
+
+		mockRepo.On("GetContacts", ctx, req).Return(expectedResponse, nil).Once()
 
 		// Act
-		contacts, err := service.GetContacts(ctx)
+		response, err := service.GetContacts(ctx, req)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.Equal(t, expectedContacts, contacts)
-		assert.Len(t, contacts, 2)
+		assert.Equal(t, expectedResponse, response)
+		assert.Len(t, response.Contacts, 2)
+		assert.NotEmpty(t, response.NextCursor)
 		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("should return empty slice when no contacts", func(t *testing.T) {
+	t.Run("should return empty response when no contacts", func(t *testing.T) {
 		// Arrange
 		ctx := context.Background()
-		expectedContacts := []*domain.Contact{}
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "empty-workspace",
+			Limit:       2,
+		}
 
-		mockRepo.On("GetContacts", ctx).Return(expectedContacts, nil).Once()
+		expectedResponse := &domain.GetContactsResponse{
+			Contacts:   []*domain.Contact{},
+			NextCursor: "",
+		}
+
+		mockRepo.On("GetContacts", ctx, req).Return(expectedResponse, nil).Once()
 
 		// Act
-		contacts, err := service.GetContacts(ctx)
+		response, err := service.GetContacts(ctx, req)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.Empty(t, contacts)
+		assert.Empty(t, response.Contacts)
+		assert.Empty(t, response.NextCursor)
 		mockRepo.AssertExpectations(t)
 	})
 
 	t.Run("should return error if repository fails", func(t *testing.T) {
 		// Arrange
 		ctx := context.Background()
-		repoErr := errors.New("repository error")
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "error-workspace",
+			Limit:       2,
+		}
 
-		mockRepo.On("GetContacts", ctx).Return(nil, repoErr).Once()
+		repoErr := errors.New("repository error")
+		mockRepo.On("GetContacts", ctx, req).Return(nil, repoErr).Once()
 
 		// Act
-		contacts, err := service.GetContacts(ctx)
+		response, err := service.GetContacts(ctx, req)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, contacts)
+		assert.Nil(t, response)
 		assert.Contains(t, err.Error(), "failed to get contacts")
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("should validate request before calling repository", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "", // Invalid: empty workspace ID
+			Limit:       2,
+		}
+
+		// Act
+		response, err := service.GetContacts(ctx, req)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Nil(t, response)
+		assert.Contains(t, err.Error(), "workspace_id is required")
+		mockRepo.AssertNotCalled(t, "GetContacts")
+	})
+
+	t.Run("should enforce maximum limit", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Limit:       150, // Should be capped at 100
+		}
+
+		expectedResponse := &domain.GetContactsResponse{
+			Contacts: []*domain.Contact{
+				{
+					Email:      "contact1@example.com",
+					ExternalID: "ext-1",
+					Timezone:   "UTC",
+					FirstName:  domain.NullableString{String: "Contact", IsNull: false},
+					LastName:   domain.NullableString{String: "One", IsNull: false},
+				},
+			},
+			NextCursor: "2024-03-20T10:00:00Z",
+		}
+
+		// The repository should receive the capped limit
+		expectedReq := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Limit:       100,
+		}
+
+		mockRepo.On("GetContacts", ctx, expectedReq).Return(expectedResponse, nil).Once()
+
+		// Act
+		response, err := service.GetContacts(ctx, req)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.Equal(t, expectedResponse, response)
+		assert.Len(t, response.Contacts, 1)
+		assert.NotEmpty(t, response.NextCursor)
 		mockRepo.AssertExpectations(t)
 	})
 }

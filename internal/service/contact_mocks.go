@@ -28,12 +28,12 @@ func (m *MockContactRepository) GetContactByExternalID(ctx context.Context, exte
 	return args.Get(0).(*domain.Contact), args.Error(1)
 }
 
-func (m *MockContactRepository) GetContacts(ctx context.Context) ([]*domain.Contact, error) {
-	args := m.Called(ctx)
+func (m *MockContactRepository) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Contact), args.Error(1)
+	return args.Get(0).(*domain.GetContactsResponse), args.Error(1)
 }
 
 func (m *MockContactRepository) DeleteContact(ctx context.Context, email string) error {

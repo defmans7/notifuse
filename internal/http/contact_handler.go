@@ -3,11 +3,13 @@ package http
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/asaskevich/govalidator"
 	"github.com/tidwall/gjson"
 )
 
@@ -50,6 +52,19 @@ type upsertContactRequest struct {
 	Timezone   string `json:"timezone" valid:"required"`
 }
 
+// Add the request type for listing contacts
+type listContactsRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+	Email       string `json:"email,omitempty" valid:"optional,email"`
+	ExternalID  string `json:"external_id,omitempty" valid:"optional"`
+	FirstName   string `json:"first_name,omitempty" valid:"optional"`
+	LastName    string `json:"last_name,omitempty" valid:"optional"`
+	Phone       string `json:"phone,omitempty" valid:"optional"`
+	Country     string `json:"country,omitempty" valid:"optional"`
+	Limit       int    `json:"limit,omitempty" valid:"optional,range(1|100)"`
+	Cursor      string `json:"cursor,omitempty" valid:"optional"`
+}
+
 func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Register RPC-style endpoints with dot notation
 	mux.HandleFunc("/api/contacts.list", h.handleList)
@@ -62,18 +77,75 @@ func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	contacts, err := h.service.GetContacts(r.Context())
+	// Parse query parameters
+	query := r.URL.Query()
+	req := listContactsRequest{
+		WorkspaceID: query.Get("workspaceId"),
+		Email:       query.Get("email"),
+		ExternalID:  query.Get("externalId"),
+		FirstName:   query.Get("firstName"),
+		LastName:    query.Get("lastName"),
+		Phone:       query.Get("phone"),
+		Country:     query.Get("country"),
+	}
+
+	// Parse limit if provided
+	if limitStr := query.Get("limit"); limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+			return
+		}
+		req.Limit = limit
+	}
+
+	// Get cursor if provided
+	req.Cursor = query.Get("cursor")
+
+	// Validate the request
+	if _, err := govalidator.ValidateStruct(req); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Convert to domain request
+	domainReq := &domain.GetContactsRequest{
+		WorkspaceID: req.WorkspaceID,
+		Email:       req.Email,
+		ExternalID:  req.ExternalID,
+		FirstName:   req.FirstName,
+		LastName:    req.LastName,
+		Phone:       req.Phone,
+		Country:     req.Country,
+		Limit:       req.Limit,
+		Cursor:      req.Cursor,
+	}
+
+	// Validate domain request
+	if err := domainReq.Validate(); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Get contacts from service
+	response, err := h.service.GetContacts(r.Context(), domainReq)
 	if err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to get contacts")
-		WriteJSONError(w, "Failed to get contacts", http.StatusInternalServerError)
+		h.logger.Error(fmt.Sprintf("Failed to get contacts: %v", err))
+		http.Error(w, "Failed to get contacts", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, contacts)
+	// Write response
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error(fmt.Sprintf("Failed to encode response: %v", err))
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *ContactHandler) handleGetByEmail(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +246,7 @@ func (h *ContactHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read the request body
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to read request body")
 		WriteJSONError(w, "Failed to read request body", http.StatusBadRequest)
@@ -219,10 +291,16 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read the request body
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to read request body")
 		WriteJSONError(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate that the body is valid JSON
+	var rawJSON map[string]interface{}
+	if err := json.Unmarshal(body, &rawJSON); err != nil {
+		WriteJSONError(w, "Invalid JSON format", http.StatusBadRequest)
 		return
 	}
 
@@ -231,6 +309,32 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// Parse custom JSON fields if they exist
+	jsonData := gjson.ParseBytes(body)
+	for i := 1; i <= 5; i++ {
+		field := fmt.Sprintf("custom_json_%d", i)
+		if value := jsonData.Get(field); value.Exists() {
+			// Check if the value is explicitly null
+			if value.Type == gjson.Null {
+				continue // Leave the field as invalid
+			}
+
+			// Set the custom JSON field
+			switch i {
+			case 1:
+				contact.CustomJSON1 = domain.NullableJSON{Data: value.Value(), Valid: true}
+			case 2:
+				contact.CustomJSON2 = domain.NullableJSON{Data: value.Value(), Valid: true}
+			case 3:
+				contact.CustomJSON3 = domain.NullableJSON{Data: value.Value(), Valid: true}
+			case 4:
+				contact.CustomJSON4 = domain.NullableJSON{Data: value.Value(), Valid: true}
+			case 5:
+				contact.CustomJSON5 = domain.NullableJSON{Data: value.Value(), Valid: true}
+			}
+		}
 	}
 
 	isNew, err := h.service.UpsertContact(r.Context(), contact)

@@ -32,6 +32,7 @@ func TestGetContactByEmail(t *testing.T) {
 		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 		"created_at", "updated_at",
 	}).
 		AddRow(
@@ -42,6 +43,7 @@ func TestGetContactByEmail(t *testing.T) {
 			"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 			42.0, 43.0, 44.0, 45.0, 46.0,
 			now, now, now, now, now,
+			[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 			now, now,
 		)
 
@@ -80,6 +82,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 		"created_at", "updated_at",
 	}).
 		AddRow(
@@ -90,6 +93,7 @@ func TestGetContactByExternalID(t *testing.T) {
 			"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 			42.0, 43.0, 44.0, 45.0, 46.0,
 			now, now, now, now, now,
+			[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 			now, now,
 		)
 
@@ -111,11 +115,11 @@ func TestGetContactByExternalID(t *testing.T) {
 
 	// Test: get contact by external ID successful case
 	t.Run("successful case", func(t *testing.T) {
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT email, external_id, timezone, first_name, last_name, phone, address_line_1, address_line_2, country, postcode, state, job_title, lifetime_value, orders_count, last_order_at, custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5, custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5, custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5, created_at, updated_at FROM contacts WHERE external_id = $1`)).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT email, external_id, timezone, first_name, last_name, phone, address_line_1, address_line_2, country, postcode, state, job_title, lifetime_value, orders_count, last_order_at, custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5, custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5, custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5, custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5, created_at, updated_at FROM contacts WHERE external_id = $1`)).
 			WithArgs("e-123").
 			WillReturnRows(
-				sqlmock.NewRows([]string{"email", "external_id", "timezone", "first_name", "last_name", "phone", "address_line_1", "address_line_2", "country", "postcode", "state", "job_title", "lifetime_value", "orders_count", "last_order_at", "custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5", "created_at", "updated_at"}).
-					AddRow("test@example.com", "e-123", "Europe/Paris", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{}, "", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Now(), time.Now()),
+				sqlmock.NewRows([]string{"email", "external_id", "timezone", "first_name", "last_name", "phone", "address_line_1", "address_line_2", "country", "postcode", "state", "job_title", "lifetime_value", "orders_count", "last_order_at", "custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5", "custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5", "created_at", "updated_at"}).
+					AddRow("test@example.com", "e-123", "Europe/Paris", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{}, "", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{}, []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), time.Now(), time.Now()),
 			)
 
 		_, err := repo.GetContactByExternalID(context.Background(), "e-123")
@@ -124,80 +128,164 @@ func TestGetContactByExternalID(t *testing.T) {
 }
 
 func TestGetContacts(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
-	defer cleanup()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("Failed to create mock DB: %v", err)
+	}
+	defer db.Close()
 
 	repo := NewContactRepository(db)
-	now := time.Now().UTC().Truncate(time.Microsecond)
 
-	// Test case 1: Multiple contacts found
-	rows := sqlmock.NewRows([]string{
-		"email", "external_id", "timezone",
-		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
-		"country", "postcode", "state", "job_title",
-		"lifetime_value", "orders_count", "last_order_at",
-		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
-		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
-		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-		"created_at", "updated_at",
-	}).
-		AddRow(
-			"test1@example.com", "ext123", "Europe/Paris",
-			"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
-			"USA", "12345", "CA", "Developer",
-			100.50, 5, now,
-			"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
-			42.0, 43.0, 44.0, 45.0, 46.0,
-			now, now, now, now, now,
+	t.Run("should get contacts with pagination", func(t *testing.T) {
+		// Arrange
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Limit:       2,
+		}
+
+		now := time.Now().UTC()
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).AddRow(
+			"contact1@example.com", "ext-1", "UTC", "Contact", "One", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil,
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			now, now,
-		).
-		AddRow(
-			"test2@example.com", "ext456", "America/New_York",
-			"Jane", "Smith", "+9876543210", "456 Oak St", "Suite 7C",
-			"USA", "54321", "NY", "Manager",
-			200.75, 10, now,
-			"Custom A", "Custom B", "Custom C", "Custom D", "Custom E",
-			52.0, 53.0, 54.0, 55.0, 56.0,
-			now, now, now, now, now,
-			now, now,
+		).AddRow(
+			"contact2@example.com", "ext-2", "UTC", "Contact", "Two", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil,
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
+			now.Add(-1*time.Hour), now,
 		)
 
-	mock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC`).
-		WillReturnRows(rows)
+		mock.ExpectQuery("SELECT (.+) FROM contacts WHERE workspace_id = \\$1 ORDER BY created_at DESC LIMIT \\$2").
+			WithArgs(req.WorkspaceID, req.Limit+1).
+			WillReturnRows(rows)
 
-	contacts, err := repo.GetContacts(context.Background())
-	require.NoError(t, err)
-	assert.Len(t, contacts, 2)
-	assert.Equal(t, "test1@example.com", contacts[0].Email)
-	assert.Equal(t, "test2@example.com", contacts[1].Email)
+		// Act
+		response, err := repo.GetContacts(context.Background(), req)
 
-	// Test case 2: No contacts found (empty result)
-	emptyRows := sqlmock.NewRows([]string{
-		"email", "external_id", "timezone",
-		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
-		"country", "postcode", "state", "job_title",
-		"lifetime_value", "orders_count", "last_order_at",
-		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
-		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
-		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-		"created_at", "updated_at",
+		// Assert
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+		assert.Len(t, response.Contacts, 2)
+		assert.Empty(t, response.NextCursor) // No more results
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	mock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC`).
-		WillReturnRows(emptyRows)
+	t.Run("should handle cursor-based pagination", func(t *testing.T) {
+		// Arrange
+		cursorTime := time.Now().UTC().Truncate(time.Second)
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Limit:       2,
+			Cursor:      cursorTime.Format(time.RFC3339),
+		}
 
-	contacts, err = repo.GetContacts(context.Background())
-	require.NoError(t, err)
-	assert.Empty(t, contacts)
+		now := cursorTime.Add(-1 * time.Hour)
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).AddRow(
+			"contact1@example.com", "ext-1", "UTC", "Contact", "One", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil,
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
+			now, now,
+		).AddRow(
+			"contact2@example.com", "ext-2", "UTC", "Contact", "Two", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil,
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
+			now.Add(-1*time.Hour), now,
+		)
 
-	// Test case 3: Database error
-	mock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC`).
-		WillReturnError(errors.New("database error"))
+		mock.ExpectQuery("SELECT (.+) FROM contacts WHERE workspace_id = \\$1 AND created_at < \\$2 ORDER BY created_at DESC LIMIT \\$3").
+			WithArgs(req.WorkspaceID, cursorTime, req.Limit+1).
+			WillReturnRows(rows)
 
-	contacts, err = repo.GetContacts(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get contacts")
-	assert.Nil(t, contacts)
+		// Act
+		response, err := repo.GetContacts(context.Background(), req)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+		assert.Len(t, response.Contacts, 2)
+		assert.Empty(t, response.NextCursor) // No more results
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should return empty response when no contacts", func(t *testing.T) {
+		// Arrange
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "empty-workspace",
+			Limit:       2,
+		}
+
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		})
+
+		mock.ExpectQuery("SELECT (.+) FROM contacts WHERE workspace_id = \\$1 ORDER BY created_at DESC LIMIT \\$2").
+			WithArgs(req.WorkspaceID, req.Limit+1).
+			WillReturnRows(rows)
+
+		// Act
+		response, err := repo.GetContacts(context.Background(), req)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+		assert.Empty(t, response.Contacts)
+		assert.Empty(t, response.NextCursor)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle database error", func(t *testing.T) {
+		// Arrange
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "error-workspace",
+			Limit:       2,
+		}
+
+		mock.ExpectQuery("SELECT (.+) FROM contacts WHERE workspace_id = \\$1 ORDER BY created_at DESC LIMIT \\$2").
+			WithArgs(req.WorkspaceID, req.Limit+1).
+			WillReturnError(errors.New("database error"))
+
+		// Act
+		response, err := repo.GetContacts(context.Background(), req)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Nil(t, response)
+		assert.Contains(t, err.Error(), "failed to get contacts")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestDeleteContact(t *testing.T) {
@@ -348,6 +436,7 @@ func TestUpsertContact(t *testing.T) {
 		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 		"created_at", "updated_at",
 	}).
 		AddRow(
@@ -358,6 +447,7 @@ func TestUpsertContact(t *testing.T) {
 			"", "", "", "", "",
 			0, 0, 0, 0, 0,
 			time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{},
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			now, now,
 		)
 

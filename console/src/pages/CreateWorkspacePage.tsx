@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Form, Input, Button, Typography, Card, Tooltip, message } from 'antd'
+import { Form, Input, Button, Typography, Card, Tooltip, App } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
 import { InfoCircleOutlined } from '@ant-design/icons'
 import { workspaceService } from '../services/api/workspace'
@@ -13,6 +13,7 @@ export function CreateWorkspacePage() {
   const [loading, setLoading] = useState(false)
   const [form] = Form.useForm()
   const { refreshWorkspaces } = useAuth()
+  const { message } = App.useApp()
 
   // Generate workspace ID from name (alphanumeric only, max 20 chars)
   const generateWorkspaceId = (name: string) => {
@@ -65,13 +66,16 @@ export function CreateWorkspacePage() {
       })
 
       await refreshWorkspaces()
-      message.success(`Workspace "${values.name}" created successfully!`)
 
       // Navigate to the new workspace
-      navigate({
-        to: '/workspace/$workspaceId/campaigns',
-        params: { workspaceId: values.id }
-      })
+      message.success(`Workspace "${values.name}" created successfully!`)
+      // wait for the refreshWorkspaces to propagate the new workspaces list to the root layout
+      window.setTimeout(() => {
+        navigate({
+          to: '/workspace/$workspaceId/campaigns',
+          params: { workspaceId: values.id }
+        })
+      }, 100)
     } catch (error) {
       console.error('Error creating workspace:', error)
       message.error('Failed to create workspace. Please try again.')
