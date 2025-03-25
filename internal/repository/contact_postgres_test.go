@@ -25,7 +25,7 @@ func TestGetContactByEmail(t *testing.T) {
 
 	// Test case 1: Contact found
 	rows := sqlmock.NewRows([]string{
-		"email", "external_id", "timezone",
+		"email", "external_id", "timezone", "language",
 		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
 		"country", "postcode", "state", "job_title",
 		"lifetime_value", "orders_count", "last_order_at",
@@ -36,7 +36,7 @@ func TestGetContactByEmail(t *testing.T) {
 		"created_at", "updated_at",
 	}).
 		AddRow(
-			email, "ext123", "Europe/Paris",
+			email, "ext123", "Europe/Paris", "en-US",
 			"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
 			"USA", "12345", "CA", "Developer",
 			100.50, 5, now,
@@ -75,7 +75,7 @@ func TestGetContactByExternalID(t *testing.T) {
 
 	// Test case 1: Contact found
 	rows := sqlmock.NewRows([]string{
-		"email", "external_id", "timezone",
+		"email", "external_id", "timezone", "language",
 		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
 		"country", "postcode", "state", "job_title",
 		"lifetime_value", "orders_count", "last_order_at",
@@ -86,7 +86,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		"created_at", "updated_at",
 	}).
 		AddRow(
-			"test@example.com", externalID, "Europe/Paris",
+			"test@example.com", externalID, "Europe/Paris", "en-US",
 			"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
 			"USA", "12345", "CA", "Developer",
 			100.50, 5, now,
@@ -115,11 +115,11 @@ func TestGetContactByExternalID(t *testing.T) {
 
 	// Test: get contact by external ID successful case
 	t.Run("successful case", func(t *testing.T) {
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT email, external_id, timezone, first_name, last_name, phone, address_line_1, address_line_2, country, postcode, state, job_title, lifetime_value, orders_count, last_order_at, custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5, custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5, custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5, custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5, created_at, updated_at FROM contacts WHERE external_id = $1`)).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT email, external_id, timezone, language, first_name, last_name, phone, address_line_1, address_line_2, country, postcode, state, job_title, lifetime_value, orders_count, last_order_at, custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5, custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5, custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5, custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5, created_at, updated_at FROM contacts WHERE external_id = $1`)).
 			WithArgs("e-123").
 			WillReturnRows(
-				sqlmock.NewRows([]string{"email", "external_id", "timezone", "first_name", "last_name", "phone", "address_line_1", "address_line_2", "country", "postcode", "state", "job_title", "lifetime_value", "orders_count", "last_order_at", "custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5", "custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5", "created_at", "updated_at"}).
-					AddRow("test@example.com", "e-123", "Europe/Paris", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{}, "", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{}, []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), time.Now(), time.Now()),
+				sqlmock.NewRows([]string{"email", "external_id", "timezone", "language", "first_name", "last_name", "phone", "address_line_1", "address_line_2", "country", "postcode", "state", "job_title", "lifetime_value", "orders_count", "last_order_at", "custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5", "custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5", "created_at", "updated_at"}).
+					AddRow("test@example.com", "e-123", "Europe/Paris", "en-US", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{}, "", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{}, []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), time.Now(), time.Now()),
 			)
 
 		_, err := repo.GetContactByExternalID(context.Background(), "e-123")
@@ -145,7 +145,8 @@ func TestGetContacts(t *testing.T) {
 
 		now := time.Now().UTC()
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "first_name", "last_name", "phone",
+			"email", "external_id", "timezone", "language",
+			"first_name", "last_name", "phone",
 			"address_line_1", "address_line_2", "country", "postcode", "state",
 			"job_title", "lifetime_value", "orders_count", "last_order_at",
 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
@@ -155,15 +156,15 @@ func TestGetContacts(t *testing.T) {
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 			"created_at", "updated_at",
 		}).AddRow(
-			"contact1@example.com", "ext-1", "UTC", "Contact", "One", nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil,
+			"contact1@example.com", "ext-1", "UTC", "en-US", "Contact", "One", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			now, now,
 		).AddRow(
-			"contact2@example.com", "ext-2", "UTC", "Contact", "Two", nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil,
+			"contact2@example.com", "ext-2", "UTC", "en-US", "Contact", "Two", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			now.Add(-1*time.Hour), now,
 		)
@@ -194,7 +195,8 @@ func TestGetContacts(t *testing.T) {
 
 		now := cursorTime.Add(-1 * time.Hour)
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "first_name", "last_name", "phone",
+			"email", "external_id", "timezone", "language",
+			"first_name", "last_name", "phone",
 			"address_line_1", "address_line_2", "country", "postcode", "state",
 			"job_title", "lifetime_value", "orders_count", "last_order_at",
 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
@@ -204,15 +206,15 @@ func TestGetContacts(t *testing.T) {
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 			"created_at", "updated_at",
 		}).AddRow(
-			"contact1@example.com", "ext-1", "UTC", "Contact", "One", nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil,
+			"contact1@example.com", "ext-1", "UTC", "en-US", "Contact", "One", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			now, now,
 		).AddRow(
-			"contact2@example.com", "ext-2", "UTC", "Contact", "Two", nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-			nil, nil, nil, nil, nil, nil, nil, nil,
+			"contact2@example.com", "ext-2", "UTC", "en-US", "Contact", "Two", nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			now.Add(-1*time.Hour), now,
 		)
@@ -240,7 +242,8 @@ func TestGetContacts(t *testing.T) {
 		}
 
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "first_name", "last_name", "phone",
+			"email", "external_id", "timezone", "language",
+			"first_name", "last_name", "phone",
 			"address_line_1", "address_line_2", "country", "postcode", "state",
 			"job_title", "lifetime_value", "orders_count", "last_order_at",
 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
@@ -323,20 +326,16 @@ func TestBatchImportContacts(t *testing.T) {
 	// Create some test contacts
 	contact1 := &domain.Contact{
 		Email:      "contact1@example.com",
-		ExternalID: "ext1",
-		Timezone:   "Europe/Paris",
-		FirstName:  domain.NullableString{String: "John", IsNull: false},
-		LastName:   domain.NullableString{String: "Doe", IsNull: false},
+		ExternalID: domain.NullableString{String: "ext1", IsNull: false},
+		Timezone:   domain.NullableString{String: "Europe/Paris", IsNull: false},
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
 
 	contact2 := &domain.Contact{
 		Email:      "contact2@example.com",
-		ExternalID: "ext2",
-		Timezone:   "America/New_York",
-		FirstName:  domain.NullableString{String: "Jane", IsNull: false},
-		LastName:   domain.NullableString{String: "Smith", IsNull: false},
+		ExternalID: domain.NullableString{String: "ext2", IsNull: false},
+		Timezone:   domain.NullableString{String: "America/New_York", IsNull: false},
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -404,10 +403,8 @@ func TestUpsertContact(t *testing.T) {
 
 	testContact := &domain.Contact{
 		Email:      email,
-		ExternalID: "ext123",
-		Timezone:   "Europe/Paris",
-		FirstName:  domain.NullableString{String: "John", IsNull: false},
-		LastName:   domain.NullableString{String: "Doe", IsNull: false},
+		ExternalID: domain.NullableString{String: "ext123", IsNull: false},
+		Timezone:   domain.NullableString{String: "Europe/Paris", IsNull: false},
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -429,7 +426,7 @@ func TestUpsertContact(t *testing.T) {
 	// Test case 2: Update existing contact
 	// First, check if contact exists
 	rows := sqlmock.NewRows([]string{
-		"email", "external_id", "timezone",
+		"email", "external_id", "timezone", "language",
 		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
 		"country", "postcode", "state", "job_title",
 		"lifetime_value", "orders_count", "last_order_at",
@@ -440,7 +437,7 @@ func TestUpsertContact(t *testing.T) {
 		"created_at", "updated_at",
 	}).
 		AddRow(
-			email, "old-ext-id", "Europe/Paris",
+			email, "old-ext-id", "Europe/Paris", "en-US",
 			"Old", "Name", "", "", "",
 			"", "", "", "",
 			0, 0, time.Time{},

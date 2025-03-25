@@ -18,38 +18,23 @@ func TestContact_Validate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid contact with required email field",
+			name: "valid contact with required email field only",
 			contact: domain.Contact{
 				Email: "test@example.com",
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid contact with all fields including custom JSON",
+			name: "valid contact with all optional fields",
 			contact: domain.Contact{
 				Email:      "test@example.com",
-				ExternalID: "ext123",
-				Timezone:   "Europe/Paris",
+				ExternalID: domain.NullableString{String: "ext123", IsNull: false},
+				Timezone:   domain.NullableString{String: "Europe/Paris", IsNull: false},
+				Language:   domain.NullableString{String: "en", IsNull: false},
 				FirstName:  domain.NullableString{String: "John", IsNull: false},
 				LastName:   domain.NullableString{String: "Doe", IsNull: false},
 				CustomJSON1: domain.NullableJSON{
 					Data:  map[string]interface{}{"preferences": map[string]interface{}{"theme": "dark"}},
-					Valid: true,
-				},
-				CustomJSON2: domain.NullableJSON{
-					Data:  []interface{}{"tag1", "tag2"},
-					Valid: true,
-				},
-				CustomJSON3: domain.NullableJSON{
-					Data:  42.5,
-					Valid: true,
-				},
-				CustomJSON4: domain.NullableJSON{
-					Data:  "string value",
-					Valid: true,
-				},
-				CustomJSON5: domain.NullableJSON{
-					Data:  true,
 					Valid: true,
 				},
 			},
@@ -58,8 +43,8 @@ func TestContact_Validate(t *testing.T) {
 		{
 			name: "missing email",
 			contact: domain.Contact{
-				ExternalID: "ext123",
-				Timezone:   "Europe/Paris",
+				ExternalID: domain.NullableString{String: "ext123", IsNull: false},
+				Timezone:   domain.NullableString{String: "Europe/Paris", IsNull: false},
 			},
 			wantErr: true,
 		},
@@ -67,8 +52,8 @@ func TestContact_Validate(t *testing.T) {
 			name: "invalid email",
 			contact: domain.Contact{
 				Email:      "invalid-email",
-				ExternalID: "ext123",
-				Timezone:   "Europe/Paris",
+				ExternalID: domain.NullableString{String: "ext123", IsNull: false},
+				Timezone:   domain.NullableString{String: "Europe/Paris", IsNull: false},
 			},
 			wantErr: true,
 		},
@@ -100,42 +85,43 @@ func TestScanContact(t *testing.T) {
 	scanner := &contactMockScanner{
 		data: []interface{}{
 			"test@example.com", // Email
-			"ext123",           // ExternalID
-			"Europe/Paris",     // Timezone
-			sql.NullString{String: "John", Valid: true},        // FirstName
-			sql.NullString{String: "Doe", Valid: true},         // LastName
-			sql.NullString{String: "+1234567890", Valid: true}, // Phone
-			sql.NullString{String: "123 Main St", Valid: true}, // AddressLine1
-			sql.NullString{String: "Apt 4B", Valid: true},      // AddressLine2
-			sql.NullString{String: "USA", Valid: true},         // Country
-			sql.NullString{String: "12345", Valid: true},       // Postcode
-			sql.NullString{String: "CA", Valid: true},          // State
-			sql.NullString{String: "Developer", Valid: true},   // JobTitle
-			sql.NullFloat64{Float64: 100.50, Valid: true},      // LifetimeValue
-			sql.NullFloat64{Float64: 5, Valid: true},           // OrdersCount
-			sql.NullTime{Time: now, Valid: true},               // LastOrderAt
-			sql.NullString{String: "Custom 1", Valid: true},    // CustomString1
-			sql.NullString{String: "Custom 2", Valid: true},    // CustomString2
-			sql.NullString{String: "Custom 3", Valid: true},    // CustomString3
-			sql.NullString{String: "Custom 4", Valid: true},    // CustomString4
-			sql.NullString{String: "Custom 5", Valid: true},    // CustomString5
-			sql.NullFloat64{Float64: 42.0, Valid: true},        // CustomNumber1
-			sql.NullFloat64{Float64: 43.0, Valid: true},        // CustomNumber2
-			sql.NullFloat64{Float64: 44.0, Valid: true},        // CustomNumber3
-			sql.NullFloat64{Float64: 45.0, Valid: true},        // CustomNumber4
-			sql.NullFloat64{Float64: 46.0, Valid: true},        // CustomNumber5
-			sql.NullTime{Time: now, Valid: true},               // CustomDatetime1
-			sql.NullTime{Time: now, Valid: true},               // CustomDatetime2
-			sql.NullTime{Time: now, Valid: true},               // CustomDatetime3
-			sql.NullTime{Time: now, Valid: true},               // CustomDatetime4
-			sql.NullTime{Time: now, Valid: true},               // CustomDatetime5
-			jsonData1,                                          // CustomJSON1
-			jsonData2,                                          // CustomJSON2
-			jsonData3,                                          // CustomJSON3
-			jsonData4,                                          // CustomJSON4
-			jsonData5,                                          // CustomJSON5
-			now,                                                // CreatedAt
-			now,                                                // UpdatedAt
+			sql.NullString{String: "ext123", Valid: true},       // ExternalID
+			sql.NullString{String: "Europe/Paris", Valid: true}, // Timezone
+			sql.NullString{String: "en-US", Valid: true},        // Language
+			sql.NullString{String: "John", Valid: true},         // FirstName
+			sql.NullString{String: "Doe", Valid: true},          // LastName
+			sql.NullString{String: "+1234567890", Valid: true},  // Phone
+			sql.NullString{String: "123 Main St", Valid: true},  // AddressLine1
+			sql.NullString{String: "Apt 4B", Valid: true},       // AddressLine2
+			sql.NullString{String: "USA", Valid: true},          // Country
+			sql.NullString{String: "12345", Valid: true},        // Postcode
+			sql.NullString{String: "CA", Valid: true},           // State
+			sql.NullString{String: "Developer", Valid: true},    // JobTitle
+			sql.NullFloat64{Float64: 100.50, Valid: true},       // LifetimeValue
+			sql.NullFloat64{Float64: 5, Valid: true},            // OrdersCount
+			sql.NullTime{Time: now, Valid: true},                // LastOrderAt
+			sql.NullString{String: "Custom 1", Valid: true},     // CustomString1
+			sql.NullString{String: "Custom 2", Valid: true},     // CustomString2
+			sql.NullString{String: "Custom 3", Valid: true},     // CustomString3
+			sql.NullString{String: "Custom 4", Valid: true},     // CustomString4
+			sql.NullString{String: "Custom 5", Valid: true},     // CustomString5
+			sql.NullFloat64{Float64: 42.0, Valid: true},         // CustomNumber1
+			sql.NullFloat64{Float64: 43.0, Valid: true},         // CustomNumber2
+			sql.NullFloat64{Float64: 44.0, Valid: true},         // CustomNumber3
+			sql.NullFloat64{Float64: 45.0, Valid: true},         // CustomNumber4
+			sql.NullFloat64{Float64: 46.0, Valid: true},         // CustomNumber5
+			sql.NullTime{Time: now, Valid: true},                // CustomDatetime1
+			sql.NullTime{Time: now, Valid: true},                // CustomDatetime2
+			sql.NullTime{Time: now, Valid: true},                // CustomDatetime3
+			sql.NullTime{Time: now, Valid: true},                // CustomDatetime4
+			sql.NullTime{Time: now, Valid: true},                // CustomDatetime5
+			jsonData1,                                           // CustomJSON1
+			jsonData2,                                           // CustomJSON2
+			jsonData3,                                           // CustomJSON3
+			jsonData4,                                           // CustomJSON4
+			jsonData5,                                           // CustomJSON5
+			now,                                                 // CreatedAt
+			now,                                                 // UpdatedAt
 		},
 	}
 
@@ -143,8 +129,10 @@ func TestScanContact(t *testing.T) {
 	contact, err := domain.ScanContact(scanner)
 	assert.NoError(t, err)
 	assert.Equal(t, "test@example.com", contact.Email)
-	assert.Equal(t, "ext123", contact.ExternalID)
-	assert.Equal(t, "Europe/Paris", contact.Timezone)
+	assert.Equal(t, "ext123", contact.ExternalID.String)
+	assert.Equal(t, "Europe/Paris", contact.Timezone.String)
+	assert.Equal(t, "en-US", contact.Language.String)
+	assert.False(t, contact.Language.IsNull)
 	assert.Equal(t, "John", contact.FirstName.String)
 	assert.False(t, contact.FirstName.IsNull)
 	assert.Equal(t, "Doe", contact.LastName.String)

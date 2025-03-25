@@ -25,8 +25,8 @@ func TestContactService_GetContactByEmail(t *testing.T) {
 	expectedError := &domain.ErrContactNotFound{Message: "contact not found"}
 	expectedContact := &domain.Contact{
 		Email:      "test@example.com",
-		ExternalID: "ext1",
-		Timezone:   "UTC",
+		ExternalID: domain.NullableString{String: "ext1", IsNull: false},
+		Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 		FirstName: domain.NullableString{
 			String: "Test",
 			IsNull: false,
@@ -62,8 +62,8 @@ func TestContactService_GetContactByExternalID(t *testing.T) {
 	expectedError := &domain.ErrContactNotFound{Message: "contact not found"}
 	expectedContact := &domain.Contact{
 		Email:      "test@example.com",
-		ExternalID: "ext1",
-		Timezone:   "UTC",
+		ExternalID: domain.NullableString{String: "ext1", IsNull: false},
+		Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 		FirstName: domain.NullableString{
 			String: "Test",
 			IsNull: false,
@@ -106,15 +106,15 @@ func TestContactService_GetContacts(t *testing.T) {
 			Contacts: []*domain.Contact{
 				{
 					Email:      "contact1@example.com",
-					ExternalID: "ext-1",
-					Timezone:   "UTC",
+					ExternalID: domain.NullableString{String: "ext-1", IsNull: false},
+					Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 					FirstName:  domain.NullableString{String: "Contact", IsNull: false},
 					LastName:   domain.NullableString{String: "One", IsNull: false},
 				},
 				{
 					Email:      "contact2@example.com",
-					ExternalID: "ext-2",
-					Timezone:   "UTC",
+					ExternalID: domain.NullableString{String: "ext-2", IsNull: false},
+					Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 					FirstName:  domain.NullableString{String: "Contact", IsNull: false},
 					LastName:   domain.NullableString{String: "Two", IsNull: false},
 				},
@@ -211,8 +211,8 @@ func TestContactService_GetContacts(t *testing.T) {
 			Contacts: []*domain.Contact{
 				{
 					Email:      "contact1@example.com",
-					ExternalID: "ext-1",
-					Timezone:   "UTC",
+					ExternalID: domain.NullableString{String: "ext-1", IsNull: false},
+					Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 					FirstName:  domain.NullableString{String: "Contact", IsNull: false},
 					LastName:   domain.NullableString{String: "One", IsNull: false},
 				},
@@ -291,16 +291,16 @@ func TestBatchImportContacts(t *testing.T) {
 
 		contacts := []*domain.Contact{
 			{
-				ExternalID: "ext1",
+				ExternalID: domain.NullableString{String: "ext1", IsNull: false},
 				Email:      "contact1@example.com",
-				Timezone:   "UTC",
+				Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 				FirstName:  domain.NullableString{String: "John", IsNull: false},
 				LastName:   domain.NullableString{String: "Doe", IsNull: false},
 			},
 			{
-				ExternalID: "ext2",
+				ExternalID: domain.NullableString{String: "ext2", IsNull: false},
 				Email:      "contact2@example.com",
-				Timezone:   "Europe/Paris",
+				Timezone:   domain.NullableString{String: "Europe/Paris", IsNull: false},
 				FirstName:  domain.NullableString{String: "Jane", IsNull: false},
 				LastName:   domain.NullableString{String: "Smith", IsNull: false},
 			},
@@ -333,14 +333,14 @@ func TestBatchImportContacts(t *testing.T) {
 
 		invalidContacts := []*domain.Contact{
 			{
-				ExternalID: "ext3",
+				ExternalID: domain.NullableString{String: "ext3", IsNull: false},
 				// Missing required Email field
-				Timezone:  "UTC",
+				Timezone:  domain.NullableString{String: "UTC", IsNull: false},
 				FirstName: domain.NullableString{String: "Invalid", IsNull: false},
 				LastName:  domain.NullableString{String: "Contact", IsNull: false},
 			},
 			{
-				ExternalID: "ext4",
+				ExternalID: domain.NullableString{String: "ext4", IsNull: false},
 				Email:      "contact4@example.com",
 				// Missing required Timezone field
 				FirstName: domain.NullableString{String: "Another", IsNull: false},
@@ -382,9 +382,9 @@ func TestBatchImportContacts(t *testing.T) {
 
 		contacts := []*domain.Contact{
 			{
-				ExternalID: "ext1",
+				ExternalID: domain.NullableString{String: "ext1", IsNull: false},
 				Email:      "contact1@example.com",
-				Timezone:   "UTC",
+				Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 				FirstName:  domain.NullableString{String: "John", IsNull: false},
 				LastName:   domain.NullableString{String: "Doe", IsNull: false},
 			},
@@ -410,8 +410,8 @@ func TestContactService_UpsertContact(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      "contact1@example.com",
-			ExternalID: "ext1",
-			Timezone:   "UTC",
+			ExternalID: domain.NullableString{String: "ext1", IsNull: false},
+			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 			FirstName:  domain.NullableString{String: "John", IsNull: false},
 			LastName:   domain.NullableString{String: "Doe", IsNull: false},
 		}
@@ -441,8 +441,8 @@ func TestContactService_UpsertContact(t *testing.T) {
 		now := time.Now().UTC()
 		contact := &domain.Contact{
 			Email:      "contact1@example.com",
-			ExternalID: "ext1",
-			Timezone:   "UTC",
+			ExternalID: domain.NullableString{String: "ext1", IsNull: false},
+			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 			FirstName:  domain.NullableString{String: "John", IsNull: false},
 			LastName:   domain.NullableString{String: "Doe", IsNull: false},
 			CreatedAt:  now,
@@ -473,8 +473,8 @@ func TestContactService_UpsertContact(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      "invalid-email",
-			ExternalID: "ext1",
-			Timezone:   "UTC",
+			ExternalID: domain.NullableString{String: "ext1", IsNull: false},
+			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 			FirstName:  domain.NullableString{String: "Invalid", IsNull: false},
 			LastName:   domain.NullableString{String: "Contact", IsNull: false},
 		}
@@ -494,8 +494,8 @@ func TestContactService_UpsertContact(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      "contact1@example.com",
-			ExternalID: "ext1",
-			Timezone:   "UTC",
+			ExternalID: domain.NullableString{String: "ext1", IsNull: false},
+			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
 			FirstName:  domain.NullableString{String: "John", IsNull: false},
 			LastName:   domain.NullableString{String: "Doe", IsNull: false},
 		}

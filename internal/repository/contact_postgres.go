@@ -23,7 +23,7 @@ func NewContactRepository(db *sql.DB) domain.ContactRepository {
 func (r *contactRepository) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
 	query := `
 		SELECT 
-			email, external_id, timezone, 
+			email, external_id, timezone, language,
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -52,7 +52,7 @@ func (r *contactRepository) GetContactByEmail(ctx context.Context, email string)
 func (r *contactRepository) GetContactByExternalID(ctx context.Context, externalID string) (*domain.Contact, error) {
 	query := `
 		SELECT 
-			email, external_id, timezone, 
+			email, external_id, timezone, language,
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -82,7 +82,7 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 	// Build the base query
 	baseQuery := `
 		SELECT 
-			email, external_id, timezone, 
+			email, external_id, timezone, language,
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -227,7 +227,7 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 	// Prepare a statement for contact insertion
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO contacts (
-			email, external_id, timezone, 
+			email, external_id, timezone, language,
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -432,6 +432,7 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 				contact.Email,
 				contact.ExternalID,
 				contact.Timezone,
+				contact.Language,
 				firstNameSQL,
 				lastNameSQL,
 				phoneSQL,
@@ -493,7 +494,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 
 	query := `
 		INSERT INTO contacts (
-			email, external_id, timezone, 
+			email, external_id, timezone, language,
 			first_name, last_name, phone, address_line_1, address_line_2,
 			country, postcode, state, job_title,
 			lifetime_value, orders_count, last_order_at,
@@ -680,10 +681,20 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 		}
 	}
 
+	// Convert domain nullable types to SQL nullable types
+	var externalIDSQL, timezoneSQL sql.NullString
+	if !contact.ExternalID.IsNull {
+		externalIDSQL = sql.NullString{String: contact.ExternalID.String, Valid: true}
+	}
+	if !contact.Timezone.IsNull {
+		timezoneSQL = sql.NullString{String: contact.Timezone.String, Valid: true}
+	}
+
 	_, err = r.db.ExecContext(ctx, query,
 		contact.Email,
-		contact.ExternalID,
-		contact.Timezone,
+		externalIDSQL,
+		timezoneSQL,
+		contact.Language,
 		firstNameSQL,
 		lastNameSQL,
 		phoneSQL,

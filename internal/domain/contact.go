@@ -14,11 +14,12 @@ import (
 // Contact represents a contact in the system
 type Contact struct {
 	// Required fields
-	Email      string `json:"email" valid:"required,email"`
-	ExternalID string `json:"external_id" valid:"required"`
-	Timezone   string `json:"timezone" valid:"required,timezone"`
+	Email string `json:"email" valid:"required,email"`
 
 	// Optional fields
+	ExternalID   NullableString `json:"external_id,omitempty" valid:"optional"`
+	Timezone     NullableString `json:"timezone,omitempty" valid:"optional,timezone"`
+	Language     NullableString `json:"language,omitempty" valid:"optional"`
 	FirstName    NullableString `json:"first_name,omitempty" valid:"optional"`
 	LastName     NullableString `json:"last_name,omitempty" valid:"optional"`
 	Phone        NullableString `json:"phone,omitempty" valid:"optional"`
@@ -83,15 +84,15 @@ func (c *Contact) Validate() error {
 		return fmt.Errorf("invalid email format")
 	}
 
-	// Other fields are optional and can be null
 	return nil
 }
 
 // For database scanning
 type dbContact struct {
 	Email      string
-	ExternalID string
-	Timezone   string
+	ExternalID sql.NullString
+	Timezone   sql.NullString
+	Language   sql.NullString
 
 	FirstName    sql.NullString
 	LastName     sql.NullString
@@ -144,6 +145,7 @@ func ScanContact(scanner interface {
 		&dbc.Email,
 		&dbc.ExternalID,
 		&dbc.Timezone,
+		&dbc.Language,
 		&dbc.FirstName,
 		&dbc.LastName,
 		&dbc.Phone,
@@ -184,8 +186,9 @@ func ScanContact(scanner interface {
 
 	c := &Contact{
 		Email:      dbc.Email,
-		ExternalID: dbc.ExternalID,
-		Timezone:   dbc.Timezone,
+		ExternalID: NullableString{String: dbc.ExternalID.String, IsNull: !dbc.ExternalID.Valid},
+		Timezone:   NullableString{String: dbc.Timezone.String, IsNull: !dbc.Timezone.Valid},
+		Language:   NullableString{String: dbc.Language.String, IsNull: !dbc.Language.Valid},
 
 		FirstName: NullableString{
 			String: dbc.FirstName.String,
@@ -455,17 +458,20 @@ func FromJSON(data interface{}) (*Contact, error) {
 		return nil, fmt.Errorf("email is required")
 	}
 
-	externalID := jsonResult.Get("external_id").String()
-	timezone := jsonResult.Get("timezone").String()
+	// Validate email format
+	if !isValidEmail(email) {
+		return nil, fmt.Errorf("invalid email format")
+	}
 
 	// Create the contact with required fields
 	contact := &Contact{
-		Email:      email,
-		ExternalID: externalID,
-		Timezone:   timezone,
+		Email: email,
 	}
 
 	// Parse nullable string fields
+	parseNullableString(jsonResult, "external_id", &contact.ExternalID)
+	parseNullableString(jsonResult, "timezone", &contact.Timezone)
+	parseNullableString(jsonResult, "language", &contact.Language)
 	parseNullableString(jsonResult, "first_name", &contact.FirstName)
 	parseNullableString(jsonResult, "last_name", &contact.LastName)
 	parseNullableString(jsonResult, "phone", &contact.Phone)

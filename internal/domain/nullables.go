@@ -3,6 +3,7 @@ package domain
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -49,6 +50,36 @@ func (ns NullableString) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 	return []byte(`"` + ns.String + `"`), nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler
+func (ns *NullableString) UnmarshalJSON(data []byte) error {
+	// Handle null case
+	if string(data) == "null" {
+		ns.String = ""
+		ns.IsNull = true
+		return nil
+	}
+
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		ns.String = str
+		ns.IsNull = false
+		return nil
+	}
+
+	// If that fails, try to unmarshal as an object
+	var obj struct {
+		String string `json:"String"`
+		IsNull bool   `json:"IsNull"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+	ns.String = obj.String
+	ns.IsNull = obj.IsNull
+	return nil
 }
 
 // NullableFloat64 represents a float64 that can be null

@@ -45,11 +45,12 @@ type batchImportContactsRequest struct {
 
 // Add upsert request type that combines create and update
 type upsertContactRequest struct {
-	ExternalID string `json:"external_id" valid:"required"`
 	Email      string `json:"email" valid:"required,email"`
-	FirstName  string `json:"first_name,omitempty"`
-	LastName   string `json:"last_name,omitempty"`
-	Timezone   string `json:"timezone" valid:"required"`
+	ExternalID string `json:"external_id,omitempty" valid:"optional"`
+	Timezone   string `json:"timezone,omitempty" valid:"optional"`
+	Language   string `json:"language,omitempty" valid:"optional"`
+	FirstName  string `json:"first_name,omitempty" valid:"optional"`
+	LastName   string `json:"last_name,omitempty" valid:"optional"`
 }
 
 // Add the request type for listing contacts
