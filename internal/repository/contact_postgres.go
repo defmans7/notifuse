@@ -397,31 +397,31 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 			}
 
 			// Custom JSON fields
-			if contact.CustomJSON1.Valid {
+			if !contact.CustomJSON1.IsNull {
 				customJSON1SQL, err = json.Marshal(contact.CustomJSON1.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON1: %w", err)
 				}
 			}
-			if contact.CustomJSON2.Valid {
+			if !contact.CustomJSON2.IsNull {
 				customJSON2SQL, err = json.Marshal(contact.CustomJSON2.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON2: %w", err)
 				}
 			}
-			if contact.CustomJSON3.Valid {
+			if !contact.CustomJSON3.IsNull {
 				customJSON3SQL, err = json.Marshal(contact.CustomJSON3.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON3: %w", err)
 				}
 			}
-			if contact.CustomJSON4.Valid {
+			if !contact.CustomJSON4.IsNull {
 				customJSON4SQL, err = json.Marshal(contact.CustomJSON4.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON4: %w", err)
 				}
 			}
-			if contact.CustomJSON5.Valid {
+			if !contact.CustomJSON5.IsNull {
 				customJSON5SQL, err = json.Marshal(contact.CustomJSON5.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON5: %w", err)
@@ -650,31 +650,31 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 	}
 
 	// Custom JSON fields
-	if contact.CustomJSON1.Valid {
+	if !contact.CustomJSON1.IsNull {
 		customJSON1SQL, err = json.Marshal(contact.CustomJSON1.Data)
 		if err != nil {
 			return false, fmt.Errorf("failed to marshal CustomJSON1: %w", err)
 		}
 	}
-	if contact.CustomJSON2.Valid {
+	if !contact.CustomJSON2.IsNull {
 		customJSON2SQL, err = json.Marshal(contact.CustomJSON2.Data)
 		if err != nil {
 			return false, fmt.Errorf("failed to marshal CustomJSON2: %w", err)
 		}
 	}
-	if contact.CustomJSON3.Valid {
+	if !contact.CustomJSON3.IsNull {
 		customJSON3SQL, err = json.Marshal(contact.CustomJSON3.Data)
 		if err != nil {
 			return false, fmt.Errorf("failed to marshal CustomJSON3: %w", err)
 		}
 	}
-	if contact.CustomJSON4.Valid {
+	if !contact.CustomJSON4.IsNull {
 		customJSON4SQL, err = json.Marshal(contact.CustomJSON4.Data)
 		if err != nil {
 			return false, fmt.Errorf("failed to marshal CustomJSON4: %w", err)
 		}
 	}
-	if contact.CustomJSON5.Valid {
+	if !contact.CustomJSON5.IsNull {
 		customJSON5SQL, err = json.Marshal(contact.CustomJSON5.Data)
 		if err != nil {
 			return false, fmt.Errorf("failed to marshal CustomJSON5: %w", err)

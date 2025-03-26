@@ -19,32 +19,32 @@ func TestNullableJSON_Scan(t *testing.T) {
 			name:  "nil value",
 			input: nil,
 			expected: NullableJSON{
-				Data:  nil,
-				Valid: false,
+				Data:   nil,
+				IsNull: true,
 			},
 		},
 		{
 			name:  "empty byte slice",
 			input: []byte{},
 			expected: NullableJSON{
-				Data:  nil,
-				Valid: false,
+				Data:   nil,
+				IsNull: true,
 			},
 		},
 		{
 			name:  "valid JSON object",
 			input: []byte(`{"key":"value"}`),
 			expected: NullableJSON{
-				Data:  map[string]interface{}{"key": "value"},
-				Valid: true,
+				Data:   map[string]interface{}{"key": "value"},
+				IsNull: false,
 			},
 		},
 		{
 			name:  "valid JSON array",
 			input: []byte(`[1,2,3]`),
 			expected: NullableJSON{
-				Data:  []interface{}{float64(1), float64(2), float64(3)},
-				Valid: true,
+				Data:   []interface{}{float64(1), float64(2), float64(3)},
+				IsNull: false,
 			},
 		},
 		{
@@ -84,24 +84,24 @@ func TestNullableJSON_Value(t *testing.T) {
 		{
 			name: "nil value",
 			input: NullableJSON{
-				Data:  nil,
-				Valid: false,
+				Data:   nil,
+				IsNull: true,
 			},
 			expected: nil,
 		},
 		{
 			name: "valid object",
 			input: NullableJSON{
-				Data:  map[string]interface{}{"key": "value"},
-				Valid: true,
+				Data:   map[string]interface{}{"key": "value"},
+				IsNull: false,
 			},
 			expected: []byte(`{"key":"value"}`),
 		},
 		{
 			name: "valid array",
 			input: NullableJSON{
-				Data:  []interface{}{1, 2, 3},
-				Valid: true,
+				Data:   []interface{}{1, 2, 3},
+				IsNull: false,
 			},
 			expected: []byte(`[1,2,3]`),
 		},
@@ -135,24 +135,24 @@ func TestNullableJSON_MarshalJSON(t *testing.T) {
 		{
 			name: "null value",
 			input: NullableJSON{
-				Data:  nil,
-				Valid: false,
+				Data:   nil,
+				IsNull: true,
 			},
 			expected: "null",
 		},
 		{
 			name: "valid object",
 			input: NullableJSON{
-				Data:  map[string]interface{}{"key": "value"},
-				Valid: true,
+				Data:   map[string]interface{}{"key": "value"},
+				IsNull: false,
 			},
 			expected: `{"key":"value"}`,
 		},
 		{
 			name: "valid array",
 			input: NullableJSON{
-				Data:  []interface{}{1, 2, 3},
-				Valid: true,
+				Data:   []interface{}{1, 2, 3},
+				IsNull: false,
 			},
 			expected: `[1,2,3]`,
 		},
@@ -183,24 +183,24 @@ func TestNullableJSON_UnmarshalJSON(t *testing.T) {
 			name:  "null value",
 			input: "null",
 			expected: NullableJSON{
-				Data:  nil,
-				Valid: false,
+				Data:   nil,
+				IsNull: true,
 			},
 		},
 		{
 			name:  "valid object",
 			input: `{"key":"value"}`,
 			expected: NullableJSON{
-				Data:  map[string]interface{}{"key": "value"},
-				Valid: true,
+				Data:   map[string]interface{}{"key": "value"},
+				IsNull: false,
 			},
 		},
 		{
 			name:  "valid array",
 			input: `[1,2,3]`,
 			expected: NullableJSON{
-				Data:  []interface{}{float64(1), float64(2), float64(3)},
-				Valid: true,
+				Data:   []interface{}{float64(1), float64(2), float64(3)},
+				IsNull: false,
 			},
 		},
 		{
@@ -214,6 +214,66 @@ func TestNullableJSON_UnmarshalJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var nj NullableJSON
 			err := json.Unmarshal([]byte(tt.input), &nj)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, nj)
+			}
+		})
+	}
+}
+
+func TestNullableJSON_UnmarshalJSON_New(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		expected NullableJSON
+		wantErr  bool
+	}{
+		{
+			name:  "null value",
+			input: []byte("null"),
+			expected: NullableJSON{
+				Data:   nil,
+				IsNull: true,
+			},
+		},
+		{
+			name:  "empty object",
+			input: []byte("{}"),
+			expected: NullableJSON{
+				Data:   map[string]interface{}{},
+				IsNull: false,
+			},
+		},
+		{
+			name:  "object with values",
+			input: []byte(`{"string":"value","number":42,"bool":true}`),
+			expected: NullableJSON{
+				Data: map[string]interface{}{
+					"string": "value",
+					"number": float64(42),
+					"bool":   true,
+				},
+				IsNull: false,
+			},
+		},
+		{
+			name:  "array",
+			input: []byte(`[1,"two",true]`),
+			expected: NullableJSON{
+				Data:   []interface{}{float64(1), "two", true},
+				IsNull: false,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var nj NullableJSON
+			err := json.Unmarshal(tt.input, &nj)
 
 			if tt.wantErr {
 				assert.Error(t, err)

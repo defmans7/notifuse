@@ -312,32 +312,6 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse custom JSON fields if they exist
-	jsonData := gjson.ParseBytes(body)
-	for i := 1; i <= 5; i++ {
-		field := fmt.Sprintf("custom_json_%d", i)
-		if value := jsonData.Get(field); value.Exists() {
-			// Check if the value is explicitly null
-			if value.Type == gjson.Null {
-				continue // Leave the field as invalid
-			}
-
-			// Set the custom JSON field
-			switch i {
-			case 1:
-				contact.CustomJSON1 = domain.NullableJSON{Data: value.Value(), Valid: true}
-			case 2:
-				contact.CustomJSON2 = domain.NullableJSON{Data: value.Value(), Valid: true}
-			case 3:
-				contact.CustomJSON3 = domain.NullableJSON{Data: value.Value(), Valid: true}
-			case 4:
-				contact.CustomJSON4 = domain.NullableJSON{Data: value.Value(), Valid: true}
-			case 5:
-				contact.CustomJSON5 = domain.NullableJSON{Data: value.Value(), Valid: true}
-			}
-		}
-	}
-
 	isNew, err := h.service.UpsertContact(r.Context(), contact)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to upsert contact")

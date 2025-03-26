@@ -42,8 +42,8 @@ func TestContactListService_AddContactToList(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      email,
-			ExternalID: domain.NullableString{String: "ext-123", IsNull: false},
-			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
+			ExternalID: &domain.NullableString{String: "ext-123", IsNull: false},
+			Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
 		}
 
 		list := &domain.List{
@@ -98,8 +98,8 @@ func TestContactListService_AddContactToList(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      email,
-			ExternalID: domain.NullableString{String: "ext-123", IsNull: false},
-			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
+			ExternalID: &domain.NullableString{String: "ext-123", IsNull: false},
+			Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
 		}
 
 		list := &domain.List{
@@ -188,8 +188,8 @@ func TestContactListService_AddContactToList(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      email,
-			ExternalID: domain.NullableString{String: "ext-123", IsNull: false},
-			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
+			ExternalID: &domain.NullableString{String: "ext-123", IsNull: false},
+			Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
 		}
 
 		contactList := &domain.ContactList{
@@ -232,8 +232,8 @@ func TestContactListService_AddContactToList(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      email,
-			ExternalID: domain.NullableString{String: "ext-123", IsNull: false},
-			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
+			ExternalID: &domain.NullableString{String: "ext-123", IsNull: false},
+			Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
 		}
 
 		list := &domain.List{
@@ -535,8 +535,8 @@ func TestContactListService_GetListsByEmail(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      email,
-			ExternalID: domain.NullableString{String: "ext-123", IsNull: false},
-			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
+			ExternalID: &domain.NullableString{String: "ext-123", IsNull: false},
+			Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
 		}
 
 		expectedContactLists := []*domain.ContactList{
@@ -616,8 +616,8 @@ func TestContactListService_GetListsByEmail(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      email,
-			ExternalID: domain.NullableString{String: "ext-123", IsNull: false},
-			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
+			ExternalID: &domain.NullableString{String: "ext-123", IsNull: false},
+			Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
 		}
 
 		expectedContactLists := []*domain.ContactList{}
@@ -652,8 +652,8 @@ func TestContactListService_GetListsByEmail(t *testing.T) {
 
 		contact := &domain.Contact{
 			Email:      email,
-			ExternalID: domain.NullableString{String: "ext-123", IsNull: false},
-			Timezone:   domain.NullableString{String: "UTC", IsNull: false},
+			ExternalID: &domain.NullableString{String: "ext-123", IsNull: false},
+			Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
 		}
 
 		repoErr := errors.New("repository error")

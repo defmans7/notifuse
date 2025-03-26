@@ -17,48 +17,48 @@ type Contact struct {
 	Email string `json:"email" valid:"required,email"`
 
 	// Optional fields
-	ExternalID   NullableString `json:"external_id,omitempty" valid:"optional"`
-	Timezone     NullableString `json:"timezone,omitempty" valid:"optional,timezone"`
-	Language     NullableString `json:"language,omitempty" valid:"optional"`
-	FirstName    NullableString `json:"first_name,omitempty" valid:"optional"`
-	LastName     NullableString `json:"last_name,omitempty" valid:"optional"`
-	Phone        NullableString `json:"phone,omitempty" valid:"optional"`
-	AddressLine1 NullableString `json:"address_line_1,omitempty" valid:"optional"`
-	AddressLine2 NullableString `json:"address_line_2,omitempty" valid:"optional"`
-	Country      NullableString `json:"country,omitempty" valid:"optional"`
-	Postcode     NullableString `json:"postcode,omitempty" valid:"optional"`
-	State        NullableString `json:"state,omitempty" valid:"optional"`
-	JobTitle     NullableString `json:"job_title,omitempty" valid:"optional"`
+	ExternalID   *NullableString `json:"external_id,omitempty" valid:"optional"`
+	Timezone     *NullableString `json:"timezone,omitempty" valid:"optional,timezone"`
+	Language     *NullableString `json:"language,omitempty" valid:"optional"`
+	FirstName    *NullableString `json:"first_name,omitempty" valid:"optional"`
+	LastName     *NullableString `json:"last_name,omitempty" valid:"optional"`
+	Phone        *NullableString `json:"phone,omitempty" valid:"optional"`
+	AddressLine1 *NullableString `json:"address_line_1,omitempty" valid:"optional"`
+	AddressLine2 *NullableString `json:"address_line_2,omitempty" valid:"optional"`
+	Country      *NullableString `json:"country,omitempty" valid:"optional"`
+	Postcode     *NullableString `json:"postcode,omitempty" valid:"optional"`
+	State        *NullableString `json:"state,omitempty" valid:"optional"`
+	JobTitle     *NullableString `json:"job_title,omitempty" valid:"optional"`
 
 	// Commerce related fields
-	LifetimeValue NullableFloat64 `json:"lifetime_value,omitempty" valid:"optional"`
-	OrdersCount   NullableFloat64 `json:"orders_count,omitempty" valid:"optional"`
-	LastOrderAt   NullableTime    `json:"last_order_at,omitempty" valid:"optional"`
+	LifetimeValue *NullableFloat64 `json:"lifetime_value,omitempty" valid:"optional"`
+	OrdersCount   *NullableFloat64 `json:"orders_count,omitempty" valid:"optional"`
+	LastOrderAt   *NullableTime    `json:"last_order_at,omitempty" valid:"optional"`
 
 	// Custom fields
-	CustomString1 NullableString `json:"custom_string_1,omitempty" valid:"optional"`
-	CustomString2 NullableString `json:"custom_string_2,omitempty" valid:"optional"`
-	CustomString3 NullableString `json:"custom_string_3,omitempty" valid:"optional"`
-	CustomString4 NullableString `json:"custom_string_4,omitempty" valid:"optional"`
-	CustomString5 NullableString `json:"custom_string_5,omitempty" valid:"optional"`
+	CustomString1 *NullableString `json:"custom_string_1,omitempty" valid:"optional"`
+	CustomString2 *NullableString `json:"custom_string_2,omitempty" valid:"optional"`
+	CustomString3 *NullableString `json:"custom_string_3,omitempty" valid:"optional"`
+	CustomString4 *NullableString `json:"custom_string_4,omitempty" valid:"optional"`
+	CustomString5 *NullableString `json:"custom_string_5,omitempty" valid:"optional"`
 
-	CustomNumber1 NullableFloat64 `json:"custom_number_1,omitempty" valid:"optional"`
-	CustomNumber2 NullableFloat64 `json:"custom_number_2,omitempty" valid:"optional"`
-	CustomNumber3 NullableFloat64 `json:"custom_number_3,omitempty" valid:"optional"`
-	CustomNumber4 NullableFloat64 `json:"custom_number_4,omitempty" valid:"optional"`
-	CustomNumber5 NullableFloat64 `json:"custom_number_5,omitempty" valid:"optional"`
+	CustomNumber1 *NullableFloat64 `json:"custom_number_1,omitempty" valid:"optional"`
+	CustomNumber2 *NullableFloat64 `json:"custom_number_2,omitempty" valid:"optional"`
+	CustomNumber3 *NullableFloat64 `json:"custom_number_3,omitempty" valid:"optional"`
+	CustomNumber4 *NullableFloat64 `json:"custom_number_4,omitempty" valid:"optional"`
+	CustomNumber5 *NullableFloat64 `json:"custom_number_5,omitempty" valid:"optional"`
 
-	CustomDatetime1 NullableTime `json:"custom_datetime_1,omitempty" valid:"optional"`
-	CustomDatetime2 NullableTime `json:"custom_datetime_2,omitempty" valid:"optional"`
-	CustomDatetime3 NullableTime `json:"custom_datetime_3,omitempty" valid:"optional"`
-	CustomDatetime4 NullableTime `json:"custom_datetime_4,omitempty" valid:"optional"`
-	CustomDatetime5 NullableTime `json:"custom_datetime_5,omitempty" valid:"optional"`
+	CustomDatetime1 *NullableTime `json:"custom_datetime_1,omitempty" valid:"optional"`
+	CustomDatetime2 *NullableTime `json:"custom_datetime_2,omitempty" valid:"optional"`
+	CustomDatetime3 *NullableTime `json:"custom_datetime_3,omitempty" valid:"optional"`
+	CustomDatetime4 *NullableTime `json:"custom_datetime_4,omitempty" valid:"optional"`
+	CustomDatetime5 *NullableTime `json:"custom_datetime_5,omitempty" valid:"optional"`
 
-	CustomJSON1 NullableJSON `json:"custom_json_1,omitempty" valid:"optional"`
-	CustomJSON2 NullableJSON `json:"custom_json_2,omitempty" valid:"optional"`
-	CustomJSON3 NullableJSON `json:"custom_json_3,omitempty" valid:"optional"`
-	CustomJSON4 NullableJSON `json:"custom_json_4,omitempty" valid:"optional"`
-	CustomJSON5 NullableJSON `json:"custom_json_5,omitempty" valid:"optional"`
+	CustomJSON1 *NullableJSON `json:"custom_json_1,omitempty" valid:"optional"`
+	CustomJSON2 *NullableJSON `json:"custom_json_2,omitempty" valid:"optional"`
+	CustomJSON3 *NullableJSON `json:"custom_json_3,omitempty" valid:"optional"`
+	CustomJSON4 *NullableJSON `json:"custom_json_4,omitempty" valid:"optional"`
+	CustomJSON5 *NullableJSON `json:"custom_json_5,omitempty" valid:"optional"`
 
 	// Timestamps
 	CreatedAt time.Time `json:"created_at"`
@@ -186,119 +186,119 @@ func ScanContact(scanner interface {
 
 	c := &Contact{
 		Email:      dbc.Email,
-		ExternalID: NullableString{String: dbc.ExternalID.String, IsNull: !dbc.ExternalID.Valid},
-		Timezone:   NullableString{String: dbc.Timezone.String, IsNull: !dbc.Timezone.Valid},
-		Language:   NullableString{String: dbc.Language.String, IsNull: !dbc.Language.Valid},
+		ExternalID: &NullableString{String: dbc.ExternalID.String, IsNull: !dbc.ExternalID.Valid},
+		Timezone:   &NullableString{String: dbc.Timezone.String, IsNull: !dbc.Timezone.Valid},
+		Language:   &NullableString{String: dbc.Language.String, IsNull: !dbc.Language.Valid},
 
-		FirstName: NullableString{
+		FirstName: &NullableString{
 			String: dbc.FirstName.String,
 			IsNull: !dbc.FirstName.Valid,
 		},
-		LastName: NullableString{
+		LastName: &NullableString{
 			String: dbc.LastName.String,
 			IsNull: !dbc.LastName.Valid,
 		},
-		Phone: NullableString{
+		Phone: &NullableString{
 			String: dbc.Phone.String,
 			IsNull: !dbc.Phone.Valid,
 		},
-		AddressLine1: NullableString{
+		AddressLine1: &NullableString{
 			String: dbc.AddressLine1.String,
 			IsNull: !dbc.AddressLine1.Valid,
 		},
-		AddressLine2: NullableString{
+		AddressLine2: &NullableString{
 			String: dbc.AddressLine2.String,
 			IsNull: !dbc.AddressLine2.Valid,
 		},
-		Country: NullableString{
+		Country: &NullableString{
 			String: dbc.Country.String,
 			IsNull: !dbc.Country.Valid,
 		},
-		Postcode: NullableString{
+		Postcode: &NullableString{
 			String: dbc.Postcode.String,
 			IsNull: !dbc.Postcode.Valid,
 		},
-		State: NullableString{
+		State: &NullableString{
 			String: dbc.State.String,
 			IsNull: !dbc.State.Valid,
 		},
-		JobTitle: NullableString{
+		JobTitle: &NullableString{
 			String: dbc.JobTitle.String,
 			IsNull: !dbc.JobTitle.Valid,
 		},
 
-		LifetimeValue: NullableFloat64{
+		LifetimeValue: &NullableFloat64{
 			Float64: dbc.LifetimeValue.Float64,
 			IsNull:  !dbc.LifetimeValue.Valid,
 		},
-		OrdersCount: NullableFloat64{
+		OrdersCount: &NullableFloat64{
 			Float64: dbc.OrdersCount.Float64,
 			IsNull:  !dbc.OrdersCount.Valid,
 		},
-		LastOrderAt: NullableTime{
+		LastOrderAt: &NullableTime{
 			Time:   dbc.LastOrderAt.Time,
 			IsNull: !dbc.LastOrderAt.Valid,
 		},
 
-		CustomString1: NullableString{
+		CustomString1: &NullableString{
 			String: dbc.CustomString1.String,
 			IsNull: !dbc.CustomString1.Valid,
 		},
-		CustomString2: NullableString{
+		CustomString2: &NullableString{
 			String: dbc.CustomString2.String,
 			IsNull: !dbc.CustomString2.Valid,
 		},
-		CustomString3: NullableString{
+		CustomString3: &NullableString{
 			String: dbc.CustomString3.String,
 			IsNull: !dbc.CustomString3.Valid,
 		},
-		CustomString4: NullableString{
+		CustomString4: &NullableString{
 			String: dbc.CustomString4.String,
 			IsNull: !dbc.CustomString4.Valid,
 		},
-		CustomString5: NullableString{
+		CustomString5: &NullableString{
 			String: dbc.CustomString5.String,
 			IsNull: !dbc.CustomString5.Valid,
 		},
 
-		CustomNumber1: NullableFloat64{
+		CustomNumber1: &NullableFloat64{
 			Float64: dbc.CustomNumber1.Float64,
 			IsNull:  !dbc.CustomNumber1.Valid,
 		},
-		CustomNumber2: NullableFloat64{
+		CustomNumber2: &NullableFloat64{
 			Float64: dbc.CustomNumber2.Float64,
 			IsNull:  !dbc.CustomNumber2.Valid,
 		},
-		CustomNumber3: NullableFloat64{
+		CustomNumber3: &NullableFloat64{
 			Float64: dbc.CustomNumber3.Float64,
 			IsNull:  !dbc.CustomNumber3.Valid,
 		},
-		CustomNumber4: NullableFloat64{
+		CustomNumber4: &NullableFloat64{
 			Float64: dbc.CustomNumber4.Float64,
 			IsNull:  !dbc.CustomNumber4.Valid,
 		},
-		CustomNumber5: NullableFloat64{
+		CustomNumber5: &NullableFloat64{
 			Float64: dbc.CustomNumber5.Float64,
 			IsNull:  !dbc.CustomNumber5.Valid,
 		},
 
-		CustomDatetime1: NullableTime{
+		CustomDatetime1: &NullableTime{
 			Time:   dbc.CustomDatetime1.Time,
 			IsNull: !dbc.CustomDatetime1.Valid,
 		},
-		CustomDatetime2: NullableTime{
+		CustomDatetime2: &NullableTime{
 			Time:   dbc.CustomDatetime2.Time,
 			IsNull: !dbc.CustomDatetime2.Valid,
 		},
-		CustomDatetime3: NullableTime{
+		CustomDatetime3: &NullableTime{
 			Time:   dbc.CustomDatetime3.Time,
 			IsNull: !dbc.CustomDatetime3.Valid,
 		},
-		CustomDatetime4: NullableTime{
+		CustomDatetime4: &NullableTime{
 			Time:   dbc.CustomDatetime4.Time,
 			IsNull: !dbc.CustomDatetime4.Valid,
 		},
-		CustomDatetime5: NullableTime{
+		CustomDatetime5: &NullableTime{
 			Time:   dbc.CustomDatetime5.Time,
 			IsNull: !dbc.CustomDatetime5.Valid,
 		},
@@ -311,31 +311,31 @@ func ScanContact(scanner interface {
 	if len(dbc.CustomJSON1) > 0 {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON1, &data); err == nil {
-			c.CustomJSON1 = NullableJSON{Data: data, Valid: true}
+			c.CustomJSON1 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
 	if len(dbc.CustomJSON2) > 0 {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON2, &data); err == nil {
-			c.CustomJSON2 = NullableJSON{Data: data, Valid: true}
+			c.CustomJSON2 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
 	if len(dbc.CustomJSON3) > 0 {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON3, &data); err == nil {
-			c.CustomJSON3 = NullableJSON{Data: data, Valid: true}
+			c.CustomJSON3 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
 	if len(dbc.CustomJSON4) > 0 {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON4, &data); err == nil {
-			c.CustomJSON4 = NullableJSON{Data: data, Valid: true}
+			c.CustomJSON4 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
 	if len(dbc.CustomJSON5) > 0 {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON5, &data); err == nil {
-			c.CustomJSON5 = NullableJSON{Data: data, Valid: true}
+			c.CustomJSON5 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
 
@@ -509,41 +509,220 @@ func FromJSON(data interface{}) (*Contact, error) {
 	parseNullableTime(jsonResult, "custom_datetime_4", &contact.CustomDatetime4)
 	parseNullableTime(jsonResult, "custom_datetime_5", &contact.CustomDatetime5)
 
+	// Parse custom JSON fields if they exist
+	for i := 1; i <= 5; i++ {
+		field := fmt.Sprintf("custom_json_%d", i)
+		if value := jsonResult.Get(field); value.Exists() {
+			// Check if the value is explicitly null
+			if value.Type == gjson.Null {
+				// Set the field as null
+				switch i {
+				case 1:
+					contact.CustomJSON1 = &NullableJSON{Data: nil, IsNull: true}
+				case 2:
+					contact.CustomJSON2 = &NullableJSON{Data: nil, IsNull: true}
+				case 3:
+					contact.CustomJSON3 = &NullableJSON{Data: nil, IsNull: true}
+				case 4:
+					contact.CustomJSON4 = &NullableJSON{Data: nil, IsNull: true}
+				case 5:
+					contact.CustomJSON5 = &NullableJSON{Data: nil, IsNull: true}
+				}
+				continue
+			}
+
+			// make sure the value is a valid JSON object or array
+			if !value.IsObject() && !value.IsArray() {
+				return nil, fmt.Errorf("invalid JSON value for custom_json_%d, got %s", i, value.String())
+			}
+
+			// Set the custom JSON field
+			switch i {
+			case 1:
+				contact.CustomJSON1 = &NullableJSON{Data: value.Value(), IsNull: false}
+			case 2:
+				contact.CustomJSON2 = &NullableJSON{Data: value.Value(), IsNull: false}
+			case 3:
+				contact.CustomJSON3 = &NullableJSON{Data: value.Value(), IsNull: false}
+			case 4:
+				contact.CustomJSON4 = &NullableJSON{Data: value.Value(), IsNull: false}
+			case 5:
+				contact.CustomJSON5 = &NullableJSON{Data: value.Value(), IsNull: false}
+			}
+		}
+	}
 	return contact, nil
 }
 
 // Helper functions for parsing nullable fields from JSON
-func parseNullableString(result gjson.Result, field string, target *NullableString) {
+func parseNullableString(result gjson.Result, field string, target **NullableString) {
 	if value := result.Get(field); value.Exists() {
 		if value.Type == gjson.Null {
-			*target = NullableString{IsNull: true}
+			*target = &NullableString{IsNull: true}
 		} else {
-			*target = NullableString{String: value.String(), IsNull: false}
+			*target = &NullableString{String: value.String(), IsNull: false}
 		}
 	}
 }
 
-func parseNullableFloat(result gjson.Result, field string, target *NullableFloat64) {
+func parseNullableFloat(result gjson.Result, field string, target **NullableFloat64) {
 	if value := result.Get(field); value.Exists() {
 		if value.Type == gjson.Null {
-			*target = NullableFloat64{IsNull: true}
+			*target = &NullableFloat64{IsNull: true}
 		} else {
-			*target = NullableFloat64{Float64: value.Float(), IsNull: false}
+			*target = &NullableFloat64{Float64: value.Float(), IsNull: false}
 		}
 	}
 }
 
-func parseNullableTime(result gjson.Result, field string, target *NullableTime) {
+func parseNullableTime(result gjson.Result, field string, target **NullableTime) {
 	if value := result.Get(field); value.Exists() {
 		if value.Type == gjson.Null {
-			*target = NullableTime{IsNull: true}
+			*target = &NullableTime{IsNull: true}
 		} else {
 			t, err := time.Parse(time.RFC3339, value.String())
 			if err == nil {
-				*target = NullableTime{Time: t, IsNull: false}
+				*target = &NullableTime{Time: t, IsNull: false}
 			} else {
-				*target = NullableTime{IsNull: true}
+				*target = &NullableTime{IsNull: true}
 			}
 		}
+	}
+}
+
+// Merge updates non-nil fields from another contact
+func (c *Contact) Merge(other *Contact) {
+	if other == nil {
+		return
+	}
+
+	// Required fields
+	if other.Email != "" {
+		c.Email = other.Email
+	}
+
+	// Optional fields
+	if other.ExternalID != nil {
+		c.ExternalID = other.ExternalID
+	}
+	if other.Timezone != nil {
+		c.Timezone = other.Timezone
+	}
+	if other.Language != nil {
+		c.Language = other.Language
+	}
+	if other.FirstName != nil {
+		c.FirstName = other.FirstName
+	}
+	if other.LastName != nil {
+		c.LastName = other.LastName
+	}
+	if other.Phone != nil {
+		c.Phone = other.Phone
+	}
+	if other.AddressLine1 != nil {
+		c.AddressLine1 = other.AddressLine1
+	}
+	if other.AddressLine2 != nil {
+		c.AddressLine2 = other.AddressLine2
+	}
+	if other.Country != nil {
+		c.Country = other.Country
+	}
+	if other.Postcode != nil {
+		c.Postcode = other.Postcode
+	}
+	if other.State != nil {
+		c.State = other.State
+	}
+	if other.JobTitle != nil {
+		c.JobTitle = other.JobTitle
+	}
+
+	// Commerce related fields
+	if other.LifetimeValue != nil {
+		c.LifetimeValue = other.LifetimeValue
+	}
+	if other.OrdersCount != nil {
+		c.OrdersCount = other.OrdersCount
+	}
+	if other.LastOrderAt != nil {
+		c.LastOrderAt = other.LastOrderAt
+	}
+
+	// Custom string fields
+	if other.CustomString1 != nil {
+		c.CustomString1 = other.CustomString1
+	}
+	if other.CustomString2 != nil {
+		c.CustomString2 = other.CustomString2
+	}
+	if other.CustomString3 != nil {
+		c.CustomString3 = other.CustomString3
+	}
+	if other.CustomString4 != nil {
+		c.CustomString4 = other.CustomString4
+	}
+	if other.CustomString5 != nil {
+		c.CustomString5 = other.CustomString5
+	}
+
+	// Custom number fields
+	if other.CustomNumber1 != nil {
+		c.CustomNumber1 = other.CustomNumber1
+	}
+	if other.CustomNumber2 != nil {
+		c.CustomNumber2 = other.CustomNumber2
+	}
+	if other.CustomNumber3 != nil {
+		c.CustomNumber3 = other.CustomNumber3
+	}
+	if other.CustomNumber4 != nil {
+		c.CustomNumber4 = other.CustomNumber4
+	}
+	if other.CustomNumber5 != nil {
+		c.CustomNumber5 = other.CustomNumber5
+	}
+
+	// Custom datetime fields
+	if other.CustomDatetime1 != nil {
+		c.CustomDatetime1 = other.CustomDatetime1
+	}
+	if other.CustomDatetime2 != nil {
+		c.CustomDatetime2 = other.CustomDatetime2
+	}
+	if other.CustomDatetime3 != nil {
+		c.CustomDatetime3 = other.CustomDatetime3
+	}
+	if other.CustomDatetime4 != nil {
+		c.CustomDatetime4 = other.CustomDatetime4
+	}
+	if other.CustomDatetime5 != nil {
+		c.CustomDatetime5 = other.CustomDatetime5
+	}
+
+	// Custom JSON fields
+	if other.CustomJSON1 != nil {
+		c.CustomJSON1 = other.CustomJSON1
+	}
+	if other.CustomJSON2 != nil {
+		c.CustomJSON2 = other.CustomJSON2
+	}
+	if other.CustomJSON3 != nil {
+		c.CustomJSON3 = other.CustomJSON3
+	}
+	if other.CustomJSON4 != nil {
+		c.CustomJSON4 = other.CustomJSON4
+	}
+	if other.CustomJSON5 != nil {
+		c.CustomJSON5 = other.CustomJSON5
+	}
+
+	// Update timestamps
+	if !other.CreatedAt.IsZero() {
+		c.CreatedAt = other.CreatedAt
+	}
+	if !other.UpdatedAt.IsZero() {
+		c.UpdatedAt = other.UpdatedAt
 	}
 }

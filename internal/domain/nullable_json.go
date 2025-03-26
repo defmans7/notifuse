@@ -11,8 +11,8 @@ import (
 // for proper database handling, as well as json.Marshaler and
 // json.Unmarshaler for JSON encoding/decoding.
 type NullableJSON struct {
-	Data  interface{}
-	Valid bool
+	Data   interface{}
+	IsNull bool
 }
 
 // Scan implements the sql.Scanner interface.
@@ -20,7 +20,7 @@ type NullableJSON struct {
 func (nj *NullableJSON) Scan(value interface{}) error {
 	if value == nil {
 		nj.Data = nil
-		nj.Valid = false
+		nj.IsNull = true
 		return nil
 	}
 
@@ -29,7 +29,7 @@ func (nj *NullableJSON) Scan(value interface{}) error {
 	case []byte:
 		if len(v) == 0 {
 			nj.Data = nil
-			nj.Valid = false
+			nj.IsNull = true
 			return nil
 		}
 		var data interface{}
@@ -37,12 +37,12 @@ func (nj *NullableJSON) Scan(value interface{}) error {
 			return err
 		}
 		nj.Data = data
-		nj.Valid = true
+		nj.IsNull = false
 		return nil
 	case string:
 		if v == "" {
 			nj.Data = nil
-			nj.Valid = false
+			nj.IsNull = true
 			return nil
 		}
 		var data interface{}
@@ -50,7 +50,7 @@ func (nj *NullableJSON) Scan(value interface{}) error {
 			return err
 		}
 		nj.Data = data
-		nj.Valid = true
+		nj.IsNull = false
 		return nil
 	default:
 		return errors.New("incompatible type for NullableJSON")
@@ -60,7 +60,7 @@ func (nj *NullableJSON) Scan(value interface{}) error {
 // Value implements the driver.Valuer interface.
 // It returns a value suitable for database storage.
 func (nj NullableJSON) Value() (driver.Value, error) {
-	if !nj.Valid || nj.Data == nil {
+	if nj.IsNull || nj.Data == nil {
 		return nil, nil
 	}
 
@@ -70,7 +70,7 @@ func (nj NullableJSON) Value() (driver.Value, error) {
 // MarshalJSON implements the json.Marshaler interface.
 // It handles the JSON encoding of the NullableJSON value.
 func (nj NullableJSON) MarshalJSON() ([]byte, error) {
-	if !nj.Valid || nj.Data == nil {
+	if nj.IsNull || nj.Data == nil {
 		return []byte("null"), nil
 	}
 	return json.Marshal(nj.Data)
@@ -82,7 +82,7 @@ func (nj *NullableJSON) UnmarshalJSON(data []byte) error {
 	// Handle null case
 	if string(data) == "null" {
 		nj.Data = nil
-		nj.Valid = false
+		nj.IsNull = true
 		return nil
 	}
 
@@ -92,6 +92,6 @@ func (nj *NullableJSON) UnmarshalJSON(data []byte) error {
 	}
 
 	nj.Data = value
-	nj.Valid = true
+	nj.IsNull = false
 	return nil
 }
