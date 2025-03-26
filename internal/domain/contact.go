@@ -467,7 +467,6 @@ func FromJSON(data interface{}) (*Contact, error) {
 	contact := &Contact{
 		Email: email,
 	}
-
 	// Parse nullable string fields
 	parseNullableString(jsonResult, "external_id", &contact.ExternalID)
 	parseNullableString(jsonResult, "timezone", &contact.Timezone)

@@ -14,13 +14,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 // MockContactService is a mock implementation of domain.ContactService for testing
@@ -253,8 +253,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		// Arrange
 		mockService := NewMockContactService()
-		mockLogger := new(MockLogger)
-		mockLogger.On("Error", mock.Anything).Maybe()
+		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
 		// Create request with query parameters
@@ -272,8 +271,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 	t.Run("Service_Error", func(t *testing.T) {
 		// Arrange
 		mockService := NewMockContactService()
-		mockLogger := new(MockLogger)
-		mockLogger.On("Error", mock.Anything).Maybe()
+		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
 		mockService.ErrToReturn = errors.New("service error")
@@ -293,8 +291,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 	t.Run("Wrong_Method", func(t *testing.T) {
 		// Arrange
 		mockService := NewMockContactService()
-		mockLogger := new(MockLogger)
-		mockLogger.On("Error", mock.Anything).Maybe()
+		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
 		request := httptest.NewRequest(http.MethodPost, "/api/contacts.list", nil)
@@ -311,8 +308,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 	t.Run("Invalid_Request", func(t *testing.T) {
 		// Arrange
 		mockService := NewMockContactService()
-		mockLogger := new(MockLogger)
-		mockLogger.On("Error", mock.Anything).Maybe()
+		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
 		// Create request without required workspaceId
@@ -1444,7 +1440,12 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupContactHandlerTest()
+			mockService := &MockContactService{
+				contacts: make(map[string]*domain.Contact),
+			}
+			mockLogger := &MockLoggerForContact{}
+			handler := NewContactHandler(mockService, mockLogger)
+
 			tc.setupMock(mockService)
 
 			var reqBody bytes.Buffer
@@ -1461,6 +1462,9 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(tc.method, "/api/contacts.upsert", &reqBody)
+			if err := req.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
 			req.Header.Set("Content-Type", "application/json")
 
 			rr := httptest.NewRecorder()
@@ -1473,23 +1477,207 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			if tc.expectedStatus == http.StatusOK || tc.expectedStatus == http.StatusCreated {
 				var response map[string]interface{}
 				err := json.Unmarshal(rr.Body.Bytes(), &response)
-				if err != nil {
-					t.Errorf("Failed to decode response body: %v", err)
-					return
-				}
+				assert.NoError(t, err)
 
 				// Check action field
 				action, exists := response["action"]
-				assert.True(t, exists, "Expected 'action' field in response, but not found")
+				assert.True(t, exists)
 				assert.Equal(t, tc.expectedAction, action)
 
 				// Check contact exists
 				_, exists = response["contact"]
-				assert.True(t, exists, "Expected 'contact' field in response, but not found")
+				assert.True(t, exists)
 			}
 
 			// Run specific checks
 			tc.checkResult(t, mockService)
+		})
+	}
+}
+
+func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
+	mockService, _, handler := setupContactHandlerTest()
+
+	// Test case 1: Successful upsert with custom JSON fields
+	reqBody := `{
+		"email": "test@example.com",
+		"external_id": "ext123",
+		"timezone": "Europe/Paris",
+		"language": "en-US",
+		"custom_json_1": {"key": "value1"},
+		"custom_json_2": null,
+		"custom_json_3": {"key": "value3"}
+	}`
+
+	req, err := http.NewRequest(http.MethodPost, "/api/contacts.upsert", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler.handleUpsert(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Handler returned wrong status code: got %v, expected %v", status, http.StatusOK)
+	}
+
+	// Verify that the service was called with the correct contact
+	if !mockService.UpsertContactCalled {
+		t.Error("Expected UpsertContact to be called, but it wasn't")
+	}
+
+	if mockService.LastContactUpserted == nil {
+		t.Error("Expected LastContactUpserted to be set, but it wasn't")
+	} else {
+		if mockService.LastContactUpserted.Email != "test@example.com" {
+			t.Errorf("Expected contact email %s, got %s", "test@example.com", mockService.LastContactUpserted.Email)
+		}
+
+		// Check external_id regardless of how it's stored internally
+		expectedExternalId := "ext123"
+		actualExternalId := mockService.LastContactUpserted.ExternalID.String
+		if actualExternalId != expectedExternalId || mockService.LastContactUpserted.ExternalID.IsNull {
+			t.Errorf("Expected contact external_id %s, got %v", expectedExternalId, mockService.LastContactUpserted.ExternalID)
+		}
+
+		// Check timezone regardless of how it's stored internally
+		expectedTimezone := "Europe/Paris"
+		actualTimezone := mockService.LastContactUpserted.Timezone.String
+		if actualTimezone != expectedTimezone || mockService.LastContactUpserted.Timezone.IsNull {
+			t.Errorf("Expected contact timezone %s, got %v", expectedTimezone, mockService.LastContactUpserted.Timezone)
+		}
+
+		if mockService.LastContactUpserted.Language.String != "en-US" || mockService.LastContactUpserted.Language.IsNull {
+			t.Errorf("Expected contact language %s, got %v", "en-US", mockService.LastContactUpserted.Language)
+		}
+
+		// Verify custom JSON fields
+		if !mockService.LastContactUpserted.CustomJSON1.Valid {
+			t.Error("Expected CustomJSON1 to be valid")
+		}
+		if mockService.LastContactUpserted.CustomJSON2.Valid {
+			t.Error("Expected CustomJSON2 to be invalid")
+		}
+		if !mockService.LastContactUpserted.CustomJSON3.Valid {
+			t.Error("Expected CustomJSON3 to be valid")
+		}
+	}
+
+	// Verify response
+	var response map[string]interface{}
+	if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
+		t.Errorf("Failed to decode response body: %v", err)
+	}
+
+	contact, ok := response["contact"].(map[string]interface{})
+	if !ok {
+		t.Error("Expected 'contact' field in response, but not found")
+	}
+
+	action, ok := response["action"].(string)
+	if !ok {
+		t.Error("Expected 'action' field in response, but not found")
+	}
+
+	if mockService.UpsertIsNewToReturn {
+		if action != "created" {
+			t.Errorf("Expected action 'created', got %s", action)
+		}
+	} else {
+		if action != "updated" {
+			t.Errorf("Expected action 'updated', got %s", action)
+		}
+	}
+
+	// Verify contact fields in response
+	if contact != nil {
+		if email, ok := contact["email"].(string); !ok || email != "test@example.com" {
+			t.Errorf("Expected contact email %s, got %v", "test@example.com", email)
+		}
+
+		// Check external_id field - could be a string or a map
+		externalID, ok := contact["external_id"]
+		if !ok {
+			t.Errorf("Expected external_id in response, but not found")
+		} else {
+			// Get the value regardless of format
+			var externalIDValue string
+			switch v := externalID.(type) {
+			case string:
+				externalIDValue = v
+			case map[string]interface{}:
+				externalIDValue, _ = v["String"].(string)
+			}
+
+			expectedExternalId := "ext123"
+			if externalIDValue != expectedExternalId {
+				t.Errorf("Expected contact external_id %s, got %v", expectedExternalId, externalIDValue)
+			}
+		}
+
+		// Check timezone field - could be a string or a map
+		timezone, ok := contact["timezone"]
+		if !ok {
+			t.Errorf("Expected timezone in response, but not found")
+		} else {
+			// Get the value regardless of format
+			var timezoneValue string
+			switch v := timezone.(type) {
+			case string:
+				timezoneValue = v
+			case map[string]interface{}:
+				timezoneValue, _ = v["String"].(string)
+			}
+
+			expectedTimezone := "Europe/Paris"
+			if timezoneValue != expectedTimezone {
+				t.Errorf("Expected contact timezone %s, got %v", expectedTimezone, timezoneValue)
+			}
+		}
+	}
+}
+
+func TestContactHandler_HandleUpsertWithInvalidJSON(t *testing.T) {
+	mockService := NewMockContactService()
+	mockLogger := &MockLoggerForContact{}
+	handler := NewContactHandler(mockService, mockLogger)
+
+	tests := []struct {
+		name           string
+		requestBody    string
+		expectedStatus int
+	}{
+		{
+			name:           "invalid JSON syntax",
+			requestBody:    `{"email": "test@example.com", "language": "en-US", invalid_json}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "missing required email field",
+			requestBody:    `{"external_id": "ext123", "language": "en-US"}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "invalid email format",
+			requestBody:    `{"email": "invalid-email", "language": "en-US"}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "empty request body",
+			requestBody:    `{}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/contacts.upsert", strings.NewReader(tt.requestBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			handler.handleUpsert(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
 }
