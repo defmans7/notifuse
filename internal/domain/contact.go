@@ -474,47 +474,108 @@ func FromJSON(data interface{}) (*Contact, error) {
 	contact := &Contact{
 		Email: email,
 	}
+
 	// Parse nullable string fields
-	parseNullableString(jsonResult, "external_id", &contact.ExternalID)
-	parseNullableString(jsonResult, "timezone", &contact.Timezone)
-	parseNullableString(jsonResult, "language", &contact.Language)
-	parseNullableString(jsonResult, "first_name", &contact.FirstName)
-	parseNullableString(jsonResult, "last_name", &contact.LastName)
-	parseNullableString(jsonResult, "phone", &contact.Phone)
-	parseNullableString(jsonResult, "address_line_1", &contact.AddressLine1)
-	parseNullableString(jsonResult, "address_line_2", &contact.AddressLine2)
-	parseNullableString(jsonResult, "country", &contact.Country)
-	parseNullableString(jsonResult, "postcode", &contact.Postcode)
-	parseNullableString(jsonResult, "state", &contact.State)
-	parseNullableString(jsonResult, "job_title", &contact.JobTitle)
+	if err := parseNullableString(jsonResult, "external_id", &contact.ExternalID); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "timezone", &contact.Timezone); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "language", &contact.Language); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "first_name", &contact.FirstName); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "last_name", &contact.LastName); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "phone", &contact.Phone); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "address_line_1", &contact.AddressLine1); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "address_line_2", &contact.AddressLine2); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "country", &contact.Country); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "postcode", &contact.Postcode); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "state", &contact.State); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "job_title", &contact.JobTitle); err != nil {
+		return nil, err
+	}
 
 	// Parse custom string fields
-	parseNullableString(jsonResult, "custom_string_1", &contact.CustomString1)
-	parseNullableString(jsonResult, "custom_string_2", &contact.CustomString2)
-	parseNullableString(jsonResult, "custom_string_3", &contact.CustomString3)
-	parseNullableString(jsonResult, "custom_string_4", &contact.CustomString4)
-	parseNullableString(jsonResult, "custom_string_5", &contact.CustomString5)
+	if err := parseNullableString(jsonResult, "custom_string_1", &contact.CustomString1); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "custom_string_2", &contact.CustomString2); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "custom_string_3", &contact.CustomString3); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "custom_string_4", &contact.CustomString4); err != nil {
+		return nil, err
+	}
+	if err := parseNullableString(jsonResult, "custom_string_5", &contact.CustomString5); err != nil {
+		return nil, err
+	}
 
 	// Parse nullable number fields
-	parseNullableFloat(jsonResult, "lifetime_value", &contact.LifetimeValue)
-	parseNullableFloat(jsonResult, "orders_count", &contact.OrdersCount)
+	if err := parseNullableFloat(jsonResult, "lifetime_value", &contact.LifetimeValue); err != nil {
+		return nil, err
+	}
+	if err := parseNullableFloat(jsonResult, "orders_count", &contact.OrdersCount); err != nil {
+		return nil, err
+	}
 
 	// Parse custom number fields
-	parseNullableFloat(jsonResult, "custom_number_1", &contact.CustomNumber1)
-	parseNullableFloat(jsonResult, "custom_number_2", &contact.CustomNumber2)
-	parseNullableFloat(jsonResult, "custom_number_3", &contact.CustomNumber3)
-	parseNullableFloat(jsonResult, "custom_number_4", &contact.CustomNumber4)
-	parseNullableFloat(jsonResult, "custom_number_5", &contact.CustomNumber5)
+	if err := parseNullableFloat(jsonResult, "custom_number_1", &contact.CustomNumber1); err != nil {
+		return nil, err
+	}
+	if err := parseNullableFloat(jsonResult, "custom_number_2", &contact.CustomNumber2); err != nil {
+		return nil, err
+	}
+	if err := parseNullableFloat(jsonResult, "custom_number_3", &contact.CustomNumber3); err != nil {
+		return nil, err
+	}
+	if err := parseNullableFloat(jsonResult, "custom_number_4", &contact.CustomNumber4); err != nil {
+		return nil, err
+	}
+	if err := parseNullableFloat(jsonResult, "custom_number_5", &contact.CustomNumber5); err != nil {
+		return nil, err
+	}
 
 	// Parse date fields
-	parseNullableTime(jsonResult, "last_order_at", &contact.LastOrderAt)
+	if err := parseNullableTime(jsonResult, "last_order_at", &contact.LastOrderAt); err != nil {
+		return nil, err
+	}
 
 	// Parse custom datetime fields
-	parseNullableTime(jsonResult, "custom_datetime_1", &contact.CustomDatetime1)
-	parseNullableTime(jsonResult, "custom_datetime_2", &contact.CustomDatetime2)
-	parseNullableTime(jsonResult, "custom_datetime_3", &contact.CustomDatetime3)
-	parseNullableTime(jsonResult, "custom_datetime_4", &contact.CustomDatetime4)
-	parseNullableTime(jsonResult, "custom_datetime_5", &contact.CustomDatetime5)
+	if err := parseNullableTime(jsonResult, "custom_datetime_1", &contact.CustomDatetime1); err != nil {
+		return nil, err
+	}
+	if err := parseNullableTime(jsonResult, "custom_datetime_2", &contact.CustomDatetime2); err != nil {
+		return nil, err
+	}
+	if err := parseNullableTime(jsonResult, "custom_datetime_3", &contact.CustomDatetime3); err != nil {
+		return nil, err
+	}
+	if err := parseNullableTime(jsonResult, "custom_datetime_4", &contact.CustomDatetime4); err != nil {
+		return nil, err
+	}
+	if err := parseNullableTime(jsonResult, "custom_datetime_5", &contact.CustomDatetime5); err != nil {
+		return nil, err
+	}
 
 	// Parse custom JSON fields if they exist
 	for i := 1; i <= 5; i++ {
@@ -540,7 +601,7 @@ func FromJSON(data interface{}) (*Contact, error) {
 
 			// make sure the value is a valid JSON object or array
 			if !value.IsObject() && !value.IsArray() {
-				return nil, fmt.Errorf("invalid JSON value for custom_json_%d, got %s", i, value.String())
+				return nil, fmt.Errorf("invalid JSON value for custom_json_%d, got %s", i, value.Type)
 			}
 
 			// Set the custom JSON field
@@ -558,43 +619,52 @@ func FromJSON(data interface{}) (*Contact, error) {
 			}
 		}
 	}
+
 	return contact, nil
 }
 
 // Helper functions for parsing nullable fields from JSON
-func parseNullableString(result gjson.Result, field string, target **NullableString) {
+func parseNullableString(result gjson.Result, field string, target **NullableString) error {
 	if value := result.Get(field); value.Exists() {
 		if value.Type == gjson.Null {
 			*target = &NullableString{IsNull: true}
-		} else {
+		} else if value.Type == gjson.String {
 			*target = &NullableString{String: value.String(), IsNull: false}
+		} else {
+			return fmt.Errorf("invalid type for %s: expected string, got %s", field, value.Type)
 		}
 	}
+	return nil
 }
 
-func parseNullableFloat(result gjson.Result, field string, target **NullableFloat64) {
+func parseNullableFloat(result gjson.Result, field string, target **NullableFloat64) error {
 	if value := result.Get(field); value.Exists() {
 		if value.Type == gjson.Null {
 			*target = &NullableFloat64{IsNull: true}
-		} else {
+		} else if value.Type == gjson.Number {
 			*target = &NullableFloat64{Float64: value.Float(), IsNull: false}
+		} else {
+			return fmt.Errorf("invalid type for %s: expected number, got %s", field, value.Type)
 		}
 	}
+	return nil
 }
 
-func parseNullableTime(result gjson.Result, field string, target **NullableTime) {
+func parseNullableTime(result gjson.Result, field string, target **NullableTime) error {
 	if value := result.Get(field); value.Exists() {
 		if value.Type == gjson.Null {
 			*target = &NullableTime{IsNull: true}
-		} else {
+		} else if value.Type == gjson.String {
 			t, err := time.Parse(time.RFC3339, value.String())
-			if err == nil {
-				*target = &NullableTime{Time: t, IsNull: false}
-			} else {
-				*target = &NullableTime{IsNull: true}
+			if err != nil {
+				return fmt.Errorf("invalid time format for %s: %v", field, err)
 			}
+			*target = &NullableTime{Time: t, IsNull: false}
+		} else {
+			return fmt.Errorf("invalid type for %s: expected string, got %s", field, value.Type)
 		}
 	}
+	return nil
 }
 
 // Merge updates non-nil fields from another contact

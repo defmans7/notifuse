@@ -697,12 +697,13 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 
 func TestContactHandler_HandleDelete(t *testing.T) {
 	testCases := []struct {
-		name           string
-		method         string
-		reqBody        interface{}
-		setupMock      func(*MockContactService)
-		expectedStatus int
-		checkDeleted   func(*testing.T, *MockContactService)
+		name            string
+		method          string
+		reqBody         interface{}
+		setupMock       func(*MockContactService)
+		expectedStatus  int
+		expectedMessage string
+		checkDeleted    func(*testing.T, *MockContactService)
 	}{
 		{
 			name:   "Delete Contact Success",
@@ -843,15 +844,12 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				var response map[string]interface{}
 				if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
 					t.Errorf("Failed to decode response body: %v", err)
+					return
 				}
 
 				success, exists := response["success"]
-				if !exists {
-					t.Error("Expected 'success' field in response, but not found")
-				}
-				if !success.(bool) {
-					t.Error("Expected 'success' to be true, but it was false")
-				}
+				assert.True(t, exists, "Expected 'success' field in response")
+				assert.True(t, success.(bool), "Expected 'success' to be true")
 			}
 
 			// Run specific checks
@@ -876,26 +874,14 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			reqBody: map[string]interface{}{
 				"contacts": []map[string]interface{}{
 					{
-						"external_id": map[string]interface{}{
-							"String": "ext1",
-							"IsNull": false,
-						},
-						"email": "contact1@example.com",
-						"timezone": map[string]interface{}{
-							"String": "UTC",
-							"IsNull": false,
-						},
+						"email":       "contact1@example.com",
+						"external_id": "ext1",
+						"timezone":    "UTC",
 					},
 					{
-						"external_id": map[string]interface{}{
-							"String": "ext2",
-							"IsNull": false,
-						},
-						"email": "contact2@example.com",
-						"timezone": map[string]interface{}{
-							"String": "UTC",
-							"IsNull": false,
-						},
+						"email":       "contact2@example.com",
+						"external_id": "ext2",
+						"timezone":    "UTC",
 					},
 				},
 			},
@@ -915,15 +901,9 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			reqBody: map[string]interface{}{
 				"contacts": []map[string]interface{}{
 					{
-						"external_id": map[string]interface{}{
-							"String": "ext1",
-							"IsNull": false,
-						},
-						"email": "contact1@example.com",
-						"timezone": map[string]interface{}{
-							"String": "UTC",
-							"IsNull": false,
-						},
+						"email":       "contact1@example.com",
+						"external_id": "ext1",
+						"timezone":    "UTC",
 					},
 				},
 			},
@@ -958,15 +938,9 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			reqBody: map[string]interface{}{
 				"contacts": []map[string]interface{}{
 					{
-						"external_id": map[string]interface{}{
-							"String": "ext1",
-							"IsNull": false,
-						},
-						"email": "contact1@example.com",
-						"timezone": map[string]interface{}{
-							"String": "UTC",
-							"IsNull": false,
-						},
+						"email":       "contact1@example.com",
+						"external_id": "ext1",
+						"timezone":    "UTC",
 					},
 				},
 			},
@@ -1016,11 +990,30 @@ func TestContactHandler_HandleImport(t *testing.T) {
 				var response map[string]interface{}
 				if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
 					t.Errorf("Failed to decode response body: %v", err)
+					return
 				}
 
+				success, exists := response["success"]
+				assert.True(t, exists, "Expected 'success' field in response")
+				assert.True(t, success.(bool), "Expected 'success' to be true")
+
 				message, exists := response["message"]
-				assert.True(t, exists)
+				assert.True(t, exists, "Expected 'message' field in response")
 				assert.Equal(t, tc.expectedMessage, message)
+
+				count, exists := response["count"]
+				assert.True(t, exists, "Expected 'count' field in response")
+				expectedCount := 0
+				if tc.name == "successful batch import" {
+					expectedCount = 2
+				} else if tc.name == "service error" {
+					expectedCount = 1
+				}
+				countNum, ok := count.(json.Number)
+				assert.True(t, ok, "Expected count to be json.Number")
+				countVal, err := countNum.Int64()
+				assert.NoError(t, err, "Failed to convert count to int64")
+				assert.Equal(t, int64(expectedCount), countVal)
 			}
 
 			// Run specific checks
