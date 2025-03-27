@@ -19,7 +19,8 @@ func TestUpsertContact(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewContactRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewContactRepository(db, workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "test@example.com"
 

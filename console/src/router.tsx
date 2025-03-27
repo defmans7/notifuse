@@ -74,9 +74,9 @@ const workspaceCampaignsRoute = createRoute({
   component: () => <div>Campaigns</div>
 })
 
-export const contactsRoute = new Route({
+export const contactsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
-  path: 'contacts',
+  path: '/contacts',
   component: ContactsPage,
   validateSearch: (search: Record<string, unknown>): ContactsSearch => ({
     cursor: search.cursor as string | undefined,

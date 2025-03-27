@@ -72,7 +72,7 @@ export function CreateWorkspacePage() {
       // wait for the refreshWorkspaces to propagate the new workspaces list to the root layout
       window.setTimeout(() => {
         navigate({
-          to: '/workspace/$workspaceId/campaigns',
+          to: '/workspace/$workspaceId/contacts',
           params: { workspaceId: values.id }
         })
       }, 100)

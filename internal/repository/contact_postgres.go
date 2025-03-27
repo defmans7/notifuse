@@ -12,12 +12,16 @@ import (
 )
 
 type contactRepository struct {
-	db *sql.DB
+	db            *sql.DB
+	workspaceRepo domain.WorkspaceRepository
 }
 
 // NewContactRepository creates a new PostgreSQL contact repository
-func NewContactRepository(db *sql.DB) domain.ContactRepository {
-	return &contactRepository{db: db}
+func NewContactRepository(db *sql.DB, workspaceRepo domain.WorkspaceRepository) domain.ContactRepository {
+	return &contactRepository{
+		db:            db,
+		workspaceRepo: workspaceRepo,
+	}
 }
 
 func (r *contactRepository) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
@@ -79,6 +83,12 @@ func (r *contactRepository) GetContactByExternalID(ctx context.Context, external
 }
 
 func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, req.WorkspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	// Build the base query
 	baseQuery := `
 		SELECT 
@@ -92,47 +102,45 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 			custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5,
 			created_at, updated_at
 		FROM contacts
-		WHERE workspace_id = $1
 	`
 
 	// Build the WHERE clause for filters
 	var conditions []string
 	var args []interface{}
 	argIndex := 1
-	args = append(args, req.WorkspaceID)
 
 	if req.Email != "" {
-		conditions = append(conditions, fmt.Sprintf("email ILIKE $%d", argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("email ILIKE $%d", argIndex))
 		args = append(args, "%"+req.Email+"%")
 		argIndex++
 	}
 
 	if req.ExternalID != "" {
-		conditions = append(conditions, fmt.Sprintf("external_id ILIKE $%d", argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("external_id ILIKE $%d", argIndex))
 		args = append(args, "%"+req.ExternalID+"%")
 		argIndex++
 	}
 
 	if req.FirstName != "" {
-		conditions = append(conditions, fmt.Sprintf("first_name ILIKE $%d", argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("first_name ILIKE $%d", argIndex))
 		args = append(args, "%"+req.FirstName+"%")
 		argIndex++
 	}
 
 	if req.LastName != "" {
-		conditions = append(conditions, fmt.Sprintf("last_name ILIKE $%d", argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("last_name ILIKE $%d", argIndex))
 		args = append(args, "%"+req.LastName+"%")
 		argIndex++
 	}
 
 	if req.Phone != "" {
-		conditions = append(conditions, fmt.Sprintf("phone ILIKE $%d", argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("phone ILIKE $%d", argIndex))
 		args = append(args, "%"+req.Phone+"%")
 		argIndex++
 	}
 
 	if req.Country != "" {
-		conditions = append(conditions, fmt.Sprintf("country ILIKE $%d", argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("country ILIKE $%d", argIndex))
 		args = append(args, "%"+req.Country+"%")
 		argIndex++
 	}
@@ -144,25 +152,25 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		if err != nil {
 			return nil, fmt.Errorf("invalid cursor format: %w", err)
 		}
-		conditions = append(conditions, fmt.Sprintf("created_at < $%d", argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("created_at < $%d", argIndex))
 		args = append(args, cursorTime)
 		argIndex++
 	}
 
 	// Combine conditions
 	if len(conditions) > 0 {
-		baseQuery += " AND " + strings.Join(conditions, " AND ")
+		baseQuery += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	// Always order by created_at DESC for consistent pagination
 	baseQuery += " ORDER BY created_at DESC"
 
 	// Add LIMIT clause (get one extra to determine if there are more results)
-	baseQuery += fmt.Sprintf(" LIMIT $%d", argIndex+1)
+	baseQuery += fmt.Sprintf(" LIMIT $%d", argIndex)
 	args = append(args, req.Limit+1)
 
 	// Execute the query
-	rows, err := r.db.QueryContext(ctx, baseQuery, args...)
+	rows, err := workspaceDB.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get contacts: %w", err)
 	}

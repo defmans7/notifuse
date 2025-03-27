@@ -1,12 +1,22 @@
-import { Layout, Menu } from 'antd'
-import { Outlet, Link, useParams, useMatches } from '@tanstack/react-router'
-import { MailOutlined, TeamOutlined, SettingOutlined, FileTextOutlined } from '@ant-design/icons'
-import { Topbar } from '../components/Topbar'
+import { Layout, Menu, Select, Space, Button } from 'antd'
+import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
+import {
+  MailOutlined,
+  TeamOutlined,
+  SettingOutlined,
+  FileTextOutlined,
+  LogoutOutlined
+} from '@ant-design/icons'
+import { useAuth } from '../contexts/AuthContext'
+import { Workspace } from '../services/api/types'
+import logo from '../assets/logo.png'
 
 const { Content, Sider } = Layout
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
+  const { signout, workspaces, user } = useAuth()
+  const navigate = useNavigate()
 
   // Use useMatches to determine the current route path
   const matches = useMatches()
@@ -22,22 +32,29 @@ export function WorkspaceLayout() {
     selectedKey = 'contacts'
   }
 
+  const handleWorkspaceChange = (workspaceId: string) => {
+    navigate({
+      to: '/workspace/$workspaceId/contacts',
+      params: { workspaceId }
+    })
+  }
+
   const menuItems = [
-    {
-      key: 'campaigns',
-      icon: <MailOutlined />,
-      label: (
-        <Link to="/workspace/$workspaceId/campaigns" params={{ workspaceId }}>
-          Campaigns
-        </Link>
-      )
-    },
     {
       key: 'contacts',
       icon: <TeamOutlined />,
       label: (
         <Link to="/workspace/$workspaceId/contacts" params={{ workspaceId }}>
           Contacts
+        </Link>
+      )
+    },
+    {
+      key: 'campaigns',
+      icon: <MailOutlined />,
+      label: (
+        <Link to="/workspace/$workspaceId/campaigns" params={{ workspaceId }}>
+          Campaigns
         </Link>
       )
     },
@@ -63,15 +80,72 @@ export function WorkspaceLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Topbar />
       <Layout>
-        <Sider width={200} theme="light">
+        <Sider width={250} theme="light" style={{ position: 'relative' }}>
+          <div style={{ padding: '16px 0 0 24px' }}>
+            <img
+              src={logo}
+              alt="Notifuse"
+              style={{ height: '32px', cursor: 'pointer' }}
+              onClick={() => navigate({ to: '/' })}
+            />
+          </div>
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <Select
+              value={workspaceId}
+              onChange={handleWorkspaceChange}
+              style={{ width: '100%' }}
+              placeholder="Select workspace"
+              options={workspaces.map((workspace: Workspace) => ({
+                label: (
+                  <Space>
+                    {workspace.settings.logo_url && (
+                      <img
+                        src={workspace.settings.logo_url}
+                        alt=""
+                        style={{
+                          height: '16px',
+                          width: '16px',
+                          marginRight: '8px',
+                          objectFit: 'contain',
+                          verticalAlign: 'middle'
+                        }}
+                      />
+                    )}
+                    {workspace.name}
+                  </Space>
+                ),
+                value: workspace.id
+              }))}
+            />
+          </div>
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            style={{ height: '100%', borderRight: 0 }}
+            style={{ height: 'calc(100% - 120px)', borderRight: 0 }}
             items={menuItems}
           />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              padding: '16px',
+              borderTop: '1px solid #f0f0f0',
+              background: '#fff'
+            }}
+          >
+            <div style={{ marginBottom: '8px', color: '#595959' }}>{user?.email}</div>
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={() => signout()}
+              style={{ width: '100%', textAlign: 'left' }}
+            >
+              Logout
+            </Button>
+          </div>
         </Sider>
         <Layout style={{ padding: '24px' }}>
           <Content>

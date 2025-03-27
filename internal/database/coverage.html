@@ -1,0 +1,389 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>database: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/Notifuse/notifuse/internal/database/init.go (100.0%)</option>
+				
+				<option value="file1">github.com/Notifuse/notifuse/internal/database/utils.go (7.9%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package database
+
+import (
+        "database/sql"
+        "fmt"
+        "time"
+
+        "github.com/google/uuid"
+
+        "github.com/Notifuse/notifuse/internal/database/schema"
+        "github.com/Notifuse/notifuse/internal/domain"
+)
+
+// InitializeDatabase creates all necessary database tables if they don't exist
+func InitializeDatabase(db *sql.DB, rootEmail string) error <span class="cov8" title="1">{
+        // Run all table creation queries
+        for _, query := range schema.TableDefinitions </span><span class="cov8" title="1">{
+                if _, err := db.Exec(query); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to create table: %w", err)
+                }</span>
+        }
+
+        // Create root user if it doesn't exist
+        <span class="cov8" title="1">if rootEmail != "" </span><span class="cov8" title="1">{
+                // Check if root user exists
+                var exists bool
+                err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", rootEmail).Scan(&amp;exists)
+                if err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to check root user existence: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">if !exists </span><span class="cov8" title="1">{
+                        // Create root user
+                        rootUser := &amp;domain.User{
+                                ID:        uuid.New().String(),
+                                Email:     rootEmail,
+                                Name:      "Root User",
+                                CreatedAt: time.Now().UTC(),
+                                UpdatedAt: time.Now().UTC(),
+                        }
+
+                        query := `
+                                INSERT INTO users (id, email, name, created_at, updated_at)
+                                VALUES ($1, $2, $3, $4, $5)
+                        `
+                        _, err = db.Exec(query,
+                                rootUser.ID,
+                                rootUser.Email,
+                                rootUser.Name,
+                                rootUser.CreatedAt,
+                                rootUser.UpdatedAt,
+                        )
+                        if err != nil </span><span class="cov8" title="1">{
+                                return fmt.Errorf("failed to create root user: %w", err)
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// InitializeWorkspaceDatabase creates the necessary tables for a workspace database
+func InitializeWorkspaceDatabase(db *sql.DB) error <span class="cov8" title="1">{
+        // Create workspace tables
+        queries := []string{
+                `CREATE TABLE IF NOT EXISTS contacts (
+                        id UUID PRIMARY KEY,
+                        email VARCHAR(255) UNIQUE NOT NULL,
+                        name VARCHAR(255),
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL
+                )`,
+                `CREATE TABLE IF NOT EXISTS lists (
+                        id VARCHAR(20) PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        type VARCHAR(20) NOT NULL,
+                        is_double_optin BOOLEAN NOT NULL DEFAULT FALSE,
+                        description TEXT,
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL
+                )`,
+                `CREATE TABLE IF NOT EXISTS contact_lists (
+                        email VARCHAR(255) NOT NULL,
+                        list_id VARCHAR(20) NOT NULL,
+                        status VARCHAR(20) NOT NULL,
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL,
+                        PRIMARY KEY (email, list_id)
+                )`,
+        }
+
+        // Run all table creation queries
+        for _, query := range queries </span><span class="cov8" title="1">{
+                if _, err := db.Exec(query); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to create workspace table: %w", err)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// CleanDatabase drops all tables in reverse order
+func CleanDatabase(db *sql.DB) error <span class="cov8" title="1">{
+        // Drop tables in reverse order to handle dependencies
+        for i := len(schema.TableNames) - 1; i &gt;= 0; i-- </span><span class="cov8" title="1">{
+                query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", schema.TableNames[i])
+                if _, err := db.Exec(query); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to drop table %s: %w", schema.TableNames[i], err)
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package database
+
+import (
+        "database/sql"
+        "fmt"
+        "strings"
+
+        "github.com/Notifuse/notifuse/config"
+        _ "github.com/lib/pq" // PostgreSQL driver
+)
+
+// GetSystemDSN returns the DSN for the system database
+func GetSystemDSN(cfg *config.DatabaseConfig) string <span class="cov8" title="1">{
+        return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+                cfg.User,
+                cfg.Password,
+                cfg.Host,
+                cfg.Port,
+                cfg.DBName,
+        )
+}</span>
+
+// GetPostgresDSN returns the DSN for connecting to PostgreSQL server without specifying a database
+func GetPostgresDSN(cfg *config.DatabaseConfig) string <span class="cov8" title="1">{
+        return fmt.Sprintf("postgres://%s:%s@%s:%d/postgres?sslmode=disable",
+                cfg.User,
+                cfg.Password,
+                cfg.Host,
+                cfg.Port,
+        )
+}</span>
+
+// GetWorkspaceDSN returns the DSN for a workspace database
+func GetWorkspaceDSN(cfg *config.DatabaseConfig, workspaceID string) string <span class="cov8" title="1">{
+        // Replace hyphens with underscores for PostgreSQL compatibility
+        safeID := strings.ReplaceAll(workspaceID, "-", "_")
+        dbName := fmt.Sprintf("%s_ws_%s", cfg.Prefix, safeID)
+        return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+                cfg.User,
+                cfg.Password,
+                cfg.Host,
+                cfg.Port,
+                dbName,
+        )
+}</span>
+
+// ConnectToWorkspace creates a new database connection for a workspace
+func ConnectToWorkspace(cfg *config.DatabaseConfig, workspaceID string) (*sql.DB, error) <span class="cov0" title="0">{
+        // Ensure the workspace database exists
+        if err := EnsureWorkspaceDatabaseExists(cfg, workspaceID); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to ensure workspace database exists: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">dsn := GetWorkspaceDSN(cfg, workspaceID)
+        db, err := sql.Open("postgres", dsn)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to connect to workspace database: %w", err)
+        }</span>
+
+        // Test the connection
+        <span class="cov0" title="0">if err := db.Ping(); err != nil </span><span class="cov0" title="0">{
+                db.Close()
+                return nil, fmt.Errorf("failed to ping workspace database: %w", err)
+        }</span>
+
+        // Set connection pool settings
+        <span class="cov0" title="0">db.SetMaxOpenConns(25)
+        db.SetMaxIdleConns(25)
+
+        return db, nil</span>
+}
+
+// EnsureWorkspaceDatabaseExists creates the workspace database if it doesn't exist
+func EnsureWorkspaceDatabaseExists(cfg *config.DatabaseConfig, workspaceID string) error <span class="cov0" title="0">{
+        // Replace hyphens with underscores for PostgreSQL compatibility
+        safeID := strings.ReplaceAll(workspaceID, "-", "_")
+        dbName := fmt.Sprintf("%s_ws_%s", cfg.Prefix, safeID)
+
+        // Connect to PostgreSQL server without specifying a database
+        pgDSN := GetPostgresDSN(cfg)
+        db, err := sql.Open("postgres", pgDSN)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to connect to PostgreSQL server: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+
+        // Test the connection
+        if err := db.Ping(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to ping PostgreSQL server: %w", err)
+        }</span>
+
+        // Check if database exists
+        <span class="cov0" title="0">var exists bool
+        query := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
+        err = db.QueryRow(query, dbName).Scan(&amp;exists)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to check if database exists: %w", err)
+        }</span>
+
+        // Create database if it doesn't exist
+        <span class="cov0" title="0">if !exists </span><span class="cov0" title="0">{
+                // Use fmt.Sprintf for proper quoting of identifiers in SQL
+                createDBQuery := fmt.Sprintf("CREATE DATABASE %s",
+                        // Proper quoting to prevent SQL injection
+                        strings.ReplaceAll(dbName, `"`, `""`))
+
+                _, err = db.Exec(createDBQuery)
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to create workspace database: %w", err)
+                }</span>
+
+                // Connect to the new database to initialize schema
+                <span class="cov0" title="0">wsDB, err := sql.Open("postgres", GetWorkspaceDSN(cfg, workspaceID))
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to connect to new workspace database: %w", err)
+                }</span>
+                <span class="cov0" title="0">defer wsDB.Close()
+
+                // Test the connection
+                if err := wsDB.Ping(); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to ping new workspace database: %w", err)
+                }</span>
+
+                // Initialize the workspace database schema
+                <span class="cov0" title="0">if err := InitializeWorkspaceDatabase(wsDB); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to initialize workspace database schema: %w", err)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// EnsureSystemDatabaseExists creates the system database if it doesn't exist
+func EnsureSystemDatabaseExists(cfg *config.DatabaseConfig) error <span class="cov0" title="0">{
+        // Connect to PostgreSQL server without specifying a database
+        pgDSN := GetPostgresDSN(cfg)
+        db, err := sql.Open("postgres", pgDSN)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to connect to PostgreSQL server: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+
+        // Test the connection
+        if err := db.Ping(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to ping PostgreSQL server: %w", err)
+        }</span>
+
+        // Check if database exists
+        <span class="cov0" title="0">var exists bool
+        query := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
+        err = db.QueryRow(query, cfg.DBName).Scan(&amp;exists)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to check if database exists: %w", err)
+        }</span>
+
+        // Create database if it doesn't exist
+        <span class="cov0" title="0">if !exists </span><span class="cov0" title="0">{
+                // Use fmt.Sprintf for proper quoting of identifiers in SQL
+                createDBQuery := fmt.Sprintf("CREATE DATABASE %s",
+                        // Proper quoting to prevent SQL injection
+                        strings.ReplaceAll(cfg.DBName, `"`, `""`))
+
+                _, err = db.Exec(createDBQuery)
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to create system database: %w", err)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

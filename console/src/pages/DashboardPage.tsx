@@ -12,7 +12,7 @@ export function DashboardPage() {
 
   const handleWorkspaceClick = (workspaceId: string) => {
     navigate({
-      to: '/workspace/$workspaceId/campaigns',
+      to: '/workspace/$workspaceId/contacts',
       params: { workspaceId }
     })
   }
