@@ -19,7 +19,8 @@ func TestAddContactToList(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewContactListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewContactListRepository(db, workspaceRepo)
 
 	// Test case 1: Successful add contact to list
 	contactList := &domain.ContactList{
@@ -61,7 +62,8 @@ func TestGetContactListByIDs(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewContactListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewContactListRepository(db, workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "contact@example.com"
 	listID := "list-123"
@@ -109,7 +111,8 @@ func TestGetContactsByListID(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewContactListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewContactListRepository(db, workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	listID := "list-123"
 
@@ -164,7 +167,8 @@ func TestGetListsByEmail(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewContactListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewContactListRepository(db, workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "contact@example.com"
 
@@ -219,34 +223,35 @@ func TestUpdateContactListStatus(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewContactListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewContactListRepository(db, workspaceRepo)
 	email := "contact@example.com"
 	listID := "list-123"
-	newStatus := domain.ContactListStatusUnsubscribed
+	status := domain.ContactListStatusUnsubscribed
 
 	// Test case 1: Successful update
 	mock.ExpectExec(`UPDATE contact_lists SET status = \$1, updated_at = \$2 WHERE email = \$3 AND list_id = \$4`).
-		WithArgs(newStatus, sqlmock.AnyArg(), email, listID).
+		WithArgs(status, sqlmock.AnyArg(), email, listID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := repo.UpdateContactListStatus(context.Background(), email, listID, newStatus)
+	err := repo.UpdateContactListStatus(context.Background(), email, listID, status)
 	require.NoError(t, err)
 
 	// Test case 2: Contact list not found
 	mock.ExpectExec(`UPDATE contact_lists SET status = \$1, updated_at = \$2 WHERE email = \$3 AND list_id = \$4`).
-		WithArgs(newStatus, sqlmock.AnyArg(), "non-existent-contact", "non-existent-list").
+		WithArgs(status, sqlmock.AnyArg(), "non-existent-contact", "non-existent-list").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = repo.UpdateContactListStatus(context.Background(), "non-existent-contact", "non-existent-list", newStatus)
+	err = repo.UpdateContactListStatus(context.Background(), "non-existent-contact", "non-existent-list", status)
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrContactListNotFound{}, err)
 
 	// Test case 3: Database error
 	mock.ExpectExec(`UPDATE contact_lists SET status = \$1, updated_at = \$2 WHERE email = \$3 AND list_id = \$4`).
-		WithArgs(newStatus, sqlmock.AnyArg(), "error-contact", "error-list").
+		WithArgs(status, sqlmock.AnyArg(), "error-contact", "error-list").
 		WillReturnError(errors.New("database error"))
 
-	err = repo.UpdateContactListStatus(context.Background(), "error-contact", "error-list", newStatus)
+	err = repo.UpdateContactListStatus(context.Background(), "error-contact", "error-list", status)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to update contact list status")
 }
@@ -255,7 +260,8 @@ func TestRemoveContactFromList(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewContactListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewContactListRepository(db, workspaceRepo)
 	email := "contact@example.com"
 	listID := "list-123"
 

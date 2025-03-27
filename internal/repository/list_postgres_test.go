@@ -19,15 +19,16 @@ func TestCreateList(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewListRepository(db, workspaceRepo)
 
 	// Test case 1: Successful list creation
 	list := &domain.List{
-		ID:            "list-123",
+		ID:            "list123",
 		Name:          "Test List",
-		Type:          "default",
+		Type:          "public",
 		IsDoubleOptin: true,
-		Description:   "A test list",
+		Description:   "This is a test list",
 	}
 
 	mock.ExpectExec(`INSERT INTO lists`).
@@ -40,18 +41,19 @@ func TestCreateList(t *testing.T) {
 	err := repo.CreateList(context.Background(), list)
 	require.NoError(t, err)
 
-	// Test case 2: Error during list creation
+	// Test case 2: Error during insertion
 	listWithError := &domain.List{
-		ID:          "list-error",
-		Name:        "Error List",
-		Type:        "default",
-		Description: "A list that will cause an error",
+		ID:            "errorList",
+		Name:          "Error List",
+		Type:          "public",
+		IsDoubleOptin: false,
+		Description:   "This list will cause an error",
 	}
 
 	mock.ExpectExec(`INSERT INTO lists`).
 		WithArgs(
-			listWithError.ID, listWithError.Name, listWithError.Type, listWithError.IsDoubleOptin,
-			listWithError.Description, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			listWithError.ID, listWithError.Name, listWithError.Type, listWithError.IsDoubleOptin, listWithError.Description,
+			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnError(errors.New("database error"))
 
@@ -64,16 +66,17 @@ func TestGetListByID(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewListRepository(db, workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	listID := "list-123"
+	listID := "list123"
 
 	// Test case 1: List found
 	rows := sqlmock.NewRows([]string{
 		"id", "name", "type", "is_double_optin", "description", "created_at", "updated_at",
 	}).
 		AddRow(
-			listID, "Test List", "default", true, "A test list", now, now,
+			listID, "Test List", "public", true, "This is a test list", now, now,
 		)
 
 	mock.ExpectQuery(`SELECT (.+) FROM lists WHERE id = \$1`).
@@ -84,25 +87,26 @@ func TestGetListByID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, listID, list.ID)
 	assert.Equal(t, "Test List", list.Name)
-	assert.Equal(t, "default", list.Type)
-	assert.True(t, list.IsDoubleOptin)
+	assert.Equal(t, "public", list.Type)
+	assert.Equal(t, true, list.IsDoubleOptin)
+	assert.Equal(t, "This is a test list", list.Description)
 
 	// Test case 2: List not found
 	mock.ExpectQuery(`SELECT (.+) FROM lists WHERE id = \$1`).
-		WithArgs("non-existent-id").
+		WithArgs("nonexistent").
 		WillReturnError(sql.ErrNoRows)
 
-	list, err = repo.GetListByID(context.Background(), "non-existent-id")
+	list, err = repo.GetListByID(context.Background(), "nonexistent")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrListNotFound{}, err)
 	assert.Nil(t, list)
 
 	// Test case 3: Database error
 	mock.ExpectQuery(`SELECT (.+) FROM lists WHERE id = \$1`).
-		WithArgs("error-id").
+		WithArgs("error").
 		WillReturnError(errors.New("database error"))
 
-	list, err = repo.GetListByID(context.Background(), "error-id")
+	list, err = repo.GetListByID(context.Background(), "error")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get list")
 	assert.Nil(t, list)
@@ -112,7 +116,8 @@ func TestGetLists(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewListRepository(db)
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewListRepository(db, workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	// Test case 1: Multiple lists found
@@ -120,10 +125,10 @@ func TestGetLists(t *testing.T) {
 		"id", "name", "type", "is_double_optin", "description", "created_at", "updated_at",
 	}).
 		AddRow(
-			"list-1", "First List", "default", true, "First test list", now, now,
+			"list1", "Test List 1", "public", true, "Description 1", now, now,
 		).
 		AddRow(
-			"list-2", "Second List", "custom", false, "Second test list", now, now,
+			"list2", "Test List 2", "private", false, "Description 2", now, now,
 		)
 
 	mock.ExpectQuery(`SELECT (.+) FROM lists ORDER BY created_at DESC`).
@@ -132,8 +137,10 @@ func TestGetLists(t *testing.T) {
 	lists, err := repo.GetLists(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, lists, 2)
-	assert.Equal(t, "list-1", lists[0].ID)
-	assert.Equal(t, "list-2", lists[1].ID)
+	assert.Equal(t, "list1", lists[0].ID)
+	assert.Equal(t, "list2", lists[1].ID)
+	assert.Equal(t, "Test List 1", lists[0].Name)
+	assert.Equal(t, "Test List 2", lists[1].Name)
 
 	// Test case 2: No lists found (empty result)
 	emptyRows := sqlmock.NewRows([]string{
@@ -161,21 +168,22 @@ func TestUpdateList(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewListRepository(db)
-	listID := "list-123"
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewListRepository(db, workspaceRepo)
 
 	// Test case 1: Successful update
 	list := &domain.List{
-		ID:            listID,
+		ID:            "list123",
 		Name:          "Updated List",
-		Type:          "custom",
-		IsDoubleOptin: false,
-		Description:   "An updated list",
+		Type:          "private",
+		IsDoubleOptin: true,
+		Description:   "This list has been updated",
 	}
 
-	mock.ExpectExec(`UPDATE lists SET (.+) WHERE id = \$6`).
+	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, description = \$4, updated_at = \$5 WHERE id = \$6`).
 		WithArgs(
-			list.Name, list.Type, list.IsDoubleOptin, list.Description, sqlmock.AnyArg(), list.ID,
+			list.Name, list.Type, list.IsDoubleOptin, list.Description,
+			sqlmock.AnyArg(), list.ID,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -183,32 +191,53 @@ func TestUpdateList(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test case 2: List not found
-	nonExistentList := &domain.List{
-		ID:            "non-existent-id",
-		Name:          "Non-existent List",
-		Type:          "default",
-		IsDoubleOptin: true,
-		Description:   "A non-existent list",
+	notFoundList := &domain.List{
+		ID:            "nonexistent",
+		Name:          "Nonexistent List",
+		Type:          "public",
+		IsDoubleOptin: false,
+		Description:   "This list doesn't exist",
 	}
 
-	mock.ExpectExec(`UPDATE lists SET (.+) WHERE id = \$6`).
+	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, description = \$4, updated_at = \$5 WHERE id = \$6`).
 		WithArgs(
-			nonExistentList.Name, nonExistentList.Type, nonExistentList.IsDoubleOptin,
-			nonExistentList.Description, sqlmock.AnyArg(), nonExistentList.ID,
+			notFoundList.Name, notFoundList.Type, notFoundList.IsDoubleOptin, notFoundList.Description,
+			sqlmock.AnyArg(), notFoundList.ID,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = repo.UpdateList(context.Background(), nonExistentList)
+	err = repo.UpdateList(context.Background(), notFoundList)
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrListNotFound{}, err)
+
+	// Test case 3: Database error
+	errorList := &domain.List{
+		ID:            "error",
+		Name:          "Error List",
+		Type:          "public",
+		IsDoubleOptin: false,
+		Description:   "This list causes an error",
+	}
+
+	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, description = \$4, updated_at = \$5 WHERE id = \$6`).
+		WithArgs(
+			errorList.Name, errorList.Type, errorList.IsDoubleOptin, errorList.Description,
+			sqlmock.AnyArg(), errorList.ID,
+		).
+		WillReturnError(errors.New("database error"))
+
+	err = repo.UpdateList(context.Background(), errorList)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to update list")
 }
 
 func TestDeleteList(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	repo := NewListRepository(db)
-	listID := "list-123"
+	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	repo := NewListRepository(db, workspaceRepo)
+	listID := "list123"
 
 	// Test case 1: Successful deletion
 	mock.ExpectExec(`DELETE FROM lists WHERE id = \$1`).
@@ -220,19 +249,19 @@ func TestDeleteList(t *testing.T) {
 
 	// Test case 2: List not found
 	mock.ExpectExec(`DELETE FROM lists WHERE id = \$1`).
-		WithArgs("non-existent-id").
+		WithArgs("nonexistent").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = repo.DeleteList(context.Background(), "non-existent-id")
+	err = repo.DeleteList(context.Background(), "nonexistent")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrListNotFound{}, err)
 
 	// Test case 3: Database error
 	mock.ExpectExec(`DELETE FROM lists WHERE id = \$1`).
-		WithArgs("error-id").
+		WithArgs("error").
 		WillReturnError(errors.New("database error"))
 
-	err = repo.DeleteList(context.Background(), "error-id")
+	err = repo.DeleteList(context.Background(), "error")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to delete list")
 }

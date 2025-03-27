@@ -3,7 +3,6 @@ package testutil
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 )
@@ -28,10 +27,13 @@ func (m *MockWorkspaceRepository) AddWorkspaceDB(workspaceID string, db *sql.DB)
 }
 
 func (m *MockWorkspaceRepository) GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error) {
+	// Return the workspaceDB if it exists
 	if db, ok := m.WorkspaceDBs[workspaceID]; ok {
 		return db, nil
 	}
-	return nil, fmt.Errorf("workspace %s not found", workspaceID)
+
+	// Return the main DB as a fallback for tests
+	return m.DB, nil
 }
 
 // Implement other required methods with empty implementations

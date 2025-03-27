@@ -166,8 +166,8 @@ func (a *App) InitRepositories() error {
 	a.workspaceRepo = repository.NewWorkspaceRepository(a.db, &a.config.Database)
 	a.authRepo = repository.NewSQLAuthRepository(a.db, a.logger)
 	a.contactRepo = repository.NewContactRepository(a.db, a.workspaceRepo)
-	a.listRepo = repository.NewListRepository(a.db)
-	a.contactListRepo = repository.NewContactListRepository(a.db)
+	a.listRepo = repository.NewListRepository(a.db, a.workspaceRepo)
+	a.contactListRepo = repository.NewContactListRepository(a.db, a.workspaceRepo)
 
 	return nil
 }
