@@ -135,6 +135,36 @@ func (nf NullableFloat64) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("%f", nf.Float64)), nil
 }
 
+// UnmarshalJSON implements json.Unmarshaler
+func (nf *NullableFloat64) UnmarshalJSON(data []byte) error {
+	// Handle null case
+	if string(data) == "null" {
+		nf.Float64 = 0
+		nf.IsNull = true
+		return nil
+	}
+
+	// Try to unmarshal as a float64 first
+	var f float64
+	if err := json.Unmarshal(data, &f); err == nil {
+		nf.Float64 = f
+		nf.IsNull = false
+		return nil
+	}
+
+	// If that fails, try to unmarshal as an object
+	var obj struct {
+		Float64 float64 `json:"Float64"`
+		IsNull  bool    `json:"IsNull"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+	nf.Float64 = obj.Float64
+	nf.IsNull = obj.IsNull
+	return nil
+}
+
 // NullableTime represents a time.Time that can be null
 type NullableTime struct {
 	Time   time.Time
@@ -173,4 +203,39 @@ func (nt NullableTime) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 	return []byte(fmt.Sprintf(`"%s"`, nt.Time.Format(time.RFC3339))), nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler
+func (nt *NullableTime) UnmarshalJSON(data []byte) error {
+	// Handle null case
+	if string(data) == "null" {
+		nt.Time = time.Time{}
+		nt.IsNull = true
+		return nil
+	}
+
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		// Try to parse the time string
+		t, err := time.Parse(time.RFC3339, str)
+		if err != nil {
+			return err
+		}
+		nt.Time = t
+		nt.IsNull = false
+		return nil
+	}
+
+	// If that fails, try to unmarshal as an object
+	var obj struct {
+		Time   time.Time `json:"Time"`
+		IsNull bool      `json:"IsNull"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+	nt.Time = obj.Time
+	nt.IsNull = obj.IsNull
+	return nil
 }

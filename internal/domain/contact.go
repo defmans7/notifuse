@@ -303,36 +303,43 @@ func ScanContact(scanner interface {
 			IsNull: !dbc.CustomDatetime5.Valid,
 		},
 
+		// Initialize CustomJSON fields with IsNull=true by default
+		CustomJSON1: &NullableJSON{IsNull: true},
+		CustomJSON2: &NullableJSON{IsNull: true},
+		CustomJSON3: &NullableJSON{IsNull: true},
+		CustomJSON4: &NullableJSON{IsNull: true},
+		CustomJSON5: &NullableJSON{IsNull: true},
+
 		CreatedAt: dbc.CreatedAt,
 		UpdatedAt: dbc.UpdatedAt,
 	}
 
 	// Handle custom JSON fields
-	if len(dbc.CustomJSON1) > 0 {
+	if len(dbc.CustomJSON1) > 0 && string(dbc.CustomJSON1) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON1, &data); err == nil {
 			c.CustomJSON1 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
-	if len(dbc.CustomJSON2) > 0 {
+	if len(dbc.CustomJSON2) > 0 && string(dbc.CustomJSON2) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON2, &data); err == nil {
 			c.CustomJSON2 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
-	if len(dbc.CustomJSON3) > 0 {
+	if len(dbc.CustomJSON3) > 0 && string(dbc.CustomJSON3) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON3, &data); err == nil {
 			c.CustomJSON3 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
-	if len(dbc.CustomJSON4) > 0 {
+	if len(dbc.CustomJSON4) > 0 && string(dbc.CustomJSON4) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON4, &data); err == nil {
 			c.CustomJSON4 = &NullableJSON{Data: data, IsNull: false}
 		}
 	}
-	if len(dbc.CustomJSON5) > 0 {
+	if len(dbc.CustomJSON5) > 0 && string(dbc.CustomJSON5) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON5, &data); err == nil {
 			c.CustomJSON5 = &NullableJSON{Data: data, IsNull: false}

@@ -57,6 +57,75 @@ func TestContact_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "valid contact with all custom fields",
+			contact: domain.Contact{
+				Email:           "test@example.com",
+				CustomString1:   &domain.NullableString{String: "custom1", IsNull: false},
+				CustomString2:   &domain.NullableString{String: "custom2", IsNull: false},
+				CustomString3:   &domain.NullableString{String: "custom3", IsNull: false},
+				CustomString4:   &domain.NullableString{String: "custom4", IsNull: false},
+				CustomString5:   &domain.NullableString{String: "custom5", IsNull: false},
+				CustomNumber1:   &domain.NullableFloat64{Float64: 1.0, IsNull: false},
+				CustomNumber2:   &domain.NullableFloat64{Float64: 2.0, IsNull: false},
+				CustomNumber3:   &domain.NullableFloat64{Float64: 3.0, IsNull: false},
+				CustomNumber4:   &domain.NullableFloat64{Float64: 4.0, IsNull: false},
+				CustomNumber5:   &domain.NullableFloat64{Float64: 5.0, IsNull: false},
+				CustomDatetime1: &domain.NullableTime{Time: time.Now(), IsNull: false},
+				CustomDatetime2: &domain.NullableTime{Time: time.Now(), IsNull: false},
+				CustomDatetime3: &domain.NullableTime{Time: time.Now(), IsNull: false},
+				CustomDatetime4: &domain.NullableTime{Time: time.Now(), IsNull: false},
+				CustomDatetime5: &domain.NullableTime{Time: time.Now(), IsNull: false},
+				CustomJSON1:     &domain.NullableJSON{Data: map[string]interface{}{"key": "value"}, IsNull: false},
+				CustomJSON2:     &domain.NullableJSON{Data: map[string]interface{}{"key": "value"}, IsNull: false},
+				CustomJSON3:     &domain.NullableJSON{Data: map[string]interface{}{"key": "value"}, IsNull: false},
+				CustomJSON4:     &domain.NullableJSON{Data: map[string]interface{}{"key": "value"}, IsNull: false},
+				CustomJSON5:     &domain.NullableJSON{Data: map[string]interface{}{"key": "value"}, IsNull: false},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid contact with commerce fields",
+			contact: domain.Contact{
+				Email:         "test@example.com",
+				LifetimeValue: &domain.NullableFloat64{Float64: 100.0, IsNull: false},
+				OrdersCount:   &domain.NullableFloat64{Float64: 5.0, IsNull: false},
+				LastOrderAt:   &domain.NullableTime{Time: time.Now(), IsNull: false},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid contact with address fields",
+			contact: domain.Contact{
+				Email:        "test@example.com",
+				AddressLine1: &domain.NullableString{String: "123 Main St", IsNull: false},
+				AddressLine2: &domain.NullableString{String: "Apt 4B", IsNull: false},
+				Country:      &domain.NullableString{String: "USA", IsNull: false},
+				Postcode:     &domain.NullableString{String: "12345", IsNull: false},
+				State:        &domain.NullableString{String: "CA", IsNull: false},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid contact with contact info fields",
+			contact: domain.Contact{
+				Email:     "test@example.com",
+				Phone:     &domain.NullableString{String: "+1234567890", IsNull: false},
+				FirstName: &domain.NullableString{String: "John", IsNull: false},
+				LastName:  &domain.NullableString{String: "Doe", IsNull: false},
+				JobTitle:  &domain.NullableString{String: "Developer", IsNull: false},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid contact with locale fields",
+			contact: domain.Contact{
+				Email:    "test@example.com",
+				Timezone: &domain.NullableString{String: "America/New_York", IsNull: false},
+				Language: &domain.NullableString{String: "en-US", IsNull: false},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -191,6 +260,133 @@ func TestScanContact(t *testing.T) {
 	scanner.err = sql.ErrNoRows
 	_, err = domain.ScanContact(scanner)
 	assert.Error(t, err)
+
+	// Test scanning with null values
+	t.Run("should handle null values", func(t *testing.T) {
+		scanner := &contactMockScanner{
+			data: []interface{}{
+				"test@example.com",                            // Email
+				sql.NullString{String: "", Valid: false},      // ExternalID
+				sql.NullString{String: "", Valid: false},      // Timezone
+				sql.NullString{String: "", Valid: false},      // Language
+				sql.NullString{String: "", Valid: false},      // FirstName
+				sql.NullString{String: "", Valid: false},      // LastName
+				sql.NullString{String: "", Valid: false},      // Phone
+				sql.NullString{String: "", Valid: false},      // AddressLine1
+				sql.NullString{String: "", Valid: false},      // AddressLine2
+				sql.NullString{String: "", Valid: false},      // Country
+				sql.NullString{String: "", Valid: false},      // Postcode
+				sql.NullString{String: "", Valid: false},      // State
+				sql.NullString{String: "", Valid: false},      // JobTitle
+				sql.NullFloat64{Float64: 0, Valid: false},     // LifetimeValue
+				sql.NullFloat64{Float64: 0, Valid: false},     // OrdersCount
+				sql.NullTime{Time: time.Time{}, Valid: false}, // LastOrderAt
+				sql.NullString{String: "", Valid: false},      // CustomString1
+				sql.NullString{String: "", Valid: false},      // CustomString2
+				sql.NullString{String: "", Valid: false},      // CustomString3
+				sql.NullString{String: "", Valid: false},      // CustomString4
+				sql.NullString{String: "", Valid: false},      // CustomString5
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber1
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber2
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber3
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber4
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber5
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime1
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime2
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime3
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime4
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime5
+				[]byte("null"), // CustomJSON1
+				[]byte("null"), // CustomJSON2
+				[]byte("null"), // CustomJSON3
+				[]byte("null"), // CustomJSON4
+				[]byte("null"), // CustomJSON5
+				time.Now(),     // CreatedAt
+				time.Now(),     // UpdatedAt
+			},
+		}
+
+		contact, err := domain.ScanContact(scanner)
+		assert.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+		assert.True(t, contact.ExternalID.IsNull)
+		assert.True(t, contact.Timezone.IsNull)
+		assert.True(t, contact.Language.IsNull)
+		assert.True(t, contact.FirstName.IsNull)
+		assert.True(t, contact.LastName.IsNull)
+		assert.True(t, contact.Phone.IsNull)
+		assert.True(t, contact.AddressLine1.IsNull)
+		assert.True(t, contact.AddressLine2.IsNull)
+		assert.True(t, contact.Country.IsNull)
+		assert.True(t, contact.Postcode.IsNull)
+		assert.True(t, contact.State.IsNull)
+		assert.True(t, contact.JobTitle.IsNull)
+		assert.True(t, contact.LifetimeValue.IsNull)
+		assert.True(t, contact.OrdersCount.IsNull)
+		assert.True(t, contact.LastOrderAt.IsNull)
+		assert.True(t, contact.CustomString1.IsNull)
+		assert.True(t, contact.CustomNumber1.IsNull)
+		assert.True(t, contact.CustomDatetime1.IsNull)
+		assert.True(t, contact.CustomJSON1.IsNull)
+		assert.True(t, contact.CustomJSON2.IsNull)
+		assert.True(t, contact.CustomJSON3.IsNull)
+		assert.True(t, contact.CustomJSON4.IsNull)
+		assert.True(t, contact.CustomJSON5.IsNull)
+	})
+
+	// Test scanning with invalid JSON data
+	t.Run("should handle invalid JSON data", func(t *testing.T) {
+		scanner := &contactMockScanner{
+			data: []interface{}{
+				"test@example.com",                            // Email
+				sql.NullString{String: "", Valid: false},      // ExternalID
+				sql.NullString{String: "", Valid: false},      // Timezone
+				sql.NullString{String: "", Valid: false},      // Language
+				sql.NullString{String: "", Valid: false},      // FirstName
+				sql.NullString{String: "", Valid: false},      // LastName
+				sql.NullString{String: "", Valid: false},      // Phone
+				sql.NullString{String: "", Valid: false},      // AddressLine1
+				sql.NullString{String: "", Valid: false},      // AddressLine2
+				sql.NullString{String: "", Valid: false},      // Country
+				sql.NullString{String: "", Valid: false},      // Postcode
+				sql.NullString{String: "", Valid: false},      // State
+				sql.NullString{String: "", Valid: false},      // JobTitle
+				sql.NullFloat64{Float64: 0, Valid: false},     // LifetimeValue
+				sql.NullFloat64{Float64: 0, Valid: false},     // OrdersCount
+				sql.NullTime{Time: time.Time{}, Valid: false}, // LastOrderAt
+				sql.NullString{String: "", Valid: false},      // CustomString1
+				sql.NullString{String: "", Valid: false},      // CustomString2
+				sql.NullString{String: "", Valid: false},      // CustomString3
+				sql.NullString{String: "", Valid: false},      // CustomString4
+				sql.NullString{String: "", Valid: false},      // CustomString5
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber1
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber2
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber3
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber4
+				sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber5
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime1
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime2
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime3
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime4
+				sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime5
+				[]byte(`{invalid json}`),                      // CustomJSON1
+				[]byte("null"),                                // CustomJSON2
+				[]byte("null"),                                // CustomJSON3
+				[]byte("null"),                                // CustomJSON4
+				[]byte("null"),                                // CustomJSON5
+				time.Now(),                                    // CreatedAt
+				time.Now(),                                    // UpdatedAt
+			},
+		}
+
+		contact, err := domain.ScanContact(scanner)
+		assert.NoError(t, err)
+		assert.True(t, contact.CustomJSON1.IsNull)
+		assert.True(t, contact.CustomJSON2.IsNull)
+		assert.True(t, contact.CustomJSON3.IsNull)
+		assert.True(t, contact.CustomJSON4.IsNull)
+		assert.True(t, contact.CustomJSON5.IsNull)
+	})
 }
 
 // Mock scanner for testing
@@ -389,6 +585,102 @@ func TestContact_Merge(t *testing.T) {
 				Country:      &domain.NullableString{String: "Canada", IsNull: false},
 				State:        &domain.NullableString{String: "CA", IsNull: false},
 				Postcode:     &domain.NullableString{String: "12345", IsNull: false},
+			},
+		},
+		{
+			name: "Merge with all custom fields",
+			base: &domain.Contact{
+				Email:           "test@example.com",
+				CustomString1:   &domain.NullableString{String: "old1", IsNull: false},
+				CustomString2:   &domain.NullableString{String: "old2", IsNull: false},
+				CustomString3:   &domain.NullableString{String: "old3", IsNull: false},
+				CustomString4:   &domain.NullableString{String: "old4", IsNull: false},
+				CustomString5:   &domain.NullableString{String: "old5", IsNull: false},
+				CustomNumber1:   &domain.NullableFloat64{Float64: 1.0, IsNull: false},
+				CustomNumber2:   &domain.NullableFloat64{Float64: 2.0, IsNull: false},
+				CustomNumber3:   &domain.NullableFloat64{Float64: 3.0, IsNull: false},
+				CustomNumber4:   &domain.NullableFloat64{Float64: 4.0, IsNull: false},
+				CustomNumber5:   &domain.NullableFloat64{Float64: 5.0, IsNull: false},
+				CustomDatetime1: &domain.NullableTime{Time: now, IsNull: false},
+				CustomDatetime2: &domain.NullableTime{Time: now, IsNull: false},
+				CustomDatetime3: &domain.NullableTime{Time: now, IsNull: false},
+				CustomDatetime4: &domain.NullableTime{Time: now, IsNull: false},
+				CustomDatetime5: &domain.NullableTime{Time: now, IsNull: false},
+				CustomJSON1:     &domain.NullableJSON{Data: map[string]interface{}{"old": "value"}, IsNull: false},
+				CustomJSON2:     &domain.NullableJSON{Data: map[string]interface{}{"old": "value"}, IsNull: false},
+				CustomJSON3:     &domain.NullableJSON{Data: map[string]interface{}{"old": "value"}, IsNull: false},
+				CustomJSON4:     &domain.NullableJSON{Data: map[string]interface{}{"old": "value"}, IsNull: false},
+				CustomJSON5:     &domain.NullableJSON{Data: map[string]interface{}{"old": "value"}, IsNull: false},
+			},
+			other: &domain.Contact{
+				Email:           "test@example.com",
+				CustomString1:   &domain.NullableString{String: "new1", IsNull: false},
+				CustomString2:   &domain.NullableString{String: "new2", IsNull: false},
+				CustomString3:   &domain.NullableString{String: "new3", IsNull: false},
+				CustomString4:   &domain.NullableString{String: "new4", IsNull: false},
+				CustomString5:   &domain.NullableString{String: "new5", IsNull: false},
+				CustomNumber1:   &domain.NullableFloat64{Float64: 6.0, IsNull: false},
+				CustomNumber2:   &domain.NullableFloat64{Float64: 7.0, IsNull: false},
+				CustomNumber3:   &domain.NullableFloat64{Float64: 8.0, IsNull: false},
+				CustomNumber4:   &domain.NullableFloat64{Float64: 9.0, IsNull: false},
+				CustomNumber5:   &domain.NullableFloat64{Float64: 10.0, IsNull: false},
+				CustomDatetime1: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime2: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime3: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime4: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime5: &domain.NullableTime{Time: later, IsNull: false},
+				CustomJSON1:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON2:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON3:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON4:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON5:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+			},
+			expected: &domain.Contact{
+				Email:           "test@example.com",
+				CustomString1:   &domain.NullableString{String: "new1", IsNull: false},
+				CustomString2:   &domain.NullableString{String: "new2", IsNull: false},
+				CustomString3:   &domain.NullableString{String: "new3", IsNull: false},
+				CustomString4:   &domain.NullableString{String: "new4", IsNull: false},
+				CustomString5:   &domain.NullableString{String: "new5", IsNull: false},
+				CustomNumber1:   &domain.NullableFloat64{Float64: 6.0, IsNull: false},
+				CustomNumber2:   &domain.NullableFloat64{Float64: 7.0, IsNull: false},
+				CustomNumber3:   &domain.NullableFloat64{Float64: 8.0, IsNull: false},
+				CustomNumber4:   &domain.NullableFloat64{Float64: 9.0, IsNull: false},
+				CustomNumber5:   &domain.NullableFloat64{Float64: 10.0, IsNull: false},
+				CustomDatetime1: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime2: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime3: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime4: &domain.NullableTime{Time: later, IsNull: false},
+				CustomDatetime5: &domain.NullableTime{Time: later, IsNull: false},
+				CustomJSON1:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON2:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON3:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON4:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+				CustomJSON5:     &domain.NullableJSON{Data: map[string]interface{}{"new": "value"}, IsNull: false},
+			},
+		},
+		{
+			name: "Merge with null custom fields",
+			base: &domain.Contact{
+				Email:           "test@example.com",
+				CustomString1:   &domain.NullableString{String: "old1", IsNull: false},
+				CustomNumber1:   &domain.NullableFloat64{Float64: 1.0, IsNull: false},
+				CustomDatetime1: &domain.NullableTime{Time: now, IsNull: false},
+				CustomJSON1:     &domain.NullableJSON{Data: map[string]interface{}{"old": "value"}, IsNull: false},
+			},
+			other: &domain.Contact{
+				Email:           "test@example.com",
+				CustomString1:   &domain.NullableString{String: "", IsNull: true},
+				CustomNumber1:   &domain.NullableFloat64{Float64: 0, IsNull: true},
+				CustomDatetime1: &domain.NullableTime{Time: time.Time{}, IsNull: true},
+				CustomJSON1:     &domain.NullableJSON{Data: nil, IsNull: true},
+			},
+			expected: &domain.Contact{
+				Email:           "test@example.com",
+				CustomString1:   &domain.NullableString{String: "", IsNull: true},
+				CustomNumber1:   &domain.NullableFloat64{Float64: 0, IsNull: true},
+				CustomDatetime1: &domain.NullableTime{Time: time.Time{}, IsNull: true},
+				CustomJSON1:     &domain.NullableJSON{Data: nil, IsNull: true},
 			},
 		},
 	}
