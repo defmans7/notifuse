@@ -12,10 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository/testutil"
 )
 
 func TestGetContactByEmail(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactRepository(db)
@@ -65,7 +66,7 @@ func TestGetContactByEmail(t *testing.T) {
 }
 
 func TestGetContactByExternalID(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactRepository(db)
@@ -151,11 +152,8 @@ func TestGetContactByExternalID(t *testing.T) {
 }
 
 func TestGetContacts(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("Failed to create mock DB: %v", err)
-	}
-	defer db.Close()
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
 
 	repo := NewContactRepository(db)
 
@@ -526,7 +524,7 @@ func TestGetContacts(t *testing.T) {
 }
 
 func TestDeleteContact(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactRepository(db)

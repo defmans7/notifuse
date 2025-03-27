@@ -12,6 +12,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Notifuse/notifuse/internal/repository/testutil"
 )
 
 // MockLogger is a simple mock logger for testing
@@ -26,7 +28,7 @@ func (l *MockLogger) WithField(key string, value interface{}) logger.Logger  { r
 func (l *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }
 
 func TestAuthRepository_GetSessionByID(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	mockLogger := &MockLogger{}
@@ -61,7 +63,7 @@ func TestAuthRepository_GetSessionByID(t *testing.T) {
 }
 
 func TestAuthRepository_GetUserByID(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	mockLogger := &MockLogger{}

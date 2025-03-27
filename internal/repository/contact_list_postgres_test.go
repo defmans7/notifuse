@@ -12,10 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository/testutil"
 )
 
 func TestAddContactToList(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactListRepository(db)
@@ -57,7 +58,7 @@ func TestAddContactToList(t *testing.T) {
 }
 
 func TestGetContactListByIDs(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactListRepository(db)
@@ -105,7 +106,7 @@ func TestGetContactListByIDs(t *testing.T) {
 }
 
 func TestGetContactsByListID(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactListRepository(db)
@@ -160,7 +161,7 @@ func TestGetContactsByListID(t *testing.T) {
 }
 
 func TestGetListsByEmail(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactListRepository(db)
@@ -215,7 +216,7 @@ func TestGetListsByEmail(t *testing.T) {
 }
 
 func TestUpdateContactListStatus(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactListRepository(db)
@@ -251,7 +252,7 @@ func TestUpdateContactListStatus(t *testing.T) {
 }
 
 func TestRemoveContactFromList(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewContactListRepository(db)

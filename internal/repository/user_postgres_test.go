@@ -13,10 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository/testutil"
 )
 
 func TestCreateUser(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
@@ -52,7 +53,7 @@ func TestCreateUser(t *testing.T) {
 }
 
 func TestGetUserByEmail(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
@@ -102,7 +103,7 @@ func TestGetUserByEmail(t *testing.T) {
 }
 
 func TestGetUserByID(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
@@ -142,7 +143,7 @@ func TestGetUserByID(t *testing.T) {
 }
 
 func TestCreateSession(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
@@ -171,7 +172,7 @@ func TestCreateSession(t *testing.T) {
 }
 
 func TestGetSessionByID(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
@@ -212,7 +213,7 @@ func TestGetSessionByID(t *testing.T) {
 }
 
 func TestDeleteSession(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
@@ -238,7 +239,7 @@ func TestDeleteSession(t *testing.T) {
 }
 
 func TestGetSessionsByUserID(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
@@ -281,7 +282,7 @@ func TestGetSessionsByUserID(t *testing.T) {
 }
 
 func TestUpdateSession(t *testing.T) {
-	db, mock, cleanup := SetupMockDB(t)
+	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	repo := NewUserRepository(db)
