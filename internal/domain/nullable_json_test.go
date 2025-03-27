@@ -57,6 +57,35 @@ func TestNullableJSON_Scan(t *testing.T) {
 			input:   123,
 			wantErr: true,
 		},
+		{
+			name:  "empty string",
+			input: "",
+			expected: NullableJSON{
+				Data:   nil,
+				IsNull: true,
+			},
+		},
+		{
+			name:  "complex JSON object",
+			input: []byte(`{"nested":{"key":"value"},"array":[1,2,3],"bool":true,"null":null}`),
+			expected: NullableJSON{
+				Data: map[string]interface{}{
+					"nested": map[string]interface{}{"key": "value"},
+					"array":  []interface{}{float64(1), float64(2), float64(3)},
+					"bool":   true,
+					"null":   nil,
+				},
+				IsNull: false,
+			},
+		},
+		{
+			name:  "string input",
+			input: `{"key":"value"}`,
+			expected: NullableJSON{
+				Data:   map[string]interface{}{"key": "value"},
+				IsNull: false,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -104,6 +133,35 @@ func TestNullableJSON_Value(t *testing.T) {
 				IsNull: false,
 			},
 			expected: []byte(`[1,2,3]`),
+		},
+		{
+			name: "complex object",
+			input: NullableJSON{
+				Data: map[string]interface{}{
+					"nested": map[string]interface{}{"key": "value"},
+					"array":  []interface{}{1, 2, 3},
+					"bool":   true,
+					"null":   nil,
+				},
+				IsNull: false,
+			},
+			expected: []byte(`{"array":[1,2,3],"bool":true,"nested":{"key":"value"},"null":null}`),
+		},
+		{
+			name: "empty object",
+			input: NullableJSON{
+				Data:   map[string]interface{}{},
+				IsNull: false,
+			},
+			expected: []byte(`{}`),
+		},
+		{
+			name: "empty array",
+			input: NullableJSON{
+				Data:   []interface{}{},
+				IsNull: false,
+			},
+			expected: []byte(`[]`),
 		},
 	}
 
@@ -156,6 +214,35 @@ func TestNullableJSON_MarshalJSON(t *testing.T) {
 			},
 			expected: `[1,2,3]`,
 		},
+		{
+			name: "complex object",
+			input: NullableJSON{
+				Data: map[string]interface{}{
+					"nested": map[string]interface{}{"key": "value"},
+					"array":  []interface{}{1, 2, 3},
+					"bool":   true,
+					"null":   nil,
+				},
+				IsNull: false,
+			},
+			expected: `{"array":[1,2,3],"bool":true,"nested":{"key":"value"},"null":null}`,
+		},
+		{
+			name: "empty object",
+			input: NullableJSON{
+				Data:   map[string]interface{}{},
+				IsNull: false,
+			},
+			expected: `{}`,
+		},
+		{
+			name: "empty array",
+			input: NullableJSON{
+				Data:   []interface{}{},
+				IsNull: false,
+			},
+			expected: `[]`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -204,8 +291,37 @@ func TestNullableJSON_UnmarshalJSON(t *testing.T) {
 			},
 		},
 		{
-			name:    "invalid JSON",
-			input:   `{invalid}`,
+			name:  "complex object",
+			input: `{"nested":{"key":"value"},"array":[1,2,3],"bool":true,"null":null}`,
+			expected: NullableJSON{
+				Data: map[string]interface{}{
+					"nested": map[string]interface{}{"key": "value"},
+					"array":  []interface{}{float64(1), float64(2), float64(3)},
+					"bool":   true,
+					"null":   nil,
+				},
+				IsNull: false,
+			},
+		},
+		{
+			name:  "empty object",
+			input: `{}`,
+			expected: NullableJSON{
+				Data:   map[string]interface{}{},
+				IsNull: false,
+			},
+		},
+		{
+			name:  "empty array",
+			input: `[]`,
+			expected: NullableJSON{
+				Data:   []interface{}{},
+				IsNull: false,
+			},
+		},
+		{
+			name:    "invalid JSON structure",
+			input:   `{"key":}`,
 			wantErr: true,
 		},
 	}

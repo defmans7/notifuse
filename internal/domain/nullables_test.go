@@ -123,6 +123,59 @@ func TestNullableString(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("UnmarshalJSON", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    string
+			expected NullableString
+			wantErr  bool
+		}{
+			{
+				name:     "non-null string",
+				input:    `"test"`,
+				expected: NullableString{String: "test", IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "null string",
+				input:    "null",
+				expected: NullableString{String: "", IsNull: true},
+				wantErr:  false,
+			},
+			{
+				name:     "empty string",
+				input:    `""`,
+				expected: NullableString{String: "", IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "escaped string",
+				input:    `"test\"quote"`,
+				expected: NullableString{String: "test\"quote", IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "invalid JSON",
+				input:    `invalid`,
+				expected: NullableString{},
+				wantErr:  true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var ns NullableString
+				err := json.Unmarshal([]byte(tt.input), &ns)
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+					assert.Equal(t, tt.expected, ns)
+				}
+			})
+		}
+	})
 }
 
 func TestNullableFloat64(t *testing.T) {
@@ -246,6 +299,59 @@ func TestNullableFloat64(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("UnmarshalJSON", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    string
+			expected NullableFloat64
+			wantErr  bool
+		}{
+			{
+				name:     "non-null float",
+				input:    "123.45",
+				expected: NullableFloat64{Float64: 123.45, IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "null float",
+				input:    "null",
+				expected: NullableFloat64{Float64: 0, IsNull: true},
+				wantErr:  false,
+			},
+			{
+				name:     "zero float",
+				input:    "0",
+				expected: NullableFloat64{Float64: 0, IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "scientific notation",
+				input:    "1.23e+2",
+				expected: NullableFloat64{Float64: 123, IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "invalid JSON",
+				input:    "invalid",
+				expected: NullableFloat64{},
+				wantErr:  true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var nf NullableFloat64
+				err := json.Unmarshal([]byte(tt.input), &nf)
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+					assert.Equal(t, tt.expected, nf)
+				}
+			})
+		}
+	})
 }
 
 func TestNullableTime(t *testing.T) {
@@ -355,6 +461,59 @@ func TestNullableTime(t *testing.T) {
 				} else {
 					assert.NoError(t, err)
 					assert.Equal(t, tt.expected, string(data))
+				}
+			})
+		}
+	})
+
+	t.Run("UnmarshalJSON", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    string
+			expected NullableTime
+			wantErr  bool
+		}{
+			{
+				name:     "non-null time",
+				input:    `"2024-03-25T12:00:00Z"`,
+				expected: NullableTime{Time: fixedTime, IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "null time",
+				input:    "null",
+				expected: NullableTime{Time: time.Time{}, IsNull: true},
+				wantErr:  false,
+			},
+			{
+				name:     "zero time",
+				input:    `"0001-01-01T00:00:00Z"`,
+				expected: NullableTime{Time: time.Time{}, IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "invalid time format",
+				input:    `"invalid-time"`,
+				expected: NullableTime{},
+				wantErr:  true,
+			},
+			{
+				name:     "invalid JSON",
+				input:    "invalid",
+				expected: NullableTime{},
+				wantErr:  true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var nt NullableTime
+				err := json.Unmarshal([]byte(tt.input), &nt)
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+					assert.Equal(t, tt.expected, nt)
 				}
 			})
 		}
