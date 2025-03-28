@@ -98,7 +98,7 @@ func (m *MockContactService) GetContactByExternalID(ctx context.Context, externa
 	return nil, &domain.ErrContactNotFound{}
 }
 
-func (m *MockContactService) DeleteContact(ctx context.Context, email string) error {
+func (m *MockContactService) DeleteContact(ctx context.Context, workspaceID string, email string) error {
 	m.DeleteContactCalled = true
 	m.LastContactEmail = email
 	if m.ErrToReturn != nil {
@@ -117,7 +117,7 @@ func (m *MockContactService) DeleteContact(ctx context.Context, email string) er
 	return &domain.ErrContactNotFound{}
 }
 
-func (m *MockContactService) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+func (m *MockContactService) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
 	m.BatchImportContactsCalled = true
 	m.LastContactsBatchImported = contacts
 	if m.ErrToReturn != nil {
@@ -139,7 +139,7 @@ func (m *MockContactService) BatchImportContacts(ctx context.Context, contacts [
 	return nil
 }
 
-func (m *MockContactService) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
+func (m *MockContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
 	m.UpsertContactCalled = true
 	m.LastContactUpserted = contact
 	if m.ErrToReturn != nil {

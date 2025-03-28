@@ -21,7 +21,7 @@ func NewListService(repo domain.ListRepository, logger logger.Logger) *ListServi
 	}
 }
 
-func (s *ListService) CreateList(ctx context.Context, list *domain.List) error {
+func (s *ListService) CreateList(ctx context.Context, workspaceID string, list *domain.List) error {
 	now := time.Now().UTC()
 	list.CreatedAt = now
 	list.UpdatedAt = now
@@ -30,7 +30,7 @@ func (s *ListService) CreateList(ctx context.Context, list *domain.List) error {
 		return fmt.Errorf("invalid list: %w", err)
 	}
 
-	if err := s.repo.CreateList(ctx, list); err != nil {
+	if err := s.repo.CreateList(ctx, workspaceID, list); err != nil {
 		s.logger.WithField("list_id", list.ID).Error(fmt.Sprintf("Failed to create list: %v", err))
 		return fmt.Errorf("failed to create list: %w", err)
 	}
@@ -38,8 +38,8 @@ func (s *ListService) CreateList(ctx context.Context, list *domain.List) error {
 	return nil
 }
 
-func (s *ListService) GetListByID(ctx context.Context, id string) (*domain.List, error) {
-	list, err := s.repo.GetListByID(ctx, id)
+func (s *ListService) GetListByID(ctx context.Context, workspaceID string, id string) (*domain.List, error) {
+	list, err := s.repo.GetListByID(ctx, workspaceID, id)
 	if err != nil {
 		if _, ok := err.(*domain.ErrListNotFound); ok {
 			return nil, err
@@ -51,8 +51,8 @@ func (s *ListService) GetListByID(ctx context.Context, id string) (*domain.List,
 	return list, nil
 }
 
-func (s *ListService) GetLists(ctx context.Context) ([]*domain.List, error) {
-	lists, err := s.repo.GetLists(ctx)
+func (s *ListService) GetLists(ctx context.Context, workspaceID string) ([]*domain.List, error) {
+	lists, err := s.repo.GetLists(ctx, workspaceID)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to get lists: %v", err))
 		return nil, fmt.Errorf("failed to get lists: %w", err)
@@ -61,14 +61,14 @@ func (s *ListService) GetLists(ctx context.Context) ([]*domain.List, error) {
 	return lists, nil
 }
 
-func (s *ListService) UpdateList(ctx context.Context, list *domain.List) error {
+func (s *ListService) UpdateList(ctx context.Context, workspaceID string, list *domain.List) error {
 	list.UpdatedAt = time.Now().UTC()
 
 	if err := list.Validate(); err != nil {
 		return fmt.Errorf("invalid list: %w", err)
 	}
 
-	if err := s.repo.UpdateList(ctx, list); err != nil {
+	if err := s.repo.UpdateList(ctx, workspaceID, list); err != nil {
 		s.logger.WithField("list_id", list.ID).Error(fmt.Sprintf("Failed to update list: %v", err))
 		return fmt.Errorf("failed to update list: %w", err)
 	}
@@ -76,8 +76,8 @@ func (s *ListService) UpdateList(ctx context.Context, list *domain.List) error {
 	return nil
 }
 
-func (s *ListService) DeleteList(ctx context.Context, id string) error {
-	if err := s.repo.DeleteList(ctx, id); err != nil {
+func (s *ListService) DeleteList(ctx context.Context, workspaceID string, id string) error {
+	if err := s.repo.DeleteList(ctx, workspaceID, id); err != nil {
 		s.logger.WithField("list_id", id).Error(fmt.Sprintf("Failed to delete list: %v", err))
 		return fmt.Errorf("failed to delete list: %w", err)
 	}

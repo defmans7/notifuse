@@ -19,7 +19,7 @@ func TestGetContactByEmail(t *testing.T) {
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	repo := NewContactRepository(db, workspaceRepo)
+	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "test@example.com"
 
@@ -51,7 +51,7 @@ func TestGetContactByEmail(t *testing.T) {
 		WithArgs(email).
 		WillReturnRows(rows)
 
-	contact, err := repo.GetContactByEmail(context.Background(), email)
+	contact, err := repo.GetContactByEmail(context.Background(), "workspace123", email)
 	require.NoError(t, err)
 	assert.Equal(t, email, contact.Email)
 
@@ -60,7 +60,7 @@ func TestGetContactByEmail(t *testing.T) {
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
-	_, err = repo.GetContactByEmail(context.Background(), "nonexistent@example.com")
+	_, err = repo.GetContactByEmail(context.Background(), "workspace123", "nonexistent@example.com")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrContactNotFound{}, err)
 }
@@ -70,7 +70,7 @@ func TestGetContactByExternalID(t *testing.T) {
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	repo := NewContactRepository(db, workspaceRepo)
+	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	externalID := "ext123"
 
@@ -102,7 +102,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		WithArgs(externalID).
 		WillReturnRows(rows)
 
-	_, err := repo.GetContactByExternalID(context.Background(), externalID)
+	_, err := repo.GetContactByExternalID(context.Background(), "workspace123", externalID)
 	require.NoError(t, err)
 
 	// Test case 2: Contact not found
@@ -110,7 +110,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		WithArgs("nonexistent-ext-id").
 		WillReturnError(sql.ErrNoRows)
 
-	_, err = repo.GetContactByExternalID(context.Background(), "nonexistent-ext-id")
+	_, err = repo.GetContactByExternalID(context.Background(), "workspace123", "nonexistent-ext-id")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrContactNotFound{}, err)
 
@@ -141,7 +141,7 @@ func TestGetContactByExternalID(t *testing.T) {
 			WillReturnRows(rows)
 
 		// Act
-		contact, err := repo.GetContactByExternalID(context.Background(), externalID)
+		contact, err := repo.GetContactByExternalID(context.Background(), externalID, "workspace123")
 
 		// Assert
 		require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestGetContacts(t *testing.T) {
 
 	// Use the concrete type directly instead of interface
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	repo := NewContactRepository(db, workspaceRepo)
+	repo := NewContactRepository(workspaceRepo)
 
 	t.Run("should get contacts with pagination", func(t *testing.T) {
 		// Create a mock workspace database
@@ -245,7 +245,7 @@ func TestDeleteContact(t *testing.T) {
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	repo := NewContactRepository(db, workspaceRepo)
+	repo := NewContactRepository(workspaceRepo)
 	email := "test@example.com"
 
 	// Test case 1: Contact successfully deleted
@@ -253,7 +253,7 @@ func TestDeleteContact(t *testing.T) {
 		WithArgs(email).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := repo.DeleteContact(context.Background(), email)
+	err := repo.DeleteContact(context.Background(), email, "workspace123")
 	require.NoError(t, err)
 
 	// Test case 2: Contact not found
@@ -261,7 +261,7 @@ func TestDeleteContact(t *testing.T) {
 		WithArgs("nonexistent@example.com").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = repo.DeleteContact(context.Background(), "nonexistent@example.com")
+	err = repo.DeleteContact(context.Background(), "nonexistent@example.com", "workspace123")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrContactNotFound{}, err)
 }

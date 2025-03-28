@@ -30,9 +30,9 @@ func NewContactListService(
 	}
 }
 
-func (s *ContactListService) AddContactToList(ctx context.Context, contactList *domain.ContactList) error {
+func (s *ContactListService) AddContactToList(ctx context.Context, workspaceID string, contactList *domain.ContactList) error {
 	// Verify contact exists by email
-	contact, err := s.contactRepo.GetContactByEmail(ctx, contactList.Email)
+	contact, err := s.contactRepo.GetContactByEmail(ctx, workspaceID, contactList.Email)
 	if err != nil {
 		return fmt.Errorf("contact not found: %w", err)
 	}
@@ -41,7 +41,7 @@ func (s *ContactListService) AddContactToList(ctx context.Context, contactList *
 	contactList.Email = contact.Email
 
 	// Verify list exists
-	list, err := s.listRepo.GetListByID(ctx, contactList.ListID)
+	list, err := s.listRepo.GetListByID(ctx, workspaceID, contactList.ListID)
 	if err != nil {
 		return fmt.Errorf("list not found: %w", err)
 	}
@@ -59,7 +59,7 @@ func (s *ContactListService) AddContactToList(ctx context.Context, contactList *
 		return fmt.Errorf("invalid contact list: %w", err)
 	}
 
-	if err := s.repo.AddContactToList(ctx, contactList); err != nil {
+	if err := s.repo.AddContactToList(ctx, workspaceID, contactList); err != nil {
 		s.logger.WithField("email", contactList.Email).
 			WithField("list_id", contactList.ListID).
 			Error(fmt.Sprintf("Failed to add contact to list: %v", err))
@@ -69,8 +69,8 @@ func (s *ContactListService) AddContactToList(ctx context.Context, contactList *
 	return nil
 }
 
-func (s *ContactListService) GetContactListByIDs(ctx context.Context, email, listID string) (*domain.ContactList, error) {
-	contactList, err := s.repo.GetContactListByIDs(ctx, email, listID)
+func (s *ContactListService) GetContactListByIDs(ctx context.Context, workspaceID string, email, listID string) (*domain.ContactList, error) {
+	contactList, err := s.repo.GetContactListByIDs(ctx, workspaceID, email, listID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrContactListNotFound); ok {
 			return nil, err
@@ -84,14 +84,14 @@ func (s *ContactListService) GetContactListByIDs(ctx context.Context, email, lis
 	return contactList, nil
 }
 
-func (s *ContactListService) GetContactsByListID(ctx context.Context, listID string) ([]*domain.ContactList, error) {
+func (s *ContactListService) GetContactsByListID(ctx context.Context, workspaceID string, listID string) ([]*domain.ContactList, error) {
 	// Verify list exists
-	_, err := s.listRepo.GetListByID(ctx, listID)
+	_, err := s.listRepo.GetListByID(ctx, workspaceID, listID)
 	if err != nil {
 		return nil, fmt.Errorf("list not found: %w", err)
 	}
 
-	contactLists, err := s.repo.GetContactsByListID(ctx, listID)
+	contactLists, err := s.repo.GetContactsByListID(ctx, workspaceID, listID)
 	if err != nil {
 		s.logger.WithField("list_id", listID).
 			Error(fmt.Sprintf("Failed to get contacts for list: %v", err))
@@ -101,14 +101,14 @@ func (s *ContactListService) GetContactsByListID(ctx context.Context, listID str
 	return contactLists, nil
 }
 
-func (s *ContactListService) GetListsByEmail(ctx context.Context, email string) ([]*domain.ContactList, error) {
+func (s *ContactListService) GetListsByEmail(ctx context.Context, workspaceID string, email string) ([]*domain.ContactList, error) {
 	// Verify contact exists by email
-	_, err := s.contactRepo.GetContactByEmail(ctx, email)
+	_, err := s.contactRepo.GetContactByEmail(ctx, email, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("contact not found: %w", err)
 	}
 
-	contactLists, err := s.repo.GetListsByEmail(ctx, email)
+	contactLists, err := s.repo.GetListsByEmail(ctx, workspaceID, email)
 	if err != nil {
 		s.logger.WithField("email", email).
 			Error(fmt.Sprintf("Failed to get lists for contact: %v", err))
@@ -118,14 +118,14 @@ func (s *ContactListService) GetListsByEmail(ctx context.Context, email string) 
 	return contactLists, nil
 }
 
-func (s *ContactListService) UpdateContactListStatus(ctx context.Context, email, listID string, status domain.ContactListStatus) error {
+func (s *ContactListService) UpdateContactListStatus(ctx context.Context, workspaceID string, email, listID string, status domain.ContactListStatus) error {
 	// Verify contact list exists
-	_, err := s.repo.GetContactListByIDs(ctx, email, listID)
+	_, err := s.repo.GetContactListByIDs(ctx, workspaceID, email, listID)
 	if err != nil {
 		return fmt.Errorf("contact list not found: %w", err)
 	}
 
-	if err := s.repo.UpdateContactListStatus(ctx, email, listID, status); err != nil {
+	if err := s.repo.UpdateContactListStatus(ctx, workspaceID, email, listID, status); err != nil {
 		s.logger.WithField("email", email).
 			WithField("list_id", listID).
 			Error(fmt.Sprintf("Failed to update contact list status: %v", err))
@@ -135,8 +135,8 @@ func (s *ContactListService) UpdateContactListStatus(ctx context.Context, email,
 	return nil
 }
 
-func (s *ContactListService) RemoveContactFromList(ctx context.Context, email, listID string) error {
-	if err := s.repo.RemoveContactFromList(ctx, email, listID); err != nil {
+func (s *ContactListService) RemoveContactFromList(ctx context.Context, workspaceID string, email, listID string) error {
+	if err := s.repo.RemoveContactFromList(ctx, workspaceID, email, listID); err != nil {
 		s.logger.WithField("email", email).
 			WithField("list_id", listID).
 			Error(fmt.Sprintf("Failed to remove contact from list: %v", err))

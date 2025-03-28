@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -72,39 +73,131 @@ func ScanList(scanner interface {
 	return l, nil
 }
 
+// Request/Response types
+type CreateListRequest struct {
+	WorkspaceID   string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name          string `json:"name" valid:"required,stringlength(1|255)"`
+	Type          string `json:"type" valid:"required,in(public|private)"`
+	IsDoubleOptin bool   `json:"is_double_optin"`
+	IsPublic      bool   `json:"is_public"`
+	Description   string `json:"description,omitempty"`
+}
+
+func (r *CreateListRequest) Validate() (list *List, workspaceID string, err error) {
+
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return nil, "", fmt.Errorf("invalid create list request: %w", err)
+	}
+
+	return &List{
+		ID:            r.ID,
+		Name:          r.Name,
+		Type:          r.Type,
+		IsDoubleOptin: r.IsDoubleOptin,
+		IsPublic:      r.IsPublic,
+		Description:   r.Description,
+	}, r.WorkspaceID, nil
+}
+
+type GetListsRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+}
+
+func (r *GetListsRequest) FromURLParams(queryParams url.Values) (err error) {
+	r.WorkspaceID = queryParams.Get("workspace_id")
+
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return fmt.Errorf("invalid get lists request: %w", err)
+	}
+	return nil
+}
+
+type GetListRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+	ID          string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+}
+
+func (r *GetListRequest) FromURLParams(queryParams url.Values) (err error) {
+	r.WorkspaceID = queryParams.Get("workspace_id")
+	r.ID = queryParams.Get("id")
+
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return fmt.Errorf("invalid get list request: %w", err)
+	}
+	return nil
+}
+
+type UpdateListRequest struct {
+	WorkspaceID   string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name          string `json:"name" valid:"required,stringlength(1|255)"`
+	Type          string `json:"type" valid:"required,in(public|private)"`
+	IsDoubleOptin bool   `json:"is_double_optin"`
+	IsPublic      bool   `json:"is_public"`
+	Description   string `json:"description,omitempty"`
+}
+
+func (r *UpdateListRequest) Validate() (list *List, workspaceID string, err error) {
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return nil, "", fmt.Errorf("invalid update list request: %w", err)
+	}
+
+	return &List{
+		ID:            r.ID,
+		Name:          r.Name,
+		Type:          r.Type,
+		IsDoubleOptin: r.IsDoubleOptin,
+		IsPublic:      r.IsPublic,
+		Description:   r.Description,
+	}, r.WorkspaceID, nil
+}
+
+type DeleteListRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+	ID          string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+}
+
+func (r *DeleteListRequest) Validate() (workspaceID string, err error) {
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return "", fmt.Errorf("invalid delete list request: %w", err)
+	}
+	return r.WorkspaceID, nil
+}
+
 // ListService provides operations for managing lists
 type ListService interface {
 	// CreateList creates a new list
-	CreateList(ctx context.Context, list *List) error
+	CreateList(ctx context.Context, workspaceID string, list *List) error
 
 	// GetListByID retrieves a list by ID
-	GetListByID(ctx context.Context, id string) (*List, error)
+	GetListByID(ctx context.Context, workspaceID string, id string) (*List, error)
 
 	// GetLists retrieves all lists
-	GetLists(ctx context.Context) ([]*List, error)
+	GetLists(ctx context.Context, workspaceID string) ([]*List, error)
 
 	// UpdateList updates an existing list
-	UpdateList(ctx context.Context, list *List) error
+	UpdateList(ctx context.Context, workspaceID string, list *List) error
 
 	// DeleteList deletes a list by ID
-	DeleteList(ctx context.Context, id string) error
+	DeleteList(ctx context.Context, workspaceID string, id string) error
 }
 
 type ListRepository interface {
 	// CreateList creates a new list in the database
-	CreateList(ctx context.Context, list *List) error
+	CreateList(ctx context.Context, workspaceID string, list *List) error
 
 	// GetListByID retrieves a list by its ID
-	GetListByID(ctx context.Context, id string) (*List, error)
+	GetListByID(ctx context.Context, workspaceID string, id string) (*List, error)
 
 	// GetLists retrieves all lists
-	GetLists(ctx context.Context) ([]*List, error)
+	GetLists(ctx context.Context, workspaceID string) ([]*List, error)
 
 	// UpdateList updates an existing list
-	UpdateList(ctx context.Context, list *List) error
+	UpdateList(ctx context.Context, workspaceID string, list *List) error
 
 	// DeleteList deletes a list
-	DeleteList(ctx context.Context, id string) error
+	DeleteList(ctx context.Context, workspaceID string, id string) error
 }
 
 // ErrListNotFound is returned when a list is not found

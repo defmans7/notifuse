@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
+	"net/url"
+	"strconv"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/tidwall/gjson"
 )
 
@@ -367,6 +370,30 @@ type GetContactsRequest struct {
 	Cursor string `json:"cursor,omitempty" valid:"optional"`
 }
 
+func (r *GetContactsRequest) FromQueryParams(queryParams url.Values) (err error) {
+	r.WorkspaceID = queryParams.Get("workspace_id")
+	r.Email = queryParams.Get("email")
+	r.ExternalID = queryParams.Get("external_id")
+	r.FirstName = queryParams.Get("first_name")
+	r.LastName = queryParams.Get("last_name")
+	r.Phone = queryParams.Get("phone")
+	r.Country = queryParams.Get("country")
+
+	// handle limit and cursor
+	r.Limit, err = strconv.Atoi(queryParams.Get("limit"))
+	if err != nil {
+		return fmt.Errorf("invalid limit: %w", err)
+	}
+	r.Cursor = queryParams.Get("cursor")
+
+	// Validate the request
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
+	return nil
+}
+
 // GetContactsResponse represents the response from getting contacts
 type GetContactsResponse struct {
 	Contacts   []*Contact `json:"contacts"`
@@ -392,46 +419,130 @@ func (r *GetContactsRequest) Validate() error {
 	return nil
 }
 
+// Request/Response types
+type GetContactByEmailRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required"`
+	Email       string `json:"email" valid:"required,email"`
+}
+
+type GetContactByExternalIDRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required"`
+	ExternalID  string `json:"external_id" valid:"required"`
+}
+
+type DeleteContactRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required"`
+	Email       string `json:"email" valid:"required,email"`
+}
+
+func (r *DeleteContactRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+	if r.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if !govalidator.IsEmail(r.Email) {
+		return fmt.Errorf("invalid email format")
+	}
+	return nil
+}
+
+// Add the request type for batch importing contacts
+type BatchImportContactsRequest struct {
+	WorkspaceID string          `json:"workspace_id" valid:"required"`
+	Contacts    json.RawMessage `json:"contacts" valid:"required"`
+}
+
+func (r *BatchImportContactsRequest) Validate() (contacts []*Contact, workspaceID string, err error) {
+	if r.WorkspaceID == "" {
+		return nil, "", fmt.Errorf("workspace_id is required")
+	}
+
+	// Parse the raw JSON bytes directly as an array
+	jsonResult := gjson.ParseBytes(r.Contacts)
+	if !jsonResult.IsArray() {
+		return nil, "", fmt.Errorf("contacts must be an array")
+	}
+
+	contactsArray := jsonResult.Array()
+	if len(contactsArray) == 0 {
+		return nil, "", fmt.Errorf("contacts array is empty")
+	}
+
+	// Parse each contact
+	contacts = make([]*Contact, 0, len(contactsArray))
+	for i, contactJson := range contactsArray {
+		contact, err := FromJSON(contactJson)
+		if err != nil {
+			return nil, "", fmt.Errorf("invalid contact at index %d: %w", i, err)
+		}
+		contacts = append(contacts, contact)
+	}
+	return contacts, r.WorkspaceID, nil
+}
+
+type UpsertContactRequest struct {
+	WorkspaceID string          `json:"workspace_id" valid:"required"`
+	Contact     json.RawMessage `json:"contact" valid:"required"`
+}
+
+func (r *UpsertContactRequest) Validate() (contact *Contact, workspaceID string, err error) {
+	if r.WorkspaceID == "" {
+		return nil, "", fmt.Errorf("workspace_id is required")
+	}
+	jsonResult := gjson.ParseBytes(r.Contact)
+	contactData := jsonResult.Get("contact")
+	if !contactData.Exists() {
+		return nil, "", fmt.Errorf("contact field is required")
+	}
+	contact, err = FromJSON(contactData)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid contact: %w", err)
+	}
+	return contact, r.WorkspaceID, nil
+}
+
 // ContactService provides operations for managing contacts
 type ContactService interface {
 	// GetContactByEmail retrieves a contact by email
-	GetContactByEmail(ctx context.Context, email string) (*Contact, error)
+	GetContactByEmail(ctx context.Context, workspaceID string, email string) (*Contact, error)
 
 	// GetContactByExternalID retrieves a contact by external ID
-	GetContactByExternalID(ctx context.Context, externalID string) (*Contact, error)
+	GetContactByExternalID(ctx context.Context, workspaceID string, externalID string) (*Contact, error)
 
 	// GetContacts retrieves contacts with filters and pagination
 	GetContacts(ctx context.Context, req *GetContactsRequest) (*GetContactsResponse, error)
 
 	// DeleteContact deletes a contact by email
-	DeleteContact(ctx context.Context, email string) error
+	DeleteContact(ctx context.Context, workspaceID string, email string) error
 
 	// BatchImportContacts imports a batch of contacts (create or update)
-	BatchImportContacts(ctx context.Context, contacts []*Contact) error
+	BatchImportContacts(ctx context.Context, workspaceID string, contacts []*Contact) error
 
 	// UpsertContact creates a new contact or updates an existing one
 	// Returns a boolean indicating whether a new contact was created (true) or an existing one was updated (false)
-	UpsertContact(ctx context.Context, contact *Contact) (bool, error)
+	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (bool, error)
 }
 
 type ContactRepository interface {
 	// GetContactByEmail retrieves a contact by its email
-	GetContactByEmail(ctx context.Context, email string) (*Contact, error)
+	GetContactByEmail(ctx context.Context, workspaceID string, email string) (*Contact, error)
 
 	// GetContactByExternalID retrieves a contact by its external ID
-	GetContactByExternalID(ctx context.Context, externalID string) (*Contact, error)
+	GetContactByExternalID(ctx context.Context, workspaceID string, externalID string) (*Contact, error)
 
 	// GetContacts retrieves contacts with filters and pagination
 	GetContacts(ctx context.Context, req *GetContactsRequest) (*GetContactsResponse, error)
 
 	// DeleteContact deletes a contact
-	DeleteContact(ctx context.Context, email string) error
+	DeleteContact(ctx context.Context, workspaceID string, email string) error
 
 	// BatchImportContacts inserts or updates multiple contacts in a batch operation
-	BatchImportContacts(ctx context.Context, contacts []*Contact) error
+	BatchImportContacts(ctx context.Context, workspaceID string, contacts []*Contact) error
 
 	// UpsertContact creates a new contact or updates an existing one
-	UpsertContact(ctx context.Context, contact *Contact) (bool, error)
+	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (bool, error)
 }
 
 // ErrContactNotFound is returned when a contact is not found

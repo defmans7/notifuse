@@ -21,8 +21,8 @@ func NewContactService(repo domain.ContactRepository, logger logger.Logger) *Con
 	}
 }
 
-func (s *ContactService) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
-	contact, err := s.repo.GetContactByEmail(ctx, email)
+func (s *ContactService) GetContactByEmail(ctx context.Context, email string, workspaceID string) (*domain.Contact, error) {
+	contact, err := s.repo.GetContactByEmail(ctx, email, workspaceID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrContactNotFound); ok {
 			return nil, err
@@ -34,8 +34,8 @@ func (s *ContactService) GetContactByEmail(ctx context.Context, email string) (*
 	return contact, nil
 }
 
-func (s *ContactService) GetContactByExternalID(ctx context.Context, externalID string) (*domain.Contact, error) {
-	contact, err := s.repo.GetContactByExternalID(ctx, externalID)
+func (s *ContactService) GetContactByExternalID(ctx context.Context, externalID string, workspaceID string) (*domain.Contact, error) {
+	contact, err := s.repo.GetContactByExternalID(ctx, externalID, workspaceID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrContactNotFound); ok {
 			return nil, err
@@ -62,8 +62,8 @@ func (s *ContactService) GetContacts(ctx context.Context, req *domain.GetContact
 	return response, nil
 }
 
-func (s *ContactService) DeleteContact(ctx context.Context, email string) error {
-	if err := s.repo.DeleteContact(ctx, email); err != nil {
+func (s *ContactService) DeleteContact(ctx context.Context, email string, workspaceID string) error {
+	if err := s.repo.DeleteContact(ctx, email, workspaceID); err != nil {
 		s.logger.WithField("email", email).Error(fmt.Sprintf("Failed to delete contact: %v", err))
 		return fmt.Errorf("failed to delete contact: %w", err)
 	}
@@ -71,7 +71,7 @@ func (s *ContactService) DeleteContact(ctx context.Context, email string) error 
 	return nil
 }
 
-func (s *ContactService) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+func (s *ContactService) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
 	// Validate all contacts first
 	for i, contact := range contacts {
 		now := time.Now().UTC()
@@ -84,7 +84,7 @@ func (s *ContactService) BatchImportContacts(ctx context.Context, contacts []*do
 	}
 
 	// Process the batch
-	if err := s.repo.BatchImportContacts(ctx, contacts); err != nil {
+	if err := s.repo.BatchImportContacts(ctx, workspaceID, contacts); err != nil {
 		s.logger.WithField("contacts_count", len(contacts)).Error(fmt.Sprintf("Failed to batch import contacts: %v", err))
 		return fmt.Errorf("failed to batch import contacts: %w", err)
 	}
@@ -92,7 +92,7 @@ func (s *ContactService) BatchImportContacts(ctx context.Context, contacts []*do
 	return nil
 }
 
-func (s *ContactService) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
+func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
 	now := time.Now().UTC()
 	// Only set CreatedAt for new contacts
 	if contact.CreatedAt.IsZero() {
@@ -104,7 +104,7 @@ func (s *ContactService) UpsertContact(ctx context.Context, contact *domain.Cont
 		return false, fmt.Errorf("invalid contact: %w", err)
 	}
 
-	created, err := s.repo.UpsertContact(ctx, contact)
+	created, err := s.repo.UpsertContact(ctx, workspaceID, contact)
 	if err != nil {
 		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Failed to upsert contact: %v", err))
 		return false, fmt.Errorf("failed to upsert contact: %w", err)

@@ -12,19 +12,23 @@ import (
 )
 
 type contactRepository struct {
-	db            *sql.DB
 	workspaceRepo domain.WorkspaceRepository
 }
 
 // NewContactRepository creates a new PostgreSQL contact repository
-func NewContactRepository(db *sql.DB, workspaceRepo domain.WorkspaceRepository) domain.ContactRepository {
+func NewContactRepository(workspaceRepo domain.WorkspaceRepository) domain.ContactRepository {
 	return &contactRepository{
-		db:            db,
 		workspaceRepo: workspaceRepo,
 	}
 }
 
-func (r *contactRepository) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
+func (r *contactRepository) GetContactByEmail(ctx context.Context, email string, workspaceID string) (*domain.Contact, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	query := `
 		SELECT 
 			email, external_id, timezone, language,
@@ -40,7 +44,7 @@ func (r *contactRepository) GetContactByEmail(ctx context.Context, email string)
 		WHERE email = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, email)
+	row := workspaceDB.QueryRowContext(ctx, query, email)
 	contact, err := domain.ScanContact(row)
 
 	if err == sql.ErrNoRows {
@@ -53,7 +57,13 @@ func (r *contactRepository) GetContactByEmail(ctx context.Context, email string)
 	return contact, nil
 }
 
-func (r *contactRepository) GetContactByExternalID(ctx context.Context, externalID string) (*domain.Contact, error) {
+func (r *contactRepository) GetContactByExternalID(ctx context.Context, externalID string, workspaceID string) (*domain.Contact, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	query := `
 		SELECT 
 			email, external_id, timezone, language,
@@ -69,7 +79,7 @@ func (r *contactRepository) GetContactByExternalID(ctx context.Context, external
 		WHERE external_id = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, externalID)
+	row := workspaceDB.QueryRowContext(ctx, query, externalID)
 	contact, err := domain.ScanContact(row)
 
 	if err == sql.ErrNoRows {
@@ -204,10 +214,16 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 	}, nil
 }
 
-func (r *contactRepository) DeleteContact(ctx context.Context, email string) error {
+func (r *contactRepository) DeleteContact(ctx context.Context, email string, workspaceID string) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	query := `DELETE FROM contacts WHERE email = $1`
 
-	result, err := r.db.ExecContext(ctx, query, email)
+	result, err := workspaceDB.ExecContext(ctx, query, email)
 	if err != nil {
 		return fmt.Errorf("failed to delete contact: %w", err)
 	}
@@ -224,9 +240,15 @@ func (r *contactRepository) DeleteContact(ctx context.Context, email string) err
 	return nil
 }
 
-func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []*domain.Contact) error {
+func (r *contactRepository) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	// Prepare a transaction
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := workspaceDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -490,9 +512,16 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, contacts []
 	return nil
 }
 
-func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.Contact) (bool, error) {
+func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
+
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	// Check if contact exists first
-	_, err := r.GetContactByEmail(ctx, contact.Email)
+	_, err = r.GetContactByEmail(ctx, contact.Email, workspaceID)
 	isNew := err != nil && err.Error() == (&domain.ErrContactNotFound{Message: "contact not found"}).Error()
 
 	// If there was an error other than "not found", return it
@@ -698,7 +727,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, contact *domain.C
 		timezoneSQL = sql.NullString{String: contact.Timezone.String, Valid: true}
 	}
 
-	_, err = r.db.ExecContext(ctx, query,
+	_, err = workspaceDB.ExecContext(ctx, query,
 		contact.Email,
 		externalIDSQL,
 		timezoneSQL,

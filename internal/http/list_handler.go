@@ -20,33 +20,6 @@ func NewListHandler(service domain.ListService, logger logger.Logger) *ListHandl
 	}
 }
 
-// Request/Response types
-type createListRequest struct {
-	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name          string `json:"name" valid:"required,stringlength(1|255)"`
-	Type          string `json:"type" valid:"required,in(public|private)"`
-	IsDoubleOptin bool   `json:"is_double_optin"`
-	IsPublic      bool   `json:"is_public"`
-	Description   string `json:"description,omitempty"`
-}
-
-type getListRequest struct {
-	ID string `json:"id"`
-}
-
-type updateListRequest struct {
-	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name          string `json:"name" valid:"required,stringlength(1|255)"`
-	Type          string `json:"type" valid:"required,in(public|private)"`
-	IsDoubleOptin bool   `json:"is_double_optin"`
-	IsPublic      bool   `json:"is_public"`
-	Description   string `json:"description,omitempty"`
-}
-
-type deleteListRequest struct {
-	ID string `json:"id"`
-}
-
 func (h *ListHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Register RPC-style endpoints with dot notation
 	mux.HandleFunc("/api/lists.list", h.handleList)
@@ -62,7 +35,13 @@ func (h *ListHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lists, err := h.service.GetLists(r.Context())
+	var req domain.GetListsRequest
+	if err := req.FromURLParams(r.URL.Query()); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	lists, err := h.service.GetLists(r.Context(), req.WorkspaceID)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get lists")
 		WriteJSONError(w, "Failed to get lists", http.StatusInternalServerError)
@@ -78,14 +57,13 @@ func (h *ListHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get list ID from query params
-	listID := r.URL.Query().Get("id")
-	if listID == "" {
-		WriteJSONError(w, "Missing list ID", http.StatusBadRequest)
+	var req domain.GetListRequest
+	if err := req.FromURLParams(r.URL.Query()); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	list, err := h.service.GetListByID(r.Context(), listID)
+	list, err := h.service.GetListByID(r.Context(), req.WorkspaceID, req.ID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrListNotFound); ok {
 			WriteJSONError(w, "List not found", http.StatusNotFound)
@@ -107,23 +85,20 @@ func (h *ListHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req createListRequest
+	var req domain.CreateListRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	list := &domain.List{
-		ID:            req.ID,
-		Name:          req.Name,
-		Type:          req.Type,
-		IsDoubleOptin: req.IsDoubleOptin,
-		IsPublic:      req.IsPublic,
-		Description:   req.Description,
+	list, workspaceID, err := req.Validate()
+	if err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	if err := h.service.CreateList(r.Context(), list); err != nil {
+	if err := h.service.CreateList(r.Context(), workspaceID, list); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to create list")
 		WriteJSONError(w, "Failed to create list", http.StatusInternalServerError)
 		return
@@ -140,28 +115,20 @@ func (h *ListHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req updateListRequest
+	var req domain.UpdateListRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.ID == "" {
-		WriteJSONError(w, "Missing ID", http.StatusBadRequest)
+	list, workspaceID, err := req.Validate()
+	if err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	list := &domain.List{
-		ID:            req.ID,
-		Name:          req.Name,
-		Type:          req.Type,
-		IsDoubleOptin: req.IsDoubleOptin,
-		IsPublic:      req.IsPublic,
-		Description:   req.Description,
-	}
-
-	if err := h.service.UpdateList(r.Context(), list); err != nil {
+	if err := h.service.UpdateList(r.Context(), workspaceID, list); err != nil {
 		if _, ok := err.(*domain.ErrListNotFound); ok {
 			WriteJSONError(w, "List not found", http.StatusNotFound)
 			return
@@ -182,19 +149,20 @@ func (h *ListHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req deleteListRequest
+	var req domain.DeleteListRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.ID == "" {
-		WriteJSONError(w, "Missing ID", http.StatusBadRequest)
+	workspaceID, err := req.Validate()
+	if err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := h.service.DeleteList(r.Context(), req.ID); err != nil {
+	if err := h.service.DeleteList(r.Context(), workspaceID, req.ID); err != nil {
 		if _, ok := err.(*domain.ErrListNotFound); ok {
 			WriteJSONError(w, "List not found", http.StatusNotFound)
 			return
