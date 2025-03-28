@@ -219,10 +219,20 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req domain.UpsertContactRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		WriteJSONError(w, "Invalid JSON format", http.StatusBadRequest)
+	// Parse the request body to get workspace_id and contact
+	var requestData struct {
+		WorkspaceID string          `json:"workspace_id"`
+		Contact     json.RawMessage `json:"contact"`
+	}
+	if err := json.Unmarshal(body, &requestData); err != nil {
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+
+	// Create the request with the parsed data
+	req := domain.UpsertContactRequest{
+		WorkspaceID: requestData.WorkspaceID,
+		Contact:     requestData.Contact,
 	}
 
 	contact, workspaceID, err := req.Validate()

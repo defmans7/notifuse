@@ -1305,8 +1305,8 @@ func TestBatchImportContactsRequest_Validate(t *testing.T) {
 }
 
 func TestUpsertContactRequest_Validate(t *testing.T) {
-	validContact := `{"contact":{"email":"test@example.com"}}`
-	invalidContact := `{"contact":{"email":"invalid-email"}}`
+	validContact := `{"email":"test@example.com"}`
+	invalidContact := `{"email":"invalid-email"}`
 
 	tests := []struct {
 		name    string

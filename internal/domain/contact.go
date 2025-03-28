@@ -492,11 +492,10 @@ func (r *UpsertContactRequest) Validate() (contact *Contact, workspaceID string,
 		return nil, "", fmt.Errorf("workspace_id is required")
 	}
 	jsonResult := gjson.ParseBytes(r.Contact)
-	contactData := jsonResult.Get("contact")
-	if !contactData.Exists() {
+	if !jsonResult.Exists() {
 		return nil, "", fmt.Errorf("contact field is required")
 	}
-	contact, err = FromJSON(contactData)
+	contact, err = FromJSON(jsonResult)
 	if err != nil {
 		return nil, "", fmt.Errorf("invalid contact: %w", err)
 	}

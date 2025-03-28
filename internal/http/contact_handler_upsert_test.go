@@ -27,11 +27,14 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:   "Create Contact Without UUID",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"external_id": "new-ext",
-				"email":       "new@example.com",
-				"first_name":  "John",
-				"last_name":   "Doe",
-				"timezone":    "UTC",
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "new-ext",
+					"email":       "new@example.com",
+					"first_name":  "John",
+					"last_name":   "Doe",
+					"timezone":    "UTC",
+				},
 			},
 			setupMock: func(m *MockContactService) {
 				// Reset mock state
@@ -57,11 +60,14 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:   "Create Contact With Email",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"external_id": "new-ext",
-				"email":       "new@example.com",
-				"first_name":  "John",
-				"last_name":   "Doe",
-				"timezone":    "UTC",
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "new-ext",
+					"email":       "new@example.com",
+					"first_name":  "John",
+					"last_name":   "Doe",
+					"timezone":    "UTC",
+				},
 			},
 			setupMock: func(m *MockContactService) {
 				// Reset mock state
@@ -87,9 +93,12 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:   "Update Existing Contact",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"external_id": "updated-ext",
-				"email":       "old@example.com",
-				"timezone":    "UTC",
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "updated-ext",
+					"email":       "old@example.com",
+					"timezone":    "UTC",
+				},
 			},
 			setupMock: func(m *MockContactService) {
 				// Reset mock state
@@ -190,9 +199,12 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:   "Service Error on Upsert",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"external_id": "ext1",
-				"email":       "test@example.com",
-				"timezone":    "UTC",
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "ext1",
+					"email":       "test@example.com",
+					"timezone":    "UTC",
+				},
 			},
 			setupMock: func(m *MockContactService) {
 				m.UpsertContactCalled = false
@@ -280,13 +292,16 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 
 	// Test case 1: Successful upsert with custom JSON fields
 	reqBody := `{
-		"email": "test@example.com",
-		"external_id": "ext123",
-		"timezone": "Europe/Paris",
-		"language": "en-US",
-		"custom_json_1": {"key": "value1"},
-		"custom_json_2": null,
-		"custom_json_3": {"key": "value3"}
+		"workspace_id": "workspace123",
+		"contact": {
+			"email": "test@example.com",
+			"external_id": "ext123",
+			"timezone": "Europe/Paris",
+			"language": "en-US",
+			"custom_json_1": {"key": "value1"},
+			"custom_json_2": null,
+			"custom_json_3": {"key": "value3"}
+		}
 	}`
 
 	req, err := http.NewRequest(http.MethodPost, "/api/contacts.upsert", strings.NewReader(reqBody))

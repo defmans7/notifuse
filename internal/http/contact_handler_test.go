@@ -359,7 +359,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 		handler := NewContactHandler(mockService, mockLogger)
 
 		// Create request with query parameters
-		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspaceId=workspace123&limit=2", nil)
+		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspace_id=workspace123&limit=2", nil)
 		response := httptest.NewRecorder()
 
 		// Act
@@ -379,7 +379,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 		mockService.ErrToReturn = errors.New("service error")
 
 		// Create request with query parameters
-		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspaceId=workspace123&limit=2", nil)
+		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspace_id=workspace123&limit=2", nil)
 		response := httptest.NewRecorder()
 
 		// Act
@@ -413,7 +413,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
-		// Create request without required workspaceId
+		// Create request without required workspace_id
 		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list", nil)
 		response := httptest.NewRecorder()
 
@@ -500,7 +500,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 
 			url := "/api/contacts.getByEmail"
 			if tc.contactEmail != "" {
-				url += "?email=" + tc.contactEmail
+				url += "?workspace_id=workspace123&email=" + tc.contactEmail
 			}
 
 			req, err := http.NewRequest(tc.method, url, nil)
@@ -629,7 +629,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 
 			url := "/api/contacts.getByExternalID"
 			if tc.externalID != "" {
-				url += "?external_id=" + tc.externalID
+				url += "?workspace_id=workspace123&external_id=" + tc.externalID
 			}
 
 			req, err := http.NewRequest(tc.method, url, nil)
@@ -709,7 +709,8 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Delete Contact Success",
 			method: http.MethodPost,
 			reqBody: domain.DeleteContactRequest{
-				Email: "test@example.com",
+				WorkspaceID: "workspace123",
+				Email:       "test@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				m.contacts = map[string]*domain.Contact{
@@ -734,7 +735,8 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Delete Contact Not Found",
 			method: http.MethodPost,
 			reqBody: domain.DeleteContactRequest{
-				Email: "nonexistent@example.com",
+				WorkspaceID: "workspace123",
+				Email:       "nonexistent@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				m.ErrContactNotFoundToReturn = true
@@ -750,7 +752,8 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Delete Contact Service Error",
 			method: http.MethodPost,
 			reqBody: domain.DeleteContactRequest{
-				Email: "error@example.com",
+				WorkspaceID: "workspace123",
+				Email:       "error@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				m.ErrToReturn = errors.New("service error")
@@ -780,7 +783,8 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Missing Email in Request",
 			method: http.MethodPost,
 			reqBody: domain.DeleteContactRequest{
-				Email: "", // Empty Email
+				WorkspaceID: "workspace123",
+				Email:       "", // Empty Email
 			},
 			setupMock: func(m *MockContactService) {
 				// No special setup
@@ -796,7 +800,8 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
 			reqBody: domain.DeleteContactRequest{
-				Email: "test@example.com",
+				WorkspaceID: "workspace123",
+				Email:       "test@example.com",
 			},
 			setupMock: func(m *MockContactService) {
 				// No special setup
@@ -872,6 +877,7 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			name:   "successful batch import",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
+				"workspace_id": "workspace123",
 				"contacts": []map[string]interface{}{
 					{
 						"email":       "contact1@example.com",
@@ -899,6 +905,7 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			name:   "service error",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
+				"workspace_id": "workspace123",
 				"contacts": []map[string]interface{}{
 					{
 						"email":       "contact1@example.com",
@@ -920,14 +927,15 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			name:   "invalid request - empty contacts",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
-				"contacts": []map[string]interface{}{},
+				"workspace_id": "workspace123",
+				"contacts":     []map[string]interface{}{},
 			},
 			setupMock: func(m *MockContactService) {
 				// Should not be called
 				m.BatchImportContactsCalled = false
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "No contacts provided in request",
+			expectedMessage: "contacts array is empty",
 			checkImported: func(t *testing.T, m *MockContactService) {
 				assert.Equal(t, false, m.BatchImportContactsCalled)
 			},
@@ -936,6 +944,7 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			name:   "method not allowed",
 			method: http.MethodGet,
 			reqBody: map[string]interface{}{
+				"workspace_id": "workspace123",
 				"contacts": []map[string]interface{}{
 					{
 						"email":       "contact1@example.com",
