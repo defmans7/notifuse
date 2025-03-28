@@ -62,7 +62,7 @@ func (m *MockContactService) GetContacts(ctx context.Context, req *domain.GetCon
 	}, nil
 }
 
-func (m *MockContactService) GetContactByEmail(ctx context.Context, email string) (*domain.Contact, error) {
+func (m *MockContactService) GetContactByEmail(ctx context.Context, workspaceID string, email string) (*domain.Contact, error) {
 	m.GetContactByEmailCalled = true
 	m.LastContactEmail = email
 	if m.ErrToReturn != nil {
@@ -80,7 +80,7 @@ func (m *MockContactService) GetContactByEmail(ctx context.Context, email string
 	return nil, &domain.ErrContactNotFound{}
 }
 
-func (m *MockContactService) GetContactByExternalID(ctx context.Context, externalID string) (*domain.Contact, error) {
+func (m *MockContactService) GetContactByExternalID(ctx context.Context, workspaceID string, externalID string) (*domain.Contact, error) {
 	m.GetContactByExternalIDCalled = true
 	m.LastContactExternalID = externalID
 	if m.ErrToReturn != nil {
@@ -708,7 +708,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 		{
 			name:   "Delete Contact Success",
 			method: http.MethodPost,
-			reqBody: deleteContactRequest{
+			reqBody: domain.DeleteContactRequest{
 				Email: "test@example.com",
 			},
 			setupMock: func(m *MockContactService) {
@@ -733,7 +733,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 		{
 			name:   "Delete Contact Not Found",
 			method: http.MethodPost,
-			reqBody: deleteContactRequest{
+			reqBody: domain.DeleteContactRequest{
 				Email: "nonexistent@example.com",
 			},
 			setupMock: func(m *MockContactService) {
@@ -749,7 +749,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 		{
 			name:   "Delete Contact Service Error",
 			method: http.MethodPost,
-			reqBody: deleteContactRequest{
+			reqBody: domain.DeleteContactRequest{
 				Email: "error@example.com",
 			},
 			setupMock: func(m *MockContactService) {
@@ -779,7 +779,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 		{
 			name:   "Missing Email in Request",
 			method: http.MethodPost,
-			reqBody: deleteContactRequest{
+			reqBody: domain.DeleteContactRequest{
 				Email: "", // Empty Email
 			},
 			setupMock: func(m *MockContactService) {
@@ -795,7 +795,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 		{
 			name:   "Method Not Allowed",
 			method: http.MethodGet,
-			reqBody: deleteContactRequest{
+			reqBody: domain.DeleteContactRequest{
 				Email: "test@example.com",
 			},
 			setupMock: func(m *MockContactService) {
