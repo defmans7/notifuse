@@ -28,12 +28,13 @@ func TestCreateList(t *testing.T) {
 		Name:          "Test List",
 		Type:          "public",
 		IsDoubleOptin: true,
+		IsPublic:      true,
 		Description:   "This is a test list",
 	}
 
-	mock.ExpectExec(`INSERT INTO lists`).
+	mock.ExpectExec(`INSERT INTO lists \(id, name, type, is_double_optin, is_public, description, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
 		WithArgs(
-			list.ID, list.Name, list.Type, list.IsDoubleOptin, list.Description,
+			list.ID, list.Name, list.Type, list.IsDoubleOptin, list.IsPublic, list.Description,
 			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -47,12 +48,13 @@ func TestCreateList(t *testing.T) {
 		Name:          "Error List",
 		Type:          "public",
 		IsDoubleOptin: false,
+		IsPublic:      false,
 		Description:   "This list will cause an error",
 	}
 
-	mock.ExpectExec(`INSERT INTO lists`).
+	mock.ExpectExec(`INSERT INTO lists \(id, name, type, is_double_optin, is_public, description, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
 		WithArgs(
-			listWithError.ID, listWithError.Name, listWithError.Type, listWithError.IsDoubleOptin, listWithError.Description,
+			listWithError.ID, listWithError.Name, listWithError.Type, listWithError.IsDoubleOptin, listWithError.IsPublic, listWithError.Description,
 			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnError(errors.New("database error"))
@@ -73,13 +75,13 @@ func TestGetListByID(t *testing.T) {
 
 	// Test case 1: List found
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "type", "is_double_optin", "description", "created_at", "updated_at",
+		"id", "name", "type", "is_double_optin", "is_public", "description", "created_at", "updated_at",
 	}).
 		AddRow(
-			listID, "Test List", "public", true, "This is a test list", now, now,
+			listID, "Test List", "public", true, true, "This is a test list", now, now,
 		)
 
-	mock.ExpectQuery(`SELECT (.+) FROM lists WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at FROM lists WHERE id = \$1`).
 		WithArgs(listID).
 		WillReturnRows(rows)
 
@@ -89,10 +91,11 @@ func TestGetListByID(t *testing.T) {
 	assert.Equal(t, "Test List", list.Name)
 	assert.Equal(t, "public", list.Type)
 	assert.Equal(t, true, list.IsDoubleOptin)
+	assert.Equal(t, true, list.IsPublic)
 	assert.Equal(t, "This is a test list", list.Description)
 
 	// Test case 2: List not found
-	mock.ExpectQuery(`SELECT (.+) FROM lists WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at FROM lists WHERE id = \$1`).
 		WithArgs("nonexistent").
 		WillReturnError(sql.ErrNoRows)
 
@@ -102,7 +105,7 @@ func TestGetListByID(t *testing.T) {
 	assert.Nil(t, list)
 
 	// Test case 3: Database error
-	mock.ExpectQuery(`SELECT (.+) FROM lists WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at FROM lists WHERE id = \$1`).
 		WithArgs("error").
 		WillReturnError(errors.New("database error"))
 
@@ -122,16 +125,16 @@ func TestGetLists(t *testing.T) {
 
 	// Test case 1: Multiple lists found
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "type", "is_double_optin", "description", "created_at", "updated_at",
+		"id", "name", "type", "is_double_optin", "is_public", "description", "created_at", "updated_at",
 	}).
 		AddRow(
-			"list1", "Test List 1", "public", true, "Description 1", now, now,
+			"list1", "Test List 1", "public", true, true, "Description 1", now, now,
 		).
 		AddRow(
-			"list2", "Test List 2", "private", false, "Description 2", now, now,
+			"list2", "Test List 2", "private", false, false, "Description 2", now, now,
 		)
 
-	mock.ExpectQuery(`SELECT (.+) FROM lists ORDER BY created_at DESC`).
+	mock.ExpectQuery(`SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at FROM lists ORDER BY created_at DESC`).
 		WillReturnRows(rows)
 
 	lists, err := repo.GetLists(context.Background())
@@ -141,13 +144,15 @@ func TestGetLists(t *testing.T) {
 	assert.Equal(t, "list2", lists[1].ID)
 	assert.Equal(t, "Test List 1", lists[0].Name)
 	assert.Equal(t, "Test List 2", lists[1].Name)
+	assert.Equal(t, true, lists[0].IsPublic)
+	assert.Equal(t, false, lists[1].IsPublic)
 
 	// Test case 2: No lists found (empty result)
 	emptyRows := sqlmock.NewRows([]string{
-		"id", "name", "type", "is_double_optin", "description", "created_at", "updated_at",
+		"id", "name", "type", "is_double_optin", "is_public", "description", "created_at", "updated_at",
 	})
 
-	mock.ExpectQuery(`SELECT (.+) FROM lists ORDER BY created_at DESC`).
+	mock.ExpectQuery(`SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at FROM lists ORDER BY created_at DESC`).
 		WillReturnRows(emptyRows)
 
 	lists, err = repo.GetLists(context.Background())
@@ -155,7 +160,7 @@ func TestGetLists(t *testing.T) {
 	assert.Empty(t, lists)
 
 	// Test case 3: Database error
-	mock.ExpectQuery(`SELECT (.+) FROM lists ORDER BY created_at DESC`).
+	mock.ExpectQuery(`SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at FROM lists ORDER BY created_at DESC`).
 		WillReturnError(errors.New("database error"))
 
 	lists, err = repo.GetLists(context.Background())
@@ -177,12 +182,13 @@ func TestUpdateList(t *testing.T) {
 		Name:          "Updated List",
 		Type:          "private",
 		IsDoubleOptin: true,
+		IsPublic:      true,
 		Description:   "This list has been updated",
 	}
 
-	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, description = \$4, updated_at = \$5 WHERE id = \$6`).
+	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, is_public = \$4, description = \$5, updated_at = \$6 WHERE id = \$7`).
 		WithArgs(
-			list.Name, list.Type, list.IsDoubleOptin, list.Description,
+			list.Name, list.Type, list.IsDoubleOptin, list.IsPublic, list.Description,
 			sqlmock.AnyArg(), list.ID,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -196,12 +202,13 @@ func TestUpdateList(t *testing.T) {
 		Name:          "Nonexistent List",
 		Type:          "public",
 		IsDoubleOptin: false,
+		IsPublic:      false,
 		Description:   "This list doesn't exist",
 	}
 
-	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, description = \$4, updated_at = \$5 WHERE id = \$6`).
+	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, is_public = \$4, description = \$5, updated_at = \$6 WHERE id = \$7`).
 		WithArgs(
-			notFoundList.Name, notFoundList.Type, notFoundList.IsDoubleOptin, notFoundList.Description,
+			notFoundList.Name, notFoundList.Type, notFoundList.IsDoubleOptin, notFoundList.IsPublic, notFoundList.Description,
 			sqlmock.AnyArg(), notFoundList.ID,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -216,12 +223,13 @@ func TestUpdateList(t *testing.T) {
 		Name:          "Error List",
 		Type:          "public",
 		IsDoubleOptin: false,
+		IsPublic:      false,
 		Description:   "This list causes an error",
 	}
 
-	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, description = \$4, updated_at = \$5 WHERE id = \$6`).
+	mock.ExpectExec(`UPDATE lists SET name = \$1, type = \$2, is_double_optin = \$3, is_public = \$4, description = \$5, updated_at = \$6 WHERE id = \$7`).
 		WithArgs(
-			errorList.Name, errorList.Type, errorList.IsDoubleOptin, errorList.Description,
+			errorList.Name, errorList.Type, errorList.IsDoubleOptin, errorList.IsPublic, errorList.Description,
 			sqlmock.AnyArg(), errorList.ID,
 		).
 		WillReturnError(errors.New("database error"))

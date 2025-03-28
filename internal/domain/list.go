@@ -14,6 +14,7 @@ type List struct {
 	Name          string    `json:"name" valid:"required,stringlength(1|255)"`
 	Type          string    `json:"type" valid:"required,in(public|private)"`
 	IsDoubleOptin bool      `json:"is_double_optin" db:"is_double_optin"`
+	IsPublic      bool      `json:"is_public" db:"is_public"`
 	Description   string    `json:"description,omitempty" valid:"optional"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
@@ -33,6 +34,7 @@ type dbList struct {
 	Name          string
 	Type          string
 	IsDoubleOptin bool
+	IsPublic      bool
 	Description   string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
@@ -48,6 +50,7 @@ func ScanList(scanner interface {
 		&dbl.Name,
 		&dbl.Type,
 		&dbl.IsDoubleOptin,
+		&dbl.IsPublic,
 		&dbl.Description,
 		&dbl.CreatedAt,
 		&dbl.UpdatedAt,
@@ -60,6 +63,7 @@ func ScanList(scanner interface {
 		Name:          dbl.Name,
 		Type:          dbl.Type,
 		IsDoubleOptin: dbl.IsDoubleOptin,
+		IsPublic:      dbl.IsPublic,
 		Description:   dbl.Description,
 		CreatedAt:     dbl.CreatedAt,
 		UpdatedAt:     dbl.UpdatedAt,

@@ -54,14 +54,15 @@ func (r *listRepository) CreateList(ctx context.Context, list *domain.List) erro
 	list.UpdatedAt = now
 
 	query := `
-		INSERT INTO lists (id, name, type, is_double_optin, description, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO lists (id, name, type, is_double_optin, is_public, description, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err = workspaceDB.ExecContext(ctx, query,
 		list.ID,
 		list.Name,
 		list.Type,
 		list.IsDoubleOptin,
+		list.IsPublic,
 		list.Description,
 		list.CreatedAt,
 		list.UpdatedAt,
@@ -79,14 +80,15 @@ func (r *listRepository) createListInMainDB(ctx context.Context, list *domain.Li
 	list.UpdatedAt = now
 
 	query := `
-		INSERT INTO lists (id, name, type, is_double_optin, description, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO lists (id, name, type, is_double_optin, is_public, description, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		list.ID,
 		list.Name,
 		list.Type,
 		list.IsDoubleOptin,
+		list.IsPublic,
 		list.Description,
 		list.CreatedAt,
 		list.UpdatedAt,
@@ -112,7 +114,7 @@ func (r *listRepository) GetListByID(ctx context.Context, id string) (*domain.Li
 	}
 
 	query := `
-		SELECT id, name, type, is_double_optin, description, created_at, updated_at
+		SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
 		FROM lists
 		WHERE id = $1
 	`
@@ -133,7 +135,7 @@ func (r *listRepository) GetListByID(ctx context.Context, id string) (*domain.Li
 // Fallback method for main database operations
 func (r *listRepository) getListByIDFromMainDB(ctx context.Context, id string) (*domain.List, error) {
 	query := `
-		SELECT id, name, type, is_double_optin, description, created_at, updated_at
+		SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
 		FROM lists
 		WHERE id = $1
 	`
@@ -166,7 +168,7 @@ func (r *listRepository) GetLists(ctx context.Context) ([]*domain.List, error) {
 	}
 
 	query := `
-		SELECT id, name, type, is_double_optin, description, created_at, updated_at
+		SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
 		FROM lists
 		ORDER BY created_at DESC
 	`
@@ -196,7 +198,7 @@ func (r *listRepository) GetLists(ctx context.Context) ([]*domain.List, error) {
 // Fallback method for main database operations
 func (r *listRepository) getListsFromMainDB(ctx context.Context) ([]*domain.List, error) {
 	query := `
-		SELECT id, name, type, is_double_optin, description, created_at, updated_at
+		SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
 		FROM lists
 		ORDER BY created_at DESC
 	`
@@ -241,14 +243,15 @@ func (r *listRepository) UpdateList(ctx context.Context, list *domain.List) erro
 
 	query := `
 		UPDATE lists
-		SET name = $1, type = $2, is_double_optin = $3, description = $4, updated_at = $5
-		WHERE id = $6
+		SET name = $1, type = $2, is_double_optin = $3, is_public = $4, description = $5, updated_at = $6
+		WHERE id = $7
 	`
 
 	result, err := workspaceDB.ExecContext(ctx, query,
 		list.Name,
 		list.Type,
 		list.IsDoubleOptin,
+		list.IsPublic,
 		list.Description,
 		list.UpdatedAt,
 		list.ID,
@@ -276,14 +279,15 @@ func (r *listRepository) updateListInMainDB(ctx context.Context, list *domain.Li
 
 	query := `
 		UPDATE lists
-		SET name = $1, type = $2, is_double_optin = $3, description = $4, updated_at = $5
-		WHERE id = $6
+		SET name = $1, type = $2, is_double_optin = $3, is_public = $4, description = $5, updated_at = $6
+		WHERE id = $7
 	`
 
 	result, err := r.db.ExecContext(ctx, query,
 		list.Name,
 		list.Type,
 		list.IsDoubleOptin,
+		list.IsPublic,
 		list.Description,
 		list.UpdatedAt,
 		list.ID,

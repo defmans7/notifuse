@@ -147,6 +147,7 @@ export function Filter({ fields, activeFilters, className }: FilterProps) {
             <Popover
               key={field.key}
               trigger="click"
+              placement="bottom"
               open={openPopovers[field.key]}
               onOpenChange={(visible) => {
                 // When opening the popover, ensure tempValues has the current active value
@@ -162,12 +163,13 @@ export function Filter({ fields, activeFilters, className }: FilterProps) {
                 setOpenPopovers((prev) => ({ ...prev, [field.key]: visible }))
               }}
               content={
-                <div className="p-2 space-y-2">
+                <div className="space-y-2" style={{ width: '200px' }}>
                   {renderFilterInput(field.key)}
                   {activeFilters.some((f) => f.field === field.key) ? (
-                    <div className="flex w-full gap-2">
+                    <div className="flex w-full gap-2 mt-6">
                       <Button
                         type="primary"
+                        size="small"
                         style={{ width: '50%' }}
                         onClick={() => handleConfirm(field.key)}
                         disabled={
@@ -178,6 +180,7 @@ export function Filter({ fields, activeFilters, className }: FilterProps) {
                       </Button>
                       <Button
                         danger
+                        size="small"
                         style={{ width: '50%' }}
                         onClick={() => handleClear(field.key)}
                       >
@@ -187,6 +190,7 @@ export function Filter({ fields, activeFilters, className }: FilterProps) {
                   ) : (
                     <Button
                       type="primary"
+                      size="small"
                       block
                       onClick={() => handleConfirm(field.key)}
                       disabled={tempValues[field.key] === undefined || tempValues[field.key] === ''}

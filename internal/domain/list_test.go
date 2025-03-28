@@ -89,6 +89,7 @@ func TestScanList(t *testing.T) {
 			"My List",        // Name
 			"public",         // Type
 			true,             // IsDoubleOptin
+			true,             // IsPublic
 			"This is a list", // Description
 			time.Now(),       // CreatedAt
 			time.Now(),       // UpdatedAt
@@ -102,6 +103,7 @@ func TestScanList(t *testing.T) {
 	assert.Equal(t, "My List", list.Name)
 	assert.Equal(t, "public", list.Type)
 	assert.Equal(t, true, list.IsDoubleOptin)
+	assert.Equal(t, true, list.IsPublic)
 	assert.Equal(t, "This is a list", list.Description)
 
 	// Test scan error

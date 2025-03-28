@@ -108,6 +108,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			name VARCHAR(255) NOT NULL,
 			type VARCHAR(20) NOT NULL,
 			is_double_optin BOOLEAN NOT NULL DEFAULT FALSE,
+			is_public BOOLEAN NOT NULL DEFAULT FALSE,
 			description TEXT,
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -37,7 +36,6 @@ func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id str
 	query := `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`
 	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(&exists)
 	if err != nil {
-		log.Printf("failed to check workspace ID existence: %v", err)
 		return false, fmt.Errorf("failed to check workspace ID existence: %w", err)
 	}
 	return exists, nil

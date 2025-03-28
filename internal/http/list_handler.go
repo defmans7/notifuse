@@ -26,6 +26,7 @@ type createListRequest struct {
 	Name          string `json:"name" valid:"required,stringlength(1|255)"`
 	Type          string `json:"type" valid:"required,in(public|private)"`
 	IsDoubleOptin bool   `json:"is_double_optin"`
+	IsPublic      bool   `json:"is_public"`
 	Description   string `json:"description,omitempty"`
 }
 
@@ -38,6 +39,7 @@ type updateListRequest struct {
 	Name          string `json:"name" valid:"required,stringlength(1|255)"`
 	Type          string `json:"type" valid:"required,in(public|private)"`
 	IsDoubleOptin bool   `json:"is_double_optin"`
+	IsPublic      bool   `json:"is_public"`
 	Description   string `json:"description,omitempty"`
 }
 
@@ -117,6 +119,7 @@ func (h *ListHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Name:          req.Name,
 		Type:          req.Type,
 		IsDoubleOptin: req.IsDoubleOptin,
+		IsPublic:      req.IsPublic,
 		Description:   req.Description,
 	}
 
@@ -154,6 +157,7 @@ func (h *ListHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		Name:          req.Name,
 		Type:          req.Type,
 		IsDoubleOptin: req.IsDoubleOptin,
+		IsPublic:      req.IsPublic,
 		Description:   req.Description,
 	}
 
