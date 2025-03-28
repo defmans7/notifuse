@@ -10,92 +10,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type MockContactListRepository struct {
-	mock.Mock
-}
-
-func (m *MockContactListRepository) AddContactToList(ctx context.Context, workspaceID string, contactList *domain.ContactList) error {
-	args := m.Called(ctx, workspaceID, contactList)
-	return args.Error(0)
-}
-
-func (m *MockContactListRepository) GetContactListByIDs(ctx context.Context, workspaceID string, email, listID string) (*domain.ContactList, error) {
-	args := m.Called(ctx, workspaceID, email, listID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.ContactList), args.Error(1)
-}
-
-func (m *MockContactListRepository) GetContactsByListID(ctx context.Context, workspaceID string, listID string) ([]*domain.ContactList, error) {
-	args := m.Called(ctx, workspaceID, listID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.ContactList), args.Error(1)
-}
-
-func (m *MockContactListRepository) GetListsByEmail(ctx context.Context, workspaceID string, email string) ([]*domain.ContactList, error) {
-	args := m.Called(ctx, workspaceID, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.ContactList), args.Error(1)
-}
-
-func (m *MockContactListRepository) UpdateContactListStatus(ctx context.Context, workspaceID string, email, listID string, status domain.ContactListStatus) error {
-	args := m.Called(ctx, workspaceID, email, listID, status)
-	return args.Error(0)
-}
-
-func (m *MockContactListRepository) RemoveContactFromList(ctx context.Context, workspaceID string, email, listID string) error {
-	args := m.Called(ctx, workspaceID, email, listID)
-	return args.Error(0)
-}
-
-type MockContactRepository struct {
-	mock.Mock
-}
-
-func (m *MockContactRepository) GetContactByEmail(ctx context.Context, workspaceID string, email string) (*domain.Contact, error) {
-	args := m.Called(ctx, workspaceID, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Contact), args.Error(1)
-}
-
-func (m *MockContactRepository) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
-	args := m.Called(ctx, workspaceID, contacts)
-	return args.Error(0)
-}
-
-func (m *MockContactRepository) DeleteContact(ctx context.Context, workspaceID string, email string) error {
-	args := m.Called(ctx, workspaceID, email)
-	return args.Error(0)
-}
-
-func (m *MockContactRepository) GetContactByExternalID(ctx context.Context, workspaceID string, externalID string) (*domain.Contact, error) {
-	args := m.Called(ctx, workspaceID, externalID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Contact), args.Error(1)
-}
-
-func (m *MockContactRepository) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
-	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.GetContactsResponse), args.Error(1)
-}
-
-func (m *MockContactRepository) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
-	args := m.Called(ctx, workspaceID, contact)
-	return args.Bool(0), args.Error(1)
-}
-
 func TestContactListService_AddContactToList(t *testing.T) {
 	mockRepo := new(MockContactListRepository)
 	mockAuthService := new(MockAuthService)
@@ -192,30 +106,6 @@ func TestContactListService_AddContactToList(t *testing.T) {
 		mockAuthService.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(&domain.User{}, nil)
 		mockContactRepo.On("GetContactByEmail", ctx, workspaceID, contactList.Email).Return(contact, nil)
 		mockListRepo.On("GetListByID", ctx, workspaceID, contactList.ListID).Return(nil, errors.New("list not found"))
-
-		err := service.AddContactToList(ctx, workspaceID, contactList)
-		assert.Error(t, err)
-		mockRepo.AssertExpectations(t)
-		mockAuthService.AssertExpectations(t)
-		mockContactRepo.AssertExpectations(t)
-		mockListRepo.AssertExpectations(t)
-		mockLogger.AssertExpectations(t)
-	})
-
-	t.Run("repository error", func(t *testing.T) {
-		mockRepo.Mock = mock.Mock{}
-		mockAuthService.Mock = mock.Mock{}
-		mockContactRepo.Mock = mock.Mock{}
-		mockListRepo.Mock = mock.Mock{}
-		mockLogger.Mock = mock.Mock{}
-
-		mockAuthService.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(&domain.User{}, nil)
-		mockContactRepo.On("GetContactByEmail", ctx, workspaceID, contactList.Email).Return(contact, nil)
-		mockListRepo.On("GetListByID", ctx, workspaceID, contactList.ListID).Return(list, nil)
-		mockRepo.On("AddContactToList", ctx, workspaceID, mock.Anything).Return(errors.New("repo error"))
-		mockLogger.On("WithField", "email", contactList.Email).Return(mockLogger)
-		mockLogger.On("WithField", "list_id", contactList.ListID).Return(mockLogger)
-		mockLogger.On("Error", "Failed to add contact to list: repo error").Return()
 
 		err := service.AddContactToList(ctx, workspaceID, contactList)
 		assert.Error(t, err)

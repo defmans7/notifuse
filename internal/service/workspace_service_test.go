@@ -35,126 +35,6 @@ type MockWorkspaceRepo struct {
 	IsUserWorkspaceMemberFn func(ctx context.Context, userID, workspaceID string) (bool, error)
 }
 
-// MockWorkspaceRepository is a mock implementation of the WorkspaceRepository interface
-type MockWorkspaceRepository struct {
-	mock.Mock
-
-	GetWorkspaceUsersWithEmailFn func(ctx context.Context, workspaceID string) ([]*domain.UserWorkspaceWithEmail, error)
-	GetUserWorkspaceFn           func(ctx context.Context, userID, workspaceID string) (*domain.UserWorkspace, error)
-}
-
-func (m *MockWorkspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error {
-	args := m.Called(ctx, workspace)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) GetByID(ctx context.Context, id string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Workspace), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) List(ctx context.Context) ([]*domain.Workspace, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.Workspace), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
-	args := m.Called(ctx, workspace)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) Delete(ctx context.Context, id string) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error) {
-	args := m.Called(ctx, workspaceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*sql.DB), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) CreateDatabase(ctx context.Context, workspaceID string) error {
-	args := m.Called(ctx, workspaceID)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) DeleteDatabase(ctx context.Context, workspaceID string) error {
-	args := m.Called(ctx, workspaceID)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) AddUserToWorkspace(ctx context.Context, userWorkspace *domain.UserWorkspace) error {
-	args := m.Called(ctx, userWorkspace)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) RemoveUserFromWorkspace(ctx context.Context, userID string, workspaceID string) error {
-	args := m.Called(ctx, userID, workspaceID)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) GetUserWorkspaces(ctx context.Context, userID string) ([]*domain.UserWorkspace, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.UserWorkspace), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) GetUserWorkspace(ctx context.Context, userID string, workspaceID string) (*domain.UserWorkspace, error) {
-	args := m.Called(ctx, userID, workspaceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.UserWorkspace), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) CreateInvitation(ctx context.Context, invitation *domain.WorkspaceInvitation) error {
-	args := m.Called(ctx, invitation)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceRepository) GetInvitationByID(ctx context.Context, id string) (*domain.WorkspaceInvitation, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.WorkspaceInvitation), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) GetInvitationByEmail(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, error) {
-	args := m.Called(ctx, workspaceID, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.WorkspaceInvitation), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) IsUserWorkspaceMember(ctx context.Context, userID, workspaceID string) (bool, error) {
-	args := m.Called(ctx, userID, workspaceID)
-	return args.Bool(0), args.Error(1)
-}
-
-func (m *MockWorkspaceRepository) GetWorkspaceUsersWithEmail(ctx context.Context, workspaceID string) ([]*domain.UserWorkspaceWithEmail, error) {
-	if m.GetWorkspaceUsersWithEmailFn != nil {
-		return m.GetWorkspaceUsersWithEmailFn(ctx, workspaceID)
-	}
-	args := m.Called(ctx, workspaceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.UserWorkspaceWithEmail), args.Error(1)
-}
-
 // Implement methods for the MockWorkspaceRepo
 func (m *MockWorkspaceRepo) Create(ctx context.Context, workspace *domain.Workspace) error {
 	return m.CreateFn(ctx, workspace)
@@ -220,13 +100,17 @@ func (m *MockWorkspaceRepo) IsUserWorkspaceMember(ctx context.Context, userID, w
 	return m.IsUserWorkspaceMemberFn(ctx, userID, workspaceID)
 }
 
+func (m *MockWorkspaceRepo) GetWorkspaceUsersWithEmail(ctx context.Context, workspaceID string) ([]*domain.UserWorkspaceWithEmail, error) {
+	return nil, nil // Not used in this test file
+}
+
 // MockMailer mocks the mailer.Mailer interface
 type MockMailer struct {
 	mock.Mock
 }
 
-func (m *MockMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, token string) error {
-	args := m.Called(email, workspaceName, inviterName, token)
+func (m *MockMailer) SendInvitationEmail(invitation *domain.WorkspaceInvitation) error {
+	args := m.Called(invitation)
 	return args.Error(0)
 }
 
@@ -235,48 +119,9 @@ func (m *MockMailer) SendMagicCode(email, code string) error {
 	return args.Error(0)
 }
 
-// MockAuthService is a mock implementation of the AuthService
-type MockAuthService struct {
-	mock.Mock
-}
-
-func (m *MockAuthService) AuthenticateUserFromContext(ctx context.Context) (*domain.User, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *MockAuthService) AuthenticateUserForWorkspace(ctx context.Context, workspaceID string) (*domain.User, error) {
-	args := m.Called(ctx, workspaceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *MockAuthService) VerifyUserSession(ctx context.Context, userID, sessionID string) (*domain.User, error) {
-	args := m.Called(ctx, userID, sessionID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *MockAuthService) GenerateAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string {
-	args := m.Called(user, sessionID, expiresAt)
-	return args.String(0)
-}
-
-func (m *MockAuthService) GenerateInvitationToken(invitation *domain.WorkspaceInvitation) string {
-	args := m.Called(invitation)
-	return args.String(0)
-}
-
-func (m *MockAuthService) GetPrivateKey() paseto.V4AsymmetricSecretKey {
-	args := m.Called()
-	return args.Get(0).(paseto.V4AsymmetricSecretKey)
+func (m *MockMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, token string) error {
+	args := m.Called(email, workspaceName, inviterName, token)
+	return args.Error(0)
 }
 
 // Create a mock UserService for testing
@@ -878,5 +723,3 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 		mockAuthService.AssertExpectations(t)
 	})
 }
-
-// Mock functions for testing
