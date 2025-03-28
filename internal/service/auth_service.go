@@ -18,17 +18,19 @@ var (
 )
 
 type AuthService struct {
-	repo       domain.AuthRepository
-	logger     logger.Logger
-	privateKey paseto.V4AsymmetricSecretKey
-	publicKey  paseto.V4AsymmetricPublicKey
+	repo          domain.AuthRepository
+	workspaceRepo domain.WorkspaceRepository
+	logger        logger.Logger
+	privateKey    paseto.V4AsymmetricSecretKey
+	publicKey     paseto.V4AsymmetricPublicKey
 }
 
 type AuthServiceConfig struct {
-	Repository domain.AuthRepository
-	PrivateKey []byte
-	PublicKey  []byte
-	Logger     logger.Logger
+	Repository          domain.AuthRepository
+	WorkspaceRepository domain.WorkspaceRepository
+	PrivateKey          []byte
+	PublicKey           []byte
+	Logger              logger.Logger
 }
 
 func NewAuthService(cfg AuthServiceConfig) (*AuthService, error) {
@@ -49,11 +51,35 @@ func NewAuthService(cfg AuthServiceConfig) (*AuthService, error) {
 	}
 
 	return &AuthService{
-		repo:       cfg.Repository,
-		logger:     cfg.Logger,
-		privateKey: privateKey,
-		publicKey:  publicKey,
+		repo:          cfg.Repository,
+		workspaceRepo: cfg.WorkspaceRepository,
+		logger:        cfg.Logger,
+		privateKey:    privateKey,
+		publicKey:     publicKey,
 	}, nil
+}
+func (s *AuthService) AuthenticateUserFromContext(ctx context.Context) (*domain.User, error) {
+	userID := ctx.Value("user_id").(string)
+	if userID == "" {
+		return nil, ErrUserNotFound
+	}
+	return s.VerifyUserSession(ctx, userID, ctx.Value("session_id").(string))
+}
+
+// AuthenticateUserForWorkspace checks if the user exists and the session is valid for a specific workspace
+func (s *AuthService) AuthenticateUserForWorkspace(ctx context.Context, workspaceID string) (*domain.User, error) {
+	user, err := s.AuthenticateUserFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// get worspace user
+	_, err = s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
 // VerifyUserSession checks if the user exists and the session is valid

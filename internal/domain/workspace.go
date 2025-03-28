@@ -155,11 +155,92 @@ func (e *ErrUnauthorized) Error() string {
 
 // WorkspaceServiceInterface defines the interface for workspace operations
 type WorkspaceServiceInterface interface {
-	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*Workspace, error)
-	GetWorkspace(ctx context.Context, id, requesterID string) (*Workspace, error)
-	ListWorkspaces(ctx context.Context, userID string) ([]*Workspace, error)
-	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*Workspace, error)
-	DeleteWorkspace(ctx context.Context, id, requesterID string) error
-	GetWorkspaceMembersWithEmail(ctx context.Context, id, requesterID string) ([]*UserWorkspaceWithEmail, error)
-	InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*WorkspaceInvitation, string, error)
+	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*Workspace, error)
+	GetWorkspace(ctx context.Context, id string) (*Workspace, error)
+	ListWorkspaces(ctx context.Context) ([]*Workspace, error)
+	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*Workspace, error)
+	DeleteWorkspace(ctx context.Context, id string) error
+	GetWorkspaceMembersWithEmail(ctx context.Context, id string) ([]*UserWorkspaceWithEmail, error)
+	InviteMember(ctx context.Context, workspaceID, email string) (*WorkspaceInvitation, string, error)
+}
+
+// Request/Response types
+type CreateWorkspaceRequest struct {
+	ID       string                `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name     string                `json:"name" valid:"required,stringlength(1|32)"`
+	Settings WorkspaceSettingsData `json:"settings" valid:"required"`
+}
+
+func (r *CreateWorkspaceRequest) Validate() error {
+	// Register custom validators
+	govalidator.TagMap["timezone"] = govalidator.Validator(func(str string) bool {
+		return IsValidTimezone(str)
+	})
+
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return fmt.Errorf("invalid create workspace request: %w", err)
+	}
+
+	// Also validate the settings
+	if _, err := govalidator.ValidateStruct(&r.Settings); err != nil {
+		return fmt.Errorf("invalid create workspace request: %w", err)
+	}
+
+	return nil
+}
+
+type WorkspaceSettingsData struct {
+	Name       string `json:"name" valid:"required,stringlength(1|32)"`
+	WebsiteURL string `json:"website_url" valid:"url,optional"`
+	LogoURL    string `json:"logo_url" valid:"url,optional"`
+	CoverURL   string `json:"cover_url" valid:"url,optional"`
+	Timezone   string `json:"timezone" valid:"required,timezone"`
+}
+
+type GetWorkspaceRequest struct {
+	ID string `json:"id"`
+}
+
+type UpdateWorkspaceRequest struct {
+	ID         string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name       string `json:"name" valid:"required,stringlength(1|32)"`
+	WebsiteURL string `json:"website_url" valid:"url,optional"`
+	LogoURL    string `json:"logo_url" valid:"url,optional"`
+	CoverURL   string `json:"cover_url" valid:"url,optional"`
+	Timezone   string `json:"timezone" valid:"required,timezone"`
+}
+
+func (r *UpdateWorkspaceRequest) Validate() error {
+	// Register custom validators
+	govalidator.TagMap["timezone"] = govalidator.Validator(func(str string) bool {
+		return IsValidTimezone(str)
+	})
+
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return fmt.Errorf("invalid update workspace request: %w", err)
+	}
+	return nil
+}
+
+type DeleteWorkspaceRequest struct {
+	ID string `json:"id"`
+}
+
+func (r *DeleteWorkspaceRequest) Validate() error {
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return fmt.Errorf("invalid delete workspace request: %w", err)
+	}
+	return nil
+}
+
+type InviteMemberRequest struct {
+	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+	Email       string `json:"email" valid:"required,email"`
+}
+
+func (r *InviteMemberRequest) Validate() error {
+	if _, err := govalidator.ValidateStruct(r); err != nil {
+		return fmt.Errorf("invalid invite member request: %w", err)
+	}
+	return nil
 }

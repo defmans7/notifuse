@@ -210,22 +210,19 @@ func (a *App) InitServices() error {
 		a.config)
 
 	// Initialize other services
-	a.contactService = service.NewContactService(a.contactRepo, a.logger)
-	a.listService = service.NewListService(a.listRepo, a.logger)
-	a.contactListService = service.NewContactListService(a.contactListRepo, a.contactRepo, a.listRepo, a.logger)
+	a.contactService = service.NewContactService(a.contactRepo, a.workspaceRepo, a.authService, a.logger)
+	a.listService = service.NewListService(a.listRepo, a.authService, a.logger)
+	a.contactListService = service.NewContactListService(a.contactListRepo, a.authService, a.contactRepo, a.listRepo, a.logger)
 
 	return nil
 }
 
 // InitHandlers initializes all HTTP handlers and routes
 func (a *App) InitHandlers() error {
-	// Create adapters for services
-	authServiceAdapter := httpHandler.NewAuthServiceMiddlewareAdapter(a.authService)
-	userServiceAdapter := httpHandler.NewUserServiceAdapter(a.authService, a.userService)
 
 	// Initialize handlers
 	userHandler := httpHandler.NewUserHandler(
-		userServiceAdapter,
+		a.userService,
 		a.workspaceService,
 		a.config,
 		a.config.Security.PasetoPublicKey,
@@ -233,7 +230,6 @@ func (a *App) InitHandlers() error {
 	rootHandler := httpHandler.NewRootHandler()
 	workspaceHandler := httpHandler.NewWorkspaceHandler(
 		a.workspaceService,
-		authServiceAdapter,
 		a.config.Security.PasetoPublicKey,
 		a.logger)
 	faviconHandler := httpHandler.NewFaviconHandler()

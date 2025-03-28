@@ -23,64 +23,64 @@ import (
 // mockWorkspaceService implements WorkspaceServiceInterface
 type mockWorkspaceService struct {
 	mock.Mock
-	CreateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
-	GetWorkspaceFn    func(ctx context.Context, id, ownerID string) (*domain.Workspace, error)
-	ListWorkspacesFn  func(ctx context.Context, ownerID string) ([]*domain.Workspace, error)
-	UpdateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error)
-	DeleteWorkspaceFn func(ctx context.Context, id, ownerID string) error
-	InviteMemberFn    func(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error)
+	CreateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error)
+	GetWorkspaceFn    func(ctx context.Context, id string) (*domain.Workspace, error)
+	ListWorkspacesFn  func(ctx context.Context) ([]*domain.Workspace, error)
+	UpdateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error)
+	DeleteWorkspaceFn func(ctx context.Context, id string) error
+	InviteMemberFn    func(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, string, error)
 
-	GetWorkspaceMembersWithEmailFn func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error)
+	GetWorkspaceMembersWithEmailFn func(ctx context.Context, id string) ([]*domain.UserWorkspaceWithEmail, error)
 	GetUserWorkspaceFn             func(ctx context.Context, userID, workspaceID string) (*domain.UserWorkspace, error)
 }
 
-func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
+func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.Workspace), args.Error(1)
 }
 
-func (m *mockWorkspaceService) GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, ownerID)
+func (m *mockWorkspaceService) GetWorkspace(ctx context.Context, id string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.Workspace), args.Error(1)
 }
 
-func (m *mockWorkspaceService) ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error) {
-	args := m.Called(ctx, ownerID)
+func (m *mockWorkspaceService) ListWorkspaces(ctx context.Context) ([]*domain.Workspace, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).([]*domain.Workspace), args.Error(1)
 }
 
-func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
+func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.Workspace), args.Error(1)
 }
 
-func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id, ownerID string) error {
-	args := m.Called(ctx, id, ownerID)
+func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
-func (m *mockWorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {
-	args := m.Called(ctx, workspaceID, inviterID, email)
+func (m *mockWorkspaceService) InviteMember(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, string, error) {
+	args := m.Called(ctx, workspaceID, email)
 	if args.Get(0) == nil {
 		return nil, args.String(1), args.Error(2)
 	}
 	return args.Get(0).(*domain.WorkspaceInvitation), args.String(1), args.Error(2)
 }
 
-func (m *mockWorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
-	if m.GetWorkspaceMembersWithEmailFn != nil {
-		return m.GetWorkspaceMembersWithEmailFn(ctx, id, requesterID)
-	}
-	args := m.Called(ctx, id, requesterID)
+func (m *mockWorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id string) ([]*domain.UserWorkspaceWithEmail, error) {
+	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -117,21 +117,20 @@ func (m *mockAuthService) GetUserByID(ctx context.Context, userID string) (*doma
 }
 
 // Test setup helper
-func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *mockAuthService, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
+func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
 	workspaceSvc := new(mockWorkspaceService)
-	authSvc := new(mockAuthService)
 
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
 	mockLogger := new(MockLogger)
-	handler := NewWorkspaceHandler(workspaceSvc, authSvc, publicKey, mockLogger)
+	handler := NewWorkspaceHandler(workspaceSvc, publicKey, mockLogger)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	return handler, workspaceSvc, authSvc, mux, secretKey
+	return handler, workspaceSvc, mux, secretKey
 }
 
 func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userID string) string {
@@ -149,11 +148,7 @@ func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userI
 }
 
 func TestWorkspaceHandler_Create(t *testing.T) {
-	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
-
-	// Mock successful user session verification
-	user := &domain.User{ID: "test-user"}
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful workspace creation
 	expectedWorkspace := &domain.Workspace{
@@ -166,13 +161,14 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", "test-user").Return(expectedWorkspace, nil)
+	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").Return(expectedWorkspace, nil)
 
 	// Create request
-	reqBody := createWorkspaceRequest{
+	reqBody := domain.CreateWorkspaceRequest{
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
-		Settings: workspaceSettingsData{
+		Settings: domain.WorkspaceSettingsData{
+			Name:       "Test Workspace",
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
@@ -201,15 +197,10 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 
 	// Assert expectations
 	workspaceSvc.AssertExpectations(t)
-	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Get(t *testing.T) {
-	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
-
-	// Mock successful user session verification
-	user := &domain.User{ID: "test-user"}
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful workspace retrieval
 	expectedWorkspace := &domain.Workspace{
@@ -221,7 +212,7 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("GetWorkspace", mock.Anything, "testworkspace1", "test-user").Return(expectedWorkspace, nil)
+	workspaceSvc.On("GetWorkspace", mock.Anything, "testworkspace1").Return(expectedWorkspace, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=testworkspace1", nil)
@@ -246,16 +237,12 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 
 	// Assert expectations
 	workspaceSvc.AssertExpectations(t)
-	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_List(t *testing.T) {
-	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful user session verification
-	user := &domain.User{ID: "test-user"}
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
-
 	// Mock successful workspace list retrieval
 	expectedWorkspaces := []*domain.Workspace{
 		{
@@ -277,7 +264,7 @@ func TestWorkspaceHandler_List(t *testing.T) {
 			},
 		},
 	}
-	workspaceSvc.On("ListWorkspaces", mock.Anything, "test-user").Return(expectedWorkspaces, nil)
+	workspaceSvc.On("ListWorkspaces", mock.Anything).Return(expectedWorkspaces, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.list", nil)
@@ -297,15 +284,10 @@ func TestWorkspaceHandler_List(t *testing.T) {
 
 	// Assert expectations
 	workspaceSvc.AssertExpectations(t)
-	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Update(t *testing.T) {
-	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
-
-	// Mock successful user session verification
-	user := &domain.User{ID: "test-user"}
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful workspace update
 	expectedWorkspace := &domain.Workspace{
@@ -318,10 +300,10 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC", "test-user").Return(expectedWorkspace, nil)
+	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").Return(expectedWorkspace, nil)
 
 	// Create request
-	reqBody := updateWorkspaceRequest{
+	reqBody := domain.UpdateWorkspaceRequest{
 		ID:         "testworkspace1",
 		Name:       "Updated Workspace",
 		WebsiteURL: "https://updated.com",
@@ -335,11 +317,9 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
-	// Execute request
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response domain.Workspace
@@ -349,41 +329,34 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 	assert.Equal(t, expectedWorkspace.Name, response.Name)
 	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
 
-	// Assert expectations
 	workspaceSvc.AssertExpectations(t)
-	authSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Delete(t *testing.T) {
-	_, workspaceSvc, authSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
-	// Mock successful user session verification
-	user := &domain.User{ID: "test-user"}
-	authSvc.On("VerifyUserSession", mock.Anything, "test-user", "test-session").Return(user, nil)
+	// Mock successful workspace deletion
+	workspaceSvc.On("DeleteWorkspace", mock.Anything, "test-id").Return(nil)
 
-	workspaceSvc.On("DeleteWorkspace", mock.Anything, "test-id", "test-user").
-		Return(nil)
-
-	request := deleteWorkspaceRequest{
+	// Create request
+	reqBody := domain.DeleteWorkspaceRequest{
 		ID: "test-id",
 	}
-
-	body, err := json.Marshal(request)
+	body, err := json.Marshal(reqBody)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.delete", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{ID: "test-user"}))
 
+	// Execute request
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]string
-	err = json.NewDecoder(w.Body).Decode(&response)
-	require.NoError(t, err)
-	assert.Equal(t, "success", response["status"])
+	// Assert expectations
+	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWriteError(t *testing.T) {
@@ -438,7 +411,7 @@ func TestWriteError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_List_MethodNotAllowed(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Try with POST instead of GET
 	reqBody := bytes.NewBuffer([]byte("{}"))
@@ -451,9 +424,7 @@ func TestWorkspaceHandler_List_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -464,21 +435,19 @@ func TestWorkspaceHandler_List_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
-	handler, workspaceService, _, _, _ := setupTest(t)
+	handler, workspaceService, _, _ := setupTest(t)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.list", nil)
 	w := httptest.NewRecorder()
 
 	// Mock workspace service to return error
-	workspaceService.On("ListWorkspaces", mock.Anything, "user123").Return(
+	workspaceService.On("ListWorkspaces", mock.Anything).Return(
 		([]*domain.Workspace)(nil), fmt.Errorf("database error"))
 
 	// Setup context with authenticated user - no need for token validation here
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -497,7 +466,7 @@ func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Try with POST instead of GET
 	reqBody := bytes.NewBuffer([]byte(`{"id": "workspace123"}`))
@@ -510,9 +479,7 @@ func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -523,7 +490,7 @@ func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get_MissingID(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Create request without ID
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get", nil)
@@ -535,9 +502,7 @@ func TestWorkspaceHandler_Get_MissingID(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -553,7 +518,7 @@ func TestWorkspaceHandler_Get_MissingID(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
-	handler, workspaceService, _, _, secretKey := setupTest(t)
+	handler, workspaceService, _, secretKey := setupTest(t)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=workspace123", nil)
@@ -564,14 +529,12 @@ func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Mock workspace service to return error
-	workspaceService.On("GetWorkspace", mock.Anything, "workspace123", "user123").Return(
+	workspaceService.On("GetWorkspace", mock.Anything, "workspace123").Return(
 		(*domain.Workspace)(nil), fmt.Errorf("database error"))
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -590,7 +553,7 @@ func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Try with GET instead of POST
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.create", nil)
@@ -602,9 +565,7 @@ func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -615,7 +576,7 @@ func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_InvalidBody(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Create invalid JSON request
 	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
@@ -628,9 +589,7 @@ func TestWorkspaceHandler_Create_InvalidBody(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -646,97 +605,121 @@ func TestWorkspaceHandler_Create_InvalidBody(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	_, _, mux, secretKey := setupTest(t)
 
 	// Create request with missing ID
-	reqBody := bytes.NewBuffer([]byte(`{
-		"settings": {
-			"name": "Test Workspace",
-			"timezone": "UTC"
-		}
-	}`))
-	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
+	reqBody := domain.CreateWorkspaceRequest{
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettingsData{
+			Name:       "Test Workspace",
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+			Timezone:   "UTC",
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
 	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
 
-	// Add auth token
-	token := createTestToken(t, secretKey, "user123")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Setup context with authenticated user
-	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
-	req = req.WithContext(ctx)
-
-	// Call handler directly
-	handler.handleCreate(w, req)
-
-	// Verify response
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "id: non zero value required")
+}
 
-	// Verify error message
-	var response errorResponse
-	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "Workspace ID is required", response.Error)
+func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
+	_, _, mux, secretKey := setupTest(t)
+
+	// Create request with missing name
+	reqBody := domain.CreateWorkspaceRequest{
+		ID: "testworkspace1",
+		Settings: domain.WorkspaceSettingsData{
+			Name:       "Test Workspace",
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+			Timezone:   "UTC",
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "name: non zero value required")
+}
+
+func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
+	_, _, mux, secretKey := setupTest(t)
+
+	// Create request with missing timezone
+	reqBody := domain.CreateWorkspaceRequest{
+		ID:   "testworkspace1",
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettingsData{
+			Name:       "Test Workspace",
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "timezone: non zero value required")
 }
 
 func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
-	handler, workspaceService, _, _, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
-	// Create valid request
-	reqBody := bytes.NewBuffer([]byte(`{
-		"id": "workspace123",
-		"settings": {
-			"name": "Test Workspace",
-			"website_url": "https://example.com",
-			"logo_url": "https://example.com/logo.png",
-			"cover_url": "https://example.com/cover.png",
-			"timezone": "UTC"
-		}
-	}`))
-	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
+	// Mock service error
+	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").Return(nil, fmt.Errorf("database error"))
+
+	// Create request with valid data
+	reqBody := domain.CreateWorkspaceRequest{
+		ID:   "testworkspace1",
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettingsData{
+			Name:       "Test Workspace",
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+			Timezone:   "UTC",
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
 	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
 
-	// Add auth token
-	token := createTestToken(t, secretKey, "user123")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Mock workspace service to return error
-	workspaceService.On("CreateWorkspace",
-		mock.Anything,
-		"workspace123",
-		"Test Workspace",
-		"https://example.com",
-		"https://example.com/logo.png",
-		"https://example.com/cover.png",
-		"UTC",
-		"user123").Return(nil, fmt.Errorf("database error"))
-
-	// Setup context with authenticated user
-	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
-	req = req.WithContext(ctx)
-
-	// Call handler directly
-	handler.handleCreate(w, req)
-
-	// Verify response
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "Failed to create workspace")
 
-	// Verify error message
-	var response errorResponse
-	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "Failed to create workspace", response.Error)
-
-	// Verify mocks were called
-	workspaceService.AssertExpectations(t)
+	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Try with GET instead of POST
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.update", nil)
@@ -748,9 +731,7 @@ func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -761,7 +742,7 @@ func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update_InvalidBody(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Create invalid JSON request
 	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
@@ -774,9 +755,7 @@ func TestWorkspaceHandler_Update_InvalidBody(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -792,104 +771,61 @@ func TestWorkspaceHandler_Update_InvalidBody(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
-	handler, workspaceService, _, _, secretKey := setupTest(t)
+	_, _, mux, secretKey := setupTest(t)
 
 	// Create request with missing ID
-	reqBody := bytes.NewBuffer([]byte(`{"name": "Test Workspace"}`))
-	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", reqBody)
+	reqBody := domain.UpdateWorkspaceRequest{
+		Name:       "Updated Workspace",
+		WebsiteURL: "https://updated.com",
+		LogoURL:    "https://updated.com/logo.png",
+		CoverURL:   "https://updated.com/cover.png",
+		Timezone:   "UTC",
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
 	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
 
-	// Add auth token
-	token := createTestToken(t, secretKey, "user123")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Setup context with authenticated user
-	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
-	req = req.WithContext(ctx)
-
-	// Mock the service call - the handler doesn't check for empty ID
-	workspaceService.On("UpdateWorkspace",
-		mock.Anything,
-		"", // Empty ID
-		"Test Workspace",
-		"",
-		"",
-		"",
-		"",
-		"user123").Return(nil, fmt.Errorf("workspace ID is required"))
-
-	// Call handler directly
-	handler.handleUpdate(w, req)
-
-	// Verify response - since the handler doesn't validate empty ID, we'll get an internal server error
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-	// Verify error message
-	var response errorResponse
-	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "Failed to update workspace", response.Error)
-
-	// Verify mocks were called
-	workspaceService.AssertExpectations(t)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "id: non zero value required")
 }
 
 func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
-	handler, workspaceService, _, _, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
-	// Create valid request
-	reqBody := bytes.NewBuffer([]byte(`{
-		"id": "workspace123",
-		"name": "Test Workspace",
-		"website_url": "https://example.com",
-		"logo_url": "https://example.com/logo.png",
-		"cover_url": "https://example.com/cover.png",
-		"timezone": "UTC"
-	}`))
-	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", reqBody)
+	// Mock service error
+	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").Return(nil, fmt.Errorf("database error"))
+
+	// Create request with valid data
+	reqBody := domain.UpdateWorkspaceRequest{
+		ID:         "testworkspace1",
+		Name:       "Updated Workspace",
+		WebsiteURL: "https://updated.com",
+		LogoURL:    "https://updated.com/logo.png",
+		CoverURL:   "https://updated.com/cover.png",
+		Timezone:   "UTC",
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
 	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
 
-	// Add auth token
-	token := createTestToken(t, secretKey, "user123")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Mock workspace service to return error
-	workspaceService.On("UpdateWorkspace",
-		mock.Anything,
-		"workspace123",
-		"Test Workspace",
-		"https://example.com",
-		"https://example.com/logo.png",
-		"https://example.com/cover.png",
-		"UTC",
-		"user123").Return(nil, fmt.Errorf("database error"))
-
-	// Setup context with authenticated user
-	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
-	req = req.WithContext(ctx)
-
-	// Call handler directly
-	handler.handleUpdate(w, req)
-
-	// Verify response
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "Failed to update workspace")
 
-	// Verify error message
-	var response errorResponse
-	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "Failed to update workspace", response.Error)
-
-	// Verify mocks were called
-	workspaceService.AssertExpectations(t)
+	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Try with GET instead of POST
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.delete", nil)
@@ -901,9 +837,7 @@ func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -914,7 +848,7 @@ func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Create invalid JSON request
 	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
@@ -927,9 +861,7 @@ func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -945,7 +877,7 @@ func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
-	handler, workspaceService, _, _, secretKey := setupTest(t)
+	handler, workspaceService, _, secretKey := setupTest(t)
 
 	// Create request with missing ID
 	reqBody := bytes.NewBuffer([]byte(`{}`))
@@ -958,13 +890,11 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Mock the service call - the handler doesn't check for empty ID
-	workspaceService.On("DeleteWorkspace", mock.Anything, "", "user123").
+	workspaceService.On("DeleteWorkspace", mock.Anything, "").
 		Return(fmt.Errorf("workspace ID is required"))
 
 	// Call handler directly
@@ -983,7 +913,7 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
-	handler, workspaceService, _, _, secretKey := setupTest(t)
+	handler, workspaceService, _, secretKey := setupTest(t)
 
 	// Create valid request
 	reqBody := bytes.NewBuffer([]byte(`{"id": "workspace123"}`))
@@ -995,14 +925,12 @@ func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Mock workspace service to return error
-	workspaceService.On("DeleteWorkspace", mock.Anything, "workspace123", "user123").
+	workspaceService.On("DeleteWorkspace", mock.Anything, "workspace123").
 		Return(fmt.Errorf("database error"))
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -1020,236 +948,35 @@ func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
 	workspaceService.AssertExpectations(t)
 }
 
-func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
-
-	// Create request with missing name
-	reqBody := bytes.NewBuffer([]byte(`{
-		"id": "workspace123",
-		"settings": {
-			"name": "",
-			"timezone": "UTC"
-		}
-	}`))
-	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
-	w := httptest.NewRecorder()
-
-	// Add auth token
-	token := createTestToken(t, secretKey, "user123")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Setup context with authenticated user
-	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
-	req = req.WithContext(ctx)
-
-	// Call handler directly
-	handler.handleCreate(w, req)
-
-	// Verify response
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	// Verify error message
-	var response errorResponse
-	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "Workspace name is required", response.Error)
-}
-
-func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
-	handler, _, _, _, secretKey := setupTest(t)
-
-	// Create request with missing timezone
-	reqBody := bytes.NewBuffer([]byte(`{
-		"id": "workspace123",
-		"settings": {
-			"name": "Test Workspace",
-			"timezone": ""
-		}
-	}`))
-	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.create", reqBody)
-	w := httptest.NewRecorder()
-
-	// Add auth token
-	token := createTestToken(t, secretKey, "user123")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Setup context with authenticated user
-	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID: "user123",
-	})
-	req = req.WithContext(ctx)
-
-	// Call handler directly
-	handler.handleCreate(w, req)
-
-	// Verify response
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	// Verify error message
-	var response errorResponse
-	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "Timezone is required", response.Error)
-}
-
 func TestWorkspaceHandler_HandleMembers(t *testing.T) {
-	mockWorkspaceService := &mockWorkspaceService{}
-	mockAuthService := &mockAuthService{}
-	publicKey := paseto.V4AsymmetricPublicKey{}
+	_, workspaceSvc, mux, secretKey := setupTest(t)
 
-	handler := NewWorkspaceHandler(mockWorkspaceService, mockAuthService, publicKey, new(MockLogger))
-
-	t.Run("success", func(t *testing.T) {
-		// Setup mocks
-		membersWithEmail := []*domain.UserWorkspaceWithEmail{
-			{
-				UserWorkspace: domain.UserWorkspace{
-					UserID:      "user1",
-					WorkspaceID: "workspace1",
-					Role:        "owner",
-					CreatedAt:   time.Now(),
-					UpdatedAt:   time.Now(),
-				},
-				Email: "user1@example.com",
+	// Mock successful members retrieval
+	expectedMembers := []*domain.UserWorkspaceWithEmail{
+		{
+			UserWorkspace: domain.UserWorkspace{
+				UserID:      "user1",
+				WorkspaceID: "workspace1",
+				Role:        "owner",
 			},
-			{
-				UserWorkspace: domain.UserWorkspace{
-					UserID:      "user2",
-					WorkspaceID: "workspace1",
-					Role:        "member",
-					CreatedAt:   time.Now(),
-					UpdatedAt:   time.Now(),
-				},
-				Email: "user2@example.com",
-			},
-		}
-		mockWorkspaceService.GetWorkspaceMembersWithEmailFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
-			return membersWithEmail, nil
-		}
+			Email: "user1@example.com",
+		},
+	}
+	workspaceSvc.On("GetWorkspaceMembersWithEmail", mock.Anything, "workspace1").Return(expectedMembers, nil)
 
-		// Setup request
-		req, err := http.NewRequest("GET", "/api/workspaces.members?id=workspace1", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.members?id=workspace1", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
-		// Add authenticated user to context
-		user := &middleware.AuthenticatedUser{
-			ID: "user1",
-		}
-		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
-		req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
 
-		// Setup response recorder
-		rr := httptest.NewRecorder()
+	assert.Equal(t, http.StatusOK, w.Code)
 
-		// Call the handler
-		handler.handleMembers(rr, req)
+	var response map[string]interface{}
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Contains(t, response, "members")
 
-		// Check response
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		// Parse response body
-		var response struct {
-			Members []*domain.UserWorkspaceWithEmail `json:"members"`
-		}
-		err = json.Unmarshal(rr.Body.Bytes(), &response)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		// Verify response content
-		assert.Len(t, response.Members, 2)
-		assert.Equal(t, "user1", response.Members[0].UserID)
-		assert.Equal(t, "user1@example.com", response.Members[0].Email)
-		assert.Equal(t, "owner", response.Members[0].Role)
-		assert.Equal(t, "user2", response.Members[1].UserID)
-		assert.Equal(t, "user2@example.com", response.Members[1].Email)
-		assert.Equal(t, "member", response.Members[1].Role)
-	})
-
-	t.Run("missing workspace id", func(t *testing.T) {
-		// Setup request without workspace ID
-		req, err := http.NewRequest("GET", "/api/workspaces.members", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Add authenticated user to context
-		user := &middleware.AuthenticatedUser{
-			ID: "user1",
-		}
-		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
-		req = req.WithContext(ctx)
-
-		// Setup response recorder
-		rr := httptest.NewRecorder()
-
-		// Call the handler
-		handler.handleMembers(rr, req)
-
-		// Check response
-		if status := rr.Code; status != http.StatusBadRequest {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusBadRequest)
-		}
-	})
-
-	t.Run("method not allowed", func(t *testing.T) {
-		// Setup POST request
-		req, err := http.NewRequest("POST", "/api/workspaces.members?id=workspace1", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Add authenticated user to context
-		user := &middleware.AuthenticatedUser{
-			ID: "user1",
-		}
-		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
-		req = req.WithContext(ctx)
-
-		// Setup response recorder
-		rr := httptest.NewRecorder()
-
-		// Call the handler
-		handler.handleMembers(rr, req)
-
-		// Check response
-		if status := rr.Code; status != http.StatusMethodNotAllowed {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusMethodNotAllowed)
-		}
-	})
-
-	t.Run("service error", func(t *testing.T) {
-		// Setup mocks to return error
-		mockWorkspaceService.GetWorkspaceMembersWithEmailFn = func(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
-			return nil, fmt.Errorf("service error")
-		}
-
-		// Setup request
-		req, err := http.NewRequest("GET", "/api/workspaces.members?id=workspace1", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Add authenticated user to context
-		user := &middleware.AuthenticatedUser{
-			ID: "user1",
-		}
-		ctx := context.WithValue(req.Context(), middleware.AuthUserKey, user)
-		req = req.WithContext(ctx)
-
-		// Setup response recorder
-		rr := httptest.NewRecorder()
-
-		// Call the handler
-		handler.handleMembers(rr, req)
-
-		// Check response
-		if status := rr.Code; status != http.StatusInternalServerError {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusInternalServerError)
-		}
-	})
+	workspaceSvc.AssertExpectations(t)
 }

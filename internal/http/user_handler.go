@@ -90,21 +90,21 @@ func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 // GetCurrentUser returns the authenticated user and their workspaces
 func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user from context
-	authUser, ok := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-	if !ok || authUser == nil {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok || userID == "" {
 		WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	// Get user details
-	user, err := h.userService.GetUserByID(r.Context(), authUser.ID)
+	user, err := h.userService.GetUserByID(r.Context(), userID)
 	if err != nil {
 		WriteJSONError(w, "User not found", http.StatusNotFound)
 		return
 	}
 
 	// Get user's workspaces
-	workspaces, err := h.workspaceService.ListWorkspaces(r.Context(), authUser.ID)
+	workspaces, err := h.workspaceService.ListWorkspaces(r.Context())
 	if err != nil {
 		WriteJSONError(w, "Failed to retrieve workspaces", http.StatusInternalServerError)
 		return
@@ -120,33 +120,14 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// AuthServiceAdapter adapts UserService to middleware.AuthServiceInterface
-type AuthServiceAdapter struct {
-	userService UserServiceInterface
-}
-
-// VerifyUserSession delegates to the UserService
-func (a *AuthServiceAdapter) VerifyUserSession(ctx context.Context, userID, sessionID string) (*domain.User, error) {
-	return a.userService.VerifyUserSession(ctx, userID, sessionID)
-}
-
-// GetUserByID delegates to the UserService
-func (a *AuthServiceAdapter) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
-	return a.userService.GetUserByID(ctx, userID)
-}
-
 func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Public routes (no auth required)
 	mux.HandleFunc("/api/user.signin", h.SignIn)
 	mux.HandleFunc("/api/user.verify", h.VerifyCode)
 
-	// Protected routes (auth required)
-	// Create auth adapter
-	authAdapter := &AuthServiceAdapter{userService: h.userService}
-
 	// Create auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
-	requireAuth := authMiddleware.RequireAuth(authAdapter)
+	requireAuth := authMiddleware.RequireAuth()
 
 	// Register protected routes
 	mux.Handle("/api/user.me", requireAuth(http.HandlerFunc(h.GetCurrentUser)))

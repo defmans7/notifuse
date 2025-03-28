@@ -16,7 +16,6 @@ import (
 // WorkspaceHandler handles HTTP requests for workspace operations
 type WorkspaceHandler struct {
 	workspaceService domain.WorkspaceServiceInterface
-	authService      middleware.AuthServiceInterface
 	publicKey        paseto.V4AsymmetricPublicKey
 	logger           logger.Logger
 }
@@ -24,48 +23,14 @@ type WorkspaceHandler struct {
 // NewWorkspaceHandler creates a new workspace handler
 func NewWorkspaceHandler(
 	workspaceService domain.WorkspaceServiceInterface,
-	authService middleware.AuthServiceInterface,
 	publicKey paseto.V4AsymmetricPublicKey,
 	logger logger.Logger,
 ) *WorkspaceHandler {
 	return &WorkspaceHandler{
 		workspaceService: workspaceService,
-		authService:      authService,
 		publicKey:        publicKey,
 		logger:           logger,
 	}
-}
-
-// Request/Response types
-type createWorkspaceRequest struct {
-	ID       string                `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name     string                `json:"name" valid:"required,stringlength(1|32)"`
-	Settings workspaceSettingsData `json:"settings"`
-}
-
-type workspaceSettingsData struct {
-	Name       string `json:"name"`
-	WebsiteURL string `json:"website_url"`
-	LogoURL    string `json:"logo_url"`
-	CoverURL   string `json:"cover_url"`
-	Timezone   string `json:"timezone"`
-}
-
-type getWorkspaceRequest struct {
-	ID string `json:"id"`
-}
-
-type updateWorkspaceRequest struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	WebsiteURL string `json:"website_url"`
-	LogoURL    string `json:"logo_url"`
-	CoverURL   string `json:"cover_url"`
-	Timezone   string `json:"timezone"`
-}
-
-type deleteWorkspaceRequest struct {
-	ID string `json:"id"`
 }
 
 type errorResponse struct {
@@ -80,7 +45,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Create auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
-	requireAuth := authMiddleware.RequireAuth(h.authService)
+	requireAuth := authMiddleware.RequireAuth()
 
 	// Register RPC-style endpoints with dot notation
 	mux.Handle("/api/workspaces.list", requireAuth(http.HandlerFunc(h.handleList)))
@@ -98,9 +63,7 @@ func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-
-	workspaces, err := h.workspaceService.ListWorkspaces(r.Context(), authUser.ID)
+	workspaces, err := h.workspaceService.ListWorkspaces(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to list workspaces")
 		return
@@ -115,8 +78,6 @@ func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-
 	// Get workspace ID from query params
 	workspaceID := r.URL.Query().Get("id")
 	if workspaceID == "" {
@@ -124,7 +85,7 @@ func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspace, err := h.workspaceService.GetWorkspace(r.Context(), workspaceID, authUser.ID)
+	workspace, err := h.workspaceService.GetWorkspace(r.Context(), workspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get workspace")
 		return
@@ -146,47 +107,25 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-
-	var req createWorkspaceRequest
+	var req domain.CreateWorkspaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	// Validate workspace ID first
-	if req.ID == "" {
-		writeError(w, http.StatusBadRequest, "Workspace ID is required")
-		return
-	}
-
-	// Support name from either root or settings
-	name := req.Name
-	if name == "" {
-		name = req.Settings.Name
-	}
-
-	// Validate name
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "Workspace name is required")
-		return
-	}
-
-	// Validate timezone
-	if req.Settings.Timezone == "" {
-		writeError(w, http.StatusBadRequest, "Timezone is required")
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	workspace, err := h.workspaceService.CreateWorkspace(
 		r.Context(),
 		req.ID,
-		name,
+		req.Name,
 		req.Settings.WebsiteURL,
 		req.Settings.LogoURL,
 		req.Settings.CoverURL,
 		req.Settings.Timezone,
-		authUser.ID,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create workspace")
@@ -209,11 +148,14 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-
-	var req updateWorkspaceRequest
+	var req domain.UpdateWorkspaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -225,7 +167,6 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		req.LogoURL,
 		req.CoverURL,
 		req.Timezone,
-		authUser.ID,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update workspace")
@@ -245,15 +186,18 @@ func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-
-	var req deleteWorkspaceRequest
+	var req domain.DeleteWorkspaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	err := h.workspaceService.DeleteWorkspace(r.Context(), req.ID, authUser.ID)
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err := h.workspaceService.DeleteWorkspace(r.Context(), req.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete workspace")
 		return
@@ -269,8 +213,6 @@ func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-
 	// Get workspace ID from query params
 	workspaceID := r.URL.Query().Get("id")
 	if workspaceID == "" {
@@ -279,7 +221,7 @@ func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Use the new method that includes emails
-	members, err := h.workspaceService.GetWorkspaceMembersWithEmail(r.Context(), workspaceID, authUser.ID)
+	members, err := h.workspaceService.GetWorkspaceMembersWithEmail(r.Context(), workspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get workspace members")
 		return
@@ -297,31 +239,20 @@ func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get the authenticated user from the context
-	authUser := r.Context().Value(middleware.AuthUserKey).(*middleware.AuthenticatedUser)
-
-	var req struct {
-		WorkspaceID string `json:"workspace_id"`
-		Email       string `json:"email"`
-	}
+	var req domain.InviteMemberRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	// Validate required fields
-	if req.WorkspaceID == "" {
-		writeError(w, http.StatusBadRequest, "Workspace ID is required")
-		return
-	}
-	if req.Email == "" {
-		writeError(w, http.StatusBadRequest, "Email is required")
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// Create the invitation or add the user directly if they already exist
-	invitation, token, err := h.workspaceService.InviteMember(r.Context(), req.WorkspaceID, authUser.ID, req.Email)
+	invitation, token, err := h.workspaceService.InviteMember(r.Context(), req.WorkspaceID, req.Email)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("email", req.Email).WithField("error", err.Error()).Error("Failed to invite member")
 		writeError(w, http.StatusInternalServerError, "Failed to invite member")

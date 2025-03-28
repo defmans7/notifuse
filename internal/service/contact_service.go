@@ -10,18 +10,28 @@ import (
 )
 
 type ContactService struct {
-	repo   domain.ContactRepository
-	logger logger.Logger
+	repo          domain.ContactRepository
+	authService   domain.AuthService
+	workspaceRepo domain.WorkspaceRepository
+	logger        logger.Logger
 }
 
-func NewContactService(repo domain.ContactRepository, logger logger.Logger) *ContactService {
+func NewContactService(repo domain.ContactRepository, workspaceRepo domain.WorkspaceRepository, authService domain.AuthService, logger logger.Logger) *ContactService {
 	return &ContactService{
-		repo:   repo,
-		logger: logger,
+		repo:          repo,
+		workspaceRepo: workspaceRepo,
+		authService:   authService,
+		logger:        logger,
 	}
 }
 
 func (s *ContactService) GetContactByEmail(ctx context.Context, email string, workspaceID string) (*domain.Contact, error) {
+
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	contact, err := s.repo.GetContactByEmail(ctx, email, workspaceID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrContactNotFound); ok {
@@ -35,6 +45,12 @@ func (s *ContactService) GetContactByEmail(ctx context.Context, email string, wo
 }
 
 func (s *ContactService) GetContactByExternalID(ctx context.Context, externalID string, workspaceID string) (*domain.Contact, error) {
+
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	contact, err := s.repo.GetContactByExternalID(ctx, externalID, workspaceID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrContactNotFound); ok {
@@ -48,9 +64,11 @@ func (s *ContactService) GetContactByExternalID(ctx context.Context, externalID 
 }
 
 func (s *ContactService) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
-	// Validate the request
-	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+
+	// Get the user ID from the context
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, req.WorkspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
 	response, err := s.repo.GetContacts(ctx, req)
@@ -63,6 +81,12 @@ func (s *ContactService) GetContacts(ctx context.Context, req *domain.GetContact
 }
 
 func (s *ContactService) DeleteContact(ctx context.Context, email string, workspaceID string) error {
+
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	if err := s.repo.DeleteContact(ctx, email, workspaceID); err != nil {
 		s.logger.WithField("email", email).Error(fmt.Sprintf("Failed to delete contact: %v", err))
 		return fmt.Errorf("failed to delete contact: %w", err)
@@ -72,6 +96,12 @@ func (s *ContactService) DeleteContact(ctx context.Context, email string, worksp
 }
 
 func (s *ContactService) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
+
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate all contacts first
 	for i, contact := range contacts {
 		now := time.Now().UTC()
@@ -93,6 +123,12 @@ func (s *ContactService) BatchImportContacts(ctx context.Context, workspaceID st
 }
 
 func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
+
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return false, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	now := time.Now().UTC()
 	// Only set CreatedAt for new contacts
 	if contact.CreatedAt.IsZero() {

@@ -6,9 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/service"
-
 	"aidanwoods.dev/go-paseto"
 )
 
@@ -18,20 +15,7 @@ type contextKey string
 const (
 	UserIDKey    contextKey = "user_id"
 	SessionIDKey contextKey = "session_id"
-	AuthUserKey  contextKey = "auth_user"
 )
-
-// AuthenticatedUser represents a user that has been authenticated
-type AuthenticatedUser struct {
-	ID    string
-	Email string
-}
-
-// AuthServiceInterface defines the interface for authentication operations
-type AuthServiceInterface interface {
-	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
-	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
-}
 
 // AuthConfig holds the configuration for the auth middleware
 type AuthConfig struct {
@@ -46,7 +30,7 @@ func NewAuthMiddleware(publicKey paseto.V4AsymmetricPublicKey) *AuthConfig {
 }
 
 // RequireAuth creates a middleware that verifies the PASETO token and user session
-func (ac *AuthConfig) RequireAuth(authService AuthServiceInterface) func(http.Handler) http.Handler {
+func (ac *AuthConfig) RequireAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get the Authorization header
@@ -90,26 +74,9 @@ func (ac *AuthConfig) RequireAuth(authService AuthServiceInterface) func(http.Ha
 				return
 			}
 
-			// Verify user session
-			user, err := authService.VerifyUserSession(r.Context(), userID, sessionID)
-			if err != nil {
-				switch err {
-				case service.ErrSessionExpired:
-					http.Error(w, "Session expired", http.StatusUnauthorized)
-				case service.ErrUserNotFound:
-					http.Error(w, "User not found", http.StatusUnauthorized)
-				default:
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
-				}
-				return
-			}
-
-			// Add authenticated user to context
-			authUser := &AuthenticatedUser{
-				ID:    user.ID,
-				Email: user.Email,
-			}
-			ctx := context.WithValue(r.Context(), AuthUserKey, authUser)
+			// put userId and sessionId in the context
+			ctx := context.WithValue(r.Context(), UserIDKey, userID)
+			ctx = context.WithValue(ctx, SessionIDKey, sessionID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

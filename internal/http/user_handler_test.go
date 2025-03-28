@@ -63,52 +63,52 @@ type mockUserWorkspaceService struct {
 	mock.Mock
 }
 
-func (m *mockUserWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
+func (m *mockUserWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.Workspace), args.Error(1)
 }
 
-func (m *mockUserWorkspaceService) GetWorkspace(ctx context.Context, id, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, ownerID)
+func (m *mockUserWorkspaceService) GetWorkspace(ctx context.Context, id string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.Workspace), args.Error(1)
 }
 
-func (m *mockUserWorkspaceService) ListWorkspaces(ctx context.Context, ownerID string) ([]*domain.Workspace, error) {
-	args := m.Called(ctx, ownerID)
+func (m *mockUserWorkspaceService) ListWorkspaces(ctx context.Context) ([]*domain.Workspace, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*domain.Workspace), args.Error(1)
 }
 
-func (m *mockUserWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone, ownerID string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone, ownerID)
+func (m *mockUserWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error) {
+	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.Workspace), args.Error(1)
 }
 
-func (m *mockUserWorkspaceService) DeleteWorkspace(ctx context.Context, id, ownerID string) error {
-	return m.Called(ctx, id, ownerID).Error(0)
+func (m *mockUserWorkspaceService) DeleteWorkspace(ctx context.Context, id string) error {
+	return m.Called(ctx, id).Error(0)
 }
 
-func (m *mockUserWorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id, requesterID string) ([]*domain.UserWorkspaceWithEmail, error) {
-	args := m.Called(ctx, id, requesterID)
+func (m *mockUserWorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id string) ([]*domain.UserWorkspaceWithEmail, error) {
+	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*domain.UserWorkspaceWithEmail), args.Error(1)
 }
 
-func (m *mockUserWorkspaceService) InviteMember(ctx context.Context, workspaceID, inviterID, email string) (*domain.WorkspaceInvitation, string, error) {
-	args := m.Called(ctx, workspaceID, inviterID, email)
+func (m *mockUserWorkspaceService) InviteMember(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, string, error) {
+	args := m.Called(ctx, workspaceID, email)
 	if args.Get(0) == nil {
 		return nil, args.String(1), args.Error(2)
 	}
@@ -332,78 +332,48 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 func TestUserHandler_GetCurrentUser(t *testing.T) {
 	mockUserSvc := new(mockUserService)
 	mockWorkspaceSvc := new(mockUserWorkspaceService)
-	config := &config.Config{}
-
-	// Create a test key
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
-
+	cfg := &config.Config{}
+	publicKey := paseto.V4AsymmetricPublicKey{}
 	mockLogger := &MockLogger{}
 
-	// Use type assertion for mockUserSvc
-	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, config, publicKey, mockLogger)
+	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, cfg, publicKey, mockLogger)
 
-	userID := uuid.New().String()
+	// Test successful case
+	userID := "test-user"
 	user := &domain.User{
-		ID:        userID,
-		Email:     "test@example.com",
-		Name:      "Test User",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:    userID,
+		Email: "test@example.com",
+		Name:  "Test User",
 	}
-
 	workspaces := []*domain.Workspace{
 		{
-			ID:   uuid.New().String(),
+			ID:   "workspace1",
 			Name: "Workspace 1",
-			Settings: domain.WorkspaceSettings{
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
 		},
 		{
-			ID:   uuid.New().String(),
+			ID:   "workspace2",
 			Name: "Workspace 2",
-			Settings: domain.WorkspaceSettings{
-				WebsiteURL: "https://example2.com",
-				LogoURL:    "https://example2.com/logo.png",
-				Timezone:   "UTC",
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
 		},
 	}
 
-	// Test successful retrieval
 	mockUserSvc.On("GetUserByID", mock.Anything, userID).Return(user, nil)
-	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, userID).Return(workspaces, nil)
+	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything).Return(workspaces, nil).Once()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
-	// Add authenticated user to context
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID:    userID,
-		Email: user.Email,
-	}))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
 	rec := httptest.NewRecorder()
 
 	handler.GetCurrentUser(rec, req)
-
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response map[string]interface{}
 	err := json.NewDecoder(rec.Body).Decode(&response)
 	require.NoError(t, err)
 
-	// Check user data
 	userData := response["user"].(map[string]interface{})
-	assert.Equal(t, user.ID, userData["id"])
 	assert.Equal(t, user.Email, userData["email"])
 	assert.Equal(t, user.Name, userData["name"])
 
-	// Check workspaces data
 	workspacesData := response["workspaces"].([]interface{})
 	assert.Equal(t, 2, len(workspacesData))
 
@@ -415,31 +385,28 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 
 	// Test user not found
-	mockUserSvc.On("GetUserByID", mock.Anything, "unknown-user-id").Return(nil, fmt.Errorf("user not found"))
+	notFoundUserID := "unknown-user-id"
+	mockUserSvc.On("GetUserByID", mock.Anything, notFoundUserID).Return(nil, fmt.Errorf("user not found"))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID:    "unknown-user-id",
-		Email: "unknown@example.com",
-	}))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, notFoundUserID))
 	rec = httptest.NewRecorder()
 
 	handler.GetCurrentUser(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 
 	// Test workspaces retrieval error
-	mockUserSvc.On("GetUserByID", mock.Anything, "error-workspace-user").Return(user, nil)
-	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, "error-workspace-user").Return(nil, fmt.Errorf("database error"))
+	errorUserID := "error-workspace-user"
+	mockUserSvc.On("GetUserByID", mock.Anything, errorUserID).Return(user, nil)
+	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything).Return(nil, fmt.Errorf("database error"))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
-	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthUserKey, &middleware.AuthenticatedUser{
-		ID:    "error-workspace-user",
-		Email: user.Email,
-	}))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, errorUserID))
 	rec = httptest.NewRecorder()
 
 	handler.GetCurrentUser(rec, req)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Failed to retrieve workspaces")
 
 	mockUserSvc.AssertExpectations(t)
 	mockWorkspaceSvc.AssertExpectations(t)
@@ -447,7 +414,7 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 
 func TestUserHandler_RegisterRoutes(t *testing.T) {
 	mockUserSvc := new(mockUserService)
-	mockWorkspaceSvc := new(mockWorkspaceService)
+	mockWorkspaceSvc := new(mockUserWorkspaceService)
 	cfg := &config.Config{}
 
 	secretKey := paseto.NewV4AsymmetricSecretKey()
@@ -464,7 +431,7 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 		Return(&domain.User{ID: "user1", Email: "user@example.com"}, nil)
 
 	// Set up mock expectation for ListWorkspaces
-	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything, "user1").
+	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything).
 		Return([]*domain.Workspace{}, nil)
 
 	// Use type assertion for mockUserSvc
@@ -474,19 +441,19 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 	testCases := []struct {
 		name       string
 		route      string
-		setupMocks func(userSvc *mockUserService, workspaceSvc *mockWorkspaceService)
+		setupMocks func(userSvc *mockUserService, workspaceSvc *mockUserWorkspaceService)
 	}{
 		{
 			name:  "public routes",
 			route: "/api/user.signin",
-			setupMocks: func(userSvc *mockUserService, workspaceSvc *mockWorkspaceService) {
+			setupMocks: func(userSvc *mockUserService, workspaceSvc *mockUserWorkspaceService) {
 				// No mock setup needed for testing route registration
 			},
 		},
 		{
 			name:  "protected routes with auth service",
 			route: "/api/user.me",
-			setupMocks: func(userSvc *mockUserService, workspaceSvc *mockWorkspaceService) {
+			setupMocks: func(userSvc *mockUserService, workspaceSvc *mockUserWorkspaceService) {
 				// Setup mock for auth middleware
 				userSvc.On("GetUserByID", mock.Anything, mock.Anything).Return(&domain.User{
 					ID:    "user1",
@@ -500,7 +467,7 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Setup new mock services for each test case to avoid interference
 			mockUserSvc := &mockUserService{}
-			mockWorkspaceSvc := &mockWorkspaceService{}
+			mockWorkspaceSvc := &mockUserWorkspaceService{}
 
 			// Set up mocks for this test case
 			tc.setupMocks(mockUserSvc, mockWorkspaceSvc)
