@@ -20,9 +20,10 @@ func TestUpsertContact(t *testing.T) {
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	repo := NewContactRepository(db, workspaceRepo)
+	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "test@example.com"
+	workspaceID := "workspace123"
 
 	testContact := &domain.Contact{
 		Email:           email,
@@ -113,7 +114,7 @@ func TestUpsertContact(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	created, err := repo.UpsertContact(context.Background(), testContact)
+	created, err := repo.UpsertContact(context.Background(), workspaceID, testContact)
 	require.NoError(t, err)
 	assert.True(t, created)
 
@@ -228,7 +229,7 @@ func TestUpsertContact(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	created, err = repo.UpsertContact(context.Background(), contactWithAllFields)
+	created, err = repo.UpsertContact(context.Background(), workspaceID, contactWithAllFields)
 	require.NoError(t, err)
 	assert.False(t, created)
 
@@ -237,7 +238,7 @@ func TestUpsertContact(t *testing.T) {
 		WithArgs(email).
 		WillReturnError(errors.New("check error"))
 
-	created, err = repo.UpsertContact(context.Background(), testContact)
+	created, err = repo.UpsertContact(context.Background(), workspaceID, testContact)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to check if contact exists")
 
@@ -249,7 +250,7 @@ func TestUpsertContact(t *testing.T) {
 	mock.ExpectExec(`INSERT INTO contacts`).
 		WillReturnError(errors.New("upsert error"))
 
-	created, err = repo.UpsertContact(context.Background(), testContact)
+	created, err = repo.UpsertContact(context.Background(), workspaceID, testContact)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to upsert contact")
 
@@ -299,7 +300,7 @@ func TestUpsertContact(t *testing.T) {
 		WithArgs("invalidjson@example.com").
 		WillReturnError(sql.ErrNoRows)
 
-	created, err = repo.UpsertContact(context.Background(), contactWithInvalidJSON)
+	created, err = repo.UpsertContact(context.Background(), workspaceID, contactWithInvalidJSON)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to marshal CustomJSON1")
 

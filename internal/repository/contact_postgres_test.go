@@ -51,7 +51,7 @@ func TestGetContactByEmail(t *testing.T) {
 		WithArgs(email).
 		WillReturnRows(rows)
 
-	contact, err := repo.GetContactByEmail(context.Background(), "workspace123", email)
+	contact, err := repo.GetContactByEmail(context.Background(), email, "workspace123")
 	require.NoError(t, err)
 	assert.Equal(t, email, contact.Email)
 
@@ -60,7 +60,7 @@ func TestGetContactByEmail(t *testing.T) {
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
-	_, err = repo.GetContactByEmail(context.Background(), "workspace123", "nonexistent@example.com")
+	_, err = repo.GetContactByEmail(context.Background(), "nonexistent@example.com", "workspace123")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrContactNotFound{}, err)
 }
@@ -102,7 +102,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		WithArgs(externalID).
 		WillReturnRows(rows)
 
-	_, err := repo.GetContactByExternalID(context.Background(), "workspace123", externalID)
+	_, err := repo.GetContactByExternalID(context.Background(), externalID, "workspace123")
 	require.NoError(t, err)
 
 	// Test case 2: Contact not found
@@ -110,7 +110,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		WithArgs("nonexistent-ext-id").
 		WillReturnError(sql.ErrNoRows)
 
-	_, err = repo.GetContactByExternalID(context.Background(), "workspace123", "nonexistent-ext-id")
+	_, err = repo.GetContactByExternalID(context.Background(), "nonexistent-ext-id", "workspace123")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrContactNotFound{}, err)
 

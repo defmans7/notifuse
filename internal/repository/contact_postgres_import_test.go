@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"regexp"
 	"testing"
@@ -21,7 +22,7 @@ func TestBatchImportContacts(t *testing.T) {
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	repo := NewContactRepository(db, workspaceRepo)
+	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	// Create some test contacts
@@ -113,32 +114,28 @@ func TestBatchImportContacts(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectPrepare(regexp.QuoteMeta(`INSERT INTO contacts`))
 
+	anyArgs38 := []driver.Value{}
+	for i := 0; i < 38; i++ {
+		anyArgs38 = append(anyArgs38, sqlmock.AnyArg())
+	}
+
 	for range testContacts {
 		mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO contacts`)).
 			WithArgs(
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(),
+				anyArgs38...,
 			).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 	}
 
 	mock.ExpectCommit()
 
-	err := repo.BatchImportContacts(context.Background(), testContacts)
+	err := repo.BatchImportContacts(context.Background(), "workspace123", testContacts)
 	require.NoError(t, err)
 
 	// Test case 2: Transaction begin error
 	mock.ExpectBegin().WillReturnError(errors.New("transaction error"))
 
-	err = repo.BatchImportContacts(context.Background(), testContacts)
+	err = repo.BatchImportContacts(context.Background(), "workspace123", testContacts)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to begin transaction")
 
@@ -147,27 +144,33 @@ func TestBatchImportContacts(t *testing.T) {
 	mock.ExpectPrepare(`INSERT INTO contacts`).WillReturnError(errors.New("prepare error"))
 	mock.ExpectRollback()
 
-	err = repo.BatchImportContacts(context.Background(), testContacts)
+	err = repo.BatchImportContacts(context.Background(), "workspace123", testContacts)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to prepare statement")
 
 	// Test case 4: Execution error
 	mock.ExpectBegin()
 	mock.ExpectPrepare(`INSERT INTO contacts`)
-	mock.ExpectExec(`INSERT INTO contacts`).WillReturnError(errors.New("execution error"))
+	mock.ExpectExec(`INSERT INTO contacts`).
+		WithArgs(anyArgs38...).
+		WillReturnError(errors.New("execution error"))
 	mock.ExpectRollback()
 
-	err = repo.BatchImportContacts(context.Background(), []*domain.Contact{contact1})
+	err = repo.BatchImportContacts(context.Background(), "workspace123", []*domain.Contact{contact1})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to execute statement")
 
 	// Test case 5: Commit error
 	mock.ExpectBegin()
 	mock.ExpectPrepare(`INSERT INTO contacts`)
-	mock.ExpectExec(`INSERT INTO contacts`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO contacts`).
+		WithArgs(
+			anyArgs38...,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit().WillReturnError(errors.New("commit error"))
 
-	err = repo.BatchImportContacts(context.Background(), []*domain.Contact{contact1})
+	err = repo.BatchImportContacts(context.Background(), "workspace123", []*domain.Contact{contact1})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to commit transaction")
 
@@ -176,7 +179,7 @@ func TestBatchImportContacts(t *testing.T) {
 		mock.ExpectPrepare(regexp.QuoteMeta(`INSERT INTO contacts`))
 		mock.ExpectCommit()
 
-		err := repo.BatchImportContacts(context.Background(), []*domain.Contact{})
+		err := repo.BatchImportContacts(context.Background(), "workspace123", []*domain.Contact{})
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -227,7 +230,7 @@ func TestBatchImportContacts(t *testing.T) {
 			WithArgs(contact.Email).
 			WillReturnError(sql.ErrNoRows)
 
-		_, err := repo.UpsertContact(context.Background(), contact)
+		_, err := repo.UpsertContact(context.Background(), "workspace123", contact)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to marshal CustomJSON1")
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -282,7 +285,7 @@ func TestBatchImportContacts(t *testing.T) {
 		mock.ExpectExec(`INSERT INTO contacts`).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		isNew, err := repo.UpsertContact(context.Background(), contact)
+		isNew, err := repo.UpsertContact(context.Background(), "workspace123", contact)
 		require.NoError(t, err)
 		assert.True(t, isNew)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -339,7 +342,7 @@ func TestBatchImportContacts(t *testing.T) {
 			WillReturnError(errors.New("database error"))
 
 		// Act
-		isNew, err := repo.UpsertContact(context.Background(), contact)
+		isNew, err := repo.UpsertContact(context.Background(), "workspace123", contact)
 
 		// Assert
 		assert.Error(t, err)
