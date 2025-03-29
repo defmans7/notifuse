@@ -36,8 +36,7 @@ jobs:
           echo "ROOT_EMAIL=admin@example.com" >> .env.test
 
           # Run all tests (both unit and integration) with a single coverage profile
-          # Exclude specific mock directories from coverage
-          go test -race -coverprofile=coverage.txt -covermode=atomic ./... -v -coverpkg=$(go list ./... | grep -v 'internal/domain/mocks\|pkg/mocks')
+          go test -race -coverprofile=coverage.txt -covermode=atomic ./... -v 
 
           # Debug - verify file exists
           ls -la
