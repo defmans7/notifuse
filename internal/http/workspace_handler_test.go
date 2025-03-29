@@ -219,12 +219,12 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 
 	// Mock successful workspace deletion
 	workspaceSvc.EXPECT().
-		DeleteWorkspace(gomock.Any(), "test-id").
+		DeleteWorkspace(gomock.Any(), "testid123").
 		Return(nil)
 
 	// Create request
-	reqBody := domain.DeleteWorkspaceRequest{
-		ID: "test-id",
+	reqBody := map[string]string{
+		"id": "testid123",
 	}
 	body, err := json.Marshal(reqBody)
 	require.NoError(t, err)
@@ -754,7 +754,7 @@ func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
-	handler, workspaceService, _, secretKey := setupTest(t)
+	handler, _, _, secretKey := setupTest(t)
 
 	// Create request with missing ID
 	reqBody := bytes.NewBuffer([]byte(`{}`))
@@ -770,21 +770,16 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
-	// Mock the service call - the handler doesn't check for empty ID
-	workspaceService.EXPECT().
-		DeleteWorkspace(gomock.Any(), "").
-		Return(fmt.Errorf("workspace ID is required"))
-
 	// Call handler directly
 	handler.handleDelete(w, req)
 
-	// Verify response - since the handler doesn't validate empty ID, we'll get an internal server error
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	// Verify response - the handler validates the request body and returns a bad request error
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 
 	// Verify error message
 	var response errorResponse
 	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "Failed to delete workspace", response.Error)
+	assert.Equal(t, "invalid delete workspace request: id: non zero value required", response.Error)
 }
 
 func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
@@ -852,4 +847,89 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Contains(t, response, "members")
+}
+
+func TestWorkspaceHandler_HandleMembers_MethodNotAllowed(t *testing.T) {
+	handler, _, _, secretKey := setupTest(t)
+
+	// Try with POST instead of GET
+	reqBody := bytes.NewBuffer([]byte(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.members", reqBody)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleMembers(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestWorkspaceHandler_HandleMembers_MissingID(t *testing.T) {
+	handler, _, _, secretKey := setupTest(t)
+
+	// Create request without ID
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.members", nil)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleMembers(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Missing workspace ID", response.Error)
+}
+
+func TestWorkspaceHandler_HandleMembers_ServiceError(t *testing.T) {
+	handler, workspaceService, _, secretKey := setupTest(t)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.members?id=workspace123", nil)
+	w := httptest.NewRecorder()
+
+	// Add auth token
+	token := createTestToken(t, secretKey, "user123")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Mock workspace service to return error
+	workspaceService.EXPECT().
+		GetWorkspaceMembersWithEmail(gomock.Any(), "workspace123").
+		Return(nil, fmt.Errorf("database error"))
+
+	// Setup context with authenticated user
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	req = req.WithContext(ctx)
+
+	// Call handler directly
+	handler.handleMembers(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// Verify error message
+	var response errorResponse
+	json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "Failed to get workspace members", response.Error)
 }

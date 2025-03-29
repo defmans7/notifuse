@@ -6,6 +6,9 @@ build:
 test:
 	go test -v ./...
 
+test-domain:
+	go test -v ./internal/domain
+
 test-service:
 	go test -v ./internal/service
 
