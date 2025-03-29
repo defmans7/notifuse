@@ -63,12 +63,11 @@ func (m *MockContactService) GetContactByEmail(ctx context.Context, workspaceID 
 		return nil, &domain.ErrContactNotFound{}
 	}
 
-	for _, contact := range m.Contacts {
-		if contact.Email == email {
-			return contact, nil
-		}
+	contact, exists := m.Contacts[email]
+	if !exists {
+		return nil, &domain.ErrContactNotFound{}
 	}
-	return nil, &domain.ErrContactNotFound{}
+	return contact, nil
 }
 
 func (m *MockContactService) GetContactByExternalID(ctx context.Context, workspaceID string, externalID string) (*domain.Contact, error) {
@@ -82,7 +81,7 @@ func (m *MockContactService) GetContactByExternalID(ctx context.Context, workspa
 	}
 
 	for _, contact := range m.Contacts {
-		if contact.ExternalID.String == externalID && !contact.ExternalID.IsNull {
+		if contact.ExternalID != nil && !contact.ExternalID.IsNull && contact.ExternalID.String == externalID {
 			return contact, nil
 		}
 	}
@@ -99,13 +98,11 @@ func (m *MockContactService) DeleteContact(ctx context.Context, workspaceID stri
 		return &domain.ErrContactNotFound{}
 	}
 
-	for key, contact := range m.Contacts {
-		if contact.Email == email {
-			delete(m.Contacts, key)
-			return nil
-		}
+	if _, exists := m.Contacts[email]; !exists {
+		return &domain.ErrContactNotFound{}
 	}
-	return &domain.ErrContactNotFound{}
+	delete(m.Contacts, email)
+	return nil
 }
 
 func (m *MockContactService) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
@@ -138,11 +135,19 @@ func (m *MockContactService) UpsertContact(ctx context.Context, workspaceID stri
 	}
 
 	// Check if contact exists
-	isNew := true
 	existingContact, exists := m.Contacts[contact.Email]
-	if exists {
-		isNew = false
-		// If updating an existing contact, merge fields
+	isNew := !exists
+
+	now := time.Now()
+	if isNew {
+		// Set timestamps for new contact
+		if contact.CreatedAt.IsZero() {
+			contact.CreatedAt = now
+		}
+		contact.UpdatedAt = now
+		m.Contacts[contact.Email] = contact
+	} else {
+		// Update existing contact fields
 		if contact.ExternalID != nil {
 			existingContact.ExternalID = contact.ExternalID
 		}
@@ -249,21 +254,13 @@ func (m *MockContactService) UpsertContact(ctx context.Context, workspaceID stri
 			existingContact.CustomJSON5 = contact.CustomJSON5
 		}
 
-		// Set timestamps
-		now := time.Now()
 		existingContact.UpdatedAt = now
-		contact = existingContact
-	} else {
-		// Set timestamps for new contact
-		now := time.Now()
-		if contact.CreatedAt.IsZero() {
-			contact.CreatedAt = now
-		}
-		contact.UpdatedAt = now
+		m.Contacts[contact.Email] = existingContact
 	}
 
-	// Store the contact
-	m.Contacts[contact.Email] = contact
-	m.LastContactUpserted = contact
+	// Return the configured value if set, otherwise return the actual isNew value
+	if m.UpsertIsNewToReturn {
+		return true, nil
+	}
 	return isNew, nil
 }

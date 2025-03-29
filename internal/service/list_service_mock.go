@@ -51,12 +51,9 @@ func (m *MockListService) GetListByID(ctx context.Context, workspaceID string, i
 	if m.ErrToReturn != nil {
 		return nil, m.ErrToReturn
 	}
-	if m.ErrListNotFoundToReturn {
-		return nil, &domain.ErrListNotFound{}
-	}
 
 	list, exists := m.Lists[id]
-	if !exists {
+	if !exists || m.ErrListNotFoundToReturn {
 		return nil, &domain.ErrListNotFound{}
 	}
 	return list, nil
@@ -87,17 +84,14 @@ func (m *MockListService) UpdateList(ctx context.Context, workspaceID string, li
 	if m.ErrToReturn != nil {
 		return m.ErrToReturn
 	}
-	if m.ErrListNotFoundToReturn {
-		return &domain.ErrListNotFound{}
-	}
 
 	// Check if list exists
 	existingList, exists := m.Lists[list.ID]
-	if !exists {
+	if !exists || m.ErrListNotFoundToReturn {
 		return &domain.ErrListNotFound{}
 	}
 
-	// Update fields
+	// Update fields while preserving timestamps
 	existingList.Name = list.Name
 	existingList.Description = list.Description
 	existingList.UpdatedAt = time.Now()
@@ -113,12 +107,9 @@ func (m *MockListService) DeleteList(ctx context.Context, workspaceID string, id
 	if m.ErrToReturn != nil {
 		return m.ErrToReturn
 	}
-	if m.ErrListNotFoundToReturn {
-		return &domain.ErrListNotFound{}
-	}
 
 	_, exists := m.Lists[id]
-	if !exists {
+	if !exists || m.ErrListNotFoundToReturn {
 		return &domain.ErrListNotFound{}
 	}
 
