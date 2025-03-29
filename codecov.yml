@@ -12,5 +12,5 @@ coverage:
     - '**/*_mock.go'
     - '**/*mock*.go'
     - '**/database/utils.go'
-    - '**/cmd/api/main.go'
-    - '**/cmd/api/test_keys.go'
+    - '/cmd/api/main.go'
+    - '/cmd/api/test_keys.go'
