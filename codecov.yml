@@ -1,0 +1,13 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+    patch: yes
+
+  # Exclude mock files from coverage calculation
+  ignore:
+    - '**/mocks/**'
+    - '**/mock/**'
+    - '**/*_mock.go'
+    - '**/*mock*.go'

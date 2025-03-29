@@ -10,6 +10,7 @@ import (
 )
 
 //go:generate mockgen -destination mocks/mock_contact_list_service.go -package mocks github.com/Notifuse/notifuse/internal/domain ContactListService
+//go:generate mockgen -destination mocks/mock_contact_list_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain ContactListRepository
 
 // ContactListStatus represents the status of a contact's subscription to a list
 type ContactListStatus string
