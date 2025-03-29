@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -155,26 +156,15 @@ func TestGetContactByExternalID(t *testing.T) {
 }
 
 func TestGetContacts(t *testing.T) {
-	db, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("Error creating mock DB: %v", err)
-	}
-	defer db.Close()
-
-	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	workspaceRepo.AddWorkspaceDB("workspace123", db)
-	repo := NewContactRepository(workspaceRepo)
-
 	t.Run("should get contacts with pagination", func(t *testing.T) {
 		// Create a mock workspace database
-		workspaceDB, workspaceMock, err := sqlmock.New()
-		if err != nil {
-			t.Fatalf("Error creating workspace mock DB: %v", err)
-		}
-		defer workspaceDB.Close()
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
 
-		// Add the workspace database to the workspace repository (no type assertion needed)
-		workspaceRepo.AddWorkspaceDB("workspace123", workspaceDB)
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the workspace database query
 		rows := sqlmock.NewRows([]string{
@@ -199,43 +189,33 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		// The limit in the query will be req.Limit + 1 (11) because GetContacts adds 1 to check for more results
-		workspaceMock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC LIMIT \$1`).
+		mock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC LIMIT \$1`).
 			WithArgs(11).
 			WillReturnRows(rows)
 
-		// Execute the test
 		req := &domain.GetContactsRequest{
 			WorkspaceID: "workspace123",
 			Limit:       10,
 		}
 
-		response, err := repo.GetContacts(context.Background(), req)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-			return
-		}
-
-		if len(response.Contacts) != 1 {
-			t.Errorf("Expected 1 contact, got %d", len(response.Contacts))
-		}
-
-		// Verify all expectations were met
-		if err := workspaceMock.ExpectationsWereMet(); err != nil {
-			t.Errorf("There were unfulfilled expectations: %s", err)
-		}
+		resp, err := repo.GetContacts(context.Background(), req)
+		require.NoError(t, err)
+		require.Len(t, resp.Contacts, 1)
+		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("should get contacts with multiple filters", func(t *testing.T) {
-		workspaceDB, workspaceMock, err := sqlmock.New()
-		if err != nil {
-			t.Fatalf("Error creating workspace mock DB: %v", err)
-		}
-		defer workspaceDB.Close()
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
 
-		workspaceRepo.AddWorkspaceDB("workspace123", workspaceDB)
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
 
-		// Set up expectations for the workspace database query with multiple filters
+		// Set up expectations for the workspace database query
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language", "first_name", "last_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
@@ -247,7 +227,7 @@ func TestGetContacts(t *testing.T) {
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
 		}).AddRow(
-			"john@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
 			"Engineer", 100.0, 5, time.Now(),
 			"custom1", "custom2", "custom3", "custom4", "custom5",
@@ -258,47 +238,178 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		// Expect query with multiple filters and LIMIT
-		workspaceMock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email ILIKE \$1 AND first_name ILIKE \$2 AND country ILIKE \$3 ORDER BY created_at DESC LIMIT \$4`).
-			WithArgs("%john%", "%John%", "%US%", 11). // 10 + 1 for pagination check
+		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email ILIKE \$1 AND first_name ILIKE \$2 AND country ILIKE \$3 ORDER BY created_at DESC LIMIT \$4`).
+			WithArgs("%test@example.com%", "%John%", "%US%", 11).
 			WillReturnRows(rows)
 
 		req := &domain.GetContactsRequest{
 			WorkspaceID: "workspace123",
-			Email:       "john",
+			Email:       "test@example.com",
 			FirstName:   "John",
 			Country:     "US",
 			Limit:       10,
 		}
 
-		result, err := repo.GetContacts(context.Background(), req)
+		resp, err := repo.GetContacts(context.Background(), req)
 		require.NoError(t, err)
-		require.Len(t, result.Contacts, 1)
-		assert.Equal(t, "john@example.com", result.Contacts[0].Email)
-		assert.NoError(t, workspaceMock.ExpectationsWereMet())
+		require.Len(t, resp.Contacts, 1)
+		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("should handle cursor pagination edge cases", func(t *testing.T) {
-		workspaceDB, workspaceMock, err := sqlmock.New()
-		if err != nil {
-			t.Fatalf("Error creating workspace mock DB: %v", err)
-		}
-		defer workspaceDB.Close()
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
 
-		workspaceRepo.AddWorkspaceDB("workspace123", workspaceDB)
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
 
-		// Test case 1: Invalid cursor format
+		// Set up expectations for the workspace database query
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
+			"custom_json_5", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
+			"Engineer", 100.0, 5, time.Now(),
+			"custom1", "custom2", "custom3", "custom4", "custom5",
+			1.0, 2.0, 3.0, 4.0, 5.0,
+			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			time.Now(), time.Now(),
+		)
+
+		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE created_at < \$1 ORDER BY created_at DESC LIMIT \$2`).
+			WithArgs(sqlmock.AnyArg(), 11).
+			WillReturnRows(rows)
+
 		req := &domain.GetContactsRequest{
 			WorkspaceID: "workspace123",
-			Cursor:      "invalid-date-format",
+			Cursor:      time.Now().Format(time.RFC3339),
 			Limit:       10,
 		}
 
-		_, err = repo.GetContacts(context.Background(), req)
+		resp, err := repo.GetContacts(context.Background(), req)
+		require.NoError(t, err)
+		require.Len(t, resp.Contacts, 1)
+		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle workspace connection errors", func(t *testing.T) {
+		// Create a new mock workspace repository without a DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(nil)
+		repo := NewContactRepository(workspaceRepo)
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Limit:       10,
+		}
+
+		_, err := repo.GetContacts(context.Background(), req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("should handle complex filter combinations", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
+
+		// Set up expectations for the workspace database query
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
+			"custom_json_5", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
+			"Engineer", 100.0, 5, time.Now(),
+			"custom1", "custom2", "custom3", "custom4", "custom5",
+			1.0, 2.0, 3.0, 4.0, 5.0,
+			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			time.Now(), time.Now(),
+		)
+
+		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email ILIKE \$1 AND external_id ILIKE \$2 AND first_name ILIKE \$3 AND last_name ILIKE \$4 AND phone ILIKE \$5 AND country ILIKE \$6 ORDER BY created_at DESC LIMIT \$7`).
+			WithArgs("%test@example.com%", "%ext123%", "%John%", "%Doe%", "%+1234567890%", "%US%", 11).
+			WillReturnRows(rows)
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Email:       "test@example.com",
+			ExternalID:  "ext123",
+			FirstName:   "John",
+			LastName:    "Doe",
+			Phone:       "+1234567890",
+			Country:     "US",
+			Limit:       10,
+		}
+
+		resp, err := repo.GetContacts(context.Background(), req)
+		require.NoError(t, err)
+		require.Len(t, resp.Contacts, 1)
+		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle invalid cursor format", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID: "workspace123",
+			Cursor:      "invalid-timestamp",
+			Limit:       10,
+		}
+
+		_, err := repo.GetContacts(context.Background(), req)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid cursor format")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-		// Test case 2: Empty result set with cursor
+	t.Run("should handle empty result set", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
+
+		// Set up expectations for an empty result set
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language", "first_name", "last_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
@@ -311,77 +422,20 @@ func TestGetContacts(t *testing.T) {
 			"custom_json_5", "created_at", "updated_at",
 		})
 
-		workspaceMock.ExpectQuery(`SELECT (.+) FROM contacts WHERE created_at < \$1 ORDER BY created_at DESC LIMIT \$2`).
-			WithArgs(sqlmock.AnyArg(), 11). // 10 + 1 for pagination check
+		mock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC LIMIT \$1`).
+			WithArgs(11).
 			WillReturnRows(rows)
-
-		req = &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Cursor:      time.Now().Format(time.RFC3339),
-			Limit:       10,
-		}
-
-		result, err := repo.GetContacts(context.Background(), req)
-		require.NoError(t, err)
-		require.Empty(t, result.Contacts)
-		assert.Empty(t, result.NextCursor)
-
-		// Test case 3: Last page of results
-		now := time.Now()
-		rows = sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
-			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
-			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
-			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
-			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at",
-		}).AddRow(
-			"last@example.com", "ext123", "UTC", "en", "Last", "User",
-			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, now,
-			"custom1", "custom2", "custom3", "custom4", "custom5",
-			1.0, 2.0, 3.0, 4.0, 5.0,
-			now, now, now, now, now,
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			now, now,
-		)
-
-		workspaceMock.ExpectQuery(`SELECT (.+) FROM contacts WHERE created_at < \$1 ORDER BY created_at DESC LIMIT \$2`).
-			WithArgs(sqlmock.AnyArg(), 11). // 10 + 1 for pagination check
-			WillReturnRows(rows)
-
-		req = &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Cursor:      now.Format(time.RFC3339),
-			Limit:       10,
-		}
-
-		result, err = repo.GetContacts(context.Background(), req)
-		require.NoError(t, err)
-		require.Len(t, result.Contacts, 1)
-		assert.Empty(t, result.NextCursor) // No more results
-		assert.Equal(t, "last@example.com", result.Contacts[0].Email)
-
-		assert.NoError(t, workspaceMock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle workspace connection errors", func(t *testing.T) {
-		// Create a new mock workspace repository with a nil DB to simulate connection error
-		mockWorkspaceRepo := testutil.NewMockWorkspaceRepository(nil)
-		repo := NewContactRepository(mockWorkspaceRepo)
 
 		req := &domain.GetContactsRequest{
-			WorkspaceID: "nonexistent-workspace",
+			WorkspaceID: "workspace123",
 			Limit:       10,
 		}
 
-		_, err := repo.GetContacts(context.Background(), req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get workspace connection")
+		resp, err := repo.GetContacts(context.Background(), req)
+		require.NoError(t, err)
+		assert.Empty(t, resp.Contacts)
+		assert.Empty(t, resp.NextCursor)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
 
@@ -390,24 +444,61 @@ func TestDeleteContact(t *testing.T) {
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	// Add the workspace database to the workspace repository
 	workspaceRepo.AddWorkspaceDB("workspace123", db)
 	repo := NewContactRepository(workspaceRepo)
 	email := "test@example.com"
 
-	// Test case 1: Contact successfully deleted
-	mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
-		WithArgs(email).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	t.Run("should delete existing contact", func(t *testing.T) {
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := repo.DeleteContact(context.Background(), email, "workspace123")
-	require.NoError(t, err)
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-	// Test case 2: Contact not found
-	mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
-		WithArgs("nonexistent@example.com").
-		WillReturnResult(sqlmock.NewResult(0, 0))
+	t.Run("should handle non-existent contact", func(t *testing.T) {
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs("nonexistent@example.com").
+			WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = repo.DeleteContact(context.Background(), "nonexistent@example.com", "workspace123")
-	require.Error(t, err)
-	assert.IsType(t, &domain.ErrContactNotFound{}, err)
+		err := repo.DeleteContact(context.Background(), "nonexistent@example.com", "workspace123")
+		require.Error(t, err)
+		assert.IsType(t, &domain.ErrContactNotFound{}, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle database execution errors", func(t *testing.T) {
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnError(errors.New("database error"))
+
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to delete contact")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle rows affected errors", func(t *testing.T) {
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnResult(sqlmock.NewErrorResult(errors.New("rows affected error")))
+
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get affected rows")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle workspace connection errors", func(t *testing.T) {
+		// Create a new mock workspace repository without a DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(nil)
+		repo := NewContactRepository(workspaceRepo)
+
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+	})
 }
