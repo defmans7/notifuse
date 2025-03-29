@@ -287,3 +287,283 @@ func TestAuthService_GenerateInvitationToken(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, email, emailFromToken)
 }
+
+func TestNewAuthService(t *testing.T) {
+	tests := []struct {
+		name          string
+		config        AuthServiceConfig
+		setupMocks    func(*MockLogger)
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "successful creation",
+			config: AuthServiceConfig{
+				Repository:          &MockAuthRepository{},
+				WorkspaceRepository: &MockWorkspaceRepository{},
+				PrivateKey:          paseto.NewV4AsymmetricSecretKey().ExportBytes(),
+				PublicKey:           paseto.NewV4AsymmetricSecretKey().Public().ExportBytes(),
+				Logger:              &MockLogger{},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid private key",
+			config: AuthServiceConfig{
+				Repository:          &MockAuthRepository{},
+				WorkspaceRepository: &MockWorkspaceRepository{},
+				PrivateKey:          []byte("invalid key"),
+				PublicKey:           paseto.NewV4AsymmetricSecretKey().Public().ExportBytes(),
+				Logger:              &MockLogger{},
+			},
+			setupMocks: func(mockLogger *MockLogger) {
+				mockLogger.On("WithField", "error", "key length incorrect (11), expected 64").Return(mockLogger)
+				mockLogger.On("Error", "Error creating PASETO private key").Return()
+			},
+			expectError:   true,
+			errorContains: "key length incorrect (11), expected 64",
+		},
+		{
+			name: "invalid public key",
+			config: AuthServiceConfig{
+				Repository:          &MockAuthRepository{},
+				WorkspaceRepository: &MockWorkspaceRepository{},
+				PrivateKey:          paseto.NewV4AsymmetricSecretKey().ExportBytes(),
+				PublicKey:           []byte("invalid key"),
+				Logger:              &MockLogger{},
+			},
+			setupMocks: func(mockLogger *MockLogger) {
+				mockLogger.On("WithField", "error", "key length incorrect (11), expected 32").Return(mockLogger)
+				mockLogger.On("Error", "Error creating PASETO public key").Return()
+			},
+			expectError:   true,
+			errorContains: "key length incorrect (11), expected 32",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks(tt.config.Logger.(*MockLogger))
+			}
+			service, err := NewAuthService(tt.config)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorContains)
+				assert.Nil(t, service)
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, service)
+		})
+	}
+}
+
+func TestAuthenticateUserFromContext(t *testing.T) {
+	tests := []struct {
+		name          string
+		ctx           context.Context
+		setupMocks    func(*MockAuthRepository, *MockLogger)
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:          "missing user_id in context",
+			ctx:           context.Background(),
+			expectError:   true,
+			errorContains: "user not found",
+		},
+		{
+			name:          "missing session_id in context",
+			ctx:           context.WithValue(context.Background(), "user_id", "test-user"),
+			expectError:   true,
+			errorContains: "user not found",
+		},
+		{
+			name: "valid context",
+			ctx:  context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
+			setupMocks: func(mockRepo *MockAuthRepository, mockLogger *MockLogger) {
+				futureTime := time.Now().Add(1 * time.Hour)
+				mockRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
+				mockRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &MockAuthRepository{}
+			mockLogger := &MockLogger{}
+
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockRepo, mockLogger)
+			}
+
+			service := &AuthService{
+				repo:   mockRepo,
+				logger: mockLogger,
+			}
+
+			user, err := service.AuthenticateUserFromContext(tt.ctx)
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+				assert.Nil(t, user)
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, user)
+			mockRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestAuthenticateUserForWorkspace(t *testing.T) {
+	tests := []struct {
+		name          string
+		ctx           context.Context
+		workspaceID   string
+		setupMocks    func(*MockAuthRepository, *MockWorkspaceRepository, *MockLogger)
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:        "successful authentication",
+			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
+			workspaceID: "test-workspace",
+			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+				futureTime := time.Now().Add(1 * time.Hour)
+				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
+				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
+				workspaceRepo.On("GetUserWorkspace", mock.Anything, "test-user", "test-workspace").Return(&domain.UserWorkspace{}, nil)
+			},
+			expectError: false,
+		},
+		{
+			name:        "workspace not found",
+			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
+			workspaceID: "test-workspace",
+			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+				futureTime := time.Now().Add(1 * time.Hour)
+				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
+				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
+				workspaceRepo.On("GetUserWorkspace", mock.Anything, "test-user", "test-workspace").Return(nil, sql.ErrNoRows)
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockAuthRepo := &MockAuthRepository{}
+			mockWorkspaceRepo := &MockWorkspaceRepository{}
+			mockLogger := &MockLogger{}
+
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockAuthRepo, mockWorkspaceRepo, mockLogger)
+			}
+
+			service := &AuthService{
+				repo:          mockAuthRepo,
+				workspaceRepo: mockWorkspaceRepo,
+				logger:        mockLogger,
+			}
+
+			user, err := service.AuthenticateUserForWorkspace(tt.ctx, tt.workspaceID)
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+				assert.Nil(t, user)
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, user)
+			mockAuthRepo.AssertExpectations(t)
+			mockWorkspaceRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestGetPrivateKey(t *testing.T) {
+	privateKey := paseto.NewV4AsymmetricSecretKey()
+	service := &AuthService{
+		privateKey: privateKey,
+	}
+
+	result := service.GetPrivateKey()
+	assert.Equal(t, privateKey, result)
+}
+
+func TestGetUserByID(t *testing.T) {
+	tests := []struct {
+		name          string
+		userID        string
+		setupMocks    func(*MockAuthRepository, *MockLogger)
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:   "successful retrieval",
+			userID: "test-user",
+			setupMocks: func(repo *MockAuthRepository, mockLogger *MockLogger) {
+				repo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
+			},
+			expectError: false,
+		},
+		{
+			name:   "user not found",
+			userID: "test-user",
+			setupMocks: func(repo *MockAuthRepository, mockLogger *MockLogger) {
+				repo.On("GetUserByID", mock.Anything, "test-user").Return(nil, sql.ErrNoRows)
+			},
+			expectError:   true,
+			errorContains: "user not found",
+		},
+		{
+			name:   "repository error",
+			userID: "test-user",
+			setupMocks: func(repo *MockAuthRepository, mockLogger *MockLogger) {
+				repo.On("GetUserByID", mock.Anything, "test-user").Return(nil, assert.AnError)
+				mockLogger.On("WithField", "error", assert.AnError.Error()).Return(mockLogger)
+				mockLogger.On("WithField", "user_id", "test-user").Return(mockLogger)
+				mockLogger.On("Error", "Failed to get user by ID").Return()
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &MockAuthRepository{}
+			mockLogger := &MockLogger{}
+
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockRepo, mockLogger)
+			}
+
+			service := &AuthService{
+				repo:   mockRepo,
+				logger: mockLogger,
+			}
+
+			user, err := service.GetUserByID(context.Background(), tt.userID)
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+				assert.Nil(t, user)
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, user)
+			mockRepo.AssertExpectations(t)
+			mockLogger.AssertExpectations(t)
+		})
+	}
+}

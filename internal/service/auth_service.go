@@ -59,11 +59,15 @@ func NewAuthService(cfg AuthServiceConfig) (*AuthService, error) {
 	}, nil
 }
 func (s *AuthService) AuthenticateUserFromContext(ctx context.Context) (*domain.User, error) {
-	userID := ctx.Value("user_id").(string)
-	if userID == "" {
+	userID, ok := ctx.Value("user_id").(string)
+	if !ok || userID == "" {
 		return nil, ErrUserNotFound
 	}
-	return s.VerifyUserSession(ctx, userID, ctx.Value("session_id").(string))
+	sessionID, ok := ctx.Value("session_id").(string)
+	if !ok || sessionID == "" {
+		return nil, ErrUserNotFound
+	}
+	return s.VerifyUserSession(ctx, userID, sessionID)
 }
 
 // AuthenticateUserForWorkspace checks if the user exists and the session is valid for a specific workspace
