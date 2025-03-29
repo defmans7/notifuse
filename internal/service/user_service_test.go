@@ -138,7 +138,7 @@ func TestUserService_SignIn(t *testing.T) {
 			return len(code) == 6
 		})).Return(nil)
 
-		code, err := service.SignIn(ctx, SignInInput{Email: user.Email})
+		code, err := service.SignIn(ctx, domain.SignInInput{Email: user.Email})
 		assert.NoError(t, err)
 		assert.Empty(t, code) // In production, no code is returned
 		repo.AssertExpectations(t)
@@ -171,7 +171,7 @@ func TestUserService_SignIn(t *testing.T) {
 		})).Return(nil)
 		// Email should not be sent in dev mode
 
-		code, err := service.SignIn(ctx, SignInInput{Email: user.Email})
+		code, err := service.SignIn(ctx, domain.SignInInput{Email: user.Email})
 		assert.NoError(t, err)
 		assert.NotEmpty(t, code) // In dev mode, code is returned
 		assert.Len(t, code, 6)   // Should be a 6-digit code
@@ -192,7 +192,7 @@ func TestUserService_SignIn(t *testing.T) {
 				len(s.MagicCode) == 6 && !s.MagicCodeExpires.IsZero()
 		})).Return(nil)
 
-		code, err = service.SignIn(ctx, SignInInput{Email: "new@example.com"})
+		code, err = service.SignIn(ctx, domain.SignInInput{Email: "new@example.com"})
 		require.NoError(t, err)
 		assert.NotEmpty(t, code)
 		assert.Len(t, code, 6) // Ensure it's a 6-digit code
@@ -231,7 +231,7 @@ func TestUserService_SignIn(t *testing.T) {
 			return len(code) == 6
 		})).Return(nil)
 
-		code, err := service.SignIn(ctx, SignInInput{Email: "notfound@example.com"})
+		code, err := service.SignIn(ctx, domain.SignInInput{Email: "notfound@example.com"})
 		assert.NoError(t, err)
 		assert.Empty(t, code) // In production, no code is returned
 		repo.AssertExpectations(t)
@@ -283,7 +283,7 @@ func TestUserService_VerifyCode(t *testing.T) {
 			return s.ID == validSession.ID && s.MagicCode == "" && s.MagicCodeExpires.IsZero()
 		})).Return(nil)
 
-		response, err := service.VerifyCode(ctx, VerifyCodeInput{
+		response, err := service.VerifyCode(ctx, domain.VerifyCodeInput{
 			Email: user.Email,
 			Code:  validCode,
 		})
@@ -301,7 +301,7 @@ func TestUserService_VerifyCode(t *testing.T) {
 		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
 		repo.On("GetSessionsByUserID", ctx, user.ID).Return([]*domain.Session{validSession}, nil)
 
-		response, err := service.VerifyCode(ctx, VerifyCodeInput{
+		response, err := service.VerifyCode(ctx, domain.VerifyCodeInput{
 			Email: user.Email,
 			Code:  "invalid",
 		})
@@ -326,7 +326,7 @@ func TestUserService_VerifyCode(t *testing.T) {
 		repo.On("GetUserByEmail", ctx, user.Email).Return(user, nil)
 		repo.On("GetSessionsByUserID", ctx, user.ID).Return([]*domain.Session{expiredSession}, nil)
 
-		response, err := service.VerifyCode(ctx, VerifyCodeInput{
+		response, err := service.VerifyCode(ctx, domain.VerifyCodeInput{
 			Email: user.Email,
 			Code:  validCode,
 		})

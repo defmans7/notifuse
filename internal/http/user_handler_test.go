@@ -19,7 +19,6 @@ import (
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
-	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
@@ -27,7 +26,7 @@ type mockUserService struct {
 	mock.Mock
 }
 
-func (m *mockUserService) SignIn(ctx context.Context, input service.SignInInput) (string, error) {
+func (m *mockUserService) SignIn(ctx context.Context, input domain.SignInInput) (string, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return "", args.Error(1)
@@ -35,12 +34,12 @@ func (m *mockUserService) SignIn(ctx context.Context, input service.SignInInput)
 	return args.Get(0).(string), args.Error(1)
 }
 
-func (m *mockUserService) VerifyCode(ctx context.Context, input service.VerifyCodeInput) (*service.AuthResponse, error) {
+func (m *mockUserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInput) (*domain.AuthResponse, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*service.AuthResponse), args.Error(1)
+	return args.Get(0).(*domain.AuthResponse), args.Error(1)
 }
 
 func (m *mockUserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
@@ -136,7 +135,7 @@ func TestUserHandler_SignIn(t *testing.T) {
 	tests := []struct {
 		name         string
 		handler      *UserHandler
-		input        service.SignInInput
+		input        domain.SignInInput
 		setupMock    func()
 		expectedCode int
 		expectedBody map[string]string
@@ -144,11 +143,11 @@ func TestUserHandler_SignIn(t *testing.T) {
 		{
 			name:    "successful sign in production",
 			handler: prodHandler,
-			input: service.SignInInput{
+			input: domain.SignInInput{
 				Email: "test@example.com",
 			},
 			setupMock: func() {
-				mockService.On("SignIn", mock.Anything, service.SignInInput{
+				mockService.On("SignIn", mock.Anything, domain.SignInInput{
 					Email: "test@example.com",
 				}).Return("", nil)
 			},
@@ -160,13 +159,13 @@ func TestUserHandler_SignIn(t *testing.T) {
 		{
 			name:    "successful sign in development",
 			handler: devHandler,
-			input: service.SignInInput{
+			input: domain.SignInInput{
 				Email: "test@example.com",
 			},
 			setupMock: func() {
 				// Mock the SignIn method to return the 6-digit code for development mode
 				mockService.Mock = mock.Mock{} // Reset mock to avoid conflicts
-				mockService.On("SignIn", mock.Anything, service.SignInInput{
+				mockService.On("SignIn", mock.Anything, domain.SignInInput{
 					Email: "test@example.com",
 				}).Return("123456", nil)
 			},
@@ -179,11 +178,11 @@ func TestUserHandler_SignIn(t *testing.T) {
 		{
 			name:    "invalid email production",
 			handler: prodHandler,
-			input: service.SignInInput{
+			input: domain.SignInInput{
 				Email: "",
 			},
 			setupMock: func() {
-				mockService.On("SignIn", mock.Anything, service.SignInInput{
+				mockService.On("SignIn", mock.Anything, domain.SignInInput{
 					Email: "",
 				}).Return("", fmt.Errorf("invalid email"))
 			},
@@ -195,11 +194,11 @@ func TestUserHandler_SignIn(t *testing.T) {
 		{
 			name:    "invalid email development",
 			handler: devHandler,
-			input: service.SignInInput{
+			input: domain.SignInInput{
 				Email: "",
 			},
 			setupMock: func() {
-				mockService.On("SignIn", mock.Anything, service.SignInInput{
+				mockService.On("SignIn", mock.Anything, domain.SignInInput{
 					Email: "",
 				}).Return("", fmt.Errorf("invalid email"))
 			},
@@ -256,22 +255,22 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		input         service.VerifyCodeInput
+		input         domain.VerifyCodeInput
 		setupMock     func()
 		expectedCode  int
 		checkResponse func(t *testing.T, response map[string]interface{})
 	}{
 		{
 			name: "successful verification",
-			input: service.VerifyCodeInput{
+			input: domain.VerifyCodeInput{
 				Email: "test@example.com",
 				Code:  "123456",
 			},
 			setupMock: func() {
-				mockService.On("VerifyCode", mock.Anything, service.VerifyCodeInput{
+				mockService.On("VerifyCode", mock.Anything, domain.VerifyCodeInput{
 					Email: "test@example.com",
 					Code:  "123456",
-				}).Return(&service.AuthResponse{
+				}).Return(&domain.AuthResponse{
 					Token:     "auth-token",
 					User:      *user,
 					ExpiresAt: time.Now().Add(24 * time.Hour),
@@ -288,12 +287,12 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 		},
 		{
 			name: "invalid code",
-			input: service.VerifyCodeInput{
+			input: domain.VerifyCodeInput{
 				Email: "test@example.com",
 				Code:  "000000",
 			},
 			setupMock: func() {
-				mockService.On("VerifyCode", mock.Anything, service.VerifyCodeInput{
+				mockService.On("VerifyCode", mock.Anything, domain.VerifyCodeInput{
 					Email: "test@example.com",
 					Code:  "000000",
 				}).Return(nil, fmt.Errorf("invalid or expired code"))

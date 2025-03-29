@@ -16,7 +16,7 @@ import (
 type WorkspaceService struct {
 	repo        domain.WorkspaceRepository
 	logger      logger.Logger
-	userService *UserService
+	userService domain.UserServiceInterface
 	authService domain.AuthService
 	mailer      mailer.Mailer
 	config      *config.Config
@@ -25,7 +25,7 @@ type WorkspaceService struct {
 func NewWorkspaceService(
 	repo domain.WorkspaceRepository,
 	logger logger.Logger,
-	userService *UserService,
+	userService domain.UserServiceInterface,
 	authService domain.AuthService,
 	mailerInstance mailer.Mailer,
 	config *config.Config,
@@ -296,6 +296,12 @@ func (s *WorkspaceService) RemoveUserFromWorkspace(ctx context.Context, workspac
 
 // TransferOwnership transfers the ownership of a workspace from the current owner to a member
 func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID string, newOwnerID string, currentOwnerID string) error {
+	// Authenticate the user
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Check if current owner is actually an owner
 	currentOwnerWorkspace, err := s.repo.GetUserWorkspace(ctx, currentOwnerID, workspaceID)
 	if err != nil {
@@ -342,7 +348,7 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 // InviteMember creates an invitation for a user to join a workspace
 func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, string, error) {
 
-	user, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	inviter, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -363,9 +369,9 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 	}
 
 	// Check if the inviter has permission to invite members (is a member of the workspace)
-	isMember, err := s.repo.IsUserWorkspaceMember(ctx, user.ID, workspaceID)
+	isMember, err := s.repo.IsUserWorkspaceMember(ctx, inviter.ID, workspaceID)
 	if err != nil {
-		s.logger.WithField("workspace_id", workspaceID).WithField("inviter_id", user.ID).WithField("error", err.Error()).Error("Failed to check if inviter is a member")
+		s.logger.WithField("workspace_id", workspaceID).WithField("inviter_id", inviter.ID).WithField("error", err.Error()).Error("Failed to check if inviter is a member")
 		return nil, "", err
 	}
 	if !isMember {
@@ -373,23 +379,23 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 	}
 
 	// Get inviter user details for the email
-	inviter, err := s.userService.GetUserByID(ctx, user.ID)
+	inviterDetails, err := s.userService.GetUserByID(ctx, inviter.ID)
 	if err != nil {
-		s.logger.WithField("inviter_id", user.ID).WithField("error", err.Error()).Error("Failed to get inviter details")
+		s.logger.WithField("inviter_id", inviter.ID).WithField("error", err.Error()).Error("Failed to get inviter details")
 		return nil, "", err
 	}
-	inviterName := inviter.Name
+	inviterName := inviterDetails.Name
 	if inviterName == "" {
-		inviterName = inviter.Email
+		inviterName = inviterDetails.Email
 	}
 
 	// Check if user already exists with this email
-	user, err = s.userService.GetUserByEmail(ctx, email)
-	if err == nil && user != nil {
+	existingUser, err := s.userService.GetUserByEmail(ctx, email)
+	if err == nil && existingUser != nil {
 		// User exists, check if they're already a member
-		isMember, err := s.repo.IsUserWorkspaceMember(ctx, user.ID, workspaceID)
+		isMember, err := s.repo.IsUserWorkspaceMember(ctx, existingUser.ID, workspaceID)
 		if err != nil {
-			s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to check if user is already a member")
+			s.logger.WithField("workspace_id", workspaceID).WithField("user_id", existingUser.ID).WithField("error", err.Error()).Error("Failed to check if user is already a member")
 			return nil, "", err
 		}
 		if isMember {
@@ -398,7 +404,7 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 
 		// User exists but is not a member, add them as a member
 		userWorkspace := &domain.UserWorkspace{
-			UserID:      user.ID,
+			UserID:      existingUser.ID,
 			WorkspaceID: workspaceID,
 			Role:        "member", // Always set invited users as members
 			CreatedAt:   time.Now(),
@@ -406,7 +412,7 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 		}
 		err = s.repo.AddUserToWorkspace(ctx, userWorkspace)
 		if err != nil {
-			s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to add user to workspace")
+			s.logger.WithField("workspace_id", workspaceID).WithField("user_id", existingUser.ID).WithField("error", err.Error()).Error("Failed to add user to workspace")
 			return nil, "", err
 		}
 
@@ -422,7 +428,7 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 	invitation := &domain.WorkspaceInvitation{
 		ID:          invitationID,
 		WorkspaceID: workspaceID,
-		InviterID:   user.ID,
+		InviterID:   inviter.ID,
 		Email:       email,
 		ExpiresAt:   expiresAt,
 		CreatedAt:   time.Now(),

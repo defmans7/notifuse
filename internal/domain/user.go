@@ -24,6 +24,30 @@ type Session struct {
 	MagicCodeExpires time.Time `json:"magic_code_expires,omitempty" db:"magic_code_expires_at"`
 }
 
+type SignInInput struct {
+	Email string `json:"email"`
+}
+
+type VerifyCodeInput struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+type AuthResponse struct {
+	Token     string    `json:"token"`
+	User      User      `json:"user"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// UserServiceInterface defines the interface for user operations
+type UserServiceInterface interface {
+	SignIn(ctx context.Context, input SignInInput) (string, error)
+	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
+	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*User, error)
+	GetUserByID(ctx context.Context, userID string) (*User, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+}
+
 type UserRepository interface {
 	// CreateUser creates a new user in the database
 	CreateUser(ctx context.Context, user *User) error

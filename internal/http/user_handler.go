@@ -10,7 +10,6 @@ import (
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
-	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
@@ -19,8 +18,8 @@ import (
 
 // UserServiceInterface defines the methods required from a user service
 type UserServiceInterface interface {
-	SignIn(ctx context.Context, input service.SignInInput) (string, error)
-	VerifyCode(ctx context.Context, input service.VerifyCodeInput) (*service.AuthResponse, error)
+	SignIn(ctx context.Context, input domain.SignInInput) (string, error)
+	VerifyCode(ctx context.Context, input domain.VerifyCodeInput) (*domain.AuthResponse, error)
 	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
 	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
 }
@@ -44,7 +43,7 @@ func NewUserHandler(userService UserServiceInterface, workspaceService domain.Wo
 }
 
 func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
-	var input service.SignInInput
+	var input domain.SignInInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		WriteJSONError(w, "Invalid SignIn request body", http.StatusBadRequest)
 		return
@@ -71,7 +70,7 @@ func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
-	var input service.VerifyCodeInput
+	var input domain.VerifyCodeInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		WriteJSONError(w, "Invalid VerifyCode request body", http.StatusBadRequest)
 		return

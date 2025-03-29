@@ -44,34 +44,10 @@ func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 	}, nil
 }
 
-type SignInInput struct {
-	Email string `json:"email"`
-}
-
-type VerifyCodeInput struct {
-	Email string `json:"email"`
-	Code  string `json:"code"`
-}
-
-type AuthResponse struct {
-	Token     string      `json:"token"`
-	User      domain.User `json:"user"`
-	ExpiresAt time.Time   `json:"expires_at"`
-}
-
-// UserServiceInterface defines the interface for user operations
-type UserServiceInterface interface {
-	SignIn(ctx context.Context, input SignInInput) (string, error)
-	VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error)
-	VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error)
-	GetUserByID(ctx context.Context, userID string) (*domain.User, error)
-	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
-}
-
 // Ensure UserService implements UserServiceInterface
-var _ UserServiceInterface = (*UserService)(nil)
+var _ domain.UserServiceInterface = (*UserService)(nil)
 
-func (s *UserService) SignIn(ctx context.Context, input SignInInput) (string, error) {
+func (s *UserService) SignIn(ctx context.Context, input domain.SignInInput) (string, error) {
 	// Check if user exists, if not create a new one
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
@@ -128,7 +104,7 @@ func (s *UserService) SignIn(ctx context.Context, input SignInInput) (string, er
 	return "", nil
 }
 
-func (s *UserService) VerifyCode(ctx context.Context, input VerifyCodeInput) (*AuthResponse, error) {
+func (s *UserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInput) (*domain.AuthResponse, error) {
 	// Find user by email
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
@@ -175,7 +151,7 @@ func (s *UserService) VerifyCode(ctx context.Context, input VerifyCodeInput) (*A
 	// Generate authentication token
 	token := s.authService.GenerateAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
 
-	return &AuthResponse{
+	return &domain.AuthResponse{
 		Token:     token,
 		User:      *user,
 		ExpiresAt: matchingSession.ExpiresAt,
