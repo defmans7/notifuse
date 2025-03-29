@@ -22,6 +22,7 @@ func TestBatchImportContacts(t *testing.T) {
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
+	workspaceRepo.AddWorkspaceDB("workspace123", db)
 	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
