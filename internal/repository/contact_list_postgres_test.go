@@ -125,6 +125,35 @@ func TestContactListRepository_GetContactListByIDs(t *testing.T) {
 		require.IsType(t, &domain.ErrContactListNotFound{}, err)
 		require.Nil(t, result)
 	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		result, err := repo.GetContactListByIDs(ctx, workspaceID, email, listID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+		require.Nil(t, result)
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
+			AddRow(nil, nil, nil, nil, nil) // Invalid data to cause scan error
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+			WithArgs(email, listID).
+			WillReturnRows(rows)
+
+		result, err := repo.GetContactListByIDs(ctx, workspaceID, email, listID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get contact list")
+		require.Nil(t, result)
+	})
 }
 
 func TestContactListRepository_GetContactsByListID(t *testing.T) {
@@ -165,6 +194,51 @@ func TestContactListRepository_GetContactsByListID(t *testing.T) {
 		results, err := repo.GetContactsByListID(ctx, workspaceID, listID)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to get contacts for list")
+		require.Nil(t, results)
+	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		results, err := repo.GetContactsByListID(ctx, workspaceID, listID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+		require.Nil(t, results)
+	})
+
+	t.Run("empty result set", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"})
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+			WithArgs(listID).
+			WillReturnRows(rows)
+
+		results, err := repo.GetContactsByListID(ctx, workspaceID, listID)
+		require.NoError(t, err)
+		require.Empty(t, results)
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
+			AddRow(nil, nil, nil, nil, nil) // Invalid data to cause scan error
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+			WithArgs(listID).
+			WillReturnRows(rows)
+
+		results, err := repo.GetContactsByListID(ctx, workspaceID, listID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to scan contact list")
 		require.Nil(t, results)
 	})
 }
@@ -209,6 +283,51 @@ func TestContactListRepository_GetListsByEmail(t *testing.T) {
 		require.Contains(t, err.Error(), "failed to get lists for contact")
 		require.Nil(t, results)
 	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		results, err := repo.GetListsByEmail(ctx, workspaceID, email)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+		require.Nil(t, results)
+	})
+
+	t.Run("empty result set", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"})
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		results, err := repo.GetListsByEmail(ctx, workspaceID, email)
+		require.NoError(t, err)
+		require.Empty(t, results)
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
+			AddRow(nil, nil, nil, nil, nil) // Invalid data to cause scan error
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		results, err := repo.GetListsByEmail(ctx, workspaceID, email)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to scan contact list")
+		require.Nil(t, results)
+	})
 }
 
 func TestContactListRepository_UpdateContactListStatus(t *testing.T) {
@@ -247,6 +366,44 @@ func TestContactListRepository_UpdateContactListStatus(t *testing.T) {
 		require.Error(t, err)
 		require.IsType(t, &domain.ErrContactListNotFound{}, err)
 	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		err := repo.UpdateContactListStatus(ctx, workspaceID, email, listID, status)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("execution error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectExec(`UPDATE contact_lists`).
+			WithArgs(status, sqlmock.AnyArg(), email, listID).
+			WillReturnError(errors.New("execution error"))
+
+		err := repo.UpdateContactListStatus(ctx, workspaceID, email, listID, status)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to update contact list status")
+	})
+
+	t.Run("rows affected error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectExec(`UPDATE contact_lists`).
+			WithArgs(status, sqlmock.AnyArg(), email, listID).
+			WillReturnResult(sqlmock.NewErrorResult(errors.New("rows affected error")))
+
+		err := repo.UpdateContactListStatus(ctx, workspaceID, email, listID, status)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get affected rows")
+	})
 }
 
 func TestContactListRepository_RemoveContactFromList(t *testing.T) {
@@ -283,5 +440,43 @@ func TestContactListRepository_RemoveContactFromList(t *testing.T) {
 		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
 		require.Error(t, err)
 		require.IsType(t, &domain.ErrContactListNotFound{}, err)
+	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("execution error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectExec(`DELETE FROM contact_lists`).
+			WithArgs(email, listID).
+			WillReturnError(errors.New("execution error"))
+
+		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to remove contact from list")
+	})
+
+	t.Run("rows affected error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectExec(`DELETE FROM contact_lists`).
+			WithArgs(email, listID).
+			WillReturnResult(sqlmock.NewErrorResult(errors.New("rows affected error")))
+
+		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get affected rows")
 	})
 }
