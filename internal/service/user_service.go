@@ -13,7 +13,7 @@ import (
 
 type UserService struct {
 	repo          domain.UserRepository
-	authService   *AuthService
+	authService   domain.AuthService
 	emailSender   EmailSender
 	sessionExpiry time.Duration
 	logger        logger.Logger
@@ -26,7 +26,7 @@ type EmailSender interface {
 
 type UserServiceConfig struct {
 	Repository    domain.UserRepository
-	AuthService   *AuthService
+	AuthService   domain.AuthService
 	EmailSender   EmailSender
 	SessionExpiry time.Duration
 	Logger        logger.Logger

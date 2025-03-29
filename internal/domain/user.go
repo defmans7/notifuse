@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+//go:generate mockgen -destination mocks/mock_user_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain UserRepository
+
 // User represents a user in the system
 type User struct {
 	ID        string    `json:"id" db:"id"`

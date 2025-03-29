@@ -33,7 +33,7 @@ func (m *MockLogger) EXPECT() *MockLoggerMockRecorder {
 // Debug mocks base method
 func (m *MockLogger) Debug(msg string) {
 	m.ctrl.T.Helper()
-	m.recorder.mock.Debug(msg)
+	m.ctrl.Call(m, "Debug", msg)
 }
 
 // Debug indicates an expected call of Debug
@@ -45,7 +45,7 @@ func (mr *MockLoggerMockRecorder) Debug(msg interface{}) *gomock.Call {
 // Info mocks base method
 func (m *MockLogger) Info(msg string) {
 	m.ctrl.T.Helper()
-	m.recorder.mock.Info(msg)
+	m.ctrl.Call(m, "Info", msg)
 }
 
 // Info indicates an expected call of Info
@@ -57,7 +57,7 @@ func (mr *MockLoggerMockRecorder) Info(msg interface{}) *gomock.Call {
 // Warn mocks base method
 func (m *MockLogger) Warn(msg string) {
 	m.ctrl.T.Helper()
-	m.recorder.mock.Warn(msg)
+	m.ctrl.Call(m, "Warn", msg)
 }
 
 // Warn indicates an expected call of Warn
@@ -69,7 +69,7 @@ func (mr *MockLoggerMockRecorder) Warn(msg interface{}) *gomock.Call {
 // Error mocks base method
 func (m *MockLogger) Error(msg string) {
 	m.ctrl.T.Helper()
-	m.recorder.mock.Error(msg)
+	m.ctrl.Call(m, "Error", msg)
 }
 
 // Error indicates an expected call of Error
@@ -81,7 +81,7 @@ func (mr *MockLoggerMockRecorder) Error(msg interface{}) *gomock.Call {
 // Fatal mocks base method
 func (m *MockLogger) Fatal(msg string) {
 	m.ctrl.T.Helper()
-	m.recorder.mock.Fatal(msg)
+	m.ctrl.Call(m, "Fatal", msg)
 }
 
 // Fatal indicates an expected call of Fatal
