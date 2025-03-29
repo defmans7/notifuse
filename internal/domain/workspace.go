@@ -10,6 +10,9 @@ import (
 	"github.com/asaskevich/govalidator"
 )
 
+//go:generate mockgen -destination mocks/mock_workspace_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain WorkspaceRepository
+//go:generate mockgen -destination mocks/mock_workspace_service.go -package mocks github.com/Notifuse/notifuse/internal/domain WorkspaceServiceInterface
+
 // WorkspaceSettings contains configurable workspace settings
 type WorkspaceSettings struct {
 	WebsiteURL string `json:"website_url,omitempty" valid:"url,optional"`
@@ -162,6 +165,9 @@ type WorkspaceServiceInterface interface {
 	DeleteWorkspace(ctx context.Context, id string) error
 	GetWorkspaceMembersWithEmail(ctx context.Context, id string) ([]*UserWorkspaceWithEmail, error)
 	InviteMember(ctx context.Context, workspaceID, email string) (*WorkspaceInvitation, string, error)
+	AddUserToWorkspace(ctx context.Context, workspaceID string, userID string, role string) error
+	RemoveUserFromWorkspace(ctx context.Context, workspaceID string, userID string) error
+	TransferOwnership(ctx context.Context, workspaceID string, newOwnerID string, currentOwnerID string) error
 }
 
 // Request/Response types

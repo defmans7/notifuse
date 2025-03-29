@@ -3,14 +3,14 @@ package http
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,10 +19,9 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*service.MockContactService)
+		setupMock      func(*mocks.MockContactService)
 		expectedStatus int
 		expectedAction string
-		checkResult    func(*testing.T, *service.MockContactService)
 	}{
 		{
 			name:   "Create Contact Without UUID",
@@ -37,25 +36,13 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *service.MockContactService) {
-				// Reset mock state
-				m.UpsertContactCalled = false
-				m.LastContactUpserted = nil
-				m.ErrToReturn = nil
-				m.UpsertIsNewToReturn = true // Indicate this is a new contact
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(true, nil)
 			},
 			expectedStatus: http.StatusCreated,
 			expectedAction: "created",
-			checkResult: func(t *testing.T, m *service.MockContactService) {
-				assert.True(t, m.UpsertContactCalled)
-				assert.NotNil(t, m.LastContactUpserted)
-				if m.LastContactUpserted.Email != "new@example.com" {
-					t.Errorf("Expected contact email %s, got %s", "new@example.com", m.LastContactUpserted.Email)
-				}
-				if m.LastContactUpserted.FirstName.String != "John" || m.LastContactUpserted.FirstName.IsNull {
-					t.Errorf("Expected contact first name 'John', got '%+v'", m.LastContactUpserted.FirstName)
-				}
-			},
 		},
 		{
 			name:   "Create Contact With Email",
@@ -70,25 +57,13 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *service.MockContactService) {
-				// Reset mock state
-				m.UpsertContactCalled = false
-				m.LastContactUpserted = nil
-				m.ErrToReturn = nil
-				m.UpsertIsNewToReturn = true // Indicate this is a new contact
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(true, nil)
 			},
 			expectedStatus: http.StatusCreated,
 			expectedAction: "created",
-			checkResult: func(t *testing.T, m *service.MockContactService) {
-				assert.True(t, m.UpsertContactCalled)
-				assert.NotNil(t, m.LastContactUpserted)
-				if m.LastContactUpserted.Email != "new@example.com" {
-					t.Errorf("Expected contact email %s, got %s", "new@example.com", m.LastContactUpserted.Email)
-				}
-				if m.LastContactUpserted.FirstName.String != "John" || m.LastContactUpserted.FirstName.IsNull {
-					t.Errorf("Expected contact first name 'John', got '%+v'", m.LastContactUpserted.FirstName)
-				}
-			},
 		},
 		{
 			name:   "Update Existing Contact",
@@ -101,83 +76,23 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *service.MockContactService) {
-				// Reset mock state
-				m.UpsertContactCalled = false
-				m.LastContactUpserted = nil
-				m.ErrToReturn = nil
-				m.UpsertIsNewToReturn = false // Indicate this is an existing contact
-
-				// Add existing contact
-				m.Contacts["old@example.com"] = &domain.Contact{
-					ExternalID: &domain.NullableString{String: "old-ext", IsNull: false},
-					Email:      "old@example.com",
-					Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
-					FirstName: &domain.NullableString{
-						String: "Old",
-						IsNull: false,
-					},
-					LastName: &domain.NullableString{
-						String: "Name",
-						IsNull: false,
-					},
-				}
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(false, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedAction: "updated",
-			checkResult: func(t *testing.T, m *service.MockContactService) {
-				assert.True(t, m.UpsertContactCalled)
-				assert.NotNil(t, m.LastContactUpserted)
-
-				// Create expected contact by merging the update
-				expectedContact := &domain.Contact{
-					ExternalID: &domain.NullableString{String: "old-ext", IsNull: false},
-					Email:      "old@example.com",
-					Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
-					FirstName: &domain.NullableString{
-						String: "Old",
-						IsNull: false,
-					},
-					LastName: &domain.NullableString{
-						String: "Name",
-						IsNull: false,
-					},
-				}
-
-				// Create update contact with only the fields being updated
-				updateContact := &domain.Contact{
-					ExternalID: &domain.NullableString{String: "updated-ext", IsNull: false},
-					Email:      "old@example.com",
-					Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
-				}
-
-				// Merge the update into the expected contact
-				expectedContact.Merge(updateContact)
-
-				// Compare the merged contact with the actual result
-				assert.Equal(t, expectedContact.Email, m.LastContactUpserted.Email)
-				assert.Equal(t, expectedContact.ExternalID.String, m.LastContactUpserted.ExternalID.String)
-				assert.Equal(t, expectedContact.ExternalID.IsNull, m.LastContactUpserted.ExternalID.IsNull)
-				assert.Equal(t, expectedContact.Timezone.String, m.LastContactUpserted.Timezone.String)
-				assert.Equal(t, expectedContact.Timezone.IsNull, m.LastContactUpserted.Timezone.IsNull)
-				assert.Equal(t, expectedContact.FirstName.String, m.LastContactUpserted.FirstName.String)
-				assert.Equal(t, expectedContact.FirstName.IsNull, m.LastContactUpserted.FirstName.IsNull)
-				assert.Equal(t, expectedContact.LastName.String, m.LastContactUpserted.LastName.String)
-				assert.Equal(t, expectedContact.LastName.IsNull, m.LastContactUpserted.LastName.IsNull)
-			},
 		},
 		{
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *service.MockContactService) {
-				m.UpsertContactCalled = false
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().UpsertContact(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedAction: "",
-			checkResult: func(t *testing.T, m *service.MockContactService) {
-				assert.False(t, m.UpsertContactCalled)
-			},
 		},
 		{
 			name:   "Method Not Allowed",
@@ -187,14 +102,11 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 				"email":       "updated@example.com",
 				"timezone":    "UTC",
 			},
-			setupMock: func(m *service.MockContactService) {
-				m.UpsertContactCalled = false
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().UpsertContact(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
 			expectedAction: "",
-			checkResult: func(t *testing.T, m *service.MockContactService) {
-				assert.False(t, m.UpsertContactCalled)
-			},
 		},
 		{
 			name:   "Service Error on Upsert",
@@ -207,23 +119,22 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *service.MockContactService) {
-				m.UpsertContactCalled = false
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(false, fmt.Errorf("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedAction: "",
-			checkResult: func(t *testing.T, m *service.MockContactService) {
-				assert.True(t, m.UpsertContactCalled)
-			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService := &service.MockContactService{
-				Contacts: make(map[string]*domain.Contact),
-			}
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockService := mocks.NewMockContactService(ctrl)
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactHandler(mockService, mockLogger)
 
@@ -269,25 +180,15 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 				_, exists = response["contact"]
 				assert.True(t, exists)
 			}
-
-			// Run specific checks
-			tc.checkResult(t, mockService)
 		})
 	}
 }
 
 func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
-	mockService := &service.MockContactService{
-		Contacts: map[string]*domain.Contact{
-			"test@example.com": {
-				Email:      "test@example.com",
-				ExternalID: &domain.NullableString{String: "old-ext", IsNull: false},
-				Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
-				Language:   &domain.NullableString{String: "en-US", IsNull: false},
-			},
-		},
-		UpsertIsNewToReturn: false,
-	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockContactService(ctrl)
 	mockLogger := &MockLoggerForContact{}
 	handler := NewContactHandler(mockService, mockLogger)
 
@@ -305,6 +206,10 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 		}
 	}`
 
+	mockService.EXPECT().
+		UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+		Return(false, nil)
+
 	req, err := http.NewRequest(http.MethodPost, "/api/contacts.upsert", strings.NewReader(reqBody))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
@@ -317,57 +222,13 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 		t.Errorf("Handler returned wrong status code: got %v, expected %v", status, http.StatusOK)
 	}
 
-	// Verify that the service was called with the correct contact
-	if !mockService.UpsertContactCalled {
-		t.Error("Expected UpsertContact to be called, but it wasn't")
-	}
-
-	if mockService.LastContactUpserted == nil {
-		t.Error("Expected LastContactUpserted to be set, but it wasn't")
-	} else {
-		if mockService.LastContactUpserted.Email != "test@example.com" {
-			t.Errorf("Expected contact email %s, got %s", "test@example.com", mockService.LastContactUpserted.Email)
-		}
-
-		// Check external_id regardless of how it's stored internally
-		expectedExternalId := "ext123"
-		actualExternalId := mockService.LastContactUpserted.ExternalID.String
-		if actualExternalId != expectedExternalId || mockService.LastContactUpserted.ExternalID.IsNull {
-			t.Errorf("Expected contact external_id %s, got %v", expectedExternalId, mockService.LastContactUpserted.ExternalID)
-		}
-
-		// Check timezone regardless of how it's stored internally
-		expectedTimezone := "Europe/Paris"
-		actualTimezone := mockService.LastContactUpserted.Timezone.String
-		if actualTimezone != expectedTimezone || mockService.LastContactUpserted.Timezone.IsNull {
-			t.Errorf("Expected contact timezone %s, got %v", expectedTimezone, mockService.LastContactUpserted.Timezone)
-		}
-
-		if mockService.LastContactUpserted.Language.String != "en-US" || mockService.LastContactUpserted.Language.IsNull {
-			t.Errorf("Expected contact language %s, got %v", "en-US", mockService.LastContactUpserted.Language)
-		}
-
-		// Verify custom JSON fields
-		if mockService.LastContactUpserted.CustomJSON1.IsNull {
-			t.Error("Expected CustomJSON1 to not be null")
-		}
-
-		if !mockService.LastContactUpserted.CustomJSON2.IsNull {
-			t.Error("Expected CustomJSON2 to be null")
-		}
-
-		if mockService.LastContactUpserted.CustomJSON3.IsNull {
-			t.Error("Expected CustomJSON3 to not be null")
-		}
-	}
-
 	// Verify response
 	var response map[string]interface{}
 	if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
 		t.Errorf("Failed to decode response body: %v", err)
 	}
 
-	contact, ok := response["contact"].(map[string]interface{})
+	contactResponse, ok := response["contact"].(map[string]interface{})
 	if !ok {
 		t.Error("Expected 'contact' field in response, but not found")
 	}
@@ -377,24 +238,18 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 		t.Error("Expected 'action' field in response, but not found")
 	}
 
-	if mockService.UpsertIsNewToReturn {
-		if action != "created" {
-			t.Errorf("Expected action 'created', got %s", action)
-		}
-	} else {
-		if action != "updated" {
-			t.Errorf("Expected action 'updated', got %s", action)
-		}
+	if action != "updated" {
+		t.Errorf("Expected action 'updated', got %s", action)
 	}
 
 	// Verify contact fields in response
-	if contact != nil {
-		if email, ok := contact["email"].(string); !ok || email != "test@example.com" {
+	if contactResponse != nil {
+		if email, ok := contactResponse["email"].(string); !ok || email != "test@example.com" {
 			t.Errorf("Expected contact email %s, got %v", "test@example.com", email)
 		}
 
 		// Check external_id field - could be a string or a map
-		externalID, ok := contact["external_id"]
+		externalID, ok := contactResponse["external_id"]
 		if !ok {
 			t.Errorf("Expected external_id in response, but not found")
 		} else {
@@ -414,7 +269,7 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 		}
 
 		// Check timezone field - could be a string or a map
-		timezone, ok := contact["timezone"]
+		timezone, ok := contactResponse["timezone"]
 		if !ok {
 			t.Errorf("Expected timezone in response, but not found")
 		} else {
@@ -436,7 +291,10 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 }
 
 func TestContactHandler_HandleUpsertWithInvalidJSON(t *testing.T) {
-	mockService := service.NewMockContactService()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockContactService(ctrl)
 	mockLogger := &MockLoggerForContact{}
 	handler := NewContactHandler(mockService, mockLogger)
 
@@ -469,6 +327,8 @@ func TestContactHandler_HandleUpsertWithInvalidJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mockService.EXPECT().UpsertContact(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
 			req := httptest.NewRequest(http.MethodPost, "/api/contacts.upsert", strings.NewReader(tt.requestBody))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()

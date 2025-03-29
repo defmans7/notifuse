@@ -6,9 +6,32 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"aidanwoods.dev/go-paseto"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Test setup helper
+func setupTest(t *testing.T) (*WorkspaceHandler, *mocks.MockWorkspaceServiceInterface, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	workspaceSvc := mocks.NewMockWorkspaceServiceInterface(ctrl)
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	mockLogger := new(pkgmocks.MockLogger)
+	handler := NewWorkspaceHandler(workspaceSvc, publicKey, mockLogger)
+
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	return handler, workspaceSvc, mux, secretKey
+}
 
 func TestWriteJSONError(t *testing.T) {
 	testCases := []struct {

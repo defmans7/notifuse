@@ -37,7 +37,7 @@ jobs:
 
           # Run all tests (both unit and integration) with a single coverage profile
           # Exclude mock files and their tests from coverage
-          go test -race -coverprofile=coverage.txt -covermode=atomic ./... -v -coverpkg=./... -coverexclude=*_mock.go,*_mock_test.go
+          go test -race -coverprofile=coverage.txt -covermode=atomic ./... -v -coverpkg=./... -coverexclude=mock_*,*_mock.go,*_mock_test.go
 
           # Debug - verify file exists
           ls -la

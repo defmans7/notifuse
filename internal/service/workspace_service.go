@@ -264,24 +264,24 @@ func (s *WorkspaceService) AddUserToWorkspace(ctx context.Context, workspaceID s
 // RemoveUserFromWorkspace removes a user from a workspace if the requester is an owner
 func (s *WorkspaceService) RemoveUserFromWorkspace(ctx context.Context, workspaceID string, userID string) error {
 	// Check if requester is an owner
-	user, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	owner, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
-	requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, owner.ID, workspaceID)
 	if err != nil {
-		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", user.ID).WithField("error", err.Error()).Error("Failed to get requester workspace")
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", owner.ID).WithField("error", err.Error()).Error("Failed to get requester workspace")
 		return err
 	}
 
 	if requesterWorkspace.Role != "owner" {
-		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", user.ID).WithField("role", requesterWorkspace.Role).Error("Requester is not an owner of the workspace")
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).WithField("requester_id", owner.ID).WithField("role", requesterWorkspace.Role).Error("Requester is not an owner of the workspace")
 		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}
 
 	// Prevent users from removing themselves
-	if userID == user.ID {
+	if userID == owner.ID {
 		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userID).Error("Cannot remove self from workspace")
 		return fmt.Errorf("cannot remove yourself from the workspace")
 	}

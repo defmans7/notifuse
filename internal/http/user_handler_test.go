@@ -11,34 +11,46 @@ import (
 	"time"
 
 	"aidanwoods.dev/go-paseto"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
-	"github.com/Notifuse/notifuse/internal/service"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 )
 
+func setupUserHandlerTest(t *testing.T) (*UserHandler, *mocks.MockUserServiceInterface, *mocks.MockWorkspaceServiceInterface, paseto.V4AsymmetricSecretKey) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+	mockWorkspaceSvc := mocks.NewMockWorkspaceServiceInterface(ctrl)
+	cfg := &config.Config{}
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	mockLogger := &pkgmocks.MockLogger{}
+	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, cfg, publicKey, mockLogger)
+
+	return handler, mockUserSvc, mockWorkspaceSvc, secretKey
+}
+
 func TestUserHandler_SignIn(t *testing.T) {
-	mockService := new(service.MockUserService)
-	mockWorkspaceSvc := new(service.MockWorkspaceService)
+	_, mockUserSvc, mockWorkspaceSvc, secretKey := setupUserHandlerTest(t)
 
 	// Test with different configs
 	devConfig := &config.Config{Environment: "development"}
 	prodConfig := &config.Config{Environment: "production"}
 
-	// Create a test key
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
-
-	mockLogger := &service.MockLogger{}
-
-	// Use type assertion to treat mockService as a service.UserServiceInterface
-	devHandler := NewUserHandler(mockService, mockWorkspaceSvc, devConfig, publicKey, mockLogger)
-	prodHandler := NewUserHandler(mockService, mockWorkspaceSvc, prodConfig, publicKey, mockLogger)
+	// Create handlers with different configs
+	devHandler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, devConfig, secretKey.Public(), &pkgmocks.MockLogger{})
+	prodHandler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, prodConfig, secretKey.Public(), &pkgmocks.MockLogger{})
 
 	tests := []struct {
 		name         string
@@ -55,9 +67,10 @@ func TestUserHandler_SignIn(t *testing.T) {
 				Email: "test@example.com",
 			},
 			setupMock: func() {
-				mockService.On("SignIn", mock.Anything, domain.SignInInput{
-					Email: "test@example.com",
-				}).Return("", nil)
+				mockUserSvc.EXPECT().
+					SignIn(gomock.Any(), domain.SignInInput{
+						Email: "test@example.com",
+					}).Return("", nil)
 			},
 			expectedCode: http.StatusOK,
 			expectedBody: map[string]string{
@@ -71,11 +84,10 @@ func TestUserHandler_SignIn(t *testing.T) {
 				Email: "test@example.com",
 			},
 			setupMock: func() {
-				// Mock the SignIn method to return the 6-digit code for development mode
-				mockService.Mock = mock.Mock{} // Reset mock to avoid conflicts
-				mockService.On("SignIn", mock.Anything, domain.SignInInput{
-					Email: "test@example.com",
-				}).Return("123456", nil)
+				mockUserSvc.EXPECT().
+					SignIn(gomock.Any(), domain.SignInInput{
+						Email: "test@example.com",
+					}).Return("123456", nil)
 			},
 			expectedCode: http.StatusOK,
 			expectedBody: map[string]string{
@@ -90,9 +102,10 @@ func TestUserHandler_SignIn(t *testing.T) {
 				Email: "",
 			},
 			setupMock: func() {
-				mockService.On("SignIn", mock.Anything, domain.SignInInput{
-					Email: "",
-				}).Return("", fmt.Errorf("invalid email"))
+				mockUserSvc.EXPECT().
+					SignIn(gomock.Any(), domain.SignInInput{
+						Email: "",
+					}).Return("", fmt.Errorf("invalid email"))
 			},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: map[string]string{
@@ -106,9 +119,10 @@ func TestUserHandler_SignIn(t *testing.T) {
 				Email: "",
 			},
 			setupMock: func() {
-				mockService.On("SignIn", mock.Anything, domain.SignInInput{
-					Email: "",
-				}).Return("", fmt.Errorf("invalid email"))
+				mockUserSvc.EXPECT().
+					SignIn(gomock.Any(), domain.SignInInput{
+						Email: "",
+					}).Return("", fmt.Errorf("invalid email"))
 			},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: map[string]string{
@@ -135,25 +149,12 @@ func TestUserHandler_SignIn(t *testing.T) {
 			err = json.NewDecoder(rec.Body).Decode(&response)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedBody, response)
-
-			mockService.AssertExpectations(t)
 		})
 	}
 }
 
 func TestUserHandler_VerifyCode(t *testing.T) {
-	mockService := new(service.MockUserService)
-	mockWorkspaceSvc := new(service.MockWorkspaceService)
-	config := &config.Config{}
-
-	// Create a test key
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
-
-	mockLogger := &service.MockLogger{}
-
-	// Use type assertion for mockService
-	handler := NewUserHandler(mockService, mockWorkspaceSvc, config, publicKey, mockLogger)
+	handler, mockUserSvc, _, _ := setupUserHandlerTest(t)
 
 	user := &domain.User{
 		ID:    uuid.New().String(),
@@ -175,10 +176,11 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 				Code:  "123456",
 			},
 			setupMock: func() {
-				mockService.On("VerifyCode", mock.Anything, domain.VerifyCodeInput{
-					Email: "test@example.com",
-					Code:  "123456",
-				}).Return(&domain.AuthResponse{
+				mockUserSvc.EXPECT().
+					VerifyCode(gomock.Any(), domain.VerifyCodeInput{
+						Email: "test@example.com",
+						Code:  "123456",
+					}).Return(&domain.AuthResponse{
 					Token:     "auth-token",
 					User:      *user,
 					ExpiresAt: time.Now().Add(24 * time.Hour),
@@ -200,10 +202,11 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 				Code:  "000000",
 			},
 			setupMock: func() {
-				mockService.On("VerifyCode", mock.Anything, domain.VerifyCodeInput{
-					Email: "test@example.com",
-					Code:  "000000",
-				}).Return(nil, fmt.Errorf("invalid or expired code"))
+				mockUserSvc.EXPECT().
+					VerifyCode(gomock.Any(), domain.VerifyCodeInput{
+						Email: "test@example.com",
+						Code:  "000000",
+					}).Return(nil, fmt.Errorf("invalid or expired code"))
 			},
 			expectedCode: http.StatusUnauthorized,
 			checkResponse: func(t *testing.T, response map[string]interface{}) {
@@ -230,20 +233,12 @@ func TestUserHandler_VerifyCode(t *testing.T) {
 			err = json.NewDecoder(rec.Body).Decode(&response)
 			require.NoError(t, err)
 			tt.checkResponse(t, response)
-
-			mockService.AssertExpectations(t)
 		})
 	}
 }
 
 func TestUserHandler_GetCurrentUser(t *testing.T) {
-	mockUserSvc := new(service.MockUserService)
-	mockWorkspaceSvc := new(service.MockWorkspaceService)
-	cfg := &config.Config{}
-	publicKey := paseto.V4AsymmetricPublicKey{}
-	mockLogger := &service.MockLogger{}
-
-	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, cfg, publicKey, mockLogger)
+	handler, mockUserSvc, mockWorkspaceSvc, _ := setupUserHandlerTest(t)
 
 	// Test successful case
 	userID := "test-user"
@@ -263,8 +258,12 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 		},
 	}
 
-	mockUserSvc.On("GetUserByID", mock.Anything, userID).Return(user, nil)
-	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything).Return(workspaces, nil).Once()
+	mockUserSvc.EXPECT().
+		GetUserByID(gomock.Any(), userID).
+		Return(user, nil)
+	mockWorkspaceSvc.EXPECT().
+		ListWorkspaces(gomock.Any()).
+		Return(workspaces, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
@@ -293,7 +292,9 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 
 	// Test user not found
 	notFoundUserID := "unknown-user-id"
-	mockUserSvc.On("GetUserByID", mock.Anything, notFoundUserID).Return(nil, fmt.Errorf("user not found"))
+	mockUserSvc.EXPECT().
+		GetUserByID(gomock.Any(), notFoundUserID).
+		Return(nil, fmt.Errorf("user not found"))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, notFoundUserID))
@@ -304,8 +305,12 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 
 	// Test workspaces retrieval error
 	errorUserID := "error-workspace-user"
-	mockUserSvc.On("GetUserByID", mock.Anything, errorUserID).Return(user, nil)
-	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything).Return(nil, fmt.Errorf("database error"))
+	mockUserSvc.EXPECT().
+		GetUserByID(gomock.Any(), errorUserID).
+		Return(user, nil)
+	mockWorkspaceSvc.EXPECT().
+		ListWorkspaces(gomock.Any()).
+		Return(nil, fmt.Errorf("database error"))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, errorUserID))
@@ -314,71 +319,56 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 	handler.GetCurrentUser(rec, req)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Failed to retrieve workspaces")
-
-	mockUserSvc.AssertExpectations(t)
-	mockWorkspaceSvc.AssertExpectations(t)
 }
 
 func TestUserHandler_RegisterRoutes(t *testing.T) {
-	mockUserSvc := new(service.MockUserService)
-	mockWorkspaceSvc := new(service.MockWorkspaceService)
-	cfg := &config.Config{}
-
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
-
-	mockLogger := &service.MockLogger{}
+	handler, mockUserSvc, mockWorkspaceSvc, secretKey := setupUserHandlerTest(t)
 
 	// Set up mock expectation for VerifyUserSession to prevent unexpected call error
-	mockUserSvc.On("VerifyUserSession", mock.Anything, mock.Anything, mock.Anything).
+	mockUserSvc.EXPECT().
+		VerifyUserSession(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&domain.User{ID: "user1", Email: "user@example.com"}, nil)
 
 	// Set up mock expectation for GetUserByID with specific user ID
-	mockUserSvc.On("GetUserByID", mock.Anything, "user1").
+	mockUserSvc.EXPECT().
+		GetUserByID(gomock.Any(), "user1").
 		Return(&domain.User{ID: "user1", Email: "user@example.com"}, nil)
 
 	// Set up mock expectation for ListWorkspaces
-	mockWorkspaceSvc.On("ListWorkspaces", mock.Anything).
+	mockWorkspaceSvc.EXPECT().
+		ListWorkspaces(gomock.Any()).
 		Return([]*domain.Workspace{}, nil)
-
-	// Use type assertion for mockUserSvc
-	handler := NewUserHandler(mockUserSvc, mockWorkspaceSvc, cfg, publicKey, mockLogger)
 
 	// Test cases for different scenarios
 	testCases := []struct {
 		name       string
 		route      string
-		setupMocks func(userSvc *service.MockUserService, workspaceSvc *service.MockWorkspaceService)
+		setupMocks func()
 	}{
 		{
 			name:  "public routes",
 			route: "/api/user.signin",
-			setupMocks: func(userSvc *service.MockUserService, workspaceSvc *service.MockWorkspaceService) {
+			setupMocks: func() {
 				// No mock setup needed for testing route registration
 			},
 		},
 		{
 			name:  "protected routes with auth service",
 			route: "/api/user.me",
-			setupMocks: func(userSvc *service.MockUserService, workspaceSvc *service.MockWorkspaceService) {
+			setupMocks: func() {
 				// Setup mock for auth middleware
-				userSvc.On("GetUserByID", mock.Anything, mock.Anything).Return(&domain.User{
-					ID:    "user1",
-					Email: "user@example.com",
-				}, nil)
+				mockUserSvc.EXPECT().
+					GetUserByID(gomock.Any(), gomock.Any()).
+					Return(&domain.User{
+						ID:    "user1",
+						Email: "user@example.com",
+					}, nil)
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Setup new mock services for each test case to avoid interference
-			mockUserSvc := new(service.MockUserService)
-			mockWorkspaceSvc := new(service.MockWorkspaceService)
-
-			// Set up mocks for this test case
-			tc.setupMocks(mockUserSvc, mockWorkspaceSvc)
-
 			// Create a new HTTP multiplexer for each test case
 			mux := http.NewServeMux()
 

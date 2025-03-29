@@ -10,8 +10,9 @@ import (
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -49,15 +50,17 @@ func (l *MockLoggerForList) Fatal(message string) {
 }
 
 // Test setup helper
-func setupListHandlerTest() (*service.MockListService, *MockLoggerForList, *ListHandler) {
-	mockService := service.NewMockListService()
+func setupListHandlerTest(t *testing.T) (*mocks.MockListService, *MockLoggerForList, *ListHandler) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockService := mocks.NewMockListService(ctrl)
 	mockLogger := &MockLoggerForList{LoggedMessages: []string{}}
 	handler := NewListHandler(mockService, mockLogger)
 	return mockService, mockLogger, handler
 }
 
 func TestListHandler_RegisterRoutes(t *testing.T) {
-	_, _, handler := setupListHandlerTest()
+	_, _, handler := setupListHandlerTest(t)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -84,7 +87,7 @@ func TestListHandler_HandleList(t *testing.T) {
 		name           string
 		method         string
 		queryParams    url.Values
-		setupMock      func(*service.MockListService)
+		setupMock      func(*mocks.MockListService)
 		expectedStatus int
 		expectedLists  bool
 	}{
@@ -94,19 +97,19 @@ func TestListHandler_HandleList(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *service.MockListService) {
-				m.Lists = map[string]*domain.List{
-					"list1": {
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().GetLists(gomock.Any(), "workspace123").Return([]*domain.List{
+					{
 						ID:          "list1",
 						Name:        "Test List 1",
 						Description: "Test Description 1",
 					},
-					"list2": {
+					{
 						ID:          "list2",
 						Name:        "Test List 2",
 						Description: "Test Description 2",
 					},
-				}
+				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedLists:  true,
@@ -117,8 +120,8 @@ func TestListHandler_HandleList(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().GetLists(gomock.Any(), "workspace123").Return(nil, errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedLists:  false,
@@ -129,7 +132,7 @@ func TestListHandler_HandleList(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
@@ -139,7 +142,7 @@ func TestListHandler_HandleList(t *testing.T) {
 			name:        "Missing Workspace ID",
 			method:      http.MethodGet,
 			queryParams: url.Values{},
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -149,7 +152,7 @@ func TestListHandler_HandleList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupListHandlerTest()
+			mockService, _, handler := setupListHandlerTest(t)
 			tc.setupMock(mockService)
 
 			req := httptest.NewRequest(tc.method, "/api/lists.list?"+tc.queryParams.Encode(), nil)
@@ -165,10 +168,6 @@ func TestListHandler_HandleList(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotEmpty(t, response)
 			}
-
-			if tc.method == http.MethodGet && tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
-				assert.True(t, mockService.GetListsCalled)
-			}
 		})
 	}
 }
@@ -178,7 +177,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 		name           string
 		method         string
 		queryParams    url.Values
-		setupMock      func(*service.MockListService)
+		setupMock      func(*mocks.MockListService)
 		expectedStatus int
 		expectedList   bool
 	}{
@@ -189,14 +188,12 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"list1"},
 			},
-			setupMock: func(m *service.MockListService) {
-				m.Lists = map[string]*domain.List{
-					"list1": {
-						ID:          "list1",
-						Name:        "Test List",
-						Description: "Test Description",
-					},
-				}
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().GetListByID(gomock.Any(), "workspace123", "list1").Return(&domain.List{
+					ID:          "list1",
+					Name:        "Test List",
+					Description: "Test Description",
+				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedList:   true,
@@ -208,8 +205,8 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"nonexistent"},
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrListNotFoundToReturn = true
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().GetListByID(gomock.Any(), "workspace123", "nonexistent").Return(nil, &domain.ErrListNotFound{Message: "list not found"})
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedList:   false,
@@ -221,8 +218,8 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"list1"},
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().GetListByID(gomock.Any(), "workspace123", "list1").Return(nil, errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedList:   false,
@@ -233,7 +230,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -246,7 +243,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"list1"},
 			},
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
@@ -256,7 +253,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupListHandlerTest()
+			mockService, _, handler := setupListHandlerTest(t)
 			tc.setupMock(mockService)
 
 			req := httptest.NewRequest(tc.method, "/api/lists.get?"+tc.queryParams.Encode(), nil)
@@ -272,13 +269,6 @@ func TestListHandler_HandleGet(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, response, "list")
 			}
-
-			if tc.method == http.MethodGet && tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
-				assert.True(t, mockService.GetListByIDCalled)
-				if tc.queryParams.Get("id") != "" {
-					assert.Equal(t, tc.queryParams.Get("id"), mockService.LastListID)
-				}
-			}
 		})
 	}
 }
@@ -288,9 +278,9 @@ func TestListHandler_HandleCreate(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*service.MockListService)
+		setupMock      func(*mocks.MockListService)
 		expectedStatus int
-		checkCreated   func(*testing.T, *service.MockListService)
+		checkCreated   func(*testing.T, *mocks.MockListService)
 	}{
 		{
 			name:   "Create List Success",
@@ -304,15 +294,20 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "New Description",
 			},
-			setupMock: func(m *service.MockListService) {
-				// No special setup needed
+			setupMock: func(m *mocks.MockListService) {
+				list := &domain.List{
+					ID:            "list1",
+					Name:          "New List",
+					Type:          "public",
+					IsDoubleOptin: true,
+					IsPublic:      true,
+					Description:   "New Description",
+				}
+				m.EXPECT().CreateList(gomock.Any(), "workspace123", list).Return(nil)
 			},
 			expectedStatus: http.StatusCreated,
-			checkCreated: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.CreateListCalled)
-				assert.NotNil(t, m.LastListCreated)
-				assert.Equal(t, "New List", m.LastListCreated.Name)
-				assert.Equal(t, "New Description", m.LastListCreated.Description)
+			checkCreated: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
@@ -327,24 +322,32 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "New Description",
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockListService) {
+				list := &domain.List{
+					ID:            "list1",
+					Name:          "New List",
+					Type:          "public",
+					IsDoubleOptin: true,
+					IsPublic:      true,
+					Description:   "New Description",
+				}
+				m.EXPECT().CreateList(gomock.Any(), "workspace123", list).Return(errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkCreated: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.CreateListCalled)
+			checkCreated: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkCreated: func(t *testing.T, m *service.MockListService) {
-				assert.False(t, m.CreateListCalled)
+			checkCreated: func(t *testing.T, m *mocks.MockListService) {
+				// No expectations needed
 			},
 		},
 		{
@@ -359,19 +362,19 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "New Description",
 			},
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkCreated: func(t *testing.T, m *service.MockListService) {
-				assert.False(t, m.CreateListCalled)
+			checkCreated: func(t *testing.T, m *mocks.MockListService) {
+				// No expectations needed
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupListHandlerTest()
+			mockService, _, handler := setupListHandlerTest(t)
 			tc.setupMock(mockService)
 
 			var reqBody bytes.Buffer
@@ -405,9 +408,9 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*service.MockListService)
+		setupMock      func(*mocks.MockListService)
 		expectedStatus int
-		checkUpdated   func(*testing.T, *service.MockListService)
+		checkUpdated   func(*testing.T, *mocks.MockListService)
 	}{
 		{
 			name:   "Update List Success",
@@ -421,24 +424,20 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *service.MockListService) {
-				m.Lists = map[string]*domain.List{
-					"list1": {
-						ID:            "list1",
-						Name:          "Original List",
-						Type:          "public",
-						IsDoubleOptin: true,
-						IsPublic:      true,
-						Description:   "Original Description",
-					},
+			setupMock: func(m *mocks.MockListService) {
+				list := &domain.List{
+					ID:            "list1",
+					Name:          "Updated List",
+					Type:          "public",
+					IsDoubleOptin: true,
+					IsPublic:      true,
+					Description:   "Updated Description",
 				}
+				m.EXPECT().UpdateList(gomock.Any(), "workspace123", list).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
-			checkUpdated: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.UpdateListCalled)
-				assert.NotNil(t, m.LastListUpdated)
-				assert.Equal(t, "Updated List", m.LastListUpdated.Name)
-				assert.Equal(t, "Updated Description", m.LastListUpdated.Description)
+			checkUpdated: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
@@ -453,12 +452,20 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrListNotFoundToReturn = true
+			setupMock: func(m *mocks.MockListService) {
+				list := &domain.List{
+					ID:            "nonexistent",
+					Name:          "Updated List",
+					Type:          "public",
+					IsDoubleOptin: true,
+					IsPublic:      true,
+					Description:   "Updated Description",
+				}
+				m.EXPECT().UpdateList(gomock.Any(), "workspace123", list).Return(&domain.ErrListNotFound{Message: "list not found"})
 			},
 			expectedStatus: http.StatusNotFound,
-			checkUpdated: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.UpdateListCalled)
+			checkUpdated: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
@@ -473,24 +480,32 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockListService) {
+				list := &domain.List{
+					ID:            "list1",
+					Name:          "Updated List",
+					Type:          "public",
+					IsDoubleOptin: true,
+					IsPublic:      true,
+					Description:   "Updated Description",
+				}
+				m.EXPECT().UpdateList(gomock.Any(), "workspace123", list).Return(errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkUpdated: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.UpdateListCalled)
+			checkUpdated: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkUpdated: func(t *testing.T, m *service.MockListService) {
-				assert.False(t, m.UpdateListCalled)
+			checkUpdated: func(t *testing.T, m *mocks.MockListService) {
+				// No expectations needed
 			},
 		},
 		{
@@ -505,19 +520,19 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkUpdated: func(t *testing.T, m *service.MockListService) {
-				assert.False(t, m.UpdateListCalled)
+			checkUpdated: func(t *testing.T, m *mocks.MockListService) {
+				// No expectations needed
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupListHandlerTest()
+			mockService, _, handler := setupListHandlerTest(t)
 			tc.setupMock(mockService)
 
 			var reqBody bytes.Buffer
@@ -551,9 +566,9 @@ func TestListHandler_HandleDelete(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*service.MockListService)
+		setupMock      func(*mocks.MockListService)
 		expectedStatus int
-		checkDeleted   func(*testing.T, *service.MockListService)
+		checkDeleted   func(*testing.T, *mocks.MockListService)
 	}{
 		{
 			name:   "Delete List Success",
@@ -562,19 +577,12 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "list1",
 			},
-			setupMock: func(m *service.MockListService) {
-				m.Lists = map[string]*domain.List{
-					"list1": {
-						ID:          "list1",
-						Name:        "Test List",
-						Description: "Test Description",
-					},
-				}
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().DeleteList(gomock.Any(), "workspace123", "list1").Return(nil)
 			},
 			expectedStatus: http.StatusOK,
-			checkDeleted: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.DeleteListCalled)
-				assert.Equal(t, "list1", m.LastListDeleted)
+			checkDeleted: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
@@ -584,12 +592,12 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "nonexistent",
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrListNotFoundToReturn = true
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().DeleteList(gomock.Any(), "workspace123", "nonexistent").Return(&domain.ErrListNotFound{Message: "list not found"})
 			},
 			expectedStatus: http.StatusNotFound,
-			checkDeleted: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.DeleteListCalled)
+			checkDeleted: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
@@ -599,24 +607,24 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "list1",
 			},
-			setupMock: func(m *service.MockListService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().DeleteList(gomock.Any(), "workspace123", "list1").Return(errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkDeleted: func(t *testing.T, m *service.MockListService) {
-				assert.True(t, m.DeleteListCalled)
+			checkDeleted: func(t *testing.T, m *mocks.MockListService) {
+				// Expectations are handled by gomock
 			},
 		},
 		{
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkDeleted: func(t *testing.T, m *service.MockListService) {
-				assert.False(t, m.DeleteListCalled)
+			checkDeleted: func(t *testing.T, m *mocks.MockListService) {
+				// No expectations needed
 			},
 		},
 		{
@@ -626,19 +634,19 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "list1",
 			},
-			setupMock: func(m *service.MockListService) {
+			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkDeleted: func(t *testing.T, m *service.MockListService) {
-				assert.False(t, m.DeleteListCalled)
+			checkDeleted: func(t *testing.T, m *mocks.MockListService) {
+				// No expectations needed
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupListHandlerTest()
+			mockService, _, handler := setupListHandlerTest(t)
 			tc.setupMock(mockService)
 
 			var reqBody bytes.Buffer

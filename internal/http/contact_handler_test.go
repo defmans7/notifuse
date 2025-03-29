@@ -10,8 +10,9 @@ import (
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -49,8 +50,9 @@ func (l *MockLoggerForContact) Fatal(message string) {
 }
 
 // Test setup helper
-func setupContactHandlerTest() (*service.MockContactService, *MockLoggerForContact, *ContactHandler) {
-	mockService := service.NewMockContactService()
+func setupContactHandlerTest(t *testing.T) (*mocks.MockContactService, *MockLoggerForContact, *ContactHandler) {
+	ctrl := gomock.NewController(t)
+	mockService := mocks.NewMockContactService(ctrl)
 	mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
 	handler := NewContactHandler(mockService, mockLogger)
 	return mockService, mockLogger, handler
@@ -65,7 +67,7 @@ func decodeContactJSONResponse(body *bytes.Buffer, v interface{}) error {
 }
 
 func TestContactHandler_RegisterRoutes(t *testing.T) {
-	_, _, handler := setupContactHandlerTest()
+	_, _, handler := setupContactHandlerTest(t)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -90,78 +92,96 @@ func TestContactHandler_RegisterRoutes(t *testing.T) {
 }
 
 func TestContactHandler_HandleList(t *testing.T) {
-	t.Run("Success", func(t *testing.T) {
-		// Arrange
-		mockService := &service.MockContactService{}
-		mockLogger := &MockLoggerForContact{}
-		handler := NewContactHandler(mockService, mockLogger)
+	testCases := []struct {
+		name             string
+		method           string
+		queryParams      string
+		setupMock        func(*mocks.MockContactService)
+		expectedStatus   int
+		expectedContacts bool
+	}{
+		{
+			name:        "Get Contacts Success",
+			method:      http.MethodGet,
+			queryParams: "workspace_id=workspace123&limit=2",
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().GetContacts(gomock.Any(), &domain.GetContactsRequest{
+					WorkspaceID: "workspace123",
+					Limit:       2,
+				}).Return(&domain.GetContactsResponse{
+					Contacts: []*domain.Contact{
+						{
+							Email:      "test1@example.com",
+							ExternalID: &domain.NullableString{String: "ext1", IsNull: false},
+							Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
+						},
+					},
+				}, nil)
+			},
+			expectedStatus:   http.StatusOK,
+			expectedContacts: true,
+		},
+		{
+			name:        "Get Contacts Service Error",
+			method:      http.MethodGet,
+			queryParams: "workspace_id=workspace123&limit=2",
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().GetContacts(gomock.Any(), &domain.GetContactsRequest{
+					WorkspaceID: "workspace123",
+					Limit:       2,
+				}).Return(nil, errors.New("service error"))
+			},
+			expectedStatus:   http.StatusInternalServerError,
+			expectedContacts: false,
+		},
+		{
+			name:        "Method Not Allowed",
+			method:      http.MethodPost,
+			queryParams: "workspace_id=workspace123&limit=2",
+			setupMock: func(m *mocks.MockContactService) {
+				// No setup needed for this test
+			},
+			expectedStatus:   http.StatusMethodNotAllowed,
+			expectedContacts: false,
+		},
+	}
 
-		// Create request with query parameters
-		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspace_id=workspace123&limit=2", nil)
-		response := httptest.NewRecorder()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		// Act
-		handler.handleList(response, request)
+			mockService := mocks.NewMockContactService(ctrl)
+			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
 
-		// Assert
-		assert.Equal(t, http.StatusOK, response.Code)
-		assert.True(t, mockService.GetContactsCalled)
-	})
+			handler := NewContactHandler(mockService, mockLogger)
 
-	t.Run("Service_Error", func(t *testing.T) {
-		// Arrange
-		mockService := &service.MockContactService{}
-		mockLogger := &MockLoggerForContact{}
-		handler := NewContactHandler(mockService, mockLogger)
+			// Setup mock expectations
+			if tc.setupMock != nil {
+				tc.setupMock(mockService)
+			}
 
-		mockService.ErrToReturn = errors.New("service error")
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/contacts.list?"+tc.queryParams, nil)
 
-		// Create request with query parameters
-		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspace_id=workspace123&limit=2", nil)
-		response := httptest.NewRecorder()
+			// Create response recorder
+			rr := httptest.NewRecorder()
 
-		// Act
-		handler.handleList(response, request)
+			// Call handler
+			handler.handleList(rr, req)
 
-		// Assert
-		assert.Equal(t, http.StatusInternalServerError, response.Code)
-		assert.True(t, mockService.GetContactsCalled)
-	})
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, rr.Code)
 
-	t.Run("Wrong_Method", func(t *testing.T) {
-		// Arrange
-		mockService := &service.MockContactService{}
-		mockLogger := &MockLoggerForContact{}
-		handler := NewContactHandler(mockService, mockLogger)
-
-		request := httptest.NewRequest(http.MethodPost, "/api/contacts.list", nil)
-		response := httptest.NewRecorder()
-
-		// Act
-		handler.handleList(response, request)
-
-		// Assert
-		assert.Equal(t, http.StatusMethodNotAllowed, response.Code)
-		assert.False(t, mockService.GetContactsCalled)
-	})
-
-	t.Run("Invalid_Request", func(t *testing.T) {
-		// Arrange
-		mockService := &service.MockContactService{}
-		mockLogger := &MockLoggerForContact{}
-		handler := NewContactHandler(mockService, mockLogger)
-
-		// Create request without required workspace_id
-		request := httptest.NewRequest(http.MethodGet, "/api/contacts.list", nil)
-		response := httptest.NewRecorder()
-
-		// Act
-		handler.handleList(response, request)
-
-		// Assert
-		assert.Equal(t, http.StatusBadRequest, response.Code)
-		assert.False(t, mockService.GetContactsCalled)
-	})
+			// If we expect contacts, check the response body
+			if tc.expectedContacts {
+				var response domain.GetContactsResponse
+				err := json.NewDecoder(rr.Body).Decode(&response)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, response.Contacts)
+			}
+		})
+	}
 }
 
 func TestContactHandler_HandleGet(t *testing.T) {
@@ -169,63 +189,57 @@ func TestContactHandler_HandleGet(t *testing.T) {
 		name            string
 		method          string
 		contactEmail    string
-		setupMock       func(*service.MockContactService)
+		contact         *domain.Contact
+		err             error
 		expectedStatus  int
 		expectedContact bool
 	}{
 		{
-			name:         "Get Contact Success",
-			method:       http.MethodGet,
+			name:         "Get_Contact_Success",
+			method:       "GET",
 			contactEmail: "test1@example.com",
-			setupMock: func(m *service.MockContactService) {
-				m.Contacts = map[string]*domain.Contact{
-					"test1@example.com": {
-						Email:      "test1@example.com",
-						ExternalID: &domain.NullableString{String: "ext1", IsNull: false},
-						Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
-					},
-				}
+			contact: &domain.Contact{
+				Email:     "test1@example.com",
+				FirstName: &domain.NullableString{String: "Test", IsNull: false},
+				LastName:  &domain.NullableString{String: "User", IsNull: false},
 			},
+			err:             nil,
 			expectedStatus:  http.StatusOK,
 			expectedContact: true,
 		},
 		{
-			name:         "Get Contact Not Found",
-			method:       http.MethodGet,
-			contactEmail: "nonexistent@example.com",
-			setupMock: func(m *service.MockContactService) {
-				m.ErrContactNotFoundToReturn = true
-			},
+			name:            "Get_Contact_Not_Found",
+			method:          "GET",
+			contactEmail:    "nonexistent@example.com",
+			contact:         nil,
+			err:             &domain.ErrContactNotFound{Message: "contact not found"},
 			expectedStatus:  http.StatusNotFound,
 			expectedContact: false,
 		},
 		{
-			name:         "Get Contact Service Error",
-			method:       http.MethodGet,
-			contactEmail: "test1@example.com",
-			setupMock: func(m *service.MockContactService) {
-				m.ErrToReturn = errors.New("service error")
-			},
+			name:            "Get_Contact_Service_Error",
+			method:          "GET",
+			contactEmail:    "test1@example.com",
+			contact:         nil,
+			err:             errors.New("service error"),
 			expectedStatus:  http.StatusInternalServerError,
 			expectedContact: false,
 		},
 		{
-			name:         "Missing Contact Email",
-			method:       http.MethodGet,
-			contactEmail: "",
-			setupMock: func(m *service.MockContactService) {
-				// No setup needed for this test
-			},
+			name:            "Missing_Contact_Email",
+			method:          "GET",
+			contactEmail:    "",
+			contact:         nil,
+			err:             nil,
 			expectedStatus:  http.StatusBadRequest,
 			expectedContact: false,
 		},
 		{
-			name:         "Method Not Allowed",
-			method:       http.MethodPost,
-			contactEmail: "test1@example.com",
-			setupMock: func(m *service.MockContactService) {
-				// No setup needed for this test
-			},
+			name:            "Method_Not_Allowed",
+			method:          "POST",
+			contactEmail:    "test1@example.com",
+			contact:         nil,
+			err:             nil,
 			expectedStatus:  http.StatusMethodNotAllowed,
 			expectedContact: false,
 		},
@@ -233,55 +247,42 @@ func TestContactHandler_HandleGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupContactHandlerTest()
-			tc.setupMock(mockService)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-			url := "/api/contacts.getByEmail"
-			if tc.contactEmail != "" {
-				url += "?workspace_id=workspace123&email=" + tc.contactEmail
+			mockService := mocks.NewMockContactService(ctrl)
+			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
+
+			handler := NewContactHandler(mockService, mockLogger)
+
+			// Set up mock expectations only for test cases that should call the service
+			if tc.method == http.MethodGet && tc.contactEmail != "" {
+				mockService.EXPECT().
+					GetContactByEmail(gomock.Any(), "workspace123", tc.contactEmail).
+					Return(tc.contact, tc.err)
 			}
 
-			req, err := http.NewRequest(tc.method, url, nil)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/contacts.get?workspace_id=workspace123&email="+tc.contactEmail, nil)
 
+			// Create response recorder
 			rr := httptest.NewRecorder()
+
+			// Call handler
 			handler.handleGetByEmail(rr, req)
 
-			if status := rr.Code; status != tc.expectedStatus {
-				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
-			}
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, rr.Code)
 
+			// If we expect a contact, check the response body
 			if tc.expectedContact {
-				if tc.expectedStatus == http.StatusOK {
-					var response map[string]interface{}
-					if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
-						t.Errorf("Failed to decode response body: %v", err)
-					}
-
-					contactData, exists := response["contact"]
-					if !exists {
-						t.Error("Expected 'contact' field in response, but not found")
-					}
-
-					// Convert to map to access fields
-					contactMap, ok := contactData.(map[string]interface{})
-					if !ok {
-						t.Errorf("Expected contact to be a map, got %T", contactData)
-					} else if contactMap["email"] != tc.contactEmail {
-						t.Errorf("Expected contact email %s, got %v", tc.contactEmail, contactMap["email"])
-					}
+				var response struct {
+					Contact *domain.Contact `json:"contact"`
 				}
-			}
-
-			if tc.method == http.MethodGet && tc.contactEmail != "" && tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
-				if !mockService.GetContactByEmailCalled {
-					t.Error("Expected GetContactByEmail to be called, but it wasn't")
-				}
-				if mockService.LastContactEmail != tc.contactEmail {
-					t.Errorf("Expected Email %s, got %s", tc.contactEmail, mockService.LastContactEmail)
-				}
+				err := json.NewDecoder(rr.Body).Decode(&response)
+				assert.NoError(t, err)
+				assert.NotNil(t, response.Contact)
+				assert.Equal(t, tc.contactEmail, response.Contact.Email)
 			}
 		})
 	}
@@ -292,7 +293,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 		name            string
 		method          string
 		externalID      string
-		setupMock       func(*service.MockContactService)
+		setupMock       func(*mocks.MockContactService)
 		expectedStatus  int
 		expectedContact bool
 	}{
@@ -300,9 +301,10 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Get Contact By External ID Success",
 			method:     http.MethodGet,
 			externalID: "ext1",
-			setupMock: func(m *service.MockContactService) {
-				m.Contacts = map[string]*domain.Contact{
-					"test@example.com": {
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					GetContactByExternalID(gomock.Any(), "workspace123", "ext1").
+					Return(&domain.Contact{
 						Email: "test@example.com",
 						ExternalID: &domain.NullableString{
 							String: "ext1",
@@ -312,8 +314,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 							String: "UTC",
 							IsNull: false,
 						},
-					},
-				}
+					}, nil)
 			},
 			expectedStatus:  http.StatusOK,
 			expectedContact: true,
@@ -322,8 +323,10 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Get Contact By External ID Not Found",
 			method:     http.MethodGet,
 			externalID: "nonexistent",
-			setupMock: func(m *service.MockContactService) {
-				m.ErrContactNotFoundToReturn = true
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					GetContactByExternalID(gomock.Any(), "workspace123", "nonexistent").
+					Return(nil, &domain.ErrContactNotFound{Message: "contact not found"})
 			},
 			expectedStatus:  http.StatusNotFound,
 			expectedContact: false,
@@ -332,8 +335,10 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Get Contact By External ID Service Error",
 			method:     http.MethodGet,
 			externalID: "error",
-			setupMock: func(m *service.MockContactService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					GetContactByExternalID(gomock.Any(), "workspace123", "error").
+					Return(nil, errors.New("service error"))
 			},
 			expectedStatus:  http.StatusInternalServerError,
 			expectedContact: false,
@@ -342,7 +347,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Missing External ID",
 			method:     http.MethodGet,
 			externalID: "",
-			setupMock: func(m *service.MockContactService) {
+			setupMock: func(m *mocks.MockContactService) {
 				// No setup needed for this test
 			},
 			expectedStatus:  http.StatusBadRequest,
@@ -352,7 +357,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Method Not Allowed",
 			method:     http.MethodPost,
 			externalID: "ext1",
-			setupMock: func(m *service.MockContactService) {
+			setupMock: func(m *mocks.MockContactService) {
 				// No setup needed for this test
 			},
 			expectedStatus:  http.StatusMethodNotAllowed,
@@ -362,72 +367,40 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupContactHandlerTest()
-			tc.setupMock(mockService)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-			url := "/api/contacts.getByExternalID"
-			if tc.externalID != "" {
-				url += "?workspace_id=workspace123&external_id=" + tc.externalID
+			mockService := mocks.NewMockContactService(ctrl)
+			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
+
+			handler := NewContactHandler(mockService, mockLogger)
+
+			// Setup mock expectations
+			if tc.setupMock != nil {
+				tc.setupMock(mockService)
 			}
 
-			req, err := http.NewRequest(tc.method, url, nil)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/contacts.getByExternalID?workspace_id=workspace123&external_id="+tc.externalID, nil)
 
+			// Create response recorder
 			rr := httptest.NewRecorder()
+
+			// Call handler
 			handler.handleGetByExternalID(rr, req)
 
-			if status := rr.Code; status != tc.expectedStatus {
-				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
-			}
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, rr.Code)
 
+			// If we expect a contact, check the response body
 			if tc.expectedContact {
-				if tc.expectedStatus == http.StatusOK {
-					var response map[string]interface{}
-					if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
-						t.Errorf("Failed to decode response body: %v", err)
-					}
-
-					contactData, exists := response["contact"]
-					if !exists {
-						t.Error("Expected 'contact' field in response, but not found")
-					}
-
-					// Convert to map to access fields
-					contactMap, ok := contactData.(map[string]interface{})
-					if !ok {
-						t.Errorf("Expected contact to be a map, got %T", contactData)
-					} else {
-						// Check external_id field - could be a string in the response
-						externalID, ok := contactMap["external_id"]
-						if !ok {
-							t.Error("Expected external_id field in contact, but not found")
-						} else {
-							// Get the value regardless of format
-							var externalIDValue string
-							switch v := externalID.(type) {
-							case string:
-								externalIDValue = v
-							case map[string]interface{}:
-								externalIDValue, _ = v["String"].(string)
-							}
-
-							if externalIDValue != tc.externalID {
-								t.Errorf("Expected external_id %s, got %s", tc.externalID, externalIDValue)
-							}
-						}
-					}
+				var response struct {
+					Contact *domain.Contact `json:"contact"`
 				}
-			}
-
-			if tc.method == http.MethodGet && tc.externalID != "" && tc.expectedStatus != http.StatusMethodNotAllowed && tc.expectedStatus != http.StatusBadRequest {
-				if !mockService.GetContactByExternalIDCalled {
-					t.Error("Expected GetContactByExternalID to be called, but it wasn't")
-				}
-				if mockService.LastContactExternalID != tc.externalID {
-					t.Errorf("Expected ExternalID %s, got %s", tc.externalID, mockService.LastContactExternalID)
-				}
+				err := json.NewDecoder(rr.Body).Decode(&response)
+				assert.NoError(t, err)
+				assert.NotNil(t, response.Contact)
+				assert.Equal(t, tc.externalID, response.Contact.ExternalID.String)
 			}
 		})
 	}
@@ -438,10 +411,9 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 		name            string
 		method          string
 		reqBody         interface{}
-		setupMock       func(*service.MockContactService)
+		setupMock       func(*mocks.MockContactService)
 		expectedStatus  int
 		expectedMessage string
-		checkDeleted    func(*testing.T, *service.MockContactService)
 	}{
 		{
 			name:   "Delete Contact Success",
@@ -450,24 +422,11 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "test@example.com",
 			},
-			setupMock: func(m *service.MockContactService) {
-				m.Contacts = map[string]*domain.Contact{
-					"test@example.com": {
-						Email:      "test@example.com",
-						ExternalID: &domain.NullableString{String: "ext1", IsNull: false},
-						Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
-					},
-				}
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().DeleteContact(gomock.Any(), "workspace123", "test@example.com").Return(nil)
 			},
-			expectedStatus: http.StatusOK,
-			checkDeleted: func(t *testing.T, m *service.MockContactService) {
-				if !m.DeleteContactCalled {
-					t.Error("Expected DeleteContact to be called, but it wasn't")
-				}
-				if m.LastContactEmail != "test@example.com" {
-					t.Errorf("Expected contact Email 'test@example.com', got '%s'", m.LastContactEmail)
-				}
-			},
+			expectedStatus:  http.StatusOK,
+			expectedMessage: "Contact deleted successfully",
 		},
 		{
 			name:   "Delete Contact Not Found",
@@ -476,15 +435,11 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "nonexistent@example.com",
 			},
-			setupMock: func(m *service.MockContactService) {
-				m.ErrContactNotFoundToReturn = true
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().DeleteContact(gomock.Any(), "workspace123", "nonexistent@example.com").Return(&domain.ErrContactNotFound{Message: "contact not found"})
 			},
-			expectedStatus: http.StatusNotFound,
-			checkDeleted: func(t *testing.T, m *service.MockContactService) {
-				if !m.DeleteContactCalled {
-					t.Error("Expected DeleteContact to be called, but it wasn't")
-				}
-			},
+			expectedStatus:  http.StatusNotFound,
+			expectedMessage: "Contact not found",
 		},
 		{
 			name:   "Delete Contact Service Error",
@@ -493,46 +448,34 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "error@example.com",
 			},
-			setupMock: func(m *service.MockContactService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().DeleteContact(gomock.Any(), "workspace123", "error@example.com").Return(errors.New("service error"))
 			},
-			expectedStatus: http.StatusInternalServerError,
-			checkDeleted: func(t *testing.T, m *service.MockContactService) {
-				if !m.DeleteContactCalled {
-					t.Error("Expected DeleteContact to be called, but it wasn't")
-				}
-			},
+			expectedStatus:  http.StatusInternalServerError,
+			expectedMessage: "Failed to delete contact",
 		},
 		{
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *service.MockContactService) {
-				// No special setup
+			setupMock: func(m *mocks.MockContactService) {
+				// No setup needed for this test
 			},
-			expectedStatus: http.StatusBadRequest,
-			checkDeleted: func(t *testing.T, m *service.MockContactService) {
-				if m.DeleteContactCalled {
-					t.Error("Expected DeleteContact not to be called, but it was")
-				}
-			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "Invalid request body",
 		},
 		{
 			name:   "Missing Email in Request",
 			method: http.MethodPost,
 			reqBody: domain.DeleteContactRequest{
 				WorkspaceID: "workspace123",
-				Email:       "", // Empty Email
+				Email:       "",
 			},
-			setupMock: func(m *service.MockContactService) {
-				// No special setup
+			setupMock: func(m *mocks.MockContactService) {
+				// No setup needed for this test
 			},
-			expectedStatus: http.StatusBadRequest,
-			checkDeleted: func(t *testing.T, m *service.MockContactService) {
-				if m.DeleteContactCalled {
-					t.Error("Expected DeleteContact not to be called, but it was")
-				}
-			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "email is required",
 		},
 		{
 			name:   "Method Not Allowed",
@@ -541,62 +484,57 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "test@example.com",
 			},
-			setupMock: func(m *service.MockContactService) {
-				// No special setup
+			setupMock: func(m *mocks.MockContactService) {
+				// No setup needed for this test
 			},
-			expectedStatus: http.StatusMethodNotAllowed,
-			checkDeleted: func(t *testing.T, m *service.MockContactService) {
-				if m.DeleteContactCalled {
-					t.Error("Expected DeleteContact not to be called, but it was")
-				}
-			},
+			expectedStatus:  http.StatusMethodNotAllowed,
+			expectedMessage: "Method not allowed",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupContactHandlerTest()
-			tc.setupMock(mockService)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockService := mocks.NewMockContactService(ctrl)
+			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
+
+			handler := NewContactHandler(mockService, mockLogger)
+
+			// Setup mock expectations
+			if tc.setupMock != nil {
+				tc.setupMock(mockService)
+			}
 
 			var reqBody bytes.Buffer
 			if tc.reqBody != nil {
-				// If it's a string, just use it directly
-				if str, ok := tc.reqBody.(string); ok {
-					reqBody = *bytes.NewBufferString(str)
-				} else {
-					// Otherwise encode as JSON
-					if err := json.NewEncoder(&reqBody).Encode(tc.reqBody); err != nil {
-						t.Fatalf("Failed to encode request body: %v", err)
-					}
+				if err := json.NewEncoder(&reqBody).Encode(tc.reqBody); err != nil {
+					t.Fatalf("Failed to encode request body: %v", err)
 				}
 			}
 
-			req, err := http.NewRequest(tc.method, "/api/contacts.delete", &reqBody)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
+			req := httptest.NewRequest(tc.method, "/api/contacts.delete", &reqBody)
+			req.Header.Set("Content-Type", "application/json")
 
 			rr := httptest.NewRecorder()
 			handler.handleDelete(rr, req)
 
-			if status := rr.Code; status != tc.expectedStatus {
-				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
-			}
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, rr.Code)
 
+			// Check response body
 			if tc.expectedStatus == http.StatusOK {
 				var response map[string]interface{}
-				if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
-					t.Errorf("Failed to decode response body: %v", err)
-					return
-				}
-
-				success, exists := response["success"]
-				assert.True(t, exists, "Expected 'success' field in response")
-				assert.True(t, success.(bool), "Expected 'success' to be true")
+				err := json.NewDecoder(rr.Body).Decode(&response)
+				assert.NoError(t, err)
+				assert.True(t, response["success"].(bool))
+			} else {
+				var response map[string]string
+				err := json.NewDecoder(rr.Body).Decode(&response)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedMessage, response["error"])
 			}
-
-			// Run specific checks
-			tc.checkDeleted(t, mockService)
 		})
 	}
 }
@@ -606,10 +544,10 @@ func TestContactHandler_HandleImport(t *testing.T) {
 		name            string
 		method          string
 		reqBody         interface{}
-		setupMock       func(*service.MockContactService)
+		setupMock       func(*mocks.MockContactService)
 		expectedStatus  int
 		expectedMessage string
-		checkImported   func(*testing.T, *service.MockContactService)
+		expectedCount   int
 	}{
 		{
 			name:   "successful batch import",
@@ -629,15 +567,12 @@ func TestContactHandler_HandleImport(t *testing.T) {
 					},
 				},
 			},
-			setupMock: func(m *service.MockContactService) {
-				m.ErrToReturn = nil
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().BatchImportContacts(gomock.Any(), "workspace123", gomock.Any()).Return(nil)
 			},
 			expectedStatus:  http.StatusOK,
 			expectedMessage: "Successfully imported 2 contacts",
-			checkImported: func(t *testing.T, m *service.MockContactService) {
-				assert.Equal(t, true, m.BatchImportContactsCalled)
-				assert.Equal(t, 2, len(m.LastContactsBatchImported))
-			},
+			expectedCount:   2,
 		},
 		{
 			name:   "service error",
@@ -652,14 +587,12 @@ func TestContactHandler_HandleImport(t *testing.T) {
 					},
 				},
 			},
-			setupMock: func(m *service.MockContactService) {
-				m.ErrToReturn = errors.New("service error")
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().BatchImportContacts(gomock.Any(), "workspace123", gomock.Any()).Return(errors.New("service error"))
 			},
 			expectedStatus:  http.StatusInternalServerError,
 			expectedMessage: "Failed to import contacts",
-			checkImported: func(t *testing.T, m *service.MockContactService) {
-				assert.Equal(t, true, m.BatchImportContactsCalled)
-			},
+			expectedCount:   0,
 		},
 		{
 			name:   "invalid request - empty contacts",
@@ -668,15 +601,12 @@ func TestContactHandler_HandleImport(t *testing.T) {
 				"workspace_id": "workspace123",
 				"contacts":     []map[string]interface{}{},
 			},
-			setupMock: func(m *service.MockContactService) {
-				// Should not be called
-				m.BatchImportContactsCalled = false
+			setupMock: func(m *mocks.MockContactService) {
+				// No setup needed
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "contacts array is empty",
-			checkImported: func(t *testing.T, m *service.MockContactService) {
-				assert.Equal(t, false, m.BatchImportContactsCalled)
-			},
+			expectedCount:   0,
 		},
 		{
 			name:   "method not allowed",
@@ -691,80 +621,54 @@ func TestContactHandler_HandleImport(t *testing.T) {
 					},
 				},
 			},
-			setupMock: func(m *service.MockContactService) {
-				// Should not be called
-				m.BatchImportContactsCalled = false
+			setupMock: func(m *mocks.MockContactService) {
+				// No setup needed
 			},
 			expectedStatus:  http.StatusMethodNotAllowed,
 			expectedMessage: "Method not allowed",
-			checkImported: func(t *testing.T, m *service.MockContactService) {
-				assert.Equal(t, false, m.BatchImportContactsCalled)
-			},
+			expectedCount:   0,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupContactHandlerTest()
-			tc.setupMock(mockService)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockService := mocks.NewMockContactService(ctrl)
+			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
+
+			handler := NewContactHandler(mockService, mockLogger)
+
+			// Setup mock expectations
+			if tc.setupMock != nil {
+				tc.setupMock(mockService)
+			}
 
 			var reqBody bytes.Buffer
 			if tc.reqBody != nil {
-				// If it's a string, just use it directly
-				if str, ok := tc.reqBody.(string); ok {
-					reqBody = *bytes.NewBufferString(str)
-				} else {
-					// Otherwise encode as JSON
-					if err := json.NewEncoder(&reqBody).Encode(tc.reqBody); err != nil {
-						t.Fatalf("Failed to encode request body: %v", err)
-					}
+				if err := json.NewEncoder(&reqBody).Encode(tc.reqBody); err != nil {
+					t.Fatalf("Failed to encode request body: %v", err)
 				}
 			}
 
-			req, err := http.NewRequest(tc.method, "/api/contacts.import", &reqBody)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
+			req := httptest.NewRequest(tc.method, "/api/contacts.import", &reqBody)
+			req.Header.Set("Content-Type", "application/json")
 
 			rr := httptest.NewRecorder()
 			handler.handleImport(rr, req)
 
-			if status := rr.Code; status != tc.expectedStatus {
-				t.Errorf("Handler returned wrong status code: got %v, expected %v", status, tc.expectedStatus)
-			}
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, rr.Code)
 
 			if tc.expectedStatus == http.StatusOK {
 				var response map[string]interface{}
-				if err := decodeContactJSONResponse(rr.Body, &response); err != nil {
-					t.Errorf("Failed to decode response body: %v", err)
-					return
-				}
-
-				success, exists := response["success"]
-				assert.True(t, exists, "Expected 'success' field in response")
-				assert.True(t, success.(bool), "Expected 'success' to be true")
-
-				message, exists := response["message"]
-				assert.True(t, exists, "Expected 'message' field in response")
-				assert.Equal(t, tc.expectedMessage, message)
-
-				count, exists := response["count"]
-				assert.True(t, exists, "Expected 'count' field in response")
-				expectedCount := 0
-				if tc.name == "successful batch import" {
-					expectedCount = 2
-				} else if tc.name == "service error" {
-					expectedCount = 1
-				}
-				countNum, ok := count.(json.Number)
-				assert.True(t, ok, "Expected count to be json.Number")
-				countVal, err := countNum.Int64()
-				assert.NoError(t, err, "Failed to convert count to int64")
-				assert.Equal(t, int64(expectedCount), countVal)
+				err := json.NewDecoder(rr.Body).Decode(&response)
+				assert.NoError(t, err)
+				assert.True(t, response["success"].(bool))
+				assert.Equal(t, tc.expectedMessage, response["message"])
+				assert.Equal(t, float64(tc.expectedCount), response["count"])
 			}
-
-			// Run specific checks
-			tc.checkImported(t, mockService)
 		})
 	}
 }

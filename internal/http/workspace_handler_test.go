@@ -12,31 +12,13 @@ import (
 	"time"
 
 	"aidanwoods.dev/go-paseto"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
-	"github.com/Notifuse/notifuse/internal/service"
 )
-
-// Test setup helper
-func setupTest(t *testing.T) (*WorkspaceHandler, *service.MockWorkspaceService, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
-	workspaceSvc := new(service.MockWorkspaceService)
-
-	// Create key pair for testing
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
-
-	mockLogger := new(service.MockLogger)
-	handler := NewWorkspaceHandler(workspaceSvc, publicKey, mockLogger)
-
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	return handler, workspaceSvc, mux, secretKey
-}
 
 func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userID string) string {
 	token := paseto.NewToken()
@@ -66,7 +48,9 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").Return(expectedWorkspace, nil)
+	workspaceSvc.EXPECT().
+		CreateWorkspace(gomock.Any(), "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").
+		Return(expectedWorkspace, nil)
 
 	// Create request
 	reqBody := domain.CreateWorkspaceRequest{
@@ -99,9 +83,6 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 	assert.Equal(t, expectedWorkspace.ID, response.ID)
 	assert.Equal(t, expectedWorkspace.Name, response.Name)
 	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
-
-	// Assert expectations
-	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Get(t *testing.T) {
@@ -117,7 +98,9 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("GetWorkspace", mock.Anything, "testworkspace1").Return(expectedWorkspace, nil)
+	workspaceSvc.EXPECT().
+		GetWorkspace(gomock.Any(), "testworkspace1").
+		Return(expectedWorkspace, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=testworkspace1", nil)
@@ -130,7 +113,6 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Updated to expect a response with a workspace field
 	var response struct {
 		Workspace domain.Workspace `json:"workspace"`
 	}
@@ -139,15 +121,11 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 	assert.Equal(t, expectedWorkspace.ID, response.Workspace.ID)
 	assert.Equal(t, expectedWorkspace.Name, response.Workspace.Name)
 	assert.Equal(t, expectedWorkspace.Settings, response.Workspace.Settings)
-
-	// Assert expectations
-	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_List(t *testing.T) {
 	_, workspaceSvc, mux, secretKey := setupTest(t)
 
-	// Mock successful user session verification
 	// Mock successful workspace list retrieval
 	expectedWorkspaces := []*domain.Workspace{
 		{
@@ -169,7 +147,9 @@ func TestWorkspaceHandler_List(t *testing.T) {
 			},
 		},
 	}
-	workspaceSvc.On("ListWorkspaces", mock.Anything).Return(expectedWorkspaces, nil)
+	workspaceSvc.EXPECT().
+		ListWorkspaces(gomock.Any()).
+		Return(expectedWorkspaces, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.list", nil)
@@ -186,9 +166,6 @@ func TestWorkspaceHandler_List(t *testing.T) {
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, expectedWorkspaces, response)
-
-	// Assert expectations
-	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Update(t *testing.T) {
@@ -205,7 +182,9 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 			Timezone:   "UTC",
 		},
 	}
-	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").Return(expectedWorkspace, nil)
+	workspaceSvc.EXPECT().
+		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").
+		Return(expectedWorkspace, nil)
 
 	// Create request
 	reqBody := domain.UpdateWorkspaceRequest{
@@ -233,15 +212,15 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 	assert.Equal(t, expectedWorkspace.ID, response.ID)
 	assert.Equal(t, expectedWorkspace.Name, response.Name)
 	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
-
-	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Delete(t *testing.T) {
 	_, workspaceSvc, mux, secretKey := setupTest(t)
 
 	// Mock successful workspace deletion
-	workspaceSvc.On("DeleteWorkspace", mock.Anything, "test-id").Return(nil)
+	workspaceSvc.EXPECT().
+		DeleteWorkspace(gomock.Any(), "test-id").
+		Return(nil)
 
 	// Create request
 	reqBody := domain.DeleteWorkspaceRequest{
@@ -259,9 +238,6 @@ func TestWorkspaceHandler_Delete(t *testing.T) {
 
 	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Assert expectations
-	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWriteError(t *testing.T) {
@@ -347,8 +323,9 @@ func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Mock workspace service to return error
-	workspaceService.On("ListWorkspaces", mock.Anything).Return(
-		([]*domain.Workspace)(nil), fmt.Errorf("database error"))
+	workspaceService.EXPECT().
+		ListWorkspaces(gomock.Any()).
+		Return(nil, fmt.Errorf("database error"))
 
 	// Setup context with authenticated user - no need for token validation here
 	ctx := req.Context()
@@ -365,9 +342,6 @@ func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
 	var response errorResponse
 	json.NewDecoder(w.Body).Decode(&response)
 	assert.Equal(t, "Failed to list workspaces", response.Error)
-
-	// Verify mocks were called
-	workspaceService.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
@@ -434,8 +408,9 @@ func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Mock workspace service to return error
-	workspaceService.On("GetWorkspace", mock.Anything, "workspace123").Return(
-		(*domain.Workspace)(nil), fmt.Errorf("database error"))
+	workspaceService.EXPECT().
+		GetWorkspace(gomock.Any(), "workspace123").
+		Return(nil, fmt.Errorf("database error"))
 
 	// Setup context with authenticated user
 	ctx := req.Context()
@@ -452,9 +427,6 @@ func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
 	var response errorResponse
 	json.NewDecoder(w.Body).Decode(&response)
 	assert.Equal(t, "Failed to get workspace", response.Error)
-
-	// Verify mocks were called
-	workspaceService.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
@@ -594,7 +566,9 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 	_, workspaceSvc, mux, secretKey := setupTest(t)
 
 	// Mock service error
-	workspaceSvc.On("CreateWorkspace", mock.Anything, "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").Return(nil, fmt.Errorf("database error"))
+	workspaceSvc.EXPECT().
+		CreateWorkspace(gomock.Any(), "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").
+		Return(nil, fmt.Errorf("database error"))
 
 	// Create request with valid data
 	reqBody := domain.CreateWorkspaceRequest{
@@ -619,8 +593,6 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Contains(t, w.Body.String(), "Failed to create workspace")
-
-	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
@@ -703,7 +675,9 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 	_, workspaceSvc, mux, secretKey := setupTest(t)
 
 	// Mock service error
-	workspaceSvc.On("UpdateWorkspace", mock.Anything, "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").Return(nil, fmt.Errorf("database error"))
+	workspaceSvc.EXPECT().
+		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").
+		Return(nil, fmt.Errorf("database error"))
 
 	// Create request with valid data
 	reqBody := domain.UpdateWorkspaceRequest{
@@ -725,8 +699,6 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Contains(t, w.Body.String(), "Failed to update workspace")
-
-	workspaceSvc.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
@@ -799,7 +771,8 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	// Mock the service call - the handler doesn't check for empty ID
-	workspaceService.On("DeleteWorkspace", mock.Anything, "").
+	workspaceService.EXPECT().
+		DeleteWorkspace(gomock.Any(), "").
 		Return(fmt.Errorf("workspace ID is required"))
 
 	// Call handler directly
@@ -812,9 +785,6 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 	var response errorResponse
 	json.NewDecoder(w.Body).Decode(&response)
 	assert.Equal(t, "Failed to delete workspace", response.Error)
-
-	// Verify mocks were called
-	workspaceService.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
@@ -830,7 +800,8 @@ func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Mock workspace service to return error
-	workspaceService.On("DeleteWorkspace", mock.Anything, "workspace123").
+	workspaceService.EXPECT().
+		DeleteWorkspace(gomock.Any(), "workspace123").
 		Return(fmt.Errorf("database error"))
 
 	// Setup context with authenticated user
@@ -848,9 +819,6 @@ func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
 	var response errorResponse
 	json.NewDecoder(w.Body).Decode(&response)
 	assert.Equal(t, "Failed to delete workspace", response.Error)
-
-	// Verify mocks were called
-	workspaceService.AssertExpectations(t)
 }
 
 func TestWorkspaceHandler_HandleMembers(t *testing.T) {
@@ -867,7 +835,9 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 			Email: "user1@example.com",
 		},
 	}
-	workspaceSvc.On("GetWorkspaceMembersWithEmail", mock.Anything, "workspace1").Return(expectedMembers, nil)
+	workspaceSvc.EXPECT().
+		GetWorkspaceMembersWithEmail(gomock.Any(), "workspace1").
+		Return(expectedMembers, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.members?id=workspace1", nil)
@@ -882,6 +852,4 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Contains(t, response, "members")
-
-	workspaceSvc.AssertExpectations(t)
 }

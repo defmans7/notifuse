@@ -14,6 +14,9 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+//go:generate mockgen -destination mocks/mock_contact_service.go -package mocks github.com/Notifuse/notifuse/internal/domain ContactService
+//go:generate mockgen -destination mocks/mock_contact_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain ContactRepository
+
 // Contact represents a contact in the system
 type Contact struct {
 	// Required fields

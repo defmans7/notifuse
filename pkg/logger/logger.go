@@ -6,6 +6,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+//go:generate mockgen -destination=../mocks/mock_logger.go -package=mocks github.com/Notifuse/notifuse/pkg/logger Logger
+
 type Logger interface {
 	Debug(msg string)
 	Info(msg string)
@@ -13,6 +15,7 @@ type Logger interface {
 	Error(msg string)
 	Fatal(msg string)
 	WithField(key string, value interface{}) Logger
+	WithFields(fields map[string]interface{}) Logger
 }
 
 type zerologLogger struct {
@@ -50,4 +53,11 @@ func (l *zerologLogger) WithField(key string, value interface{}) Logger {
 	return &zerologLogger{
 		logger: l.logger.With().Interface(key, value).Logger(),
 	}
+}
+
+func (l *zerologLogger) WithFields(fields map[string]interface{}) Logger {
+	for key, value := range fields {
+		l.logger = l.logger.With().Interface(key, value).Logger()
+	}
+	return l
 }
