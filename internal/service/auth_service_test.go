@@ -454,6 +454,32 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name:        "workspace repository error",
+			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
+			workspaceID: "test-workspace",
+			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+				futureTime := time.Now().Add(1 * time.Hour)
+				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
+				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
+				workspaceRepo.On("GetUserWorkspace", mock.Anything, "test-user", "test-workspace").Return(nil, assert.AnError)
+			},
+			expectError: true,
+		},
+		{
+			name:        "authentication error",
+			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
+			workspaceID: "test-workspace",
+			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+				futureTime := time.Now().Add(1 * time.Hour)
+				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
+				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(nil, sql.ErrNoRows)
+				mockLogger.On("WithField", "user_id", "test-user").Return(mockLogger)
+				mockLogger.On("Error", "User not found").Return()
+			},
+			expectError:   true,
+			errorContains: "user not found",
+		},
 	}
 
 	for _, tt := range tests {
@@ -485,6 +511,7 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 			assert.NotNil(t, user)
 			mockAuthRepo.AssertExpectations(t)
 			mockWorkspaceRepo.AssertExpectations(t)
+			mockLogger.AssertExpectations(t)
 		})
 	}
 }
