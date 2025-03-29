@@ -571,3 +571,336 @@ func TestWorkspaceService_GetWorkspaceMembersWithEmail(t *testing.T) {
 		assert.Equal(t, "database error", err.Error())
 	})
 }
+
+func TestWorkspaceService_InviteMember(t *testing.T) {
+	ctx := context.Background()
+	workspaceID := "workspace1"
+	inviterID := "inviter1"
+	email := "test@example.com"
+
+	t.Run("successful invitation for new user", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		cfg := &config.Config{Environment: "development"}
+
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+
+		// Setup common logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Mock inviter authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: inviterID}, nil)
+
+		// Mock workspace existence check
+		mockRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(&domain.Workspace{
+				ID:   workspaceID,
+				Name: "Test Workspace",
+			}, nil)
+
+		// Mock inviter membership check
+		mockRepo.EXPECT().
+			IsUserWorkspaceMember(ctx, inviterID, workspaceID).
+			Return(true, nil)
+
+		// Mock inviter details
+		mockUserSvc.EXPECT().
+			GetUserByID(ctx, inviterID).
+			Return(&domain.User{
+				ID:    inviterID,
+				Name:  "Test Inviter",
+				Email: "inviter@example.com",
+			}, nil)
+
+		// Mock existing user check
+		mockUserSvc.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(nil, fmt.Errorf("user not found"))
+
+		// Mock invitation creation
+		mockRepo.EXPECT().
+			CreateInvitation(ctx, gomock.Any()).
+			DoAndReturn(func(_ context.Context, inv *domain.WorkspaceInvitation) error {
+				assert.Equal(t, workspaceID, inv.WorkspaceID)
+				assert.Equal(t, inviterID, inv.InviterID)
+				assert.Equal(t, email, inv.Email)
+				return nil
+			})
+
+		// Mock token generation
+		mockAuthSvc.EXPECT().
+			GenerateInvitationToken(gomock.Any()).
+			Return("test-token")
+
+		invitation, token, err := service.InviteMember(ctx, workspaceID, email)
+		require.NoError(t, err)
+		assert.NotNil(t, invitation)
+		assert.Equal(t, "test-token", token)
+	})
+
+	t.Run("successful invitation for existing user", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		cfg := &config.Config{Environment: "development"}
+
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+
+		// Setup common logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		existingUser := &domain.User{
+			ID:    "existing-user",
+			Email: email,
+		}
+
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: inviterID}, nil)
+
+		mockRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(&domain.Workspace{
+				ID:   workspaceID,
+				Name: "Test Workspace",
+			}, nil)
+
+		mockRepo.EXPECT().
+			IsUserWorkspaceMember(ctx, inviterID, workspaceID).
+			Return(true, nil)
+
+		mockUserSvc.EXPECT().
+			GetUserByID(ctx, inviterID).
+			Return(&domain.User{
+				ID:    inviterID,
+				Name:  "Test Inviter",
+				Email: "inviter@example.com",
+			}, nil)
+
+		mockUserSvc.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(existingUser, nil)
+
+		mockRepo.EXPECT().
+			IsUserWorkspaceMember(ctx, existingUser.ID, workspaceID).
+			Return(false, nil)
+
+		mockRepo.EXPECT().
+			AddUserToWorkspace(ctx, gomock.Any()).
+			DoAndReturn(func(_ context.Context, uw *domain.UserWorkspace) error {
+				assert.Equal(t, existingUser.ID, uw.UserID)
+				assert.Equal(t, workspaceID, uw.WorkspaceID)
+				assert.Equal(t, "member", uw.Role)
+				return nil
+			})
+
+		invitation, token, err := service.InviteMember(ctx, workspaceID, email)
+		require.NoError(t, err)
+		assert.Nil(t, invitation)
+		assert.Empty(t, token)
+	})
+
+	t.Run("invalid_email_format", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		cfg := &config.Config{Environment: "development"}
+
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+
+		// Setup common logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Mock authentication - this should be called before email validation
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: inviterID}, nil)
+
+		invitation, token, err := service.InviteMember(ctx, workspaceID, "invalid-email")
+		require.Error(t, err)
+		assert.Nil(t, invitation)
+		assert.Empty(t, token)
+		assert.Equal(t, "invalid email format", err.Error())
+	})
+
+	t.Run("authentication error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		cfg := &config.Config{Environment: "development"}
+
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+
+		// Setup common logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(nil, fmt.Errorf("authentication failed"))
+
+		invitation, token, err := service.InviteMember(ctx, workspaceID, email)
+		require.Error(t, err)
+		assert.Nil(t, invitation)
+		assert.Empty(t, token)
+		assert.Equal(t, "failed to authenticate user: authentication failed", err.Error())
+	})
+
+	t.Run("workspace not found", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		cfg := &config.Config{Environment: "development"}
+
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+
+		// Setup common logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: inviterID}, nil)
+
+		mockRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(nil, fmt.Errorf("workspace not found"))
+
+		invitation, token, err := service.InviteMember(ctx, workspaceID, email)
+		require.Error(t, err)
+		assert.Nil(t, invitation)
+		assert.Empty(t, token)
+		assert.Equal(t, "workspace not found", err.Error())
+	})
+
+	t.Run("inviter not a member", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		cfg := &config.Config{Environment: "development"}
+
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+
+		// Setup common logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: inviterID}, nil)
+
+		mockRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(&domain.Workspace{
+				ID:   workspaceID,
+				Name: "Test Workspace",
+			}, nil)
+
+		mockRepo.EXPECT().
+			IsUserWorkspaceMember(ctx, inviterID, workspaceID).
+			Return(false, nil)
+
+		invitation, token, err := service.InviteMember(ctx, workspaceID, email)
+		require.Error(t, err)
+		assert.Nil(t, invitation)
+		assert.Empty(t, token)
+		assert.Equal(t, "inviter is not a member of the workspace", err.Error())
+	})
+
+	t.Run("user already a member", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		cfg := &config.Config{Environment: "development"}
+
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+
+		// Setup common logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		existingUser := &domain.User{
+			ID:    "existing-user",
+			Email: email,
+		}
+
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: inviterID}, nil)
+
+		mockRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(&domain.Workspace{
+				ID:   workspaceID,
+				Name: "Test Workspace",
+			}, nil)
+
+		mockRepo.EXPECT().
+			IsUserWorkspaceMember(ctx, inviterID, workspaceID).
+			Return(true, nil)
+
+		mockUserSvc.EXPECT().
+			GetUserByID(ctx, inviterID).
+			Return(&domain.User{
+				ID:    inviterID,
+				Name:  "Test Inviter",
+				Email: "inviter@example.com",
+			}, nil)
+
+		mockUserSvc.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(existingUser, nil)
+
+		mockRepo.EXPECT().
+			IsUserWorkspaceMember(ctx, existingUser.ID, workspaceID).
+			Return(true, nil)
+
+		invitation, token, err := service.InviteMember(ctx, workspaceID, email)
+		require.Error(t, err)
+		assert.Nil(t, invitation)
+		assert.Empty(t, token)
+		assert.Equal(t, "user is already a member of the workspace", err.Error())
+	})
+}

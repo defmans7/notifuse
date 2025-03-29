@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net/mail"
 	"net/url"
 	"strconv"
 	"time"
@@ -71,14 +70,6 @@ type Contact struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// isValidEmail checks if the email is valid
-func isValidEmail(email string) bool {
-	if _, err := mail.ParseAddress(email); err != nil {
-		return false
-	}
-	return true
-}
-
 // Validate ensures that the contact has all required fields
 func (c *Contact) Validate() error {
 	// Email is required
@@ -86,7 +77,7 @@ func (c *Contact) Validate() error {
 		return fmt.Errorf("email is required")
 	}
 	// Email must be valid
-	if !isValidEmail(c.Email) {
+	if !govalidator.IsEmail(c.Email) {
 		return fmt.Errorf("invalid email format")
 	}
 
@@ -579,7 +570,7 @@ func FromJSON(data interface{}) (*Contact, error) {
 	}
 
 	// Validate email format
-	if !isValidEmail(email) {
+	if !govalidator.IsEmail(email) {
 		return nil, fmt.Errorf("invalid email format")
 	}
 

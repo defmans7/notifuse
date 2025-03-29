@@ -10,6 +10,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
+	"github.com/asaskevich/govalidator"
 	"github.com/google/uuid"
 )
 
@@ -354,7 +355,7 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 	}
 
 	// Validate email format
-	if !isValidEmail(email) {
+	if !govalidator.IsEmail(email) {
 		return nil, "", fmt.Errorf("invalid email format")
 	}
 
@@ -463,7 +464,25 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 // Helper function to validate email format
 func isValidEmail(email string) bool {
 	// Basic email validation - could be more sophisticated in production
-	return strings.Contains(email, "@") && strings.Contains(email, ".")
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false
+	}
+
+	localPart := parts[0]
+	domain := parts[1]
+
+	// Check for empty parts
+	if localPart == "" || domain == "" {
+		return false
+	}
+
+	// Check domain has at least one dot
+	if !strings.Contains(domain, ".") {
+		return false
+	}
+
+	return true
 }
 
 // GetWorkspaceMembersWithEmail returns all users with emails for a workspace, verifying the requester has access
