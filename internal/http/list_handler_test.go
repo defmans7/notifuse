@@ -2,138 +2,18 @@ package http
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/assert"
 )
-
-// MockListService is a mock implementation of domain.ListService for testing
-type MockListService struct {
-	lists                   map[string]*domain.List
-	ErrToReturn             error
-	ErrListNotFoundToReturn bool
-	GetListsCalled          bool
-	GetListByIDCalled       bool
-	LastListID              string
-	CreateListCalled        bool
-	LastListCreated         *domain.List
-	UpdateListCalled        bool
-	LastListUpdated         *domain.List
-	DeleteListCalled        bool
-	LastListDeleted         string
-}
-
-// NewMockListService creates a new mock list service for testing
-func NewMockListService() *MockListService {
-	return &MockListService{
-		lists: make(map[string]*domain.List),
-	}
-}
-
-func (m *MockListService) GetLists(ctx context.Context, workspaceID string) ([]*domain.List, error) {
-	m.GetListsCalled = true
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-
-	// Convert map to slice
-	lists := make([]*domain.List, 0, len(m.lists))
-	for _, list := range m.lists {
-		lists = append(lists, list)
-	}
-
-	return lists, nil
-}
-
-func (m *MockListService) GetListByID(ctx context.Context, workspaceID string, id string) (*domain.List, error) {
-	m.GetListByIDCalled = true
-	m.LastListID = id
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-	if m.ErrListNotFoundToReturn {
-		return nil, &domain.ErrListNotFound{}
-	}
-
-	list, exists := m.lists[id]
-	if !exists {
-		return nil, &domain.ErrListNotFound{}
-	}
-	return list, nil
-}
-
-func (m *MockListService) CreateList(ctx context.Context, workspaceID string, list *domain.List) error {
-	m.CreateListCalled = true
-	m.LastListCreated = list
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-
-	// Set timestamps
-	now := time.Now()
-	if list.CreatedAt.IsZero() {
-		list.CreatedAt = now
-	}
-	list.UpdatedAt = now
-
-	// Store the list
-	m.lists[list.ID] = list
-	return nil
-}
-
-func (m *MockListService) UpdateList(ctx context.Context, workspaceID string, list *domain.List) error {
-	m.UpdateListCalled = true
-	m.LastListUpdated = list
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-	if m.ErrListNotFoundToReturn {
-		return &domain.ErrListNotFound{}
-	}
-
-	// Check if list exists
-	existingList, exists := m.lists[list.ID]
-	if !exists {
-		return &domain.ErrListNotFound{}
-	}
-
-	// Update fields
-	existingList.Name = list.Name
-	existingList.Description = list.Description
-	existingList.UpdatedAt = time.Now()
-
-	// Store the updated list
-	m.lists[list.ID] = existingList
-	return nil
-}
-
-func (m *MockListService) DeleteList(ctx context.Context, workspaceID string, id string) error {
-	m.DeleteListCalled = true
-	m.LastListDeleted = id
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-	if m.ErrListNotFoundToReturn {
-		return &domain.ErrListNotFound{}
-	}
-
-	_, exists := m.lists[id]
-	if !exists {
-		return &domain.ErrListNotFound{}
-	}
-
-	delete(m.lists, id)
-	return nil
-}
 
 // MockLoggerForList is a mock implementation of logger.Logger for list tests
 type MockLoggerForList struct {
@@ -169,8 +49,8 @@ func (l *MockLoggerForList) Fatal(message string) {
 }
 
 // Test setup helper
-func setupListHandlerTest() (*MockListService, *MockLoggerForList, *ListHandler) {
-	mockService := NewMockListService()
+func setupListHandlerTest() (*service.MockListService, *MockLoggerForList, *ListHandler) {
+	mockService := service.NewMockListService()
 	mockLogger := &MockLoggerForList{LoggedMessages: []string{}}
 	handler := NewListHandler(mockService, mockLogger)
 	return mockService, mockLogger, handler
@@ -204,7 +84,7 @@ func TestListHandler_HandleList(t *testing.T) {
 		name           string
 		method         string
 		queryParams    url.Values
-		setupMock      func(*MockListService)
+		setupMock      func(*service.MockListService)
 		expectedStatus int
 		expectedLists  bool
 	}{
@@ -214,8 +94,8 @@ func TestListHandler_HandleList(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *MockListService) {
-				m.lists = map[string]*domain.List{
+			setupMock: func(m *service.MockListService) {
+				m.Lists = map[string]*domain.List{
 					"list1": {
 						ID:          "list1",
 						Name:        "Test List 1",
@@ -237,7 +117,7 @@ func TestListHandler_HandleList(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -249,7 +129,7 @@ func TestListHandler_HandleList(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
@@ -259,7 +139,7 @@ func TestListHandler_HandleList(t *testing.T) {
 			name:        "Missing Workspace ID",
 			method:      http.MethodGet,
 			queryParams: url.Values{},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -298,7 +178,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 		name           string
 		method         string
 		queryParams    url.Values
-		setupMock      func(*MockListService)
+		setupMock      func(*service.MockListService)
 		expectedStatus int
 		expectedList   bool
 	}{
@@ -309,8 +189,8 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"list1"},
 			},
-			setupMock: func(m *MockListService) {
-				m.lists = map[string]*domain.List{
+			setupMock: func(m *service.MockListService) {
+				m.Lists = map[string]*domain.List{
 					"list1": {
 						ID:          "list1",
 						Name:        "Test List",
@@ -328,7 +208,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"nonexistent"},
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrListNotFoundToReturn = true
 			},
 			expectedStatus: http.StatusNotFound,
@@ -341,7 +221,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"list1"},
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -353,7 +233,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 			queryParams: url.Values{
 				"workspace_id": []string{"workspace123"},
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -366,7 +246,7 @@ func TestListHandler_HandleGet(t *testing.T) {
 				"workspace_id": []string{"workspace123"},
 				"id":           []string{"list1"},
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
@@ -408,9 +288,9 @@ func TestListHandler_HandleCreate(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*MockListService)
+		setupMock      func(*service.MockListService)
 		expectedStatus int
-		checkCreated   func(*testing.T, *MockListService)
+		checkCreated   func(*testing.T, *service.MockListService)
 	}{
 		{
 			name:   "Create List Success",
@@ -424,11 +304,11 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "New Description",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No special setup needed
 			},
 			expectedStatus: http.StatusCreated,
-			checkCreated: func(t *testing.T, m *MockListService) {
+			checkCreated: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.CreateListCalled)
 				assert.NotNil(t, m.LastListCreated)
 				assert.Equal(t, "New List", m.LastListCreated.Name)
@@ -447,11 +327,11 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "New Description",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkCreated: func(t *testing.T, m *MockListService) {
+			checkCreated: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.CreateListCalled)
 			},
 		},
@@ -459,11 +339,11 @@ func TestListHandler_HandleCreate(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkCreated: func(t *testing.T, m *MockListService) {
+			checkCreated: func(t *testing.T, m *service.MockListService) {
 				assert.False(t, m.CreateListCalled)
 			},
 		},
@@ -479,11 +359,11 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "New Description",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkCreated: func(t *testing.T, m *MockListService) {
+			checkCreated: func(t *testing.T, m *service.MockListService) {
 				assert.False(t, m.CreateListCalled)
 			},
 		},
@@ -525,9 +405,9 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*MockListService)
+		setupMock      func(*service.MockListService)
 		expectedStatus int
-		checkUpdated   func(*testing.T, *MockListService)
+		checkUpdated   func(*testing.T, *service.MockListService)
 	}{
 		{
 			name:   "Update List Success",
@@ -541,8 +421,8 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *MockListService) {
-				m.lists = map[string]*domain.List{
+			setupMock: func(m *service.MockListService) {
+				m.Lists = map[string]*domain.List{
 					"list1": {
 						ID:            "list1",
 						Name:          "Original List",
@@ -554,7 +434,7 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
-			checkUpdated: func(t *testing.T, m *MockListService) {
+			checkUpdated: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.UpdateListCalled)
 				assert.NotNil(t, m.LastListUpdated)
 				assert.Equal(t, "Updated List", m.LastListUpdated.Name)
@@ -573,11 +453,11 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrListNotFoundToReturn = true
 			},
 			expectedStatus: http.StatusNotFound,
-			checkUpdated: func(t *testing.T, m *MockListService) {
+			checkUpdated: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.UpdateListCalled)
 			},
 		},
@@ -593,11 +473,11 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkUpdated: func(t *testing.T, m *MockListService) {
+			checkUpdated: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.UpdateListCalled)
 			},
 		},
@@ -605,11 +485,11 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkUpdated: func(t *testing.T, m *MockListService) {
+			checkUpdated: func(t *testing.T, m *service.MockListService) {
 				assert.False(t, m.UpdateListCalled)
 			},
 		},
@@ -625,11 +505,11 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsPublic:      true,
 				Description:   "Updated Description",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkUpdated: func(t *testing.T, m *MockListService) {
+			checkUpdated: func(t *testing.T, m *service.MockListService) {
 				assert.False(t, m.UpdateListCalled)
 			},
 		},
@@ -671,9 +551,9 @@ func TestListHandler_HandleDelete(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*MockListService)
+		setupMock      func(*service.MockListService)
 		expectedStatus int
-		checkDeleted   func(*testing.T, *MockListService)
+		checkDeleted   func(*testing.T, *service.MockListService)
 	}{
 		{
 			name:   "Delete List Success",
@@ -682,8 +562,8 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "list1",
 			},
-			setupMock: func(m *MockListService) {
-				m.lists = map[string]*domain.List{
+			setupMock: func(m *service.MockListService) {
+				m.Lists = map[string]*domain.List{
 					"list1": {
 						ID:          "list1",
 						Name:        "Test List",
@@ -692,7 +572,7 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
-			checkDeleted: func(t *testing.T, m *MockListService) {
+			checkDeleted: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.DeleteListCalled)
 				assert.Equal(t, "list1", m.LastListDeleted)
 			},
@@ -704,11 +584,11 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "nonexistent",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrListNotFoundToReturn = true
 			},
 			expectedStatus: http.StatusNotFound,
-			checkDeleted: func(t *testing.T, m *MockListService) {
+			checkDeleted: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.DeleteListCalled)
 			},
 		},
@@ -719,11 +599,11 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "list1",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkDeleted: func(t *testing.T, m *MockListService) {
+			checkDeleted: func(t *testing.T, m *service.MockListService) {
 				assert.True(t, m.DeleteListCalled)
 			},
 		},
@@ -731,11 +611,11 @@ func TestListHandler_HandleDelete(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkDeleted: func(t *testing.T, m *MockListService) {
+			checkDeleted: func(t *testing.T, m *service.MockListService) {
 				assert.False(t, m.DeleteListCalled)
 			},
 		},
@@ -746,11 +626,11 @@ func TestListHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				ID:          "list1",
 			},
-			setupMock: func(m *MockListService) {
+			setupMock: func(m *service.MockListService) {
 				// No setup needed
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkDeleted: func(t *testing.T, m *MockListService) {
+			checkDeleted: func(t *testing.T, m *service.MockListService) {
 				assert.False(t, m.DeleteListCalled)
 			},
 		},

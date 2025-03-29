@@ -2,280 +2,18 @@ package http
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/assert"
 )
-
-// MockContactService is a mock implementation of domain.ContactService for testing
-type MockContactService struct {
-	contacts                   map[string]*domain.Contact
-	ErrToReturn                error
-	ErrContactNotFoundToReturn bool
-
-	GetContactsCalled            bool
-	GetContactByEmailCalled      bool
-	LastContactEmail             string
-	GetContactByExternalIDCalled bool
-	LastContactExternalID        string
-	DeleteContactCalled          bool
-	BatchImportContactsCalled    bool
-	LastContactsBatchImported    []*domain.Contact
-	UpsertContactCalled          bool
-	LastContactUpserted          *domain.Contact
-	UpsertIsNewToReturn          bool
-}
-
-// NewMockContactService creates a new mock contact service for testing
-func NewMockContactService() *MockContactService {
-	return &MockContactService{
-		contacts: make(map[string]*domain.Contact),
-	}
-}
-
-func (m *MockContactService) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
-	m.GetContactsCalled = true
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-
-	// Convert map to slice
-	contacts := make([]*domain.Contact, 0, len(m.contacts))
-	for _, contact := range m.contacts {
-		contacts = append(contacts, contact)
-	}
-
-	// For testing purposes, we'll just return all contacts
-	// In a real implementation, we would handle pagination and filtering
-	return &domain.GetContactsResponse{
-		Contacts:   contacts,
-		NextCursor: "", // For testing, we don't implement cursor pagination
-	}, nil
-}
-
-func (m *MockContactService) GetContactByEmail(ctx context.Context, workspaceID string, email string) (*domain.Contact, error) {
-	m.GetContactByEmailCalled = true
-	m.LastContactEmail = email
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-	if m.ErrContactNotFoundToReturn {
-		return nil, &domain.ErrContactNotFound{}
-	}
-
-	for _, contact := range m.contacts {
-		if contact.Email == email {
-			return contact, nil
-		}
-	}
-	return nil, &domain.ErrContactNotFound{}
-}
-
-func (m *MockContactService) GetContactByExternalID(ctx context.Context, workspaceID string, externalID string) (*domain.Contact, error) {
-	m.GetContactByExternalIDCalled = true
-	m.LastContactExternalID = externalID
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-	if m.ErrContactNotFoundToReturn {
-		return nil, &domain.ErrContactNotFound{}
-	}
-
-	for _, contact := range m.contacts {
-		if contact.ExternalID.String == externalID && !contact.ExternalID.IsNull {
-			return contact, nil
-		}
-	}
-	return nil, &domain.ErrContactNotFound{}
-}
-
-func (m *MockContactService) DeleteContact(ctx context.Context, workspaceID string, email string) error {
-	m.DeleteContactCalled = true
-	m.LastContactEmail = email
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-	if m.ErrContactNotFoundToReturn {
-		return &domain.ErrContactNotFound{}
-	}
-
-	for key, contact := range m.contacts {
-		if contact.Email == email {
-			delete(m.contacts, key)
-			return nil
-		}
-	}
-	return &domain.ErrContactNotFound{}
-}
-
-func (m *MockContactService) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
-	m.BatchImportContactsCalled = true
-	m.LastContactsBatchImported = contacts
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-
-	// Set timestamps for all contacts
-	now := time.Now()
-	for _, contact := range contacts {
-		if contact.CreatedAt.IsZero() {
-			contact.CreatedAt = now
-		}
-		contact.UpdatedAt = now
-
-		// Store in the map
-		m.contacts[contact.Email] = contact
-	}
-
-	return nil
-}
-
-func (m *MockContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
-	m.UpsertContactCalled = true
-	m.LastContactUpserted = contact
-	if m.ErrToReturn != nil {
-		return false, m.ErrToReturn
-	}
-
-	// Check if contact exists
-	isNew := true
-	existingContact, exists := m.contacts[contact.Email]
-	if exists {
-		isNew = false
-		// If updating an existing contact, merge fields
-		if contact.ExternalID != nil {
-			existingContact.ExternalID = contact.ExternalID
-		}
-		if contact.Timezone != nil {
-			existingContact.Timezone = contact.Timezone
-		}
-		if contact.Language != nil {
-			existingContact.Language = contact.Language
-		}
-		if contact.FirstName != nil {
-			existingContact.FirstName = contact.FirstName
-		}
-		if contact.LastName != nil {
-			existingContact.LastName = contact.LastName
-		}
-		if contact.Phone != nil {
-			existingContact.Phone = contact.Phone
-		}
-		if contact.AddressLine1 != nil {
-			existingContact.AddressLine1 = contact.AddressLine1
-		}
-		if contact.AddressLine2 != nil {
-			existingContact.AddressLine2 = contact.AddressLine2
-		}
-		if contact.Country != nil {
-			existingContact.Country = contact.Country
-		}
-		if contact.Postcode != nil {
-			existingContact.Postcode = contact.Postcode
-		}
-		if contact.State != nil {
-			existingContact.State = contact.State
-		}
-		if contact.JobTitle != nil {
-			existingContact.JobTitle = contact.JobTitle
-		}
-		if contact.LifetimeValue != nil {
-			existingContact.LifetimeValue = contact.LifetimeValue
-		}
-		if contact.OrdersCount != nil {
-			existingContact.OrdersCount = contact.OrdersCount
-		}
-		if contact.LastOrderAt != nil {
-			existingContact.LastOrderAt = contact.LastOrderAt
-		}
-		if contact.CustomString1 != nil {
-			existingContact.CustomString1 = contact.CustomString1
-		}
-		if contact.CustomString2 != nil {
-			existingContact.CustomString2 = contact.CustomString2
-		}
-		if contact.CustomString3 != nil {
-			existingContact.CustomString3 = contact.CustomString3
-		}
-		if contact.CustomString4 != nil {
-			existingContact.CustomString4 = contact.CustomString4
-		}
-		if contact.CustomString5 != nil {
-			existingContact.CustomString5 = contact.CustomString5
-		}
-		if contact.CustomNumber1 != nil {
-			existingContact.CustomNumber1 = contact.CustomNumber1
-		}
-		if contact.CustomNumber2 != nil {
-			existingContact.CustomNumber2 = contact.CustomNumber2
-		}
-		if contact.CustomNumber3 != nil {
-			existingContact.CustomNumber3 = contact.CustomNumber3
-		}
-		if contact.CustomNumber4 != nil {
-			existingContact.CustomNumber4 = contact.CustomNumber4
-		}
-		if contact.CustomNumber5 != nil {
-			existingContact.CustomNumber5 = contact.CustomNumber5
-		}
-		if contact.CustomDatetime1 != nil {
-			existingContact.CustomDatetime1 = contact.CustomDatetime1
-		}
-		if contact.CustomDatetime2 != nil {
-			existingContact.CustomDatetime2 = contact.CustomDatetime2
-		}
-		if contact.CustomDatetime3 != nil {
-			existingContact.CustomDatetime3 = contact.CustomDatetime3
-		}
-		if contact.CustomDatetime4 != nil {
-			existingContact.CustomDatetime4 = contact.CustomDatetime4
-		}
-		if contact.CustomDatetime5 != nil {
-			existingContact.CustomDatetime5 = contact.CustomDatetime5
-		}
-		if contact.CustomJSON1 != nil {
-			existingContact.CustomJSON1 = contact.CustomJSON1
-		}
-		if contact.CustomJSON2 != nil {
-			existingContact.CustomJSON2 = contact.CustomJSON2
-		}
-		if contact.CustomJSON3 != nil {
-			existingContact.CustomJSON3 = contact.CustomJSON3
-		}
-		if contact.CustomJSON4 != nil {
-			existingContact.CustomJSON4 = contact.CustomJSON4
-		}
-		if contact.CustomJSON5 != nil {
-			existingContact.CustomJSON5 = contact.CustomJSON5
-		}
-
-		// Set timestamps
-		now := time.Now()
-		existingContact.UpdatedAt = now
-		contact = existingContact
-	} else {
-		// Set timestamps for new contact
-		now := time.Now()
-		if contact.CreatedAt.IsZero() {
-			contact.CreatedAt = now
-		}
-		contact.UpdatedAt = now
-	}
-
-	// Store the contact
-	m.contacts[contact.Email] = contact
-	m.LastContactUpserted = contact
-	return isNew, nil
-}
 
 // MockLoggerForContact is a mock implementation of logger.Logger for contact tests
 type MockLoggerForContact struct {
@@ -311,8 +49,8 @@ func (l *MockLoggerForContact) Fatal(message string) {
 }
 
 // Test setup helper
-func setupContactHandlerTest() (*MockContactService, *MockLoggerForContact, *ContactHandler) {
-	mockService := NewMockContactService()
+func setupContactHandlerTest() (*service.MockContactService, *MockLoggerForContact, *ContactHandler) {
+	mockService := service.NewMockContactService()
 	mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
 	handler := NewContactHandler(mockService, mockLogger)
 	return mockService, mockLogger, handler
@@ -354,7 +92,7 @@ func TestContactHandler_RegisterRoutes(t *testing.T) {
 func TestContactHandler_HandleList(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		// Arrange
-		mockService := NewMockContactService()
+		mockService := &service.MockContactService{}
 		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
@@ -372,7 +110,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 
 	t.Run("Service_Error", func(t *testing.T) {
 		// Arrange
-		mockService := NewMockContactService()
+		mockService := &service.MockContactService{}
 		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
@@ -392,7 +130,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 
 	t.Run("Wrong_Method", func(t *testing.T) {
 		// Arrange
-		mockService := NewMockContactService()
+		mockService := &service.MockContactService{}
 		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
@@ -409,7 +147,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 
 	t.Run("Invalid_Request", func(t *testing.T) {
 		// Arrange
-		mockService := NewMockContactService()
+		mockService := &service.MockContactService{}
 		mockLogger := &MockLoggerForContact{}
 		handler := NewContactHandler(mockService, mockLogger)
 
@@ -431,7 +169,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 		name            string
 		method          string
 		contactEmail    string
-		setupMock       func(*MockContactService)
+		setupMock       func(*service.MockContactService)
 		expectedStatus  int
 		expectedContact bool
 	}{
@@ -439,8 +177,8 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			name:         "Get Contact Success",
 			method:       http.MethodGet,
 			contactEmail: "test1@example.com",
-			setupMock: func(m *MockContactService) {
-				m.contacts = map[string]*domain.Contact{
+			setupMock: func(m *service.MockContactService) {
+				m.Contacts = map[string]*domain.Contact{
 					"test1@example.com": {
 						Email:      "test1@example.com",
 						ExternalID: &domain.NullableString{String: "ext1", IsNull: false},
@@ -455,7 +193,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			name:         "Get Contact Not Found",
 			method:       http.MethodGet,
 			contactEmail: "nonexistent@example.com",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrContactNotFoundToReturn = true
 			},
 			expectedStatus:  http.StatusNotFound,
@@ -465,7 +203,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			name:         "Get Contact Service Error",
 			method:       http.MethodGet,
 			contactEmail: "test1@example.com",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus:  http.StatusInternalServerError,
@@ -475,7 +213,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			name:         "Missing Contact Email",
 			method:       http.MethodGet,
 			contactEmail: "",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// No setup needed for this test
 			},
 			expectedStatus:  http.StatusBadRequest,
@@ -485,7 +223,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			name:         "Method Not Allowed",
 			method:       http.MethodPost,
 			contactEmail: "test1@example.com",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// No setup needed for this test
 			},
 			expectedStatus:  http.StatusMethodNotAllowed,
@@ -554,7 +292,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 		name            string
 		method          string
 		externalID      string
-		setupMock       func(*MockContactService)
+		setupMock       func(*service.MockContactService)
 		expectedStatus  int
 		expectedContact bool
 	}{
@@ -562,8 +300,8 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Get Contact By External ID Success",
 			method:     http.MethodGet,
 			externalID: "ext1",
-			setupMock: func(m *MockContactService) {
-				m.contacts = map[string]*domain.Contact{
+			setupMock: func(m *service.MockContactService) {
+				m.Contacts = map[string]*domain.Contact{
 					"test@example.com": {
 						Email: "test@example.com",
 						ExternalID: &domain.NullableString{
@@ -584,7 +322,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Get Contact By External ID Not Found",
 			method:     http.MethodGet,
 			externalID: "nonexistent",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrContactNotFoundToReturn = true
 			},
 			expectedStatus:  http.StatusNotFound,
@@ -594,7 +332,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Get Contact By External ID Service Error",
 			method:     http.MethodGet,
 			externalID: "error",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus:  http.StatusInternalServerError,
@@ -604,7 +342,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Missing External ID",
 			method:     http.MethodGet,
 			externalID: "",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// No setup needed for this test
 			},
 			expectedStatus:  http.StatusBadRequest,
@@ -614,7 +352,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			name:       "Method Not Allowed",
 			method:     http.MethodPost,
 			externalID: "ext1",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// No setup needed for this test
 			},
 			expectedStatus:  http.StatusMethodNotAllowed,
@@ -700,10 +438,10 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 		name            string
 		method          string
 		reqBody         interface{}
-		setupMock       func(*MockContactService)
+		setupMock       func(*service.MockContactService)
 		expectedStatus  int
 		expectedMessage string
-		checkDeleted    func(*testing.T, *MockContactService)
+		checkDeleted    func(*testing.T, *service.MockContactService)
 	}{
 		{
 			name:   "Delete Contact Success",
@@ -712,8 +450,8 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "test@example.com",
 			},
-			setupMock: func(m *MockContactService) {
-				m.contacts = map[string]*domain.Contact{
+			setupMock: func(m *service.MockContactService) {
+				m.Contacts = map[string]*domain.Contact{
 					"test@example.com": {
 						Email:      "test@example.com",
 						ExternalID: &domain.NullableString{String: "ext1", IsNull: false},
@@ -722,7 +460,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
-			checkDeleted: func(t *testing.T, m *MockContactService) {
+			checkDeleted: func(t *testing.T, m *service.MockContactService) {
 				if !m.DeleteContactCalled {
 					t.Error("Expected DeleteContact to be called, but it wasn't")
 				}
@@ -738,11 +476,11 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "nonexistent@example.com",
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrContactNotFoundToReturn = true
 			},
 			expectedStatus: http.StatusNotFound,
-			checkDeleted: func(t *testing.T, m *MockContactService) {
+			checkDeleted: func(t *testing.T, m *service.MockContactService) {
 				if !m.DeleteContactCalled {
 					t.Error("Expected DeleteContact to be called, but it wasn't")
 				}
@@ -755,11 +493,11 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "error@example.com",
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkDeleted: func(t *testing.T, m *MockContactService) {
+			checkDeleted: func(t *testing.T, m *service.MockContactService) {
 				if !m.DeleteContactCalled {
 					t.Error("Expected DeleteContact to be called, but it wasn't")
 				}
@@ -769,11 +507,11 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// No special setup
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkDeleted: func(t *testing.T, m *MockContactService) {
+			checkDeleted: func(t *testing.T, m *service.MockContactService) {
 				if m.DeleteContactCalled {
 					t.Error("Expected DeleteContact not to be called, but it was")
 				}
@@ -786,11 +524,11 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "", // Empty Email
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// No special setup
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkDeleted: func(t *testing.T, m *MockContactService) {
+			checkDeleted: func(t *testing.T, m *service.MockContactService) {
 				if m.DeleteContactCalled {
 					t.Error("Expected DeleteContact not to be called, but it was")
 				}
@@ -803,11 +541,11 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Email:       "test@example.com",
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// No special setup
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkDeleted: func(t *testing.T, m *MockContactService) {
+			checkDeleted: func(t *testing.T, m *service.MockContactService) {
 				if m.DeleteContactCalled {
 					t.Error("Expected DeleteContact not to be called, but it was")
 				}
@@ -868,10 +606,10 @@ func TestContactHandler_HandleImport(t *testing.T) {
 		name            string
 		method          string
 		reqBody         interface{}
-		setupMock       func(*MockContactService)
+		setupMock       func(*service.MockContactService)
 		expectedStatus  int
 		expectedMessage string
-		checkImported   func(*testing.T, *MockContactService)
+		checkImported   func(*testing.T, *service.MockContactService)
 	}{
 		{
 			name:   "successful batch import",
@@ -891,12 +629,12 @@ func TestContactHandler_HandleImport(t *testing.T) {
 					},
 				},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrToReturn = nil
 			},
 			expectedStatus:  http.StatusOK,
 			expectedMessage: "Successfully imported 2 contacts",
-			checkImported: func(t *testing.T, m *MockContactService) {
+			checkImported: func(t *testing.T, m *service.MockContactService) {
 				assert.Equal(t, true, m.BatchImportContactsCalled)
 				assert.Equal(t, 2, len(m.LastContactsBatchImported))
 			},
@@ -914,12 +652,12 @@ func TestContactHandler_HandleImport(t *testing.T) {
 					},
 				},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus:  http.StatusInternalServerError,
 			expectedMessage: "Failed to import contacts",
-			checkImported: func(t *testing.T, m *MockContactService) {
+			checkImported: func(t *testing.T, m *service.MockContactService) {
 				assert.Equal(t, true, m.BatchImportContactsCalled)
 			},
 		},
@@ -930,13 +668,13 @@ func TestContactHandler_HandleImport(t *testing.T) {
 				"workspace_id": "workspace123",
 				"contacts":     []map[string]interface{}{},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// Should not be called
 				m.BatchImportContactsCalled = false
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "contacts array is empty",
-			checkImported: func(t *testing.T, m *MockContactService) {
+			checkImported: func(t *testing.T, m *service.MockContactService) {
 				assert.Equal(t, false, m.BatchImportContactsCalled)
 			},
 		},
@@ -953,13 +691,13 @@ func TestContactHandler_HandleImport(t *testing.T) {
 					},
 				},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// Should not be called
 				m.BatchImportContactsCalled = false
 			},
 			expectedStatus:  http.StatusMethodNotAllowed,
 			expectedMessage: "Method not allowed",
-			checkImported: func(t *testing.T, m *MockContactService) {
+			checkImported: func(t *testing.T, m *service.MockContactService) {
 				assert.Equal(t, false, m.BatchImportContactsCalled)
 			},
 		},

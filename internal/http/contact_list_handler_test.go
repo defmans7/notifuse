@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,73 +10,12 @@ import (
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/stretchr/testify/assert"
 )
 
-// MockContactListService is a mock implementation of domain.ContactListService for testing
-type MockContactListService struct {
-	AddContactToListCalled      bool
-	GetContactListByIDsCalled   bool
-	GetContactsByListCalled     bool
-	GetListsByEmailCalled       bool
-	UpdateContactListCalled     bool
-	RemoveContactFromListCalled bool
-
-	ErrToReturn  error
-	ContactList  *domain.ContactList
-	ContactLists []*domain.ContactList
-}
-
-func (m *MockContactListService) AddContactToList(ctx context.Context, workspaceID string, contactList *domain.ContactList) error {
-	m.AddContactToListCalled = true
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-	return nil
-}
-
-func (m *MockContactListService) GetContactListByIDs(ctx context.Context, workspaceID string, email string, listID string) (*domain.ContactList, error) {
-	m.GetContactListByIDsCalled = true
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-	return m.ContactList, nil
-}
-
-func (m *MockContactListService) GetContactsByListID(ctx context.Context, workspaceID string, listID string) ([]*domain.ContactList, error) {
-	m.GetContactsByListCalled = true
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-	return m.ContactLists, nil
-}
-
-func (m *MockContactListService) GetListsByEmail(ctx context.Context, workspaceID string, email string) ([]*domain.ContactList, error) {
-	m.GetListsByEmailCalled = true
-	if m.ErrToReturn != nil {
-		return nil, m.ErrToReturn
-	}
-	return m.ContactLists, nil
-}
-
-func (m *MockContactListService) UpdateContactListStatus(ctx context.Context, workspaceID string, email string, listID string, status domain.ContactListStatus) error {
-	m.UpdateContactListCalled = true
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-	return nil
-}
-
-func (m *MockContactListService) RemoveContactFromList(ctx context.Context, workspaceID string, email string, listID string) error {
-	m.RemoveContactFromListCalled = true
-	if m.ErrToReturn != nil {
-		return m.ErrToReturn
-	}
-	return nil
-}
-
 func TestContactListHandler_RegisterRoutes(t *testing.T) {
-	mockService := &MockContactListService{}
+	mockService := &service.MockContactListService{}
 	mockLogger := &MockLoggerForContact{}
 	handler := NewContactListHandler(mockService, mockLogger)
 	mux := http.NewServeMux()
@@ -106,9 +44,9 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*MockContactListService)
+		setupMock      func(*service.MockContactListService)
 		expectedStatus int
-		checkResult    func(*testing.T, *MockContactListService)
+		checkResult    func(*testing.T, *service.MockContactListService)
 	}{
 		{
 			name:   "Success",
@@ -119,11 +57,11 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 				ListID:      "list123",
 				Status:      "active",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = nil
 			},
 			expectedStatus: http.StatusCreated,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.AddContactToListCalled)
 			},
 		},
@@ -131,11 +69,11 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.AddContactToListCalled = false
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.AddContactToListCalled)
 			},
 		},
@@ -148,11 +86,11 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 				ListID:      "list123",
 				Status:      "active",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.AddContactToListCalled = false
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.AddContactToListCalled)
 			},
 		},
@@ -165,11 +103,11 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 				ListID:      "list123",
 				Status:      "active",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.AddContactToListCalled)
 			},
 		},
@@ -177,7 +115,7 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService := &MockContactListService{}
+			mockService := &service.MockContactListService{}
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactListHandler(mockService, mockLogger)
 
@@ -215,15 +153,15 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 		name           string
 		method         string
 		queryParams    string
-		setupMock      func(*MockContactListService)
+		setupMock      func(*service.MockContactListService)
 		expectedStatus int
-		checkResult    func(*testing.T, *MockContactListService)
+		checkResult    func(*testing.T, *service.MockContactListService)
 	}{
 		{
 			name:        "Success",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123&email=test@example.com&list_id=list123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ContactList = &domain.ContactList{
 					Email:  "test@example.com",
 					ListID: "list123",
@@ -232,7 +170,7 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 				m.ErrToReturn = nil
 			},
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.GetContactListByIDsCalled)
 			},
 		},
@@ -240,11 +178,11 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			name:        "Missing Required Parameters",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.GetContactListByIDsCalled = false
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.GetContactListByIDsCalled)
 			},
 		},
@@ -252,11 +190,11 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			name:        "Method Not Allowed",
 			method:      http.MethodPost,
 			queryParams: "workspace_id=workspace123&email=test@example.com&list_id=list123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.GetContactListByIDsCalled = false
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.GetContactListByIDsCalled)
 			},
 		},
@@ -264,11 +202,11 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			name:        "Service Error",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123&email=test@example.com&list_id=list123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.GetContactListByIDsCalled)
 			},
 		},
@@ -276,7 +214,7 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService := &MockContactListService{}
+			mockService := &service.MockContactListService{}
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactListHandler(mockService, mockLogger)
 
@@ -305,15 +243,15 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 		name           string
 		method         string
 		queryParams    string
-		setupMock      func(*MockContactListService)
+		setupMock      func(*service.MockContactListService)
 		expectedStatus int
-		checkResult    func(*testing.T, *MockContactListService)
+		checkResult    func(*testing.T, *service.MockContactListService)
 	}{
 		{
 			name:        "Success",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123&list_id=list123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ContactLists = []*domain.ContactList{
 					{
 						Email:  "test1@example.com",
@@ -329,7 +267,7 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 				m.ErrToReturn = nil
 			},
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.GetContactsByListCalled)
 			},
 		},
@@ -337,11 +275,11 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 			name:        "Missing Required Parameters",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.GetContactsByListCalled = false
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.GetContactsByListCalled)
 			},
 		},
@@ -349,11 +287,11 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 			name:        "Method Not Allowed",
 			method:      http.MethodPost,
 			queryParams: "workspace_id=workspace123&list_id=list123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.GetContactsByListCalled = false
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.GetContactsByListCalled)
 			},
 		},
@@ -361,11 +299,11 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 			name:        "Service Error",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123&list_id=list123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.GetContactsByListCalled)
 			},
 		},
@@ -373,7 +311,7 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService := &MockContactListService{}
+			mockService := &service.MockContactListService{}
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactListHandler(mockService, mockLogger)
 
@@ -402,15 +340,15 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 		name           string
 		method         string
 		queryParams    string
-		setupMock      func(*MockContactListService)
+		setupMock      func(*service.MockContactListService)
 		expectedStatus int
-		checkResult    func(*testing.T, *MockContactListService)
+		checkResult    func(*testing.T, *service.MockContactListService)
 	}{
 		{
 			name:        "Success",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123&email=test@example.com",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ContactLists = []*domain.ContactList{
 					{
 						Email:  "test@example.com",
@@ -426,7 +364,7 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 				m.ErrToReturn = nil
 			},
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.GetListsByEmailCalled)
 			},
 		},
@@ -434,11 +372,11 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			name:        "Missing Required Parameters",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.GetListsByEmailCalled = false
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.GetListsByEmailCalled)
 			},
 		},
@@ -446,11 +384,11 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			name:        "Method Not Allowed",
 			method:      http.MethodPost,
 			queryParams: "workspace_id=workspace123&email=test@example.com",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.GetListsByEmailCalled = false
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.GetListsByEmailCalled)
 			},
 		},
@@ -458,11 +396,11 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 			name:        "Service Error",
 			method:      http.MethodGet,
 			queryParams: "workspace_id=workspace123&email=test@example.com",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.GetListsByEmailCalled)
 			},
 		},
@@ -470,7 +408,7 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService := &MockContactListService{}
+			mockService := &service.MockContactListService{}
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactListHandler(mockService, mockLogger)
 
@@ -499,9 +437,9 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*MockContactListService)
+		setupMock      func(*service.MockContactListService)
 		expectedStatus int
-		checkResult    func(*testing.T, *MockContactListService)
+		checkResult    func(*testing.T, *service.MockContactListService)
 	}{
 		{
 			name:   "Success",
@@ -512,11 +450,11 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 				ListID:      "list123",
 				Status:      "unsubscribed",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = nil
 			},
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.UpdateContactListCalled)
 			},
 		},
@@ -524,11 +462,11 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.UpdateContactListCalled = false
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.UpdateContactListCalled)
 			},
 		},
@@ -541,11 +479,11 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 				ListID:      "list123",
 				Status:      "unsubscribed",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.UpdateContactListCalled = false
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.UpdateContactListCalled)
 			},
 		},
@@ -558,11 +496,11 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 				ListID:      "list123",
 				Status:      "unsubscribed",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.UpdateContactListCalled)
 			},
 		},
@@ -570,7 +508,7 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService := &MockContactListService{}
+			mockService := &service.MockContactListService{}
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactListHandler(mockService, mockLogger)
 
@@ -608,9 +546,9 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*MockContactListService)
+		setupMock      func(*service.MockContactListService)
 		expectedStatus int
-		checkResult    func(*testing.T, *MockContactListService)
+		checkResult    func(*testing.T, *service.MockContactListService)
 	}{
 		{
 			name:   "Success",
@@ -620,11 +558,11 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 				Email:       "test@example.com",
 				ListID:      "list123",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = nil
 			},
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.RemoveContactFromListCalled)
 			},
 		},
@@ -632,11 +570,11 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.RemoveContactFromListCalled = false
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.RemoveContactFromListCalled)
 			},
 		},
@@ -648,11 +586,11 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 				Email:       "test@example.com",
 				ListID:      "list123",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.RemoveContactFromListCalled = false
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.False(t, m.RemoveContactFromListCalled)
 			},
 		},
@@ -664,11 +602,11 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 				Email:       "test@example.com",
 				ListID:      "list123",
 			},
-			setupMock: func(m *MockContactListService) {
+			setupMock: func(m *service.MockContactListService) {
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			checkResult: func(t *testing.T, m *MockContactListService) {
+			checkResult: func(t *testing.T, m *service.MockContactListService) {
 				assert.True(t, m.RemoveContactFromListCalled)
 			},
 		},
@@ -676,7 +614,7 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService := &MockContactListService{}
+			mockService := &service.MockContactListService{}
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactListHandler(mockService, mockLogger)
 

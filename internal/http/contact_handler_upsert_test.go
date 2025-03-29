@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,10 +19,10 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 		name           string
 		method         string
 		reqBody        interface{}
-		setupMock      func(*MockContactService)
+		setupMock      func(*service.MockContactService)
 		expectedStatus int
 		expectedAction string
-		checkResult    func(*testing.T, *MockContactService)
+		checkResult    func(*testing.T, *service.MockContactService)
 	}{
 		{
 			name:   "Create Contact Without UUID",
@@ -36,7 +37,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// Reset mock state
 				m.UpsertContactCalled = false
 				m.LastContactUpserted = nil
@@ -45,7 +46,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated,
 			expectedAction: "created",
-			checkResult: func(t *testing.T, m *MockContactService) {
+			checkResult: func(t *testing.T, m *service.MockContactService) {
 				assert.True(t, m.UpsertContactCalled)
 				assert.NotNil(t, m.LastContactUpserted)
 				if m.LastContactUpserted.Email != "new@example.com" {
@@ -69,7 +70,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// Reset mock state
 				m.UpsertContactCalled = false
 				m.LastContactUpserted = nil
@@ -78,7 +79,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated,
 			expectedAction: "created",
-			checkResult: func(t *testing.T, m *MockContactService) {
+			checkResult: func(t *testing.T, m *service.MockContactService) {
 				assert.True(t, m.UpsertContactCalled)
 				assert.NotNil(t, m.LastContactUpserted)
 				if m.LastContactUpserted.Email != "new@example.com" {
@@ -100,7 +101,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				// Reset mock state
 				m.UpsertContactCalled = false
 				m.LastContactUpserted = nil
@@ -108,7 +109,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 				m.UpsertIsNewToReturn = false // Indicate this is an existing contact
 
 				// Add existing contact
-				m.contacts["old@example.com"] = &domain.Contact{
+				m.Contacts["old@example.com"] = &domain.Contact{
 					ExternalID: &domain.NullableString{String: "old-ext", IsNull: false},
 					Email:      "old@example.com",
 					Timezone:   &domain.NullableString{String: "UTC", IsNull: false},
@@ -124,7 +125,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedAction: "updated",
-			checkResult: func(t *testing.T, m *MockContactService) {
+			checkResult: func(t *testing.T, m *service.MockContactService) {
 				assert.True(t, m.UpsertContactCalled)
 				assert.NotNil(t, m.LastContactUpserted)
 
@@ -169,12 +170,12 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			name:    "Invalid Request Body",
 			method:  http.MethodPost,
 			reqBody: "invalid json",
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.UpsertContactCalled = false
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedAction: "",
-			checkResult: func(t *testing.T, m *MockContactService) {
+			checkResult: func(t *testing.T, m *service.MockContactService) {
 				assert.False(t, m.UpsertContactCalled)
 			},
 		},
@@ -186,12 +187,12 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 				"email":       "updated@example.com",
 				"timezone":    "UTC",
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.UpsertContactCalled = false
 			},
 			expectedStatus: http.StatusMethodNotAllowed,
 			expectedAction: "",
-			checkResult: func(t *testing.T, m *MockContactService) {
+			checkResult: func(t *testing.T, m *service.MockContactService) {
 				assert.False(t, m.UpsertContactCalled)
 			},
 		},
@@ -206,13 +207,13 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 					"timezone":    "UTC",
 				},
 			},
-			setupMock: func(m *MockContactService) {
+			setupMock: func(m *service.MockContactService) {
 				m.UpsertContactCalled = false
 				m.ErrToReturn = errors.New("service error")
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedAction: "",
-			checkResult: func(t *testing.T, m *MockContactService) {
+			checkResult: func(t *testing.T, m *service.MockContactService) {
 				assert.True(t, m.UpsertContactCalled)
 			},
 		},
@@ -220,8 +221,8 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockService := &MockContactService{
-				contacts: make(map[string]*domain.Contact),
+			mockService := &service.MockContactService{
+				Contacts: make(map[string]*domain.Contact),
 			}
 			mockLogger := &MockLoggerForContact{}
 			handler := NewContactHandler(mockService, mockLogger)
@@ -276,8 +277,8 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 }
 
 func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
-	mockService := &MockContactService{
-		contacts: map[string]*domain.Contact{
+	mockService := &service.MockContactService{
+		Contacts: map[string]*domain.Contact{
 			"test@example.com": {
 				Email:      "test@example.com",
 				ExternalID: &domain.NullableString{String: "old-ext", IsNull: false},
@@ -435,7 +436,7 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 }
 
 func TestContactHandler_HandleUpsertWithInvalidJSON(t *testing.T) {
-	mockService := NewMockContactService()
+	mockService := service.NewMockContactService()
 	mockLogger := &MockLoggerForContact{}
 	handler := NewContactHandler(mockService, mockLogger)
 
