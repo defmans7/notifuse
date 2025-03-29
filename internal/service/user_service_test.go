@@ -13,72 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository"
 )
-
-type mockUserRepository struct {
-	mock.Mock
-}
-
-func (m *mockUserRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	args := m.Called(ctx, user)
-	return args.Error(0)
-}
-
-func (m *mockUserRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
-	args := m.Called(ctx, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *mockUserRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *mockUserRepository) CreateSession(ctx context.Context, session *domain.Session) error {
-	args := m.Called(ctx, session)
-	return args.Error(0)
-}
-
-func (m *mockUserRepository) GetSessionByID(ctx context.Context, id string) (*domain.Session, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Session), args.Error(1)
-}
-
-func (m *mockUserRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]*domain.Session, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.Session), args.Error(1)
-}
-
-func (m *mockUserRepository) UpdateSession(ctx context.Context, session *domain.Session) error {
-	args := m.Called(ctx, session)
-	return args.Error(0)
-}
-
-func (m *mockUserRepository) DeleteSession(ctx context.Context, id string) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-type mockEmailSender struct {
-	mock.Mock
-}
-
-func (m *mockEmailSender) SendMagicCode(email, code string) error {
-	args := m.Called(email, code)
-	return args.Error(0)
-}
 
 // Setup a real AuthService for testing
 func setupAuthService() *AuthService {
@@ -87,7 +23,7 @@ func setupAuthService() *AuthService {
 	privateKey := key.ExportBytes()
 	publicKey := key.Public().ExportBytes()
 
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(repository.MockAuthRepository)
 	mockLogger := new(MockLogger)
 
 	service, _ := NewAuthService(AuthServiceConfig{
@@ -101,8 +37,8 @@ func setupAuthService() *AuthService {
 }
 
 func TestUserService_SignIn(t *testing.T) {
-	repo := new(mockUserRepository)
-	emailSender := new(mockEmailSender)
+	repo := new(repository.MockUserRepository)
+	emailSender := new(MockMailer)
 	mockLogger := new(MockLogger)
 	authService := setupAuthService()
 
@@ -240,8 +176,8 @@ func TestUserService_SignIn(t *testing.T) {
 }
 
 func TestUserService_VerifyCode(t *testing.T) {
-	repo := new(mockUserRepository)
-	emailSender := new(mockEmailSender)
+	repo := new(repository.MockUserRepository)
+	emailSender := new(MockMailer)
 	mockLogger := new(MockLogger)
 	authService := setupAuthService()
 
@@ -339,8 +275,8 @@ func TestUserService_VerifyCode(t *testing.T) {
 }
 
 func TestUserService_VerifyUserSession(t *testing.T) {
-	repo := new(mockUserRepository)
-	emailSender := new(mockEmailSender)
+	repo := new(repository.MockUserRepository)
+	emailSender := new(MockMailer)
 	mockLogger := new(MockLogger)
 	authService := setupAuthService()
 
@@ -464,8 +400,8 @@ func TestUserService_VerifyUserSession(t *testing.T) {
 }
 
 func TestUserService_GetUserByID(t *testing.T) {
-	repo := new(mockUserRepository)
-	emailSender := new(mockEmailSender)
+	repo := new(repository.MockUserRepository)
+	emailSender := new(MockMailer)
 	mockLogger := new(MockLogger)
 	authService := setupAuthService()
 
@@ -516,8 +452,8 @@ func TestUserService_GetUserByID(t *testing.T) {
 }
 
 func TestUserService_GetUserByEmail(t *testing.T) {
-	repo := new(mockUserRepository)
-	emailSender := new(mockEmailSender)
+	repo := new(repository.MockUserRepository)
+	emailSender := new(MockMailer)
 	mockLogger := new(MockLogger)
 	authService := setupAuthService()
 

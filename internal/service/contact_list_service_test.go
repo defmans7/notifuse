@@ -6,15 +6,16 @@ import (
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestContactListService_AddContactToList(t *testing.T) {
-	mockRepo := new(MockContactListRepository)
+	mockRepo := new(repository.MockContactListRepository)
 	mockAuthService := new(MockAuthService)
-	mockContactRepo := new(MockContactRepository)
-	mockListRepo := new(MockListRepository)
+	mockContactRepo := new(repository.MockContactRepository)
+	mockListRepo := new(repository.MockListRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)
@@ -118,10 +119,10 @@ func TestContactListService_AddContactToList(t *testing.T) {
 }
 
 func TestContactListService_GetContactListByIDs(t *testing.T) {
-	mockRepo := new(MockContactListRepository)
+	mockRepo := new(repository.MockContactListRepository)
 	mockAuthService := new(MockAuthService)
-	mockContactRepo := new(MockContactRepository)
-	mockListRepo := new(MockListRepository)
+	mockContactRepo := new(repository.MockContactRepository)
+	mockListRepo := new(repository.MockListRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)
@@ -220,10 +221,10 @@ func TestContactListService_GetContactListByIDs(t *testing.T) {
 }
 
 func TestContactListService_GetContactsByListID(t *testing.T) {
-	mockRepo := new(MockContactListRepository)
+	mockRepo := new(repository.MockContactListRepository)
 	mockAuthService := new(MockAuthService)
-	mockContactRepo := new(MockContactRepository)
-	mockListRepo := new(MockListRepository)
+	mockContactRepo := new(repository.MockContactRepository)
+	mockListRepo := new(repository.MockListRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)
@@ -332,10 +333,10 @@ func TestContactListService_GetContactsByListID(t *testing.T) {
 }
 
 func TestContactListService_GetListsByEmail(t *testing.T) {
-	mockRepo := new(MockContactListRepository)
+	mockRepo := new(repository.MockContactListRepository)
 	mockAuthService := new(MockAuthService)
-	mockContactRepo := new(MockContactRepository)
-	mockListRepo := new(MockListRepository)
+	mockContactRepo := new(repository.MockContactRepository)
+	mockListRepo := new(repository.MockListRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)
@@ -444,10 +445,10 @@ func TestContactListService_GetListsByEmail(t *testing.T) {
 }
 
 func TestContactListService_UpdateContactListStatus(t *testing.T) {
-	mockRepo := new(MockContactListRepository)
+	mockRepo := new(repository.MockContactListRepository)
 	mockAuthService := new(MockAuthService)
-	mockContactRepo := new(MockContactRepository)
-	mockListRepo := new(MockListRepository)
+	mockContactRepo := new(repository.MockContactRepository)
+	mockListRepo := new(repository.MockListRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)
@@ -545,10 +546,10 @@ func TestContactListService_UpdateContactListStatus(t *testing.T) {
 }
 
 func TestContactListService_RemoveContactFromList(t *testing.T) {
-	mockRepo := new(MockContactListRepository)
+	mockRepo := new(repository.MockContactListRepository)
 	mockAuthService := new(MockAuthService)
-	mockContactRepo := new(MockContactRepository)
-	mockListRepo := new(MockListRepository)
+	mockContactRepo := new(repository.MockContactRepository)
+	mockListRepo := new(repository.MockListRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)

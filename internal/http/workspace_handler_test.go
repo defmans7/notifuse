@@ -18,113 +18,18 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
+	"github.com/Notifuse/notifuse/internal/service"
 )
 
-// mockWorkspaceService implements WorkspaceServiceInterface
-type mockWorkspaceService struct {
-	mock.Mock
-	CreateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error)
-	GetWorkspaceFn    func(ctx context.Context, id string) (*domain.Workspace, error)
-	ListWorkspacesFn  func(ctx context.Context) ([]*domain.Workspace, error)
-	UpdateWorkspaceFn func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error)
-	DeleteWorkspaceFn func(ctx context.Context, id string) error
-	InviteMemberFn    func(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, string, error)
-
-	GetWorkspaceMembersWithEmailFn func(ctx context.Context, id string) ([]*domain.UserWorkspaceWithEmail, error)
-	GetUserWorkspaceFn             func(ctx context.Context, userID, workspaceID string) (*domain.UserWorkspace, error)
-}
-
-func (m *mockWorkspaceService) CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Workspace), args.Error(1)
-}
-
-func (m *mockWorkspaceService) GetWorkspace(ctx context.Context, id string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Workspace), args.Error(1)
-}
-
-func (m *mockWorkspaceService) ListWorkspaces(ctx context.Context) ([]*domain.Workspace, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.Workspace), args.Error(1)
-}
-
-func (m *mockWorkspaceService) UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*domain.Workspace, error) {
-	args := m.Called(ctx, id, name, websiteURL, logoURL, coverURL, timezone)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Workspace), args.Error(1)
-}
-
-func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id string) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *mockWorkspaceService) InviteMember(ctx context.Context, workspaceID, email string) (*domain.WorkspaceInvitation, string, error) {
-	args := m.Called(ctx, workspaceID, email)
-	if args.Get(0) == nil {
-		return nil, args.String(1), args.Error(2)
-	}
-	return args.Get(0).(*domain.WorkspaceInvitation), args.String(1), args.Error(2)
-}
-
-func (m *mockWorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id string) ([]*domain.UserWorkspaceWithEmail, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.UserWorkspaceWithEmail), args.Error(1)
-}
-
-func (m *mockWorkspaceService) GetUserWorkspace(ctx context.Context, userID, workspaceID string) (*domain.UserWorkspace, error) {
-	args := m.Called(ctx, userID, workspaceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.UserWorkspace), args.Error(1)
-}
-
-// mockAuthService implements middleware.AuthServiceInterface
-type mockAuthService struct {
-	mock.Mock
-}
-
-func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
-	args := m.Called(ctx, userID, sessionID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *mockAuthService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
 // Test setup helper
-func setupTest(t *testing.T) (*WorkspaceHandler, *mockWorkspaceService, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
-	workspaceSvc := new(mockWorkspaceService)
+func setupTest(t *testing.T) (*WorkspaceHandler, *service.MockWorkspaceService, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
+	workspaceSvc := new(service.MockWorkspaceService)
 
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	mockLogger := new(MockLogger)
+	mockLogger := new(service.MockLogger)
 	handler := NewWorkspaceHandler(workspaceSvc, publicKey, mockLogger)
 
 	mux := http.NewServeMux()

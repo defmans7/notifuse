@@ -7,14 +7,15 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestContactService_GetContactByEmail(t *testing.T) {
-	mockRepo := new(MockContactRepository)
+	mockRepo := new(repository.MockContactRepository)
 	mockAuthService := new(MockAuthService)
-	mockWorkspaceRepo := new(MockWorkspaceRepository)
+	mockWorkspaceRepo := new(repository.MockWorkspaceRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactService(mockRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
@@ -101,9 +102,9 @@ func TestContactService_GetContactByEmail(t *testing.T) {
 }
 
 func TestContactService_GetContactByExternalID(t *testing.T) {
-	mockRepo := new(MockContactRepository)
+	mockRepo := new(repository.MockContactRepository)
 	mockAuthService := new(MockAuthService)
-	mockWorkspaceRepo := new(MockWorkspaceRepository)
+	mockWorkspaceRepo := new(repository.MockWorkspaceRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactService(mockRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
@@ -190,9 +191,9 @@ func TestContactService_GetContactByExternalID(t *testing.T) {
 }
 
 func TestContactService_GetContacts(t *testing.T) {
-	mockRepo := new(MockContactRepository)
+	mockRepo := new(repository.MockContactRepository)
 	mockAuthService := new(MockAuthService)
-	mockWorkspaceRepo := new(MockWorkspaceRepository)
+	mockWorkspaceRepo := new(repository.MockWorkspaceRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactService(mockRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
@@ -265,9 +266,9 @@ func TestContactService_GetContacts(t *testing.T) {
 }
 
 func TestContactService_DeleteContact(t *testing.T) {
-	mockRepo := new(MockContactRepository)
+	mockRepo := new(repository.MockContactRepository)
 	mockAuthService := new(MockAuthService)
-	mockWorkspaceRepo := new(MockWorkspaceRepository)
+	mockWorkspaceRepo := new(repository.MockWorkspaceRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactService(mockRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
@@ -330,9 +331,9 @@ func TestContactService_DeleteContact(t *testing.T) {
 }
 
 func TestContactService_BatchImportContacts(t *testing.T) {
-	mockRepo := new(MockContactRepository)
+	mockRepo := new(repository.MockContactRepository)
 	mockAuthService := new(MockAuthService)
-	mockWorkspaceRepo := new(MockWorkspaceRepository)
+	mockWorkspaceRepo := new(repository.MockWorkspaceRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactService(mockRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
@@ -430,9 +431,9 @@ func TestContactService_BatchImportContacts(t *testing.T) {
 }
 
 func TestContactService_UpsertContact(t *testing.T) {
-	mockRepo := new(MockContactRepository)
+	mockRepo := new(repository.MockContactRepository)
 	mockAuthService := new(MockAuthService)
-	mockWorkspaceRepo := new(MockWorkspaceRepository)
+	mockWorkspaceRepo := new(repository.MockWorkspaceRepository)
 	mockLogger := new(MockLogger)
 
 	service := NewContactService(mockRepo, mockWorkspaceRepo, mockAuthService, mockLogger)

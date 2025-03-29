@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestAuthService_VerifyUserSession(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(repository.MockAuthRepository)
 	mockLogger := new(MockLogger)
 
 	// Setup logger mock to return itself for WithField calls
@@ -143,7 +144,7 @@ func TestAuthService_VerifyUserSession(t *testing.T) {
 
 // Test the constructor with config
 func TestAuthService_NewAuthService(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(repository.MockAuthRepository)
 	mockLogger := new(MockLogger)
 
 	// Create key pair for testing
@@ -169,7 +170,7 @@ func TestAuthService_NewAuthService(t *testing.T) {
 
 // Test the GenerateAuthToken method
 func TestAuthService_GenerateAuthToken(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(repository.MockAuthRepository)
 	mockLogger := new(MockLogger)
 
 	// Setup logger mock to return itself for WithField calls
@@ -228,7 +229,7 @@ func TestAuthService_GenerateAuthToken(t *testing.T) {
 
 // Test the GenerateInvitationToken method
 func TestAuthService_GenerateInvitationToken(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(repository.MockAuthRepository)
 	mockLogger := new(MockLogger)
 
 	// Setup logger mock to return itself for WithField calls
@@ -299,8 +300,8 @@ func TestNewAuthService(t *testing.T) {
 		{
 			name: "successful creation",
 			config: AuthServiceConfig{
-				Repository:          &MockAuthRepository{},
-				WorkspaceRepository: &MockWorkspaceRepository{},
+				Repository:          &repository.MockAuthRepository{},
+				WorkspaceRepository: &repository.MockWorkspaceRepository{},
 				PrivateKey:          paseto.NewV4AsymmetricSecretKey().ExportBytes(),
 				PublicKey:           paseto.NewV4AsymmetricSecretKey().Public().ExportBytes(),
 				Logger:              &MockLogger{},
@@ -310,8 +311,8 @@ func TestNewAuthService(t *testing.T) {
 		{
 			name: "invalid private key",
 			config: AuthServiceConfig{
-				Repository:          &MockAuthRepository{},
-				WorkspaceRepository: &MockWorkspaceRepository{},
+				Repository:          &repository.MockAuthRepository{},
+				WorkspaceRepository: &repository.MockWorkspaceRepository{},
 				PrivateKey:          []byte("invalid key"),
 				PublicKey:           paseto.NewV4AsymmetricSecretKey().Public().ExportBytes(),
 				Logger:              &MockLogger{},
@@ -326,8 +327,8 @@ func TestNewAuthService(t *testing.T) {
 		{
 			name: "invalid public key",
 			config: AuthServiceConfig{
-				Repository:          &MockAuthRepository{},
-				WorkspaceRepository: &MockWorkspaceRepository{},
+				Repository:          &repository.MockAuthRepository{},
+				WorkspaceRepository: &repository.MockWorkspaceRepository{},
 				PrivateKey:          paseto.NewV4AsymmetricSecretKey().ExportBytes(),
 				PublicKey:           []byte("invalid key"),
 				Logger:              &MockLogger{},
@@ -363,7 +364,7 @@ func TestAuthenticateUserFromContext(t *testing.T) {
 	tests := []struct {
 		name          string
 		ctx           context.Context
-		setupMocks    func(*MockAuthRepository, *MockLogger)
+		setupMocks    func(*repository.MockAuthRepository, *MockLogger)
 		expectError   bool
 		errorContains string
 	}{
@@ -382,7 +383,7 @@ func TestAuthenticateUserFromContext(t *testing.T) {
 		{
 			name: "valid context",
 			ctx:  context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
-			setupMocks: func(mockRepo *MockAuthRepository, mockLogger *MockLogger) {
+			setupMocks: func(mockRepo *repository.MockAuthRepository, mockLogger *MockLogger) {
 				futureTime := time.Now().Add(1 * time.Hour)
 				mockRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
 				mockRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
@@ -393,7 +394,7 @@ func TestAuthenticateUserFromContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := &MockAuthRepository{}
+			mockRepo := &repository.MockAuthRepository{}
 			mockLogger := &MockLogger{}
 
 			if tt.setupMocks != nil {
@@ -426,7 +427,7 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 		name          string
 		ctx           context.Context
 		workspaceID   string
-		setupMocks    func(*MockAuthRepository, *MockWorkspaceRepository, *MockLogger)
+		setupMocks    func(*repository.MockAuthRepository, *repository.MockWorkspaceRepository, *MockLogger)
 		expectError   bool
 		errorContains string
 	}{
@@ -434,7 +435,7 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 			name:        "successful authentication",
 			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
 			workspaceID: "test-workspace",
-			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+			setupMocks: func(authRepo *repository.MockAuthRepository, workspaceRepo *repository.MockWorkspaceRepository, mockLogger *MockLogger) {
 				futureTime := time.Now().Add(1 * time.Hour)
 				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
 				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
@@ -446,7 +447,7 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 			name:        "workspace not found",
 			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
 			workspaceID: "test-workspace",
-			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+			setupMocks: func(authRepo *repository.MockAuthRepository, workspaceRepo *repository.MockWorkspaceRepository, mockLogger *MockLogger) {
 				futureTime := time.Now().Add(1 * time.Hour)
 				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
 				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
@@ -458,7 +459,7 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 			name:        "workspace repository error",
 			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
 			workspaceID: "test-workspace",
-			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+			setupMocks: func(authRepo *repository.MockAuthRepository, workspaceRepo *repository.MockWorkspaceRepository, mockLogger *MockLogger) {
 				futureTime := time.Now().Add(1 * time.Hour)
 				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
 				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
@@ -470,7 +471,7 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 			name:        "authentication error",
 			ctx:         context.WithValue(context.WithValue(context.Background(), "user_id", "test-user"), "session_id", "test-session"),
 			workspaceID: "test-workspace",
-			setupMocks: func(authRepo *MockAuthRepository, workspaceRepo *MockWorkspaceRepository, mockLogger *MockLogger) {
+			setupMocks: func(authRepo *repository.MockAuthRepository, workspaceRepo *repository.MockWorkspaceRepository, mockLogger *MockLogger) {
 				futureTime := time.Now().Add(1 * time.Hour)
 				authRepo.On("GetSessionByID", mock.Anything, "test-session", "test-user").Return(&futureTime, nil)
 				authRepo.On("GetUserByID", mock.Anything, "test-user").Return(nil, sql.ErrNoRows)
@@ -484,8 +485,8 @@ func TestAuthenticateUserForWorkspace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockAuthRepo := &MockAuthRepository{}
-			mockWorkspaceRepo := &MockWorkspaceRepository{}
+			mockAuthRepo := &repository.MockAuthRepository{}
+			mockWorkspaceRepo := &repository.MockWorkspaceRepository{}
 			mockLogger := &MockLogger{}
 
 			if tt.setupMocks != nil {
@@ -530,14 +531,14 @@ func TestGetUserByID(t *testing.T) {
 	tests := []struct {
 		name          string
 		userID        string
-		setupMocks    func(*MockAuthRepository, *MockLogger)
+		setupMocks    func(*repository.MockAuthRepository, *MockLogger)
 		expectError   bool
 		errorContains string
 	}{
 		{
 			name:   "successful retrieval",
 			userID: "test-user",
-			setupMocks: func(repo *MockAuthRepository, mockLogger *MockLogger) {
+			setupMocks: func(repo *repository.MockAuthRepository, mockLogger *MockLogger) {
 				repo.On("GetUserByID", mock.Anything, "test-user").Return(&domain.User{ID: "test-user"}, nil)
 			},
 			expectError: false,
@@ -545,7 +546,7 @@ func TestGetUserByID(t *testing.T) {
 		{
 			name:   "user not found",
 			userID: "test-user",
-			setupMocks: func(repo *MockAuthRepository, mockLogger *MockLogger) {
+			setupMocks: func(repo *repository.MockAuthRepository, mockLogger *MockLogger) {
 				repo.On("GetUserByID", mock.Anything, "test-user").Return(nil, sql.ErrNoRows)
 			},
 			expectError:   true,
@@ -554,7 +555,7 @@ func TestGetUserByID(t *testing.T) {
 		{
 			name:   "repository error",
 			userID: "test-user",
-			setupMocks: func(repo *MockAuthRepository, mockLogger *MockLogger) {
+			setupMocks: func(repo *repository.MockAuthRepository, mockLogger *MockLogger) {
 				repo.On("GetUserByID", mock.Anything, "test-user").Return(nil, assert.AnError)
 				mockLogger.On("WithField", "error", assert.AnError.Error()).Return(mockLogger)
 				mockLogger.On("WithField", "user_id", "test-user").Return(mockLogger)
@@ -566,7 +567,7 @@ func TestGetUserByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := &MockAuthRepository{}
+			mockRepo := &repository.MockAuthRepository{}
 			mockLogger := &MockLogger{}
 
 			if tt.setupMocks != nil {
