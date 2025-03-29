@@ -229,7 +229,7 @@ func (r *UpdateWorkspaceRequest) Validate() error {
 }
 
 type DeleteWorkspaceRequest struct {
-	ID string `json:"id"`
+	ID string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
 }
 
 func (r *DeleteWorkspaceRequest) Validate() error {
