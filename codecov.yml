@@ -11,3 +11,5 @@ coverage:
     - '**/mock/**'
     - '**/*_mock.go'
     - '**/*mock*.go'
+    - '**/database/utils.go'
+    - '**/cmd/main.go'
