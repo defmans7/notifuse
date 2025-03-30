@@ -55,7 +55,7 @@ func TestAuthService_AuthenticateUserFromContext(t *testing.T) {
 
 		expiresAt := time.Now().Add(1 * time.Hour)
 
-		ctx := context.WithValue(context.WithValue(context.Background(), "user_id", userID), "session_id", sessionID)
+		ctx := context.WithValue(context.WithValue(context.Background(), domain.UserIDKey, userID), domain.SessionIDKey, sessionID)
 
 		mockAuthRepo.EXPECT().
 			GetSessionByID(ctx, sessionID, userID).
@@ -73,7 +73,7 @@ func TestAuthService_AuthenticateUserFromContext(t *testing.T) {
 	})
 
 	t.Run("missing user_id in context", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), "session_id", sessionID)
+		ctx := context.WithValue(context.Background(), domain.SessionIDKey, sessionID)
 
 		result, err := service.AuthenticateUserFromContext(ctx)
 
@@ -83,7 +83,7 @@ func TestAuthService_AuthenticateUserFromContext(t *testing.T) {
 	})
 
 	t.Run("missing session_id in context", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), "user_id", userID)
+		ctx := context.WithValue(context.Background(), domain.UserIDKey, userID)
 
 		result, err := service.AuthenticateUserFromContext(ctx)
 
@@ -108,7 +108,7 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 
 		expiresAt := time.Now().Add(1 * time.Hour)
 
-		ctx := context.WithValue(context.WithValue(context.Background(), "user_id", userID), "session_id", sessionID)
+		ctx := context.WithValue(context.WithValue(context.Background(), domain.UserIDKey, userID), domain.SessionIDKey, sessionID)
 
 		mockAuthRepo.EXPECT().
 			GetSessionByID(ctx, sessionID, userID).
@@ -143,7 +143,7 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 
 		expiresAt := time.Now().Add(1 * time.Hour)
 
-		ctx := context.WithValue(context.WithValue(context.Background(), "user_id", userID), "session_id", sessionID)
+		ctx := context.WithValue(context.WithValue(context.Background(), domain.UserIDKey, userID), domain.SessionIDKey, sessionID)
 
 		mockAuthRepo.EXPECT().
 			GetSessionByID(ctx, sessionID, userID).
@@ -199,11 +199,11 @@ func TestAuthService_VerifyUserSession(t *testing.T) {
 			Return(nil, sql.ErrNoRows)
 
 		mockLogger.EXPECT().
-			WithField("user_id", userID).
+			WithField(string(domain.UserIDKey), userID).
 			Return(mockLogger)
 
 		mockLogger.EXPECT().
-			WithField("session_id", sessionID).
+			WithField(string(domain.SessionIDKey), sessionID).
 			Return(mockLogger)
 
 		mockLogger.EXPECT().
@@ -224,11 +224,11 @@ func TestAuthService_VerifyUserSession(t *testing.T) {
 			Return(&expiresAt, nil)
 
 		mockLogger.EXPECT().
-			WithField("user_id", userID).
+			WithField(string(domain.UserIDKey), userID).
 			Return(mockLogger)
 
 		mockLogger.EXPECT().
-			WithField("session_id", sessionID).
+			WithField(string(domain.SessionIDKey), sessionID).
 			Return(mockLogger)
 
 		mockLogger.EXPECT().
@@ -257,7 +257,7 @@ func TestAuthService_VerifyUserSession(t *testing.T) {
 			Return(nil, sql.ErrNoRows)
 
 		mockLogger.EXPECT().
-			WithField("user_id", userID).
+			WithField(string(domain.UserIDKey), userID).
 			Return(mockLogger)
 
 		mockLogger.EXPECT().
@@ -385,7 +385,7 @@ func TestAuthService_GetUserByID(t *testing.T) {
 			Return(mockLogger)
 
 		mockLogger.EXPECT().
-			WithField("user_id", userID).
+			WithField(string(domain.UserIDKey), userID).
 			Return(mockLogger)
 
 		mockLogger.EXPECT().

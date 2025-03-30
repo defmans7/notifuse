@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"aidanwoods.dev/go-paseto"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -129,7 +130,7 @@ func TestRequireAuth(t *testing.T) {
 		// Create a token with missing session_id
 		token := paseto.NewToken()
 		token.SetExpiration(time.Now().Add(time.Hour))
-		token.SetString("user_id", "test-user")
+		token.SetString(string(domain.UserIDKey), "test-user")
 		// Intentionally omit setting session_id
 
 		signedToken := token.V4Sign(secretKey, nil)
@@ -159,8 +160,8 @@ func TestRequireAuth(t *testing.T) {
 		// Create a valid token
 		token := paseto.NewToken()
 		token.SetExpiration(time.Now().Add(time.Hour))
-		token.SetString("user_id", "test-user")
-		token.SetString("session_id", "test-session")
+		token.SetString(string(domain.UserIDKey), "test-user")
+		token.SetString(string(domain.SessionIDKey), "test-session")
 
 		signedToken := token.V4Sign(secretKey, nil)
 
@@ -189,8 +190,8 @@ func TestRequireAuth(t *testing.T) {
 		// Create a valid token
 		token := paseto.NewToken()
 		token.SetExpiration(time.Now().Add(time.Hour))
-		token.SetString("user_id", "test-user")
-		token.SetString("session_id", "test-session")
+		token.SetString(string(domain.UserIDKey), "test-user")
+		token.SetString(string(domain.SessionIDKey), "test-session")
 
 		signedToken := token.V4Sign(secretKey, nil)
 

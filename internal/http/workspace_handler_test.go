@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/http/middleware"
 )
 
 func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userID string) string {
@@ -27,8 +26,8 @@ func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userI
 	token.SetNotBefore(time.Now())
 	token.SetIssuedAt(time.Now())
 	token.SetExpiration(time.Now().Add(24 * time.Hour))
-	token.SetString("user_id", userID)
-	token.SetString("session_id", "test-session")
+	token.SetString(string(domain.UserIDKey), userID)
+	token.SetString(string(domain.SessionIDKey), "test-session")
 
 	signed := token.V4Sign(secretKey, nil)
 	return signed
@@ -305,7 +304,7 @@ func TestWorkspaceHandler_List_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -329,7 +328,7 @@ func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
 
 	// Setup context with authenticated user - no need for token validation here
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -358,7 +357,7 @@ func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -381,7 +380,7 @@ func TestWorkspaceHandler_Get_MissingID(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -414,7 +413,7 @@ func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -442,7 +441,7 @@ func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -466,7 +465,7 @@ func TestWorkspaceHandler_Create_InvalidBody(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -608,7 +607,7 @@ func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -632,7 +631,7 @@ func TestWorkspaceHandler_Update_InvalidBody(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -714,7 +713,7 @@ func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -738,7 +737,7 @@ func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -767,7 +766,7 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -801,7 +800,7 @@ func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -863,7 +862,7 @@ func TestWorkspaceHandler_HandleMembers_MethodNotAllowed(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -886,7 +885,7 @@ func TestWorkspaceHandler_HandleMembers_MissingID(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly
@@ -919,7 +918,7 @@ func TestWorkspaceHandler_HandleMembers_ServiceError(t *testing.T) {
 
 	// Setup context with authenticated user
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, middleware.UserIDKey, "user123")
+	ctx = context.WithValue(ctx, domain.UserIDKey, "user123")
 	req = req.WithContext(ctx)
 
 	// Call handler directly

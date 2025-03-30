@@ -7,14 +7,7 @@ import (
 	"strings"
 
 	"aidanwoods.dev/go-paseto"
-)
-
-// Key for storing user ID and session ID in context
-type contextKey string
-
-const (
-	UserIDKey    contextKey = "user_id"
-	SessionIDKey contextKey = "session_id"
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 // AuthConfig holds the configuration for the auth middleware
@@ -61,22 +54,22 @@ func (ac *AuthConfig) RequireAuth() func(http.Handler) http.Handler {
 			}
 
 			// Get user ID from claims
-			userID, err := verified.GetString("user_id")
+			userID, err := verified.GetString(string(domain.UserIDKey))
 			if err != nil {
 				http.Error(w, "User ID not found in token", http.StatusUnauthorized)
 				return
 			}
 
 			// Get session ID from claims
-			sessionID, err := verified.GetString("session_id")
+			sessionID, err := verified.GetString(string(domain.SessionIDKey))
 			if err != nil {
 				http.Error(w, "Session ID not found in token", http.StatusUnauthorized)
 				return
 			}
 
 			// put userId and sessionId in the context
-			ctx := context.WithValue(r.Context(), UserIDKey, userID)
-			ctx = context.WithValue(ctx, SessionIDKey, sessionID)
+			ctx := context.WithValue(r.Context(), domain.UserIDKey, userID)
+			ctx = context.WithValue(ctx, domain.SessionIDKey, sessionID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

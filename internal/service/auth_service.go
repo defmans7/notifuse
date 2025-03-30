@@ -59,11 +59,12 @@ func NewAuthService(cfg AuthServiceConfig) (*AuthService, error) {
 	}, nil
 }
 func (s *AuthService) AuthenticateUserFromContext(ctx context.Context) (*domain.User, error) {
-	userID, ok := ctx.Value("user_id").(string)
+
+	userID, ok := ctx.Value(domain.UserIDKey).(string)
 	if !ok || userID == "" {
 		return nil, ErrUserNotFound
 	}
-	sessionID, ok := ctx.Value("session_id").(string)
+	sessionID, ok := ctx.Value(domain.SessionIDKey).(string)
 	if !ok || sessionID == "" {
 		return nil, ErrUserNotFound
 	}

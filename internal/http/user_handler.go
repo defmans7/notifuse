@@ -89,7 +89,7 @@ func (h *UserHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 // GetCurrentUser returns the authenticated user and their workspaces
 func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user from context
-	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+	userID, ok := r.Context().Value(domain.UserIDKey).(string)
 	if !ok || userID == "" {
 		WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
 		return

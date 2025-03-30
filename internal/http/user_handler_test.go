@@ -19,7 +19,6 @@ import (
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/internal/http/middleware"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 )
 
@@ -266,7 +265,7 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 		Return(workspaces, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
-	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	req = req.WithContext(context.WithValue(req.Context(), domain.UserIDKey, userID))
 	rec := httptest.NewRecorder()
 
 	handler.GetCurrentUser(rec, req)
@@ -297,7 +296,7 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 		Return(nil, fmt.Errorf("user not found"))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
-	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, notFoundUserID))
+	req = req.WithContext(context.WithValue(req.Context(), domain.UserIDKey, notFoundUserID))
 	rec = httptest.NewRecorder()
 
 	handler.GetCurrentUser(rec, req)
@@ -313,7 +312,7 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 		Return(nil, fmt.Errorf("database error"))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/user.me", nil)
-	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, errorUserID))
+	req = req.WithContext(context.WithValue(req.Context(), domain.UserIDKey, errorUserID))
 	rec = httptest.NewRecorder()
 
 	handler.GetCurrentUser(rec, req)
@@ -386,8 +385,8 @@ func TestUserHandler_RegisterRoutes(t *testing.T) {
 			// For protected routes, we need to add a valid token
 			if tc.route == "/api/user.me" {
 				token := paseto.NewToken()
-				token.SetString("user_id", "user1")
-				token.SetString("session_id", "session1")
+				token.SetString(string(domain.UserIDKey), "user1")
+				token.SetString(string(domain.SessionIDKey), "session1")
 				token.SetExpiration(time.Now().Add(time.Hour))
 
 				signedToken := token.V4Sign(secretKey, nil)
