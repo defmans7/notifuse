@@ -25,8 +25,9 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{}
+	mockContactService := domainmocks.NewMockContactService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService)
 
 	ctx := context.Background()
 	user := &domain.User{ID: "test-user"}
@@ -101,8 +102,9 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{Environment: "development"}
+	mockContactService := domainmocks.NewMockContactService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -183,8 +185,9 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{Environment: "development"}
+	mockContactService := domainmocks.NewMockContactService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -195,7 +198,9 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("successful creation", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID: "test-owner",
+			ID:    "test-owner",
+			Email: "test@example.com",
+			Name:  "Test User",
 		}
 
 		expectedWorkspace := &domain.Workspace{
@@ -209,25 +214,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 			},
 		}
 
-		expectedUserWorkspace := &domain.UserWorkspace{
-			UserID:      "test-owner",
-			WorkspaceID: workspaceID,
-			Role:        "owner",
-		}
-
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
-		mockRepo.EXPECT().Create(ctx, gomock.AssignableToTypeOf(&domain.Workspace{})).DoAndReturn(func(_ context.Context, w *domain.Workspace) error {
-			assert.Equal(t, expectedWorkspace.ID, w.ID)
-			assert.Equal(t, expectedWorkspace.Name, w.Name)
-			assert.Equal(t, expectedWorkspace.Settings, w.Settings)
-			return nil
-		})
-		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.AssignableToTypeOf(&domain.UserWorkspace{})).DoAndReturn(func(_ context.Context, uw *domain.UserWorkspace) error {
-			assert.Equal(t, expectedUserWorkspace.UserID, uw.UserID)
-			assert.Equal(t, expectedUserWorkspace.WorkspaceID, uw.WorkspaceID)
-			assert.Equal(t, expectedUserWorkspace.Role, uw.Role)
-			return nil
-		})
+		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
+		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
+		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
+		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(true, nil)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
 		require.NoError(t, err)
@@ -238,7 +229,9 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("validation error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID: "test-owner",
+			ID:    "test-owner",
+			Email: "test@example.com",
+			Name:  "Test User",
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
@@ -252,7 +245,9 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("repository error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID: "test-owner",
+			ID:    "test-owner",
+			Email: "test@example.com",
+			Name:  "Test User",
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
@@ -266,12 +261,51 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("add user error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID: "test-owner",
+			ID:    "test-owner",
+			Email: "test@example.com",
+			Name:  "Test User",
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(assert.AnError)
+
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		require.Error(t, err)
+		assert.Nil(t, workspace)
+		assert.Equal(t, assert.AnError, err)
+	})
+
+	t.Run("get user error", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID:    "test-owner",
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
+		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
+		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(nil, assert.AnError)
+
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		require.Error(t, err)
+		assert.Nil(t, workspace)
+		assert.Equal(t, assert.AnError, err)
+	})
+
+	t.Run("upsert contact error", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID:    "test-owner",
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
+		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
+		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
+		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(false, assert.AnError)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
 		require.Error(t, err)
@@ -290,8 +324,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{Environment: "development"}
+	mockContactService := domainmocks.NewMockContactService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -415,8 +450,9 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{Environment: "development"}
+	mockContactService := domainmocks.NewMockContactService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()

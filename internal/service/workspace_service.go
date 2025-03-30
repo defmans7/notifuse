@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/config"
@@ -15,12 +14,13 @@ import (
 )
 
 type WorkspaceService struct {
-	repo        domain.WorkspaceRepository
-	logger      logger.Logger
-	userService domain.UserServiceInterface
-	authService domain.AuthService
-	mailer      mailer.Mailer
-	config      *config.Config
+	repo           domain.WorkspaceRepository
+	logger         logger.Logger
+	userService    domain.UserServiceInterface
+	authService    domain.AuthService
+	mailer         mailer.Mailer
+	config         *config.Config
+	contactService domain.ContactService
 }
 
 func NewWorkspaceService(
@@ -30,14 +30,16 @@ func NewWorkspaceService(
 	authService domain.AuthService,
 	mailerInstance mailer.Mailer,
 	config *config.Config,
+	contactService domain.ContactService,
 ) *WorkspaceService {
 	return &WorkspaceService{
-		repo:        repo,
-		logger:      logger,
-		userService: userService,
-		authService: authService,
-		mailer:      mailerInstance,
-		config:      config,
+		repo:           repo,
+		logger:         logger,
+		userService:    userService,
+		authService:    authService,
+		mailer:         mailerInstance,
+		config:         config,
+		contactService: contactService,
 	}
 }
 
@@ -143,6 +145,32 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 
 	if err := s.repo.AddUserToWorkspace(ctx, userWorkspace); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to add user to workspace")
+		return nil, err
+	}
+
+	// Get user details to create contact
+	userDetails, err := s.userService.GetUserByID(ctx, user.ID)
+	if err != nil {
+		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get user details for contact creation")
+		return nil, err
+	}
+
+	// Create contact for the owner
+	contact := &domain.Contact{
+		Email:     userDetails.Email,
+		FirstName: &domain.NullableString{String: userDetails.Name, IsNull: false},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := contact.Validate(); err != nil {
+		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to validate contact")
+		return nil, err
+	}
+
+	_, err = s.contactService.UpsertContact(ctx, id, contact)
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create contact for owner")
 		return nil, err
 	}
 
@@ -459,30 +487,6 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 
 	// In development mode, return the token
 	return invitation, token, nil
-}
-
-// Helper function to validate email format
-func isValidEmail(email string) bool {
-	// Basic email validation - could be more sophisticated in production
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return false
-	}
-
-	localPart := parts[0]
-	domain := parts[1]
-
-	// Check for empty parts
-	if localPart == "" || domain == "" {
-		return false
-	}
-
-	// Check domain has at least one dot
-	if !strings.Contains(domain, ".") {
-		return false
-	}
-
-	return true
 }
 
 // GetWorkspaceMembersWithEmail returns all users with emails for a workspace, verifying the requester has access

@@ -208,7 +208,9 @@ func (a *App) InitServices() error {
 		a.userService,
 		a.authService,
 		a.mailer,
-		a.config)
+		a.config,
+		a.contactService,
+	)
 
 	// Initialize other services
 	a.contactService = service.NewContactService(a.contactRepo, a.workspaceRepo, a.authService, a.logger)

@@ -25,9 +25,10 @@ func TestWorkspaceService_AddUserToWorkspace(t *testing.T) {
 	mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
 	cfg := &config.Config{}
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 	ctx := context.Background()
 	workspaceID := "workspace1"
@@ -169,9 +170,10 @@ func TestWorkspaceService_RemoveUserFromWorkspace(t *testing.T) {
 	mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
 	cfg := &config.Config{}
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -314,9 +316,10 @@ func TestWorkspaceService_TransferOwnership(t *testing.T) {
 	mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
 	cfg := &config.Config{}
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 	ctx := context.Background()
 	workspaceID := "workspace1"
@@ -471,9 +474,10 @@ func TestWorkspaceService_GetWorkspaceMembersWithEmail(t *testing.T) {
 	mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
 	cfg := &config.Config{}
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 	ctx := context.Background()
 	workspaceID := "workspace1"
@@ -578,7 +582,7 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 	inviterID := "inviter1"
 	email := "test@example.com"
 
-	t.Run("successful invitation for new user", func(t *testing.T) {
+	t.Run("successful invitation for new user in production", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -587,9 +591,10 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 		mockAuthSvc := mocks.NewMockAuthService(ctrl)
 		mockMailer := pkgmocks.NewMockMailer(ctrl)
-		cfg := &config.Config{Environment: "development"}
+		mockContactService := mocks.NewMockContactService(ctrl)
+		cfg := &config.Config{Environment: "production"}
 
-		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 		// Setup common logger expectations
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -642,10 +647,14 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 			GenerateInvitationToken(gomock.Any()).
 			Return("test-token")
 
-		invitation, token, err := service.InviteMember(ctx, workspaceID, email)
+		// Mock sending invitation email
+		mockMailer.EXPECT().
+			SendWorkspaceInvitation(email, "Test Workspace", "Test Inviter", "test-token").
+			Return(nil)
+
+		invitation, _, err := service.InviteMember(ctx, workspaceID, email)
 		require.NoError(t, err)
 		assert.NotNil(t, invitation)
-		assert.Equal(t, "test-token", token)
 	})
 
 	t.Run("successful invitation for existing user", func(t *testing.T) {
@@ -657,9 +666,10 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 		mockAuthSvc := mocks.NewMockAuthService(ctrl)
 		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		mockContactService := mocks.NewMockContactService(ctrl)
 		cfg := &config.Config{Environment: "development"}
 
-		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 		// Setup common logger expectations
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -725,9 +735,10 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 		mockAuthSvc := mocks.NewMockAuthService(ctrl)
 		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		mockContactService := mocks.NewMockContactService(ctrl)
 		cfg := &config.Config{Environment: "development"}
 
-		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 		// Setup common logger expectations
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -754,9 +765,10 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 		mockAuthSvc := mocks.NewMockAuthService(ctrl)
 		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		mockContactService := mocks.NewMockContactService(ctrl)
 		cfg := &config.Config{Environment: "development"}
 
-		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 		// Setup common logger expectations
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -782,9 +794,10 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 		mockAuthSvc := mocks.NewMockAuthService(ctrl)
 		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		mockContactService := mocks.NewMockContactService(ctrl)
 		cfg := &config.Config{Environment: "development"}
 
-		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 		// Setup common logger expectations
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -814,9 +827,10 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 		mockAuthSvc := mocks.NewMockAuthService(ctrl)
 		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		mockContactService := mocks.NewMockContactService(ctrl)
 		cfg := &config.Config{Environment: "development"}
 
-		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 		// Setup common logger expectations
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -853,9 +867,10 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockUserSvc := mocks.NewMockUserServiceInterface(ctrl)
 		mockAuthSvc := mocks.NewMockAuthService(ctrl)
 		mockMailer := pkgmocks.NewMockMailer(ctrl)
+		mockContactService := mocks.NewMockContactService(ctrl)
 		cfg := &config.Config{Environment: "development"}
 
-		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg)
+		service := NewWorkspaceService(mockRepo, mockLogger, mockUserSvc, mockAuthSvc, mockMailer, cfg, mockContactService)
 
 		// Setup common logger expectations
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
