@@ -215,6 +215,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
@@ -235,6 +236,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		// No need to mock GetByID here as the validation fails before that check
 
 		// Invalid timezone
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "INVALID_TIMEZONE")
@@ -251,6 +253,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(assert.AnError)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
@@ -267,6 +270,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(assert.AnError)
 
@@ -284,6 +288,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(nil, assert.AnError)
@@ -302,6 +307,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
@@ -311,6 +317,27 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
+	})
+
+	t.Run("workspace already exists", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID:    "test-owner",
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
+
+		existingWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existingWorkspace, nil)
+
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		require.Error(t, err)
+		assert.Nil(t, workspace)
+		assert.Contains(t, err.Error(), "workspace already exists")
 	})
 }
 
