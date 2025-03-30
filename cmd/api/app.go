@@ -201,7 +201,12 @@ func (a *App) InitServices() error {
 		return fmt.Errorf("failed to create user service: %w", err)
 	}
 
-	// Create workspace service with mailer
+	// Initialize other services in correct dependency order
+	a.contactService = service.NewContactService(a.contactRepo, a.workspaceRepo, a.authService, a.logger)
+	a.listService = service.NewListService(a.listRepo, a.authService, a.logger)
+	a.contactListService = service.NewContactListService(a.contactListRepo, a.authService, a.contactRepo, a.listRepo, a.logger)
+
+	// Create workspace service last since it depends on other services
 	a.workspaceService = service.NewWorkspaceService(
 		a.workspaceRepo,
 		a.logger,
@@ -211,11 +216,6 @@ func (a *App) InitServices() error {
 		a.config,
 		a.contactService,
 	)
-
-	// Initialize other services
-	a.contactService = service.NewContactService(a.contactRepo, a.workspaceRepo, a.authService, a.logger)
-	a.listService = service.NewListService(a.listRepo, a.authService, a.logger)
-	a.contactListService = service.NewContactListService(a.contactListRepo, a.authService, a.contactRepo, a.listRepo, a.logger)
 
 	return nil
 }

@@ -172,9 +172,9 @@ type WorkspaceServiceInterface interface {
 
 // Request/Response types
 type CreateWorkspaceRequest struct {
-	ID       string                `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name     string                `json:"name" valid:"required,stringlength(1|32)"`
-	Settings WorkspaceSettingsData `json:"settings" valid:"required"`
+	ID       string            `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name     string            `json:"name" valid:"required,stringlength(1|32)"`
+	Settings WorkspaceSettings `json:"settings" valid:"required"`
 }
 
 func (r *CreateWorkspaceRequest) Validate() error {
@@ -195,25 +195,14 @@ func (r *CreateWorkspaceRequest) Validate() error {
 	return nil
 }
 
-type WorkspaceSettingsData struct {
-	Name       string `json:"name" valid:"required,stringlength(1|32)"`
-	WebsiteURL string `json:"website_url" valid:"url,optional"`
-	LogoURL    string `json:"logo_url" valid:"url,optional"`
-	CoverURL   string `json:"cover_url" valid:"url,optional"`
-	Timezone   string `json:"timezone" valid:"required,timezone"`
-}
-
 type GetWorkspaceRequest struct {
 	ID string `json:"id"`
 }
 
 type UpdateWorkspaceRequest struct {
-	ID         string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name       string `json:"name" valid:"required,stringlength(1|32)"`
-	WebsiteURL string `json:"website_url" valid:"url,optional"`
-	LogoURL    string `json:"logo_url" valid:"url,optional"`
-	CoverURL   string `json:"cover_url" valid:"url,optional"`
-	Timezone   string `json:"timezone" valid:"required,timezone"`
+	ID       string            `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	Name     string            `json:"name" valid:"required,stringlength(1|32)"`
+	Settings WorkspaceSettings `json:"settings" valid:"required"`
 }
 
 func (r *UpdateWorkspaceRequest) Validate() error {
@@ -225,6 +214,12 @@ func (r *UpdateWorkspaceRequest) Validate() error {
 	if _, err := govalidator.ValidateStruct(r); err != nil {
 		return fmt.Errorf("invalid update workspace request: %w", err)
 	}
+
+	// Also validate the settings
+	if _, err := govalidator.ValidateStruct(&r.Settings); err != nil {
+		return fmt.Errorf("invalid update workspace request: %w", err)
+	}
+
 	return nil
 }
 

@@ -340,8 +340,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test123",
 				Name: "Test Workspace",
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "https://example.com/logo.png",
 					Timezone:   "UTC",
@@ -354,8 +353,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "",
 				Name: "Test Workspace",
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "https://example.com/logo.png",
 					Timezone:   "UTC",
@@ -368,8 +366,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test-123",
 				Name: "Test Workspace",
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "https://example.com/logo.png",
 					Timezone:   "UTC",
@@ -382,8 +379,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test123",
 				Name: "",
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "https://example.com/logo.png",
 					Timezone:   "UTC",
@@ -396,8 +392,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test123",
 				Name: "Test Workspace",
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "https://example.com/logo.png",
 					Timezone:   "InvalidTimezone",
@@ -410,8 +405,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test123",
 				Name: "Test Workspace",
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "not-a-url",
 					LogoURL:    "https://example.com/logo.png",
 					Timezone:   "UTC",
@@ -424,8 +418,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test123",
 				Name: "Test Workspace",
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "not-a-url",
 					Timezone:   "UTC",
@@ -438,11 +431,10 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test123",
 				Name: "Test Workspace",
-				Settings: WorkspaceSettingsData{
-					Name:       "",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "https://example.com/logo.png",
-					Timezone:   "UTC",
+					Timezone:   "", // Missing timezone which is required
 				},
 			},
 			wantErr: true,
@@ -452,8 +444,7 @@ func TestCreateWorkspaceRequest_Validate(t *testing.T) {
 			request: CreateWorkspaceRequest{
 				ID:   "test123",
 				Name: string(make([]byte, 33)), // 33 chars
-				Settings: WorkspaceSettingsData{
-					Name:       "Test Workspace",
+				Settings: WorkspaceSettings{
 					WebsiteURL: "https://example.com",
 					LogoURL:    "https://example.com/logo.png",
 					Timezone:   "UTC",
@@ -484,55 +475,65 @@ func TestUpdateWorkspaceRequest_Validate(t *testing.T) {
 		{
 			name: "valid request",
 			request: UpdateWorkspaceRequest{
-				ID:         "test123",
-				Name:       "Test Workspace",
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
+				ID:   "test123",
+				Name: "Test Workspace",
+				Settings: WorkspaceSettings{
+					WebsiteURL: "https://example.com",
+					LogoURL:    "https://example.com/logo.png",
+					Timezone:   "UTC",
+				},
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing ID",
 			request: UpdateWorkspaceRequest{
-				ID:         "",
-				Name:       "Test Workspace",
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
+				ID:   "",
+				Name: "Test Workspace",
+				Settings: WorkspaceSettings{
+					WebsiteURL: "https://example.com",
+					LogoURL:    "https://example.com/logo.png",
+					Timezone:   "UTC",
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid ID with special characters",
 			request: UpdateWorkspaceRequest{
-				ID:         "test-123",
-				Name:       "Test Workspace",
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
+				ID:   "test-123",
+				Name: "Test Workspace",
+				Settings: WorkspaceSettings{
+					WebsiteURL: "https://example.com",
+					LogoURL:    "https://example.com/logo.png",
+					Timezone:   "UTC",
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing name",
 			request: UpdateWorkspaceRequest{
-				ID:         "test123",
-				Name:       "",
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
+				ID:   "test123",
+				Name: "",
+				Settings: WorkspaceSettings{
+					WebsiteURL: "https://example.com",
+					LogoURL:    "https://example.com/logo.png",
+					Timezone:   "UTC",
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid timezone",
 			request: UpdateWorkspaceRequest{
-				ID:         "test123",
-				Name:       "Test Workspace",
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "InvalidTimezone",
+				ID:   "test123",
+				Name: "Test Workspace",
+				Settings: WorkspaceSettings{
+					WebsiteURL: "https://example.com",
+					LogoURL:    "https://example.com/logo.png",
+					Timezone:   "InvalidTimezone",
+				},
 			},
 			wantErr: true,
 		},
@@ -672,8 +673,7 @@ func TestCreateWorkspaceRequest_Validate_TimezoneValidatorRegistration(t *testin
 	request := CreateWorkspaceRequest{
 		ID:   "test123",
 		Name: "Test Workspace",
-		Settings: WorkspaceSettingsData{
-			Name:       "Test Workspace",
+		Settings: WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			Timezone:   "UTC", // Use a valid timezone
@@ -709,8 +709,7 @@ func TestCreateWorkspaceRequest_Validate_FirstValidationFails(t *testing.T) {
 	request := CreateWorkspaceRequest{
 		ID:   "", // Invalid ID to fail first validation
 		Name: "Test Workspace",
-		Settings: WorkspaceSettingsData{
-			Name:       "Test Workspace",
+		Settings: WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			Timezone:   "UTC",

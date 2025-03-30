@@ -595,137 +595,269 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	var customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL []byte
 
 	// String fields
-	if !contact.FirstName.IsNull {
-		firstNameSQL = sql.NullString{String: contact.FirstName.String, Valid: true}
+	if contact.FirstName != nil {
+		if !contact.FirstName.IsNull {
+			firstNameSQL = sql.NullString{String: contact.FirstName.String, Valid: true}
+		} else {
+			firstNameSQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.LastName.IsNull {
-		lastNameSQL = sql.NullString{String: contact.LastName.String, Valid: true}
+	if contact.LastName != nil {
+		if !contact.LastName.IsNull {
+			lastNameSQL = sql.NullString{String: contact.LastName.String, Valid: true}
+		} else {
+			lastNameSQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.Phone.IsNull {
-		phoneSQL = sql.NullString{String: contact.Phone.String, Valid: true}
+	if contact.Phone != nil {
+		if !contact.Phone.IsNull {
+			phoneSQL = sql.NullString{String: contact.Phone.String, Valid: true}
+		} else {
+			phoneSQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.AddressLine1.IsNull {
-		addressLine1SQL = sql.NullString{String: contact.AddressLine1.String, Valid: true}
+	if contact.AddressLine1 != nil {
+		if !contact.AddressLine1.IsNull {
+			addressLine1SQL = sql.NullString{String: contact.AddressLine1.String, Valid: true}
+		} else {
+			addressLine1SQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.AddressLine2.IsNull {
-		addressLine2SQL = sql.NullString{String: contact.AddressLine2.String, Valid: true}
+	if contact.AddressLine2 != nil {
+		if !contact.AddressLine2.IsNull {
+			addressLine2SQL = sql.NullString{String: contact.AddressLine2.String, Valid: true}
+		} else {
+			addressLine2SQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.Country.IsNull {
-		countrySQL = sql.NullString{String: contact.Country.String, Valid: true}
+	if contact.Country != nil {
+		if !contact.Country.IsNull {
+			countrySQL = sql.NullString{String: contact.Country.String, Valid: true}
+		} else {
+			countrySQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.Postcode.IsNull {
-		postcodeSQL = sql.NullString{String: contact.Postcode.String, Valid: true}
+	if contact.Postcode != nil {
+		if !contact.Postcode.IsNull {
+			postcodeSQL = sql.NullString{String: contact.Postcode.String, Valid: true}
+		} else {
+			postcodeSQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.State.IsNull {
-		stateSQL = sql.NullString{String: contact.State.String, Valid: true}
+	if contact.State != nil {
+		if !contact.State.IsNull {
+			stateSQL = sql.NullString{String: contact.State.String, Valid: true}
+		} else {
+			stateSQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.JobTitle.IsNull {
-		jobTitleSQL = sql.NullString{String: contact.JobTitle.String, Valid: true}
+	if contact.JobTitle != nil {
+		if !contact.JobTitle.IsNull {
+			jobTitleSQL = sql.NullString{String: contact.JobTitle.String, Valid: true}
+		} else {
+			jobTitleSQL = sql.NullString{Valid: false}
+		}
 	}
 
 	// Custom string fields
-	if !contact.CustomString1.IsNull {
-		customString1SQL = sql.NullString{String: contact.CustomString1.String, Valid: true}
+	if contact.CustomString1 != nil {
+		if !contact.CustomString1.IsNull {
+			customString1SQL = sql.NullString{String: contact.CustomString1.String, Valid: true}
+		} else {
+			customString1SQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.CustomString2.IsNull {
-		customString2SQL = sql.NullString{String: contact.CustomString2.String, Valid: true}
+	if contact.CustomString2 != nil {
+		if !contact.CustomString2.IsNull {
+			customString2SQL = sql.NullString{String: contact.CustomString2.String, Valid: true}
+		} else {
+			customString2SQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.CustomString3.IsNull {
-		customString3SQL = sql.NullString{String: contact.CustomString3.String, Valid: true}
+	if contact.CustomString3 != nil {
+		if !contact.CustomString3.IsNull {
+			customString3SQL = sql.NullString{String: contact.CustomString3.String, Valid: true}
+		} else {
+			customString3SQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.CustomString4.IsNull {
-		customString4SQL = sql.NullString{String: contact.CustomString4.String, Valid: true}
+	if contact.CustomString4 != nil {
+		if !contact.CustomString4.IsNull {
+			customString4SQL = sql.NullString{String: contact.CustomString4.String, Valid: true}
+		} else {
+			customString4SQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.CustomString5.IsNull {
-		customString5SQL = sql.NullString{String: contact.CustomString5.String, Valid: true}
+	if contact.CustomString5 != nil {
+		if !contact.CustomString5.IsNull {
+			customString5SQL = sql.NullString{String: contact.CustomString5.String, Valid: true}
+		} else {
+			customString5SQL = sql.NullString{Valid: false}
+		}
 	}
 
 	// Number fields
-	if !contact.LifetimeValue.IsNull {
-		lifetimeValueSQL = sql.NullFloat64{Float64: contact.LifetimeValue.Float64, Valid: true}
+	if contact.LifetimeValue != nil {
+		if !contact.LifetimeValue.IsNull {
+			lifetimeValueSQL = sql.NullFloat64{Float64: contact.LifetimeValue.Float64, Valid: true}
+		} else {
+			lifetimeValueSQL = sql.NullFloat64{Valid: false}
+		}
 	}
-	if !contact.OrdersCount.IsNull {
-		ordersCountSQL = sql.NullFloat64{Float64: contact.OrdersCount.Float64, Valid: true}
+	if contact.OrdersCount != nil {
+		if !contact.OrdersCount.IsNull {
+			ordersCountSQL = sql.NullFloat64{Float64: contact.OrdersCount.Float64, Valid: true}
+		} else {
+			ordersCountSQL = sql.NullFloat64{Valid: false}
+		}
 	}
 
 	// Custom number fields
-	if !contact.CustomNumber1.IsNull {
-		customNumber1SQL = sql.NullFloat64{Float64: contact.CustomNumber1.Float64, Valid: true}
+	if contact.CustomNumber1 != nil {
+		if !contact.CustomNumber1.IsNull {
+			customNumber1SQL = sql.NullFloat64{Float64: contact.CustomNumber1.Float64, Valid: true}
+		} else {
+			customNumber1SQL = sql.NullFloat64{Valid: false}
+		}
 	}
-	if !contact.CustomNumber2.IsNull {
-		customNumber2SQL = sql.NullFloat64{Float64: contact.CustomNumber2.Float64, Valid: true}
+	if contact.CustomNumber2 != nil {
+		if !contact.CustomNumber2.IsNull {
+			customNumber2SQL = sql.NullFloat64{Float64: contact.CustomNumber2.Float64, Valid: true}
+		} else {
+			customNumber2SQL = sql.NullFloat64{Valid: false}
+		}
 	}
-	if !contact.CustomNumber3.IsNull {
-		customNumber3SQL = sql.NullFloat64{Float64: contact.CustomNumber3.Float64, Valid: true}
+	if contact.CustomNumber3 != nil {
+		if !contact.CustomNumber3.IsNull {
+			customNumber3SQL = sql.NullFloat64{Float64: contact.CustomNumber3.Float64, Valid: true}
+		} else {
+			customNumber3SQL = sql.NullFloat64{Valid: false}
+		}
 	}
-	if !contact.CustomNumber4.IsNull {
-		customNumber4SQL = sql.NullFloat64{Float64: contact.CustomNumber4.Float64, Valid: true}
+	if contact.CustomNumber4 != nil {
+		if !contact.CustomNumber4.IsNull {
+			customNumber4SQL = sql.NullFloat64{Float64: contact.CustomNumber4.Float64, Valid: true}
+		}
 	}
-	if !contact.CustomNumber5.IsNull {
-		customNumber5SQL = sql.NullFloat64{Float64: contact.CustomNumber5.Float64, Valid: true}
+	if contact.CustomNumber5 != nil {
+		if !contact.CustomNumber5.IsNull {
+			customNumber5SQL = sql.NullFloat64{Float64: contact.CustomNumber5.Float64, Valid: true}
+		} else {
+			customNumber5SQL = sql.NullFloat64{Valid: false}
+		}
 	}
 
 	// Datetime fields
-	if !contact.LastOrderAt.IsNull {
-		lastOrderAtSQL = sql.NullTime{Time: contact.LastOrderAt.Time, Valid: true}
+	if contact.LastOrderAt != nil {
+		if !contact.LastOrderAt.IsNull {
+			lastOrderAtSQL = sql.NullTime{Time: contact.LastOrderAt.Time, Valid: true}
+		} else {
+			lastOrderAtSQL = sql.NullTime{Valid: false}
+		}
 	}
 
 	// Custom datetime fields
-	if !contact.CustomDatetime1.IsNull {
-		customDatetime1SQL = sql.NullTime{Time: contact.CustomDatetime1.Time, Valid: true}
+	if contact.CustomDatetime1 != nil {
+		if !contact.CustomDatetime1.IsNull {
+			customDatetime1SQL = sql.NullTime{Time: contact.CustomDatetime1.Time, Valid: true}
+		} else {
+			customDatetime1SQL = sql.NullTime{Valid: false}
+		}
 	}
-	if !contact.CustomDatetime2.IsNull {
-		customDatetime2SQL = sql.NullTime{Time: contact.CustomDatetime2.Time, Valid: true}
+	if contact.CustomDatetime2 != nil {
+		if !contact.CustomDatetime2.IsNull {
+			customDatetime2SQL = sql.NullTime{Time: contact.CustomDatetime2.Time, Valid: true}
+		} else {
+			customDatetime2SQL = sql.NullTime{Valid: false}
+		}
 	}
-	if !contact.CustomDatetime3.IsNull {
-		customDatetime3SQL = sql.NullTime{Time: contact.CustomDatetime3.Time, Valid: true}
+	if contact.CustomDatetime3 != nil {
+		if !contact.CustomDatetime3.IsNull {
+			customDatetime3SQL = sql.NullTime{Time: contact.CustomDatetime3.Time, Valid: true}
+		} else {
+			customDatetime3SQL = sql.NullTime{Valid: false}
+		}
 	}
-	if !contact.CustomDatetime4.IsNull {
-		customDatetime4SQL = sql.NullTime{Time: contact.CustomDatetime4.Time, Valid: true}
+	if contact.CustomDatetime4 != nil {
+		if !contact.CustomDatetime4.IsNull {
+			customDatetime4SQL = sql.NullTime{Time: contact.CustomDatetime4.Time, Valid: true}
+		}
 	}
-	if !contact.CustomDatetime5.IsNull {
-		customDatetime5SQL = sql.NullTime{Time: contact.CustomDatetime5.Time, Valid: true}
+	if contact.CustomDatetime5 != nil {
+		if !contact.CustomDatetime5.IsNull {
+			customDatetime5SQL = sql.NullTime{Time: contact.CustomDatetime5.Time, Valid: true}
+		} else {
+			customDatetime5SQL = sql.NullTime{Valid: false}
+		}
 	}
 
 	// Custom JSON fields
-	if !contact.CustomJSON1.IsNull {
-		customJSON1SQL, err = json.Marshal(contact.CustomJSON1.Data)
-		if err != nil {
-			return false, fmt.Errorf("failed to marshal CustomJSON1: %w", err)
+	if contact.CustomJSON1 != nil {
+		if !contact.CustomJSON1.IsNull {
+			customJSON1SQL, err = json.Marshal(contact.CustomJSON1.Data)
+			if err != nil {
+				return false, fmt.Errorf("failed to marshal CustomJSON1: %w", err)
+			}
+		} else {
+			customJSON1SQL = nil
 		}
 	}
-	if !contact.CustomJSON2.IsNull {
-		customJSON2SQL, err = json.Marshal(contact.CustomJSON2.Data)
-		if err != nil {
-			return false, fmt.Errorf("failed to marshal CustomJSON2: %w", err)
+	if contact.CustomJSON2 != nil {
+		if !contact.CustomJSON2.IsNull {
+			customJSON2SQL, err = json.Marshal(contact.CustomJSON2.Data)
+			if err != nil {
+				return false, fmt.Errorf("failed to marshal CustomJSON2: %w", err)
+			}
+		} else {
+			customJSON2SQL = nil
 		}
 	}
-	if !contact.CustomJSON3.IsNull {
-		customJSON3SQL, err = json.Marshal(contact.CustomJSON3.Data)
-		if err != nil {
-			return false, fmt.Errorf("failed to marshal CustomJSON3: %w", err)
+	if contact.CustomJSON3 != nil {
+		if !contact.CustomJSON3.IsNull {
+			customJSON3SQL, err = json.Marshal(contact.CustomJSON3.Data)
+			if err != nil {
+				return false, fmt.Errorf("failed to marshal CustomJSON3: %w", err)
+			}
+		} else {
+			customJSON3SQL = nil
 		}
 	}
-	if !contact.CustomJSON4.IsNull {
-		customJSON4SQL, err = json.Marshal(contact.CustomJSON4.Data)
-		if err != nil {
-			return false, fmt.Errorf("failed to marshal CustomJSON4: %w", err)
+	if contact.CustomJSON4 != nil {
+		if !contact.CustomJSON4.IsNull {
+			customJSON4SQL, err = json.Marshal(contact.CustomJSON4.Data)
+			if err != nil {
+				return false, fmt.Errorf("failed to marshal CustomJSON4: %w", err)
+			}
+		} else {
+			customJSON4SQL = nil
 		}
 	}
-	if !contact.CustomJSON5.IsNull {
-		customJSON5SQL, err = json.Marshal(contact.CustomJSON5.Data)
-		if err != nil {
-			return false, fmt.Errorf("failed to marshal CustomJSON5: %w", err)
+	if contact.CustomJSON5 != nil {
+		if !contact.CustomJSON5.IsNull {
+			customJSON5SQL, err = json.Marshal(contact.CustomJSON5.Data)
+			if err != nil {
+				return false, fmt.Errorf("failed to marshal CustomJSON5: %w", err)
+			}
+		} else {
+			customJSON5SQL = nil
 		}
 	}
 
 	// Convert domain nullable types to SQL nullable types
 	var externalIDSQL, timezoneSQL sql.NullString
-	if !contact.ExternalID.IsNull {
-		externalIDSQL = sql.NullString{String: contact.ExternalID.String, Valid: true}
+	if contact.ExternalID != nil {
+		if !contact.ExternalID.IsNull {
+			externalIDSQL = sql.NullString{String: contact.ExternalID.String, Valid: true}
+		} else {
+			externalIDSQL = sql.NullString{Valid: false}
+		}
 	}
-	if !contact.Timezone.IsNull {
-		timezoneSQL = sql.NullString{String: contact.Timezone.String, Valid: true}
+	if contact.Timezone != nil {
+		if !contact.Timezone.IsNull {
+			timezoneSQL = sql.NullString{String: contact.Timezone.String, Valid: true}
+		} else {
+			timezoneSQL = sql.NullString{Valid: false}
+		}
 	}
 
 	_, err = workspaceDB.ExecContext(ctx, query,

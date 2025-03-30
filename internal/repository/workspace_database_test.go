@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -32,13 +33,16 @@ type testWorkspaceRepository struct {
 func (r *testWorkspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error {
 	// Call the underlying repository's Create method
 	err := r.WorkspaceRepository.Create(ctx, workspace)
+	if err != nil {
+		return err
+	}
 
 	// If there was no error but we want to simulate a database creation error
-	if err == nil && r.createDatabaseError != nil {
+	if r.createDatabaseError != nil {
 		return r.createDatabaseError
 	}
 
-	return err
+	return nil
 }
 
 // CreateDatabase overrides the CreateDatabase method to use our custom function
@@ -48,6 +52,30 @@ func (r *testWorkspaceRepository) CreateDatabase(ctx context.Context, workspaceI
 	}
 	if r.createDatabaseError != nil {
 		return r.createDatabaseError
+	}
+	return nil
+}
+
+// Update overrides the Update method to handle errors
+func (r *testWorkspaceRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
+	if workspace.Name == "" {
+		return fmt.Errorf("workspace not found")
+	}
+	err := r.WorkspaceRepository.Update(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Delete overrides the Delete method to handle errors
+func (r *testWorkspaceRepository) Delete(ctx context.Context, workspaceID string) error {
+	if workspaceID == "" {
+		return fmt.Errorf("workspace not found")
+	}
+	err := r.WorkspaceRepository.Delete(ctx, workspaceID)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -103,18 +131,40 @@ func TestWorkspaceRepository_DeleteDatabase(t *testing.T) {
 	workspaceID := "testworkspace"
 
 	// Test database drop error
-	mock.ExpectExec("DROP DATABASE IF EXISTS.*").
+	safeID := strings.ReplaceAll(workspaceID, "-", "_")
+	dbName := fmt.Sprintf("%s_ws_%s", dbConfig.Prefix, safeID)
+
+	// First test: error case
+	revokeQuery := fmt.Sprintf(`
+		REVOKE ALL PRIVILEGES ON DATABASE %s FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s;
+		REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM %s;
+		REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM %s;`,
+		dbName, dbName, dbConfig.User, dbConfig.User, dbConfig.User)
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
 		WillReturnError(errors.New("permission denied"))
 
 	err := repo.(*workspaceRepository).DeleteDatabase(context.Background(), workspaceID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to delete workspace database")
-	assert.Contains(t, err.Error(), "permission denied")
+	assert.Equal(t, "permission denied", err.Error())
 
-	// Test successful database drop
-	safeID := strings.ReplaceAll(workspaceID, "-", "_")
-	dbName := fmt.Sprintf("%s_ws_%s", dbConfig.Prefix, safeID)
+	// Test successful database drop with proper connection termination
+	// Expect revoke privileges
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 
+	// Expect terminate connections
+	terminateQuery := fmt.Sprintf(`
+		SELECT pg_terminate_backend(pid) 
+		FROM pg_stat_activity 
+		WHERE datname = '%s' 
+		AND pid <> pg_backend_pid()`, dbName)
+	mock.ExpectExec(regexp.QuoteMeta(terminateQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// Expect drop database
 	mock.ExpectExec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
@@ -225,25 +275,9 @@ func (r *mockInternalRepository) Create(ctx context.Context, workspace *domain.W
 		INSERT INTO workspaces (id, name, settings, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
 	`
-	_, err = r.systemDB.ExecContext(ctx, query,
-		workspace.ID,
-		workspace.Name,
-		settings,
-		workspace.CreatedAt,
-		workspace.UpdatedAt,
-	)
+	_, err = r.systemDB.ExecContext(ctx, query, workspace.ID, workspace.Name, settings, workspace.CreatedAt, workspace.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create workspace: %w", err)
-	}
-
-	// Create the workspace database
-	if err := r.CreateDatabase(ctx, workspace.ID); err != nil {
-		// Roll back workspace creation if database creation fails
-		_, rollbackErr := r.systemDB.ExecContext(ctx, "DELETE FROM workspaces WHERE id = $1", workspace.ID)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to roll back workspace creation after database creation failed: %v (original error: %w)", rollbackErr, err)
-		}
-		return err
 	}
 
 	return nil
@@ -258,11 +292,69 @@ func (r *mockInternalRepository) List(ctx context.Context) ([]*domain.Workspace,
 }
 
 func (r *mockInternalRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
-	return fmt.Errorf("not implemented in mock")
+	if err := workspace.Validate(); err != nil {
+		return err
+	}
+
+	settings, err := json.Marshal(workspace.Settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal settings: %w", err)
+	}
+
+	query := `
+		UPDATE workspaces
+		SET name = $1, settings = $2, updated_at = $3
+		WHERE id = $4
+	`
+	result, err := r.systemDB.ExecContext(ctx, query, workspace.Name, settings, time.Now(), workspace.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update workspace")
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows")
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("workspace not found")
+	}
+
+	return nil
 }
 
-func (r *mockInternalRepository) Delete(ctx context.Context, id string) error {
-	return fmt.Errorf("not implemented in mock")
+func (r *mockInternalRepository) Delete(ctx context.Context, workspaceID string) error {
+	// Delete user workspaces
+	query := `DELETE FROM user_workspaces WHERE workspace_id = $1`
+	_, err := r.systemDB.ExecContext(ctx, query, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to delete user workspaces")
+	}
+
+	// Delete workspace invitations
+	query = `DELETE FROM workspace_invitations WHERE workspace_id = $1`
+	_, err = r.systemDB.ExecContext(ctx, query, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to delete workspace invitations")
+	}
+
+	// Delete workspace
+	query = `DELETE FROM workspaces WHERE id = $1`
+	result, err := r.systemDB.ExecContext(ctx, query, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to delete workspace")
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows")
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("workspace not found")
+	}
+
+	return nil
 }
 
 func (r *mockInternalRepository) AddUserToWorkspace(ctx context.Context, userWorkspace *domain.UserWorkspace) error {

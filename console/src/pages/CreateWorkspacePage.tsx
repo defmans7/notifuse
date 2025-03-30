@@ -55,7 +55,7 @@ export function CreateWorkspacePage() {
 
       // Create workspace with API
       await workspaceService.create({
-        id: generateWorkspaceId(values.name),
+        id: generateWorkspaceId(values.id),
         name: values.name,
         settings: {
           website_url: values.website_url || '',

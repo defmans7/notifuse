@@ -36,7 +36,7 @@ func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id str
 	query := `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`
 	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(&exists)
 	if err != nil {
-		return false, fmt.Errorf("failed to check workspace ID existence: %w", err)
+		return false, err
 	}
 	return exists, nil
 }
@@ -67,7 +67,7 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 	// Marshal settings to JSON
 	settings, err := json.Marshal(workspace.Settings)
 	if err != nil {
-		return fmt.Errorf("failed to marshal settings: %w", err)
+		return err
 	}
 
 	query := `
@@ -82,7 +82,7 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 		workspace.UpdatedAt,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create workspace: %w", err)
+		return err
 	}
 
 	// Create the workspace database
@@ -100,7 +100,7 @@ func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.W
 		return nil, fmt.Errorf("workspace not found")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get workspace: %w", err)
+		return nil, err
 	}
 	return workspace, nil
 }
@@ -113,7 +113,7 @@ func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, er
 	`
 	rows, err := r.systemDB.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list workspaces: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -121,7 +121,7 @@ func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, er
 	for rows.Next() {
 		workspace, err := domain.ScanWorkspace(rows)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan workspace: %w", err)
+			return nil, err
 		}
 		workspaces = append(workspaces, workspace)
 	}
@@ -139,7 +139,7 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 	// Marshal settings to JSON
 	settings, err := json.Marshal(workspace.Settings)
 	if err != nil {
-		return fmt.Errorf("failed to marshal settings: %w", err)
+		return err
 	}
 
 	query := `
@@ -154,11 +154,11 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 		workspace.ID,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to update workspace: %w", err)
+		return err
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
+		return err
 	}
 	if rows == 0 {
 		return fmt.Errorf("workspace not found")
@@ -175,24 +175,24 @@ func (r *workspaceRepository) Delete(ctx context.Context, id string) error {
 	// Delete all user_workspaces entries for this workspace
 	deleteUserWorkspacesQuery := `DELETE FROM user_workspaces WHERE workspace_id = $1`
 	if _, err := r.systemDB.ExecContext(ctx, deleteUserWorkspacesQuery, id); err != nil {
-		return fmt.Errorf("failed to delete user workspaces: %w", err)
+		return err
 	}
 
 	// Delete all workspace invitations for this workspace
 	deleteInvitationsQuery := `DELETE FROM workspace_invitations WHERE workspace_id = $1`
 	if _, err := r.systemDB.ExecContext(ctx, deleteInvitationsQuery, id); err != nil {
-		return fmt.Errorf("failed to delete workspace invitations: %w", err)
+		return err
 	}
 
 	// Then delete the workspace record
 	query := `DELETE FROM workspaces WHERE id = $1`
 	result, err := r.systemDB.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete workspace: %w", err)
+		return err
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
+		return err
 	}
 	if rows == 0 {
 		return fmt.Errorf("workspace not found")
@@ -226,23 +226,55 @@ func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID str
 func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID string) error {
 	// Use the utility function to ensure the database exists and initialize it
 	if err := database.EnsureWorkspaceDatabaseExists(r.dbConfig, workspaceID); err != nil {
-		return fmt.Errorf("failed to create and initialize workspace database: %w", err)
+		return err
 	}
 	return nil
 }
 
 func (r *workspaceRepository) DeleteDatabase(ctx context.Context, workspaceID string) error {
-	// Remove the connection from the pool if it exists
-	r.connections.Delete(workspaceID)
-
 	// Replace hyphens with underscores for PostgreSQL compatibility
 	safeID := strings.ReplaceAll(workspaceID, "-", "_")
 	dbName := fmt.Sprintf("%s_ws_%s", r.dbConfig.Prefix, safeID)
 
-	// Drop the database
-	_, err := r.systemDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
-	if err != nil {
-		return fmt.Errorf("failed to delete workspace database: %w", err)
+	// Get our own connection to close it
+	if conn, ok := r.connections.Load(workspaceID); ok {
+		db := conn.(*sql.DB)
+		// Close our connection to the workspace database
+		db.Close()
+		// Remove from the pool
+		r.connections.Delete(workspaceID)
+	}
+
+	// First, revoke all privileges to prevent new connections
+	revokeQuery := fmt.Sprintf(`
+		REVOKE ALL PRIVILEGES ON DATABASE %s FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s;
+		REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM %s;
+		REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM %s;`,
+		dbName, dbName, r.dbConfig.User, r.dbConfig.User, r.dbConfig.User)
+	if _, err := r.systemDB.ExecContext(ctx, revokeQuery); err != nil {
+		return err
+	}
+
+	// Then terminate all connections to the database
+	terminateQuery := fmt.Sprintf(`
+		SELECT pg_terminate_backend(pid) 
+		FROM pg_stat_activity 
+		WHERE datname = '%s' 
+		AND pid <> pg_backend_pid()`, dbName)
+	if _, err := r.systemDB.ExecContext(ctx, terminateQuery); err != nil {
+		return err
+	}
+
+	// Add a small delay to ensure connections are closed
+	time.Sleep(100 * time.Millisecond)
+
+	// Finally, drop the database
+	dropQuery := fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)
+	if _, err := r.systemDB.ExecContext(ctx, dropQuery); err != nil {
+		return err
 	}
 
 	return nil

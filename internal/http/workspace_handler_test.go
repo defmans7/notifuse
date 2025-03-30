@@ -55,8 +55,7 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 	reqBody := domain.CreateWorkspaceRequest{
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
-		Settings: domain.WorkspaceSettingsData{
-			Name:       "Test Workspace",
+		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
@@ -187,12 +186,14 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 
 	// Create request
 	reqBody := domain.UpdateWorkspaceRequest{
-		ID:         "testworkspace1",
-		Name:       "Updated Workspace",
-		WebsiteURL: "https://updated.com",
-		LogoURL:    "https://updated.com/logo.png",
-		CoverURL:   "https://updated.com/cover.png",
-		Timezone:   "UTC",
+		ID:   "testworkspace1",
+		Name: "Updated Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://updated.com",
+			LogoURL:    "https://updated.com/logo.png",
+			CoverURL:   "https://updated.com/cover.png",
+			Timezone:   "UTC",
+		},
 	}
 	body, err := json.Marshal(reqBody)
 	require.NoError(t, err)
@@ -486,8 +487,7 @@ func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
 	// Create request with missing ID
 	reqBody := domain.CreateWorkspaceRequest{
 		Name: "Test Workspace",
-		Settings: domain.WorkspaceSettingsData{
-			Name:       "Test Workspace",
+		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
@@ -513,8 +513,7 @@ func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
 	// Create request with missing name
 	reqBody := domain.CreateWorkspaceRequest{
 		ID: "testworkspace1",
-		Settings: domain.WorkspaceSettingsData{
-			Name:       "Test Workspace",
+		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
@@ -541,8 +540,7 @@ func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
 	reqBody := domain.CreateWorkspaceRequest{
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
-		Settings: domain.WorkspaceSettingsData{
-			Name:       "Test Workspace",
+		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
@@ -573,8 +571,7 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 	reqBody := domain.CreateWorkspaceRequest{
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
-		Settings: domain.WorkspaceSettingsData{
-			Name:       "Test Workspace",
+		Settings: domain.WorkspaceSettings{
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
@@ -651,11 +648,13 @@ func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
 
 	// Create request with missing ID
 	reqBody := domain.UpdateWorkspaceRequest{
-		Name:       "Updated Workspace",
-		WebsiteURL: "https://updated.com",
-		LogoURL:    "https://updated.com/logo.png",
-		CoverURL:   "https://updated.com/cover.png",
-		Timezone:   "UTC",
+		Name: "Updated Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://updated.com",
+			LogoURL:    "https://updated.com/logo.png",
+			CoverURL:   "https://updated.com/cover.png",
+			Timezone:   "UTC",
+		},
 	}
 	body, err := json.Marshal(reqBody)
 	require.NoError(t, err)
@@ -680,12 +679,14 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 
 	// Create request with valid data
 	reqBody := domain.UpdateWorkspaceRequest{
-		ID:         "testworkspace1",
-		Name:       "Updated Workspace",
-		WebsiteURL: "https://updated.com",
-		LogoURL:    "https://updated.com/logo.png",
-		CoverURL:   "https://updated.com/cover.png",
-		Timezone:   "UTC",
+		ID:   "testworkspace1",
+		Name: "Updated Workspace",
+		Settings: domain.WorkspaceSettings{
+			WebsiteURL: "https://updated.com",
+			LogoURL:    "https://updated.com/logo.png",
+			CoverURL:   "https://updated.com/cover.png",
+			Timezone:   "UTC",
+		},
 	}
 	body, err := json.Marshal(reqBody)
 	require.NoError(t, err)

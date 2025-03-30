@@ -45,10 +45,9 @@ func NewWorkspaceService(
 
 // ListWorkspaces returns all workspaces for a user
 func (s *WorkspaceService) ListWorkspaces(ctx context.Context) ([]*domain.Workspace, error) {
-
 	user, err := s.authService.AuthenticateUserFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+		return nil, err
 	}
 
 	userWorkspaces, err := s.repo.GetUserWorkspaces(ctx, user.ID)
@@ -80,7 +79,7 @@ func (s *WorkspaceService) GetWorkspace(ctx context.Context, id string) (*domain
 	// Check if user has access to the workspace
 	user, err := s.authService.AuthenticateUserForWorkspace(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+		return nil, err
 	}
 
 	_, err = s.repo.GetUserWorkspace(ctx, user.ID, id)
@@ -100,10 +99,9 @@ func (s *WorkspaceService) GetWorkspace(ctx context.Context, id string) (*domain
 
 // CreateWorkspace creates a new workspace and adds the creator as owner
 func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string) (*domain.Workspace, error) {
-
 	user, err := s.authService.AuthenticateUserFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+		return nil, err
 	}
 
 	workspace := &domain.Workspace{
@@ -179,10 +177,9 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 
 // UpdateWorkspace updates a workspace if the user is an owner
 func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string) (*domain.Workspace, error) {
-
 	user, err := s.authService.AuthenticateUserForWorkspace(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+		return nil, err
 	}
 
 	// Check if user is an owner
@@ -227,7 +224,7 @@ func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, id string) error
 	// Check if user is an owner
 	user, err := s.authService.AuthenticateUserForWorkspace(ctx, id)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
+		return err
 	}
 
 	userWorkspace, err := s.repo.GetUserWorkspace(ctx, user.ID, id)
