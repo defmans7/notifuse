@@ -122,6 +122,12 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
+	// check if workspace already exists
+	if existingWorkspace, _ := s.repo.GetByID(ctx, id); existingWorkspace != nil {
+		s.logger.WithField("workspace_id", id).Error("Workspace already exists")
+		return nil, fmt.Errorf("workspace already exists")
+	}
+
 	if err := s.repo.Create(ctx, workspace); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to create workspace")
 		return nil, err

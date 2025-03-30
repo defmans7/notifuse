@@ -76,9 +76,9 @@ export function CreateWorkspacePage() {
           params: { workspaceId: values.id }
         })
       }, 100)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating workspace:', error)
-      message.error('Failed to create workspace. Please try again.')
+      message.error(error.message)
       setLoading(false)
     }
   }

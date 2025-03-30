@@ -128,7 +128,11 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		req.Settings.Timezone,
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create workspace")
+		if err.Error() == "workspace already exists" {
+			writeError(w, http.StatusConflict, "Workspace already exists")
+		} else {
+			writeError(w, http.StatusInternalServerError, "Failed to create workspace")
+		}
 		return
 	}
 

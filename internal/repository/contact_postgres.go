@@ -254,67 +254,6 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, workspaceID
 	}
 	defer tx.Rollback() // Rollback if there's a panic or error
 
-	// Prepare a statement for contact insertion
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO contacts (
-			email, external_id, timezone, language,
-			first_name, last_name, phone, address_line_1, address_line_2,
-			country, postcode, state, job_title,
-			lifetime_value, orders_count, last_order_at,
-			custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
-			custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
-			custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
-			custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5,
-			created_at, updated_at
-		)
-		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
-			$33, $34, $35, $36, $37, $38
-		)
-		ON CONFLICT (email) DO UPDATE SET
-			external_id = EXCLUDED.external_id,
-			timezone = EXCLUDED.timezone,
-			language = EXCLUDED.language,
-			first_name = EXCLUDED.first_name,
-			last_name = EXCLUDED.last_name,
-			phone = EXCLUDED.phone,
-			address_line_1 = EXCLUDED.address_line_1,
-			address_line_2 = EXCLUDED.address_line_2,
-			country = EXCLUDED.country,
-			postcode = EXCLUDED.postcode,
-			state = EXCLUDED.state,
-			job_title = EXCLUDED.job_title,
-			lifetime_value = EXCLUDED.lifetime_value,
-			orders_count = EXCLUDED.orders_count,
-			last_order_at = EXCLUDED.last_order_at,
-			custom_string_1 = EXCLUDED.custom_string_1,
-			custom_string_2 = EXCLUDED.custom_string_2,
-			custom_string_3 = EXCLUDED.custom_string_3,
-			custom_string_4 = EXCLUDED.custom_string_4,
-			custom_string_5 = EXCLUDED.custom_string_5,
-			custom_number_1 = EXCLUDED.custom_number_1,
-			custom_number_2 = EXCLUDED.custom_number_2,
-			custom_number_3 = EXCLUDED.custom_number_3,
-			custom_number_4 = EXCLUDED.custom_number_4,
-			custom_number_5 = EXCLUDED.custom_number_5,
-			custom_datetime_1 = EXCLUDED.custom_datetime_1,
-			custom_datetime_2 = EXCLUDED.custom_datetime_2,
-			custom_datetime_3 = EXCLUDED.custom_datetime_3,
-			custom_datetime_4 = EXCLUDED.custom_datetime_4,
-			custom_datetime_5 = EXCLUDED.custom_datetime_5,
-			custom_json_1 = EXCLUDED.custom_json_1,
-			custom_json_2 = EXCLUDED.custom_json_2,
-			custom_json_3 = EXCLUDED.custom_json_3,
-			custom_json_4 = EXCLUDED.custom_json_4,
-			custom_json_5 = EXCLUDED.custom_json_5,
-			updated_at = EXCLUDED.updated_at
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
 	// Execute in batches
 	const batchSize = 100
 	for i := 0; i < len(contacts); i += batchSize {
@@ -325,6 +264,30 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, workspaceID
 
 		batch := contacts[i:end]
 		for _, contact := range batch {
+			// Build dynamic update query for this contact
+			updateClause := buildUpdateQuery(contact)
+
+			// Construct full query with dynamic update clause
+			query := fmt.Sprintf(`
+				INSERT INTO contacts (
+					email, external_id, timezone, language,
+					first_name, last_name, phone, address_line_1, address_line_2,
+					country, postcode, state, job_title,
+					lifetime_value, orders_count, last_order_at,
+					custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
+					custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
+					custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
+					custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5,
+					created_at, updated_at
+				)
+				VALUES (
+					$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+					$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
+					$33, $34, $35, $36, $37, $38
+				)
+				ON CONFLICT (email) DO UPDATE SET %s
+			`, updateClause)
+
 			// Convert domain nullable types to SQL nullable types
 			var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
 			var countrySQL, postcodeSQL, stateSQL, jobTitleSQL sql.NullString
@@ -332,7 +295,7 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, workspaceID
 			var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
 			var customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL sql.NullFloat64
 			var lastOrderAtSQL, customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL sql.NullTime
-			var customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL []byte
+			var customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL sql.NullString
 
 			// String fields
 			if !contact.FirstName.IsNull {
@@ -429,37 +392,42 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, workspaceID
 
 			// Custom JSON fields
 			if !contact.CustomJSON1.IsNull {
-				customJSON1SQL, err = json.Marshal(contact.CustomJSON1.Data)
+				jsonBytes, err := json.Marshal(contact.CustomJSON1.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON1: %w", err)
 				}
+				customJSON1SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 			}
 			if !contact.CustomJSON2.IsNull {
-				customJSON2SQL, err = json.Marshal(contact.CustomJSON2.Data)
+				jsonBytes, err := json.Marshal(contact.CustomJSON2.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON2: %w", err)
 				}
+				customJSON2SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 			}
 			if !contact.CustomJSON3.IsNull {
-				customJSON3SQL, err = json.Marshal(contact.CustomJSON3.Data)
+				jsonBytes, err := json.Marshal(contact.CustomJSON3.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON3: %w", err)
 				}
+				customJSON3SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 			}
 			if !contact.CustomJSON4.IsNull {
-				customJSON4SQL, err = json.Marshal(contact.CustomJSON4.Data)
+				jsonBytes, err := json.Marshal(contact.CustomJSON4.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON4: %w", err)
 				}
+				customJSON4SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 			}
 			if !contact.CustomJSON5.IsNull {
-				customJSON5SQL, err = json.Marshal(contact.CustomJSON5.Data)
+				jsonBytes, err := json.Marshal(contact.CustomJSON5.Data)
 				if err != nil {
 					return fmt.Errorf("failed to marshal CustomJSON5: %w", err)
 				}
+				customJSON5SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 			}
 
-			_, err := stmt.ExecContext(ctx,
+			_, err = tx.ExecContext(ctx, query,
 				contact.Email,
 				contact.ExternalID,
 				contact.Timezone,
@@ -513,8 +481,61 @@ func (r *contactRepository) BatchImportContacts(ctx context.Context, workspaceID
 	return nil
 }
 
-func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
+// buildUpdateQuery builds the UPDATE part of the upsert query based on which fields are present in the contact
+func buildUpdateQuery(contact *domain.Contact) string {
+	var updates []string
 
+	// Helper function to add a field to updates if it's not nil
+	addField := func(fieldName string, field interface{}) {
+		if field != nil {
+			updates = append(updates, fmt.Sprintf("%s = EXCLUDED.%s", fieldName, fieldName))
+		}
+	}
+
+	// Add fields that are present in the contact
+	addField("external_id", contact.ExternalID)
+	addField("timezone", contact.Timezone)
+	addField("language", contact.Language)
+	addField("first_name", contact.FirstName)
+	addField("last_name", contact.LastName)
+	addField("phone", contact.Phone)
+	addField("address_line_1", contact.AddressLine1)
+	addField("address_line_2", contact.AddressLine2)
+	addField("country", contact.Country)
+	addField("postcode", contact.Postcode)
+	addField("state", contact.State)
+	addField("job_title", contact.JobTitle)
+	addField("lifetime_value", contact.LifetimeValue)
+	addField("orders_count", contact.OrdersCount)
+	addField("last_order_at", contact.LastOrderAt)
+	addField("custom_string_1", contact.CustomString1)
+	addField("custom_string_2", contact.CustomString2)
+	addField("custom_string_3", contact.CustomString3)
+	addField("custom_string_4", contact.CustomString4)
+	addField("custom_string_5", contact.CustomString5)
+	addField("custom_number_1", contact.CustomNumber1)
+	addField("custom_number_2", contact.CustomNumber2)
+	addField("custom_number_3", contact.CustomNumber3)
+	addField("custom_number_4", contact.CustomNumber4)
+	addField("custom_number_5", contact.CustomNumber5)
+	addField("custom_datetime_1", contact.CustomDatetime1)
+	addField("custom_datetime_2", contact.CustomDatetime2)
+	addField("custom_datetime_3", contact.CustomDatetime3)
+	addField("custom_datetime_4", contact.CustomDatetime4)
+	addField("custom_datetime_5", contact.CustomDatetime5)
+	addField("custom_json_1", contact.CustomJSON1)
+	addField("custom_json_2", contact.CustomJSON2)
+	addField("custom_json_3", contact.CustomJSON3)
+	addField("custom_json_4", contact.CustomJSON4)
+	addField("custom_json_5", contact.CustomJSON5)
+
+	// Always update the updated_at timestamp
+	updates = append(updates, "updated_at = EXCLUDED.updated_at")
+
+	return strings.Join(updates, ", ")
+}
+
+func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
@@ -530,7 +551,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		return false, fmt.Errorf("failed to check if contact exists: %w", err)
 	}
 
-	query := `
+	// Build the base query with dynamic update part
+	query := fmt.Sprintf(`
 		INSERT INTO contacts (
 			email, external_id, timezone, language,
 			first_name, last_name, phone, address_line_1, address_line_2,
@@ -547,43 +569,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
 			$33, $34, $35, $36, $37, $38
 		)
-		ON CONFLICT (email) DO UPDATE SET
-			external_id = EXCLUDED.external_id,
-			timezone = EXCLUDED.timezone,
-			first_name = EXCLUDED.first_name,
-			last_name = EXCLUDED.last_name,
-			phone = EXCLUDED.phone,
-			address_line_1 = EXCLUDED.address_line_1,
-			address_line_2 = EXCLUDED.address_line_2,
-			country = EXCLUDED.country,
-			postcode = EXCLUDED.postcode,
-			state = EXCLUDED.state,
-			job_title = EXCLUDED.job_title,
-			lifetime_value = EXCLUDED.lifetime_value,
-			orders_count = EXCLUDED.orders_count,
-			last_order_at = EXCLUDED.last_order_at,
-			custom_string_1 = EXCLUDED.custom_string_1,
-			custom_string_2 = EXCLUDED.custom_string_2,
-			custom_string_3 = EXCLUDED.custom_string_3,
-			custom_string_4 = EXCLUDED.custom_string_4,
-			custom_string_5 = EXCLUDED.custom_string_5,
-			custom_number_1 = EXCLUDED.custom_number_1,
-			custom_number_2 = EXCLUDED.custom_number_2,
-			custom_number_3 = EXCLUDED.custom_number_3,
-			custom_number_4 = EXCLUDED.custom_number_4,
-			custom_number_5 = EXCLUDED.custom_number_5,
-			custom_datetime_1 = EXCLUDED.custom_datetime_1,
-			custom_datetime_2 = EXCLUDED.custom_datetime_2,
-			custom_datetime_3 = EXCLUDED.custom_datetime_3,
-			custom_datetime_4 = EXCLUDED.custom_datetime_4,
-			custom_datetime_5 = EXCLUDED.custom_datetime_5,
-			custom_json_1 = EXCLUDED.custom_json_1,
-			custom_json_2 = EXCLUDED.custom_json_2,
-			custom_json_3 = EXCLUDED.custom_json_3,
-			custom_json_4 = EXCLUDED.custom_json_4,
-			custom_json_5 = EXCLUDED.custom_json_5,
-			updated_at = EXCLUDED.updated_at
-	`
+		ON CONFLICT (email) DO UPDATE SET %s
+	`, buildUpdateQuery(contact))
 
 	// Convert domain nullable types to SQL nullable types
 	var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
@@ -592,7 +579,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
 	var customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL sql.NullFloat64
 	var lastOrderAtSQL, customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL sql.NullTime
-	var customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL []byte
+	var customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL sql.NullString
 
 	// String fields
 	if contact.FirstName != nil {
@@ -794,52 +781,57 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	// Custom JSON fields
 	if contact.CustomJSON1 != nil {
 		if !contact.CustomJSON1.IsNull {
-			customJSON1SQL, err = json.Marshal(contact.CustomJSON1.Data)
+			jsonBytes, err := json.Marshal(contact.CustomJSON1.Data)
 			if err != nil {
 				return false, fmt.Errorf("failed to marshal CustomJSON1: %w", err)
 			}
+			customJSON1SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
-			customJSON1SQL = nil
+			customJSON1SQL = sql.NullString{Valid: false}
 		}
 	}
 	if contact.CustomJSON2 != nil {
 		if !contact.CustomJSON2.IsNull {
-			customJSON2SQL, err = json.Marshal(contact.CustomJSON2.Data)
+			jsonBytes, err := json.Marshal(contact.CustomJSON2.Data)
 			if err != nil {
 				return false, fmt.Errorf("failed to marshal CustomJSON2: %w", err)
 			}
+			customJSON2SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
-			customJSON2SQL = nil
+			customJSON2SQL = sql.NullString{Valid: false}
 		}
 	}
 	if contact.CustomJSON3 != nil {
 		if !contact.CustomJSON3.IsNull {
-			customJSON3SQL, err = json.Marshal(contact.CustomJSON3.Data)
+			jsonBytes, err := json.Marshal(contact.CustomJSON3.Data)
 			if err != nil {
 				return false, fmt.Errorf("failed to marshal CustomJSON3: %w", err)
 			}
+			customJSON3SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
-			customJSON3SQL = nil
+			customJSON3SQL = sql.NullString{Valid: false}
 		}
 	}
 	if contact.CustomJSON4 != nil {
 		if !contact.CustomJSON4.IsNull {
-			customJSON4SQL, err = json.Marshal(contact.CustomJSON4.Data)
+			jsonBytes, err := json.Marshal(contact.CustomJSON4.Data)
 			if err != nil {
 				return false, fmt.Errorf("failed to marshal CustomJSON4: %w", err)
 			}
+			customJSON4SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
-			customJSON4SQL = nil
+			customJSON4SQL = sql.NullString{Valid: false}
 		}
 	}
 	if contact.CustomJSON5 != nil {
 		if !contact.CustomJSON5.IsNull {
-			customJSON5SQL, err = json.Marshal(contact.CustomJSON5.Data)
+			jsonBytes, err := json.Marshal(contact.CustomJSON5.Data)
 			if err != nil {
 				return false, fmt.Errorf("failed to marshal CustomJSON5: %w", err)
 			}
+			customJSON5SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
-			customJSON5SQL = nil
+			customJSON5SQL = sql.NullString{Valid: false}
 		}
 	}
 
@@ -902,7 +894,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	)
 
 	if err != nil {
-		return false, fmt.Errorf("failed to upsert contact: %w", err)
+		return false, fmt.Errorf("failed to upsert contact: %w, customJSON1: %v, customJSON2: %v, customJSON3: %v, customJSON4: %v, customJSON5: %v", err, contact.CustomJSON1, contact.CustomJSON2, contact.CustomJSON3, contact.CustomJSON4, contact.CustomJSON5)
 	}
 
 	return isNew, nil
