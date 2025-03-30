@@ -9,10 +9,27 @@ import (
 	"strings"
 	"testing"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
+
+// Helper function to create a handler with public key
+func setupContactHandlerUpsertTest(t *testing.T) (*mocks.MockContactService, *MockLoggerForContact, *ContactHandler) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockContactService(ctrl)
+	mockLogger := &MockLoggerForContact{}
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewContactHandler(mockService, publicKey, mockLogger)
+	return mockService, mockLogger, handler
+}
 
 func TestContactHandler_HandleUpsert(t *testing.T) {
 	testCases := []struct {
@@ -131,13 +148,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactService(ctrl)
-			mockLogger := &MockLoggerForContact{}
-			handler := NewContactHandler(mockService, mockLogger)
-
+			mockService, _, handler := setupContactHandlerUpsertTest(t)
 			tc.setupMock(mockService)
 
 			var reqBody bytes.Buffer
@@ -185,12 +196,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 }
 
 func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockService := mocks.NewMockContactService(ctrl)
-	mockLogger := &MockLoggerForContact{}
-	handler := NewContactHandler(mockService, mockLogger)
+	mockService, _, handler := setupContactHandlerUpsertTest(t)
 
 	// Test case 1: Successful upsert with custom JSON fields
 	reqBody := `{
@@ -291,12 +297,7 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 }
 
 func TestContactHandler_HandleUpsertWithInvalidJSON(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockService := mocks.NewMockContactService(ctrl)
-	mockLogger := &MockLoggerForContact{}
-	handler := NewContactHandler(mockService, mockLogger)
+	mockService, _, handler := setupContactHandlerUpsertTest(t)
 
 	tests := []struct {
 		name           string

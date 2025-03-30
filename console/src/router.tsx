@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, Route, Router } from '@tanstack/react-router'
+import { createRootRoute, createRoute } from '@tanstack/react-router'
 import { RootLayout } from './layouts/RootLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { SignInPage } from './pages/SignInPage'
@@ -12,11 +12,12 @@ import { createRouter } from '@tanstack/react-router'
 export interface ContactsSearch {
   cursor?: string
   email?: string
-  externalId?: string
-  firstName?: string
-  lastName?: string
+  external_id?: string
+  first_name?: string
+  last_name?: string
   phone?: string
   country?: string
+  language?: string
   limit?: number
 }
 
@@ -81,11 +82,12 @@ export const contactsRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): ContactsSearch => ({
     cursor: search.cursor as string | undefined,
     email: search.email as string | undefined,
-    externalId: search.externalId as string | undefined,
-    firstName: search.firstName as string | undefined,
-    lastName: search.lastName as string | undefined,
+    external_id: search.external_id as string | undefined,
+    first_name: search.first_name as string | undefined,
+    last_name: search.last_name as string | undefined,
     phone: search.phone as string | undefined,
     country: search.country as string | undefined,
+    language: search.language as string | undefined,
     limit: search.limit ? Number(search.limit) : 20
   })
 })

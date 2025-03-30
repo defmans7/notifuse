@@ -164,9 +164,9 @@ export function Filter({ fields, activeFilters, className }: FilterProps) {
               }}
               content={
                 <div className="space-y-2" style={{ width: '200px' }}>
-                  {renderFilterInput(field.key)}
+                  <div className="mb-2">{renderFilterInput(field.key)}</div>
                   {activeFilters.some((f) => f.field === field.key) ? (
-                    <div className="flex w-full gap-2 mt-6">
+                    <div className="flex w-full gap-2">
                       <Button
                         type="primary"
                         size="small"

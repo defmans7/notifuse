@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/golang/mock/gomock"
@@ -21,7 +22,12 @@ func TestContactListHandler_RegisterRoutes(t *testing.T) {
 
 	mockService := mocks.NewMockContactListService(ctrl)
 	mockLogger := &MockLoggerForContact{}
-	handler := NewContactListHandler(mockService, mockLogger)
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewContactListHandler(mockService, publicKey, mockLogger)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -114,13 +120,7 @@ func TestContactListHandler_HandleAddContact(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactListService(ctrl)
-			mockLogger := &MockLoggerForContact{}
-			handler := NewContactListHandler(mockService, mockLogger)
-
+			mockService, _, handler := setupContactListHandlerTest(t)
 			tt.setupMock(mockService)
 
 			var reqBody bytes.Buffer
@@ -200,13 +200,7 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactListService(ctrl)
-			mockLogger := &MockLoggerForContact{}
-			handler := NewContactListHandler(mockService, mockLogger)
-
+			mockService, _, handler := setupContactListHandlerTest(t)
 			tt.setupMock(mockService)
 
 			req := httptest.NewRequest(tt.method, "/api/contactLists.getByIDs?"+tt.queryParams, nil)
@@ -284,13 +278,7 @@ func TestContactListHandler_HandleGetContactsByList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactListService(ctrl)
-			mockLogger := &MockLoggerForContact{}
-			handler := NewContactListHandler(mockService, mockLogger)
-
+			mockService, _, handler := setupContactListHandlerTest(t)
 			tt.setupMock(mockService)
 
 			req := httptest.NewRequest(tt.method, "/api/contactLists.getContactsByList?"+tt.queryParams, nil)
@@ -368,13 +356,7 @@ func TestContactListHandler_HandleGetListsByContact(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactListService(ctrl)
-			mockLogger := &MockLoggerForContact{}
-			handler := NewContactListHandler(mockService, mockLogger)
-
+			mockService, _, handler := setupContactListHandlerTest(t)
 			tt.setupMock(mockService)
 
 			req := httptest.NewRequest(tt.method, "/api/contactLists.getListsByContact?"+tt.queryParams, nil)
@@ -456,13 +438,7 @@ func TestContactListHandler_HandleUpdateStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactListService(ctrl)
-			mockLogger := &MockLoggerForContact{}
-			handler := NewContactListHandler(mockService, mockLogger)
-
+			mockService, _, handler := setupContactListHandlerTest(t)
 			tt.setupMock(mockService)
 
 			var reqBody bytes.Buffer
@@ -550,13 +526,7 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactListService(ctrl)
-			mockLogger := &MockLoggerForContact{}
-			handler := NewContactListHandler(mockService, mockLogger)
-
+			mockService, _, handler := setupContactListHandlerTest(t)
 			tt.setupMock(mockService)
 
 			var reqBody bytes.Buffer
@@ -582,4 +552,20 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Helper function to create a handler with public key
+func setupContactListHandlerTest(t *testing.T) (*mocks.MockContactListService, *MockLoggerForContact, *ContactListHandler) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockContactListService(ctrl)
+	mockLogger := &MockLoggerForContact{}
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewContactListHandler(mockService, publicKey, mockLogger)
+	return mockService, mockLogger, handler
 }

@@ -4,30 +4,39 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"aidanwoods.dev/go-paseto"
+
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type ContactListHandler struct {
-	service domain.ContactListService
-	logger  logger.Logger
+	service   domain.ContactListService
+	logger    logger.Logger
+	publicKey paseto.V4AsymmetricPublicKey
 }
 
-func NewContactListHandler(service domain.ContactListService, logger logger.Logger) *ContactListHandler {
+func NewContactListHandler(service domain.ContactListService, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger) *ContactListHandler {
 	return &ContactListHandler{
-		service: service,
-		logger:  logger,
+		service:   service,
+		publicKey: publicKey,
+		logger:    logger,
 	}
 }
 
 func (h *ContactListHandler) RegisterRoutes(mux *http.ServeMux) {
+	// Create auth middleware
+	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
+	requireAuth := authMiddleware.RequireAuth()
+
 	// Register RPC-style endpoints with dot notation
-	mux.HandleFunc("/api/contactLists.addContact", h.handleAddContact)
-	mux.HandleFunc("/api/contactLists.getByIDs", h.handleGetByIDs)
-	mux.HandleFunc("/api/contactLists.getContactsByList", h.handleGetContactsByList)
-	mux.HandleFunc("/api/contactLists.getListsByContact", h.handleGetListsByContact)
-	mux.HandleFunc("/api/contactLists.updateStatus", h.handleUpdateStatus)
-	mux.HandleFunc("/api/contactLists.removeContact", h.handleRemoveContact)
+	mux.Handle("/api/contactLists.addContact", requireAuth(http.HandlerFunc(h.handleAddContact)))
+	mux.Handle("/api/contactLists.getByIDs", requireAuth(http.HandlerFunc(h.handleGetByIDs)))
+	mux.Handle("/api/contactLists.getContactsByList", requireAuth(http.HandlerFunc(h.handleGetContactsByList)))
+	mux.Handle("/api/contactLists.getListsByContact", requireAuth(http.HandlerFunc(h.handleGetListsByContact)))
+	mux.Handle("/api/contactLists.updateStatus", requireAuth(http.HandlerFunc(h.handleUpdateStatus)))
+	mux.Handle("/api/contactLists.removeContact", requireAuth(http.HandlerFunc(h.handleRemoveContact)))
 }
 
 func (h *ContactListHandler) handleAddContact(w http.ResponseWriter, r *http.Request) {

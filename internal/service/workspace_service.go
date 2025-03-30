@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -45,13 +44,10 @@ func NewWorkspaceService(
 // ListWorkspaces returns all workspaces for a user
 func (s *WorkspaceService) ListWorkspaces(ctx context.Context) ([]*domain.Workspace, error) {
 
-	log.Printf("ctx: %+v\n", ctx)
 	user, err := s.authService.AuthenticateUserFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
-
-	log.Printf("user: %+v\n", user)
 
 	userWorkspaces, err := s.repo.GetUserWorkspaces(ctx, user.ID)
 	if err != nil {
@@ -59,7 +55,6 @@ func (s *WorkspaceService) ListWorkspaces(ctx context.Context) ([]*domain.Worksp
 		return nil, err
 	}
 
-	log.Printf("userWorkspaces: %+v\n", userWorkspaces)
 	// Return empty array if user has no workspaces
 	if len(userWorkspaces) == 0 {
 		return []*domain.Workspace{}, nil

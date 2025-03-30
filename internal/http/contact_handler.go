@@ -6,30 +6,39 @@ import (
 	"io"
 	"net/http"
 
+	"aidanwoods.dev/go-paseto"
+
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type ContactHandler struct {
-	service domain.ContactService
-	logger  logger.Logger
+	service   domain.ContactService
+	logger    logger.Logger
+	publicKey paseto.V4AsymmetricPublicKey
 }
 
-func NewContactHandler(service domain.ContactService, logger logger.Logger) *ContactHandler {
+func NewContactHandler(service domain.ContactService, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger) *ContactHandler {
 	return &ContactHandler{
-		service: service,
-		logger:  logger,
+		service:   service,
+		publicKey: publicKey,
+		logger:    logger,
 	}
 }
 
 func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
+	// Create auth middleware
+	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
+	requireAuth := authMiddleware.RequireAuth()
+
 	// Register RPC-style endpoints with dot notation
-	mux.HandleFunc("/api/contacts.list", h.handleList)
-	mux.HandleFunc("/api/contacts.getByEmail", h.handleGetByEmail)
-	mux.HandleFunc("/api/contacts.getByExternalID", h.handleGetByExternalID)
-	mux.HandleFunc("/api/contacts.delete", h.handleDelete)
-	mux.HandleFunc("/api/contacts.import", h.handleImport)
-	mux.HandleFunc("/api/contacts.upsert", h.handleUpsert)
+	mux.Handle("/api/contacts.list", requireAuth(http.HandlerFunc(h.handleList)))
+	mux.Handle("/api/contacts.getByEmail", requireAuth(http.HandlerFunc(h.handleGetByEmail)))
+	mux.Handle("/api/contacts.getByExternalID", requireAuth(http.HandlerFunc(h.handleGetByExternalID)))
+	mux.Handle("/api/contacts.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
+	mux.Handle("/api/contacts.import", requireAuth(http.HandlerFunc(h.handleImport)))
+	mux.Handle("/api/contacts.upsert", requireAuth(http.HandlerFunc(h.handleUpsert)))
 }
 
 func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {

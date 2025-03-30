@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -55,7 +56,12 @@ func setupListHandlerTest(t *testing.T) (*mocks.MockListService, *MockLoggerForL
 	defer ctrl.Finish()
 	mockService := mocks.NewMockListService(ctrl)
 	mockLogger := &MockLoggerForList{LoggedMessages: []string{}}
-	handler := NewListHandler(mockService, mockLogger)
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewListHandler(mockService, publicKey, mockLogger)
 	return mockService, mockLogger, handler
 }
 

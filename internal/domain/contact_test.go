@@ -1056,6 +1056,7 @@ func TestGetContactsRequest_FromQueryParams(t *testing.T) {
 				"last_name":    []string{"Doe"},
 				"phone":        []string{"+1234567890"},
 				"country":      []string{"US"},
+				"language":     []string{"en"},
 				"limit":        []string{"50"},
 				"cursor":       []string{"cursor123"},
 			},
@@ -1068,6 +1069,7 @@ func TestGetContactsRequest_FromQueryParams(t *testing.T) {
 				LastName:    "Doe",
 				Phone:       "+1234567890",
 				Country:     "US",
+				Language:    "en",
 				Limit:       50,
 				Cursor:      "cursor123",
 			},
@@ -1122,6 +1124,7 @@ func TestGetContactsRequest_FromQueryParams(t *testing.T) {
 				assert.Equal(t, tt.wantResult.LastName, req.LastName)
 				assert.Equal(t, tt.wantResult.Phone, req.Phone)
 				assert.Equal(t, tt.wantResult.Country, req.Country)
+				assert.Equal(t, tt.wantResult.Language, req.Language)
 				assert.Equal(t, tt.wantResult.Limit, req.Limit)
 				assert.Equal(t, tt.wantResult.Cursor, req.Cursor)
 			}

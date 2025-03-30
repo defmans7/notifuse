@@ -77,7 +77,6 @@ func (s *AuthService) AuthenticateUserForWorkspace(ctx context.Context, workspac
 	if err != nil {
 		return nil, err
 	}
-
 	// get worspace user
 	_, err = s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
 	if err != nil {

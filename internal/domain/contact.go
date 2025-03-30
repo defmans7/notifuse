@@ -358,6 +358,7 @@ type GetContactsRequest struct {
 	LastName   string `json:"last_name,omitempty" valid:"optional"`
 	Phone      string `json:"phone,omitempty" valid:"optional"`
 	Country    string `json:"country,omitempty" valid:"optional"`
+	Language   string `json:"language,omitempty" valid:"optional"`
 
 	// Pagination
 	Limit  int    `json:"limit,omitempty" valid:"optional,range(1|100)"`
@@ -372,7 +373,7 @@ func (r *GetContactsRequest) FromQueryParams(queryParams url.Values) (err error)
 	r.LastName = queryParams.Get("last_name")
 	r.Phone = queryParams.Get("phone")
 	r.Country = queryParams.Get("country")
-
+	r.Language = queryParams.Get("language")
 	// handle limit and cursor
 	r.Limit, err = strconv.Atoi(queryParams.Get("limit"))
 	if err != nil {

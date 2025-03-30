@@ -21,50 +21,54 @@ import React from 'react'
 import { contactsRoute } from '../router'
 import { Filter } from '../components/filters/Filter'
 import { PlusOutlined } from '@ant-design/icons'
+import { CountriesFormOptions, TimezonesFormOptions } from '../components/utils/countries_timezones'
+import { Languages } from '../components/utils/languages'
+import { FilterField } from '../components/filters/types'
 
 const { Option } = Select
 const { Text } = Typography
 
-const filterFields = [
+const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
-  { key: 'firstName', label: 'First Name', type: 'string' as const },
-  { key: 'lastName', label: 'Last Name', type: 'string' as const },
+  { key: 'external_id', label: 'External ID', type: 'string' as const },
+  { key: 'first_name', label: 'First Name', type: 'string' as const },
+  { key: 'last_name', label: 'Last Name', type: 'string' as const },
   { key: 'phone', label: 'Phone', type: 'string' as const },
-  { key: 'country', label: 'Country', type: 'string' as const },
-  { key: 'externalId', label: 'External ID', type: 'string' as const }
+  { key: 'language', label: 'Language', type: 'string' as const, options: Languages },
+  { key: 'country', label: 'Country', type: 'string' as const, options: CountriesFormOptions }
 ]
 
 const optionalFields = [
-  { key: 'firstName', label: 'First Name' },
-  { key: 'lastName', label: 'Last Name' },
+  { key: 'first_name', label: 'First Name' },
+  { key: 'last_name', label: 'Last Name' },
   { key: 'phone', label: 'Phone' },
   { key: 'country', label: 'Country' },
-  { key: 'externalId', label: 'External ID' },
+  { key: 'external_id', label: 'External ID' },
   { key: 'timezone', label: 'Timezone' },
   { key: 'language', label: 'Language' },
-  { key: 'addressLine1', label: 'Address Line 1' },
-  { key: 'addressLine2', label: 'Address Line 2' },
+  { key: 'address_line_1', label: 'Address Line 1' },
+  { key: 'address_line_2', label: 'Address Line 2' },
   { key: 'postcode', label: 'Postcode' },
   { key: 'state', label: 'State' },
-  { key: 'jobTitle', label: 'Job Title' },
-  { key: 'lifetimeValue', label: 'Lifetime Value' },
-  { key: 'ordersCount', label: 'Orders Count' },
-  { key: 'lastOrderAt', label: 'Last Order At' },
-  { key: 'customString1', label: 'Custom String 1' },
-  { key: 'customString2', label: 'Custom String 2' },
-  { key: 'customString3', label: 'Custom String 3' },
-  { key: 'customString4', label: 'Custom String 4' },
-  { key: 'customString5', label: 'Custom String 5' },
-  { key: 'customNumber1', label: 'Custom Number 1' },
-  { key: 'customNumber2', label: 'Custom Number 2' },
-  { key: 'customNumber3', label: 'Custom Number 3' },
-  { key: 'customNumber4', label: 'Custom Number 4' },
-  { key: 'customNumber5', label: 'Custom Number 5' },
-  { key: 'customDatetime1', label: 'Custom Date 1' },
-  { key: 'customDatetime2', label: 'Custom Date 2' },
-  { key: 'customDatetime3', label: 'Custom Date 3' },
-  { key: 'customDatetime4', label: 'Custom Date 4' },
-  { key: 'customDatetime5', label: 'Custom Date 5' }
+  { key: 'job_title', label: 'Job Title' },
+  { key: 'lifetime_value', label: 'Lifetime Value' },
+  { key: 'orders_count', label: 'Orders Count' },
+  { key: 'last_order_at', label: 'Last Order At' },
+  { key: 'custom_string_1', label: 'Custom String 1' },
+  { key: 'custom_string_2', label: 'Custom String 2' },
+  { key: 'custom_string_3', label: 'Custom String 3' },
+  { key: 'custom_string_4', label: 'Custom String 4' },
+  { key: 'custom_string_5', label: 'Custom String 5' },
+  { key: 'custom_number_1', label: 'Custom Number 1' },
+  { key: 'custom_number_2', label: 'Custom Number 2' },
+  { key: 'custom_number_3', label: 'Custom Number 3' },
+  { key: 'custom_number_4', label: 'Custom Number 4' },
+  { key: 'custom_number_5', label: 'Custom Number 5' },
+  { key: 'custom_datetime_1', label: 'Custom Date 1' },
+  { key: 'custom_datetime_2', label: 'Custom Date 2' },
+  { key: 'custom_datetime_3', label: 'Custom Date 3' },
+  { key: 'custom_datetime_4', label: 'Custom Date 4' },
+  { key: 'custom_datetime_5', label: 'Custom Date 5' }
 ]
 
 export function ContactsPage() {
@@ -96,15 +100,16 @@ export function ContactsPage() {
     queryKey: ['contacts', workspaceId, search],
     queryFn: () => {
       const request: ListContactsRequest = {
-        workspaceId,
+        workspace_id: workspaceId,
         cursor: search.cursor,
         limit: search.limit || 20,
         email: search.email,
-        externalId: search.externalId,
-        firstName: search.firstName,
-        lastName: search.lastName,
+        external_id: search.external_id,
+        first_name: search.first_name,
+        last_name: search.last_name,
         phone: search.phone,
-        country: search.country
+        country: search.country,
+        language: search.language
       }
       return contactsApi.list(request)
     }
@@ -265,13 +270,13 @@ export function ContactsPage() {
             // Render appropriate input based on field type
             let inputComponent
             if (
-              field === 'lifetimeValue' ||
-              field === 'ordersCount' ||
-              field === 'customNumber1' ||
-              field === 'customNumber2' ||
-              field === 'customNumber3' ||
-              field === 'customNumber4' ||
-              field === 'customNumber5'
+              field === 'lifetime_value' ||
+              field === 'orders_count' ||
+              field === 'custom_number_1' ||
+              field === 'custom_number_2' ||
+              field === 'custom_number_3' ||
+              field === 'custom_number_4' ||
+              field === 'custom_number_5'
             ) {
               inputComponent = (
                 <InputNumber
@@ -280,39 +285,37 @@ export function ContactsPage() {
                 />
               )
             } else if (
-              field === 'lastOrderAt' ||
-              field === 'customDatetime1' ||
-              field === 'customDatetime2' ||
-              field === 'customDatetime3' ||
-              field === 'customDatetime4' ||
-              field === 'customDatetime5'
+              field === 'last_order_at' ||
+              field === 'custom_datetime_1' ||
+              field === 'custom_datetime_2' ||
+              field === 'custom_datetime_3' ||
+              field === 'custom_datetime_4' ||
+              field === 'custom_datetime_5'
             ) {
               inputComponent = <DatePicker showTime style={{ width: '100%' }} />
             } else if (field === 'timezone') {
               inputComponent = (
-                <Select placeholder="Select timezone" style={{ width: '100%' }}>
-                  <Option value="UTC">UTC</Option>
-                  <Option value="America/New_York">Eastern Time (ET)</Option>
-                  <Option value="America/Chicago">Central Time (CT)</Option>
-                  <Option value="America/Denver">Mountain Time (MT)</Option>
-                  <Option value="America/Los_Angeles">Pacific Time (PT)</Option>
-                  <Option value="Europe/London">London</Option>
-                  <Option value="Europe/Paris">Paris</Option>
-                  <Option value="Asia/Tokyo">Tokyo</Option>
-                </Select>
+                <Select
+                  placeholder="Select timezone"
+                  style={{ width: '100%' }}
+                  options={TimezonesFormOptions}
+                />
+              )
+            } else if (field === 'country') {
+              inputComponent = (
+                <Select
+                  placeholder="Select country"
+                  style={{ width: '100%' }}
+                  options={CountriesFormOptions}
+                />
               )
             } else if (field === 'language') {
               inputComponent = (
-                <Select placeholder="Select language" style={{ width: '100%' }}>
-                  <Option value="en">English</Option>
-                  <Option value="es">Spanish</Option>
-                  <Option value="fr">French</Option>
-                  <Option value="de">German</Option>
-                  <Option value="it">Italian</Option>
-                  <Option value="pt">Portuguese</Option>
-                  <Option value="ja">Japanese</Option>
-                  <Option value="zh">Chinese</Option>
-                </Select>
+                <Select
+                  placeholder="Select language"
+                  style={{ width: '100%' }}
+                  options={Languages}
+                />
               )
             } else {
               inputComponent = <Input placeholder={`Enter ${fieldInfo?.label?.toLowerCase()}`} />

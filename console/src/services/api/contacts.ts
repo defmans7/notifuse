@@ -1,14 +1,15 @@
 import { api } from './client'
 
 export interface ListContactsRequest {
-  workspaceId: string
+  workspace_id: string
   // Optional filters
   email?: string
-  externalId?: string
-  firstName?: string
-  lastName?: string
+  external_id?: string
+  first_name?: string
+  last_name?: string
   phone?: string
   country?: string
+  language?: string
   // Pagination
   limit?: number
   cursor?: string
@@ -38,15 +39,16 @@ export const contactsApi = {
     const searchParams = new URLSearchParams()
 
     // Add required param
-    searchParams.append('workspaceId', params.workspaceId)
+    searchParams.append('workspace_id', params.workspace_id)
 
     // Add optional params if they exist
     if (params.email) searchParams.append('email', params.email)
-    if (params.externalId) searchParams.append('externalId', params.externalId)
-    if (params.firstName) searchParams.append('firstName', params.firstName)
-    if (params.lastName) searchParams.append('lastName', params.lastName)
+    if (params.external_id) searchParams.append('external_id', params.external_id)
+    if (params.first_name) searchParams.append('first_name', params.first_name)
+    if (params.last_name) searchParams.append('last_name', params.last_name)
     if (params.phone) searchParams.append('phone', params.phone)
     if (params.country) searchParams.append('country', params.country)
+    if (params.language) searchParams.append('language', params.language)
     if (params.limit) searchParams.append('limit', params.limit.toString())
     if (params.cursor) searchParams.append('cursor', params.cursor)
 

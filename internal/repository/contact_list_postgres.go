@@ -99,7 +99,7 @@ func (r *contactListRepository) GetContactsByListID(ctx context.Context, workspa
 	}
 	defer rows.Close()
 
-	var contactLists []*domain.ContactList
+	contactLists := make([]*domain.ContactList, 0)
 	for rows.Next() {
 		contactList, err := domain.ScanContactList(rows)
 		if err != nil {
@@ -136,7 +136,7 @@ func (r *contactListRepository) GetListsByEmail(ctx context.Context, workspaceID
 	}
 	defer rows.Close()
 
-	var contactLists []*domain.ContactList
+	contactLists := make([]*domain.ContactList, 0)
 	for rows.Next() {
 		contactList, err := domain.ScanContactList(rows)
 		if err != nil {

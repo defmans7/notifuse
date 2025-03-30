@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -52,9 +53,16 @@ func (l *MockLoggerForContact) Fatal(message string) {
 // Test setup helper
 func setupContactHandlerTest(t *testing.T) (*mocks.MockContactService, *MockLoggerForContact, *ContactHandler) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	mockService := mocks.NewMockContactService(ctrl)
 	mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
-	handler := NewContactHandler(mockService, mockLogger)
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewContactHandler(mockService, publicKey, mockLogger)
 	return mockService, mockLogger, handler
 }
 
@@ -148,13 +156,7 @@ func TestContactHandler_HandleList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactService(ctrl)
-			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
-
-			handler := NewContactHandler(mockService, mockLogger)
+			mockService, _, handler := setupContactHandlerTest(t)
 
 			// Setup mock expectations
 			if tc.setupMock != nil {
@@ -247,13 +249,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactService(ctrl)
-			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
-
-			handler := NewContactHandler(mockService, mockLogger)
+			mockService, _, handler := setupContactHandlerTest(t)
 
 			// Set up mock expectations only for test cases that should call the service
 			if tc.method == http.MethodGet && tc.contactEmail != "" {
@@ -367,13 +363,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactService(ctrl)
-			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
-
-			handler := NewContactHandler(mockService, mockLogger)
+			mockService, _, handler := setupContactHandlerTest(t)
 
 			// Setup mock expectations
 			if tc.setupMock != nil {
@@ -494,13 +484,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactService(ctrl)
-			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
-
-			handler := NewContactHandler(mockService, mockLogger)
+			mockService, _, handler := setupContactHandlerTest(t)
 
 			// Setup mock expectations
 			if tc.setupMock != nil {
@@ -632,13 +616,7 @@ func TestContactHandler_HandleImport(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockService := mocks.NewMockContactService(ctrl)
-			mockLogger := &MockLoggerForContact{LoggedMessages: []string{}}
-
-			handler := NewContactHandler(mockService, mockLogger)
+			mockService, _, handler := setupContactHandlerTest(t)
 
 			// Setup mock expectations
 			if tc.setupMock != nil {

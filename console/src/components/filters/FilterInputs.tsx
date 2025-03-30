@@ -49,6 +49,11 @@ export function SelectFilterInput({ field, value, onChange, className }: FilterI
       onChange={onChange}
       options={field.options}
       className={className}
+      style={{ width: '100%' }}
+      showSearch
+      filterOption={(input, option) =>
+        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+      }
     />
   )
 }

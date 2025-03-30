@@ -4,29 +4,38 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type ListHandler struct {
-	service domain.ListService
-	logger  logger.Logger
+	service   domain.ListService
+	logger    logger.Logger
+	publicKey paseto.V4AsymmetricPublicKey
 }
 
-func NewListHandler(service domain.ListService, logger logger.Logger) *ListHandler {
+func NewListHandler(service domain.ListService, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger) *ListHandler {
 	return &ListHandler{
-		service: service,
-		logger:  logger,
+		service:   service,
+		logger:    logger,
+		publicKey: publicKey,
 	}
 }
 
 func (h *ListHandler) RegisterRoutes(mux *http.ServeMux) {
+
+	// Create auth middleware
+	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
+	requireAuth := authMiddleware.RequireAuth()
+
 	// Register RPC-style endpoints with dot notation
-	mux.HandleFunc("/api/lists.list", h.handleList)
-	mux.HandleFunc("/api/lists.get", h.handleGet)
-	mux.HandleFunc("/api/lists.create", h.handleCreate)
-	mux.HandleFunc("/api/lists.update", h.handleUpdate)
-	mux.HandleFunc("/api/lists.delete", h.handleDelete)
+	mux.Handle("/api/lists.list", requireAuth(http.HandlerFunc(h.handleList)))
+	mux.Handle("/api/lists.get", requireAuth(http.HandlerFunc(h.handleGet)))
+	mux.Handle("/api/lists.create", requireAuth(http.HandlerFunc(h.handleCreate)))
+	mux.Handle("/api/lists.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
+	mux.Handle("/api/lists.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 }
 
 func (h *ListHandler) handleList(w http.ResponseWriter, r *http.Request) {

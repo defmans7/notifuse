@@ -178,10 +178,11 @@ func (a *App) InitServices() error {
 
 	// Create auth service first
 	a.authService, err = service.NewAuthService(service.AuthServiceConfig{
-		Repository: a.authRepo,
-		PrivateKey: a.config.Security.PasetoPrivateKeyBytes,
-		PublicKey:  a.config.Security.PasetoPublicKeyBytes,
-		Logger:     a.logger,
+		Repository:          a.authRepo,
+		WorkspaceRepository: a.workspaceRepo,
+		PrivateKey:          a.config.Security.PasetoPrivateKeyBytes,
+		PublicKey:           a.config.Security.PasetoPublicKeyBytes,
+		Logger:              a.logger,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create auth service: %w", err)
@@ -233,9 +234,9 @@ func (a *App) InitHandlers() error {
 		a.config.Security.PasetoPublicKey,
 		a.logger)
 	faviconHandler := httpHandler.NewFaviconHandler()
-	contactHandler := httpHandler.NewContactHandler(a.contactService, a.logger)
-	listHandler := httpHandler.NewListHandler(a.listService, a.logger)
-	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, a.logger)
+	contactHandler := httpHandler.NewContactHandler(a.contactService, a.config.Security.PasetoPublicKey, a.logger)
+	listHandler := httpHandler.NewListHandler(a.listService, a.config.Security.PasetoPublicKey, a.logger)
+	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, a.config.Security.PasetoPublicKey, a.logger)
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)

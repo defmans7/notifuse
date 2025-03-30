@@ -186,7 +186,7 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 	}
 	defer rows.Close()
 
-	var contacts []*domain.Contact
+	contacts := make([]*domain.Contact, 0) // Initialize as empty slice
 	for rows.Next() {
 		contact, err := domain.ScanContact(rows)
 		if err != nil {
