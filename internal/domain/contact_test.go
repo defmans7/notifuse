@@ -1359,7 +1359,7 @@ func TestUpsertContactRequest_Validate(t *testing.T) {
 }
 
 func TestErrContactNotFound_Error(t *testing.T) {
-	err := &ErrContactNotFound{Message: "contact not found"}
+	err := fmt.Errorf("contact not found")
 	assert.Equal(t, "contact not found", err.Error())
 }
 

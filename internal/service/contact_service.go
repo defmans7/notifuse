@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -34,7 +35,7 @@ func (s *ContactService) GetContactByEmail(ctx context.Context, email string, wo
 
 	contact, err := s.repo.GetContactByEmail(ctx, email, workspaceID)
 	if err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
+		if strings.Contains(err.Error(), "contact not found") {
 			return nil, err
 		}
 		s.logger.WithField("email", email).Error(fmt.Sprintf("Failed to get contact by email: %v", err))
@@ -53,7 +54,7 @@ func (s *ContactService) GetContactByExternalID(ctx context.Context, externalID 
 
 	contact, err := s.repo.GetContactByExternalID(ctx, externalID, workspaceID)
 	if err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
+		if strings.Contains(err.Error(), "contact not found") {
 			return nil, err
 		}
 		s.logger.WithField("external_id", externalID).Error(fmt.Sprintf("Failed to get contact by external ID: %v", err))
@@ -122,11 +123,11 @@ func (s *ContactService) BatchImportContacts(ctx context.Context, workspaceID st
 	return nil
 }
 
-func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
+func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) error {
 
 	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
-		return false, fmt.Errorf("failed to authenticate user: %w", err)
+		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -137,14 +138,14 @@ func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, 
 	contact.UpdatedAt = now
 
 	if err := contact.Validate(); err != nil {
-		return false, fmt.Errorf("invalid contact: %w", err)
+		return fmt.Errorf("invalid contact: %w", err)
 	}
 
-	created, err := s.repo.UpsertContact(ctx, workspaceID, contact)
+	err = s.repo.UpsertContact(ctx, workspaceID, contact)
 	if err != nil {
 		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Failed to upsert contact: %v", err))
-		return false, fmt.Errorf("failed to upsert contact: %w", err)
+		return fmt.Errorf("failed to upsert contact: %w", err)
 	}
 
-	return created, nil
+	return nil
 }

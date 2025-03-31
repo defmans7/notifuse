@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -22,70 +23,40 @@ func NewContactRepository(workspaceRepo domain.WorkspaceRepository) domain.Conta
 	}
 }
 
-func (r *contactRepository) GetContactByEmail(ctx context.Context, email string, workspaceID string) (*domain.Contact, error) {
-	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+func (r *contactRepository) GetContactByEmail(ctx context.Context, email, workspaceID string) (*domain.Contact, error) {
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `
-		SELECT 
-			email, external_id, timezone, language,
-			first_name, last_name, phone, address_line_1, address_line_2,
-			country, postcode, state, job_title,
-			lifetime_value, orders_count, last_order_at,
-			custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
-			custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
-			custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
-			custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5,
-			created_at, updated_at
-		FROM contacts
-		WHERE email = $1
-	`
+	query := `SELECT c.* FROM contacts c WHERE c.email = $1`
+	row := db.QueryRowContext(ctx, query, email)
 
-	row := workspaceDB.QueryRowContext(ctx, query, email)
 	contact, err := domain.ScanContact(row)
-
-	if err == sql.ErrNoRows {
-		return nil, &domain.ErrContactNotFound{Message: "contact not found"}
-	}
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("contact not found")
+		}
 		return nil, fmt.Errorf("failed to get contact: %w", err)
 	}
 
 	return contact, nil
 }
 
-func (r *contactRepository) GetContactByExternalID(ctx context.Context, externalID string, workspaceID string) (*domain.Contact, error) {
-	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+func (r *contactRepository) GetContactByExternalID(ctx context.Context, externalID, workspaceID string) (*domain.Contact, error) {
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `
-		SELECT 
-			email, external_id, timezone, language,
-			first_name, last_name, phone, address_line_1, address_line_2,
-			country, postcode, state, job_title,
-			lifetime_value, orders_count, last_order_at,
-			custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
-			custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
-			custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
-			custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5,
-			created_at, updated_at
-		FROM contacts
-		WHERE external_id = $1
-	`
+	query := `SELECT c.* FROM contacts c WHERE c.external_id = $1`
+	row := db.QueryRowContext(ctx, query, externalID)
 
-	row := workspaceDB.QueryRowContext(ctx, query, externalID)
 	contact, err := domain.ScanContact(row)
-
-	if err == sql.ErrNoRows {
-		return nil, &domain.ErrContactNotFound{Message: "contact not found"}
-	}
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("contact not found")
+		}
 		return nil, fmt.Errorf("failed to get contact: %w", err)
 	}
 
@@ -93,119 +64,134 @@ func (r *contactRepository) GetContactByExternalID(ctx context.Context, external
 }
 
 func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetContactsRequest) (*domain.GetContactsResponse, error) {
-	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, req.WorkspaceID)
+	db, err := r.workspaceRepo.GetConnection(ctx, req.WorkspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	// Build the base query
-	baseQuery := `
-		SELECT 
-			email, external_id, timezone, language,
-			first_name, last_name, phone, address_line_1, address_line_2,
-			country, postcode, state, job_title,
-			lifetime_value, orders_count, last_order_at,
-			custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
-			custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
-			custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
-			custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5,
-			created_at, updated_at
-		FROM contacts
-	`
+	// Build the query
+	query := strings.Builder{}
+	query.WriteString("SELECT c.* ")
+	if req.WithContactLists {
+		query.WriteString(", cl.list_id, cl.status, cl.created_at, cl.updated_at ")
+	}
+	query.WriteString("FROM contacts c ")
+	if req.WithContactLists {
+		query.WriteString("LEFT JOIN contact_lists cl ON c.email = cl.email ")
+	}
 
-	// Build the WHERE clause for filters
-	var conditions []string
+	// Add filters
+	var filters []string
 	var args []interface{}
-	argIndex := 1
+	argCount := 1
 
 	if req.Email != "" {
-		conditions = append(conditions, fmt.Sprintf("email ILIKE $%d", argIndex))
+		filters = append(filters, fmt.Sprintf("c.email ILIKE $%d", argCount))
 		args = append(args, "%"+req.Email+"%")
-		argIndex++
+		argCount++
 	}
 
 	if req.ExternalID != "" {
-		conditions = append(conditions, fmt.Sprintf("external_id ILIKE $%d", argIndex))
+		filters = append(filters, fmt.Sprintf("c.external_id ILIKE $%d", argCount))
 		args = append(args, "%"+req.ExternalID+"%")
-		argIndex++
+		argCount++
 	}
 
 	if req.FirstName != "" {
-		conditions = append(conditions, fmt.Sprintf("first_name ILIKE $%d", argIndex))
+		filters = append(filters, fmt.Sprintf("c.first_name ILIKE $%d", argCount))
 		args = append(args, "%"+req.FirstName+"%")
-		argIndex++
+		argCount++
 	}
 
 	if req.LastName != "" {
-		conditions = append(conditions, fmt.Sprintf("last_name ILIKE $%d", argIndex))
+		filters = append(filters, fmt.Sprintf("c.last_name ILIKE $%d", argCount))
 		args = append(args, "%"+req.LastName+"%")
-		argIndex++
+		argCount++
 	}
 
 	if req.Phone != "" {
-		conditions = append(conditions, fmt.Sprintf("phone ILIKE $%d", argIndex))
+		filters = append(filters, fmt.Sprintf("c.phone ILIKE $%d", argCount))
 		args = append(args, "%"+req.Phone+"%")
-		argIndex++
+		argCount++
 	}
 
 	if req.Country != "" {
-		conditions = append(conditions, fmt.Sprintf("country ILIKE $%d", argIndex))
+		filters = append(filters, fmt.Sprintf("c.country ILIKE $%d", argCount))
 		args = append(args, "%"+req.Country+"%")
-		argIndex++
+		argCount++
 	}
 
-	// Add cursor condition if provided
+	if req.Language != "" {
+		filters = append(filters, fmt.Sprintf("c.language ILIKE $%d", argCount))
+		args = append(args, "%"+req.Language+"%")
+		argCount++
+	}
+
 	if req.Cursor != "" {
-		// Parse the cursor timestamp
+		// Parse cursor as timestamp
 		cursorTime, err := time.Parse(time.RFC3339, req.Cursor)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cursor format: %w", err)
 		}
-		conditions = append(conditions, fmt.Sprintf("created_at < $%d", argIndex))
+		filters = append(filters, fmt.Sprintf("c.created_at < $%d", argCount))
 		args = append(args, cursorTime)
-		argIndex++
+		argCount++
 	}
 
-	// Combine conditions
-	if len(conditions) > 0 {
-		baseQuery += " WHERE " + strings.Join(conditions, " AND ")
+	if len(filters) > 0 {
+		query.WriteString("WHERE " + strings.Join(filters, " AND "))
 	}
 
-	// Always order by created_at DESC for consistent pagination
-	baseQuery += " ORDER BY created_at DESC"
+	// Add order by and limit
+	query.WriteString(" ORDER BY c.created_at DESC")
+	query.WriteString(fmt.Sprintf(" LIMIT $%d", argCount))
+	args = append(args, req.Limit+1) // Get one extra to determine if there are more results
 
-	// Add LIMIT clause (get one extra to determine if there are more results)
-	baseQuery += fmt.Sprintf(" LIMIT $%d", argIndex)
-	args = append(args, req.Limit+1)
-
-	// Execute the query
-	rows, err := workspaceDB.QueryContext(ctx, baseQuery, args...)
+	// Execute query
+	rows, err := db.QueryContext(ctx, query.String(), args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get contacts: %w", err)
+		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 	defer rows.Close()
 
-	contacts := make([]*domain.Contact, 0) // Initialize as empty slice
+	// Process results
+	var contacts []*domain.Contact
+	contactMap := make(map[string]*domain.Contact)
+	var nextCursor string
+
 	for rows.Next() {
 		contact, err := domain.ScanContact(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan contact: %w", err)
 		}
-		contacts = append(contacts, contact)
+
+		// If we're fetching with contact lists, we need to handle multiple rows for the same contact
+		if req.WithContactLists {
+			if existingContact, ok := contactMap[contact.Email]; ok {
+				// If the contact already exists and has a contact list, merge it
+				if len(contact.ContactLists) > 0 {
+					existingContact.MergeContactLists(contact.ContactLists[0])
+				}
+			} else {
+				// This is a new contact
+				contactMap[contact.Email] = contact
+				contacts = append(contacts, contact)
+			}
+		} else {
+			contacts = append(contacts, contact)
+		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating contacts rows: %w", err)
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
 	}
 
 	// Handle pagination
-	var nextCursor string
 	if len(contacts) > req.Limit {
-		// Remove the extra item we fetched
+		// Remove the extra contact we fetched
+		lastContact := contacts[req.Limit-1]
 		contacts = contacts[:req.Limit]
-		// Set the next cursor to the created_at of the last item
-		nextCursor = contacts[len(contacts)-1].CreatedAt.Format(time.RFC3339)
+		nextCursor = lastContact.CreatedAt.Format(time.RFC3339)
 	}
 
 	return &domain.GetContactsResponse{
@@ -234,7 +220,7 @@ func (r *contactRepository) DeleteContact(ctx context.Context, email string, wor
 	}
 
 	if rows == 0 {
-		return &domain.ErrContactNotFound{Message: "contact not found"}
+		return fmt.Errorf("contact not found")
 	}
 
 	return nil
@@ -535,20 +521,19 @@ func buildUpdateQuery(contact *domain.Contact) string {
 	return strings.Join(updates, ", ")
 }
 
-func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
+func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) error {
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
-		return false, fmt.Errorf("failed to get workspace connection: %w", err)
+		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	// Check if contact exists first
-	_, err = r.GetContactByEmail(ctx, contact.Email, workspaceID)
-	isNew := err != nil && err.Error() == (&domain.ErrContactNotFound{Message: "contact not found"}).Error()
-
-	// If there was an error other than "not found", return it
-	if err != nil && !isNew {
-		return false, fmt.Errorf("failed to check if contact exists: %w", err)
+	// Check if contact exists
+	existsQuery := `SELECT EXISTS(SELECT 1 FROM contacts WHERE email = $1)`
+	var exists bool
+	err = workspaceDB.QueryRowContext(ctx, existsQuery, contact.Email).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check if contact exists: %w", err)
 	}
 
 	// Build the base query with dynamic update part
@@ -724,6 +709,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	if contact.CustomNumber4 != nil {
 		if !contact.CustomNumber4.IsNull {
 			customNumber4SQL = sql.NullFloat64{Float64: contact.CustomNumber4.Float64, Valid: true}
+		} else {
+			customNumber4SQL = sql.NullFloat64{Valid: false}
 		}
 	}
 	if contact.CustomNumber5 != nil {
@@ -768,6 +755,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	if contact.CustomDatetime4 != nil {
 		if !contact.CustomDatetime4.IsNull {
 			customDatetime4SQL = sql.NullTime{Time: contact.CustomDatetime4.Time, Valid: true}
+		} else {
+			customDatetime4SQL = sql.NullTime{Valid: false}
 		}
 	}
 	if contact.CustomDatetime5 != nil {
@@ -783,7 +772,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		if !contact.CustomJSON1.IsNull {
 			jsonBytes, err := json.Marshal(contact.CustomJSON1.Data)
 			if err != nil {
-				return false, fmt.Errorf("failed to marshal CustomJSON1: %w", err)
+				return fmt.Errorf("failed to marshal CustomJSON1: %w", err)
 			}
 			customJSON1SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
@@ -794,7 +783,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		if !contact.CustomJSON2.IsNull {
 			jsonBytes, err := json.Marshal(contact.CustomJSON2.Data)
 			if err != nil {
-				return false, fmt.Errorf("failed to marshal CustomJSON2: %w", err)
+				return fmt.Errorf("failed to marshal CustomJSON2: %w", err)
 			}
 			customJSON2SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
@@ -805,7 +794,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		if !contact.CustomJSON3.IsNull {
 			jsonBytes, err := json.Marshal(contact.CustomJSON3.Data)
 			if err != nil {
-				return false, fmt.Errorf("failed to marshal CustomJSON3: %w", err)
+				return fmt.Errorf("failed to marshal CustomJSON3: %w", err)
 			}
 			customJSON3SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
@@ -816,7 +805,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		if !contact.CustomJSON4.IsNull {
 			jsonBytes, err := json.Marshal(contact.CustomJSON4.Data)
 			if err != nil {
-				return false, fmt.Errorf("failed to marshal CustomJSON4: %w", err)
+				return fmt.Errorf("failed to marshal CustomJSON4: %w", err)
 			}
 			customJSON4SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
@@ -827,7 +816,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		if !contact.CustomJSON5.IsNull {
 			jsonBytes, err := json.Marshal(contact.CustomJSON5.Data)
 			if err != nil {
-				return false, fmt.Errorf("failed to marshal CustomJSON5: %w", err)
+				return fmt.Errorf("failed to marshal CustomJSON5: %w", err)
 			}
 			customJSON5SQL = sql.NullString{String: string(jsonBytes), Valid: true}
 		} else {
@@ -894,8 +883,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	)
 
 	if err != nil {
-		return false, fmt.Errorf("failed to upsert contact: %w, customJSON1: %v, customJSON2: %v, customJSON3: %v, customJSON4: %v, customJSON5: %v", err, contact.CustomJSON1, contact.CustomJSON2, contact.CustomJSON3, contact.CustomJSON4, contact.CustomJSON5)
+		return fmt.Errorf("failed to upsert contact: %w, customJSON1: %v, customJSON2: %v, customJSON3: %v, customJSON4: %v, customJSON5: %v", err, contact.CustomJSON1, contact.CustomJSON2, contact.CustomJSON3, contact.CustomJSON4, contact.CustomJSON5)
 	}
 
-	return isNew, nil
+	return nil
 }

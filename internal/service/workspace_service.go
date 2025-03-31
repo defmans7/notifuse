@@ -172,7 +172,7 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
-	_, err = s.contactService.UpsertContact(ctx, id, contact)
+	err = s.contactService.UpsertContact(ctx, id, contact)
 	if err != nil {
 		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create contact for owner")
 		return nil, err

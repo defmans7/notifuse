@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -214,7 +215,7 @@ func TestContactHandler_HandleGet(t *testing.T) {
 			method:          "GET",
 			contactEmail:    "nonexistent@example.com",
 			contact:         nil,
-			err:             &domain.ErrContactNotFound{Message: "contact not found"},
+			err:             fmt.Errorf("contact not found"),
 			expectedStatus:  http.StatusNotFound,
 			expectedContact: false,
 		},
@@ -322,7 +323,7 @@ func TestContactHandler_HandleGetByExternalID(t *testing.T) {
 			setupMock: func(m *mocks.MockContactService) {
 				m.EXPECT().
 					GetContactByExternalID(gomock.Any(), "workspace123", "nonexistent").
-					Return(nil, &domain.ErrContactNotFound{Message: "contact not found"})
+					Return(nil, fmt.Errorf("contact not found"))
 			},
 			expectedStatus:  http.StatusNotFound,
 			expectedContact: false,
@@ -426,7 +427,7 @@ func TestContactHandler_HandleDelete(t *testing.T) {
 				Email:       "nonexistent@example.com",
 			},
 			setupMock: func(m *mocks.MockContactService) {
-				m.EXPECT().DeleteContact(gomock.Any(), "workspace123", "nonexistent@example.com").Return(&domain.ErrContactNotFound{Message: "contact not found"})
+				m.EXPECT().DeleteContact(gomock.Any(), "workspace123", "nonexistent@example.com").Return(fmt.Errorf("contact not found"))
 			},
 			expectedStatus:  http.StatusNotFound,
 			expectedMessage: "Contact not found",

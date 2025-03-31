@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -68,6 +69,9 @@ type Contact struct {
 	// Timestamps
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// Join contact_lists
+	ContactLists []*ContactList `json:"contact_lists,omitempty"`
 }
 
 // Validate ensures that the contact has all required fields
@@ -138,7 +142,11 @@ func ScanContact(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*Contact, error) {
 	var dbc dbContact
-	if err := scanner.Scan(
+	var listID, listStatus sql.NullString
+	var listCreatedAt, listUpdatedAt sql.NullTime
+
+	// Try to scan with contact list fields first
+	err := scanner.Scan(
 		&dbc.Email,
 		&dbc.ExternalID,
 		&dbc.Timezone,
@@ -177,8 +185,58 @@ func ScanContact(scanner interface {
 		&dbc.CustomJSON5,
 		&dbc.CreatedAt,
 		&dbc.UpdatedAt,
-	); err != nil {
-		return nil, err
+		&listID,
+		&listStatus,
+		&listCreatedAt,
+		&listUpdatedAt,
+	)
+
+	// If we get an error about the number of arguments, try scanning without contact list fields
+	if err != nil && strings.Contains(err.Error(), "expected") && strings.Contains(err.Error(), "destination arguments") {
+		err = scanner.Scan(
+			&dbc.Email,
+			&dbc.ExternalID,
+			&dbc.Timezone,
+			&dbc.Language,
+			&dbc.FirstName,
+			&dbc.LastName,
+			&dbc.Phone,
+			&dbc.AddressLine1,
+			&dbc.AddressLine2,
+			&dbc.Country,
+			&dbc.Postcode,
+			&dbc.State,
+			&dbc.JobTitle,
+			&dbc.LifetimeValue,
+			&dbc.OrdersCount,
+			&dbc.LastOrderAt,
+			&dbc.CustomString1,
+			&dbc.CustomString2,
+			&dbc.CustomString3,
+			&dbc.CustomString4,
+			&dbc.CustomString5,
+			&dbc.CustomNumber1,
+			&dbc.CustomNumber2,
+			&dbc.CustomNumber3,
+			&dbc.CustomNumber4,
+			&dbc.CustomNumber5,
+			&dbc.CustomDatetime1,
+			&dbc.CustomDatetime2,
+			&dbc.CustomDatetime3,
+			&dbc.CustomDatetime4,
+			&dbc.CustomDatetime5,
+			&dbc.CustomJSON1,
+			&dbc.CustomJSON2,
+			&dbc.CustomJSON3,
+			&dbc.CustomJSON4,
+			&dbc.CustomJSON5,
+			&dbc.CreatedAt,
+			&dbc.UpdatedAt,
+		)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan contact: %w", err)
 	}
 
 	c := &Contact{
@@ -343,6 +401,19 @@ func ScanContact(scanner interface {
 		}
 	}
 
+	// If we have contact list information, add it to the contact
+	if listID.Valid {
+		c.ContactLists = []*ContactList{
+			{
+				Email:     c.Email,
+				ListID:    listID.String,
+				Status:    ContactListStatus(listStatus.String),
+				CreatedAt: listCreatedAt.Time,
+				UpdatedAt: listUpdatedAt.Time,
+			},
+		}
+	}
+
 	return c, nil
 }
 
@@ -360,30 +431,57 @@ type GetContactsRequest struct {
 	Country    string `json:"country,omitempty" valid:"optional"`
 	Language   string `json:"language,omitempty" valid:"optional"`
 
+	// Join contact_lists
+	WithContactLists bool `json:"with_contact_lists,omitempty" valid:"optional"`
+
 	// Pagination
 	Limit  int    `json:"limit,omitempty" valid:"optional,range(1|100)"`
 	Cursor string `json:"cursor,omitempty" valid:"optional"`
 }
 
-func (r *GetContactsRequest) FromQueryParams(queryParams url.Values) (err error) {
-	r.WorkspaceID = queryParams.Get("workspace_id")
-	r.Email = queryParams.Get("email")
-	r.ExternalID = queryParams.Get("external_id")
-	r.FirstName = queryParams.Get("first_name")
-	r.LastName = queryParams.Get("last_name")
-	r.Phone = queryParams.Get("phone")
-	r.Country = queryParams.Get("country")
-	r.Language = queryParams.Get("language")
-	// handle limit and cursor
-	r.Limit, err = strconv.Atoi(queryParams.Get("limit"))
-	if err != nil {
-		return fmt.Errorf("invalid limit: %w", err)
-	}
-	r.Cursor = queryParams.Get("cursor")
+// FromQueryParams populates the request from URL query parameters
+func (r *GetContactsRequest) FromQueryParams(params url.Values) error {
+	r.WorkspaceID = params.Get("workspace_id")
+	r.Email = params.Get("email")
+	r.ExternalID = params.Get("external_id")
+	r.FirstName = params.Get("first_name")
+	r.LastName = params.Get("last_name")
+	r.Phone = params.Get("phone")
+	r.Country = params.Get("country")
+	r.Language = params.Get("language")
+	r.Cursor = params.Get("cursor")
 
-	// Validate the request
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid request: %w", err)
+	// Validate workspace ID
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	// Parse limit
+	if limitStr := params.Get("limit"); limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			return fmt.Errorf("invalid limit: %w", err)
+		}
+		if limit < 1 || limit > 100 {
+			return fmt.Errorf("limit must be between 1 and 100")
+		}
+		r.Limit = limit
+	}
+
+	// Parse with_contact_lists
+	if withContactListsStr := params.Get("with_contact_lists"); withContactListsStr != "" {
+		withContactLists, err := strconv.ParseBool(withContactListsStr)
+		if err != nil {
+			return fmt.Errorf("invalid with_contact_lists: %w", err)
+		}
+		r.WithContactLists = withContactLists
+	}
+
+	// Validate email format if provided
+	if r.Email != "" {
+		if !govalidator.IsEmail(r.Email) {
+			return fmt.Errorf("invalid email format")
+		}
 	}
 
 	return nil
@@ -515,8 +613,7 @@ type ContactService interface {
 	BatchImportContacts(ctx context.Context, workspaceID string, contacts []*Contact) error
 
 	// UpsertContact creates a new contact or updates an existing one
-	// Returns a boolean indicating whether a new contact was created (true) or an existing one was updated (false)
-	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (bool, error)
+	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) error
 }
 
 type ContactRepository interface {
@@ -536,16 +633,7 @@ type ContactRepository interface {
 	BatchImportContacts(ctx context.Context, workspaceID string, contacts []*Contact) error
 
 	// UpsertContact creates a new contact or updates an existing one
-	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (bool, error)
-}
-
-// ErrContactNotFound is returned when a contact is not found
-type ErrContactNotFound struct {
-	Message string
-}
-
-func (e *ErrContactNotFound) Error() string {
-	return e.Message
+	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) error
 }
 
 // FromJSON parses JSON data into a Contact struct
@@ -907,4 +995,25 @@ func (c *Contact) Merge(other *Contact) {
 	if !other.UpdatedAt.IsZero() {
 		c.UpdatedAt = other.UpdatedAt
 	}
+}
+
+// MergeContactLists merges a new contact list into the contact's existing lists
+func (c *Contact) MergeContactLists(list *ContactList) {
+	// If this is the first list, initialize the slice
+	if c.ContactLists == nil {
+		c.ContactLists = []*ContactList{list}
+		return
+	}
+
+	// Check if the list already exists
+	for i, existingList := range c.ContactLists {
+		if existingList.ListID == list.ListID {
+			// Update the existing list
+			c.ContactLists[i] = list
+			return
+		}
+	}
+
+	// If we get here, this is a new list, so append it
+	c.ContactLists = append(c.ContactLists, list)
 }

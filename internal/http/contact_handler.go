@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"aidanwoods.dev/go-paseto"
 
@@ -91,7 +93,7 @@ func (h *ContactHandler) handleGetByEmail(w http.ResponseWriter, r *http.Request
 
 	contact, err := h.service.GetContactByEmail(r.Context(), workspaceID, email)
 	if err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
+		if strings.Contains(err.Error(), "contact not found") {
 			WriteJSONError(w, "Contact not found", http.StatusNotFound)
 			return
 		}
@@ -125,7 +127,7 @@ func (h *ContactHandler) handleGetByExternalID(w http.ResponseWriter, r *http.Re
 
 	contact, err := h.service.GetContactByExternalID(r.Context(), workspaceID, externalID)
 	if err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
+		if strings.Contains(err.Error(), "contact not found") {
 			WriteJSONError(w, "Contact not found", http.StatusNotFound)
 			return
 		}
@@ -158,7 +160,7 @@ func (h *ContactHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.DeleteContact(r.Context(), req.WorkspaceID, req.Email); err != nil {
-		if _, ok := err.(*domain.ErrContactNotFound); ok {
+		if strings.Contains(err.Error(), "contact not found") {
 			WriteJSONError(w, "Contact not found", http.StatusNotFound)
 			return
 		}
@@ -250,22 +252,21 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isNew, err := h.service.UpsertContact(r.Context(), workspaceID, contact)
+	err = h.service.UpsertContact(r.Context(), workspaceID, contact)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to upsert contact")
 		WriteJSONError(w, "Failed to upsert contact", http.StatusInternalServerError)
 		return
 	}
 
-	statusCode := http.StatusOK
-	action := "updated"
-	if isNew {
-		statusCode = http.StatusCreated
-		action = "created"
-	}
+	// Determine if the contact was just created by checking if CreatedAt is recent
+	isNew := time.Since(contact.CreatedAt) < time.Second
+
+	// Return 201 for new contacts, 200 for updates
+	statusCode := map[bool]int{true: http.StatusCreated, false: http.StatusOK}[isNew]
 
 	writeJSON(w, statusCode, map[string]interface{}{
 		"contact": contact,
-		"action":  action,
+		"action":  map[bool]string{true: "created", false: "updated"}[isNew],
 	})
 }

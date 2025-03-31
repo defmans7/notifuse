@@ -136,9 +136,9 @@ export function ContactsPage() {
       key: 'subscriptions',
       render: (_, record) => (
         <>
-          {record.subscriptions.map((subscription) => (
-            <Tag key={subscription.id} color="blue">
-              {subscription.name}
+          {record.contact_lists.map((subscription) => (
+            <Tag key={subscription.list_id} color="blue">
+              {subscription.list_id}
             </Tag>
           ))}
         </>

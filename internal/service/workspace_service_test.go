@@ -219,7 +219,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
-		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(true, nil)
+		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(nil)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
 		require.NoError(t, err)
@@ -311,7 +311,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
-		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(false, assert.AnError)
+		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(assert.AnError)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
 		require.Error(t, err)

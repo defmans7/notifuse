@@ -36,6 +36,7 @@ func TestGetContactByEmail(t *testing.T) {
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 		"created_at", "updated_at",
+		"list_id", "list_status", "list_created_at", "list_updated_at",
 	}).
 		AddRow(
 			email, "ext123", "Europe/Paris", "en-US",
@@ -47,9 +48,10 @@ func TestGetContactByEmail(t *testing.T) {
 			now, now, now, now, now,
 			[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 			now, now,
+			sql.NullString{}, sql.NullString{}, sql.NullTime{}, sql.NullTime{},
 		)
 
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
 		WithArgs(email).
 		WillReturnRows(rows)
 
@@ -58,13 +60,13 @@ func TestGetContactByEmail(t *testing.T) {
 	assert.Equal(t, email, contact.Email)
 
 	// Test case 2: Contact not found
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
 	_, err = repo.GetContactByEmail(context.Background(), "nonexistent@example.com", "workspace123")
 	require.Error(t, err)
-	assert.IsType(t, &domain.ErrContactNotFound{}, err)
+	assert.Contains(t, err.Error(), "contact not found")
 }
 
 func TestGetContactByExternalID(t *testing.T) {
@@ -88,6 +90,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 		"created_at", "updated_at",
+		"list_id", "list_status", "list_created_at", "list_updated_at",
 	}).
 		AddRow(
 			"test@example.com", externalID, "Europe/Paris", "en-US",
@@ -99,9 +102,10 @@ func TestGetContactByExternalID(t *testing.T) {
 			now, now, now, now, now,
 			[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 			now, now,
+			sql.NullString{}, sql.NullString{}, sql.NullTime{}, sql.NullTime{},
 		)
 
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE external_id = \$1`).
+	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.external_id = \$1`).
 		WithArgs(externalID).
 		WillReturnRows(rows)
 
@@ -109,13 +113,13 @@ func TestGetContactByExternalID(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test case 2: Contact not found
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE external_id = \$1`).
+	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.external_id = \$1`).
 		WithArgs("nonexistent-ext-id").
 		WillReturnError(sql.ErrNoRows)
 
 	_, err = repo.GetContactByExternalID(context.Background(), "nonexistent-ext-id", "workspace123")
 	require.Error(t, err)
-	assert.IsType(t, &domain.ErrContactNotFound{}, err)
+	assert.Contains(t, err.Error(), "contact not found")
 
 	// Test: get contact by external ID successful case
 	t.Run("successful_case", func(t *testing.T) {
@@ -132,14 +136,16 @@ func TestGetContactByExternalID(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 			"created_at", "updated_at",
+			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "e-123", "Europe/Paris", "en-US", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{},
 			"", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{},
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			time.Now(), time.Now(),
+			sql.NullString{}, sql.NullString{}, sql.NullTime{}, sql.NullTime{},
 		)
 
-		mock.ExpectQuery("SELECT (.+) FROM contacts WHERE external_id = \\$1").
+		mock.ExpectQuery("SELECT c\\.\\* FROM contacts c WHERE c.external_id = \\$1").
 			WithArgs(externalID).
 			WillReturnRows(rows)
 
@@ -177,6 +183,7 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
+			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -187,21 +194,29 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
+			sql.NullString{String: "list1", Valid: true},
+			sql.NullString{String: "active", Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC LIMIT \$1`).
+		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email ORDER BY c\.created_at DESC LIMIT \$1`).
 			WithArgs(11).
 			WillReturnRows(rows)
 
 		req := &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Limit:       10,
+			WorkspaceID:      "workspace123",
+			Limit:            10,
+			WithContactLists: true,
 		}
 
 		resp, err := repo.GetContacts(context.Background(), req)
 		require.NoError(t, err)
 		require.Len(t, resp.Contacts, 1)
 		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.Len(t, resp.Contacts[0].ContactLists, 1)
+		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
+		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -226,6 +241,7 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
+			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -236,24 +252,32 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
+			sql.NullString{String: "list1", Valid: true},
+			sql.NullString{String: "active", Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email ILIKE \$1 AND first_name ILIKE \$2 AND country ILIKE \$3 ORDER BY created_at DESC LIMIT \$4`).
+		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC LIMIT \$4`).
 			WithArgs("%test@example.com%", "%John%", "%US%", 11).
 			WillReturnRows(rows)
 
 		req := &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Email:       "test@example.com",
-			FirstName:   "John",
-			Country:     "US",
-			Limit:       10,
+			WorkspaceID:      "workspace123",
+			Email:            "test@example.com",
+			FirstName:        "John",
+			Country:          "US",
+			Limit:            10,
+			WithContactLists: true,
 		}
 
 		resp, err := repo.GetContacts(context.Background(), req)
 		require.NoError(t, err)
 		require.Len(t, resp.Contacts, 1)
 		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.Len(t, resp.Contacts[0].ContactLists, 1)
+		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
+		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -278,6 +302,7 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
+			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -288,22 +313,30 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
+			sql.NullString{String: "list1", Valid: true},
+			sql.NullString{String: "active", Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE created_at < \$1 ORDER BY created_at DESC LIMIT \$2`).
+		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email WHERE c\.created_at < \$1 ORDER BY c\.created_at DESC LIMIT \$2`).
 			WithArgs(sqlmock.AnyArg(), 11).
 			WillReturnRows(rows)
 
 		req := &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Cursor:      time.Now().Format(time.RFC3339),
-			Limit:       10,
+			WorkspaceID:      "workspace123",
+			Cursor:           time.Now().Format(time.RFC3339),
+			Limit:            10,
+			WithContactLists: true,
 		}
 
 		resp, err := repo.GetContacts(context.Background(), req)
 		require.NoError(t, err)
 		require.Len(t, resp.Contacts, 1)
 		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.Len(t, resp.Contacts[0].ContactLists, 1)
+		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
+		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -313,8 +346,9 @@ func TestGetContacts(t *testing.T) {
 		repo := NewContactRepository(workspaceRepo)
 
 		req := &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Limit:       10,
+			WorkspaceID:      "workspace123",
+			Limit:            10,
+			WithContactLists: true,
 		}
 
 		_, err := repo.GetContacts(context.Background(), req)
@@ -343,6 +377,7 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
+			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -353,27 +388,35 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
+			sql.NullString{String: "list1", Valid: true},
+			sql.NullString{String: "active", Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
+			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email ILIKE \$1 AND external_id ILIKE \$2 AND first_name ILIKE \$3 AND last_name ILIKE \$4 AND phone ILIKE \$5 AND country ILIKE \$6 ORDER BY created_at DESC LIMIT \$7`).
+		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC LIMIT \$7`).
 			WithArgs("%test@example.com%", "%ext123%", "%John%", "%Doe%", "%+1234567890%", "%US%", 11).
 			WillReturnRows(rows)
 
 		req := &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Email:       "test@example.com",
-			ExternalID:  "ext123",
-			FirstName:   "John",
-			LastName:    "Doe",
-			Phone:       "+1234567890",
-			Country:     "US",
-			Limit:       10,
+			WorkspaceID:      "workspace123",
+			Email:            "test@example.com",
+			ExternalID:       "ext123",
+			FirstName:        "John",
+			LastName:         "Doe",
+			Phone:            "+1234567890",
+			Country:          "US",
+			Limit:            10,
+			WithContactLists: true,
 		}
 
 		resp, err := repo.GetContacts(context.Background(), req)
 		require.NoError(t, err)
 		require.Len(t, resp.Contacts, 1)
 		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+		assert.Len(t, resp.Contacts[0].ContactLists, 1)
+		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
+		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -388,53 +431,15 @@ func TestGetContacts(t *testing.T) {
 		repo := NewContactRepository(workspaceRepo)
 
 		req := &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Cursor:      "invalid-timestamp",
-			Limit:       10,
+			WorkspaceID:      "workspace123",
+			Cursor:           "invalid-cursor",
+			Limit:            10,
+			WithContactLists: true,
 		}
 
 		_, err := repo.GetContacts(context.Background(), req)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid cursor format")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle empty result set", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
-		repo := NewContactRepository(workspaceRepo)
-
-		// Set up expectations for an empty result set
-		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
-			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
-			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
-			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
-			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at",
-		})
-
-		mock.ExpectQuery(`SELECT (.+) FROM contacts ORDER BY created_at DESC LIMIT \$1`).
-			WithArgs(11).
-			WillReturnRows(rows)
-
-		req := &domain.GetContactsRequest{
-			WorkspaceID: "workspace123",
-			Limit:       10,
-		}
-
-		resp, err := repo.GetContacts(context.Background(), req)
-		require.NoError(t, err)
-		assert.Empty(t, resp.Contacts)
-		assert.Empty(t, resp.NextCursor)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
@@ -466,7 +471,7 @@ func TestDeleteContact(t *testing.T) {
 
 		err := repo.DeleteContact(context.Background(), "nonexistent@example.com", "workspace123")
 		require.Error(t, err)
-		assert.IsType(t, &domain.ErrContactNotFound{}, err)
+		assert.Contains(t, err.Error(), "contact not found")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 

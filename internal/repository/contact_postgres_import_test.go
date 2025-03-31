@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"regexp"
@@ -222,121 +221,6 @@ func TestBatchImportContacts(t *testing.T) {
 		err := repo.BatchImportContacts(context.Background(), "workspace123", []*domain.Contact{contact})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to marshal CustomJSON1")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle nullable field edge cases", func(t *testing.T) {
-		contact := &domain.Contact{
-			Email:           "test@example.com",
-			ExternalID:      &domain.NullableString{String: "", IsNull: true},
-			Timezone:        &domain.NullableString{String: "", IsNull: true},
-			Language:        &domain.NullableString{String: "", IsNull: true},
-			FirstName:       &domain.NullableString{String: "", IsNull: true},
-			LastName:        &domain.NullableString{String: "", IsNull: true},
-			Phone:           &domain.NullableString{String: "", IsNull: true},
-			AddressLine1:    &domain.NullableString{String: "", IsNull: true},
-			AddressLine2:    &domain.NullableString{String: "", IsNull: true},
-			Country:         &domain.NullableString{String: "", IsNull: true},
-			Postcode:        &domain.NullableString{String: "", IsNull: true},
-			State:           &domain.NullableString{String: "", IsNull: true},
-			JobTitle:        &domain.NullableString{String: "", IsNull: true},
-			LifetimeValue:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			OrdersCount:     &domain.NullableFloat64{Float64: 0, IsNull: true},
-			LastOrderAt:     &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomString1:   &domain.NullableString{String: "", IsNull: true},
-			CustomString2:   &domain.NullableString{String: "", IsNull: true},
-			CustomString3:   &domain.NullableString{String: "", IsNull: true},
-			CustomString4:   &domain.NullableString{String: "", IsNull: true},
-			CustomString5:   &domain.NullableString{String: "", IsNull: true},
-			CustomNumber1:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber2:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber3:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber4:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber5:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomDatetime1: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime2: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime3: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime4: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime5: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomJSON1:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON2:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON3:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON4:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON5:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CreatedAt:       time.Now(),
-			UpdatedAt:       time.Now(),
-		}
-
-		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
-			WithArgs(contact.Email).
-			WillReturnError(sql.ErrNoRows)
-
-		mock.ExpectExec(`INSERT INTO contacts`).
-			WillReturnResult(sqlmock.NewResult(0, 1))
-
-		isNew, err := repo.UpsertContact(context.Background(), "workspace123", contact)
-		require.NoError(t, err)
-		assert.True(t, isNew)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle database error during upsert", func(t *testing.T) {
-		// Arrange
-		contact := &domain.Contact{
-			Email:           "test@example.com",
-			ExternalID:      &domain.NullableString{String: "ext1", IsNull: false},
-			Timezone:        &domain.NullableString{String: "Europe/Paris", IsNull: false},
-			Language:        &domain.NullableString{String: "en-US", IsNull: false},
-			FirstName:       &domain.NullableString{String: "John", IsNull: false},
-			LastName:        &domain.NullableString{String: "Doe", IsNull: false},
-			Phone:           &domain.NullableString{String: "", IsNull: true},
-			AddressLine1:    &domain.NullableString{String: "", IsNull: true},
-			AddressLine2:    &domain.NullableString{String: "", IsNull: true},
-			Country:         &domain.NullableString{String: "", IsNull: true},
-			Postcode:        &domain.NullableString{String: "", IsNull: true},
-			State:           &domain.NullableString{String: "", IsNull: true},
-			JobTitle:        &domain.NullableString{String: "", IsNull: true},
-			LifetimeValue:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			OrdersCount:     &domain.NullableFloat64{Float64: 0, IsNull: true},
-			LastOrderAt:     &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomString1:   &domain.NullableString{String: "", IsNull: true},
-			CustomString2:   &domain.NullableString{String: "", IsNull: true},
-			CustomString3:   &domain.NullableString{String: "", IsNull: true},
-			CustomString4:   &domain.NullableString{String: "", IsNull: true},
-			CustomString5:   &domain.NullableString{String: "", IsNull: true},
-			CustomNumber1:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber2:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber3:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber4:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomNumber5:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-			CustomDatetime1: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime2: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime3: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime4: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomDatetime5: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-			CustomJSON1:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON2:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON3:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON4:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CustomJSON5:     &domain.NullableJSON{Data: nil, IsNull: true},
-			CreatedAt:       time.Now(),
-			UpdatedAt:       time.Now(),
-		}
-
-		mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
-			WithArgs(contact.Email).
-			WillReturnError(sql.ErrNoRows)
-
-		mock.ExpectExec(`INSERT INTO contacts`).
-			WillReturnError(errors.New("database error"))
-
-		// Act
-		isNew, err := repo.UpsertContact(context.Background(), "workspace123", contact)
-
-		// Assert
-		assert.Error(t, err)
-		assert.False(t, isNew)
-		assert.Contains(t, err.Error(), "failed to upsert contact")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 

@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"aidanwoods.dev/go-paseto"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -56,7 +58,10 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			setupMock: func(m *mocks.MockContactService) {
 				m.EXPECT().
 					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
-					Return(true, nil)
+					DoAndReturn(func(ctx interface{}, workspaceID string, contact *domain.Contact) error {
+						contact.CreatedAt = time.Now()
+						return nil
+					})
 			},
 			expectedStatus: http.StatusCreated,
 			expectedAction: "created",
@@ -77,7 +82,10 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			setupMock: func(m *mocks.MockContactService) {
 				m.EXPECT().
 					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
-					Return(true, nil)
+					DoAndReturn(func(ctx interface{}, workspaceID string, contact *domain.Contact) error {
+						contact.CreatedAt = time.Now()
+						return nil
+					})
 			},
 			expectedStatus: http.StatusCreated,
 			expectedAction: "created",
@@ -96,7 +104,10 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			setupMock: func(m *mocks.MockContactService) {
 				m.EXPECT().
 					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
-					Return(false, nil)
+					DoAndReturn(func(ctx interface{}, workspaceID string, contact *domain.Contact) error {
+						contact.CreatedAt = time.Now().Add(-time.Hour)
+						return nil
+					})
 			},
 			expectedStatus: http.StatusOK,
 			expectedAction: "updated",
@@ -139,7 +150,7 @@ func TestContactHandler_HandleUpsert(t *testing.T) {
 			setupMock: func(m *mocks.MockContactService) {
 				m.EXPECT().
 					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
-					Return(false, fmt.Errorf("service error"))
+					Return(fmt.Errorf("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedAction: "",
@@ -214,7 +225,7 @@ func TestContactHandler_HandleUpsertWithCustomJSON(t *testing.T) {
 
 	mockService.EXPECT().
 		UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
-		Return(false, nil)
+		Return(nil)
 
 	req, err := http.NewRequest(http.MethodPost, "/api/contacts.upsert", strings.NewReader(reqBody))
 	if err != nil {

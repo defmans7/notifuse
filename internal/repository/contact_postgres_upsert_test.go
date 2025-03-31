@@ -68,9 +68,9 @@ func TestUpsertContact(t *testing.T) {
 	}
 
 	// Test case 1: Insert new contact
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
 		WithArgs(email).
-		WillReturnError(sql.ErrNoRows)
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
 	mock.ExpectExec(`INSERT INTO contacts`).
 		WithArgs(
@@ -115,9 +115,8 @@ func TestUpsertContact(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	created, err := repo.UpsertContact(context.Background(), workspaceID, testContact)
+	err := repo.UpsertContact(context.Background(), workspaceID, testContact)
 	require.NoError(t, err)
-	assert.True(t, created)
 
 	// Test case 2: Update existing contact with only some fields
 	partialContact := &domain.Contact{
@@ -127,31 +126,9 @@ func TestUpsertContact(t *testing.T) {
 		UpdatedAt: now,
 	}
 
-	rows := sqlmock.NewRows([]string{
-		"email", "external_id", "timezone", "language",
-		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
-		"country", "postcode", "state", "job_title",
-		"lifetime_value", "orders_count", "last_order_at",
-		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
-		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
-		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
-		"created_at", "updated_at",
-	}).AddRow(
-		"partial@example.com", "old-ext-id", "UTC", "en-US",
-		"Old", "Name", "", "", "",
-		"", "", "", "",
-		0.0, 0.0, time.Time{},
-		"", "", "", "", "",
-		0.0, 0.0, 0.0, 0.0, 0.0,
-		time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{},
-		"", "", "", "", "",
-		now, now,
-	)
-
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
-		WithArgs("partial@example.com").
-		WillReturnRows(rows)
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
+		WithArgs(partialContact.Email).
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
 	// Expect only the fields that are present in partialContact to be updated
 	mock.ExpectExec(`INSERT INTO contacts`).
@@ -197,28 +174,67 @@ func TestUpsertContact(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	created, err = repo.UpsertContact(context.Background(), workspaceID, partialContact)
+	err = repo.UpsertContact(context.Background(), workspaceID, partialContact)
 	require.NoError(t, err)
-	assert.False(t, created)
 
 	// Test case 3: Error checking if contact exists
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
 		WithArgs(email).
 		WillReturnError(errors.New("check error"))
 
-	created, err = repo.UpsertContact(context.Background(), workspaceID, testContact)
+	err = repo.UpsertContact(context.Background(), workspaceID, testContact)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to check if contact exists")
 
 	// Test case 4: Error upserting contact
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
 		WithArgs(email).
-		WillReturnError(sql.ErrNoRows)
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
 	mock.ExpectExec(`INSERT INTO contacts`).
+		WithArgs(
+			testContact.Email,
+			testContact.ExternalID.String,
+			testContact.Timezone.String,
+			testContact.Language.String,
+			testContact.FirstName.String,
+			testContact.LastName.String,
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullFloat64{Valid: false},
+			sql.NullFloat64{Valid: false},
+			sql.NullTime{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullFloat64{Valid: false},
+			sql.NullFloat64{Valid: false},
+			sql.NullFloat64{Valid: false},
+			sql.NullFloat64{Valid: false},
+			sql.NullFloat64{Valid: false},
+			sql.NullTime{Valid: false},
+			sql.NullTime{Valid: false},
+			sql.NullTime{Valid: false},
+			sql.NullTime{Valid: false},
+			sql.NullTime{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			sql.NullString{Valid: false},
+			testContact.CreatedAt,
+			testContact.UpdatedAt,
+		).
 		WillReturnError(errors.New("upsert error"))
 
-	created, err = repo.UpsertContact(context.Background(), workspaceID, testContact)
+	err = repo.UpsertContact(context.Background(), workspaceID, testContact)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to upsert contact")
 
@@ -264,11 +280,11 @@ func TestUpsertContact(t *testing.T) {
 		UpdatedAt:       now,
 	}
 
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
 		WithArgs("invalidjson@example.com").
-		WillReturnError(sql.ErrNoRows)
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
-	created, err = repo.UpsertContact(context.Background(), workspaceID, contactWithInvalidJSON)
+	err = repo.UpsertContact(context.Background(), workspaceID, contactWithInvalidJSON)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to marshal CustomJSON1")
 
@@ -293,9 +309,9 @@ func TestUpsertContactWithOnlyEmail(t *testing.T) {
 	}
 
 	// Test case: Insert new contact with only email
-	mock.ExpectQuery(`SELECT (.+) FROM contacts WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
 		WithArgs(email).
-		WillReturnError(sql.ErrNoRows)
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
 	mock.ExpectExec(`INSERT INTO contacts`).
 		WithArgs(
@@ -340,9 +356,8 @@ func TestUpsertContactWithOnlyEmail(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	created, err := repo.UpsertContact(context.Background(), workspaceID, minimalContact)
+	err := repo.UpsertContact(context.Background(), workspaceID, minimalContact)
 	require.NoError(t, err)
-	assert.True(t, created)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

@@ -50,7 +50,7 @@ func TestContactService_GetContactByEmail(t *testing.T) {
 
 	t.Run("contact not found", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().GetContactByEmail(ctx, email, workspaceID).Return(nil, &domain.ErrContactNotFound{})
+		mockRepo.EXPECT().GetContactByEmail(ctx, email, workspaceID).Return(nil, fmt.Errorf("contact not found"))
 
 		result, err := service.GetContactByEmail(ctx, email, workspaceID)
 		assert.Error(t, err)
@@ -106,7 +106,7 @@ func TestContactService_GetContactByExternalID(t *testing.T) {
 
 	t.Run("contact not found", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().GetContactByExternalID(ctx, externalID, workspaceID).Return(nil, &domain.ErrContactNotFound{})
+		mockRepo.EXPECT().GetContactByExternalID(ctx, externalID, workspaceID).Return(nil, fmt.Errorf("contact not found"))
 
 		result, err := service.GetContactByExternalID(ctx, externalID, workspaceID)
 		assert.Error(t, err)
@@ -194,8 +194,8 @@ func TestContactService_DeleteContact(t *testing.T) {
 	t.Run("contact not found", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
 		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
-		mockContactRepo.EXPECT().DeleteContact(ctx, email, workspaceID).Return(&domain.ErrContactNotFound{})
-		mockLogger.EXPECT().Error(fmt.Sprintf("Failed to delete contact: %v", &domain.ErrContactNotFound{}))
+		mockContactRepo.EXPECT().DeleteContact(ctx, email, workspaceID).Return(fmt.Errorf("contact not found"))
+		mockLogger.EXPECT().Error(fmt.Sprintf("Failed to delete contact: %v", fmt.Errorf("contact not found")))
 
 		err := service.DeleteContact(ctx, email, workspaceID)
 		assert.Error(t, err)
@@ -252,30 +252,27 @@ func TestContactService_UpsertContact(t *testing.T) {
 
 	t.Run("successful upsert", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(true, nil)
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(nil)
 
-		isNew, err := service.UpsertContact(ctx, workspaceID, contact)
+		err := service.UpsertContact(ctx, workspaceID, contact)
 		assert.NoError(t, err)
-		assert.True(t, isNew)
 	})
 
 	t.Run("authentication error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
 
-		isNew, err := service.UpsertContact(ctx, workspaceID, contact)
+		err := service.UpsertContact(ctx, workspaceID, contact)
 		assert.Error(t, err)
-		assert.False(t, isNew)
 	})
 
 	t.Run("repository error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(false, errors.New("repo error"))
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(errors.New("repo error"))
 		mockLogger.EXPECT().WithField("email", contact.Email).Return(mockLogger)
 		mockLogger.EXPECT().Error("Failed to upsert contact: repo error")
 
-		isNew, err := service.UpsertContact(ctx, workspaceID, contact)
+		err := service.UpsertContact(ctx, workspaceID, contact)
 		assert.Error(t, err)
-		assert.False(t, isNew)
 	})
 }
 
@@ -309,9 +306,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 				return true, nil
 			})
 
-		isNew, err := service.UpsertContact(ctx, workspaceID, minimalContact)
+		err := service.UpsertContact(ctx, workspaceID, minimalContact)
 		assert.NoError(t, err)
-		assert.True(t, isNew)
 	})
 
 	t.Run("upsert with partial fields", func(t *testing.T) {
@@ -340,9 +336,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 				return false, nil
 			})
 
-		isNew, err := service.UpsertContact(ctx, workspaceID, partialContact)
+		err := service.UpsertContact(ctx, workspaceID, partialContact)
 		assert.NoError(t, err)
-		assert.False(t, isNew)
 	})
 
 	t.Run("upsert with custom JSON", func(t *testing.T) {
@@ -372,9 +367,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 				return true, nil
 			})
 
-		isNew, err := service.UpsertContact(ctx, workspaceID, jsonContact)
+		err := service.UpsertContact(ctx, workspaceID, jsonContact)
 		assert.NoError(t, err)
-		assert.True(t, isNew)
 	})
 
 	t.Run("upsert with explicit null field", func(t *testing.T) {
@@ -402,9 +396,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 				return false, nil
 			})
 
-		isNew, err := service.UpsertContact(ctx, workspaceID, contactWithNulls)
+		err := service.UpsertContact(ctx, workspaceID, contactWithNulls)
 		assert.NoError(t, err)
-		assert.False(t, isNew)
 	})
 }
 

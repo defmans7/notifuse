@@ -21,9 +21,12 @@ export interface Contact {
   first_name: string
   last_name: string
   country_code: string
-  subscriptions: {
-    id: string
-    name: string
+  contact_lists: {
+    email: string
+    list_id: string
+    status: string
+    created_at: string
+    updated_at: string
   }[]
   created_at: string
   updated_at: string
