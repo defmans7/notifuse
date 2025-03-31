@@ -11,8 +11,8 @@ type Country = {
 export const Timezones = map(CountriesTimezonesData.zones, (x) => x)
 export const TimezonesFormOptions = map(Timezones, (x) => {
   return {
-    value: x,
-    label: x
+    value: x.name,
+    label: x.name
   }
 })
 export const CountriesMap: Record<string, Country> = CountriesTimezonesData.countries

@@ -198,153 +198,119 @@ func ScanContact(scanner interface {
 	// Handle nullable fields
 	if dbc.ExternalID.Valid {
 		c.ExternalID = &NullableString{String: dbc.ExternalID.String, IsNull: false}
-	} else {
-		c.ExternalID = &NullableString{IsNull: true}
 	}
 	if dbc.Timezone.Valid {
 		c.Timezone = &NullableString{String: dbc.Timezone.String, IsNull: false}
-	} else {
-		c.Timezone = &NullableString{IsNull: true}
 	}
 	if dbc.Language.Valid {
 		c.Language = &NullableString{String: dbc.Language.String, IsNull: false}
-	} else {
-		c.Language = &NullableString{IsNull: true}
 	}
 	if dbc.FirstName.Valid {
 		c.FirstName = &NullableString{String: dbc.FirstName.String, IsNull: false}
-	} else {
-		c.FirstName = &NullableString{IsNull: true}
 	}
+
 	if dbc.LastName.Valid {
 		c.LastName = &NullableString{String: dbc.LastName.String, IsNull: false}
-	} else {
-		c.LastName = &NullableString{IsNull: true}
 	}
+
 	if dbc.Phone.Valid {
 		c.Phone = &NullableString{String: dbc.Phone.String, IsNull: false}
-	} else {
-		c.Phone = &NullableString{IsNull: true}
 	}
+
 	if dbc.AddressLine1.Valid {
 		c.AddressLine1 = &NullableString{String: dbc.AddressLine1.String, IsNull: false}
-	} else {
-		c.AddressLine1 = &NullableString{IsNull: true}
 	}
+
 	if dbc.AddressLine2.Valid {
 		c.AddressLine2 = &NullableString{String: dbc.AddressLine2.String, IsNull: false}
-	} else {
-		c.AddressLine2 = &NullableString{IsNull: true}
 	}
+
 	if dbc.Country.Valid {
 		c.Country = &NullableString{String: dbc.Country.String, IsNull: false}
-	} else {
-		c.Country = &NullableString{IsNull: true}
 	}
+
 	if dbc.Postcode.Valid {
 		c.Postcode = &NullableString{String: dbc.Postcode.String, IsNull: false}
-	} else {
-		c.Postcode = &NullableString{IsNull: true}
 	}
+
 	if dbc.State.Valid {
 		c.State = &NullableString{String: dbc.State.String, IsNull: false}
-	} else {
-		c.State = &NullableString{IsNull: true}
 	}
+
 	if dbc.JobTitle.Valid {
 		c.JobTitle = &NullableString{String: dbc.JobTitle.String, IsNull: false}
-	} else {
-		c.JobTitle = &NullableString{IsNull: true}
 	}
+
 	if dbc.LifetimeValue.Valid {
 		c.LifetimeValue = &NullableFloat64{Float64: dbc.LifetimeValue.Float64, IsNull: false}
-	} else {
-		c.LifetimeValue = &NullableFloat64{IsNull: true}
 	}
+
 	if dbc.OrdersCount.Valid {
 		c.OrdersCount = &NullableFloat64{Float64: dbc.OrdersCount.Float64, IsNull: false}
-	} else {
-		c.OrdersCount = &NullableFloat64{IsNull: true}
 	}
+
 	if dbc.LastOrderAt.Valid {
 		c.LastOrderAt = &NullableTime{Time: dbc.LastOrderAt.Time, IsNull: false}
-	} else {
-		c.LastOrderAt = &NullableTime{IsNull: true}
 	}
+
 	if dbc.CustomString1.Valid {
 		c.CustomString1 = &NullableString{String: dbc.CustomString1.String, IsNull: false}
-	} else {
-		c.CustomString1 = &NullableString{IsNull: true}
 	}
+
 	if dbc.CustomString2.Valid {
 		c.CustomString2 = &NullableString{String: dbc.CustomString2.String, IsNull: false}
-	} else {
-		c.CustomString2 = &NullableString{IsNull: true}
 	}
+
 	if dbc.CustomString3.Valid {
 		c.CustomString3 = &NullableString{String: dbc.CustomString3.String, IsNull: false}
-	} else {
-		c.CustomString3 = &NullableString{IsNull: true}
 	}
+
 	if dbc.CustomString4.Valid {
 		c.CustomString4 = &NullableString{String: dbc.CustomString4.String, IsNull: false}
-	} else {
-		c.CustomString4 = &NullableString{IsNull: true}
 	}
+
 	if dbc.CustomString5.Valid {
 		c.CustomString5 = &NullableString{String: dbc.CustomString5.String, IsNull: false}
-	} else {
-		c.CustomString5 = &NullableString{IsNull: true}
 	}
+
 	if dbc.CustomNumber1.Valid {
 		c.CustomNumber1 = &NullableFloat64{Float64: dbc.CustomNumber1.Float64, IsNull: false}
-	} else {
-		c.CustomNumber1 = &NullableFloat64{IsNull: true}
 	}
+
 	if dbc.CustomNumber2.Valid {
 		c.CustomNumber2 = &NullableFloat64{Float64: dbc.CustomNumber2.Float64, IsNull: false}
-	} else {
-		c.CustomNumber2 = &NullableFloat64{IsNull: true}
 	}
+
 	if dbc.CustomNumber3.Valid {
 		c.CustomNumber3 = &NullableFloat64{Float64: dbc.CustomNumber3.Float64, IsNull: false}
-	} else {
-		c.CustomNumber3 = &NullableFloat64{IsNull: true}
 	}
+
 	if dbc.CustomNumber4.Valid {
 		c.CustomNumber4 = &NullableFloat64{Float64: dbc.CustomNumber4.Float64, IsNull: false}
-	} else {
-		c.CustomNumber4 = &NullableFloat64{IsNull: true}
 	}
+
 	if dbc.CustomNumber5.Valid {
 		c.CustomNumber5 = &NullableFloat64{Float64: dbc.CustomNumber5.Float64, IsNull: false}
-	} else {
-		c.CustomNumber5 = &NullableFloat64{IsNull: true}
 	}
+
 	if dbc.CustomDatetime1.Valid {
 		c.CustomDatetime1 = &NullableTime{Time: dbc.CustomDatetime1.Time, IsNull: false}
-	} else {
-		c.CustomDatetime1 = &NullableTime{IsNull: true}
 	}
+
 	if dbc.CustomDatetime2.Valid {
 		c.CustomDatetime2 = &NullableTime{Time: dbc.CustomDatetime2.Time, IsNull: false}
-	} else {
-		c.CustomDatetime2 = &NullableTime{IsNull: true}
 	}
+
 	if dbc.CustomDatetime3.Valid {
 		c.CustomDatetime3 = &NullableTime{Time: dbc.CustomDatetime3.Time, IsNull: false}
-	} else {
-		c.CustomDatetime3 = &NullableTime{IsNull: true}
 	}
+
 	if dbc.CustomDatetime4.Valid {
 		c.CustomDatetime4 = &NullableTime{Time: dbc.CustomDatetime4.Time, IsNull: false}
-	} else {
-		c.CustomDatetime4 = &NullableTime{IsNull: true}
 	}
+
 	if dbc.CustomDatetime5.Valid {
 		c.CustomDatetime5 = &NullableTime{Time: dbc.CustomDatetime5.Time, IsNull: false}
-	} else {
-		c.CustomDatetime5 = &NullableTime{IsNull: true}
 	}
 
 	// Handle JSON fields
@@ -352,51 +318,31 @@ func ScanContact(scanner interface {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON1, &data); err == nil {
 			c.CustomJSON1 = &NullableJSON{Data: data, IsNull: false}
-		} else {
-			c.CustomJSON1 = &NullableJSON{IsNull: true}
 		}
-	} else {
-		c.CustomJSON1 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON2) > 0 && string(dbc.CustomJSON2) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON2, &data); err == nil {
 			c.CustomJSON2 = &NullableJSON{Data: data, IsNull: false}
-		} else {
-			c.CustomJSON2 = &NullableJSON{IsNull: true}
 		}
-	} else {
-		c.CustomJSON2 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON3) > 0 && string(dbc.CustomJSON3) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON3, &data); err == nil {
 			c.CustomJSON3 = &NullableJSON{Data: data, IsNull: false}
-		} else {
-			c.CustomJSON3 = &NullableJSON{IsNull: true}
 		}
-	} else {
-		c.CustomJSON3 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON4) > 0 && string(dbc.CustomJSON4) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON4, &data); err == nil {
 			c.CustomJSON4 = &NullableJSON{Data: data, IsNull: false}
-		} else {
-			c.CustomJSON4 = &NullableJSON{IsNull: true}
 		}
-	} else {
-		c.CustomJSON4 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON5) > 0 && string(dbc.CustomJSON5) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON5, &data); err == nil {
 			c.CustomJSON5 = &NullableJSON{Data: data, IsNull: false}
-		} else {
-			c.CustomJSON5 = &NullableJSON{IsNull: true}
 		}
-	} else {
-		c.CustomJSON5 = &NullableJSON{IsNull: true}
 	}
 
 	return c, nil
