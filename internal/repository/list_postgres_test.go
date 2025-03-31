@@ -28,7 +28,6 @@ func TestListRepository(t *testing.T) {
 	testList := &domain.List{
 		ID:            "list123",
 		Name:          "Test List",
-		Type:          "contact",
 		IsDoubleOptin: true,
 		IsPublic:      false,
 		Description:   "Test list description",
@@ -39,12 +38,11 @@ func TestListRepository(t *testing.T) {
 	t.Run("CreateList", func(t *testing.T) {
 		t.Run("successful creation", func(t *testing.T) {
 			mock.ExpectExec(regexp.QuoteMeta(`
-				INSERT INTO lists (id, name, type, is_double_optin, is_public, description, created_at, updated_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				INSERT INTO lists (id, name, is_double_optin, is_public, description, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
 			`)).WithArgs(
 				testList.ID,
 				testList.Name,
-				testList.Type,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
@@ -59,12 +57,11 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			mock.ExpectExec(regexp.QuoteMeta(`
-				INSERT INTO lists (id, name, type, is_double_optin, is_public, description, created_at, updated_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				INSERT INTO lists (id, name, is_double_optin, is_public, description, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
 			`)).WithArgs(
 				testList.ID,
 				testList.Name,
-				testList.Type,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
@@ -82,11 +79,10 @@ func TestListRepository(t *testing.T) {
 	t.Run("GetListByID", func(t *testing.T) {
 		t.Run("list found", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
-				"id", "name", "type", "is_double_optin", "is_public", "description", "created_at", "updated_at",
+				"id", "name", "is_double_optin", "is_public", "description", "created_at", "updated_at",
 			}).AddRow(
 				testList.ID,
 				testList.Name,
-				testList.Type,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
@@ -95,7 +91,7 @@ func TestListRepository(t *testing.T) {
 			)
 
 			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
+				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
 				FROM lists
 				WHERE id = $1
 			`)).WithArgs(testList.ID).WillReturnRows(rows)
@@ -104,7 +100,6 @@ func TestListRepository(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, testList.ID, list.ID)
 			assert.Equal(t, testList.Name, list.Name)
-			assert.Equal(t, testList.Type, list.Type)
 			assert.Equal(t, testList.IsDoubleOptin, list.IsDoubleOptin)
 			assert.Equal(t, testList.IsPublic, list.IsPublic)
 			assert.Equal(t, testList.Description, list.Description)
@@ -113,7 +108,7 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("list not found", func(t *testing.T) {
 			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
+				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
 				FROM lists
 				WHERE id = $1
 			`)).WithArgs(testList.ID).WillReturnError(sql.ErrNoRows)
@@ -127,7 +122,7 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
+				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
 				FROM lists
 				WHERE id = $1
 			`)).WithArgs(testList.ID).WillReturnError(errors.New("database error"))
@@ -143,11 +138,10 @@ func TestListRepository(t *testing.T) {
 	t.Run("GetLists", func(t *testing.T) {
 		t.Run("successful retrieval", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
-				"id", "name", "type", "is_double_optin", "is_public", "description", "created_at", "updated_at",
+				"id", "name", "is_double_optin", "is_public", "description", "created_at", "updated_at",
 			}).AddRow(
 				testList.ID,
 				testList.Name,
-				testList.Type,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
@@ -156,7 +150,7 @@ func TestListRepository(t *testing.T) {
 			)
 
 			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
+				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
 				FROM lists
 				ORDER BY created_at DESC
 			`)).WillReturnRows(rows)
@@ -166,7 +160,6 @@ func TestListRepository(t *testing.T) {
 			require.Len(t, lists, 1)
 			assert.Equal(t, testList.ID, lists[0].ID)
 			assert.Equal(t, testList.Name, lists[0].Name)
-			assert.Equal(t, testList.Type, lists[0].Type)
 			assert.Equal(t, testList.IsDoubleOptin, lists[0].IsDoubleOptin)
 			assert.Equal(t, testList.IsPublic, lists[0].IsPublic)
 			assert.Equal(t, testList.Description, lists[0].Description)
@@ -175,7 +168,7 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
+				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
 				FROM lists
 				ORDER BY created_at DESC
 			`)).WillReturnError(errors.New("database error"))
@@ -192,11 +185,10 @@ func TestListRepository(t *testing.T) {
 		t.Run("successful update", func(t *testing.T) {
 			mock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
-				SET name = $1, type = $2, is_double_optin = $3, is_public = $4, description = $5, updated_at = $6
-				WHERE id = $7
+				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
+				WHERE id = $6
 			`)).WithArgs(
 				testList.Name,
-				testList.Type,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
@@ -212,11 +204,10 @@ func TestListRepository(t *testing.T) {
 		t.Run("list not found", func(t *testing.T) {
 			mock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
-				SET name = $1, type = $2, is_double_optin = $3, is_public = $4, description = $5, updated_at = $6
-				WHERE id = $7
+				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
+				WHERE id = $6
 			`)).WithArgs(
 				testList.Name,
-				testList.Type,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
@@ -233,11 +224,10 @@ func TestListRepository(t *testing.T) {
 		t.Run("database error", func(t *testing.T) {
 			mock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
-				SET name = $1, type = $2, is_double_optin = $3, is_public = $4, description = $5, updated_at = $6
-				WHERE id = $7
+				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
+				WHERE id = $6
 			`)).WithArgs(
 				testList.Name,
-				testList.Type,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,

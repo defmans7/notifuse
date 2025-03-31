@@ -19,7 +19,7 @@ type workspaceRepository struct {
 	dbConfig *config.DatabaseConfig
 
 	// Connection pool for workspace databases
-	connections sync.Map
+	connectionPools sync.Map
 }
 
 // NewWorkspaceRepository creates a new PostgreSQL workspace repository
@@ -202,14 +202,14 @@ func (r *workspaceRepository) Delete(ctx context.Context, id string) error {
 
 func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error) {
 	// Check if we already have a connection
-	if conn, ok := r.connections.Load(workspaceID); ok {
+	if conn, ok := r.connectionPools.Load(workspaceID); ok {
 		db := conn.(*sql.DB)
 		// Test the connection
 		if err := db.PingContext(ctx); err == nil {
 			return db, nil
 		}
 		// If ping fails, remove the connection and create a new one
-		r.connections.Delete(workspaceID)
+		r.connectionPools.Delete(workspaceID)
 	}
 
 	// Create a new connection
@@ -219,7 +219,7 @@ func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID str
 	}
 
 	// Store the connection
-	r.connections.Store(workspaceID, db)
+	r.connectionPools.Store(workspaceID, db)
 	return db, nil
 }
 
@@ -237,12 +237,12 @@ func (r *workspaceRepository) DeleteDatabase(ctx context.Context, workspaceID st
 	dbName := fmt.Sprintf("%s_ws_%s", r.dbConfig.Prefix, safeID)
 
 	// Get our own connection to close it
-	if conn, ok := r.connections.Load(workspaceID); ok {
+	if conn, ok := r.connectionPools.Load(workspaceID); ok {
 		db := conn.(*sql.DB)
 		// Close our connection to the workspace database
 		db.Close()
 		// Remove from the pool
-		r.connections.Delete(workspaceID)
+		r.connectionPools.Delete(workspaceID)
 	}
 
 	// First, revoke all privileges to prevent new connections

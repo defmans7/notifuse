@@ -106,7 +106,6 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS lists (
 			id VARCHAR(20) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
-			type VARCHAR(20) NOT NULL,
 			is_double_optin BOOLEAN NOT NULL DEFAULT FALSE,
 			is_public BOOLEAN NOT NULL DEFAULT FALSE,
 			description TEXT,

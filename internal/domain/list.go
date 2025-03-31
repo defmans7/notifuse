@@ -16,7 +16,6 @@ import (
 type List struct {
 	ID            string    `json:"id" valid:"required,alphanum,stringlength(1|20)"`
 	Name          string    `json:"name" valid:"required,stringlength(1|255)"`
-	Type          string    `json:"type" valid:"required,in(public|private)"`
 	IsDoubleOptin bool      `json:"is_double_optin" db:"is_double_optin"`
 	IsPublic      bool      `json:"is_public" db:"is_public"`
 	Description   string    `json:"description,omitempty" valid:"optional"`
@@ -36,7 +35,6 @@ func (l *List) Validate() error {
 type dbList struct {
 	ID            string
 	Name          string
-	Type          string
 	IsDoubleOptin bool
 	IsPublic      bool
 	Description   string
@@ -52,7 +50,6 @@ func ScanList(scanner interface {
 	if err := scanner.Scan(
 		&dbl.ID,
 		&dbl.Name,
-		&dbl.Type,
 		&dbl.IsDoubleOptin,
 		&dbl.IsPublic,
 		&dbl.Description,
@@ -65,7 +62,6 @@ func ScanList(scanner interface {
 	l := &List{
 		ID:            dbl.ID,
 		Name:          dbl.Name,
-		Type:          dbl.Type,
 		IsDoubleOptin: dbl.IsDoubleOptin,
 		IsPublic:      dbl.IsPublic,
 		Description:   dbl.Description,
@@ -81,7 +77,6 @@ type CreateListRequest struct {
 	WorkspaceID   string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
 	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
 	Name          string `json:"name" valid:"required,stringlength(1|255)"`
-	Type          string `json:"type" valid:"required,in(public|private)"`
 	IsDoubleOptin bool   `json:"is_double_optin"`
 	IsPublic      bool   `json:"is_public"`
 	Description   string `json:"description,omitempty"`
@@ -96,7 +91,6 @@ func (r *CreateListRequest) Validate() (list *List, workspaceID string, err erro
 	return &List{
 		ID:            r.ID,
 		Name:          r.Name,
-		Type:          r.Type,
 		IsDoubleOptin: r.IsDoubleOptin,
 		IsPublic:      r.IsPublic,
 		Description:   r.Description,
@@ -135,7 +129,6 @@ type UpdateListRequest struct {
 	WorkspaceID   string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
 	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
 	Name          string `json:"name" valid:"required,stringlength(1|255)"`
-	Type          string `json:"type" valid:"required,in(public|private)"`
 	IsDoubleOptin bool   `json:"is_double_optin"`
 	IsPublic      bool   `json:"is_public"`
 	Description   string `json:"description,omitempty"`
@@ -149,7 +142,6 @@ func (r *UpdateListRequest) Validate() (list *List, workspaceID string, err erro
 	return &List{
 		ID:            r.ID,
 		Name:          r.Name,
-		Type:          r.Type,
 		IsDoubleOptin: r.IsDoubleOptin,
 		IsPublic:      r.IsPublic,
 		Description:   r.Description,

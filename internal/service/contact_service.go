@@ -26,14 +26,14 @@ func NewContactService(repo domain.ContactRepository, workspaceRepo domain.Works
 	}
 }
 
-func (s *ContactService) GetContactByEmail(ctx context.Context, email string, workspaceID string) (*domain.Contact, error) {
+func (s *ContactService) GetContactByEmail(ctx context.Context, workspaceID string, email string) (*domain.Contact, error) {
 
 	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
-	contact, err := s.repo.GetContactByEmail(ctx, email, workspaceID)
+	contact, err := s.repo.GetContactByEmail(ctx, workspaceID, email)
 	if err != nil {
 		if strings.Contains(err.Error(), "contact not found") {
 			return nil, err

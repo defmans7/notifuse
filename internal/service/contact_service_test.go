@@ -33,9 +33,9 @@ func TestContactService_GetContactByEmail(t *testing.T) {
 
 	t.Run("successful retrieval", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().GetContactByEmail(ctx, email, workspaceID).Return(contact, nil)
+		mockRepo.EXPECT().GetContactByEmail(ctx, workspaceID, email).Return(contact, nil)
 
-		result, err := service.GetContactByEmail(ctx, email, workspaceID)
+		result, err := service.GetContactByEmail(ctx, workspaceID, email)
 		assert.NoError(t, err)
 		assert.Equal(t, contact, result)
 	})
@@ -43,27 +43,27 @@ func TestContactService_GetContactByEmail(t *testing.T) {
 	t.Run("authentication error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
 
-		result, err := service.GetContactByEmail(ctx, email, workspaceID)
+		result, err := service.GetContactByEmail(ctx, workspaceID, email)
 		assert.Error(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("contact not found", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().GetContactByEmail(ctx, email, workspaceID).Return(nil, fmt.Errorf("contact not found"))
+		mockRepo.EXPECT().GetContactByEmail(ctx, workspaceID, email).Return(nil, fmt.Errorf("contact not found"))
 
-		result, err := service.GetContactByEmail(ctx, email, workspaceID)
+		result, err := service.GetContactByEmail(ctx, workspaceID, email)
 		assert.Error(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("repository error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().GetContactByEmail(ctx, email, workspaceID).Return(nil, errors.New("repo error"))
+		mockRepo.EXPECT().GetContactByEmail(ctx, workspaceID, email).Return(nil, errors.New("repo error"))
 		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
 		mockLogger.EXPECT().Error("Failed to get contact by email: repo error")
 
-		result, err := service.GetContactByEmail(ctx, email, workspaceID)
+		result, err := service.GetContactByEmail(ctx, workspaceID, email)
 		assert.Error(t, err)
 		assert.Nil(t, result)
 	})

@@ -18,7 +18,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { contactsApi, type Contact, type ListContactsRequest } from '../services/api/contacts'
 import React from 'react'
-import { contactsRoute } from '../router'
+import { workspaceContactsRoute } from '../router'
 import { Filter } from '../components/filters/Filter'
 import { PlusOutlined } from '@ant-design/icons'
 import { CountriesFormOptions, TimezonesFormOptions } from '../components/utils/countries_timezones'
@@ -73,7 +73,7 @@ const optionalFields = [
 
 export function ContactsPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/contacts' })
-  const search = useSearch({ from: contactsRoute.id })
+  const search = useSearch({ from: workspaceContactsRoute.id })
   const navigate = useNavigate()
   const [form] = Form.useForm()
   const [drawerVisible, setDrawerVisible] = React.useState(false)
@@ -109,7 +109,8 @@ export function ContactsPage() {
         last_name: search.last_name,
         phone: search.phone,
         country: search.country,
-        language: search.language
+        language: search.language,
+        with_contact_lists: true
       }
       return contactsApi.list(request)
     }
@@ -124,7 +125,7 @@ export function ContactsPage() {
     {
       title: 'Name',
       key: 'name',
-      render: (_, record) => `${record.first_name} ${record.last_name}`
+      render: (_, record) => `${record.first_name || ''} ${record.last_name || ''}`
     },
     {
       title: 'Country Code',
@@ -132,13 +133,13 @@ export function ContactsPage() {
       key: 'country_code'
     },
     {
-      title: 'Subscriptions',
-      key: 'subscriptions',
+      title: 'Lists',
+      key: 'lists',
       render: (_, record) => (
         <>
-          {record.contact_lists.map((subscription) => (
-            <Tag key={subscription.list_id} color="blue">
-              {subscription.list_id}
+          {record.contact_lists.map((list) => (
+            <Tag key={list.list_id} color="blue">
+              {list.list_id}
             </Tag>
           ))}
         </>
@@ -174,12 +175,26 @@ export function ContactsPage() {
     setSelectedFields([])
   }
 
+  const handleLoadMore = () => {
+    if (data?.cursor) {
+      navigate({
+        to: workspaceContactsRoute.id,
+        search: {
+          ...search,
+          cursor: data.cursor
+        },
+        params: { workspaceId },
+        replace: true
+      })
+    }
+  }
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Contacts</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerVisible(true)}>
-          Insert / Update Contact
+          Insert / Update
         </Button>
       </div>
 
@@ -187,37 +202,18 @@ export function ContactsPage() {
       <Table
         columns={columns}
         dataSource={data?.contacts}
-        rowKey="id"
+        rowKey={(record) => record.email}
         loading={isLoading}
-        pagination={{
-          current: search.cursor ? 2 : 1,
-          onChange: (page) => {
-            if (page > 1 && data?.next_cursor) {
-              navigate({
-                to: contactsRoute.id,
-                search: {
-                  ...search,
-                  cursor: data.next_cursor
-                },
-                params: { workspaceId },
-                replace: true
-              })
-            } else {
-              navigate({
-                to: contactsRoute.id,
-                search: {
-                  ...search,
-                  cursor: undefined
-                },
-                params: { workspaceId },
-                replace: true
-              })
-            }
-          },
-          total: data?.next_cursor ? (data.contacts.length || 0) + 1 : data?.contacts.length,
-          pageSize: search.limit || 20
-        }}
+        pagination={false}
       />
+
+      {data?.cursor && (
+        <div className="flex justify-center mt-4">
+          <Button onClick={handleLoadMore} loading={isLoading}>
+            Load More
+          </Button>
+        </div>
+      )}
 
       <Drawer
         title="Insert / Update Contact"
@@ -280,6 +276,7 @@ export function ContactsPage() {
             ) {
               inputComponent = (
                 <InputNumber
+                  key={field}
                   placeholder={`Enter ${fieldInfo?.label?.toLowerCase()}`}
                   style={{ width: '100%' }}
                 />
@@ -296,6 +293,7 @@ export function ContactsPage() {
             } else if (field === 'timezone') {
               inputComponent = (
                 <Select
+                  key={field}
                   placeholder="Select timezone"
                   style={{ width: '100%' }}
                   options={TimezonesFormOptions}
@@ -304,6 +302,7 @@ export function ContactsPage() {
             } else if (field === 'country') {
               inputComponent = (
                 <Select
+                  key={field}
                   placeholder="Select country"
                   style={{ width: '100%' }}
                   options={CountriesFormOptions}

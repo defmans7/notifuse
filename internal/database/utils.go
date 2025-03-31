@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Notifuse/notifuse/config"
 	_ "github.com/lib/pq" // PostgreSQL driver
@@ -66,6 +67,8 @@ func ConnectToWorkspace(cfg *config.DatabaseConfig, workspaceID string) (*sql.DB
 	// Set connection pool settings
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(20 * time.Minute)
+	db.SetConnMaxIdleTime(10 * time.Minute)
 
 	return db, nil
 }

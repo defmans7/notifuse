@@ -36,7 +36,6 @@ func TestGetContactByEmail(t *testing.T) {
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 		"created_at", "updated_at",
-		"list_id", "list_status", "list_created_at", "list_updated_at",
 	}).
 		AddRow(
 			email, "ext123", "Europe/Paris", "en-US",
@@ -48,14 +47,13 @@ func TestGetContactByEmail(t *testing.T) {
 			now, now, now, now, now,
 			[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 			now, now,
-			sql.NullString{}, sql.NullString{}, sql.NullTime{}, sql.NullTime{},
 		)
 
 	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
 		WithArgs(email).
 		WillReturnRows(rows)
 
-	contact, err := repo.GetContactByEmail(context.Background(), email, "workspace123")
+	contact, err := repo.GetContactByEmail(context.Background(), "workspace123", email)
 	require.NoError(t, err)
 	assert.Equal(t, email, contact.Email)
 
@@ -64,7 +62,7 @@ func TestGetContactByEmail(t *testing.T) {
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
-	_, err = repo.GetContactByEmail(context.Background(), "nonexistent@example.com", "workspace123")
+	_, err = repo.GetContactByEmail(context.Background(), "workspace123", "nonexistent@example.com")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "contact not found")
 }
@@ -90,7 +88,6 @@ func TestGetContactByExternalID(t *testing.T) {
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 		"created_at", "updated_at",
-		"list_id", "list_status", "list_created_at", "list_updated_at",
 	}).
 		AddRow(
 			"test@example.com", externalID, "Europe/Paris", "en-US",
@@ -102,7 +99,6 @@ func TestGetContactByExternalID(t *testing.T) {
 			now, now, now, now, now,
 			[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 			now, now,
-			sql.NullString{}, sql.NullString{}, sql.NullTime{}, sql.NullTime{},
 		)
 
 	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.external_id = \$1`).
@@ -136,13 +132,11 @@ func TestGetContactByExternalID(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 			"created_at", "updated_at",
-			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "e-123", "Europe/Paris", "en-US", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{},
 			"", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{},
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			time.Now(), time.Now(),
-			sql.NullString{}, sql.NullString{}, sql.NullTime{}, sql.NullTime{},
 		)
 
 		mock.ExpectQuery("SELECT c\\.\\* FROM contacts c WHERE c.external_id = \\$1").
@@ -183,7 +177,6 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
-			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -194,15 +187,22 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
-			sql.NullString{String: "list1", Valid: true},
-			sql.NullString{String: "active", Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email ORDER BY c\.created_at DESC LIMIT \$1`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
 			WithArgs(11).
 			WillReturnRows(rows)
+
+		// Set up expectations for the contact lists query
+		listRows := sqlmock.NewRows([]string{
+			"email", "list_id", "status", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "list1", "active", time.Now(), time.Now(),
+		)
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
+			WithArgs("test@example.com").
+			WillReturnRows(listRows)
 
 		req := &domain.GetContactsRequest{
 			WorkspaceID:      "workspace123",
@@ -241,7 +241,6 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
-			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -252,15 +251,22 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
-			sql.NullString{String: "list1", Valid: true},
-			sql.NullString{String: "active", Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC LIMIT \$4`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC LIMIT \$4`).
 			WithArgs("%test@example.com%", "%John%", "%US%", 11).
 			WillReturnRows(rows)
+
+		// Set up expectations for the contact lists query
+		listRows := sqlmock.NewRows([]string{
+			"email", "list_id", "status", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "list1", "active", time.Now(), time.Now(),
+		)
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
+			WithArgs("test@example.com").
+			WillReturnRows(listRows)
 
 		req := &domain.GetContactsRequest{
 			WorkspaceID:      "workspace123",
@@ -302,7 +308,6 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
-			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -313,15 +318,22 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
-			sql.NullString{String: "list1", Valid: true},
-			sql.NullString{String: "active", Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email WHERE c\.created_at < \$1 ORDER BY c\.created_at DESC LIMIT \$2`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.created_at < \$1 ORDER BY c\.created_at DESC LIMIT \$2`).
 			WithArgs(sqlmock.AnyArg(), 11).
 			WillReturnRows(rows)
+
+		// Set up expectations for the contact lists query
+		listRows := sqlmock.NewRows([]string{
+			"email", "list_id", "status", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "list1", "active", time.Now(), time.Now(),
+		)
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
+			WithArgs("test@example.com").
+			WillReturnRows(listRows)
 
 		req := &domain.GetContactsRequest{
 			WorkspaceID:      "workspace123",
@@ -377,7 +389,6 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
-			"list_id", "list_status", "list_created_at", "list_updated_at",
 		}).AddRow(
 			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
@@ -388,15 +399,22 @@ func TestGetContacts(t *testing.T) {
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
 			time.Now(), time.Now(),
-			sql.NullString{String: "list1", Valid: true},
-			sql.NullString{String: "active", Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
-			sql.NullTime{Time: time.Now(), Valid: true},
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* , cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at FROM contacts c LEFT JOIN contact_lists cl ON c\.email = cl\.email WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC LIMIT \$7`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC LIMIT \$7`).
 			WithArgs("%test@example.com%", "%ext123%", "%John%", "%Doe%", "%+1234567890%", "%US%", 11).
 			WillReturnRows(rows)
+
+		// Set up expectations for the contact lists query
+		listRows := sqlmock.NewRows([]string{
+			"email", "list_id", "status", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "list1", "active", time.Now(), time.Now(),
+		)
+
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
+			WithArgs("test@example.com").
+			WillReturnRows(listRows)
 
 		req := &domain.GetContactsRequest{
 			WorkspaceID:      "workspace123",

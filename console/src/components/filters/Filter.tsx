@@ -34,6 +34,9 @@ export function Filter({ fields, activeFilters, className }: FilterProps) {
       searchParams.delete(field.key)
     })
 
+    // Remove any cursor parameters
+    searchParams.delete('cursor')
+
     // Then add the active filters
     filters.forEach((filter) => {
       searchParams.set(filter.field, String(filter.value))

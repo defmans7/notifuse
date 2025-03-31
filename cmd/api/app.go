@@ -215,6 +215,8 @@ func (a *App) InitServices() error {
 		a.mailer,
 		a.config,
 		a.contactService,
+		a.listService,
+		a.contactListService,
 	)
 
 	return nil

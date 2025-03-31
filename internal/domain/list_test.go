@@ -21,7 +21,6 @@ func TestList_Validate(t *testing.T) {
 			list: domain.List{
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 				Description:   "This is a description",
 			},
@@ -32,7 +31,6 @@ func TestList_Validate(t *testing.T) {
 			list: domain.List{
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "private",
 				IsDoubleOptin: false,
 			},
 			wantErr: false,
@@ -42,7 +40,6 @@ func TestList_Validate(t *testing.T) {
 			list: domain.List{
 				ID:            "",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -52,17 +49,6 @@ func TestList_Validate(t *testing.T) {
 			list: domain.List{
 				ID:            "list123",
 				Name:          "",
-				Type:          "public",
-				IsDoubleOptin: true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid type",
-			list: domain.List{
-				ID:            "list123",
-				Name:          "My List",
-				Type:          "invalid",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -88,7 +74,6 @@ func TestScanList(t *testing.T) {
 		data: []interface{}{
 			"list123",        // ID
 			"My List",        // Name
-			"public",         // Type
 			true,             // IsDoubleOptin
 			true,             // IsPublic
 			"This is a list", // Description
@@ -102,7 +87,6 @@ func TestScanList(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "list123", list.ID)
 	assert.Equal(t, "My List", list.Name)
-	assert.Equal(t, "public", list.Type)
 	assert.Equal(t, true, list.IsDoubleOptin)
 	assert.Equal(t, true, list.IsPublic)
 	assert.Equal(t, "This is a list", list.Description)
@@ -162,7 +146,6 @@ func TestCreateListRequest_Validate(t *testing.T) {
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
@@ -171,7 +154,6 @@ func TestCreateListRequest_Validate(t *testing.T) {
 			wantList: &domain.List{
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
@@ -182,7 +164,6 @@ func TestCreateListRequest_Validate(t *testing.T) {
 			request: domain.CreateListRequest{
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -192,7 +173,6 @@ func TestCreateListRequest_Validate(t *testing.T) {
 			request: domain.CreateListRequest{
 				WorkspaceID:   "workspace123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -203,7 +183,6 @@ func TestCreateListRequest_Validate(t *testing.T) {
 				WorkspaceID:   "workspace123",
 				ID:            "invalid@id",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -213,18 +192,6 @@ func TestCreateListRequest_Validate(t *testing.T) {
 			request: domain.CreateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
-				Type:          "public",
-				IsDoubleOptin: true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid type",
-			request: domain.CreateListRequest{
-				WorkspaceID:   "workspace123",
-				ID:            "list123",
-				Name:          "My List",
-				Type:          "invalid",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -243,7 +210,6 @@ func TestCreateListRequest_Validate(t *testing.T) {
 				assert.Equal(t, tt.request.WorkspaceID, workspaceID)
 				assert.Equal(t, tt.wantList.ID, list.ID)
 				assert.Equal(t, tt.wantList.Name, list.Name)
-				assert.Equal(t, tt.wantList.Type, list.Type)
 				assert.Equal(t, tt.wantList.IsDoubleOptin, list.IsDoubleOptin)
 				assert.Equal(t, tt.wantList.IsPublic, list.IsPublic)
 				assert.Equal(t, tt.wantList.Description, list.Description)
@@ -376,7 +342,6 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
@@ -385,7 +350,6 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 			wantList: &domain.List{
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
@@ -396,7 +360,6 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 			request: domain.UpdateListRequest{
 				ID:            "list123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -406,7 +369,6 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 			request: domain.UpdateListRequest{
 				WorkspaceID:   "workspace123",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -417,7 +379,6 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 				WorkspaceID:   "workspace123",
 				ID:            "invalid@id",
 				Name:          "My List",
-				Type:          "public",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -427,18 +388,6 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 			request: domain.UpdateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
-				Type:          "public",
-				IsDoubleOptin: true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid type",
-			request: domain.UpdateListRequest{
-				WorkspaceID:   "workspace123",
-				ID:            "list123",
-				Name:          "My List",
-				Type:          "invalid",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
@@ -457,7 +406,6 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 				assert.Equal(t, tt.request.WorkspaceID, workspaceID)
 				assert.Equal(t, tt.wantList.ID, list.ID)
 				assert.Equal(t, tt.wantList.Name, list.Name)
-				assert.Equal(t, tt.wantList.Type, list.Type)
 				assert.Equal(t, tt.wantList.IsDoubleOptin, list.IsDoubleOptin)
 				assert.Equal(t, tt.wantList.IsPublic, list.IsPublic)
 				assert.Equal(t, tt.wantList.Description, list.Description)

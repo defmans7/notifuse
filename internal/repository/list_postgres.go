@@ -34,13 +34,12 @@ func (r *listRepository) CreateList(ctx context.Context, workspaceID string, lis
 	list.UpdatedAt = now
 
 	query := `
-		INSERT INTO lists (id, name, type, is_double_optin, is_public, description, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO lists (id, name, is_double_optin, is_public, description, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 	_, err = workspaceDB.ExecContext(ctx, query,
 		list.ID,
 		list.Name,
-		list.Type,
 		list.IsDoubleOptin,
 		list.IsPublic,
 		list.Description,
@@ -61,7 +60,7 @@ func (r *listRepository) GetListByID(ctx context.Context, workspaceID string, id
 	}
 
 	query := `
-		SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
+		SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
 		FROM lists
 		WHERE id = $1
 	`
@@ -88,7 +87,7 @@ func (r *listRepository) GetLists(ctx context.Context, workspaceID string) ([]*d
 	}
 
 	query := `
-		SELECT id, name, type, is_double_optin, is_public, description, created_at, updated_at
+		SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
 		FROM lists
 		ORDER BY created_at DESC
 	`
@@ -126,13 +125,12 @@ func (r *listRepository) UpdateList(ctx context.Context, workspaceID string, lis
 
 	query := `
 		UPDATE lists
-		SET name = $1, type = $2, is_double_optin = $3, is_public = $4, description = $5, updated_at = $6
-		WHERE id = $7
+		SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
+		WHERE id = $6
 	`
 
 	result, err := workspaceDB.ExecContext(ctx, query,
 		list.Name,
-		list.Type,
 		list.IsDoubleOptin,
 		list.IsPublic,
 		list.Description,

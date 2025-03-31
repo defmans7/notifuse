@@ -302,7 +302,7 @@ func TestContactListService_GetListsByEmail(t *testing.T) {
 			Return(&domain.User{}, nil)
 
 		mockContactRepo.EXPECT().
-			GetContactByEmail(gomock.Any(), email, workspaceID).
+			GetContactByEmail(gomock.Any(), workspaceID, email).
 			Return(&domain.Contact{Email: email}, nil)
 
 		mockRepo.EXPECT().
@@ -330,7 +330,7 @@ func TestContactListService_GetListsByEmail(t *testing.T) {
 			Return(&domain.User{}, nil)
 
 		mockContactRepo.EXPECT().
-			GetContactByEmail(gomock.Any(), email, workspaceID).
+			GetContactByEmail(gomock.Any(), workspaceID, email).
 			Return(nil, errors.New("not found"))
 
 		result, err := service.GetListsByEmail(ctx, workspaceID, email)

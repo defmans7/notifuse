@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -71,7 +70,7 @@ type Contact struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// Join contact_lists
-	ContactLists []*ContactList `json:"contact_lists,omitempty"`
+	ContactLists []*ContactList `json:"contact_lists"`
 }
 
 // Validate ensures that the contact has all required fields
@@ -142,8 +141,6 @@ func ScanContact(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*Contact, error) {
 	var dbc dbContact
-	var listID, listStatus sql.NullString
-	var listCreatedAt, listUpdatedAt sql.NullTime
 
 	// Try to scan with contact list fields first
 	err := scanner.Scan(
@@ -185,233 +182,221 @@ func ScanContact(scanner interface {
 		&dbc.CustomJSON5,
 		&dbc.CreatedAt,
 		&dbc.UpdatedAt,
-		&listID,
-		&listStatus,
-		&listCreatedAt,
-		&listUpdatedAt,
 	)
-
-	// If we get an error about the number of arguments, try scanning without contact list fields
-	if err != nil && strings.Contains(err.Error(), "expected") && strings.Contains(err.Error(), "destination arguments") {
-		err = scanner.Scan(
-			&dbc.Email,
-			&dbc.ExternalID,
-			&dbc.Timezone,
-			&dbc.Language,
-			&dbc.FirstName,
-			&dbc.LastName,
-			&dbc.Phone,
-			&dbc.AddressLine1,
-			&dbc.AddressLine2,
-			&dbc.Country,
-			&dbc.Postcode,
-			&dbc.State,
-			&dbc.JobTitle,
-			&dbc.LifetimeValue,
-			&dbc.OrdersCount,
-			&dbc.LastOrderAt,
-			&dbc.CustomString1,
-			&dbc.CustomString2,
-			&dbc.CustomString3,
-			&dbc.CustomString4,
-			&dbc.CustomString5,
-			&dbc.CustomNumber1,
-			&dbc.CustomNumber2,
-			&dbc.CustomNumber3,
-			&dbc.CustomNumber4,
-			&dbc.CustomNumber5,
-			&dbc.CustomDatetime1,
-			&dbc.CustomDatetime2,
-			&dbc.CustomDatetime3,
-			&dbc.CustomDatetime4,
-			&dbc.CustomDatetime5,
-			&dbc.CustomJSON1,
-			&dbc.CustomJSON2,
-			&dbc.CustomJSON3,
-			&dbc.CustomJSON4,
-			&dbc.CustomJSON5,
-			&dbc.CreatedAt,
-			&dbc.UpdatedAt,
-		)
-	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan contact: %w", err)
 	}
 
+	// Convert to domain model
 	c := &Contact{
-		Email:      dbc.Email,
-		ExternalID: &NullableString{String: dbc.ExternalID.String, IsNull: !dbc.ExternalID.Valid},
-		Timezone:   &NullableString{String: dbc.Timezone.String, IsNull: !dbc.Timezone.Valid},
-		Language:   &NullableString{String: dbc.Language.String, IsNull: !dbc.Language.Valid},
-
-		FirstName: &NullableString{
-			String: dbc.FirstName.String,
-			IsNull: !dbc.FirstName.Valid,
-		},
-		LastName: &NullableString{
-			String: dbc.LastName.String,
-			IsNull: !dbc.LastName.Valid,
-		},
-		Phone: &NullableString{
-			String: dbc.Phone.String,
-			IsNull: !dbc.Phone.Valid,
-		},
-		AddressLine1: &NullableString{
-			String: dbc.AddressLine1.String,
-			IsNull: !dbc.AddressLine1.Valid,
-		},
-		AddressLine2: &NullableString{
-			String: dbc.AddressLine2.String,
-			IsNull: !dbc.AddressLine2.Valid,
-		},
-		Country: &NullableString{
-			String: dbc.Country.String,
-			IsNull: !dbc.Country.Valid,
-		},
-		Postcode: &NullableString{
-			String: dbc.Postcode.String,
-			IsNull: !dbc.Postcode.Valid,
-		},
-		State: &NullableString{
-			String: dbc.State.String,
-			IsNull: !dbc.State.Valid,
-		},
-		JobTitle: &NullableString{
-			String: dbc.JobTitle.String,
-			IsNull: !dbc.JobTitle.Valid,
-		},
-
-		LifetimeValue: &NullableFloat64{
-			Float64: dbc.LifetimeValue.Float64,
-			IsNull:  !dbc.LifetimeValue.Valid,
-		},
-		OrdersCount: &NullableFloat64{
-			Float64: dbc.OrdersCount.Float64,
-			IsNull:  !dbc.OrdersCount.Valid,
-		},
-		LastOrderAt: &NullableTime{
-			Time:   dbc.LastOrderAt.Time,
-			IsNull: !dbc.LastOrderAt.Valid,
-		},
-
-		CustomString1: &NullableString{
-			String: dbc.CustomString1.String,
-			IsNull: !dbc.CustomString1.Valid,
-		},
-		CustomString2: &NullableString{
-			String: dbc.CustomString2.String,
-			IsNull: !dbc.CustomString2.Valid,
-		},
-		CustomString3: &NullableString{
-			String: dbc.CustomString3.String,
-			IsNull: !dbc.CustomString3.Valid,
-		},
-		CustomString4: &NullableString{
-			String: dbc.CustomString4.String,
-			IsNull: !dbc.CustomString4.Valid,
-		},
-		CustomString5: &NullableString{
-			String: dbc.CustomString5.String,
-			IsNull: !dbc.CustomString5.Valid,
-		},
-
-		CustomNumber1: &NullableFloat64{
-			Float64: dbc.CustomNumber1.Float64,
-			IsNull:  !dbc.CustomNumber1.Valid,
-		},
-		CustomNumber2: &NullableFloat64{
-			Float64: dbc.CustomNumber2.Float64,
-			IsNull:  !dbc.CustomNumber2.Valid,
-		},
-		CustomNumber3: &NullableFloat64{
-			Float64: dbc.CustomNumber3.Float64,
-			IsNull:  !dbc.CustomNumber3.Valid,
-		},
-		CustomNumber4: &NullableFloat64{
-			Float64: dbc.CustomNumber4.Float64,
-			IsNull:  !dbc.CustomNumber4.Valid,
-		},
-		CustomNumber5: &NullableFloat64{
-			Float64: dbc.CustomNumber5.Float64,
-			IsNull:  !dbc.CustomNumber5.Valid,
-		},
-
-		CustomDatetime1: &NullableTime{
-			Time:   dbc.CustomDatetime1.Time,
-			IsNull: !dbc.CustomDatetime1.Valid,
-		},
-		CustomDatetime2: &NullableTime{
-			Time:   dbc.CustomDatetime2.Time,
-			IsNull: !dbc.CustomDatetime2.Valid,
-		},
-		CustomDatetime3: &NullableTime{
-			Time:   dbc.CustomDatetime3.Time,
-			IsNull: !dbc.CustomDatetime3.Valid,
-		},
-		CustomDatetime4: &NullableTime{
-			Time:   dbc.CustomDatetime4.Time,
-			IsNull: !dbc.CustomDatetime4.Valid,
-		},
-		CustomDatetime5: &NullableTime{
-			Time:   dbc.CustomDatetime5.Time,
-			IsNull: !dbc.CustomDatetime5.Valid,
-		},
-
-		// Initialize CustomJSON fields with IsNull=true by default
-		CustomJSON1: &NullableJSON{IsNull: true},
-		CustomJSON2: &NullableJSON{IsNull: true},
-		CustomJSON3: &NullableJSON{IsNull: true},
-		CustomJSON4: &NullableJSON{IsNull: true},
-		CustomJSON5: &NullableJSON{IsNull: true},
-
+		Email:     dbc.Email,
 		CreatedAt: dbc.CreatedAt,
 		UpdatedAt: dbc.UpdatedAt,
 	}
 
-	// Handle custom JSON fields
+	// Handle nullable fields
+	if dbc.ExternalID.Valid {
+		c.ExternalID = &NullableString{String: dbc.ExternalID.String, IsNull: false}
+	} else {
+		c.ExternalID = &NullableString{IsNull: true}
+	}
+	if dbc.Timezone.Valid {
+		c.Timezone = &NullableString{String: dbc.Timezone.String, IsNull: false}
+	} else {
+		c.Timezone = &NullableString{IsNull: true}
+	}
+	if dbc.Language.Valid {
+		c.Language = &NullableString{String: dbc.Language.String, IsNull: false}
+	} else {
+		c.Language = &NullableString{IsNull: true}
+	}
+	if dbc.FirstName.Valid {
+		c.FirstName = &NullableString{String: dbc.FirstName.String, IsNull: false}
+	} else {
+		c.FirstName = &NullableString{IsNull: true}
+	}
+	if dbc.LastName.Valid {
+		c.LastName = &NullableString{String: dbc.LastName.String, IsNull: false}
+	} else {
+		c.LastName = &NullableString{IsNull: true}
+	}
+	if dbc.Phone.Valid {
+		c.Phone = &NullableString{String: dbc.Phone.String, IsNull: false}
+	} else {
+		c.Phone = &NullableString{IsNull: true}
+	}
+	if dbc.AddressLine1.Valid {
+		c.AddressLine1 = &NullableString{String: dbc.AddressLine1.String, IsNull: false}
+	} else {
+		c.AddressLine1 = &NullableString{IsNull: true}
+	}
+	if dbc.AddressLine2.Valid {
+		c.AddressLine2 = &NullableString{String: dbc.AddressLine2.String, IsNull: false}
+	} else {
+		c.AddressLine2 = &NullableString{IsNull: true}
+	}
+	if dbc.Country.Valid {
+		c.Country = &NullableString{String: dbc.Country.String, IsNull: false}
+	} else {
+		c.Country = &NullableString{IsNull: true}
+	}
+	if dbc.Postcode.Valid {
+		c.Postcode = &NullableString{String: dbc.Postcode.String, IsNull: false}
+	} else {
+		c.Postcode = &NullableString{IsNull: true}
+	}
+	if dbc.State.Valid {
+		c.State = &NullableString{String: dbc.State.String, IsNull: false}
+	} else {
+		c.State = &NullableString{IsNull: true}
+	}
+	if dbc.JobTitle.Valid {
+		c.JobTitle = &NullableString{String: dbc.JobTitle.String, IsNull: false}
+	} else {
+		c.JobTitle = &NullableString{IsNull: true}
+	}
+	if dbc.LifetimeValue.Valid {
+		c.LifetimeValue = &NullableFloat64{Float64: dbc.LifetimeValue.Float64, IsNull: false}
+	} else {
+		c.LifetimeValue = &NullableFloat64{IsNull: true}
+	}
+	if dbc.OrdersCount.Valid {
+		c.OrdersCount = &NullableFloat64{Float64: dbc.OrdersCount.Float64, IsNull: false}
+	} else {
+		c.OrdersCount = &NullableFloat64{IsNull: true}
+	}
+	if dbc.LastOrderAt.Valid {
+		c.LastOrderAt = &NullableTime{Time: dbc.LastOrderAt.Time, IsNull: false}
+	} else {
+		c.LastOrderAt = &NullableTime{IsNull: true}
+	}
+	if dbc.CustomString1.Valid {
+		c.CustomString1 = &NullableString{String: dbc.CustomString1.String, IsNull: false}
+	} else {
+		c.CustomString1 = &NullableString{IsNull: true}
+	}
+	if dbc.CustomString2.Valid {
+		c.CustomString2 = &NullableString{String: dbc.CustomString2.String, IsNull: false}
+	} else {
+		c.CustomString2 = &NullableString{IsNull: true}
+	}
+	if dbc.CustomString3.Valid {
+		c.CustomString3 = &NullableString{String: dbc.CustomString3.String, IsNull: false}
+	} else {
+		c.CustomString3 = &NullableString{IsNull: true}
+	}
+	if dbc.CustomString4.Valid {
+		c.CustomString4 = &NullableString{String: dbc.CustomString4.String, IsNull: false}
+	} else {
+		c.CustomString4 = &NullableString{IsNull: true}
+	}
+	if dbc.CustomString5.Valid {
+		c.CustomString5 = &NullableString{String: dbc.CustomString5.String, IsNull: false}
+	} else {
+		c.CustomString5 = &NullableString{IsNull: true}
+	}
+	if dbc.CustomNumber1.Valid {
+		c.CustomNumber1 = &NullableFloat64{Float64: dbc.CustomNumber1.Float64, IsNull: false}
+	} else {
+		c.CustomNumber1 = &NullableFloat64{IsNull: true}
+	}
+	if dbc.CustomNumber2.Valid {
+		c.CustomNumber2 = &NullableFloat64{Float64: dbc.CustomNumber2.Float64, IsNull: false}
+	} else {
+		c.CustomNumber2 = &NullableFloat64{IsNull: true}
+	}
+	if dbc.CustomNumber3.Valid {
+		c.CustomNumber3 = &NullableFloat64{Float64: dbc.CustomNumber3.Float64, IsNull: false}
+	} else {
+		c.CustomNumber3 = &NullableFloat64{IsNull: true}
+	}
+	if dbc.CustomNumber4.Valid {
+		c.CustomNumber4 = &NullableFloat64{Float64: dbc.CustomNumber4.Float64, IsNull: false}
+	} else {
+		c.CustomNumber4 = &NullableFloat64{IsNull: true}
+	}
+	if dbc.CustomNumber5.Valid {
+		c.CustomNumber5 = &NullableFloat64{Float64: dbc.CustomNumber5.Float64, IsNull: false}
+	} else {
+		c.CustomNumber5 = &NullableFloat64{IsNull: true}
+	}
+	if dbc.CustomDatetime1.Valid {
+		c.CustomDatetime1 = &NullableTime{Time: dbc.CustomDatetime1.Time, IsNull: false}
+	} else {
+		c.CustomDatetime1 = &NullableTime{IsNull: true}
+	}
+	if dbc.CustomDatetime2.Valid {
+		c.CustomDatetime2 = &NullableTime{Time: dbc.CustomDatetime2.Time, IsNull: false}
+	} else {
+		c.CustomDatetime2 = &NullableTime{IsNull: true}
+	}
+	if dbc.CustomDatetime3.Valid {
+		c.CustomDatetime3 = &NullableTime{Time: dbc.CustomDatetime3.Time, IsNull: false}
+	} else {
+		c.CustomDatetime3 = &NullableTime{IsNull: true}
+	}
+	if dbc.CustomDatetime4.Valid {
+		c.CustomDatetime4 = &NullableTime{Time: dbc.CustomDatetime4.Time, IsNull: false}
+	} else {
+		c.CustomDatetime4 = &NullableTime{IsNull: true}
+	}
+	if dbc.CustomDatetime5.Valid {
+		c.CustomDatetime5 = &NullableTime{Time: dbc.CustomDatetime5.Time, IsNull: false}
+	} else {
+		c.CustomDatetime5 = &NullableTime{IsNull: true}
+	}
+
+	// Handle JSON fields
 	if len(dbc.CustomJSON1) > 0 && string(dbc.CustomJSON1) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON1, &data); err == nil {
 			c.CustomJSON1 = &NullableJSON{Data: data, IsNull: false}
+		} else {
+			c.CustomJSON1 = &NullableJSON{IsNull: true}
 		}
+	} else {
+		c.CustomJSON1 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON2) > 0 && string(dbc.CustomJSON2) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON2, &data); err == nil {
 			c.CustomJSON2 = &NullableJSON{Data: data, IsNull: false}
+		} else {
+			c.CustomJSON2 = &NullableJSON{IsNull: true}
 		}
+	} else {
+		c.CustomJSON2 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON3) > 0 && string(dbc.CustomJSON3) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON3, &data); err == nil {
 			c.CustomJSON3 = &NullableJSON{Data: data, IsNull: false}
+		} else {
+			c.CustomJSON3 = &NullableJSON{IsNull: true}
 		}
+	} else {
+		c.CustomJSON3 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON4) > 0 && string(dbc.CustomJSON4) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON4, &data); err == nil {
 			c.CustomJSON4 = &NullableJSON{Data: data, IsNull: false}
+		} else {
+			c.CustomJSON4 = &NullableJSON{IsNull: true}
 		}
+	} else {
+		c.CustomJSON4 = &NullableJSON{IsNull: true}
 	}
 	if len(dbc.CustomJSON5) > 0 && string(dbc.CustomJSON5) != "null" {
 		var data interface{}
 		if err := json.Unmarshal(dbc.CustomJSON5, &data); err == nil {
 			c.CustomJSON5 = &NullableJSON{Data: data, IsNull: false}
+		} else {
+			c.CustomJSON5 = &NullableJSON{IsNull: true}
 		}
-	}
-
-	// If we have contact list information, add it to the contact
-	if listID.Valid {
-		c.ContactLists = []*ContactList{
-			{
-				Email:     c.Email,
-				ListID:    listID.String,
-				Status:    ContactListStatus(listStatus.String),
-				CreatedAt: listCreatedAt.Time,
-				UpdatedAt: listUpdatedAt.Time,
-			},
-		}
+	} else {
+		c.CustomJSON5 = &NullableJSON{IsNull: true}
 	}
 
 	return c, nil

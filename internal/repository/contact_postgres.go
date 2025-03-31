@@ -23,13 +23,14 @@ func NewContactRepository(workspaceRepo domain.WorkspaceRepository) domain.Conta
 	}
 }
 
-func (r *contactRepository) GetContactByEmail(ctx context.Context, email, workspaceID string) (*domain.Contact, error) {
+func (r *contactRepository) GetContactByEmail(ctx context.Context, workspaceID, email string) (*domain.Contact, error) {
 	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
 	query := `SELECT c.* FROM contacts c WHERE c.email = $1`
+
 	row := db.QueryRowContext(ctx, query, email)
 
 	contact, err := domain.ScanContact(row)
@@ -71,14 +72,7 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 
 	// Build the query
 	query := strings.Builder{}
-	query.WriteString("SELECT c.* ")
-	if req.WithContactLists {
-		query.WriteString(", cl.list_id, cl.status, cl.created_at, cl.updated_at ")
-	}
-	query.WriteString("FROM contacts c ")
-	if req.WithContactLists {
-		query.WriteString("LEFT JOIN contact_lists cl ON c.email = cl.email ")
-	}
+	query.WriteString("SELECT c.* FROM contacts c ")
 
 	// Add filters
 	var filters []string
@@ -156,7 +150,6 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 
 	// Process results
 	var contacts []*domain.Contact
-	contactMap := make(map[string]*domain.Contact)
 	var nextCursor string
 
 	for rows.Next() {
@@ -164,22 +157,7 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan contact: %w", err)
 		}
-
-		// If we're fetching with contact lists, we need to handle multiple rows for the same contact
-		if req.WithContactLists {
-			if existingContact, ok := contactMap[contact.Email]; ok {
-				// If the contact already exists and has a contact list, merge it
-				if len(contact.ContactLists) > 0 {
-					existingContact.MergeContactLists(contact.ContactLists[0])
-				}
-			} else {
-				// This is a new contact
-				contactMap[contact.Email] = contact
-				contacts = append(contacts, contact)
-			}
-		} else {
-			contacts = append(contacts, contact)
-		}
+		contacts = append(contacts, contact)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -192,6 +170,65 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		lastContact := contacts[req.Limit-1]
 		contacts = contacts[:req.Limit]
 		nextCursor = lastContact.CreatedAt.Format(time.RFC3339)
+	}
+
+	// If WithContactLists is true, fetch contact lists in a separate query
+	if req.WithContactLists && len(contacts) > 0 {
+		// Build list of contact emails
+		emails := make([]string, len(contacts))
+		for i, contact := range contacts {
+			emails[i] = contact.Email
+		}
+
+		// Build the IN clause with placeholders
+		placeholders := make([]string, len(emails))
+		for i := range emails {
+			placeholders[i] = fmt.Sprintf("$%d", i+1)
+		}
+
+		// Query for contact lists
+		listQuery := fmt.Sprintf(`
+			SELECT email, list_id, status, created_at, updated_at
+			FROM contact_lists
+			WHERE email IN (%s)
+		`, strings.Join(placeholders, ","))
+
+		// Convert emails to interface slice for query args
+		emailArgs := make([]interface{}, len(emails))
+		for i, email := range emails {
+			emailArgs[i] = email
+		}
+
+		listRows, err := db.QueryContext(ctx, listQuery, emailArgs...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query contact lists: %w", err)
+		}
+		defer listRows.Close()
+
+		// Create a map of contacts by email for quick lookup
+		contactMap := make(map[string]*domain.Contact)
+		for _, contact := range contacts {
+			contact.ContactLists = []*domain.ContactList{}
+			contactMap[contact.Email] = contact
+		}
+
+		// Process contact list results
+		for listRows.Next() {
+			var email string
+			var list domain.ContactList
+			err := listRows.Scan(&email, &list.ListID, &list.Status, &list.CreatedAt, &list.UpdatedAt)
+			if err != nil {
+				return nil, fmt.Errorf("failed to scan contact list: %w", err)
+			}
+
+			if contact, ok := contactMap[email]; ok {
+				contact.ContactLists = append(contact.ContactLists, &list)
+			}
+		}
+
+		if err = listRows.Err(); err != nil {
+			return nil, fmt.Errorf("error iterating over contact list rows: %w", err)
+		}
 	}
 
 	return &domain.GetContactsResponse{

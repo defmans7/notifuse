@@ -1,11 +1,12 @@
-import { Layout, Menu, Select, Space, Button } from 'antd'
+import { Layout, Menu, Select, Space, Button, Popover, Dropdown } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
 import {
   MailOutlined,
   TeamOutlined,
   SettingOutlined,
   FileTextOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  FolderOpenOutlined
 } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { Workspace } from '../services/api/types'
@@ -26,6 +27,8 @@ export function WorkspaceLayout() {
   let selectedKey = 'campaigns'
   if (currentPath.includes('/settings')) {
     selectedKey = 'settings'
+  } else if (currentPath.includes('/lists')) {
+    selectedKey = 'lists'
   } else if (currentPath.includes('/templates')) {
     selectedKey = 'templates'
   } else if (currentPath.includes('/contacts')) {
@@ -46,6 +49,15 @@ export function WorkspaceLayout() {
       label: (
         <Link to="/workspace/$workspaceId/contacts" params={{ workspaceId }}>
           Contacts
+        </Link>
+      )
+    },
+    {
+      key: 'lists',
+      icon: <FolderOpenOutlined />,
+      label: (
+        <Link to="/workspace/$workspaceId/lists" params={{ workspaceId }}>
+          Lists
         </Link>
       )
     },
@@ -136,15 +148,30 @@ export function WorkspaceLayout() {
               background: '#fff'
             }}
           >
-            <div style={{ marginBottom: '8px', color: '#595959' }}>{user?.email}</div>
-            <Button
-              type="text"
-              icon={<LogoutOutlined />}
-              onClick={() => signout()}
-              style={{ width: '100%', textAlign: 'left' }}
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'logout',
+                    label: (
+                      <Space>
+                        <LogoutOutlined />
+                        Logout
+                      </Space>
+                    ),
+                    onClick: () => signout()
+                  }
+                ]
+              }}
+              trigger={['click']}
+              placement="bottomRight"
             >
-              Logout
-            </Button>
+              <Button type="text" block>
+                <div style={{ padding: '4px 8px', color: '#595959', cursor: 'pointer' }}>
+                  {user?.email}
+                </div>
+              </Button>
+            </Dropdown>
           </div>
         </Sider>
         <Layout style={{ padding: '24px' }}>

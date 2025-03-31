@@ -34,19 +34,17 @@ func NewContactListService(
 }
 
 func (s *ContactListService) AddContactToList(ctx context.Context, workspaceID string, contactList *domain.ContactList) error {
+
 	// Verify contact exists by email
 	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
-	contact, err := s.contactRepo.GetContactByEmail(ctx, workspaceID, contactList.Email)
+	_, err = s.contactRepo.GetContactByEmail(ctx, workspaceID, contactList.Email)
 	if err != nil {
 		return fmt.Errorf("contact not found: %w", err)
 	}
-
-	// Use the email as the contact ID
-	contactList.Email = contact.Email
 
 	// Verify list exists
 	list, err := s.listRepo.GetListByID(ctx, workspaceID, contactList.ListID)
@@ -126,7 +124,7 @@ func (s *ContactListService) GetListsByEmail(ctx context.Context, workspaceID st
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
-	_, err = s.contactRepo.GetContactByEmail(ctx, email, workspaceID)
+	_, err = s.contactRepo.GetContactByEmail(ctx, workspaceID, email)
 	if err != nil {
 		return nil, fmt.Errorf("contact not found: %w", err)
 	}

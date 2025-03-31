@@ -14,13 +14,15 @@ import (
 )
 
 type WorkspaceService struct {
-	repo           domain.WorkspaceRepository
-	logger         logger.Logger
-	userService    domain.UserServiceInterface
-	authService    domain.AuthService
-	mailer         mailer.Mailer
-	config         *config.Config
-	contactService domain.ContactService
+	repo               domain.WorkspaceRepository
+	logger             logger.Logger
+	userService        domain.UserServiceInterface
+	authService        domain.AuthService
+	mailer             mailer.Mailer
+	config             *config.Config
+	contactService     domain.ContactService
+	listService        domain.ListService
+	contactListService domain.ContactListService
 }
 
 func NewWorkspaceService(
@@ -31,15 +33,19 @@ func NewWorkspaceService(
 	mailerInstance mailer.Mailer,
 	config *config.Config,
 	contactService domain.ContactService,
+	listService domain.ListService,
+	contactListService domain.ContactListService,
 ) *WorkspaceService {
 	return &WorkspaceService{
-		repo:           repo,
-		logger:         logger,
-		userService:    userService,
-		authService:    authService,
-		mailer:         mailerInstance,
-		config:         config,
-		contactService: contactService,
+		repo:               repo,
+		logger:             logger,
+		userService:        userService,
+		authService:        authService,
+		mailer:             mailerInstance,
+		config:             config,
+		contactService:     contactService,
+		listService:        listService,
+		contactListService: contactListService,
 	}
 }
 
@@ -175,6 +181,38 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 	err = s.contactService.UpsertContact(ctx, id, contact)
 	if err != nil {
 		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create contact for owner")
+		return nil, err
+	}
+
+	// create a default list for the workspace
+	list := &domain.List{
+		ID:            "test",
+		Name:          "Test List",
+		IsDoubleOptin: false,
+		IsPublic:      false,
+		Description:   "This is a test list",
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	err = s.listService.CreateList(ctx, id, list)
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to create default list for workspace")
+		return nil, err
+	}
+
+	// create a default contact list for the workspace
+	contactList := &domain.ContactList{
+		Email:     userDetails.Email,
+		ListID:    list.ID,
+		Status:    domain.ContactListStatusActive,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	err = s.contactListService.AddContactToList(ctx, id, contactList)
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to create default contact list for workspace")
 		return nil, err
 	}
 

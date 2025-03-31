@@ -27,7 +27,6 @@ func TestListService_CreateList(t *testing.T) {
 	list := &domain.List{
 		ID:   "list123",
 		Name: "Test List",
-		Type: "public",
 	}
 
 	t.Run("successful creation", func(t *testing.T) {
@@ -87,7 +86,6 @@ func TestListService_GetListByID(t *testing.T) {
 	expectedList := &domain.List{
 		ID:   listID,
 		Name: "Test List",
-		Type: "public",
 	}
 
 	t.Run("successful retrieval", func(t *testing.T) {
@@ -148,8 +146,8 @@ func TestListService_GetLists(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "workspace123"
 	expectedLists := []*domain.List{
-		{ID: "list1", Name: "List 1", Type: "public"},
-		{ID: "list2", Name: "List 2", Type: "private"},
+		{ID: "list1", Name: "List 1"},
+		{ID: "list2", Name: "List 2"},
 	}
 
 	t.Run("successful retrieval", func(t *testing.T) {
@@ -198,7 +196,6 @@ func TestListService_UpdateList(t *testing.T) {
 	list := &domain.List{
 		ID:   "list123",
 		Name: "Updated List",
-		Type: "public",
 	}
 
 	t.Run("successful update", func(t *testing.T) {

@@ -198,7 +198,7 @@ func TestWorkspaceRepository_GetConnection(t *testing.T) {
 	defer mockWorkspaceCleanup()
 
 	// Store the mock connection in the repository's connection map directly
-	repo.connections.Store(workspaceID, mockWorkspaceDB)
+	repo.connectionPools.Store(workspaceID, mockWorkspaceDB)
 
 	// Test case 1: Getting a connection that already exists
 	db1, err := repo.GetConnection(ctx, workspaceID)
@@ -215,10 +215,10 @@ func TestWorkspaceRepository_GetConnection(t *testing.T) {
 	defer newWorkspaceCleanup()
 
 	newWorkspaceID := "new-workspace"
-	repo.connections.Store(newWorkspaceID, newWorkspaceDB)
+	repo.connectionPools.Store(newWorkspaceID, newWorkspaceDB)
 
 	// Verify the connection is in the pool
-	_, exists := repo.connections.Load(newWorkspaceID)
+	_, exists := repo.connectionPools.Load(newWorkspaceID)
 	assert.True(t, exists, "Connection should be in the pool")
 
 	// GetConnection call (may or may not error depending on the environment)

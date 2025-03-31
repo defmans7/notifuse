@@ -75,7 +75,13 @@ const workspaceCampaignsRoute = createRoute({
   component: () => <div>Campaigns</div>
 })
 
-export const contactsRoute = createRoute({
+const workspaceListsRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/lists',
+  component: () => <div>Lists</div>
+})
+
+export const workspaceContactsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/contacts',
   component: ContactsPage,
@@ -113,7 +119,8 @@ const routeTree = rootRoute.addChildren([
   workspaceCreateRoute,
   workspaceRoute.addChildren([
     workspaceCampaignsRoute,
-    contactsRoute,
+    workspaceContactsRoute,
+    workspaceListsRoute,
     workspaceSettingsRoute,
     workspaceTemplatesRoute
   ])
