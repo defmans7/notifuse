@@ -65,6 +65,10 @@ func TestContactListService_AddContactToList(t *testing.T) {
 			AddContactToList(gomock.Any(), workspaceID, gomock.Any()).
 			Return(nil)
 
+		mockListRepo.EXPECT().
+			IncrementTotal(gomock.Any(), workspaceID, listID, domain.TotalTypeActive).
+			Return(nil)
+
 		err := service.AddContactToList(ctx, workspaceID, contactList)
 		require.NoError(t, err)
 	})
@@ -97,6 +101,10 @@ func TestContactListService_AddContactToList(t *testing.T) {
 				require.Equal(t, domain.ContactListStatusPending, cl.Status)
 				return nil
 			})
+
+		mockListRepo.EXPECT().
+			IncrementTotal(gomock.Any(), workspaceID, listID, domain.TotalTypeActive).
+			Return(nil)
 
 		err := service.AddContactToList(ctx, workspaceID, contactList)
 		require.NoError(t, err)

@@ -10,7 +10,7 @@ import { ContactUpsertDrawer } from '../components/contacts/ContactUpsertDrawer'
 import { CountriesFormOptions } from '../components/utils/countries_timezones'
 import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
-import { ContactColumnsSelector } from '../components/contacts/ContactColumnsSelector'
+import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
 
 const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
@@ -50,7 +50,12 @@ const DEFAULT_VISIBLE_COLUMNS = {
   custom_datetime_2: false,
   custom_datetime_3: false,
   custom_datetime_4: false,
-  custom_datetime_5: false
+  custom_datetime_5: false,
+  custom_json_1: false,
+  custom_json_2: false,
+  custom_json_3: false,
+  custom_json_4: false,
+  custom_json_5: false
 }
 
 export function ContactsPage() {
@@ -109,7 +114,12 @@ export function ContactsPage() {
     { key: 'custom_datetime_2', title: 'Custom Date 2' },
     { key: 'custom_datetime_3', title: 'Custom Date 3' },
     { key: 'custom_datetime_4', title: 'Custom Date 4' },
-    { key: 'custom_datetime_5', title: 'Custom Date 5' }
+    { key: 'custom_datetime_5', title: 'Custom Date 5' },
+    { key: 'custom_json_1', title: 'Custom JSON 1' },
+    { key: 'custom_json_2', title: 'Custom JSON 2' },
+    { key: 'custom_json_3', title: 'Custom JSON 3' },
+    { key: 'custom_json_4', title: 'Custom JSON 4' },
+    { key: 'custom_json_5', title: 'Custom JSON 5' }
   ]
 
   const activeFilters = React.useMemo(() => {
@@ -152,7 +162,11 @@ export function ContactsPage() {
     {
       title: 'Email',
       dataIndex: 'email',
-      key: 'email'
+      key: 'email',
+      fixed: 'left' as const,
+      onHeaderCell: () => ({
+        className: '!bg-white'
+      })
     },
     {
       title: 'Name',
@@ -328,6 +342,51 @@ export function ContactsPage() {
       hidden: !visibleColumns.custom_datetime_5
     },
     {
+      title: 'Custom JSON 1',
+      dataIndex: 'custom_json_1',
+      key: 'custom_json_1',
+      render: (_: unknown, record: Contact) => (
+        <JsonViewer json={record.custom_json_1} title="Custom JSON 1" />
+      ),
+      hidden: !visibleColumns.custom_json_1
+    },
+    {
+      title: 'Custom JSON 2',
+      dataIndex: 'custom_json_2',
+      key: 'custom_json_2',
+      render: (_: unknown, record: Contact) => (
+        <JsonViewer json={record.custom_json_2} title="Custom JSON 2" />
+      ),
+      hidden: !visibleColumns.custom_json_2
+    },
+    {
+      title: 'Custom JSON 3',
+      dataIndex: 'custom_json_3',
+      key: 'custom_json_3',
+      render: (_: unknown, record: Contact) => (
+        <JsonViewer json={record.custom_json_3} title="Custom JSON 3" />
+      ),
+      hidden: !visibleColumns.custom_json_3
+    },
+    {
+      title: 'Custom JSON 4',
+      dataIndex: 'custom_json_4',
+      key: 'custom_json_4',
+      render: (_: unknown, record: Contact) => (
+        <JsonViewer json={record.custom_json_4} title="Custom JSON 4" />
+      ),
+      hidden: !visibleColumns.custom_json_4
+    },
+    {
+      title: 'Custom JSON 5',
+      dataIndex: 'custom_json_5',
+      key: 'custom_json_5',
+      render: (_: unknown, record: Contact) => (
+        <JsonViewer json={record.custom_json_5} title="Custom JSON 5" />
+      ),
+      hidden: !visibleColumns.custom_json_5
+    },
+    {
       title: 'Lists',
       key: 'lists',
       render: (_: unknown, record: Contact) => (
@@ -344,6 +403,7 @@ export function ContactsPage() {
     {
       title: 'Actions',
       key: 'actions',
+      fixed: 'right' as const,
       render: (_: unknown, record: Contact) => (
         <ContactUpsertDrawer
           workspaceId={workspaceId}
@@ -396,6 +456,8 @@ export function ContactsPage() {
         rowKey={(record) => record.email}
         loading={isLoading}
         pagination={false}
+        scroll={{ x: 'max-content' }}
+        style={{ minWidth: 800 }}
       />
 
       {data?.cursor && (

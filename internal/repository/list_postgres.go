@@ -180,3 +180,83 @@ func (r *listRepository) DeleteList(ctx context.Context, workspaceID string, id 
 
 	return nil
 }
+
+func (r *listRepository) IncrementTotal(ctx context.Context, workspaceID string, listID string, totalType domain.ContactListTotalType) error {
+	var columnName string
+	switch totalType {
+	case domain.TotalTypePending:
+		columnName = "total_pending"
+	case domain.TotalTypeUnsubscribed:
+		columnName = "total_unsubscribed"
+	case domain.TotalTypeBounced:
+		columnName = "total_bounced"
+	case domain.TotalTypeComplained:
+		columnName = "total_complained"
+	case domain.TotalTypeActive:
+		columnName = "total_active"
+	default:
+		return fmt.Errorf("invalid total type: %s", totalType)
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	query := fmt.Sprintf("UPDATE lists SET %s = %s + 1 WHERE id = $1", columnName, columnName)
+	result, err := workspaceDB.ExecContext(ctx, query, listID)
+	if err != nil {
+		return fmt.Errorf("failed to increment total: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	if rows == 0 {
+		return &domain.ErrListNotFound{Message: "list not found"}
+	}
+
+	return nil
+}
+
+func (r *listRepository) DecrementTotal(ctx context.Context, workspaceID string, listID string, totalType domain.ContactListTotalType) error {
+	var columnName string
+	switch totalType {
+	case domain.TotalTypePending:
+		columnName = "total_pending"
+	case domain.TotalTypeUnsubscribed:
+		columnName = "total_unsubscribed"
+	case domain.TotalTypeBounced:
+		columnName = "total_bounced"
+	case domain.TotalTypeComplained:
+		columnName = "total_complained"
+	case domain.TotalTypeActive:
+		columnName = "total_active"
+	default:
+		return fmt.Errorf("invalid total type: %s", totalType)
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	query := fmt.Sprintf("UPDATE lists SET %s = GREATEST(%s - 1, 0) WHERE id = $1", columnName, columnName)
+	result, err := workspaceDB.ExecContext(ctx, query, listID)
+	if err != nil {
+		return fmt.Errorf("failed to decrement total: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	if rows == 0 {
+		return &domain.ErrListNotFound{Message: "list not found"}
+	}
+
+	return nil
+}

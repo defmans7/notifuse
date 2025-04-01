@@ -13,6 +13,31 @@ interface ContactColumnsSelectorProps {
   onColumnVisibilityChange: (key: string, visible: boolean) => void
 }
 
+interface JsonViewerProps {
+  json: any
+  title?: string
+}
+
+export function JsonViewer({ json, title }: JsonViewerProps) {
+  if (!json) return '-'
+  const jsonString = JSON.stringify(json)
+  const preview = jsonString.length > 10 ? jsonString.slice(0, 10) + '...' : jsonString
+  return (
+    <Popover
+      content={
+        <div>
+          {title && <div className="font-medium mb-2">{title}</div>}
+          <pre className="max-h-[300px] overflow-auto text-sm bg-gray-50 p-2 rounded">
+            {JSON.stringify(json, null, 2)}
+          </pre>
+        </div>
+      }
+    >
+      <span className="text-gray-600 cursor-pointer">{preview}</span>
+    </Popover>
+  )
+}
+
 const STORAGE_KEY = 'contact_columns_visibility'
 
 export function ContactColumnsSelector({

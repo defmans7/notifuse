@@ -72,6 +72,11 @@ func (s *ContactListService) AddContactToList(ctx context.Context, workspaceID s
 		return fmt.Errorf("failed to add contact to list: %w", err)
 	}
 
+	if err := s.listRepo.IncrementTotal(ctx, workspaceID, contactList.ListID, domain.TotalTypeActive); err != nil {
+		s.logger.WithField("list_id", contactList.ListID).
+			Error(fmt.Sprintf("Failed to increment total active: %v", err))
+	}
+
 	return nil
 }
 

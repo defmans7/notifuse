@@ -281,3 +281,111 @@ func TestListService_DeleteList(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to delete list")
 	})
 }
+
+func TestListService_IncrementTotal(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockListRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	service := NewListService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	listID := "list123"
+	totalType := domain.TotalTypeActive
+
+	t.Run("successful increment", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().IncrementTotal(ctx, workspaceID, listID, totalType).Return(nil)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).Times(0)
+		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
+
+		err := service.IncrementTotal(ctx, workspaceID, listID, totalType)
+		assert.NoError(t, err)
+	})
+
+	t.Run("authentication failure", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+
+		err := service.IncrementTotal(ctx, workspaceID, listID, totalType)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("invalid total type", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+
+		err := service.IncrementTotal(ctx, workspaceID, listID, domain.ContactListTotalType("invalid"))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid total type")
+	})
+
+	t.Run("repository failure", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().IncrementTotal(ctx, workspaceID, listID, totalType).Return(errors.New("db error"))
+		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("total_type", totalType).Return(mockLogger)
+		mockLogger.EXPECT().Error(gomock.Any())
+
+		err := service.IncrementTotal(ctx, workspaceID, listID, totalType)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to increment total")
+	})
+}
+
+func TestListService_DecrementTotal(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockListRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	service := NewListService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	listID := "list123"
+	totalType := domain.TotalTypeActive
+
+	t.Run("successful decrement", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().DecrementTotal(ctx, workspaceID, listID, totalType).Return(nil)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).Times(0)
+		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
+
+		err := service.DecrementTotal(ctx, workspaceID, listID, totalType)
+		assert.NoError(t, err)
+	})
+
+	t.Run("authentication failure", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+
+		err := service.DecrementTotal(ctx, workspaceID, listID, totalType)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("invalid total type", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+
+		err := service.DecrementTotal(ctx, workspaceID, listID, domain.ContactListTotalType("invalid"))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid total type")
+	})
+
+	t.Run("repository failure", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().DecrementTotal(ctx, workspaceID, listID, totalType).Return(errors.New("db error"))
+		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("total_type", totalType).Return(mockLogger)
+		mockLogger.EXPECT().Error(gomock.Any())
+
+		err := service.DecrementTotal(ctx, workspaceID, listID, totalType)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrement total")
+	})
+}

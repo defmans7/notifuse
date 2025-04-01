@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -13,7 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
+	"github.com/golang/mock/gomock"
 )
 
 func TestListRepository(t *testing.T) {
@@ -275,4 +278,246 @@ func TestListRepository(t *testing.T) {
 			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 	})
+}
+
+func setupListRepositoryTest(t *testing.T) (*listRepository, sqlmock.Sqlmock, *mocks.MockWorkspaceRepository) {
+	ctrl := gomock.NewController(t)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+	repo := NewListRepository(mockWorkspaceRepo).(*listRepository)
+	return repo, nil, mockWorkspaceRepo
+}
+
+func TestListRepository_IncrementTotal_InvalidType(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewListRepository(mockWorkspaceRepo)
+
+	err := repo.IncrementTotal(context.Background(), "workspace123", "list123", "invalid_type")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid total type")
+}
+
+func TestListRepository_DecrementTotal_InvalidType(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewListRepository(mockWorkspaceRepo)
+
+	err := repo.DecrementTotal(context.Background(), "workspace123", "list123", "invalid_type")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid total type")
+}
+
+func TestListRepository_IncrementTotal(t *testing.T) {
+	tests := []struct {
+		name      string
+		totalType domain.ContactListTotalType
+		column    string
+		mockSetup func(mock sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name:      "increment active total",
+			totalType: domain.TotalTypeActive,
+			column:    "total_active",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_active = total_active \\+ 1 WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "increment pending total",
+			totalType: domain.TotalTypePending,
+			column:    "total_pending",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_pending = total_pending \\+ 1 WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "increment unsubscribed total",
+			totalType: domain.TotalTypeUnsubscribed,
+			column:    "total_unsubscribed",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_unsubscribed = total_unsubscribed \\+ 1 WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "increment bounced total",
+			totalType: domain.TotalTypeBounced,
+			column:    "total_bounced",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_bounced = total_bounced \\+ 1 WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "increment complained total",
+			totalType: domain.TotalTypeComplained,
+			column:    "total_complained",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_complained = total_complained \\+ 1 WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "workspace connection error",
+			totalType: domain.TotalTypeActive,
+			mockSetup: nil,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+			repo := NewListRepository(mockWorkspaceRepo)
+
+			if tt.mockSetup != nil {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				defer db.Close()
+
+				tt.mockSetup(mock)
+
+				mockWorkspaceRepo.EXPECT().
+					GetConnection(gomock.Any(), "workspace123").
+					Return(db, nil)
+			} else {
+				mockWorkspaceRepo.EXPECT().
+					GetConnection(gomock.Any(), "workspace123").
+					Return(nil, fmt.Errorf("workspace connection error"))
+			}
+
+			err := repo.IncrementTotal(context.Background(), "workspace123", "list123", tt.totalType)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestListRepository_DecrementTotal(t *testing.T) {
+	tests := []struct {
+		name      string
+		totalType domain.ContactListTotalType
+		column    string
+		mockSetup func(mock sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name:      "decrement active total",
+			totalType: domain.TotalTypeActive,
+			column:    "total_active",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_active = GREATEST\\(total_active - 1, 0\\) WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "decrement pending total",
+			totalType: domain.TotalTypePending,
+			column:    "total_pending",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_pending = GREATEST\\(total_pending - 1, 0\\) WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "decrement unsubscribed total",
+			totalType: domain.TotalTypeUnsubscribed,
+			column:    "total_unsubscribed",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_unsubscribed = GREATEST\\(total_unsubscribed - 1, 0\\) WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "decrement bounced total",
+			totalType: domain.TotalTypeBounced,
+			column:    "total_bounced",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_bounced = GREATEST\\(total_bounced - 1, 0\\) WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "decrement complained total",
+			totalType: domain.TotalTypeComplained,
+			column:    "total_complained",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("UPDATE lists SET total_complained = GREATEST\\(total_complained - 1, 0\\) WHERE id = \\$1").
+					WithArgs("list123").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "workspace connection error",
+			totalType: domain.TotalTypeActive,
+			mockSetup: nil,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+			repo := NewListRepository(mockWorkspaceRepo)
+
+			if tt.mockSetup != nil {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				defer db.Close()
+
+				tt.mockSetup(mock)
+
+				mockWorkspaceRepo.EXPECT().
+					GetConnection(gomock.Any(), "workspace123").
+					Return(db, nil)
+			} else {
+				mockWorkspaceRepo.EXPECT().
+					GetConnection(gomock.Any(), "workspace123").
+					Return(nil, fmt.Errorf("workspace connection error"))
+			}
+
+			err := repo.DecrementTotal(context.Background(), "workspace123", "list123", tt.totalType)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

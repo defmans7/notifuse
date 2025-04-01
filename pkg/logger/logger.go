@@ -6,7 +6,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-//go:generate mockgen -destination=../mocks/mock_logger.go -package=mocks github.com/Notifuse/notifuse/pkg/logger Logger
+//go:generate mockgen -destination=../mocks/mock_logger.go -package=pkgmocks github.com/Notifuse/notifuse/pkg/logger Logger
 
 type Logger interface {
 	Debug(msg string)

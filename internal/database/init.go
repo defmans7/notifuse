@@ -109,6 +109,11 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			is_double_optin BOOLEAN NOT NULL DEFAULT FALSE,
 			is_public BOOLEAN NOT NULL DEFAULT FALSE,
 			description TEXT,
+			total_active INTEGER NOT NULL DEFAULT 0,
+			total_pending INTEGER NOT NULL DEFAULT 0,
+			total_unsubscribed INTEGER NOT NULL DEFAULT 0,
+			total_bounced INTEGER NOT NULL DEFAULT 0,
+			total_complained INTEGER NOT NULL DEFAULT 0,
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL
 		)`,
