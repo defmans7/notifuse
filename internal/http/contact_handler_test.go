@@ -535,7 +535,7 @@ func TestContactHandler_HandleImport(t *testing.T) {
 		expectedCount   int
 	}{
 		{
-			name:   "successful batch import",
+			name:   "successful_batch_import",
 			method: http.MethodPost,
 			reqBody: map[string]interface{}{
 				"workspace_id": "workspace123",
@@ -545,19 +545,23 @@ func TestContactHandler_HandleImport(t *testing.T) {
 						"external_id": "ext1",
 						"timezone":    "UTC",
 					},
-					{
-						"email":       "contact2@example.com",
-						"external_id": "ext2",
-						"timezone":    "UTC",
-					},
 				},
 			},
 			setupMock: func(m *mocks.MockContactService) {
-				m.EXPECT().BatchImportContacts(gomock.Any(), "workspace123", gomock.Any()).Return(nil)
+				m.EXPECT().
+					BatchImportContacts(gomock.Any(), "workspace123", gomock.Any()).
+					Return(&domain.BatchImportContactsResponse{
+						Operations: []*domain.UpsertContactOperation{
+							{
+								Email:  "contact1@example.com",
+								Action: domain.UpsertContactOperationCreate,
+							},
+						},
+					})
 			},
 			expectedStatus:  http.StatusOK,
-			expectedMessage: "Successfully imported 2 contacts",
-			expectedCount:   2,
+			expectedMessage: "contact1@example.com",
+			expectedCount:   1,
 		},
 		{
 			name:   "service error",
@@ -573,10 +577,14 @@ func TestContactHandler_HandleImport(t *testing.T) {
 				},
 			},
 			setupMock: func(m *mocks.MockContactService) {
-				m.EXPECT().BatchImportContacts(gomock.Any(), "workspace123", gomock.Any()).Return(errors.New("service error"))
+				m.EXPECT().
+					BatchImportContacts(gomock.Any(), "workspace123", gomock.Any()).
+					Return(&domain.BatchImportContactsResponse{
+						Error: "service error",
+					})
 			},
 			expectedStatus:  http.StatusInternalServerError,
-			expectedMessage: "Failed to import contacts",
+			expectedMessage: "service error",
 			expectedCount:   0,
 		},
 		{
@@ -641,12 +649,182 @@ func TestContactHandler_HandleImport(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, rr.Code)
 
 			if tc.expectedStatus == http.StatusOK {
-				var response map[string]interface{}
+				var response domain.BatchImportContactsResponse
 				err := json.NewDecoder(rr.Body).Decode(&response)
 				assert.NoError(t, err)
-				assert.True(t, response["success"].(bool))
-				assert.Equal(t, tc.expectedMessage, response["message"])
-				assert.Equal(t, float64(tc.expectedCount), response["count"])
+				assert.NotEmpty(t, response.Operations)
+				assert.Equal(t, tc.expectedCount, len(response.Operations))
+				assert.Equal(t, tc.expectedMessage, response.Operations[0].Email)
+				assert.Equal(t, domain.UpsertContactOperationCreate, response.Operations[0].Action)
+			}
+		})
+	}
+}
+
+func TestContactHandler_HandleUpsert(t *testing.T) {
+	testCases := []struct {
+		name           string
+		method         string
+		reqBody        interface{}
+		setupMock      func(*mocks.MockContactService)
+		expectedStatus int
+		expectedAction string
+	}{
+		{
+			name:   "Create Contact Without UUID",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "new-ext",
+					"email":       "new@example.com",
+					"first_name":  "John",
+					"last_name":   "Doe",
+					"timezone":    "UTC",
+				},
+			},
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(domain.UpsertContactOperation{
+						Email:  "new@example.com",
+						Action: domain.UpsertContactOperationCreate,
+					})
+			},
+			expectedStatus: http.StatusOK,
+			expectedAction: domain.UpsertContactOperationCreate,
+		},
+		{
+			name:   "Create Contact With Email",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "new-ext",
+					"email":       "new@example.com",
+					"first_name":  "John",
+					"last_name":   "Doe",
+					"timezone":    "UTC",
+				},
+			},
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(domain.UpsertContactOperation{
+						Email:  "new@example.com",
+						Action: domain.UpsertContactOperationCreate,
+					})
+			},
+			expectedStatus: http.StatusOK,
+			expectedAction: domain.UpsertContactOperationCreate,
+		},
+		{
+			name:   "Update Existing Contact",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "updated-ext",
+					"email":       "old@example.com",
+					"timezone":    "UTC",
+				},
+			},
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(domain.UpsertContactOperation{
+						Email:  "old@example.com",
+						Action: domain.UpsertContactOperationUpdate,
+					})
+			},
+			expectedStatus: http.StatusOK,
+			expectedAction: domain.UpsertContactOperationUpdate,
+		},
+		{
+			name:    "Invalid Request Body",
+			method:  http.MethodPost,
+			reqBody: "invalid json",
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().UpsertContact(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedAction: "",
+		},
+		{
+			name:   "Method Not Allowed",
+			method: http.MethodGet,
+			reqBody: map[string]interface{}{
+				"external_id": "updated-ext",
+				"email":       "updated@example.com",
+				"timezone":    "UTC",
+			},
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().UpsertContact(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+			},
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedAction: "",
+		},
+		{
+			name:   "Service Error on Upsert",
+			method: http.MethodPost,
+			reqBody: map[string]interface{}{
+				"workspace_id": "workspace123",
+				"contact": map[string]interface{}{
+					"external_id": "ext1",
+					"email":       "test@example.com",
+					"timezone":    "UTC",
+				},
+			},
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().
+					UpsertContact(gomock.Any(), "workspace123", gomock.Any()).
+					Return(domain.UpsertContactOperation{
+						Email:  "test@example.com",
+						Action: domain.UpsertContactOperationError,
+						Error:  "service error",
+					})
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedAction: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockService, _, handler := setupContactHandlerTest(t)
+			tc.setupMock(mockService)
+
+			var reqBody bytes.Buffer
+			if tc.reqBody != nil {
+				// If it's a string, just use it directly
+				if str, ok := tc.reqBody.(string); ok {
+					reqBody = *bytes.NewBufferString(str)
+				} else {
+					// Otherwise encode as JSON
+					if err := json.NewEncoder(&reqBody).Encode(tc.reqBody); err != nil {
+						t.Fatalf("Failed to encode request body: %v", err)
+					}
+				}
+			}
+
+			req := httptest.NewRequest(tc.method, "/api/contacts.upsert", &reqBody)
+			if err := req.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			handler.handleUpsert(rr, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+
+			// Check response body for success cases
+			if tc.expectedStatus == http.StatusOK {
+				var response domain.UpsertContactOperation
+				err := json.Unmarshal(rr.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedAction, response.Action)
 			}
 		})
 	}

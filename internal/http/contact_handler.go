@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"aidanwoods.dev/go-paseto"
 
@@ -201,20 +200,17 @@ func (h *ContactHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.BatchImportContacts(r.Context(), workspaceID, contacts); err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to import contacts")
-		WriteJSONError(w, "Failed to import contacts", http.StatusInternalServerError)
+	result := h.service.BatchImportContacts(r.Context(), workspaceID, contacts)
+	if result.Error != "" {
+		h.logger.WithField("error", result.Error).Error("Failed to import contacts")
+		WriteJSONError(w, result.Error, http.StatusInternalServerError)
 		return
 	}
 
 	// Write success response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": fmt.Sprintf("Successfully imported %d contacts", len(contacts)),
-		"count":   len(contacts),
-	})
+	json.NewEncoder(w).Encode(result)
 }
 
 func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
@@ -252,21 +248,12 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.service.UpsertContact(r.Context(), workspaceID, contact)
-	if err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to upsert contact")
-		WriteJSONError(w, "Failed to upsert contact", http.StatusInternalServerError)
+	result := h.service.UpsertContact(r.Context(), workspaceID, contact)
+	if result.Action == domain.UpsertContactOperationError {
+		h.logger.WithField("error", result.Error).Error("Failed to upsert contact")
+		WriteJSONError(w, result.Error, http.StatusBadRequest)
 		return
 	}
 
-	// Determine if the contact was just created by checking if CreatedAt is recent
-	isNew := time.Since(contact.CreatedAt) < time.Second
-
-	// Return 201 for new contacts, 200 for updates
-	statusCode := map[bool]int{true: http.StatusCreated, false: http.StatusOK}[isNew]
-
-	writeJSON(w, statusCode, map[string]interface{}{
-		"contact": contact,
-		"action":  map[bool]string{true: "created", false: "updated"}[isNew],
-	})
+	writeJSON(w, http.StatusOK, result)
 }

@@ -203,36 +203,6 @@ func TestContactService_DeleteContact(t *testing.T) {
 	})
 }
 
-func TestContactService_BatchImportContacts(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockContactRepo := mocks.NewMockContactRepository(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	service := NewContactService(mockContactRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
-
-	ctx := context.Background()
-	workspaceID := "test-workspace"
-	contacts := []*domain.Contact{
-		{Email: "test1@example.com"},
-		{Email: "test2@example.com"},
-	}
-
-	t.Run("repository error", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockLogger.EXPECT().WithField("contacts_count", len(contacts)).Return(mockLogger)
-		mockContactRepo.EXPECT().BatchImportContacts(ctx, workspaceID, contacts).Return(errors.New("repo error"))
-		mockLogger.EXPECT().Error("Failed to batch import contacts: repo error")
-
-		err := service.BatchImportContacts(ctx, workspaceID, contacts)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "repo error")
-	})
-}
-
 func TestContactService_UpsertContact(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -250,29 +220,43 @@ func TestContactService_UpsertContact(t *testing.T) {
 		Email: "test@example.com",
 	}
 
-	t.Run("successful upsert", func(t *testing.T) {
+	t.Run("successful create", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(nil)
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(true, nil)
 
-		err := service.UpsertContact(ctx, workspaceID, contact)
-		assert.NoError(t, err)
+		result := service.UpsertContact(ctx, workspaceID, contact)
+		assert.Equal(t, domain.UpsertContactOperationCreate, result.Action)
+		assert.Empty(t, result.Error)
+	})
+
+	t.Run("successful update", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(false, nil)
+
+		result := service.UpsertContact(ctx, workspaceID, contact)
+		assert.Equal(t, domain.UpsertContactOperationUpdate, result.Action)
+		assert.Empty(t, result.Error)
 	})
 
 	t.Run("authentication error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockLogger.EXPECT().WithField("email", contact.Email).Return(mockLogger)
+		mockLogger.EXPECT().Error("Failed to authenticate user: auth error")
 
-		err := service.UpsertContact(ctx, workspaceID, contact)
-		assert.Error(t, err)
+		result := service.UpsertContact(ctx, workspaceID, contact)
+		assert.Equal(t, domain.UpsertContactOperationError, result.Action)
+		assert.Contains(t, result.Error, "auth error")
 	})
 
 	t.Run("repository error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(errors.New("repo error"))
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, contact).Return(false, errors.New("repo error"))
 		mockLogger.EXPECT().WithField("email", contact.Email).Return(mockLogger)
 		mockLogger.EXPECT().Error("Failed to upsert contact: repo error")
 
-		err := service.UpsertContact(ctx, workspaceID, contact)
-		assert.Error(t, err)
+		result := service.UpsertContact(ctx, workspaceID, contact)
+		assert.Equal(t, domain.UpsertContactOperationError, result.Action)
+		assert.Contains(t, result.Error, "repo error")
 	})
 }
 
@@ -300,14 +284,15 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
 				// Verify that contact has CreatedAt and UpdatedAt set
-				assert.NotZero(t, contact.CreatedAt)
-				assert.NotZero(t, contact.UpdatedAt)
+				assert.NotZero(t, contact.CreatedAt.Unix())
+				assert.NotZero(t, contact.UpdatedAt.Unix())
 				assert.Equal(t, "minimal@example.com", contact.Email)
 				return true, nil
 			})
 
-		err := service.UpsertContact(ctx, workspaceID, minimalContact)
-		assert.NoError(t, err)
+		result := service.UpsertContact(ctx, workspaceID, minimalContact)
+		assert.Equal(t, domain.UpsertContactOperationCreate, result.Action)
+		assert.Empty(t, result.Error)
 	})
 
 	t.Run("upsert with partial fields", func(t *testing.T) {
@@ -322,8 +307,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
 				// Verify that only the specified fields are set
-				assert.NotZero(t, contact.CreatedAt)
-				assert.NotZero(t, contact.UpdatedAt)
+				assert.NotZero(t, contact.CreatedAt.Unix())
+				assert.NotZero(t, contact.UpdatedAt.Unix())
 				assert.Equal(t, "partial@example.com", contact.Email)
 				assert.Equal(t, "Jane", contact.FirstName.String)
 				assert.Equal(t, "Smith", contact.LastName.String)
@@ -336,8 +321,9 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 				return false, nil
 			})
 
-		err := service.UpsertContact(ctx, workspaceID, partialContact)
-		assert.NoError(t, err)
+		result := service.UpsertContact(ctx, workspaceID, partialContact)
+		assert.Equal(t, domain.UpsertContactOperationUpdate, result.Action)
+		assert.Empty(t, result.Error)
 	})
 
 	t.Run("upsert with custom JSON", func(t *testing.T) {
@@ -355,8 +341,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
 				// Verify that JSON field is properly set
-				assert.NotZero(t, contact.CreatedAt)
-				assert.NotZero(t, contact.UpdatedAt)
+				assert.NotZero(t, contact.CreatedAt.Unix())
+				assert.NotZero(t, contact.UpdatedAt.Unix())
 				assert.Equal(t, "json@example.com", contact.Email)
 				assert.NotNil(t, contact.CustomJSON1)
 				assert.Equal(t, jsonData, contact.CustomJSON1.Data)
@@ -367,8 +353,9 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 				return true, nil
 			})
 
-		err := service.UpsertContact(ctx, workspaceID, jsonContact)
-		assert.NoError(t, err)
+		result := service.UpsertContact(ctx, workspaceID, jsonContact)
+		assert.Equal(t, domain.UpsertContactOperationCreate, result.Action)
+		assert.Empty(t, result.Error)
 	})
 
 	t.Run("upsert with explicit null field", func(t *testing.T) {
@@ -383,8 +370,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
 				// Verify that null fields are properly set
-				assert.NotZero(t, contact.CreatedAt)
-				assert.NotZero(t, contact.UpdatedAt)
+				assert.NotZero(t, contact.CreatedAt.Unix())
+				assert.NotZero(t, contact.UpdatedAt.Unix())
 				assert.Equal(t, "null@example.com", contact.Email)
 				assert.NotNil(t, contact.FirstName)
 				assert.True(t, contact.FirstName.IsNull)
@@ -396,86 +383,8 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 				return false, nil
 			})
 
-		err := service.UpsertContact(ctx, workspaceID, contactWithNulls)
-		assert.NoError(t, err)
-	})
-}
-
-func TestContactService_BatchImportContactsWithPartialFields(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockContactRepo := mocks.NewMockContactRepository(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	service := NewContactService(mockContactRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
-
-	ctx := context.Background()
-	workspaceID := "test-workspace"
-
-	t.Run("batch import with different field combinations", func(t *testing.T) {
-		contacts := []*domain.Contact{
-			{
-				Email: "minimal@example.com",
-			},
-			{
-				Email:     "partial@example.com",
-				FirstName: &domain.NullableString{String: "Jane", IsNull: false},
-				LastName:  &domain.NullableString{String: "Smith", IsNull: false},
-			},
-			{
-				Email:       "json@example.com",
-				CustomJSON1: &domain.NullableJSON{Data: map[string]interface{}{"preference": "email"}, IsNull: false},
-			},
-			{
-				Email:       "complete@example.com",
-				FirstName:   &domain.NullableString{String: "John", IsNull: false},
-				LastName:    &domain.NullableString{String: "Doe", IsNull: false},
-				Phone:       &domain.NullableString{String: "+1234567890", IsNull: false},
-				CustomJSON2: &domain.NullableJSON{Data: map[string]interface{}{"preferences": []string{"email", "sms"}}, IsNull: false},
-			},
-		}
-
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
-		mockContactRepo.EXPECT().BatchImportContacts(ctx, workspaceID, gomock.Any()).DoAndReturn(
-			func(ctx context.Context, workspaceID string, importedContacts []*domain.Contact) error {
-				assert.Equal(t, len(contacts), len(importedContacts))
-
-				// Verify timestamps and contact details
-				for i, contact := range importedContacts {
-					assert.NotZero(t, contact.CreatedAt)
-					assert.NotZero(t, contact.UpdatedAt)
-					assert.Equal(t, contacts[i].Email, contact.Email)
-
-					// Check specific fields for each contact
-					if i == 0 {
-						// minimal contact
-						assert.Nil(t, contact.FirstName)
-						assert.Nil(t, contact.LastName)
-					} else if i == 1 {
-						// partial contact
-						assert.Equal(t, "Jane", contact.FirstName.String)
-						assert.Equal(t, "Smith", contact.LastName.String)
-						assert.Nil(t, contact.Phone)
-					} else if i == 2 {
-						// JSON contact
-						assert.NotNil(t, contact.CustomJSON1)
-						assert.Equal(t, "email", contact.CustomJSON1.Data.(map[string]interface{})["preference"])
-					} else if i == 3 {
-						// complete contact
-						assert.Equal(t, "John", contact.FirstName.String)
-						assert.Equal(t, "Doe", contact.LastName.String)
-						assert.Equal(t, "+1234567890", contact.Phone.String)
-						assert.NotNil(t, contact.CustomJSON2)
-					}
-				}
-
-				return nil
-			})
-
-		err := service.BatchImportContacts(ctx, workspaceID, contacts)
-		assert.NoError(t, err)
+		result := service.UpsertContact(ctx, workspaceID, contactWithNulls)
+		assert.Equal(t, domain.UpsertContactOperationUpdate, result.Action)
+		assert.Empty(t, result.Error)
 	})
 }

@@ -35,20 +35,6 @@ func (m *MockContactRepository) EXPECT() *MockContactRepositoryMockRecorder {
 	return m.recorder
 }
 
-// BatchImportContacts mocks base method.
-func (m *MockContactRepository) BatchImportContacts(arg0 context.Context, arg1 string, arg2 []*domain.Contact) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BatchImportContacts", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// BatchImportContacts indicates an expected call of BatchImportContacts.
-func (mr *MockContactRepositoryMockRecorder) BatchImportContacts(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchImportContacts", reflect.TypeOf((*MockContactRepository)(nil).BatchImportContacts), arg0, arg1, arg2)
-}
-
 // DeleteContact mocks base method.
 func (m *MockContactRepository) DeleteContact(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -109,11 +95,12 @@ func (mr *MockContactRepositoryMockRecorder) GetContacts(arg0, arg1 interface{})
 }
 
 // UpsertContact mocks base method.
-func (m *MockContactRepository) UpsertContact(arg0 context.Context, arg1 string, arg2 *domain.Contact) error {
+func (m *MockContactRepository) UpsertContact(arg0 context.Context, arg1 string, arg2 *domain.Contact) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpsertContact", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // UpsertContact indicates an expected call of UpsertContact.

@@ -223,7 +223,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
-		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(nil)
+		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
 
@@ -317,12 +317,15 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
-		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(assert.AnError)
+		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{
+			Action: domain.UpsertContactOperationError,
+			Error:  "failed to upsert contact",
+		})
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
 		require.Error(t, err)
 		assert.Nil(t, workspace)
-		assert.Equal(t, assert.AnError, err)
+		assert.Contains(t, err.Error(), "failed to upsert contact")
 	})
 
 	t.Run("workspace already exists", func(t *testing.T) {

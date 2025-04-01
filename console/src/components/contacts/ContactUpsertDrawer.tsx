@@ -20,7 +20,9 @@ import type { DatePickerProps } from 'antd/es/date-picker'
 import type { InputNumberProps } from 'antd/es/input-number'
 import { CountriesFormOptions, TimezonesFormOptions } from '../utils/countries_timezones'
 import { Languages } from '../utils/languages'
-import { Contact } from '../../services/api/contacts'
+import { Contact, UpsertContactOperationAction } from '../../services/api/contacts'
+import { contactsApi } from '../../services/api/contacts'
+import { useQueryClient } from '@tanstack/react-query'
 
 const { Option } = Select
 const { Text } = Typography
@@ -184,6 +186,8 @@ export function ContactUpsertDrawer({
   const [selectedFields, setSelectedFields] = React.useState<string[]>([])
   const [selectedFieldToAdd, setSelectedFieldToAdd] = React.useState<string | null>(null)
   const [form] = Form.useForm()
+  const [loading, setLoading] = React.useState(false)
+  const queryClient = useQueryClient()
 
   React.useEffect(() => {
     if (drawerVisible && contact) {
@@ -229,31 +233,56 @@ export function ContactUpsertDrawer({
     form.setFieldValue(field, undefined)
   }
 
-  const handleSubmit = (values: any) => {
-    const contactData = {
-      ...values,
-      workspace_id: workspaceId
-    }
-
-    // Parse JSON fields before submission
-    selectedFields.forEach((field) => {
-      if (field.startsWith('custom_json_')) {
-        try {
-          contactData[field] = JSON.parse(values[field])
-        } catch (e) {
-          message.error(`Invalid JSON in field ${field}`)
-          return
-        }
+  const handleSubmit = async (values: any) => {
+    try {
+      setLoading(true)
+      const contactData = {
+        ...values,
+        workspace_id: workspaceId
       }
-    })
 
-    // Here you would implement the API call to create/update contact
-    console.log('Contact data to send:', contactData)
+      // Parse JSON fields before submission
+      selectedFields.forEach((field) => {
+        if (field.startsWith('custom_json_')) {
+          try {
+            contactData[field] = JSON.parse(values[field])
+          } catch (e) {
+            message.error(`Invalid JSON in field ${field}`)
+            return
+          }
+        }
+      })
 
-    setDrawerVisible(false)
-    form.resetFields()
-    setSelectedFields([])
-    onSuccess?.()
+      const response = await contactsApi.upsert({
+        workspace_id: workspaceId,
+        contact: contactData
+      })
+
+      if (response.action === UpsertContactOperationAction.Error) {
+        message.error(response.error || 'Failed to save contact')
+        return
+      }
+
+      const actionMessage =
+        response.action === UpsertContactOperationAction.Create
+          ? 'Contact created successfully'
+          : 'Contact updated successfully'
+
+      message.success(actionMessage)
+      setDrawerVisible(false)
+      form.resetFields()
+      setSelectedFields([])
+
+      // Invalidate and refetch contacts query
+      await queryClient.invalidateQueries({ queryKey: ['contacts', workspaceId] })
+
+      onSuccess?.()
+    } catch (error) {
+      console.error('Failed to upsert contact:', error)
+      message.error('Failed to save contact. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleClose = () => {
@@ -359,7 +388,7 @@ export function ContactUpsertDrawer({
 
   return (
     <>
-      <Button onClick={() => setDrawerVisible(true)} {...defaultButtonProps}>
+      <Button onClick={() => setDrawerVisible(true)} {...defaultButtonProps} loading={loading}>
         {buttonContent || (contact ? 'Update Contact' : 'Insert Contact')}
       </Button>
 
@@ -370,8 +399,10 @@ export function ContactUpsertDrawer({
         onClose={handleClose}
         extra={
           <Space>
-            <Button onClick={handleClose}>Cancel</Button>
-            <Button type="primary" onClick={() => form.submit()}>
+            <Button onClick={handleClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="primary" onClick={() => form.submit()} loading={loading}>
               Save
             </Button>
           </Space>
@@ -383,7 +414,7 @@ export function ContactUpsertDrawer({
           showIcon
           style={{ marginBottom: '16px' }}
         />
-        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        <Form form={form} layout="vertical" onFinish={handleSubmit} disabled={loading}>
           <Form.Item
             name="email"
             label="Email"
@@ -392,7 +423,7 @@ export function ContactUpsertDrawer({
               { type: 'email', message: 'Please enter a valid email' }
             ]}
           >
-            <Input placeholder="Enter email address" />
+            <Input placeholder="Enter email address" disabled={!!contact} />
           </Form.Item>
 
           {selectedFields.map((field) => {
@@ -427,12 +458,17 @@ export function ContactUpsertDrawer({
 
           <div>
             <Text strong>Add an optional field</Text>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2">
               <Select
                 placeholder="Select a field"
-                style={{ width: '80%' }}
+                style={{ width: '100%' }}
                 value={selectedFieldToAdd}
-                onChange={setSelectedFieldToAdd}
+                onChange={(value) => {
+                  if (value && !selectedFields.includes(value)) {
+                    setSelectedFields([...selectedFields, value])
+                    setSelectedFieldToAdd(null)
+                  }
+                }}
               >
                 {optionalFields
                   .filter((field) => !selectedFields.includes(field.key))
@@ -442,9 +478,6 @@ export function ContactUpsertDrawer({
                     </Option>
                   ))}
               </Select>
-              <Button type="primary" onClick={handleAddField} disabled={!selectedFieldToAdd}>
-                Add
-              </Button>
             </div>
           </div>
         </Form>

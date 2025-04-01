@@ -526,6 +526,23 @@ func (r *UpsertContactRequest) Validate() (contact *Contact, workspaceID string,
 	return contact, r.WorkspaceID, nil
 }
 
+type BatchImportContactsResponse struct {
+	Operations []*UpsertContactOperation `json:"operations"`
+	Error      string                    `json:"error,omitempty"`
+}
+
+const (
+	UpsertContactOperationCreate = "create"
+	UpsertContactOperationUpdate = "update"
+	UpsertContactOperationError  = "error"
+)
+
+type UpsertContactOperation struct {
+	Email  string `json:"email"`
+	Action string `json:"action"` // create or update or error
+	Error  string `json:"error,omitempty"`
+}
+
 // ContactService provides operations for managing contacts
 type ContactService interface {
 	// GetContactByEmail retrieves a contact by email
@@ -541,10 +558,10 @@ type ContactService interface {
 	DeleteContact(ctx context.Context, workspaceID string, email string) error
 
 	// BatchImportContacts imports a batch of contacts (create or update)
-	BatchImportContacts(ctx context.Context, workspaceID string, contacts []*Contact) error
+	BatchImportContacts(ctx context.Context, workspaceID string, contacts []*Contact) *BatchImportContactsResponse
 
 	// UpsertContact creates a new contact or updates an existing one
-	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) error
+	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) UpsertContactOperation
 }
 
 type ContactRepository interface {
@@ -560,11 +577,8 @@ type ContactRepository interface {
 	// DeleteContact deletes a contact
 	DeleteContact(ctx context.Context, workspaceID string, email string) error
 
-	// BatchImportContacts inserts or updates multiple contacts in a batch operation
-	BatchImportContacts(ctx context.Context, workspaceID string, contacts []*Contact) error
-
 	// UpsertContact creates a new contact or updates an existing one
-	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) error
+	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (isNew bool, err error)
 }
 
 // FromJSON parses JSON data into a Contact struct

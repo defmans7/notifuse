@@ -76,6 +76,17 @@ export interface ListContactsResponse {
   cursor?: string
 }
 
+export enum UpsertContactOperationAction {
+  Create = 'create',
+  Update = 'update',
+  Error = 'error'
+}
+
+export interface UpsertContactOperation {
+  action: UpsertContactOperationAction
+  error?: string
+}
+
 export const contactsApi = {
   list: async (params: ListContactsRequest): Promise<ListContactsResponse> => {
     const searchParams = new URLSearchParams()
@@ -96,5 +107,15 @@ export const contactsApi = {
     if (params.with_contact_lists)
       searchParams.append('with_contact_lists', params.with_contact_lists.toString())
     return api.get<ListContactsResponse>(`/api/contacts.list?${searchParams.toString()}`)
+  },
+
+  upsert: async (params: {
+    workspace_id: string
+    contact: Partial<Contact>
+  }): Promise<UpsertContactOperation> => {
+    return api.post('/api/contacts.upsert', {
+      workspace_id: params.workspace_id,
+      contact: params.contact
+    })
   }
 }

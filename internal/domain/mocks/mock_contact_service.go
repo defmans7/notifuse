@@ -36,10 +36,10 @@ func (m *MockContactService) EXPECT() *MockContactServiceMockRecorder {
 }
 
 // BatchImportContacts mocks base method.
-func (m *MockContactService) BatchImportContacts(arg0 context.Context, arg1 string, arg2 []*domain.Contact) error {
+func (m *MockContactService) BatchImportContacts(arg0 context.Context, arg1 string, arg2 []*domain.Contact) *domain.BatchImportContactsResponse {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BatchImportContacts", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
+	ret0, _ := ret[0].(*domain.BatchImportContactsResponse)
 	return ret0
 }
 
@@ -109,10 +109,10 @@ func (mr *MockContactServiceMockRecorder) GetContacts(arg0, arg1 interface{}) *g
 }
 
 // UpsertContact mocks base method.
-func (m *MockContactService) UpsertContact(arg0 context.Context, arg1 string, arg2 *domain.Contact) error {
+func (m *MockContactService) UpsertContact(arg0 context.Context, arg1 string, arg2 *domain.Contact) domain.UpsertContactOperation {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpsertContact", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
+	ret0, _ := ret[0].(domain.UpsertContactOperation)
 	return ret0
 }
 

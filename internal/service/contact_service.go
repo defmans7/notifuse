@@ -96,56 +96,87 @@ func (s *ContactService) DeleteContact(ctx context.Context, email string, worksp
 	return nil
 }
 
-func (s *ContactService) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) error {
+func (s *ContactService) BatchImportContacts(ctx context.Context, workspaceID string, contacts []*domain.Contact) *domain.BatchImportContactsResponse {
+
+	response := &domain.BatchImportContactsResponse{
+		Operations: make([]*domain.UpsertContactOperation, len(contacts)),
+	}
 
 	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
+		response.Error = fmt.Sprintf("failed to authenticate user: %v", err)
+		return response
 	}
 
-	// Validate all contacts first
+	// Validate and upsert
 	for i, contact := range contacts {
 		now := time.Now().UTC()
 		contact.CreatedAt = now
 		contact.UpdatedAt = now
 
-		if err := contact.Validate(); err != nil {
-			return fmt.Errorf("invalid contact at index %d: %w", i, err)
+		// init operation
+		operation := &domain.UpsertContactOperation{
+			Email:  contact.Email,
+			Action: domain.UpsertContactOperationCreate,
 		}
+
+		if err := contact.Validate(); err != nil {
+			operation.Action = domain.UpsertContactOperationError
+			operation.Error = fmt.Sprintf("invalid contact at index %d: %v", i, err)
+			response.Operations = append(response.Operations, operation)
+			continue
+		}
+
+		isNew, err := s.repo.UpsertContact(ctx, workspaceID, contact)
+		if err != nil {
+			operation.Action = domain.UpsertContactOperationError
+			operation.Error = fmt.Sprintf("failed to upsert contact at index %d: %v", i, err)
+			response.Operations = append(response.Operations, operation)
+			continue
+		}
+
+		if !isNew {
+			operation.Action = domain.UpsertContactOperationUpdate
+		}
+
+		response.Operations = append(response.Operations, operation)
 	}
 
-	// Process the batch
-	if err := s.repo.BatchImportContacts(ctx, workspaceID, contacts); err != nil {
-		s.logger.WithField("contacts_count", len(contacts)).Error(fmt.Sprintf("Failed to batch import contacts: %v", err))
-		return fmt.Errorf("failed to batch import contacts: %w", err)
-	}
-
-	return nil
+	return response
 }
 
-func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) error {
+func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, contact *domain.Contact) domain.UpsertContactOperation {
 
+	operation := domain.UpsertContactOperation{
+		Email:  contact.Email,
+		Action: domain.UpsertContactOperationCreate,
+	}
 	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
+		operation.Action = domain.UpsertContactOperationError
+		operation.Error = err.Error()
+		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Failed to authenticate user: %v", err))
+		return operation
 	}
-
-	now := time.Now().UTC()
-	// Only set CreatedAt for new contacts
-	if contact.CreatedAt.IsZero() {
-		contact.CreatedAt = now
-	}
-	contact.UpdatedAt = now
 
 	if err := contact.Validate(); err != nil {
-		return fmt.Errorf("invalid contact: %w", err)
+		operation.Action = domain.UpsertContactOperationError
+		operation.Error = err.Error()
+		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Invalid contact: %v", err))
+		return operation
 	}
 
-	err = s.repo.UpsertContact(ctx, workspaceID, contact)
+	isNew, err := s.repo.UpsertContact(ctx, workspaceID, contact)
 	if err != nil {
+		operation.Action = domain.UpsertContactOperationError
+		operation.Error = err.Error()
 		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Failed to upsert contact: %v", err))
-		return fmt.Errorf("failed to upsert contact: %w", err)
+		return operation
 	}
 
-	return nil
+	if !isNew {
+		operation.Action = domain.UpsertContactOperationUpdate
+	}
+
+	return operation
 }

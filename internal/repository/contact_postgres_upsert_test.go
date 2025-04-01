@@ -8,356 +8,333 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUpsertContact(t *testing.T) {
-	db, mock, cleanup := testutil.SetupMockDB(t)
+	db, _, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
 	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
 	workspaceRepo.AddWorkspaceDB("workspace123", db)
-	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "test@example.com"
 	workspaceID := "workspace123"
 
 	testContact := &domain.Contact{
-		Email:           email,
-		ExternalID:      &domain.NullableString{String: "ext123", IsNull: false},
-		Timezone:        &domain.NullableString{String: "Europe/Paris", IsNull: false},
-		Language:        &domain.NullableString{String: "en-US", IsNull: false},
-		FirstName:       &domain.NullableString{String: "John", IsNull: false},
-		LastName:        &domain.NullableString{String: "Doe", IsNull: false},
-		Phone:           &domain.NullableString{String: "", IsNull: true},
-		AddressLine1:    &domain.NullableString{String: "", IsNull: true},
-		AddressLine2:    &domain.NullableString{String: "", IsNull: true},
-		Country:         &domain.NullableString{String: "", IsNull: true},
-		Postcode:        &domain.NullableString{String: "", IsNull: true},
-		State:           &domain.NullableString{String: "", IsNull: true},
-		JobTitle:        &domain.NullableString{String: "", IsNull: true},
-		LifetimeValue:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		OrdersCount:     &domain.NullableFloat64{Float64: 0, IsNull: true},
-		LastOrderAt:     &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomString1:   &domain.NullableString{String: "", IsNull: true},
-		CustomString2:   &domain.NullableString{String: "", IsNull: true},
-		CustomString3:   &domain.NullableString{String: "", IsNull: true},
-		CustomString4:   &domain.NullableString{String: "", IsNull: true},
-		CustomString5:   &domain.NullableString{String: "", IsNull: true},
-		CustomNumber1:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber2:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber3:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber4:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber5:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomDatetime1: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime2: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime3: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime4: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime5: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomJSON1:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CustomJSON2:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CustomJSON3:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CustomJSON4:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CustomJSON5:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Email:      email,
+		ExternalID: &domain.NullableString{String: "ext123", IsNull: false},
+		Timezone:   &domain.NullableString{String: "Europe/Paris", IsNull: false},
+		Language:   &domain.NullableString{String: "en-US", IsNull: false},
+		FirstName:  &domain.NullableString{String: "John", IsNull: false},
+		LastName:   &domain.NullableString{String: "Doe", IsNull: false},
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 
-	// Test case 1: Insert new contact
-	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
-		WithArgs(email).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	t.Run("insert new contact", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
 
-	mock.ExpectExec(`INSERT INTO contacts`).
-		WithArgs(
-			testContact.Email,
-			testContact.ExternalID.String,
-			testContact.Timezone.String,
-			testContact.Language.String,
-			testContact.FirstName.String,
-			testContact.LastName.String,
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			testContact.CreatedAt,
-			testContact.UpdatedAt,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
 
-	err := repo.UpsertContact(context.Background(), workspaceID, testContact)
-	require.NoError(t, err)
+		// Expect transaction begin
+		newMock.ExpectBegin()
 
-	// Test case 2: Update existing contact with only some fields
-	partialContact := &domain.Contact{
-		Email:     "partial@example.com",
-		FirstName: &domain.NullableString{String: "Jane", IsNull: false},
-		LastName:  &domain.NullableString{String: "Smith", IsNull: false},
-		UpdatedAt: now,
-	}
+		// Expect select for update that returns no rows
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnError(sql.ErrNoRows)
 
-	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
-		WithArgs(partialContact.Email).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+		// Expect insert
+		newMock.ExpectExec(`INSERT INTO contacts`).
+			WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// Expect only the fields that are present in partialContact to be updated
-	mock.ExpectExec(`INSERT INTO contacts`).
-		WithArgs(
-			partialContact.Email,
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			partialContact.FirstName.String,
-			partialContact.LastName.String,
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			partialContact.CreatedAt,
-			partialContact.UpdatedAt,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		// Expect transaction commit
+		newMock.ExpectCommit()
 
-	err = repo.UpsertContact(context.Background(), workspaceID, partialContact)
-	require.NoError(t, err)
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, testContact)
+		require.NoError(t, err)
+		assert.True(t, isNew)
 
-	// Test case 3: Error checking if contact exists
-	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
-		WithArgs(email).
-		WillReturnError(errors.New("check error"))
+		// Verify all expectations were met
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 
-	err = repo.UpsertContact(context.Background(), workspaceID, testContact)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to check if contact exists")
+	t.Run("update existing contact", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
 
-	// Test case 4: Error upserting contact
-	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
-		WithArgs(email).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
 
-	mock.ExpectExec(`INSERT INTO contacts`).
-		WithArgs(
-			testContact.Email,
-			testContact.ExternalID.String,
-			testContact.Timezone.String,
-			testContact.Language.String,
-			testContact.FirstName.String,
-			testContact.LastName.String,
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			testContact.CreatedAt,
-			testContact.UpdatedAt,
-		).
-		WillReturnError(errors.New("upsert error"))
+		// Create an existing contact with some fields
+		existingContact := &domain.Contact{
+			Email:      email,
+			ExternalID: &domain.NullableString{String: "old-ext", IsNull: false},
+			FirstName:  &domain.NullableString{String: "Old", IsNull: false},
+			LastName:   &domain.NullableString{String: "Name", IsNull: false},
+			CreatedAt:  now.Add(-24 * time.Hour), // Created yesterday
+			UpdatedAt:  now.Add(-24 * time.Hour),
+		}
 
-	err = repo.UpsertContact(context.Background(), workspaceID, testContact)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to upsert contact")
+		// Prepare mock for existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				existingContact.Email, "old-ext", nil, nil, "Old", "Name", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				existingContact.CreatedAt, existingContact.UpdatedAt,
+			)
 
-	// Test case 5: Contact with invalid JSON data
-	contactWithInvalidJSON := &domain.Contact{
-		Email:           "invalidjson@example.com",
-		ExternalID:      &domain.NullableString{String: "ext789", IsNull: false},
-		Timezone:        &domain.NullableString{String: "UTC", IsNull: false},
-		Language:        &domain.NullableString{String: "en-US", IsNull: false},
-		FirstName:       &domain.NullableString{String: "John", IsNull: false},
-		LastName:        &domain.NullableString{String: "Doe", IsNull: false},
-		Phone:           &domain.NullableString{String: "", IsNull: true},
-		AddressLine1:    &domain.NullableString{String: "", IsNull: true},
-		AddressLine2:    &domain.NullableString{String: "", IsNull: true},
-		Country:         &domain.NullableString{String: "", IsNull: true},
-		Postcode:        &domain.NullableString{String: "", IsNull: true},
-		State:           &domain.NullableString{String: "", IsNull: true},
-		JobTitle:        &domain.NullableString{String: "", IsNull: true},
-		LifetimeValue:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		OrdersCount:     &domain.NullableFloat64{Float64: 0, IsNull: true},
-		LastOrderAt:     &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomString1:   &domain.NullableString{String: "", IsNull: true},
-		CustomString2:   &domain.NullableString{String: "", IsNull: true},
-		CustomString3:   &domain.NullableString{String: "", IsNull: true},
-		CustomString4:   &domain.NullableString{String: "", IsNull: true},
-		CustomString5:   &domain.NullableString{String: "", IsNull: true},
-		CustomNumber1:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber2:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber3:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber4:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomNumber5:   &domain.NullableFloat64{Float64: 0, IsNull: true},
-		CustomDatetime1: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime2: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime3: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime4: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomDatetime5: &domain.NullableTime{Time: time.Time{}, IsNull: true},
-		CustomJSON1:     &domain.NullableJSON{Data: make(chan int), IsNull: false}, // Invalid JSON data
-		CustomJSON2:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CustomJSON3:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CustomJSON4:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CustomJSON5:     &domain.NullableJSON{Data: nil, IsNull: true},
-		CreatedAt:       now,
-		UpdatedAt:       now,
-	}
+		// New contact data with updates
+		updateContact := &domain.Contact{
+			Email:      email,
+			ExternalID: &domain.NullableString{String: "updated-ext", IsNull: false},
+			Timezone:   &domain.NullableString{String: "America/New_York", IsNull: false},
+			Language:   &domain.NullableString{String: "en-US", IsNull: false},
+		}
 
-	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
-		WithArgs("invalidjson@example.com").
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+		// Expect transaction begin
+		newMock.ExpectBegin()
 
-	err = repo.UpsertContact(context.Background(), workspaceID, contactWithInvalidJSON)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to marshal CustomJSON1")
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
 
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
+		// Expect update with merged data
+		newMock.ExpectExec(`UPDATE contacts SET`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
 
-func TestUpsertContactWithOnlyEmail(t *testing.T) {
-	db, mock, cleanup := testutil.SetupMockDB(t)
-	defer cleanup()
+		// Expect transaction commit
+		newMock.ExpectCommit()
 
-	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	workspaceRepo.AddWorkspaceDB("workspace123", db)
-	repo := NewContactRepository(workspaceRepo)
-	now := time.Now().UTC().Truncate(time.Microsecond)
-	email := "minimal@example.com"
-	workspaceID := "workspace123"
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, updateContact)
+		require.NoError(t, err)
+		assert.False(t, isNew)
 
-	minimalContact := &domain.Contact{
-		Email:     email,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
+		// Verify all expectations were met
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 
-	// Test case: Insert new contact with only email
-	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM contacts WHERE email = \$1\)`).
-		WithArgs(email).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	t.Run("fails when workspace connection fails", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, _, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
 
-	mock.ExpectExec(`INSERT INTO contacts`).
-		WithArgs(
-			minimalContact.Email,
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullFloat64{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullTime{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			sql.NullString{Valid: false},
-			minimalContact.CreatedAt,
-			minimalContact.UpdatedAt,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		// Don't add the invalid workspace
+		newRepo := NewContactRepository(newWorkspaceRepo)
 
-	err := repo.UpsertContact(context.Background(), workspaceID, minimalContact)
-	require.NoError(t, err)
+		// Setup new mock with error
+		invalidWorkspaceID := "invalid-workspace"
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+		// Execute function with invalid workspace
+		isNew, err := newRepo.UpsertContact(context.Background(), invalidWorkspaceID, testContact)
+
+		// Should fail with workspace connection error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+		assert.False(t, isNew)
+	})
+
+	t.Run("fails when transaction begin fails", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Expect error from BeginTx
+		newMock.ExpectBegin().WillReturnError(errors.New("begin tx error"))
+
+		// Execute function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, testContact)
+
+		// Should fail with transaction error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to begin transaction")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails when select query fails", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select with error
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnError(errors.New("query error"))
+
+		// Expect rollback
+		newMock.ExpectRollback()
+
+		// Execute function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, testContact)
+
+		// Should fail with query error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to check existing contact")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails when insert fails", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update that returns no rows
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnError(sql.ErrNoRows)
+
+		// Expect insert with error
+		newMock.ExpectExec(`INSERT INTO contacts`).
+			WillReturnError(errors.New("insert error"))
+
+		// Expect rollback
+		newMock.ExpectRollback()
+
+		// Execute function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, testContact)
+
+		// Should fail with insert error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to insert contact")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails when update fails", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create a mock for existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "old-ext", nil, nil, "Old", "Name", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				now.Add(-24*time.Hour), now.Add(-24*time.Hour),
+			)
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect update with error
+		newMock.ExpectExec(`UPDATE contacts SET`).
+			WillReturnError(errors.New("update error"))
+
+		// Expect rollback
+		newMock.ExpectRollback()
+
+		// Execute function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, testContact)
+
+		// Should fail with update error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to update contact")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails when commit fails", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update that returns no rows
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnError(sql.ErrNoRows)
+
+		// Expect insert
+		newMock.ExpectExec(`INSERT INTO contacts`).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		// Expect commit to fail
+		newMock.ExpectCommit().WillReturnError(errors.New("commit error"))
+
+		// Execute function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, testContact)
+
+		// Should fail with commit error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to commit transaction")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 }

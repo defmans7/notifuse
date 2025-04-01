@@ -1,4 +1,4 @@
-import { Button, Space, Popover } from 'antd'
+import { Button, Space, Popover, Tooltip } from 'antd'
 import type { FilterProps, FilterValue } from './types'
 import { StringFilterInput } from './FilterInputs'
 import { NumberFilterInput } from './FilterInputs'
@@ -204,12 +204,14 @@ export function Filter({ fields, activeFilters, className }: FilterProps) {
                 </div>
               }
             >
-              <Button
-                size="small"
-                type={activeFilters.some((f) => f.field === field.key) ? 'primary' : 'default'}
-              >
-                {getButtonLabel(field)}
-              </Button>
+              <Tooltip title={<>Filter by: {field.label}</>} placement="top">
+                <Button
+                  size="small"
+                  type={activeFilters.some((f) => f.field === field.key) ? 'primary' : 'default'}
+                >
+                  {getButtonLabel(field)}
+                </Button>
+              </Tooltip>
             </Popover>
           ))}
         </Space>
