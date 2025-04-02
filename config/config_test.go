@@ -47,6 +47,7 @@ func TestLoadWithOptions(t *testing.T) {
 	os.Setenv("DB_PREFIX", "test")
 	os.Setenv("DB_NAME", "test_system")
 	os.Setenv("ENVIRONMENT", "development")
+	os.Setenv("SECRET_KEY", "test-key")
 
 	// Clean up after the test
 	defer func() {
@@ -62,6 +63,7 @@ func TestLoadWithOptions(t *testing.T) {
 		os.Unsetenv("DB_PREFIX")
 		os.Unsetenv("DB_NAME")
 		os.Unsetenv("ENVIRONMENT")
+		os.Unsetenv("SECRET_KEY")
 	}()
 
 	// Load config with env vars
@@ -81,12 +83,12 @@ func TestLoadWithOptions(t *testing.T) {
 	assert.Equal(t, "test_system", cfg.Database.DBName)
 	assert.Equal(t, "test@example.com", cfg.RootEmail)
 	assert.Equal(t, "development", cfg.Environment)
-
 	// Check the decoded keys
 	decodedPrivateKey, _ := base64.StdEncoding.DecodeString(privateKey)
 	decodedPublicKey, _ := base64.StdEncoding.DecodeString(publicKey)
 	assert.Equal(t, decodedPrivateKey, cfg.Security.PasetoPrivateKeyBytes)
 	assert.Equal(t, decodedPublicKey, cfg.Security.PasetoPublicKeyBytes)
+	assert.Equal(t, "test-key", cfg.Security.SecretKey)
 
 	// Verify that the parsed keys are not nil
 	assert.NotNil(t, cfg.Security.PasetoPrivateKey)
