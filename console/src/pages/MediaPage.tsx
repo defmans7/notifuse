@@ -1,0 +1,100 @@
+import { useState, useEffect } from 'react'
+import { message } from 'antd'
+import { FileManager, ExtendedFileManagerProps } from '../components/file_manager/fileManager'
+import { FilesSettings, StorageObject } from '../components/file_manager/interfaces'
+import { useParams } from '@tanstack/react-router'
+import { useAuth } from '../contexts/AuthContext'
+import { workspaceService } from '../services/api/workspace'
+import { Workspace } from '../services/api/types'
+
+export function MediaPage() {
+  const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
+  const { workspaces, refreshWorkspaces } = useAuth()
+  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null)
+
+  // Initialize settings from the current workspace
+  useEffect(() => {
+    if (workspaceId && workspaces.length > 0) {
+      const workspace = workspaces.find((w) => w.id === workspaceId)
+      if (workspace) {
+        setCurrentWorkspace(workspace)
+      }
+    }
+  }, [workspaceId, workspaces])
+
+  const handleError = (error: any) => {
+    console.error('File manager error:', error)
+    message.error('An error occurred with the file manager')
+  }
+
+  const handleSelect = (items: StorageObject[]) => {
+    console.log('Selected items:', items)
+    // Handle selected items as needed
+  }
+
+  const handleUpdateSettings = async (newSettings: FilesSettings) => {
+    try {
+      if (!currentWorkspace || !workspaceId) {
+        message.error('Workspace not found')
+        return
+      }
+
+      // Update the workspace settings
+      await workspaceService.update({
+        ...currentWorkspace,
+        settings: {
+          ...currentWorkspace.settings,
+          file_manager: {
+            endpoint: newSettings.endpoint,
+            access_key: newSettings.access_key,
+            bucket: newSettings.bucket,
+            region: newSettings.region,
+            secret_key: newSettings.secret_key,
+            cdn_endpoint: newSettings.cdn_endpoint
+          }
+        } as any // Use type assertion to bypass the type checking
+      })
+
+      // Refresh workspaces to get the updated data
+      await refreshWorkspaces()
+
+      message.success('File manager settings updated successfully')
+    } catch (error) {
+      console.error('Error updating settings:', error)
+      message.error('Failed to update file manager settings')
+    }
+  }
+
+  const fileManagerProps: ExtendedFileManagerProps = {
+    currentPath: '',
+    onError: handleError,
+    onSelect: handleSelect,
+    height: 600,
+    acceptFileType: '*',
+    acceptItem: () => true,
+    withSelection: true,
+    multiple: true,
+    settings: {
+      endpoint: currentWorkspace?.settings.file_manager.endpoint || '',
+      access_key: currentWorkspace?.settings.file_manager.access_key || '',
+      bucket: currentWorkspace?.settings.file_manager.bucket || '',
+      region: currentWorkspace?.settings.file_manager.region || '',
+      secret_key: currentWorkspace?.settings.file_manager.secret_key || '',
+      cdn_endpoint: currentWorkspace?.settings.file_manager.cdn_endpoint || ''
+    },
+    onUpdateSettings: handleUpdateSettings
+  }
+
+  console.log('fileManagerProps', fileManagerProps)
+  console.log('currentWorkspace', currentWorkspace)
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Media Library</h2>
+      </div>
+
+      <FileManager {...fileManagerProps} />
+    </div>
+  )
+}
