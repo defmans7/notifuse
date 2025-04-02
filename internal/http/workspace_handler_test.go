@@ -34,7 +34,7 @@ func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userI
 }
 
 func TestWorkspaceHandler_Create(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock successful workspace creation
 	expectedWorkspace := &domain.Workspace{
@@ -45,11 +45,22 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	workspaceSvc.EXPECT().
-		CreateWorkspace(gomock.Any(), "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").
-		Return(expectedWorkspace, nil)
+		CreateWorkspace(gomock.Any(), "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string, fileManager domain.FileManagerSettings) (*domain.Workspace, error) {
+			// Verify file manager settings
+			assert.Equal(t, "https://s3.amazonaws.com", fileManager.Endpoint)
+			assert.Equal(t, "my-bucket", fileManager.Bucket)
+			assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", fileManager.AccessKey)
+			return expectedWorkspace, nil
+		})
 
 	// Create request
 	reqBody := domain.CreateWorkspaceRequest{
@@ -60,6 +71,11 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -84,7 +100,7 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock successful workspace retrieval
 	expectedWorkspace := &domain.Workspace{
@@ -94,6 +110,11 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	workspaceSvc.EXPECT().
@@ -122,7 +143,7 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 }
 
 func TestWorkspaceHandler_List(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock successful workspace list retrieval
 	expectedWorkspaces := []*domain.Workspace{
@@ -133,6 +154,11 @@ func TestWorkspaceHandler_List(t *testing.T) {
 				WebsiteURL: "https://example1.com",
 				LogoURL:    "https://example1.com/logo.png",
 				Timezone:   "UTC",
+				FileManager: domain.FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
 			},
 		},
 		{
@@ -142,6 +168,11 @@ func TestWorkspaceHandler_List(t *testing.T) {
 				WebsiteURL: "https://example2.com",
 				LogoURL:    "https://example2.com/logo.png",
 				Timezone:   "UTC",
+				FileManager: domain.FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
 			},
 		},
 	}
@@ -167,7 +198,7 @@ func TestWorkspaceHandler_List(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock successful workspace update
 	expectedWorkspace := &domain.Workspace{
@@ -178,11 +209,22 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 			LogoURL:    "https://updated.com/logo.png",
 			CoverURL:   "https://updated.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	workspaceSvc.EXPECT().
-		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").
-		Return(expectedWorkspace, nil)
+		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string, fileManager domain.FileManagerSettings) (*domain.Workspace, error) {
+			// Verify file manager settings
+			assert.Equal(t, "https://s3.amazonaws.com", fileManager.Endpoint)
+			assert.Equal(t, "my-bucket", fileManager.Bucket)
+			assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", fileManager.AccessKey)
+			return expectedWorkspace, nil
+		})
 
 	// Create request
 	reqBody := domain.UpdateWorkspaceRequest{
@@ -193,6 +235,11 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 			LogoURL:    "https://updated.com/logo.png",
 			CoverURL:   "https://updated.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -215,7 +262,7 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock successful workspace deletion
 	workspaceSvc.EXPECT().
@@ -292,7 +339,7 @@ func TestWriteError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_List_MethodNotAllowed(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Try with POST instead of GET
 	reqBody := bytes.NewBuffer([]byte("{}"))
@@ -316,7 +363,7 @@ func TestWorkspaceHandler_List_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
-	handler, workspaceService, _, _ := setupTest(t)
+	handler, workspaceService, _, _, _ := setupTest(t)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.list", nil)
@@ -345,7 +392,7 @@ func TestWorkspaceHandler_List_ServiceError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Try with POST instead of GET
 	reqBody := bytes.NewBuffer([]byte(`{"id": "workspace123"}`))
@@ -369,7 +416,7 @@ func TestWorkspaceHandler_Get_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get_MissingID(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Create request without ID
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get", nil)
@@ -397,7 +444,7 @@ func TestWorkspaceHandler_Get_MissingID(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
-	handler, workspaceService, _, secretKey := setupTest(t)
+	handler, workspaceService, _, secretKey, _ := setupTest(t)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.get?id=workspace123", nil)
@@ -430,7 +477,7 @@ func TestWorkspaceHandler_Get_ServiceError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Try with GET instead of POST
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.create", nil)
@@ -453,7 +500,7 @@ func TestWorkspaceHandler_Create_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_InvalidBody(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Create invalid JSON request
 	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
@@ -482,7 +529,7 @@ func TestWorkspaceHandler_Create_InvalidBody(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
-	_, _, mux, secretKey := setupTest(t)
+	_, _, mux, secretKey, _ := setupTest(t)
 
 	// Create request with missing ID
 	reqBody := domain.CreateWorkspaceRequest{
@@ -492,6 +539,11 @@ func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -508,7 +560,7 @@ func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
-	_, _, mux, secretKey := setupTest(t)
+	_, _, mux, secretKey, _ := setupTest(t)
 
 	// Create request with missing name
 	reqBody := domain.CreateWorkspaceRequest{
@@ -518,6 +570,11 @@ func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -534,7 +591,7 @@ func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
-	_, _, mux, secretKey := setupTest(t)
+	_, _, mux, secretKey, _ := setupTest(t)
 
 	// Create request with missing timezone
 	reqBody := domain.CreateWorkspaceRequest{
@@ -544,6 +601,11 @@ func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
 			WebsiteURL: "https://example.com",
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -560,11 +622,11 @@ func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock service error
 	workspaceSvc.EXPECT().
-		CreateWorkspace(gomock.Any(), "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC").
+		CreateWorkspace(gomock.Any(), "testworkspace1", "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", gomock.Any()).
 		Return(nil, fmt.Errorf("database error"))
 
 	// Create request with valid data
@@ -576,6 +638,11 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 			LogoURL:    "https://example.com/logo.png",
 			CoverURL:   "https://example.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -592,7 +659,7 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Try with GET instead of POST
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.update", nil)
@@ -615,7 +682,7 @@ func TestWorkspaceHandler_Update_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update_InvalidBody(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Create invalid JSON request
 	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
@@ -644,7 +711,7 @@ func TestWorkspaceHandler_Update_InvalidBody(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
-	_, _, mux, secretKey := setupTest(t)
+	_, _, mux, secretKey, _ := setupTest(t)
 
 	// Create request with missing ID
 	reqBody := domain.UpdateWorkspaceRequest{
@@ -654,6 +721,11 @@ func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
 			LogoURL:    "https://updated.com/logo.png",
 			CoverURL:   "https://updated.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -670,11 +742,11 @@ func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock service error
 	workspaceSvc.EXPECT().
-		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC").
+		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC", gomock.Any()).
 		Return(nil, fmt.Errorf("database error"))
 
 	// Create request with valid data
@@ -686,6 +758,11 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 			LogoURL:    "https://updated.com/logo.png",
 			CoverURL:   "https://updated.com/cover.png",
 			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		},
 	}
 	body, err := json.Marshal(reqBody)
@@ -702,7 +779,7 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Try with GET instead of POST
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.delete", nil)
@@ -725,7 +802,7 @@ func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Create invalid JSON request
 	reqBody := bytes.NewBuffer([]byte(`{invalid json`))
@@ -754,7 +831,7 @@ func TestWorkspaceHandler_Delete_InvalidBody(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Create request with missing ID
 	reqBody := bytes.NewBuffer([]byte(`{}`))
@@ -783,7 +860,7 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 }
 
 func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
-	handler, workspaceService, _, secretKey := setupTest(t)
+	handler, workspaceService, _, secretKey, _ := setupTest(t)
 
 	// Create valid request
 	reqBody := bytes.NewBuffer([]byte(`{"id": "workspace123"}`))
@@ -817,7 +894,7 @@ func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {
 }
 
 func TestWorkspaceHandler_HandleMembers(t *testing.T) {
-	_, workspaceSvc, mux, secretKey := setupTest(t)
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
 
 	// Mock successful members retrieval
 	expectedMembers := []*domain.UserWorkspaceWithEmail{
@@ -850,7 +927,7 @@ func TestWorkspaceHandler_HandleMembers(t *testing.T) {
 }
 
 func TestWorkspaceHandler_HandleMembers_MethodNotAllowed(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Try with POST instead of GET
 	reqBody := bytes.NewBuffer([]byte(`{}`))
@@ -874,7 +951,7 @@ func TestWorkspaceHandler_HandleMembers_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWorkspaceHandler_HandleMembers_MissingID(t *testing.T) {
-	handler, _, _, secretKey := setupTest(t)
+	handler, _, _, secretKey, _ := setupTest(t)
 
 	// Create request without ID
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.members", nil)
@@ -902,7 +979,7 @@ func TestWorkspaceHandler_HandleMembers_MissingID(t *testing.T) {
 }
 
 func TestWorkspaceHandler_HandleMembers_ServiceError(t *testing.T) {
-	handler, workspaceService, _, secretKey := setupTest(t)
+	handler, workspaceService, _, secretKey, _ := setupTest(t)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.members?id=workspace123", nil)

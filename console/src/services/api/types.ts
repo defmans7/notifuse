@@ -32,6 +32,16 @@ export interface WorkspaceSettings {
   logo_url: string | null
   cover_url: string | null
   timezone: string
+  file_manager: FileManagerSettings
+}
+
+export interface FileManagerSettings {
+  endpoint: string
+  access_key: string
+  bucket: string
+  region?: string
+  secret_key?: string
+  cdn_endpoint?: string
 }
 
 export interface CreateWorkspaceRequest {

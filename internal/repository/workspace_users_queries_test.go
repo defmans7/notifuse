@@ -23,7 +23,7 @@ func TestWorkspaceRepository_GetUserWorkspaces(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 	userID := "user123"
 
 	// Test success case
@@ -73,7 +73,7 @@ func TestWorkspaceRepository_GetUserWorkspace(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 	userID := "user123"
 	workspaceID := "workspace123"
 

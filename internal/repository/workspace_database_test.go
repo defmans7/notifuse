@@ -127,7 +127,7 @@ func TestWorkspaceRepository_DeleteDatabase(t *testing.T) {
 		Prefix:   "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 	workspaceID := "testworkspace"
 
 	// Test database drop error
@@ -188,7 +188,7 @@ func TestWorkspaceRepository_GetConnection(t *testing.T) {
 	defer cleanup()
 
 	// Create a repository instance
-	repo := NewWorkspaceRepository(mockDB, dbConfig).(*workspaceRepository)
+	repo := NewWorkspaceRepository(mockDB, dbConfig, "secret-key").(*workspaceRepository)
 
 	ctx := context.Background()
 	workspaceID := "test-workspace"
@@ -247,11 +247,6 @@ func (r *mockInternalRepository) Create(ctx context.Context, workspace *domain.W
 		return fmt.Errorf("workspace ID is required")
 	}
 
-	// Validate workspace before creating
-	if err := workspace.Validate(); err != nil {
-		return err
-	}
-
 	// Check if workspace ID already exists
 	exists, err := r.checkWorkspaceIDExists(ctx, workspace.ID)
 	if err != nil {
@@ -292,9 +287,6 @@ func (r *mockInternalRepository) List(ctx context.Context) ([]*domain.Workspace,
 }
 
 func (r *mockInternalRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
-	if err := workspace.Validate(); err != nil {
-		return err
-	}
 
 	settings, err := json.Marshal(workspace.Settings)
 	if err != nil {

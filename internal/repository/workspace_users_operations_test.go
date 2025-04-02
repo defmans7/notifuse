@@ -22,7 +22,7 @@ func TestWorkspaceRepository_AddUserToWorkspace(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
 	userWorkspace := &domain.UserWorkspace{
 		UserID:      "user123",
@@ -68,7 +68,7 @@ func TestWorkspaceRepository_RemoveUserFromWorkspace(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 	userID := "user123"
 	workspaceID := "workspace123"
 

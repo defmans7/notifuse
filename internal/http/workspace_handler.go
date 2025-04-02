@@ -18,6 +18,7 @@ type WorkspaceHandler struct {
 	workspaceService domain.WorkspaceServiceInterface
 	publicKey        paseto.V4AsymmetricPublicKey
 	logger           logger.Logger
+	secretKey        string
 }
 
 // NewWorkspaceHandler creates a new workspace handler
@@ -25,11 +26,13 @@ func NewWorkspaceHandler(
 	workspaceService domain.WorkspaceServiceInterface,
 	publicKey paseto.V4AsymmetricPublicKey,
 	logger logger.Logger,
+	secretKey string,
 ) *WorkspaceHandler {
 	return &WorkspaceHandler{
 		workspaceService: workspaceService,
 		publicKey:        publicKey,
 		logger:           logger,
+		secretKey:        secretKey,
 	}
 }
 
@@ -113,7 +116,7 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := req.Validate(); err != nil {
+	if err := req.Validate(h.secretKey); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -126,6 +129,7 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		req.Settings.LogoURL,
 		req.Settings.CoverURL,
 		req.Settings.Timezone,
+		req.Settings.FileManager,
 	)
 	if err != nil {
 		if err.Error() == "workspace already exists" {
@@ -158,7 +162,7 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := req.Validate(); err != nil {
+	if err := req.Validate(h.secretKey); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -171,6 +175,7 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		req.Settings.LogoURL,
 		req.Settings.CoverURL,
 		req.Settings.Timezone,
+		req.Settings.FileManager,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update workspace")

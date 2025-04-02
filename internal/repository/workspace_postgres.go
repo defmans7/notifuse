@@ -15,18 +15,20 @@ import (
 )
 
 type workspaceRepository struct {
-	systemDB *sql.DB
-	dbConfig *config.DatabaseConfig
+	systemDB  *sql.DB
+	dbConfig  *config.DatabaseConfig
+	secretKey string
 
 	// Connection pool for workspace databases
 	connectionPools sync.Map
 }
 
 // NewWorkspaceRepository creates a new PostgreSQL workspace repository
-func NewWorkspaceRepository(systemDB *sql.DB, dbConfig *config.DatabaseConfig) domain.WorkspaceRepository {
+func NewWorkspaceRepository(systemDB *sql.DB, dbConfig *config.DatabaseConfig, secretKey string) domain.WorkspaceRepository {
 	return &workspaceRepository{
-		systemDB: systemDB,
-		dbConfig: dbConfig,
+		systemDB:  systemDB,
+		dbConfig:  dbConfig,
+		secretKey: secretKey,
 	}
 }
 
@@ -42,14 +44,6 @@ func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id str
 }
 
 func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error {
-	if workspace.ID == "" {
-		return fmt.Errorf("workspace ID is required")
-	}
-
-	// Validate workspace before creating
-	if err := workspace.Validate(); err != nil {
-		return err
-	}
 
 	// Check if workspace ID already exists
 	exists, err := r.checkWorkspaceIDExists(ctx, workspace.ID)
@@ -63,6 +57,10 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 	now := time.Now()
 	workspace.CreatedAt = now
 	workspace.UpdatedAt = now
+
+	if err := workspace.BeforeSave(r.secretKey); err != nil {
+		return err
+	}
 
 	// Marshal settings to JSON
 	settings, err := json.Marshal(workspace.Settings)
@@ -85,6 +83,10 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 		return err
 	}
 
+	if err := workspace.AfterLoad(r.secretKey); err != nil {
+		return err
+	}
+
 	// Create the workspace database
 	return r.CreateDatabase(ctx, workspace.ID)
 }
@@ -102,6 +104,11 @@ func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.W
 	if err != nil {
 		return nil, err
 	}
+
+	if err := workspace.AfterLoad(r.secretKey); err != nil {
+		return nil, err
+	}
+
 	return workspace, nil
 }
 
@@ -123,6 +130,9 @@ func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, er
 		if err != nil {
 			return nil, err
 		}
+		if err := workspace.AfterLoad(r.secretKey); err != nil {
+			return nil, err
+		}
 		workspaces = append(workspaces, workspace)
 	}
 	return workspaces, rows.Err()
@@ -131,8 +141,7 @@ func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, er
 func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
 	workspace.UpdatedAt = time.Now()
 
-	// Validate workspace before updating
-	if err := workspace.Validate(); err != nil {
+	if err := workspace.BeforeSave(r.secretKey); err != nil {
 		return err
 	}
 
@@ -163,6 +172,11 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 	if rows == 0 {
 		return fmt.Errorf("workspace not found")
 	}
+
+	if err := workspace.AfterLoad(r.secretKey); err != nil {
+		return err
+	}
+
 	return nil
 }
 

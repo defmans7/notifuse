@@ -163,7 +163,7 @@ func (a *App) InitRepositories() error {
 	}
 
 	a.userRepo = repository.NewUserRepository(a.db)
-	a.workspaceRepo = repository.NewWorkspaceRepository(a.db, &a.config.Database)
+	a.workspaceRepo = repository.NewWorkspaceRepository(a.db, &a.config.Database, a.config.Security.SecretKey)
 	a.authRepo = repository.NewSQLAuthRepository(a.db, a.logger)
 	a.contactRepo = repository.NewContactRepository(a.workspaceRepo)
 	a.listRepo = repository.NewListRepository(a.workspaceRepo)
@@ -217,6 +217,7 @@ func (a *App) InitServices() error {
 		a.contactService,
 		a.listService,
 		a.contactListService,
+		a.config.Security.SecretKey,
 	)
 
 	return nil
@@ -236,7 +237,9 @@ func (a *App) InitHandlers() error {
 	workspaceHandler := httpHandler.NewWorkspaceHandler(
 		a.workspaceService,
 		a.config.Security.PasetoPublicKey,
-		a.logger)
+		a.logger,
+		a.config.Security.SecretKey,
+	)
 	faviconHandler := httpHandler.NewFaviconHandler()
 	contactHandler := httpHandler.NewContactHandler(a.contactService, a.config.Security.PasetoPublicKey, a.logger)
 	listHandler := httpHandler.NewListHandler(a.listService, a.config.Security.PasetoPublicKey, a.logger)

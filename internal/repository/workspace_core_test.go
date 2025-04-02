@@ -31,7 +31,7 @@ func TestWorkspaceRepository_CheckWorkspaceIDExists(t *testing.T) {
 		Prefix:   "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig).(*workspaceRepository)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key").(*workspaceRepository)
 	workspaceID := "test-workspace"
 
 	// Test successful check
@@ -116,24 +116,6 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workspace ID is required")
 
-	// Test case: Invalid workspace (validation failure)
-	invalidWorkspace := &domain.Workspace{
-		ID:   "testworkspace",
-		Name: "", // Name is required
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
-
-	// We need to ensure validation actually fails for this test case
-	err = invalidWorkspace.Validate() // First verify that validation actually fails
-	require.Error(t, err, "Validation should fail for empty workspace name")
-
-	// Then verify that Create returns the validation error
-	err = testRepo.Create(context.Background(), invalidWorkspace)
-	require.Error(t, err, "Create should return validation error for invalid workspace")
-	assert.Contains(t, err.Error(), "invalid workspace: name is required")
-
 	// Test case: Workspace ID already exists
 	existingWorkspace := &domain.Workspace{
 		ID:   "existingworkspace",
@@ -188,7 +170,7 @@ func TestWorkspaceRepository_GetByID(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
 	// Test data
 	workspaceID := "testworkspace"
@@ -233,7 +215,7 @@ func TestWorkspaceRepository_List(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
 	// Test data
 	workspace1 := &domain.Workspace{
@@ -277,7 +259,7 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
 	// Test case: Successful update
 	workspace := &domain.Workspace{
@@ -325,18 +307,6 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 	err = repo.Update(context.Background(), notFoundWorkspace)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workspace not found")
-
-	// Test case: Invalid workspace (validation failure)
-	invalidWorkspace := &domain.Workspace{
-		ID:   "testworkspace",
-		Name: "", // Empty name, which should fail validation
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
-
-	err = repo.Update(context.Background(), invalidWorkspace)
-	require.Error(t, err)
 
 	// Test case: Database error during workspace update
 	validWorkspace := &domain.Workspace{

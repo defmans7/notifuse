@@ -2,10 +2,24 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { fileURLToPath } from 'url'
+import { dirname, resolve } from 'path'
+import { readFileSync } from 'fs'
+import path from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    host: 'notifusedev.com',
+    https: {
+      key: readFileSync(resolve(__dirname, 'certificates/key.pem')),
+      cert: readFileSync(resolve(__dirname, 'certificates/cert.pem'))
+    }
+  },
   test: {
     globals: true,
     environment: 'jsdom',
@@ -14,6 +28,11 @@ export default defineConfig({
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: ['node_modules/', 'src/test/setup.tsx']
+    }
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
     }
   }
 })

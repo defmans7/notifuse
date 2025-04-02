@@ -15,7 +15,7 @@ import (
 )
 
 // Test setup helper
-func setupTest(t *testing.T) (*WorkspaceHandler, *mocks.MockWorkspaceServiceInterface, *http.ServeMux, paseto.V4AsymmetricSecretKey) {
+func setupTest(t *testing.T) (*WorkspaceHandler, *mocks.MockWorkspaceServiceInterface, *http.ServeMux, paseto.V4AsymmetricSecretKey, string) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	workspaceSvc := mocks.NewMockWorkspaceServiceInterface(ctrl)
@@ -23,14 +23,14 @@ func setupTest(t *testing.T) (*WorkspaceHandler, *mocks.MockWorkspaceServiceInte
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
-
+	passphrase := "test-passphrase"
 	mockLogger := new(pkgmocks.MockLogger)
-	handler := NewWorkspaceHandler(workspaceSvc, publicKey, mockLogger)
+	handler := NewWorkspaceHandler(workspaceSvc, publicKey, mockLogger, passphrase)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	return handler, workspaceSvc, mux, secretKey
+	return handler, workspaceSvc, mux, secretKey, passphrase
 }
 
 func TestWriteJSONError(t *testing.T) {

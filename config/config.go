@@ -42,6 +42,9 @@ type SecurityConfig struct {
 	// Raw decoded bytes for compatibility
 	PasetoPrivateKeyBytes []byte
 	PasetoPublicKeyBytes  []byte
+
+	// Secret passphrase for workspace settings encryption
+	SecretKey string
 }
 
 type SSLConfig struct {
@@ -134,6 +137,10 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		return nil, fmt.Errorf("error creating PASETO public key: %w", err)
 	}
 
+	if v.GetString("SECRET_KEY") == "" {
+		return nil, fmt.Errorf("SECRET_KEY is required")
+	}
+
 	config := &Config{
 		Server: ServerConfig{
 			Port: v.GetInt("SERVER_PORT"),
@@ -157,6 +164,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			PasetoPublicKey:       publicKey,
 			PasetoPrivateKeyBytes: privateKeyBytes,
 			PasetoPublicKeyBytes:  publicKeyBytes,
+			SecretKey:             v.GetString("SECRET_KEY"),
 		},
 		RootEmail:   v.GetString("ROOT_EMAIL"),
 		Environment: v.GetString("ENVIRONMENT"),

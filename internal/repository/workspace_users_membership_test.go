@@ -21,7 +21,7 @@ func TestWorkspaceRepository_IsUserWorkspaceMember(t *testing.T) {
 		Prefix: "notifuse",
 	}
 
-	repo := NewWorkspaceRepository(db, dbConfig)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 	userID := "user-123"
 	workspaceID := "ws-123"
 

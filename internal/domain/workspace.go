@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/asaskevich/govalidator"
 )
 
@@ -23,7 +24,7 @@ type WorkspaceSettings struct {
 }
 
 // Validate validates workspace settings
-func (ws *WorkspaceSettings) Validate() error {
+func (ws *WorkspaceSettings) Validate(passphrase string) error {
 	if ws.Timezone == "" {
 		return fmt.Errorf("timezone is required")
 	}
@@ -44,6 +45,10 @@ func (ws *WorkspaceSettings) Validate() error {
 		return fmt.Errorf("invalid cover URL: %s", ws.CoverURL)
 	}
 
+	if err := ws.FileManager.Validate(passphrase); err != nil {
+		return fmt.Errorf("invalid file manager settings: %w", err)
+	}
+
 	return nil
 }
 
@@ -56,7 +61,7 @@ type Workspace struct {
 }
 
 // Validate performs validation on the workspace fields
-func (w *Workspace) Validate() error {
+func (w *Workspace) Validate(passphrase string) error {
 	// Validate ID
 	if w.ID == "" {
 		return fmt.Errorf("invalid workspace: id is required")
@@ -77,23 +82,89 @@ func (w *Workspace) Validate() error {
 	}
 
 	// Validate Settings
-	if err := w.Settings.Validate(); err != nil {
+	if err := w.Settings.Validate(passphrase); err != nil {
 		return fmt.Errorf("invalid workspace settings: %w", err)
 	}
 
 	return nil
 }
 
+func (w *Workspace) BeforeSave(secretkey string) error {
+	if w.Settings.FileManager.SecretKey != "" {
+		if err := w.Settings.FileManager.EncryptSecretKey(secretkey); err != nil {
+			return fmt.Errorf("failed to encrypt secret key: %w", err)
+		}
+		// clear the secret key from the workspace settings
+		w.Settings.FileManager.SecretKey = ""
+	}
+	return nil
+}
+
+func (w *Workspace) AfterLoad(secretkey string) error {
+	if w.Settings.FileManager.EncryptedSecretKey != "" {
+		if err := w.Settings.FileManager.DecryptSecretKey(secretkey); err != nil {
+			return fmt.Errorf("failed to decrypt secret key: %w", err)
+		}
+	}
+	return nil
+}
+
 type FileManagerSettings struct {
-	Endpoint           string `json:"endpoint"`
-	Bucket             string `json:"bucket"`
-	Region             string `json:"region"`
-	CDNEndpoint        string `json:"cdn_endpoint"`
-	AccessKey          string `json:"access_key"`
-	EncryptedSecretKey string `json:"encrypted_secret_key"`
+	Endpoint           string  `json:"endpoint"`
+	Bucket             string  `json:"bucket"`
+	AccessKey          string  `json:"access_key"`
+	EncryptedSecretKey string  `json:"encrypted_secret_key,omitempty"`
+	Region             *string `json:"region,omitempty"`
+	CDNEndpoint        *string `json:"cdn_endpoint,omitempty"`
 
 	// decoded secret key, not stored in the database
-	SecretKey string
+	SecretKey string `json:"secret_key,omitempty"`
+}
+
+func (f *FileManagerSettings) DecryptSecretKey(passphrase string) error {
+	secretKey, err := crypto.DecryptFromHexString(f.EncryptedSecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt secret key: %w", err)
+	}
+	f.SecretKey = secretKey
+	return nil
+}
+
+func (f *FileManagerSettings) EncryptSecretKey(passphrase string) error {
+	encryptedSecretKey, err := crypto.EncryptString(f.SecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt secret key: %w", err)
+	}
+	f.EncryptedSecretKey = encryptedSecretKey
+	return nil
+}
+
+func (f *FileManagerSettings) Validate(passphrase string) error {
+	if f.AccessKey == "" {
+		return fmt.Errorf("access key is required")
+	}
+	if f.Endpoint == "" {
+		return fmt.Errorf("endpoint is required")
+	}
+	if !govalidator.IsURL(f.Endpoint) {
+		return fmt.Errorf("invalid endpoint: %s", f.Endpoint)
+	}
+	if f.Bucket == "" {
+		return fmt.Errorf("bucket is required")
+	}
+	// Region is now optional, so we don't check if it's empty
+	if f.CDNEndpoint != nil && !govalidator.IsURL(*f.CDNEndpoint) {
+		return fmt.Errorf("invalid cdn endpoint: %s", *f.CDNEndpoint)
+	}
+
+	// only encrypt secret key if it's not empty
+	if f.SecretKey != "" {
+		if err := f.EncryptSecretKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt secret key: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // For database scanning
@@ -223,10 +294,10 @@ func (e *ErrUnauthorized) Error() string {
 
 // WorkspaceServiceInterface defines the interface for workspace operations
 type WorkspaceServiceInterface interface {
-	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*Workspace, error)
+	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string, fileManager FileManagerSettings) (*Workspace, error)
 	GetWorkspace(ctx context.Context, id string) (*Workspace, error)
 	ListWorkspaces(ctx context.Context) ([]*Workspace, error)
-	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string) (*Workspace, error)
+	UpdateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string, fileManager FileManagerSettings) (*Workspace, error)
 	DeleteWorkspace(ctx context.Context, id string) error
 	GetWorkspaceMembersWithEmail(ctx context.Context, id string) ([]*UserWorkspaceWithEmail, error)
 	InviteMember(ctx context.Context, workspaceID, email string) (*WorkspaceInvitation, string, error)
@@ -242,7 +313,7 @@ type CreateWorkspaceRequest struct {
 	Settings WorkspaceSettings `json:"settings"`
 }
 
-func (r *CreateWorkspaceRequest) Validate() error {
+func (r *CreateWorkspaceRequest) Validate(passphrase string) error {
 	// Validate ID
 	if r.ID == "" {
 		return fmt.Errorf("invalid create workspace request: id is required")
@@ -263,7 +334,7 @@ func (r *CreateWorkspaceRequest) Validate() error {
 	}
 
 	// Validate Settings
-	if err := r.Settings.Validate(); err != nil {
+	if err := r.Settings.Validate(passphrase); err != nil {
 		return fmt.Errorf("invalid create workspace request: %w", err)
 	}
 
@@ -280,7 +351,7 @@ type UpdateWorkspaceRequest struct {
 	Settings WorkspaceSettings `json:"settings"`
 }
 
-func (r *UpdateWorkspaceRequest) Validate() error {
+func (r *UpdateWorkspaceRequest) Validate(passphrase string) error {
 	// Validate ID
 	if r.ID == "" {
 		return fmt.Errorf("invalid update workspace request: id is required")
@@ -301,7 +372,7 @@ func (r *UpdateWorkspaceRequest) Validate() error {
 	}
 
 	// Validate Settings
-	if err := r.Settings.Validate(); err != nil {
+	if err := r.Settings.Validate(passphrase); err != nil {
 		return fmt.Errorf("invalid update workspace request: %w", err)
 	}
 

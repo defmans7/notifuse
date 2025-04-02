@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,7 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
 
 	ctx := context.Background()
 	user := &domain.User{ID: "test-user"}
@@ -107,7 +108,7 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -191,7 +192,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -215,7 +216,14 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 				LogoURL:    "https://example.com/logo.png",
 				CoverURL:   "https://example.com/cover.png",
 				Timezone:   "UTC",
+				FileManager: domain.FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
 			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
@@ -227,7 +235,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.NoError(t, err)
 		assert.Equal(t, expectedWorkspace.ID, workspace.ID)
 		assert.Equal(t, expectedWorkspace.Name, workspace.Name)
@@ -245,7 +257,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		// No need to mock GetByID here as the validation fails before that check
 
 		// Invalid timezone
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "INVALID_TIMEZONE")
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "INVALID_TIMEZONE", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Contains(t, err.Error(), "invalid timezone: INVALID_TIMEZONE")
@@ -262,7 +278,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(assert.AnError)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -280,7 +300,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(assert.AnError)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -299,7 +323,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(nil, assert.AnError)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -322,7 +350,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 			Error:  "failed to upsert contact",
 		})
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Contains(t, err.Error(), "failed to upsert contact")
@@ -343,7 +375,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existingWorkspace, nil)
 
-		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC")
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Contains(t, err.Error(), "workspace already exists")
@@ -363,7 +399,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -392,7 +428,14 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 				LogoURL:    "https://updated.com/logo.png",
 				CoverURL:   "https://updated.com/cover.png",
 				Timezone:   "Europe/Paris",
+				FileManager: domain.FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
 			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(expectedUser, nil)
@@ -404,7 +447,11 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			return nil
 		})
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris")
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.NoError(t, err)
 		assert.Equal(t, workspaceID, workspace.ID)
 		assert.Equal(t, "Updated Workspace", workspace.Name)
@@ -412,6 +459,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Equal(t, "https://updated.com/logo.png", workspace.Settings.LogoURL)
 		assert.Equal(t, "https://updated.com/cover.png", workspace.Settings.CoverURL)
 		assert.Equal(t, "Europe/Paris", workspace.Settings.Timezone)
+		assert.Equal(t, "https://s3.amazonaws.com", workspace.Settings.FileManager.Endpoint)
+		assert.Equal(t, "my-bucket", workspace.Settings.FileManager.Bucket)
+		assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", workspace.Settings.FileManager.AccessKey)
 	})
 
 	t.Run("unauthorized user", func(t *testing.T) {
@@ -428,7 +478,11 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(expectedUser, nil)
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris")
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.IsType(t, &domain.ErrUnauthorized{}, err)
@@ -449,7 +503,11 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
 
 		// Invalid timezone
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "INVALID_TIMEZONE")
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "INVALID_TIMEZONE", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Contains(t, err.Error(), "invalid timezone: INVALID_TIMEZONE")
@@ -470,7 +528,11 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(assert.AnError)
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris")
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -490,7 +552,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()

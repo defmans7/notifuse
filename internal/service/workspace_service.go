@@ -23,6 +23,7 @@ type WorkspaceService struct {
 	contactService     domain.ContactService
 	listService        domain.ListService
 	contactListService domain.ContactListService
+	secretKey          string
 }
 
 func NewWorkspaceService(
@@ -35,6 +36,7 @@ func NewWorkspaceService(
 	contactService domain.ContactService,
 	listService domain.ListService,
 	contactListService domain.ContactListService,
+	secretKey string,
 ) *WorkspaceService {
 	return &WorkspaceService{
 		repo:               repo,
@@ -46,6 +48,7 @@ func NewWorkspaceService(
 		contactService:     contactService,
 		listService:        listService,
 		contactListService: contactListService,
+		secretKey:          secretKey,
 	}
 }
 
@@ -104,7 +107,7 @@ func (s *WorkspaceService) GetWorkspace(ctx context.Context, id string) (*domain
 }
 
 // CreateWorkspace creates a new workspace and adds the creator as owner
-func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string) (*domain.Workspace, error) {
+func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string, fileManager domain.FileManagerSettings) (*domain.Workspace, error) {
 	user, err := s.authService.AuthenticateUserFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -114,16 +117,17 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		ID:   id,
 		Name: name,
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: websiteURL,
-			LogoURL:    logoURL,
-			CoverURL:   coverURL,
-			Timezone:   timezone,
+			WebsiteURL:  websiteURL,
+			LogoURL:     logoURL,
+			CoverURL:    coverURL,
+			Timezone:    timezone,
+			FileManager: fileManager,
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	if err := workspace.Validate(); err != nil {
+	if err := workspace.Validate(s.secretKey); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
 		return nil, err
 	}
@@ -220,7 +224,7 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 }
 
 // UpdateWorkspace updates a workspace if the user is an owner
-func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string) (*domain.Workspace, error) {
+func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string, fileManager domain.FileManagerSettings) (*domain.Workspace, error) {
 	user, err := s.authService.AuthenticateUserForWorkspace(ctx, id)
 	if err != nil {
 		return nil, err
@@ -242,15 +246,16 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		ID:   id,
 		Name: name,
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: websiteURL,
-			LogoURL:    logoURL,
-			CoverURL:   coverURL,
-			Timezone:   timezone,
+			WebsiteURL:  websiteURL,
+			LogoURL:     logoURL,
+			CoverURL:    coverURL,
+			Timezone:    timezone,
+			FileManager: fileManager,
 		},
 		UpdatedAt: time.Now(),
 	}
 
-	if err := workspace.Validate(); err != nil {
+	if err := workspace.Validate(s.secretKey); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
 		return nil, err
 	}

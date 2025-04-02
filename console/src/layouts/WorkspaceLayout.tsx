@@ -6,7 +6,9 @@ import {
   SettingOutlined,
   FileTextOutlined,
   LogoutOutlined,
-  FolderOpenOutlined
+  FolderOpenOutlined,
+  FileOutlined,
+  PictureOutlined
 } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { Workspace } from '../services/api/types'
@@ -33,6 +35,8 @@ export function WorkspaceLayout() {
     selectedKey = 'templates'
   } else if (currentPath.includes('/contacts')) {
     selectedKey = 'contacts'
+  } else if (currentPath.includes('/media')) {
+    selectedKey = 'media'
   }
 
   const handleWorkspaceChange = (workspaceId: string) => {
@@ -76,6 +80,15 @@ export function WorkspaceLayout() {
       label: (
         <Link to="/workspace/$workspaceId/templates" params={{ workspaceId }}>
           Templates
+        </Link>
+      )
+    },
+    {
+      key: 'media',
+      icon: <PictureOutlined />,
+      label: (
+        <Link to="/workspace/$workspaceId/media" params={{ workspaceId }}>
+          Media
         </Link>
       )
     },
