@@ -173,6 +173,10 @@ func TestCreateListRequest_Validate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			wantErr: false,
 			wantList: &domain.List{
@@ -181,6 +185,10 @@ func TestCreateListRequest_Validate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 		},
 		{
@@ -220,6 +228,16 @@ func TestCreateListRequest_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "double opt-in without template",
+			request: domain.CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -237,6 +255,8 @@ func TestCreateListRequest_Validate(t *testing.T) {
 				assert.Equal(t, tt.wantList.IsDoubleOptin, list.IsDoubleOptin)
 				assert.Equal(t, tt.wantList.IsPublic, list.IsPublic)
 				assert.Equal(t, tt.wantList.Description, list.Description)
+				assert.Equal(t, tt.wantList.DoubleOptInTemplate.ID, list.DoubleOptInTemplate.ID)
+				assert.Equal(t, tt.wantList.DoubleOptInTemplate.Version, list.DoubleOptInTemplate.Version)
 			}
 		})
 	}
@@ -369,6 +389,10 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			wantErr: false,
 			wantList: &domain.List{
@@ -377,6 +401,10 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 		},
 		{
@@ -416,6 +444,16 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "double opt-in without template",
+			request: domain.UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -433,6 +471,8 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 				assert.Equal(t, tt.wantList.IsDoubleOptin, list.IsDoubleOptin)
 				assert.Equal(t, tt.wantList.IsPublic, list.IsPublic)
 				assert.Equal(t, tt.wantList.Description, list.Description)
+				assert.Equal(t, tt.wantList.DoubleOptInTemplate.ID, list.DoubleOptInTemplate.ID)
+				assert.Equal(t, tt.wantList.DoubleOptInTemplate.Version, list.DoubleOptInTemplate.Version)
 			}
 		})
 	}

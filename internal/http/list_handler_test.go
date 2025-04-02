@@ -298,6 +298,10 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "New Description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			setupMock: func(m *mocks.MockListService) {
 				list := &domain.List{
@@ -306,6 +310,10 @@ func TestListHandler_HandleCreate(t *testing.T) {
 					IsDoubleOptin: true,
 					IsPublic:      true,
 					Description:   "New Description",
+					DoubleOptInTemplate: &domain.TemplateReference{
+						ID:      "template123",
+						Version: 1,
+					},
 				}
 				m.EXPECT().CreateList(gomock.Any(), "workspace123", list).Return(nil)
 			},
@@ -324,6 +332,10 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "New Description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			setupMock: func(m *mocks.MockListService) {
 				list := &domain.List{
@@ -332,6 +344,10 @@ func TestListHandler_HandleCreate(t *testing.T) {
 					IsDoubleOptin: true,
 					IsPublic:      true,
 					Description:   "New Description",
+					DoubleOptInTemplate: &domain.TemplateReference{
+						ID:      "template123",
+						Version: 1,
+					},
 				}
 				m.EXPECT().CreateList(gomock.Any(), "workspace123", list).Return(errors.New("service error"))
 			},
@@ -362,6 +378,10 @@ func TestListHandler_HandleCreate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "New Description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			setupMock: func(m *mocks.MockListService) {
 				// No setup needed
@@ -423,6 +443,10 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Updated Description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			setupMock: func(m *mocks.MockListService) {
 				list := &domain.List{
@@ -431,6 +455,10 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 					IsDoubleOptin: true,
 					IsPublic:      true,
 					Description:   "Updated Description",
+					DoubleOptInTemplate: &domain.TemplateReference{
+						ID:      "template123",
+						Version: 1,
+					},
 				}
 				m.EXPECT().UpdateList(gomock.Any(), "workspace123", list).Return(nil)
 			},
@@ -449,6 +477,10 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Updated Description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			setupMock: func(m *mocks.MockListService) {
 				list := &domain.List{
@@ -457,6 +489,10 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 					IsDoubleOptin: true,
 					IsPublic:      true,
 					Description:   "Updated Description",
+					DoubleOptInTemplate: &domain.TemplateReference{
+						ID:      "template123",
+						Version: 1,
+					},
 				}
 				m.EXPECT().UpdateList(gomock.Any(), "workspace123", list).Return(&domain.ErrListNotFound{Message: "list not found"})
 			},
@@ -475,6 +511,10 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Updated Description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			setupMock: func(m *mocks.MockListService) {
 				list := &domain.List{
@@ -483,6 +523,10 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 					IsDoubleOptin: true,
 					IsPublic:      true,
 					Description:   "Updated Description",
+					DoubleOptInTemplate: &domain.TemplateReference{
+						ID:      "template123",
+						Version: 1,
+					},
 				}
 				m.EXPECT().UpdateList(gomock.Any(), "workspace123", list).Return(errors.New("service error"))
 			},
@@ -513,6 +557,10 @@ func TestListHandler_HandleUpdate(t *testing.T) {
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Updated Description",
+				DoubleOptInTemplate: &domain.TemplateReference{
+					ID:      "template123",
+					Version: 1,
+				},
 			},
 			setupMock: func(m *mocks.MockListService) {
 				// No setup needed

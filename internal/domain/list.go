@@ -197,6 +197,10 @@ func (r *CreateListRequest) Validate() (list *List, workspaceID string, err erro
 		}
 	}
 
+	if r.IsDoubleOptin && r.DoubleOptInTemplate == nil {
+		return nil, "", fmt.Errorf("invalid create list request: double opt-in template is required when is_double_optin is true")
+	}
+
 	return &List{
 		ID:                  r.ID,
 		Name:                r.Name,
@@ -318,6 +322,10 @@ func (r *UpdateListRequest) Validate() (list *List, workspaceID string, err erro
 		if err := r.UnsubscribeTemplate.Validate(); err != nil {
 			return nil, "", fmt.Errorf("invalid update list request: unsubscribe template: %w", err)
 		}
+	}
+
+	if r.IsDoubleOptin && r.DoubleOptInTemplate == nil {
+		return nil, "", fmt.Errorf("invalid update list request: double opt-in template is required when is_double_optin is true")
 	}
 
 	return &List{
