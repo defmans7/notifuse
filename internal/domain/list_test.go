@@ -537,3 +537,53 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestContactListTotalType_Validate(t *testing.T) {
+	tests := []struct {
+		name      string
+		totalType domain.ContactListTotalType
+		wantErr   bool
+	}{
+		{
+			name:      "valid type - pending",
+			totalType: domain.TotalTypePending,
+			wantErr:   false,
+		},
+		{
+			name:      "valid type - active",
+			totalType: domain.TotalTypeActive,
+			wantErr:   false,
+		},
+		{
+			name:      "valid type - unsubscribed",
+			totalType: domain.TotalTypeUnsubscribed,
+			wantErr:   false,
+		},
+		{
+			name:      "valid type - bounced",
+			totalType: domain.TotalTypeBounced,
+			wantErr:   false,
+		},
+		{
+			name:      "valid type - complained",
+			totalType: domain.TotalTypeComplained,
+			wantErr:   false,
+		},
+		{
+			name:      "invalid type",
+			totalType: domain.ContactListTotalType("invalid"),
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.totalType.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
