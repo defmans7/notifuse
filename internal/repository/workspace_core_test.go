@@ -15,7 +15,6 @@ import (
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
-	"github.com/golang/mock/gomock"
 )
 
 func TestWorkspaceRepository_CheckWorkspaceIDExists(t *testing.T) {
@@ -66,100 +65,121 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 		Prefix:   "notifuse",
 	}
 
-	// Create a mock repository to use testWorkspaceRepository.Create instead
-	testRepo := &testWorkspaceRepository{
-		WorkspaceRepository: &mockInternalRepository{
-			systemDB: db,
-			dbConfig: dbConfig,
-		},
-		createDatabaseError: nil, // No error initially
-	}
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
-	// Test case: Happy path
-	workspace := &domain.Workspace{
-		ID:   "testworkspace",
-		Name: "Test Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
+	t.Run("successful creation", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+			},
+		}
 
-	// Mock for checking if workspace exists
-	mock.ExpectQuery(`SELECT EXISTS.*FROM workspaces WHERE id = \$1`).
-		WithArgs(workspace.ID).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+		// Mock for checking if workspace exists
+		mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+			WithArgs(workspace.ID).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
-	// Mock for inserting workspace
-	settings, _ := json.Marshal(workspace.Settings)
-	mock.ExpectExec(`INSERT INTO workspaces.*VALUES.*`).
-		WithArgs(
-			workspace.ID,
-			workspace.Name,
-			settings,
-			sqlmock.AnyArg(), // created_at
-			sqlmock.AnyArg(), // updated_at
-		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+		// Mock for inserting workspace
+		settings, _ := json.Marshal(workspace.Settings)
+		mock.ExpectExec(`INSERT INTO workspaces \(id, name, settings, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
+			WithArgs(
+				workspace.ID,
+				workspace.Name,
+				settings,
+				sqlmock.AnyArg(), // created_at
+				sqlmock.AnyArg(), // updated_at
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
 
-	err := testRepo.Create(context.Background(), workspace)
-	require.NoError(t, err)
+		err := repo.Create(context.Background(), workspace)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-	// Test case: Empty workspace ID
-	emptyIDWorkspace := &domain.Workspace{
-		Name: "Test Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
+	t.Run("empty workspace ID", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+			},
+		}
 
-	err = testRepo.Create(context.Background(), emptyIDWorkspace)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "workspace ID is required")
+		err := repo.Create(context.Background(), workspace)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace ID is required")
+	})
 
-	// Test case: Workspace ID already exists
-	existingWorkspace := &domain.Workspace{
-		ID:   "existingworkspace",
-		Name: "Existing Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
+	t.Run("workspace ID already exists", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "existing-workspace",
+			Name: "Existing Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+			},
+		}
 
-	mock.ExpectQuery(`SELECT EXISTS.*FROM workspaces WHERE id = \$1`).
-		WithArgs(existingWorkspace.ID).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+		mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+			WithArgs(workspace.ID).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
-	err = testRepo.Create(context.Background(), existingWorkspace)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "already exists")
+		err := repo.Create(context.Background(), workspace)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-	// Test case: Database error during insert
-	validWorkspace := &domain.Workspace{
-		ID:   "validworkspace",
-		Name: "Valid Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
+	t.Run("database error during existence check", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+			},
+		}
 
-	mock.ExpectQuery(`SELECT EXISTS.*FROM workspaces WHERE id = \$1`).
-		WithArgs(validWorkspace.ID).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+		mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+			WithArgs(workspace.ID).
+			WillReturnError(errors.New("database error"))
 
-	settingsJSON, _ := json.Marshal(validWorkspace.Settings)
-	mock.ExpectExec(`INSERT INTO workspaces.*VALUES.*`).
-		WithArgs(
-			validWorkspace.ID,
-			validWorkspace.Name,
-			settingsJSON,
-			sqlmock.AnyArg(), // created_at
-			sqlmock.AnyArg(), // updated_at
-		).
-		WillReturnError(fmt.Errorf("insert error"))
+		err := repo.Create(context.Background(), workspace)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "database error")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-	err = testRepo.Create(context.Background(), validWorkspace)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create workspace")
+	t.Run("database error during insert", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+			},
+		}
+
+		// Mock for checking if workspace exists
+		mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+			WithArgs(workspace.ID).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		// Mock for inserting workspace with error
+		settings, _ := json.Marshal(workspace.Settings)
+		mock.ExpectExec(`INSERT INTO workspaces \(id, name, settings, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
+			WithArgs(
+				workspace.ID,
+				workspace.Name,
+				settings,
+				sqlmock.AnyArg(), // created_at
+				sqlmock.AnyArg(), // updated_at
+			).
+			WillReturnError(errors.New("insert error"))
+
+		err := repo.Create(context.Background(), workspace)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create workspace")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestWorkspaceRepository_GetByID(t *testing.T) {
@@ -347,91 +367,101 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 }
 
 func TestWorkspaceRepository_Delete(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
 
-	// Setup a mock implementation of the repository
-	// This is different from the standard pattern because we're testing
-	// the Delete method itself, so we need to use a wrapper
-	// to avoid infinite recursion
-	workspaceRepo := &workspaceRepositoryDeleteTest{
-		deleteResults: map[string]error{
-			"test-workspace":        nil,
-			"error-workspace":       fmt.Errorf("database error"),
-			"nonexistent-workspace": fmt.Errorf("workspace not found"),
-		},
-		deleteDatabaseResults: map[string]error{
-			"test-workspace":              nil,
-			"error-workspace":             nil,
-			"permission-denied-workspace": fmt.Errorf("permission denied"),
-			"nonexistent-workspace":       nil,
-		},
+	dbConfig := &config.DatabaseConfig{
+		Host:     "localhost",
+		Port:     5432,
+		User:     "postgres",
+		Password: "password",
+		DBName:   "notifuse_system",
+		Prefix:   "notifuse",
 	}
 
-	// Test cases
-	testCases := []struct {
-		name          string
-		workspaceID   string
-		expectedError string
-	}{
-		{
-			name:          "successful deletion",
-			workspaceID:   "test-workspace",
-			expectedError: "",
-		},
-		{
-			name:          "database error during deletion",
-			workspaceID:   "error-workspace",
-			expectedError: "database error",
-		},
-		{
-			name:          "permission denied during database deletion",
-			workspaceID:   "permission-denied-workspace",
-			expectedError: "permission denied",
-		},
-		{
-			name:          "workspace not found",
-			workspaceID:   "nonexistent-workspace",
-			expectedError: "workspace not found",
-		},
-	}
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
-	// Run tests
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Call the method under test
-			err := workspaceRepo.Delete(context.Background(), tc.workspaceID)
+	t.Run("successful deletion", func(t *testing.T) {
+		workspaceID := "test-workspace"
 
-			// Check the result
-			if tc.expectedError == "" {
-				assert.NoError(t, err)
-			} else {
-				assert.Error(t, err)
-				assert.Equal(t, tc.expectedError, err.Error())
-			}
-		})
-	}
-}
+		// Mock for dropping the database
+		mock.ExpectExec(`DROP DATABASE IF EXISTS "notifuse_test-workspace"`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
 
-// A test implementation of the repository for Delete test only
-type workspaceRepositoryDeleteTest struct {
-	domain.WorkspaceRepository // This embeds the interface, making all methods required
-	deleteResults              map[string]error
-	deleteDatabaseResults      map[string]error
-}
+		// Mock for deleting from workspaces table
+		mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
+			WithArgs(workspaceID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
 
-// Override the Delete method for testing
-func (r *workspaceRepositoryDeleteTest) Delete(ctx context.Context, id string) error {
-	// First call DeleteDatabase to match the real implementation
-	if err := r.DeleteDatabase(ctx, id); err != nil {
-		return err
-	}
+		err := repo.Delete(context.Background(), workspaceID)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-	// Then return the result for this specific workspace ID
-	return r.deleteResults[id]
-}
+	t.Run("error dropping database", func(t *testing.T) {
+		workspaceID := "error-workspace"
 
-// Override the DeleteDatabase method for testing
-func (r *workspaceRepositoryDeleteTest) DeleteDatabase(ctx context.Context, id string) error {
-	return r.deleteDatabaseResults[id]
+		// Mock for dropping the database with error
+		mock.ExpectExec(`DROP DATABASE IF EXISTS "notifuse_error-workspace"`).
+			WillReturnError(errors.New("database drop error"))
+
+		err := repo.Delete(context.Background(), workspaceID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "database drop error")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("workspace not found", func(t *testing.T) {
+		workspaceID := "nonexistent-workspace"
+
+		// Mock for dropping the database
+		mock.ExpectExec(`DROP DATABASE IF EXISTS "notifuse_nonexistent-workspace"`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		// Mock for deleting from workspaces table with no rows affected
+		mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
+			WithArgs(workspaceID).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.Delete(context.Background(), workspaceID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace not found")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("error deleting from workspaces table", func(t *testing.T) {
+		workspaceID := "delete-error-workspace"
+
+		// Mock for dropping the database
+		mock.ExpectExec(`DROP DATABASE IF EXISTS "notifuse_delete-error-workspace"`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Mock for deleting from workspaces table with error
+		mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
+			WithArgs(workspaceID).
+			WillReturnError(errors.New("delete error"))
+
+		err := repo.Delete(context.Background(), workspaceID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "delete error")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("error getting affected rows", func(t *testing.T) {
+		workspaceID := "rows-error-workspace"
+
+		// Mock for dropping the database
+		mock.ExpectExec(`DROP DATABASE IF EXISTS "notifuse_rows-error-workspace"`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Mock for deleting from workspaces table with error in rows affected
+		mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
+			WithArgs(workspaceID).
+			WillReturnResult(sqlmock.NewErrorResult(errors.New("rows affected error")))
+
+		err := repo.Delete(context.Background(), workspaceID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "rows affected error")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
