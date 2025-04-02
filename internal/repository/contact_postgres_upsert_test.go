@@ -439,4 +439,204 @@ func TestUpsertContact(t *testing.T) {
 		assert.False(t, isNew)
 		assert.NoError(t, newMock.ExpectationsWereMet())
 	})
+
+	t.Run("insert contact with all fields populated", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create a contact with ALL fields populated
+		allFieldsContact := &domain.Contact{
+			Email:         email,
+			ExternalID:    &domain.NullableString{String: "ext-all-fields", IsNull: false},
+			Timezone:      &domain.NullableString{String: "Europe/Paris", IsNull: false},
+			Language:      &domain.NullableString{String: "fr-FR", IsNull: false},
+			FirstName:     &domain.NullableString{String: "Jean", IsNull: false},
+			LastName:      &domain.NullableString{String: "Dupont", IsNull: false},
+			Phone:         &domain.NullableString{String: "+33123456789", IsNull: false},
+			AddressLine1:  &domain.NullableString{String: "123 Rue de Paris", IsNull: false},
+			AddressLine2:  &domain.NullableString{String: "Appartement 42", IsNull: false},
+			Country:       &domain.NullableString{String: "France", IsNull: false},
+			Postcode:      &domain.NullableString{String: "75001", IsNull: false},
+			State:         &domain.NullableString{String: "Île-de-France", IsNull: false},
+			JobTitle:      &domain.NullableString{String: "Developer", IsNull: false},
+			LifetimeValue: &domain.NullableFloat64{Float64: 1250.50, IsNull: false},
+			OrdersCount:   &domain.NullableFloat64{Float64: 12, IsNull: false},
+			LastOrderAt:   &domain.NullableTime{Time: now.Add(-24 * time.Hour), IsNull: false},
+
+			// Custom string fields
+			CustomString1: &domain.NullableString{String: "Custom 1", IsNull: false},
+			CustomString2: &domain.NullableString{String: "Custom 2", IsNull: false},
+			CustomString3: &domain.NullableString{String: "Custom 3", IsNull: false},
+			CustomString4: &domain.NullableString{String: "Custom 4", IsNull: false},
+			CustomString5: &domain.NullableString{String: "Custom 5", IsNull: false},
+
+			// Custom number fields
+			CustomNumber1: &domain.NullableFloat64{Float64: 1.1, IsNull: false},
+			CustomNumber2: &domain.NullableFloat64{Float64: 2.2, IsNull: false},
+			CustomNumber3: &domain.NullableFloat64{Float64: 3.3, IsNull: false},
+			CustomNumber4: &domain.NullableFloat64{Float64: 4.4, IsNull: false},
+			CustomNumber5: &domain.NullableFloat64{Float64: 5.5, IsNull: false},
+
+			// Custom datetime fields
+			CustomDatetime1: &domain.NullableTime{Time: now.Add(-1 * time.Hour), IsNull: false},
+			CustomDatetime2: &domain.NullableTime{Time: now.Add(-2 * time.Hour), IsNull: false},
+			CustomDatetime3: &domain.NullableTime{Time: now.Add(-3 * time.Hour), IsNull: false},
+			CustomDatetime4: &domain.NullableTime{Time: now.Add(-4 * time.Hour), IsNull: false},
+			CustomDatetime5: &domain.NullableTime{Time: now.Add(-5 * time.Hour), IsNull: false},
+
+			// Custom JSON fields
+			CustomJSON1: &domain.NullableJSON{Data: map[string]interface{}{"key1": "value1"}, IsNull: false},
+			CustomJSON2: &domain.NullableJSON{Data: map[string]interface{}{"key2": "value2"}, IsNull: false},
+			CustomJSON3: &domain.NullableJSON{Data: map[string]interface{}{"key3": "value3"}, IsNull: false},
+			CustomJSON4: &domain.NullableJSON{Data: map[string]interface{}{"key4": "value4"}, IsNull: false},
+			CustomJSON5: &domain.NullableJSON{Data: map[string]interface{}{"key5": "value5"}, IsNull: false},
+
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update that returns no rows
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnError(sql.ErrNoRows)
+
+		// Expect insert
+		newMock.ExpectExec(`INSERT INTO contacts`).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		// Expect transaction commit
+		newMock.ExpectCommit()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, allFieldsContact)
+		require.NoError(t, err)
+		assert.True(t, isNew)
+
+		// Verify all expectations were met
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("insert contact with null/empty values", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create a contact with only required fields and NULL values for others
+		minimalContact := &domain.Contact{
+			Email: email,
+			// All optional fields are nil or explicitly NULL
+			ExternalID:    &domain.NullableString{IsNull: true},
+			FirstName:     &domain.NullableString{IsNull: true},
+			LastName:      &domain.NullableString{IsNull: true},
+			LifetimeValue: &domain.NullableFloat64{IsNull: true},
+			OrdersCount:   &domain.NullableFloat64{IsNull: true},
+			LastOrderAt:   &domain.NullableTime{IsNull: true},
+			CustomJSON1:   &domain.NullableJSON{IsNull: true},
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update that returns no rows
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnError(sql.ErrNoRows)
+
+		// Expect insert
+		newMock.ExpectExec(`INSERT INTO contacts`).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		// Expect transaction commit
+		newMock.ExpectCommit()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, minimalContact)
+		require.NoError(t, err)
+		assert.True(t, isNew)
+
+		// Verify all expectations were met
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("update contact with mixed null and non-null fields", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create an existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "old-ext", "UTC", "en-US", "Old", "Name", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				now.Add(-24*time.Hour), now.Add(-24*time.Hour),
+			)
+
+		// Update with mixed null and non-null fields
+		mixedContact := &domain.Contact{
+			Email:         email,
+			ExternalID:    &domain.NullableString{String: "new-ext", IsNull: false},
+			FirstName:     &domain.NullableString{IsNull: true}, // explicitly setting to NULL
+			LastName:      &domain.NullableString{String: "New-Name", IsNull: false},
+			Phone:         &domain.NullableString{String: "+1234567890", IsNull: false},
+			AddressLine1:  &domain.NullableString{String: "123 Main St", IsNull: false},
+			CustomString1: &domain.NullableString{String: "Custom Value", IsNull: false},
+			CustomNumber1: &domain.NullableFloat64{Float64: 42.0, IsNull: false},
+			CustomJSON1:   &domain.NullableJSON{Data: map[string]interface{}{"key": "value"}, IsNull: false},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect update with merged data
+		newMock.ExpectExec(`UPDATE contacts SET`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Expect transaction commit
+		newMock.ExpectCommit()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, mixedContact)
+		require.NoError(t, err)
+		assert.False(t, isNew)
+
+		// Verify all expectations were met
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 }
