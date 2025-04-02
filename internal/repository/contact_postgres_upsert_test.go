@@ -337,4 +337,106 @@ func TestUpsertContact(t *testing.T) {
 		assert.False(t, isNew)
 		assert.NoError(t, newMock.ExpectationsWereMet())
 	})
+
+	t.Run("fails with JSON marshal error on insert", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create a contact with an unmarshalable JSON field
+		contactWithBadJSON := &domain.Contact{
+			Email: email,
+			// Create a custom JSON field with a value that can't be marshaled
+			CustomJSON1: &domain.NullableJSON{
+				Data:   make(chan int), // channels can't be marshaled to JSON
+				IsNull: false,
+			},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update that returns no rows
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnError(sql.ErrNoRows)
+
+		// Expect rollback due to JSON marshal error
+		newMock.ExpectRollback()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, contactWithBadJSON)
+
+		// Should fail with JSON marshal error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to marshal custom_json_1")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails with JSON marshal error on update", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create an existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "ext123", nil, nil, "John", "Doe", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				time.Now(), time.Now(),
+			)
+
+		// Create an update with unmarshalable JSON
+		contactWithBadJSON := &domain.Contact{
+			Email: email,
+			// Add a custom JSON field with a value that can't be marshaled
+			CustomJSON2: &domain.NullableJSON{
+				Data:   make(chan int), // channels can't be marshaled to JSON
+				IsNull: false,
+			},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update that returns existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect rollback due to JSON marshal error
+		newMock.ExpectRollback()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, contactWithBadJSON)
+
+		// Should fail with JSON marshal error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to marshal custom_json_2")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 }
