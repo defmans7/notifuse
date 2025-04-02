@@ -132,6 +132,69 @@ func TestTemplate_Validate(t *testing.T) {
 			}(),
 			wantErr: true,
 		},
+		{
+			name: "invalid template - missing channel",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Channel = ""
+				return t
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid template - channel too long",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Channel = "this_channel_name_is_too_long_for_validation"
+				return t
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid template - missing category",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Category = ""
+				return t
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid template - category too long",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Category = "this_category_name_is_too_long_for_validation"
+				return t
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid template - zero version",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Version = 0
+				return t
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid template - negative version",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Version = -1
+				return t
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid template - missing email",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Email = nil
+				return t
+			}(),
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

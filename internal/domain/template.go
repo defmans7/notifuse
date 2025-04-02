@@ -10,23 +10,6 @@ import (
 	"github.com/asaskevich/govalidator"
 )
 
-func init() {
-	// Do not set fields required by default - rely on explicit validation tags
-	govalidator.CustomTypeTagMap.Set("email", govalidator.CustomTypeValidator(func(i interface{}, context interface{}) bool {
-		switch v := i.(type) {
-		case string:
-			return govalidator.IsEmail(v)
-		case *string:
-			if v == nil {
-				return true
-			}
-			return govalidator.IsEmail(*v)
-		default:
-			return false
-		}
-	}))
-}
-
 type TemplateCategory string
 
 const (

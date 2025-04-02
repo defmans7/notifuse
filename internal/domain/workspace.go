@@ -15,10 +15,11 @@ import (
 
 // WorkspaceSettings contains configurable workspace settings
 type WorkspaceSettings struct {
-	WebsiteURL string `json:"website_url,omitempty"`
-	LogoURL    string `json:"logo_url,omitempty"`
-	CoverURL   string `json:"cover_url,omitempty"`
-	Timezone   string `json:"timezone"`
+	WebsiteURL  string              `json:"website_url,omitempty"`
+	LogoURL     string              `json:"logo_url,omitempty"`
+	CoverURL    string              `json:"cover_url,omitempty"`
+	Timezone    string              `json:"timezone"`
+	FileManager FileManagerSettings `json:"file_manager"`
 }
 
 // Validate validates workspace settings
@@ -81,6 +82,18 @@ func (w *Workspace) Validate() error {
 	}
 
 	return nil
+}
+
+type FileManagerSettings struct {
+	Endpoint           string `json:"endpoint"`
+	Bucket             string `json:"bucket"`
+	Region             string `json:"region"`
+	CDNEndpoint        string `json:"cdn_endpoint"`
+	AccessKey          string `json:"access_key"`
+	EncryptedSecretKey string `json:"encrypted_secret_key"`
+
+	// decoded secret key, not stored in the database
+	SecretKey string
 }
 
 // For database scanning
