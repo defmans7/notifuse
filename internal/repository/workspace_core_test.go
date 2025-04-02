@@ -132,7 +132,7 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 	// Then verify that Create returns the validation error
 	err = testRepo.Create(context.Background(), invalidWorkspace)
 	require.Error(t, err, "Create should return validation error for invalid workspace")
-	assert.Contains(t, err.Error(), "non zero value required")
+	assert.Contains(t, err.Error(), "invalid workspace: name is required")
 
 	// Test case: Workspace ID already exists
 	existingWorkspace := &domain.Workspace{

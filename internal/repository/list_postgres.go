@@ -60,7 +60,9 @@ func (r *listRepository) GetListByID(ctx context.Context, workspaceID string, id
 	}
 
 	query := `
-		SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
+		SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
+		total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+		welcome_template, unsubscribe_template, created_at, updated_at
 		FROM lists
 		WHERE id = $1
 	`
@@ -87,7 +89,9 @@ func (r *listRepository) GetLists(ctx context.Context, workspaceID string) ([]*d
 	}
 
 	query := `
-		SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
+		SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
+		total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+		welcome_template, unsubscribe_template, created_at, updated_at
 		FROM lists
 		ORDER BY created_at DESC
 	`

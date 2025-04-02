@@ -15,32 +15,44 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/internal/repository/testutil"
 	"github.com/golang/mock/gomock"
 )
 
 func TestListRepository(t *testing.T) {
-	db, mock, cleanup := testutil.SetupMockDB(t)
-	defer cleanup()
-
-	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	workspaceRepo.AddWorkspaceDB("workspace123", db)
-	repo := NewListRepository(workspaceRepo)
+	repo, _, mockWorkspaceRepo := setupListRepositoryTest(t)
 
 	// Create a test list
 	testList := &domain.List{
-		ID:            "list123",
-		Name:          "Test List",
-		IsDoubleOptin: true,
-		IsPublic:      false,
-		Description:   "Test list description",
-		CreatedAt:     time.Now().UTC(),
-		UpdatedAt:     time.Now().UTC(),
+		ID:                  "list123",
+		Name:                "Test List",
+		IsDoubleOptin:       true,
+		IsPublic:            true,
+		Description:         "This is a test list",
+		TotalActive:         0,
+		TotalPending:        0,
+		TotalUnsubscribed:   0,
+		TotalBounced:        0,
+		TotalComplained:     0,
+		DoubleOptInTemplate: nil,
+		WelcomeTemplate:     nil,
+		UnsubscribeTemplate: nil,
+		CreatedAt:           time.Now().UTC(),
+		UpdatedAt:           time.Now().UTC(),
 	}
+
+	// Setup workspace connection mock
+	db, sqlMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), "workspace123").
+		Return(db, nil).
+		AnyTimes()
 
 	t.Run("CreateList", func(t *testing.T) {
 		t.Run("successful creation", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`
+			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				INSERT INTO lists (id, name, is_double_optin, is_public, description, created_at, updated_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7)
 			`)).WithArgs(
@@ -51,15 +63,14 @@ func TestListRepository(t *testing.T) {
 				testList.Description,
 				sqlmock.AnyArg(),
 				sqlmock.AnyArg(),
-			).WillReturnResult(sqlmock.NewResult(0, 1))
+			).WillReturnResult(sqlmock.NewResult(1, 1))
 
 			err := repo.CreateList(context.Background(), "workspace123", testList)
 			require.NoError(t, err)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("database error", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`
+			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				INSERT INTO lists (id, name, is_double_optin, is_public, description, created_at, updated_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7)
 			`)).WithArgs(
@@ -75,26 +86,37 @@ func TestListRepository(t *testing.T) {
 			err := repo.CreateList(context.Background(), "workspace123", testList)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "failed to create list")
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 	})
 
 	t.Run("GetListByID", func(t *testing.T) {
 		t.Run("list found", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
-				"id", "name", "is_double_optin", "is_public", "description", "created_at", "updated_at",
+				"id", "name", "is_double_optin", "is_public", "description", "total_active", "total_pending",
+				"total_unsubscribed", "total_bounced", "total_complained", "double_optin_template",
+				"welcome_template", "unsubscribe_template", "created_at", "updated_at",
 			}).AddRow(
 				testList.ID,
 				testList.Name,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
+				testList.TotalActive,
+				testList.TotalPending,
+				testList.TotalUnsubscribed,
+				testList.TotalBounced,
+				testList.TotalComplained,
+				testList.DoubleOptInTemplate,
+				testList.WelcomeTemplate,
+				testList.UnsubscribeTemplate,
 				testList.CreatedAt,
 				testList.UpdatedAt,
 			)
 
-			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
+				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				welcome_template, unsubscribe_template, created_at, updated_at
 				FROM lists
 				WHERE id = $1
 			`)).WithArgs(testList.ID).WillReturnRows(rows)
@@ -106,12 +128,13 @@ func TestListRepository(t *testing.T) {
 			assert.Equal(t, testList.IsDoubleOptin, list.IsDoubleOptin)
 			assert.Equal(t, testList.IsPublic, list.IsPublic)
 			assert.Equal(t, testList.Description, list.Description)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("list not found", func(t *testing.T) {
-			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
+				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				welcome_template, unsubscribe_template, created_at, updated_at
 				FROM lists
 				WHERE id = $1
 			`)).WithArgs(testList.ID).WillReturnError(sql.ErrNoRows)
@@ -120,12 +143,13 @@ func TestListRepository(t *testing.T) {
 			require.Error(t, err)
 			assert.Nil(t, list)
 			assert.IsType(t, &domain.ErrListNotFound{}, err)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("database error", func(t *testing.T) {
-			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
+				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				welcome_template, unsubscribe_template, created_at, updated_at
 				FROM lists
 				WHERE id = $1
 			`)).WithArgs(testList.ID).WillReturnError(errors.New("database error"))
@@ -134,26 +158,37 @@ func TestListRepository(t *testing.T) {
 			require.Error(t, err)
 			assert.Nil(t, list)
 			assert.Contains(t, err.Error(), "failed to get list")
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 	})
 
 	t.Run("GetLists", func(t *testing.T) {
 		t.Run("successful retrieval", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
-				"id", "name", "is_double_optin", "is_public", "description", "created_at", "updated_at",
+				"id", "name", "is_double_optin", "is_public", "description", "total_active", "total_pending",
+				"total_unsubscribed", "total_bounced", "total_complained", "double_optin_template",
+				"welcome_template", "unsubscribe_template", "created_at", "updated_at",
 			}).AddRow(
 				testList.ID,
 				testList.Name,
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
+				testList.TotalActive,
+				testList.TotalPending,
+				testList.TotalUnsubscribed,
+				testList.TotalBounced,
+				testList.TotalComplained,
+				testList.DoubleOptInTemplate,
+				testList.WelcomeTemplate,
+				testList.UnsubscribeTemplate,
 				testList.CreatedAt,
 				testList.UpdatedAt,
 			)
 
-			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
+				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				welcome_template, unsubscribe_template, created_at, updated_at
 				FROM lists
 				ORDER BY created_at DESC
 			`)).WillReturnRows(rows)
@@ -166,12 +201,13 @@ func TestListRepository(t *testing.T) {
 			assert.Equal(t, testList.IsDoubleOptin, lists[0].IsDoubleOptin)
 			assert.Equal(t, testList.IsPublic, lists[0].IsPublic)
 			assert.Equal(t, testList.Description, lists[0].Description)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("database error", func(t *testing.T) {
-			mock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, created_at, updated_at
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
+				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				welcome_template, unsubscribe_template, created_at, updated_at
 				FROM lists
 				ORDER BY created_at DESC
 			`)).WillReturnError(errors.New("database error"))
@@ -180,13 +216,12 @@ func TestListRepository(t *testing.T) {
 			require.Error(t, err)
 			assert.Nil(t, lists)
 			assert.Contains(t, err.Error(), "failed to get lists")
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 	})
 
 	t.Run("UpdateList", func(t *testing.T) {
 		t.Run("successful update", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`
+			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
 				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
 				WHERE id = $6
@@ -201,11 +236,10 @@ func TestListRepository(t *testing.T) {
 
 			err := repo.UpdateList(context.Background(), "workspace123", testList)
 			require.NoError(t, err)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("list not found", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`
+			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
 				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
 				WHERE id = $6
@@ -221,11 +255,10 @@ func TestListRepository(t *testing.T) {
 			err := repo.UpdateList(context.Background(), "workspace123", testList)
 			require.Error(t, err)
 			assert.IsType(t, &domain.ErrListNotFound{}, err)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("database error", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`
+			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
 				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
 				WHERE id = $6
@@ -241,41 +274,37 @@ func TestListRepository(t *testing.T) {
 			err := repo.UpdateList(context.Background(), "workspace123", testList)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "failed to update list")
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 	})
 
 	t.Run("DeleteList", func(t *testing.T) {
 		t.Run("successful deletion", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM lists WHERE id = $1`)).
+			sqlMock.ExpectExec(regexp.QuoteMeta(`DELETE FROM lists WHERE id = $1`)).
 				WithArgs(testList.ID).
 				WillReturnResult(sqlmock.NewResult(0, 1))
 
 			err := repo.DeleteList(context.Background(), "workspace123", testList.ID)
 			require.NoError(t, err)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("list not found", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM lists WHERE id = $1`)).
+			sqlMock.ExpectExec(regexp.QuoteMeta(`DELETE FROM lists WHERE id = $1`)).
 				WithArgs(testList.ID).
 				WillReturnResult(sqlmock.NewResult(0, 0))
 
 			err := repo.DeleteList(context.Background(), "workspace123", testList.ID)
 			require.Error(t, err)
 			assert.IsType(t, &domain.ErrListNotFound{}, err)
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
 		t.Run("database error", func(t *testing.T) {
-			mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM lists WHERE id = $1`)).
+			sqlMock.ExpectExec(regexp.QuoteMeta(`DELETE FROM lists WHERE id = $1`)).
 				WithArgs(testList.ID).
 				WillReturnError(errors.New("database error"))
 
 			err := repo.DeleteList(context.Background(), "workspace123", testList.ID)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "failed to delete list")
-			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 	})
 }

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -32,8 +33,12 @@ func (nj *NullableJSON) Scan(value interface{}) error {
 			nj.IsNull = true
 			return nil
 		}
+		// VERY IMPORTANT: we need to clone the bytes here
+		// The sql driver will reuse the same bytes RAM slots for future queries
+		// Thank you St Antoine De Padoue for helping me find this bug
+		cloned := bytes.Clone(v)
 		var data interface{}
-		if err := json.Unmarshal(v, &data); err != nil {
+		if err := json.Unmarshal(cloned, &data); err != nil {
 			return err
 		}
 		nj.Data = data
@@ -45,8 +50,12 @@ func (nj *NullableJSON) Scan(value interface{}) error {
 			nj.IsNull = true
 			return nil
 		}
+		// VERY IMPORTANT: we need to clone the bytes here
+		// The sql driver will reuse the same bytes RAM slots for future queries
+		// Thank you St Antoine De Padoue for helping me find this bug
+		cloned := bytes.Clone([]byte(v))
 		var data interface{}
-		if err := json.Unmarshal([]byte(v), &data); err != nil {
+		if err := json.Unmarshal(cloned, &data); err != nil {
 			return err
 		}
 		nj.Data = data

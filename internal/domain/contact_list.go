@@ -30,30 +30,56 @@ const (
 
 // ContactList represents the relationship between a contact and a list
 type ContactList struct {
-	Email     string            `json:"email" valid:"required,email"`
-	ListID    string            `json:"list_id" valid:"required,alphanum,stringlength(1|20)"`
-	Status    ContactListStatus `json:"status" valid:"required,in(active|pending|unsubscribed|bounced|complained)"`
+	Email     string            `json:"email"`
+	ListID    string            `json:"list_id"`
+	Status    ContactListStatus `json:"status"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 // Validate performs validation on the contact list fields
 func (cl *ContactList) Validate() error {
-	// Check required fields first
+	// Check required fields
 	if cl.Email == "" {
 		return fmt.Errorf("email is required")
 	}
+	if !govalidator.IsEmail(cl.Email) {
+		return fmt.Errorf("invalid email format: %s", cl.Email)
+	}
+
 	if cl.ListID == "" {
 		return fmt.Errorf("list_id is required")
 	}
+	if !govalidator.IsAlphanumeric(cl.ListID) {
+		return fmt.Errorf("list_id must be alphanumeric")
+	}
+	if len(cl.ListID) > 20 {
+		return fmt.Errorf("list_id length must be between 1 and 20")
+	}
+
 	if cl.Status == "" {
 		return fmt.Errorf("status is required")
 	}
 
-	// Then use govalidator for additional validation
-	if _, err := govalidator.ValidateStruct(cl); err != nil {
-		return fmt.Errorf("invalid contact list: %w", err)
+	// Validate status is one of the allowed values
+	validStatus := false
+	for _, status := range []ContactListStatus{
+		ContactListStatusActive,
+		ContactListStatusPending,
+		ContactListStatusUnsubscribed,
+		ContactListStatusBounced,
+		ContactListStatusComplained,
+	} {
+		if cl.Status == status {
+			validStatus = true
+			break
+		}
 	}
+
+	if !validStatus {
+		return fmt.Errorf("invalid status: %s", cl.Status)
+	}
+
 	return nil
 }
 
@@ -94,16 +120,45 @@ func ScanContactList(scanner interface {
 
 // Request/Response types
 type AddContactToListRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required"`
-	Email       string `json:"email" valid:"required,email"`
-	ListID      string `json:"list_id" valid:"required"`
-	Status      string `json:"status" valid:"required,in(active|pending|unsubscribed|blacklisted)"`
+	WorkspaceID string `json:"workspace_id"`
+	Email       string `json:"email"`
+	ListID      string `json:"list_id"`
+	Status      string `json:"status"`
 }
 
 func (r *AddContactToListRequest) Validate() (contactList *ContactList, workspaceID string, err error) {
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return nil, "", fmt.Errorf("invalid add contact to list request: %w", err)
+	if r.WorkspaceID == "" {
+		return nil, "", fmt.Errorf("workspace_id is required")
 	}
+
+	if r.Email == "" {
+		return nil, "", fmt.Errorf("email is required")
+	}
+	if !govalidator.IsEmail(r.Email) {
+		return nil, "", fmt.Errorf("invalid email format: %s", r.Email)
+	}
+
+	if r.ListID == "" {
+		return nil, "", fmt.Errorf("list_id is required")
+	}
+
+	if r.Status == "" {
+		return nil, "", fmt.Errorf("status is required")
+	}
+
+	// Validate status is one of the allowed values
+	validStatus := false
+	for _, status := range []string{"active", "pending", "unsubscribed", "blacklisted"} {
+		if r.Status == status {
+			validStatus = true
+			break
+		}
+	}
+
+	if !validStatus {
+		return nil, "", fmt.Errorf("invalid status: %s", r.Status)
+	}
+
 	return &ContactList{
 		Email:  r.Email,
 		ListID: r.ListID,
@@ -112,9 +167,9 @@ func (r *AddContactToListRequest) Validate() (contactList *ContactList, workspac
 }
 
 type GetContactListRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required"`
-	Email       string `json:"email" valid:"required,email"`
-	ListID      string `json:"list_id" valid:"required"`
+	WorkspaceID string `json:"workspace_id"`
+	Email       string `json:"email"`
+	ListID      string `json:"list_id"`
 }
 
 func (r *GetContactListRequest) FromURLParams(queryParams url.Values) (err error) {
@@ -122,56 +177,111 @@ func (r *GetContactListRequest) FromURLParams(queryParams url.Values) (err error
 	r.Email = queryParams.Get("email")
 	r.ListID = queryParams.Get("list_id")
 
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid get contact list request: %w", err)
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if r.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if !govalidator.IsEmail(r.Email) {
+		return fmt.Errorf("invalid email format: %s", r.Email)
+	}
+
+	if r.ListID == "" {
+		return fmt.Errorf("list_id is required")
 	}
 
 	return nil
 }
 
 type GetContactsByListRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required"`
-	ListID      string `json:"list_id" valid:"required,alphanum"`
+	WorkspaceID string `json:"workspace_id"`
+	ListID      string `json:"list_id"`
 }
 
 func (r *GetContactsByListRequest) FromURLParams(queryParams url.Values) (err error) {
 	r.WorkspaceID = queryParams.Get("workspace_id")
 	r.ListID = queryParams.Get("list_id")
 
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid get contacts by list request: %w", err)
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if r.ListID == "" {
+		return fmt.Errorf("list_id is required")
+	}
+
+	if !govalidator.IsAlphanumeric(r.ListID) {
+		return fmt.Errorf("list_id must be alphanumeric")
 	}
 
 	return nil
 }
 
 type GetListsByContactRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required"`
-	Email       string `json:"email" valid:"required,email"`
+	WorkspaceID string `json:"workspace_id"`
+	Email       string `json:"email"`
 }
 
 func (r *GetListsByContactRequest) FromURLParams(queryParams url.Values) (err error) {
 	r.WorkspaceID = queryParams.Get("workspace_id")
 	r.Email = queryParams.Get("email")
 
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid get lists by contact request: %w", err)
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if r.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if !govalidator.IsEmail(r.Email) {
+		return fmt.Errorf("invalid email format: %s", r.Email)
 	}
 
 	return nil
 }
 
 type UpdateContactListStatusRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required"`
-	Email       string `json:"email" valid:"required,email"`
-	ListID      string `json:"list_id" valid:"required"`
-	Status      string `json:"status" valid:"required,in(active|pending|unsubscribed|blacklisted)"`
+	WorkspaceID string `json:"workspace_id"`
+	Email       string `json:"email"`
+	ListID      string `json:"list_id"`
+	Status      string `json:"status"`
 }
 
 func (r *UpdateContactListStatusRequest) Validate() (workspaceID string, list *ContactList, err error) {
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return "", nil, fmt.Errorf("invalid update contact list status request: %w", err)
+	if r.WorkspaceID == "" {
+		return "", nil, fmt.Errorf("workspace_id is required")
 	}
+
+	if r.Email == "" {
+		return "", nil, fmt.Errorf("email is required")
+	}
+	if !govalidator.IsEmail(r.Email) {
+		return "", nil, fmt.Errorf("invalid email format: %s", r.Email)
+	}
+
+	if r.ListID == "" {
+		return "", nil, fmt.Errorf("list_id is required")
+	}
+
+	if r.Status == "" {
+		return "", nil, fmt.Errorf("status is required")
+	}
+
+	// Validate status is one of the allowed values
+	validStatus := false
+	for _, status := range []string{"active", "pending", "unsubscribed", "blacklisted"} {
+		if r.Status == status {
+			validStatus = true
+			break
+		}
+	}
+
+	if !validStatus {
+		return "", nil, fmt.Errorf("invalid status: %s", r.Status)
+	}
+
 	return r.WorkspaceID, &ContactList{
 		Email:  r.Email,
 		ListID: r.ListID,
@@ -180,15 +290,27 @@ func (r *UpdateContactListStatusRequest) Validate() (workspaceID string, list *C
 }
 
 type RemoveContactFromListRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required"`
-	Email       string `json:"email" valid:"required,email"`
-	ListID      string `json:"list_id" valid:"required"`
+	WorkspaceID string `json:"workspace_id"`
+	Email       string `json:"email"`
+	ListID      string `json:"list_id"`
 }
 
 func (r *RemoveContactFromListRequest) Validate() (err error) {
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid remove contact from list request: %w", err)
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
 	}
+
+	if r.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if !govalidator.IsEmail(r.Email) {
+		return fmt.Errorf("invalid email format: %s", r.Email)
+	}
+
+	if r.ListID == "" {
+		return fmt.Errorf("list_id is required")
+	}
+
 	return nil
 }
 

@@ -14,37 +14,81 @@ import (
 
 // List represents a subscription list
 type List struct {
-	ID                string    `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name              string    `json:"name" valid:"required,stringlength(1|255)"`
-	IsDoubleOptin     bool      `json:"is_double_optin" db:"is_double_optin"`
-	IsPublic          bool      `json:"is_public" db:"is_public"`
-	Description       string    `json:"description,omitempty" valid:"optional"`
-	TotalActive       int       `json:"total_active" db:"total_active"`
-	TotalPending      int       `json:"total_pending" db:"total_pending"`
-	TotalUnsubscribed int       `json:"total_unsubscribed" db:"total_unsubscribed"`
-	TotalBounced      int       `json:"total_bounced" db:"total_bounced"`
-	TotalComplained   int       `json:"total_complained" db:"total_complained"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                  string             `json:"id"`
+	Name                string             `json:"name"`
+	IsDoubleOptin       bool               `json:"is_double_optin" db:"is_double_optin"`
+	IsPublic            bool               `json:"is_public" db:"is_public"`
+	Description         string             `json:"description,omitempty"`
+	TotalActive         int                `json:"total_active" db:"total_active"`
+	TotalPending        int                `json:"total_pending" db:"total_pending"`
+	TotalUnsubscribed   int                `json:"total_unsubscribed" db:"total_unsubscribed"`
+	TotalBounced        int                `json:"total_bounced" db:"total_bounced"`
+	TotalComplained     int                `json:"total_complained" db:"total_complained"`
+	DoubleOptInTemplate *TemplateReference `json:"double_optin_template,omitempty"`
+	WelcomeTemplate     *TemplateReference `json:"welcome_template,omitempty"`
+	UnsubscribeTemplate *TemplateReference `json:"unsubscribe_template,omitempty"`
+	CreatedAt           time.Time          `json:"created_at"`
+	UpdatedAt           time.Time          `json:"updated_at"`
 }
 
 // Validate performs validation on the list fields
 func (l *List) Validate() error {
-	if _, err := govalidator.ValidateStruct(l); err != nil {
-		return fmt.Errorf("invalid list: %w", err)
+	if l.ID == "" {
+		return fmt.Errorf("invalid list: id is required")
 	}
+	if !govalidator.IsAlphanumeric(l.ID) {
+		return fmt.Errorf("invalid list: id must be alphanumeric")
+	}
+	if len(l.ID) > 20 {
+		return fmt.Errorf("invalid list: id length must be between 1 and 20")
+	}
+
+	if l.Name == "" {
+		return fmt.Errorf("invalid list: name is required")
+	}
+	if len(l.Name) > 255 {
+		return fmt.Errorf("invalid list: name length must be between 1 and 255")
+	}
+
+	// Validate optional template references if they exist
+	if l.DoubleOptInTemplate != nil {
+		if err := l.DoubleOptInTemplate.Validate(); err != nil {
+			return fmt.Errorf("invalid list: double opt-in template: %w", err)
+		}
+	}
+
+	if l.WelcomeTemplate != nil {
+		if err := l.WelcomeTemplate.Validate(); err != nil {
+			return fmt.Errorf("invalid list: welcome template: %w", err)
+		}
+	}
+
+	if l.UnsubscribeTemplate != nil {
+		if err := l.UnsubscribeTemplate.Validate(); err != nil {
+			return fmt.Errorf("invalid list: unsubscribe template: %w", err)
+		}
+	}
+
 	return nil
 }
 
 // For database scanning
 type dbList struct {
-	ID            string
-	Name          string
-	IsDoubleOptin bool
-	IsPublic      bool
-	Description   string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID                  string
+	Name                string
+	IsDoubleOptin       bool
+	IsPublic            bool
+	Description         string
+	TotalActive         int
+	TotalPending        int
+	TotalUnsubscribed   int
+	TotalBounced        int
+	TotalComplained     int
+	DoubleOptInTemplate *TemplateReference
+	WelcomeTemplate     *TemplateReference
+	UnsubscribeTemplate *TemplateReference
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 // ScanList scans a list from the database
@@ -58,6 +102,14 @@ func ScanList(scanner interface {
 		&dbl.IsDoubleOptin,
 		&dbl.IsPublic,
 		&dbl.Description,
+		&dbl.TotalActive,
+		&dbl.TotalPending,
+		&dbl.TotalUnsubscribed,
+		&dbl.TotalBounced,
+		&dbl.TotalComplained,
+		&dbl.DoubleOptInTemplate,
+		&dbl.WelcomeTemplate,
+		&dbl.UnsubscribeTemplate,
 		&dbl.CreatedAt,
 		&dbl.UpdatedAt,
 	); err != nil {
@@ -65,13 +117,21 @@ func ScanList(scanner interface {
 	}
 
 	l := &List{
-		ID:            dbl.ID,
-		Name:          dbl.Name,
-		IsDoubleOptin: dbl.IsDoubleOptin,
-		IsPublic:      dbl.IsPublic,
-		Description:   dbl.Description,
-		CreatedAt:     dbl.CreatedAt,
-		UpdatedAt:     dbl.UpdatedAt,
+		ID:                  dbl.ID,
+		Name:                dbl.Name,
+		IsDoubleOptin:       dbl.IsDoubleOptin,
+		IsPublic:            dbl.IsPublic,
+		Description:         dbl.Description,
+		TotalActive:         dbl.TotalActive,
+		TotalPending:        dbl.TotalPending,
+		TotalUnsubscribed:   dbl.TotalUnsubscribed,
+		TotalBounced:        dbl.TotalBounced,
+		TotalComplained:     dbl.TotalComplained,
+		DoubleOptInTemplate: dbl.DoubleOptInTemplate,
+		WelcomeTemplate:     dbl.WelcomeTemplate,
+		UnsubscribeTemplate: dbl.UnsubscribeTemplate,
+		CreatedAt:           dbl.CreatedAt,
+		UpdatedAt:           dbl.UpdatedAt,
 	}
 
 	return l, nil
@@ -79,89 +139,225 @@ func ScanList(scanner interface {
 
 // Request/Response types
 type CreateListRequest struct {
-	WorkspaceID   string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
-	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name          string `json:"name" valid:"required,stringlength(1|255)"`
-	IsDoubleOptin bool   `json:"is_double_optin"`
-	IsPublic      bool   `json:"is_public"`
-	Description   string `json:"description,omitempty"`
+	WorkspaceID         string             `json:"workspace_id"`
+	ID                  string             `json:"id"`
+	Name                string             `json:"name"`
+	IsDoubleOptin       bool               `json:"is_double_optin"`
+	IsPublic            bool               `json:"is_public"`
+	Description         string             `json:"description,omitempty"`
+	DoubleOptInTemplate *TemplateReference `json:"double_optin_template,omitempty"`
+	WelcomeTemplate     *TemplateReference `json:"welcome_template,omitempty"`
+	UnsubscribeTemplate *TemplateReference `json:"unsubscribe_template,omitempty"`
 }
 
 func (r *CreateListRequest) Validate() (list *List, workspaceID string, err error) {
+	if r.WorkspaceID == "" {
+		return nil, "", fmt.Errorf("invalid create list request: workspace_id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
+		return nil, "", fmt.Errorf("invalid create list request: workspace_id must be alphanumeric")
+	}
+	if len(r.WorkspaceID) > 20 {
+		return nil, "", fmt.Errorf("invalid create list request: workspace_id length must be between 1 and 20")
+	}
 
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return nil, "", fmt.Errorf("invalid create list request: %w", err)
+	if r.ID == "" {
+		return nil, "", fmt.Errorf("invalid create list request: id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.ID) {
+		return nil, "", fmt.Errorf("invalid create list request: id must be alphanumeric")
+	}
+	if len(r.ID) > 20 {
+		return nil, "", fmt.Errorf("invalid create list request: id length must be between 1 and 20")
+	}
+
+	if r.Name == "" {
+		return nil, "", fmt.Errorf("invalid create list request: name is required")
+	}
+	if len(r.Name) > 255 {
+		return nil, "", fmt.Errorf("invalid create list request: name length must be between 1 and 255")
+	}
+
+	// Validate optional template references if they exist
+	if r.DoubleOptInTemplate != nil {
+		if err := r.DoubleOptInTemplate.Validate(); err != nil {
+			return nil, "", fmt.Errorf("invalid create list request: double opt-in template: %w", err)
+		}
+	}
+
+	if r.WelcomeTemplate != nil {
+		if err := r.WelcomeTemplate.Validate(); err != nil {
+			return nil, "", fmt.Errorf("invalid create list request: welcome template: %w", err)
+		}
+	}
+
+	if r.UnsubscribeTemplate != nil {
+		if err := r.UnsubscribeTemplate.Validate(); err != nil {
+			return nil, "", fmt.Errorf("invalid create list request: unsubscribe template: %w", err)
+		}
 	}
 
 	return &List{
-		ID:            r.ID,
-		Name:          r.Name,
-		IsDoubleOptin: r.IsDoubleOptin,
-		IsPublic:      r.IsPublic,
-		Description:   r.Description,
+		ID:                  r.ID,
+		Name:                r.Name,
+		IsDoubleOptin:       r.IsDoubleOptin,
+		IsPublic:            r.IsPublic,
+		Description:         r.Description,
+		DoubleOptInTemplate: r.DoubleOptInTemplate,
+		WelcomeTemplate:     r.WelcomeTemplate,
+		UnsubscribeTemplate: r.UnsubscribeTemplate,
 	}, r.WorkspaceID, nil
 }
 
 type GetListsRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
+	WorkspaceID string `json:"workspace_id"`
 }
 
 func (r *GetListsRequest) FromURLParams(queryParams url.Values) (err error) {
 	r.WorkspaceID = queryParams.Get("workspace_id")
 
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid get lists request: %w", err)
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("invalid get lists request: workspace_id is required")
 	}
+	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
+		return fmt.Errorf("invalid get lists request: workspace_id must be alphanumeric")
+	}
+	if len(r.WorkspaceID) > 20 {
+		return fmt.Errorf("invalid get lists request: workspace_id length must be between 1 and 20")
+	}
+
 	return nil
 }
 
 type GetListRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
-	ID          string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
 }
 
 func (r *GetListRequest) FromURLParams(queryParams url.Values) (err error) {
 	r.WorkspaceID = queryParams.Get("workspace_id")
 	r.ID = queryParams.Get("id")
 
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid get list request: %w", err)
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("invalid get list request: workspace_id is required")
 	}
+	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
+		return fmt.Errorf("invalid get list request: workspace_id must be alphanumeric")
+	}
+	if len(r.WorkspaceID) > 20 {
+		return fmt.Errorf("invalid get list request: workspace_id length must be between 1 and 20")
+	}
+
+	if r.ID == "" {
+		return fmt.Errorf("invalid get list request: id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.ID) {
+		return fmt.Errorf("invalid get list request: id must be alphanumeric")
+	}
+	if len(r.ID) > 20 {
+		return fmt.Errorf("invalid get list request: id length must be between 1 and 20")
+	}
+
 	return nil
 }
 
 type UpdateListRequest struct {
-	WorkspaceID   string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
-	ID            string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name          string `json:"name" valid:"required,stringlength(1|255)"`
-	IsDoubleOptin bool   `json:"is_double_optin"`
-	IsPublic      bool   `json:"is_public"`
-	Description   string `json:"description,omitempty"`
+	WorkspaceID         string             `json:"workspace_id"`
+	ID                  string             `json:"id"`
+	Name                string             `json:"name"`
+	IsDoubleOptin       bool               `json:"is_double_optin"`
+	IsPublic            bool               `json:"is_public"`
+	Description         string             `json:"description,omitempty"`
+	DoubleOptInTemplate *TemplateReference `json:"double_optin_template,omitempty"`
+	WelcomeTemplate     *TemplateReference `json:"welcome_template,omitempty"`
+	UnsubscribeTemplate *TemplateReference `json:"unsubscribe_template,omitempty"`
 }
 
 func (r *UpdateListRequest) Validate() (list *List, workspaceID string, err error) {
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return nil, "", fmt.Errorf("invalid update list request: %w", err)
+	if r.WorkspaceID == "" {
+		return nil, "", fmt.Errorf("invalid update list request: workspace_id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
+		return nil, "", fmt.Errorf("invalid update list request: workspace_id must be alphanumeric")
+	}
+	if len(r.WorkspaceID) > 20 {
+		return nil, "", fmt.Errorf("invalid update list request: workspace_id length must be between 1 and 20")
+	}
+
+	if r.ID == "" {
+		return nil, "", fmt.Errorf("invalid update list request: id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.ID) {
+		return nil, "", fmt.Errorf("invalid update list request: id must be alphanumeric")
+	}
+	if len(r.ID) > 20 {
+		return nil, "", fmt.Errorf("invalid update list request: id length must be between 1 and 20")
+	}
+
+	if r.Name == "" {
+		return nil, "", fmt.Errorf("invalid update list request: name is required")
+	}
+	if len(r.Name) > 255 {
+		return nil, "", fmt.Errorf("invalid update list request: name length must be between 1 and 255")
+	}
+
+	// Validate optional template references if they exist
+	if r.DoubleOptInTemplate != nil {
+		if err := r.DoubleOptInTemplate.Validate(); err != nil {
+			return nil, "", fmt.Errorf("invalid update list request: double opt-in template: %w", err)
+		}
+	}
+
+	if r.WelcomeTemplate != nil {
+		if err := r.WelcomeTemplate.Validate(); err != nil {
+			return nil, "", fmt.Errorf("invalid update list request: welcome template: %w", err)
+		}
+	}
+
+	if r.UnsubscribeTemplate != nil {
+		if err := r.UnsubscribeTemplate.Validate(); err != nil {
+			return nil, "", fmt.Errorf("invalid update list request: unsubscribe template: %w", err)
+		}
 	}
 
 	return &List{
-		ID:            r.ID,
-		Name:          r.Name,
-		IsDoubleOptin: r.IsDoubleOptin,
-		IsPublic:      r.IsPublic,
-		Description:   r.Description,
+		ID:                  r.ID,
+		Name:                r.Name,
+		IsDoubleOptin:       r.IsDoubleOptin,
+		IsPublic:            r.IsPublic,
+		Description:         r.Description,
+		DoubleOptInTemplate: r.DoubleOptInTemplate,
+		WelcomeTemplate:     r.WelcomeTemplate,
+		UnsubscribeTemplate: r.UnsubscribeTemplate,
 	}, r.WorkspaceID, nil
 }
 
 type DeleteListRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
-	ID          string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
 }
 
 func (r *DeleteListRequest) Validate() (workspaceID string, err error) {
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return "", fmt.Errorf("invalid delete list request: %w", err)
+	if r.WorkspaceID == "" {
+		return "", fmt.Errorf("invalid delete list request: workspace_id is required")
 	}
+	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
+		return "", fmt.Errorf("invalid delete list request: workspace_id must be alphanumeric")
+	}
+	if len(r.WorkspaceID) > 20 {
+		return "", fmt.Errorf("invalid delete list request: workspace_id length must be between 1 and 20")
+	}
+
+	if r.ID == "" {
+		return "", fmt.Errorf("invalid delete list request: id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.ID) {
+		return "", fmt.Errorf("invalid delete list request: id must be alphanumeric")
+	}
+	if len(r.ID) > 20 {
+		return "", fmt.Errorf("invalid delete list request: id length must be between 1 and 20")
+	}
+
 	return r.WorkspaceID, nil
 }
 

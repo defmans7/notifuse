@@ -504,7 +504,7 @@ func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "id: non zero value required")
+	assert.Contains(t, w.Body.String(), "invalid create workspace request: id is required")
 }
 
 func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
@@ -530,7 +530,7 @@ func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "name: non zero value required")
+	assert.Contains(t, w.Body.String(), "invalid create workspace request: name is required")
 }
 
 func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
@@ -556,7 +556,7 @@ func TestWorkspaceHandler_Create_MissingTimezone(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "timezone: non zero value required")
+	assert.Contains(t, w.Body.String(), "invalid create workspace request: timezone is required")
 }
 
 func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
@@ -666,7 +666,7 @@ func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "id: non zero value required")
+	assert.Contains(t, w.Body.String(), "invalid update workspace request: id is required")
 }
 
 func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
@@ -779,7 +779,7 @@ func TestWorkspaceHandler_Delete_MissingID(t *testing.T) {
 	// Verify error message
 	var response errorResponse
 	json.NewDecoder(w.Body).Decode(&response)
-	assert.Equal(t, "invalid delete workspace request: id: non zero value required", response.Error)
+	assert.Equal(t, "invalid delete workspace request: id is required", response.Error)
 }
 
 func TestWorkspaceHandler_Delete_ServiceError(t *testing.T) {

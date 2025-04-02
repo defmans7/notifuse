@@ -15,15 +15,40 @@ import (
 
 // WorkspaceSettings contains configurable workspace settings
 type WorkspaceSettings struct {
-	WebsiteURL string `json:"website_url,omitempty" valid:"url,optional"`
-	LogoURL    string `json:"logo_url,omitempty" valid:"url,optional"`
-	CoverURL   string `json:"cover_url,omitempty" valid:"url,optional"`
-	Timezone   string `json:"timezone" valid:"required,timezone"`
+	WebsiteURL string `json:"website_url,omitempty"`
+	LogoURL    string `json:"logo_url,omitempty"`
+	CoverURL   string `json:"cover_url,omitempty"`
+	Timezone   string `json:"timezone"`
+}
+
+// Validate validates workspace settings
+func (ws *WorkspaceSettings) Validate() error {
+	if ws.Timezone == "" {
+		return fmt.Errorf("timezone is required")
+	}
+
+	if !IsValidTimezone(ws.Timezone) {
+		return fmt.Errorf("invalid timezone: %s", ws.Timezone)
+	}
+
+	if ws.WebsiteURL != "" && !govalidator.IsURL(ws.WebsiteURL) {
+		return fmt.Errorf("invalid website URL: %s", ws.WebsiteURL)
+	}
+
+	if ws.LogoURL != "" && !govalidator.IsURL(ws.LogoURL) {
+		return fmt.Errorf("invalid logo URL: %s", ws.LogoURL)
+	}
+
+	if ws.CoverURL != "" && !govalidator.IsURL(ws.CoverURL) {
+		return fmt.Errorf("invalid cover URL: %s", ws.CoverURL)
+	}
+
+	return nil
 }
 
 type Workspace struct {
-	ID        string            `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name      string            `json:"name" valid:"required,stringlength(1|255)"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
 	Settings  WorkspaceSettings `json:"settings"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
@@ -31,18 +56,27 @@ type Workspace struct {
 
 // Validate performs validation on the workspace fields
 func (w *Workspace) Validate() error {
-	// Register custom validators
-	govalidator.TagMap["timezone"] = govalidator.Validator(func(str string) bool {
-		return IsValidTimezone(str)
-	})
-
-	// First validate the workspace itself
-	if _, err := govalidator.ValidateStruct(w); err != nil {
-		return fmt.Errorf("invalid workspace: %w", err)
+	// Validate ID
+	if w.ID == "" {
+		return fmt.Errorf("invalid workspace: id is required")
+	}
+	if !govalidator.IsAlphanumeric(w.ID) {
+		return fmt.Errorf("invalid workspace: id must be alphanumeric")
+	}
+	if len(w.ID) > 20 {
+		return fmt.Errorf("invalid workspace: id length must be between 1 and 20")
 	}
 
-	// Then validate the settings
-	if _, err := govalidator.ValidateStruct(&w.Settings); err != nil {
+	// Validate Name
+	if w.Name == "" {
+		return fmt.Errorf("invalid workspace: name is required")
+	}
+	if len(w.Name) > 255 {
+		return fmt.Errorf("invalid workspace: name length must be between 1 and 255")
+	}
+
+	// Validate Settings
+	if err := w.Settings.Validate(); err != nil {
 		return fmt.Errorf("invalid workspace settings: %w", err)
 	}
 
@@ -91,7 +125,7 @@ func ScanWorkspace(scanner interface {
 type UserWorkspace struct {
 	UserID      string    `json:"user_id" db:"user_id"`
 	WorkspaceID string    `json:"workspace_id" db:"workspace_id"`
-	Role        string    `json:"role" db:"role" valid:"required,in(owner|member)"`
+	Role        string    `json:"role" db:"role"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -104,9 +138,27 @@ type UserWorkspaceWithEmail struct {
 
 // Validate performs validation on the user workspace fields
 func (uw *UserWorkspace) Validate() error {
-	if _, err := govalidator.ValidateStruct(uw); err != nil {
-		return fmt.Errorf("invalid user workspace: %w", err)
+	if uw.UserID == "" {
+		return fmt.Errorf("invalid user workspace: user_id is required")
 	}
+	if !govalidator.IsAlphanumeric(uw.UserID) {
+		return fmt.Errorf("invalid user workspace: user_id must be alphanumeric")
+	}
+
+	if uw.WorkspaceID == "" {
+		return fmt.Errorf("invalid user workspace: workspace_id is required")
+	}
+	if !govalidator.IsAlphanumeric(uw.WorkspaceID) {
+		return fmt.Errorf("invalid user workspace: workspace_id must be alphanumeric")
+	}
+
+	if uw.Role == "" {
+		return fmt.Errorf("invalid user workspace: role is required")
+	}
+	if uw.Role != "owner" && uw.Role != "member" {
+		return fmt.Errorf("invalid user workspace: role must be either 'owner' or 'member'")
+	}
+
 	return nil
 }
 
@@ -172,23 +224,33 @@ type WorkspaceServiceInterface interface {
 
 // Request/Response types
 type CreateWorkspaceRequest struct {
-	ID       string            `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name     string            `json:"name" valid:"required,stringlength(1|32)"`
-	Settings WorkspaceSettings `json:"settings" valid:"required"`
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	Settings WorkspaceSettings `json:"settings"`
 }
 
 func (r *CreateWorkspaceRequest) Validate() error {
-	// Register custom validators
-	govalidator.TagMap["timezone"] = govalidator.Validator(func(str string) bool {
-		return IsValidTimezone(str)
-	})
-
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid create workspace request: %w", err)
+	// Validate ID
+	if r.ID == "" {
+		return fmt.Errorf("invalid create workspace request: id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.ID) {
+		return fmt.Errorf("invalid create workspace request: id must be alphanumeric")
+	}
+	if len(r.ID) > 20 {
+		return fmt.Errorf("invalid create workspace request: id length must be between 1 and 20")
 	}
 
-	// Also validate the settings
-	if _, err := govalidator.ValidateStruct(&r.Settings); err != nil {
+	// Validate Name
+	if r.Name == "" {
+		return fmt.Errorf("invalid create workspace request: name is required")
+	}
+	if len(r.Name) > 32 {
+		return fmt.Errorf("invalid create workspace request: name length must be between 1 and 32")
+	}
+
+	// Validate Settings
+	if err := r.Settings.Validate(); err != nil {
 		return fmt.Errorf("invalid create workspace request: %w", err)
 	}
 
@@ -200,23 +262,33 @@ type GetWorkspaceRequest struct {
 }
 
 type UpdateWorkspaceRequest struct {
-	ID       string            `json:"id" valid:"required,alphanum,stringlength(1|20)"`
-	Name     string            `json:"name" valid:"required,stringlength(1|32)"`
-	Settings WorkspaceSettings `json:"settings" valid:"required"`
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	Settings WorkspaceSettings `json:"settings"`
 }
 
 func (r *UpdateWorkspaceRequest) Validate() error {
-	// Register custom validators
-	govalidator.TagMap["timezone"] = govalidator.Validator(func(str string) bool {
-		return IsValidTimezone(str)
-	})
-
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid update workspace request: %w", err)
+	// Validate ID
+	if r.ID == "" {
+		return fmt.Errorf("invalid update workspace request: id is required")
+	}
+	if !govalidator.IsAlphanumeric(r.ID) {
+		return fmt.Errorf("invalid update workspace request: id must be alphanumeric")
+	}
+	if len(r.ID) > 20 {
+		return fmt.Errorf("invalid update workspace request: id length must be between 1 and 20")
 	}
 
-	// Also validate the settings
-	if _, err := govalidator.ValidateStruct(&r.Settings); err != nil {
+	// Validate Name
+	if r.Name == "" {
+		return fmt.Errorf("invalid update workspace request: name is required")
+	}
+	if len(r.Name) > 32 {
+		return fmt.Errorf("invalid update workspace request: name length must be between 1 and 32")
+	}
+
+	// Validate Settings
+	if err := r.Settings.Validate(); err != nil {
 		return fmt.Errorf("invalid update workspace request: %w", err)
 	}
 
@@ -224,24 +296,45 @@ func (r *UpdateWorkspaceRequest) Validate() error {
 }
 
 type DeleteWorkspaceRequest struct {
-	ID string `json:"id" valid:"required,alphanum,stringlength(1|20)"`
+	ID string `json:"id"`
 }
 
 func (r *DeleteWorkspaceRequest) Validate() error {
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid delete workspace request: %w", err)
+	if r.ID == "" {
+		return fmt.Errorf("invalid delete workspace request: id is required")
 	}
+	if !govalidator.IsAlphanumeric(r.ID) {
+		return fmt.Errorf("invalid delete workspace request: id must be alphanumeric")
+	}
+	if len(r.ID) > 20 {
+		return fmt.Errorf("invalid delete workspace request: id length must be between 1 and 20")
+	}
+
 	return nil
 }
 
 type InviteMemberRequest struct {
-	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
-	Email       string `json:"email" valid:"required,email"`
+	WorkspaceID string `json:"workspace_id"`
+	Email       string `json:"email"`
 }
 
 func (r *InviteMemberRequest) Validate() error {
-	if _, err := govalidator.ValidateStruct(r); err != nil {
-		return fmt.Errorf("invalid invite member request: %w", err)
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("invalid invite member request: workspace_id is required")
 	}
+	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
+		return fmt.Errorf("invalid invite member request: workspace_id must be alphanumeric")
+	}
+	if len(r.WorkspaceID) > 20 {
+		return fmt.Errorf("invalid invite member request: workspace_id length must be between 1 and 20")
+	}
+
+	if r.Email == "" {
+		return fmt.Errorf("invalid invite member request: email is required")
+	}
+	if !govalidator.IsEmail(r.Email) {
+		return fmt.Errorf("invalid invite member request: email is not valid")
+	}
+
 	return nil
 }

@@ -100,8 +100,8 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			custom_json_3 JSONB,
 			custom_json_4 JSONB,
 			custom_json_5 JSONB,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON CREATE,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		)`,
 		`CREATE TABLE IF NOT EXISTS lists (
 			id VARCHAR(20) PRIMARY KEY,
@@ -114,16 +114,36 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			total_unsubscribed INTEGER NOT NULL DEFAULT 0,
 			total_bounced INTEGER NOT NULL DEFAULT 0,
 			total_complained INTEGER NOT NULL DEFAULT 0,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			double_optin_template JSONB,
+			welcome_template JSONB,
+			unsubscribe_template JSONB,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON CREATE,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		)`,
 		`CREATE TABLE IF NOT EXISTS contact_lists (
 			email VARCHAR(255) NOT NULL,
 			list_id VARCHAR(20) NOT NULL,
 			status VARCHAR(20) NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON CREATE,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY (email, list_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS templates (
+			id VARCHAR(20) NOT NULL,
+			name VARCHAR(255) NOT NULL,
+			version INTEGER NOT NULL,
+			channel VARCHAR(20) NOT NULL,
+			email JSONB NOT NULL,
+			category VARCHAR(20) NOT NULL,
+			template_macro_id VARCHAR(20),
+			utm_source VARCHAR(255),
+			utm_medium VARCHAR(255),
+			utm_campaign VARCHAR(255),
+			test_data JSONB,
+			settings JSONB,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON CREATE,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY (id, version)
 		)`,
 	}
 

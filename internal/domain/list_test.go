@@ -77,6 +77,14 @@ func TestScanList(t *testing.T) {
 			true,             // IsDoubleOptin
 			true,             // IsPublic
 			"This is a list", // Description
+			10,               // TotalActive
+			5,                // TotalPending
+			2,                // TotalUnsubscribed
+			1,                // TotalBounced
+			0,                // TotalComplained
+			nil,              // DoubleOptInTemplate
+			nil,              // WelcomeTemplate
+			nil,              // UnsubscribeTemplate
 			now,              // CreatedAt
 			now,              // UpdatedAt
 		},
@@ -90,6 +98,14 @@ func TestScanList(t *testing.T) {
 	assert.Equal(t, true, list.IsDoubleOptin)
 	assert.Equal(t, true, list.IsPublic)
 	assert.Equal(t, "This is a list", list.Description)
+	assert.Equal(t, 10, list.TotalActive)
+	assert.Equal(t, 5, list.TotalPending)
+	assert.Equal(t, 2, list.TotalUnsubscribed)
+	assert.Equal(t, 1, list.TotalBounced)
+	assert.Equal(t, 0, list.TotalComplained)
+	assert.Nil(t, list.DoubleOptInTemplate)
+	assert.Nil(t, list.WelcomeTemplate)
+	assert.Nil(t, list.UnsubscribeTemplate)
 	assert.Equal(t, now, list.CreatedAt)
 	assert.Equal(t, now, list.UpdatedAt)
 
@@ -118,6 +134,14 @@ func (m *mockScanner) Scan(dest ...interface{}) error {
 		case *bool:
 			if b, ok := m.data[i].(bool); ok {
 				*v = b
+			}
+		case *int:
+			if n, ok := m.data[i].(int); ok {
+				*v = n
+			}
+		case **domain.TemplateReference:
+			if tr, ok := m.data[i].(*domain.TemplateReference); ok {
+				*v = tr
 			}
 		case *time.Time:
 			if t, ok := m.data[i].(time.Time); ok {

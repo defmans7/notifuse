@@ -42,126 +42,87 @@ func TestWorkspaceService_AddUserToWorkspace(t *testing.T) {
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
-	tests := []struct {
-		name          string
-		userID        string
-		workspaceID   string
-		role          string
-		setupMock     func()
-		expectedError error
-	}{
-		{
-			name:        "successful add user to workspace",
-			userID:      userID,
-			workspaceID: workspaceID,
-			role:        "member",
-			setupMock: func() {
-				mockAuthSvc.EXPECT().
-					AuthenticateUserForWorkspace(ctx, workspaceID).
-					Return(&domain.User{ID: requesterID}, nil)
+	t.Run("successful_add_user_to_workspace", func(t *testing.T) {
+		// Set up mock expectations
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: requesterID}, nil)
 
-				mockRepo.EXPECT().
-					GetUserWorkspace(ctx, requesterID, workspaceID).
-					Return(&domain.UserWorkspace{
-						UserID:      requesterID,
-						WorkspaceID: workspaceID,
-						Role:        "owner",
-					}, nil)
+		mockRepo.EXPECT().
+			GetUserWorkspace(ctx, requesterID, workspaceID).
+			Return(&domain.UserWorkspace{
+				UserID:      requesterID,
+				WorkspaceID: workspaceID,
+				Role:        "owner",
+			}, nil)
 
-				mockRepo.EXPECT().
-					AddUserToWorkspace(gomock.Any(), gomock.Any()).
-					Return(nil)
-			},
-			expectedError: nil,
-		},
-		{
-			name:        "authentication error",
-			userID:      userID,
-			workspaceID: workspaceID,
-			role:        "member",
-			setupMock: func() {
-				mockAuthSvc.EXPECT().
-					AuthenticateUserForWorkspace(ctx, workspaceID).
-					Return(nil, fmt.Errorf("authentication failed"))
-			},
-			expectedError: fmt.Errorf("failed to authenticate user: authentication failed"),
-		},
-		{
-			name:        "requester not found in workspace",
-			userID:      userID,
-			workspaceID: workspaceID,
-			role:        "member",
-			setupMock: func() {
-				mockAuthSvc.EXPECT().
-					AuthenticateUserForWorkspace(ctx, workspaceID).
-					Return(&domain.User{ID: requesterID}, nil)
+		mockRepo.EXPECT().
+			AddUserToWorkspace(gomock.Any(), gomock.Any()).
+			Return(nil)
 
-				mockRepo.EXPECT().
-					GetUserWorkspace(ctx, requesterID, workspaceID).
-					Return(nil, fmt.Errorf("user workspace not found"))
-			},
-			expectedError: fmt.Errorf("user workspace not found"),
-		},
-		{
-			name:        "requester not an owner",
-			userID:      userID,
-			workspaceID: workspaceID,
-			role:        "member",
-			setupMock: func() {
-				mockAuthSvc.EXPECT().
-					AuthenticateUserForWorkspace(ctx, workspaceID).
-					Return(&domain.User{ID: requesterID}, nil)
+		err := service.AddUserToWorkspace(ctx, workspaceID, userID, "member")
+		require.NoError(t, err)
+	})
 
-				mockRepo.EXPECT().
-					GetUserWorkspace(ctx, requesterID, workspaceID).
-					Return(&domain.UserWorkspace{
-						UserID:      requesterID,
-						WorkspaceID: workspaceID,
-						Role:        "member",
-					}, nil)
-			},
-			expectedError: &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"},
-		},
-		{
-			name:        "invalid role",
-			userID:      userID,
-			workspaceID: workspaceID,
-			role:        "invalid_role",
-			setupMock: func() {
-				mockAuthSvc.EXPECT().
-					AuthenticateUserForWorkspace(ctx, workspaceID).
-					Return(&domain.User{ID: requesterID}, nil)
+	t.Run("authentication_error", func(t *testing.T) {
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(nil, fmt.Errorf("authentication failed"))
 
-				mockRepo.EXPECT().
-					GetUserWorkspace(ctx, requesterID, workspaceID).
-					Return(&domain.UserWorkspace{
-						UserID:      requesterID,
-						WorkspaceID: workspaceID,
-						Role:        "owner",
-					}, nil)
-			},
-			expectedError: fmt.Errorf("invalid user workspace: role: invalid_role does not validate as in(owner|member)"),
-		},
-	}
+		err := service.AddUserToWorkspace(ctx, workspaceID, userID, "member")
+		require.Error(t, err)
+		assert.Equal(t, "failed to authenticate user: authentication failed", err.Error())
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
+	t.Run("requester_not_found_in_workspace", func(t *testing.T) {
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: requesterID}, nil)
 
-			err := service.AddUserToWorkspace(ctx, tt.workspaceID, tt.userID, tt.role)
+		mockRepo.EXPECT().
+			GetUserWorkspace(ctx, requesterID, workspaceID).
+			Return(nil, fmt.Errorf("user workspace not found"))
 
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				if _, ok := tt.expectedError.(*domain.ErrUnauthorized); ok {
-					assert.IsType(t, &domain.ErrUnauthorized{}, err)
-				} else {
-					assert.Equal(t, tt.expectedError.Error(), err.Error())
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+		err := service.AddUserToWorkspace(ctx, workspaceID, userID, "member")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "user workspace not found")
+	})
+
+	t.Run("requester_not_an_owner", func(t *testing.T) {
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: requesterID}, nil)
+
+		mockRepo.EXPECT().
+			GetUserWorkspace(ctx, requesterID, workspaceID).
+			Return(&domain.UserWorkspace{
+				UserID:      requesterID,
+				WorkspaceID: workspaceID,
+				Role:        "member",
+			}, nil)
+
+		err := service.AddUserToWorkspace(ctx, workspaceID, userID, "member")
+		require.Error(t, err)
+		assert.Equal(t, "user is not an owner of the workspace", err.Error())
+	})
+
+	t.Run("invalid_role", func(t *testing.T) {
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(&domain.User{ID: requesterID}, nil)
+
+		mockRepo.EXPECT().
+			GetUserWorkspace(ctx, requesterID, workspaceID).
+			Return(&domain.UserWorkspace{
+				UserID:      requesterID,
+				WorkspaceID: workspaceID,
+				Role:        "owner",
+			}, nil)
+
+		err := service.AddUserToWorkspace(ctx, workspaceID, userID, "invalid_role")
+		require.Error(t, err)
+		assert.Equal(t, "invalid user workspace: role must be either 'owner' or 'member'", err.Error())
+	})
 }
 
 func TestWorkspaceService_RemoveUserFromWorkspace(t *testing.T) {

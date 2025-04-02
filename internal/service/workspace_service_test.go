@@ -202,7 +202,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("successful creation", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID:    "test-owner",
+			ID:    "testowner",
 			Email: "test@example.com",
 			Name:  "Test User",
 		}
@@ -236,7 +236,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("validation error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID:    "test-owner",
+			ID:    "testowner",
 			Email: "test@example.com",
 			Name:  "Test User",
 		}
@@ -248,12 +248,12 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "INVALID_TIMEZONE")
 		require.Error(t, err)
 		assert.Nil(t, workspace)
-		assert.Contains(t, err.Error(), "does not validate as timezone")
+		assert.Contains(t, err.Error(), "invalid timezone: INVALID_TIMEZONE")
 	})
 
 	t.Run("repository error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID:    "test-owner",
+			ID:    "testowner",
 			Email: "test@example.com",
 			Name:  "Test User",
 		}
@@ -270,7 +270,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("add user error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID:    "test-owner",
+			ID:    "testowner",
 			Email: "test@example.com",
 			Name:  "Test User",
 		}
@@ -288,7 +288,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("get user error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID:    "test-owner",
+			ID:    "testowner",
 			Email: "test@example.com",
 			Name:  "Test User",
 		}
@@ -307,7 +307,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("upsert contact error", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID:    "test-owner",
+			ID:    "testowner",
 			Email: "test@example.com",
 			Name:  "Test User",
 		}
@@ -330,7 +330,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 	t.Run("workspace already exists", func(t *testing.T) {
 		expectedUser := &domain.User{
-			ID:    "test-owner",
+			ID:    "testowner",
 			Email: "test@example.com",
 			Name:  "Test User",
 		}
@@ -370,7 +370,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
-	userID := "test-user"
+	userID := "testuser"
 	workspaceID := "testworkspace1"
 
 	t.Run("successful update as owner", func(t *testing.T) {
@@ -452,7 +452,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "INVALID_TIMEZONE")
 		require.Error(t, err)
 		assert.Nil(t, workspace)
-		assert.Contains(t, err.Error(), "does not validate as timezone")
+		assert.Contains(t, err.Error(), "invalid timezone: INVALID_TIMEZONE")
 	})
 
 	t.Run("repository error", func(t *testing.T) {
@@ -497,8 +497,8 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
-	userID := "test-user"
-	workspaceID := "test-workspace"
+	userID := "testuser"
+	workspaceID := "testworkspace"
 
 	t.Run("successful delete as owner", func(t *testing.T) {
 		expectedUser := &domain.User{
