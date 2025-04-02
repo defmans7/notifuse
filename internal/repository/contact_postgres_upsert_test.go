@@ -639,4 +639,444 @@ func TestUpsertContact(t *testing.T) {
 		// Verify all expectations were met
 		assert.NoError(t, newMock.ExpectationsWereMet())
 	})
+
+	t.Run("update contact with all fields populated", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create existing contact with all fields populated
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "old-ext", "UTC", "en-US", "Old", "Name", "+1234567000",
+				"Old Address 1", "Old Address 2", "Old Country", "Old Postcode", "Old State", "Old Job Title",
+				100.0, 5, now.Add(-72*time.Hour),
+				"Old Custom 1", "Old Custom 2", "Old Custom 3", "Old Custom 4", "Old Custom 5",
+				1.1, 2.2, 3.3, 4.4, 5.5,
+				now.Add(-10*time.Hour), now.Add(-20*time.Hour), now.Add(-30*time.Hour), now.Add(-40*time.Hour), now.Add(-50*time.Hour),
+				[]byte(`{"old":"json1"}`), []byte(`{"old":"json2"}`), []byte(`{"old":"json3"}`), []byte(`{"old":"json4"}`), []byte(`{"old":"json5"}`),
+				now.Add(-24*time.Hour), now.Add(-12*time.Hour),
+			)
+
+		// Create update contact with ALL fields populated with new values
+		updateContact := &domain.Contact{
+			Email:         email,
+			ExternalID:    &domain.NullableString{String: "new-ext", IsNull: false},
+			Timezone:      &domain.NullableString{String: "Europe/Paris", IsNull: false},
+			Language:      &domain.NullableString{String: "fr-FR", IsNull: false},
+			FirstName:     &domain.NullableString{String: "Jean", IsNull: false},
+			LastName:      &domain.NullableString{String: "Dupont", IsNull: false},
+			Phone:         &domain.NullableString{String: "+33123456789", IsNull: false},
+			AddressLine1:  &domain.NullableString{String: "123 Rue de Paris", IsNull: false},
+			AddressLine2:  &domain.NullableString{String: "Appartement 42", IsNull: false},
+			Country:       &domain.NullableString{String: "France", IsNull: false},
+			Postcode:      &domain.NullableString{String: "75001", IsNull: false},
+			State:         &domain.NullableString{String: "Île-de-France", IsNull: false},
+			JobTitle:      &domain.NullableString{String: "Developer", IsNull: false},
+			LifetimeValue: &domain.NullableFloat64{Float64: 1250.50, IsNull: false},
+			OrdersCount:   &domain.NullableFloat64{Float64: 12, IsNull: false},
+			LastOrderAt:   &domain.NullableTime{Time: now.Add(-24 * time.Hour), IsNull: false},
+
+			// Custom string fields
+			CustomString1: &domain.NullableString{String: "New Custom 1", IsNull: false},
+			CustomString2: &domain.NullableString{String: "New Custom 2", IsNull: false},
+			CustomString3: &domain.NullableString{String: "New Custom 3", IsNull: false},
+			CustomString4: &domain.NullableString{String: "New Custom 4", IsNull: false},
+			CustomString5: &domain.NullableString{String: "New Custom 5", IsNull: false},
+
+			// Custom number fields
+			CustomNumber1: &domain.NullableFloat64{Float64: 10.1, IsNull: false},
+			CustomNumber2: &domain.NullableFloat64{Float64: 20.2, IsNull: false},
+			CustomNumber3: &domain.NullableFloat64{Float64: 30.3, IsNull: false},
+			CustomNumber4: &domain.NullableFloat64{Float64: 40.4, IsNull: false},
+			CustomNumber5: &domain.NullableFloat64{Float64: 50.5, IsNull: false},
+
+			// Custom datetime fields
+			CustomDatetime1: &domain.NullableTime{Time: now.Add(-1 * time.Hour), IsNull: false},
+			CustomDatetime2: &domain.NullableTime{Time: now.Add(-2 * time.Hour), IsNull: false},
+			CustomDatetime3: &domain.NullableTime{Time: now.Add(-3 * time.Hour), IsNull: false},
+			CustomDatetime4: &domain.NullableTime{Time: now.Add(-4 * time.Hour), IsNull: false},
+			CustomDatetime5: &domain.NullableTime{Time: now.Add(-5 * time.Hour), IsNull: false},
+
+			// Custom JSON fields
+			CustomJSON1: &domain.NullableJSON{Data: map[string]interface{}{"new": "json1"}, IsNull: false},
+			CustomJSON2: &domain.NullableJSON{Data: map[string]interface{}{"new": "json2"}, IsNull: false},
+			CustomJSON3: &domain.NullableJSON{Data: map[string]interface{}{"new": "json3"}, IsNull: false},
+			CustomJSON4: &domain.NullableJSON{Data: map[string]interface{}{"new": "json4"}, IsNull: false},
+			CustomJSON5: &domain.NullableJSON{Data: map[string]interface{}{"new": "json5"}, IsNull: false},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect update with merged data
+		newMock.ExpectExec(`UPDATE contacts SET`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Expect transaction commit
+		newMock.ExpectCommit()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, updateContact)
+		require.NoError(t, err)
+		assert.False(t, isNew)
+
+		// Verify all expectations were met
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	// Add specific tests for each nullable field category to verify NULL handling in updates
+	t.Run("update with nulling out previously populated fields", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create existing contact with all fields populated
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "ext123", "UTC", "en-US", "John", "Doe", "+1234567890",
+				"Address 1", "Address 2", "Country", "Postcode", "State", "Job Title",
+				100.0, 5, now.Add(-24*time.Hour),
+				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
+				1.1, 2.2, 3.3, 4.4, 5.5,
+				now.Add(-1*time.Hour), now.Add(-2*time.Hour), now.Add(-3*time.Hour), now.Add(-4*time.Hour), now.Add(-5*time.Hour),
+				[]byte(`{"key1":"value1"}`), []byte(`{"key2":"value2"}`), []byte(`{"key3":"value3"}`), []byte(`{"key4":"value4"}`), []byte(`{"key5":"value5"}`),
+				now.Add(-24*time.Hour), now.Add(-12*time.Hour),
+			)
+
+		// Create update with explicit NULL values for fields
+		nullUpdateContact := &domain.Contact{
+			Email: email,
+			// Set all these fields explicitly to NULL
+			ExternalID:      &domain.NullableString{IsNull: true},
+			AddressLine2:    &domain.NullableString{IsNull: true},
+			Country:         &domain.NullableString{IsNull: true},
+			Postcode:        &domain.NullableString{IsNull: true},
+			State:           &domain.NullableString{IsNull: true},
+			JobTitle:        &domain.NullableString{IsNull: true},
+			CustomString1:   &domain.NullableString{IsNull: true},
+			CustomString2:   &domain.NullableString{IsNull: true},
+			CustomString3:   &domain.NullableString{IsNull: true},
+			CustomString4:   &domain.NullableString{IsNull: true},
+			CustomString5:   &domain.NullableString{IsNull: true},
+			LifetimeValue:   &domain.NullableFloat64{IsNull: true},
+			OrdersCount:     &domain.NullableFloat64{IsNull: true},
+			CustomNumber1:   &domain.NullableFloat64{IsNull: true},
+			CustomNumber2:   &domain.NullableFloat64{IsNull: true},
+			CustomNumber3:   &domain.NullableFloat64{IsNull: true},
+			CustomNumber4:   &domain.NullableFloat64{IsNull: true},
+			CustomNumber5:   &domain.NullableFloat64{IsNull: true},
+			LastOrderAt:     &domain.NullableTime{IsNull: true},
+			CustomDatetime1: &domain.NullableTime{IsNull: true},
+			CustomDatetime2: &domain.NullableTime{IsNull: true},
+			CustomDatetime3: &domain.NullableTime{IsNull: true},
+			CustomDatetime4: &domain.NullableTime{IsNull: true},
+			CustomDatetime5: &domain.NullableTime{IsNull: true},
+			CustomJSON1:     &domain.NullableJSON{IsNull: true},
+			CustomJSON2:     &domain.NullableJSON{IsNull: true},
+			CustomJSON3:     &domain.NullableJSON{IsNull: true},
+			CustomJSON4:     &domain.NullableJSON{IsNull: true},
+			CustomJSON5:     &domain.NullableJSON{IsNull: true},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect update with merged data
+		newMock.ExpectExec(`UPDATE contacts SET`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Expect transaction commit
+		newMock.ExpectCommit()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, nullUpdateContact)
+		require.NoError(t, err)
+		assert.False(t, isNew)
+
+		// Verify all expectations were met
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	// Test JSON marshal errors for all JSON fields
+	t.Run("fails with JSON marshal error for CustomJSON2", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create an existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "old-ext", "UTC", "en-US", "Old", "Name", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				now.Add(-24*time.Hour), now.Add(-24*time.Hour),
+			)
+
+		// Create update with unmarshalable JSON
+		badJSONContact := &domain.Contact{
+			Email: email,
+			// Each test already tests CustomJSON1, let's test CustomJSON2
+			CustomJSON2: &domain.NullableJSON{
+				Data:   make(chan int), // channels can't be marshaled to JSON
+				IsNull: false,
+			},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect rollback due to JSON marshal error
+		newMock.ExpectRollback()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, badJSONContact)
+
+		// Should fail with JSON marshal error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to marshal custom_json_2")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails with JSON marshal error for CustomJSON3", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create an existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "old-ext", "UTC", "en-US", "Old", "Name", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				now.Add(-24*time.Hour), now.Add(-24*time.Hour),
+			)
+
+		// Update with unmarshalable JSON for CustomJSON3
+		badJSONContact := &domain.Contact{
+			Email: email,
+			CustomJSON3: &domain.NullableJSON{
+				Data:   make(chan int), // channels can't be marshaled to JSON
+				IsNull: false,
+			},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect rollback due to JSON marshal error
+		newMock.ExpectRollback()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, badJSONContact)
+
+		// Should fail with JSON marshal error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to marshal custom_json_3")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails with JSON marshal error for CustomJSON4", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create an existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "old-ext", "UTC", "en-US", "Old", "Name", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				now.Add(-24*time.Hour), now.Add(-24*time.Hour),
+			)
+
+		// Update with unmarshalable JSON for CustomJSON4
+		badJSONContact := &domain.Contact{
+			Email: email,
+			CustomJSON4: &domain.NullableJSON{
+				Data:   make(chan int), // channels can't be marshaled to JSON
+				IsNull: false,
+			},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect rollback due to JSON marshal error
+		newMock.ExpectRollback()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, badJSONContact)
+
+		// Should fail with JSON marshal error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to marshal custom_json_4")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("fails with JSON marshal error for CustomJSON5", func(t *testing.T) {
+		// Setup new mock DB for this test
+		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
+		defer newCleanup()
+
+		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newRepo := NewContactRepository(newWorkspaceRepo)
+
+		// Create an existing contact
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "old-ext", "UTC", "en-US", "Old", "Name", nil,
+				nil, nil, nil, nil, nil, nil,
+				nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				now.Add(-24*time.Hour), now.Add(-24*time.Hour),
+			)
+
+		// Update with unmarshalable JSON for CustomJSON5
+		badJSONContact := &domain.Contact{
+			Email: email,
+			CustomJSON5: &domain.NullableJSON{
+				Data:   make(chan int), // channels can't be marshaled to JSON
+				IsNull: false,
+			},
+		}
+
+		// Expect transaction begin
+		newMock.ExpectBegin()
+
+		// Expect select for update returning the existing contact
+		newMock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email = \$1 FOR UPDATE`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Expect rollback due to JSON marshal error
+		newMock.ExpectRollback()
+
+		// Execute the function
+		isNew, err := newRepo.UpsertContact(context.Background(), workspaceID, badJSONContact)
+
+		// Should fail with JSON marshal error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to marshal custom_json_5")
+		assert.False(t, isNew)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 }
