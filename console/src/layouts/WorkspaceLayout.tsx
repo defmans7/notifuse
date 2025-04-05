@@ -7,7 +7,6 @@ import {
   FileTextOutlined,
   LogoutOutlined,
   FolderOpenOutlined,
-  FileOutlined,
   PictureOutlined
 } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
@@ -66,20 +65,20 @@ export function WorkspaceLayout() {
       )
     },
     {
-      key: 'campaigns',
-      icon: <MailOutlined />,
-      label: (
-        <Link to="/workspace/$workspaceId/campaigns" params={{ workspaceId }}>
-          Campaigns
-        </Link>
-      )
-    },
-    {
       key: 'templates',
       icon: <FileTextOutlined />,
       label: (
         <Link to="/workspace/$workspaceId/templates" params={{ workspaceId }}>
           Templates
+        </Link>
+      )
+    },
+    {
+      key: 'campaigns',
+      icon: <MailOutlined />,
+      label: (
+        <Link to="/workspace/$workspaceId/campaigns" params={{ workspaceId }}>
+          Campaigns
         </Link>
       )
     },

@@ -32,3 +32,26 @@ h1 {
   font-size: 3.2em;
   line-height: 1.1;
 }
+
+/* .drawer-no-transition .ant-drawer-content-wrapper {
+  transition: none !important;
+} */
+
+.drawer-body-no-padding .ant-drawer-body {
+  padding: 0;
+}
+
+.tabs-in-header {
+  position: absolute;
+  top: 0;
+  height: 65px;
+  width: 40%;
+  right: 30%;
+  left: 30%;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.tabs-in-header .ant-tabs-tab {
+  line-height: 41px;
+}

@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/Notifuse/notifuse/internal/domain"
 )
 
@@ -29,9 +29,16 @@ func (r *contactRepository) GetContactByEmail(ctx context.Context, workspaceID, 
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `SELECT c.* FROM contacts c WHERE c.email = $1`
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	query, args, err := psql.Select("c.*").
+		From("contacts c").
+		Where(sq.Eq{"c.email": email}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
 
-	row := db.QueryRowContext(ctx, query, email)
+	row := db.QueryRowContext(ctx, query, args...)
 
 	contact, err := domain.ScanContact(row)
 	if err != nil {
@@ -50,8 +57,16 @@ func (r *contactRepository) GetContactByExternalID(ctx context.Context, external
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `SELECT c.* FROM contacts c WHERE c.external_id = $1`
-	row := db.QueryRowContext(ctx, query, externalID)
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	query, args, err := psql.Select("c.*").
+		From("contacts c").
+		Where(sq.Eq{"c.external_id": externalID}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	row := db.QueryRowContext(ctx, query, args...)
 
 	contact, err := domain.ScanContact(row)
 	if err != nil {
@@ -70,79 +85,51 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	// Build the query
-	query := strings.Builder{}
-	query.WriteString("SELECT c.* FROM contacts c ")
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sb := psql.Select("c.*").From("contacts c")
 
-	// Add filters
-	var filters []string
-	var args []interface{}
-	argCount := 1
-
+	// Add filters using squirrel
 	if req.Email != "" {
-		filters = append(filters, fmt.Sprintf("c.email ILIKE $%d", argCount))
-		args = append(args, "%"+req.Email+"%")
-		argCount++
+		sb = sb.Where(sq.ILike{"c.email": "%" + req.Email + "%"})
 	}
-
 	if req.ExternalID != "" {
-		filters = append(filters, fmt.Sprintf("c.external_id ILIKE $%d", argCount))
-		args = append(args, "%"+req.ExternalID+"%")
-		argCount++
+		sb = sb.Where(sq.ILike{"c.external_id": "%" + req.ExternalID + "%"})
 	}
-
 	if req.FirstName != "" {
-		filters = append(filters, fmt.Sprintf("c.first_name ILIKE $%d", argCount))
-		args = append(args, "%"+req.FirstName+"%")
-		argCount++
+		sb = sb.Where(sq.ILike{"c.first_name": "%" + req.FirstName + "%"})
 	}
-
 	if req.LastName != "" {
-		filters = append(filters, fmt.Sprintf("c.last_name ILIKE $%d", argCount))
-		args = append(args, "%"+req.LastName+"%")
-		argCount++
+		sb = sb.Where(sq.ILike{"c.last_name": "%" + req.LastName + "%"})
 	}
-
 	if req.Phone != "" {
-		filters = append(filters, fmt.Sprintf("c.phone ILIKE $%d", argCount))
-		args = append(args, "%"+req.Phone+"%")
-		argCount++
+		sb = sb.Where(sq.ILike{"c.phone": "%" + req.Phone + "%"})
 	}
-
 	if req.Country != "" {
-		filters = append(filters, fmt.Sprintf("c.country ILIKE $%d", argCount))
-		args = append(args, "%"+req.Country+"%")
-		argCount++
+		sb = sb.Where(sq.ILike{"c.country": "%" + req.Country + "%"})
 	}
-
 	if req.Language != "" {
-		filters = append(filters, fmt.Sprintf("c.language ILIKE $%d", argCount))
-		args = append(args, "%"+req.Language+"%")
-		argCount++
+		sb = sb.Where(sq.ILike{"c.language": "%" + req.Language + "%"})
 	}
 
 	if req.Cursor != "" {
-		// Parse cursor as timestamp
 		cursorTime, err := time.Parse(time.RFC3339, req.Cursor)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cursor format: %w", err)
 		}
-		filters = append(filters, fmt.Sprintf("c.created_at < $%d", argCount))
-		args = append(args, cursorTime)
-		argCount++
-	}
-
-	if len(filters) > 0 {
-		query.WriteString("WHERE " + strings.Join(filters, " AND "))
+		sb = sb.Where(sq.Lt{"c.created_at": cursorTime})
 	}
 
 	// Add order by and limit
-	query.WriteString(" ORDER BY c.created_at DESC")
-	query.WriteString(fmt.Sprintf(" LIMIT $%d", argCount))
-	args = append(args, req.Limit+1) // Get one extra to determine if there are more results
+	sb = sb.OrderBy("c.created_at DESC").Limit(uint64(req.Limit + 1)) // Get one extra
+
+	// Build the final query
+	query, args, err := sb.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
 
 	// Execute query
-	rows, err := db.QueryContext(ctx, query.String(), args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -180,26 +167,17 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 			emails[i] = contact.Email
 		}
 
-		// Build the IN clause with placeholders
-		placeholders := make([]string, len(emails))
-		for i := range emails {
-			placeholders[i] = fmt.Sprintf("$%d", i+1)
+		// Query for contact lists using squirrel
+		listQueryBuilder := psql.Select("email, list_id, status, created_at, updated_at").
+			From("contact_lists").
+			Where(sq.Eq{"email": emails}) // squirrel handles IN clauses automatically
+
+		listQuery, listArgs, err := listQueryBuilder.ToSql()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build contact list query: %w", err)
 		}
 
-		// Query for contact lists
-		listQuery := fmt.Sprintf(`
-			SELECT email, list_id, status, created_at, updated_at
-			FROM contact_lists
-			WHERE email IN (%s)
-		`, strings.Join(placeholders, ","))
-
-		// Convert emails to interface slice for query args
-		emailArgs := make([]interface{}, len(emails))
-		for i, email := range emails {
-			emailArgs[i] = email
-		}
-
-		listRows, err := db.QueryContext(ctx, listQuery, emailArgs...)
+		listRows, err := db.QueryContext(ctx, listQuery, listArgs...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query contact lists: %w", err)
 		}
@@ -244,9 +222,15 @@ func (r *contactRepository) DeleteContact(ctx context.Context, email string, wor
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `DELETE FROM contacts WHERE email = $1`
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	query, args, err := psql.Delete("contacts").
+		Where(sq.Eq{"email": email}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("failed to build delete query: %w", err)
+	}
 
-	result, err := workspaceDB.ExecContext(ctx, query, email)
+	result, err := workspaceDB.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to delete contact: %w", err)
 	}
@@ -270,6 +254,9 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		return false, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
+	// Use squirrel placeholder format
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
 	// Start a transaction
 	tx, err := workspaceDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -277,10 +264,18 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	}
 	defer tx.Rollback() // Rollback if there's a panic or error
 
-	// Check if contact exists with FOR UPDATE lock
+	// Check if contact exists with FOR UPDATE lock using squirrel
+	selectQuery, selectArgs, err := psql.Select("c.*").
+		From("contacts c").
+		Where(sq.Eq{"c.email": contact.Email}).
+		Suffix("FOR UPDATE").
+		ToSql()
+	if err != nil {
+		return false, fmt.Errorf("failed to build select for update query: %w", err)
+	}
+
 	var existingContact *domain.Contact
-	query := `SELECT c.* FROM contacts c WHERE c.email = $1 FOR UPDATE`
-	row := tx.QueryRowContext(ctx, query, contact.Email)
+	row := tx.QueryRowContext(ctx, selectQuery, selectArgs...)
 	existingContact, err = domain.ScanContact(row)
 
 	if err != nil {
@@ -288,27 +283,11 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			return false, fmt.Errorf("failed to check existing contact: %w", err)
 		}
 
-		// Contact doesn't exist, do an INSERT
-		insertQuery := `
-			INSERT INTO contacts (
-				email, external_id, timezone, language,
-				first_name, last_name, phone, address_line_1, address_line_2,
-				country, postcode, state, job_title,
-				lifetime_value, orders_count, last_order_at,
-				custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
-				custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
-				custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
-				custom_json_1, custom_json_2, custom_json_3, custom_json_4, custom_json_5,
-				created_at, updated_at
-			)
-			VALUES (
-				$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-				$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
-				$33, $34, $35, $36, $37, COALESCE($38, NOW()), NOW()
-			)
-		`
+		// --- INSERT path ---
+		isNew = true
 
 		// Convert domain nullable types to SQL nullable types
+		var externalIDSQL, timezoneSQL, languageSQL sql.NullString
 		var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
 		var countrySQL, postcodeSQL, stateSQL, jobTitleSQL sql.NullString
 		var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
@@ -319,6 +298,27 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		var customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL sql.NullString
 
 		// String fields
+		if contact.ExternalID != nil {
+			if !contact.ExternalID.IsNull {
+				externalIDSQL = sql.NullString{String: contact.ExternalID.String, Valid: true}
+			} else {
+				externalIDSQL = sql.NullString{Valid: false}
+			}
+		}
+		if contact.Timezone != nil {
+			if !contact.Timezone.IsNull {
+				timezoneSQL = sql.NullString{String: contact.Timezone.String, Valid: true}
+			} else {
+				timezoneSQL = sql.NullString{Valid: false}
+			}
+		}
+		if contact.Language != nil {
+			if !contact.Language.IsNull {
+				languageSQL = sql.NullString{String: contact.Language.String, Valid: true}
+			} else {
+				languageSQL = sql.NullString{Valid: false}
+			}
+		}
 		if contact.FirstName != nil {
 			if !contact.FirstName.IsNull {
 				firstNameSQL = sql.NullString{String: contact.FirstName.String, Valid: true}
@@ -576,141 +576,61 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			}
 		}
 
-		// Execute the insert query within the transaction
-		_, err = tx.ExecContext(ctx, insertQuery,
-			contact.Email,
-			contact.ExternalID,
-			contact.Timezone,
-			contact.Language,
-			firstNameSQL,
-			lastNameSQL,
-			phoneSQL,
-			addressLine1SQL,
-			addressLine2SQL,
-			countrySQL,
-			postcodeSQL,
-			stateSQL,
-			jobTitleSQL,
-			lifetimeValueSQL,
-			ordersCountSQL,
-			lastOrderAtSQL,
-			customString1SQL,
-			customString2SQL,
-			customString3SQL,
-			customString4SQL,
-			customString5SQL,
-			customNumber1SQL,
-			customNumber2SQL,
-			customNumber3SQL,
-			customNumber4SQL,
-			customNumber5SQL,
-			customDatetime1SQL,
-			customDatetime2SQL,
-			customDatetime3SQL,
-			customDatetime4SQL,
-			customDatetime5SQL,
-			customJSON1SQL,
-			customJSON2SQL,
-			customJSON3SQL,
-			customJSON4SQL,
-			customJSON5SQL,
-			contact.CreatedAt,
-		)
+		// Build insert query using squirrel
+		insertBuilder := psql.Insert("contacts").
+			Columns(
+				"email", "external_id", "timezone", "language",
+				"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+				"country", "postcode", "state", "job_title",
+				"lifetime_value", "orders_count", "last_order_at",
+				"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+				"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+				"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+				"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+				"created_at", "updated_at",
+			).
+			Values(
+				contact.Email, externalIDSQL, timezoneSQL, languageSQL,
+				firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL,
+				countrySQL, postcodeSQL, stateSQL, jobTitleSQL,
+				lifetimeValueSQL, ordersCountSQL, lastOrderAtSQL,
+				customString1SQL, customString2SQL, customString3SQL, customString4SQL, customString5SQL,
+				customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL,
+				customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL,
+				customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL,
+				sq.Expr("COALESCE(?, NOW())", contact.CreatedAt), // Use squirrel expression for COALESCE
+				sq.Expr("NOW()"), // Use squirrel expression for NOW()
+			)
+
+		insertQuery, insertArgs, err := insertBuilder.ToSql()
 		if err != nil {
+			return false, fmt.Errorf("failed to build insert query: %w", err)
+		}
+
+		// Execute the insert query within the transaction
+		_, err = tx.ExecContext(ctx, insertQuery, insertArgs...)
+		if err != nil {
+			// Check if the error is a constraint violation or similar if needed
 			return false, fmt.Errorf("failed to insert contact: %w", err)
 		}
 
-		// For new contacts, return isNew = true
-		isNew = true
 	} else {
-		// Contact exists, merge with the existing contact
+		// --- UPDATE path ---
+		isNew = false
+
+		// Merge changes from the input 'contact' into the 'existingContact'
 		existingContact.Merge(contact)
 
-		// Build a complete update query with all fields
-		updateQuery := `
-			UPDATE contacts SET
-				external_id = $1,
-				timezone = $2,
-				language = $3,
-				first_name = $4,
-				last_name = $5,
-				phone = $6,
-				address_line_1 = $7,
-				address_line_2 = $8,
-				country = $9,
-				postcode = $10,
-				state = $11,
-				job_title = $12,
-				lifetime_value = $13,
-				orders_count = $14,
-				last_order_at = $15,
-				custom_string_1 = $16,
-				custom_string_2 = $17,
-				custom_string_3 = $18,
-				custom_string_4 = $19,
-				custom_string_5 = $20,
-				custom_number_1 = $21,
-				custom_number_2 = $22,
-				custom_number_3 = $23,
-				custom_number_4 = $24,
-				custom_number_5 = $25,
-				custom_datetime_1 = $26,
-				custom_datetime_2 = $27,
-				custom_datetime_3 = $28,
-				custom_datetime_4 = $29,
-				custom_datetime_5 = $30,
-				custom_json_1 = $31,
-				custom_json_2 = $32,
-				custom_json_3 = $33,
-				custom_json_4 = $34,
-				custom_json_5 = $35,
-				updated_at = NOW()
-			WHERE email = $36
-		`
-
 		// Convert domain nullable types to SQL nullable types for the update
-		// String fields
-		var externalIDSQL sql.NullString
-		var timezoneSQL sql.NullString
-		var languageSQL sql.NullString
-		var firstNameSQL sql.NullString
-		var lastNameSQL sql.NullString
-		var phoneSQL sql.NullString
-		var addressLine1SQL sql.NullString
-		var addressLine2SQL sql.NullString
-		var countrySQL sql.NullString
-		var postcodeSQL sql.NullString
-		var stateSQL sql.NullString
-		var jobTitleSQL sql.NullString
-		var customString1SQL sql.NullString
-		var customString2SQL sql.NullString
-		var customString3SQL sql.NullString
-		var customString4SQL sql.NullString
-		var customString5SQL sql.NullString
-
-		// Number fields
-		var lifetimeValueSQL sql.NullFloat64
-		var ordersCountSQL sql.NullFloat64
-		var customNumber1SQL sql.NullFloat64
-		var customNumber2SQL sql.NullFloat64
-		var customNumber3SQL sql.NullFloat64
-		var customNumber4SQL sql.NullFloat64
-		var customNumber5SQL sql.NullFloat64
-
-		// DateTime fields
+		var externalIDSQL, timezoneSQL, languageSQL sql.NullString
+		var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
+		var countrySQL, postcodeSQL, stateSQL, jobTitleSQL sql.NullString
+		var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
 		var lastOrderAtSQL sql.NullTime
-		var customDatetime1SQL sql.NullTime
-		var customDatetime2SQL sql.NullTime
-		var customDatetime3SQL sql.NullTime
-		var customDatetime4SQL sql.NullTime
-		var customDatetime5SQL sql.NullTime
-
-		// JSON fields
-		var customJSON1SQL sql.NullString
-		var customJSON2SQL sql.NullString
-		var customJSON3SQL sql.NullString
-		var customJSON4SQL sql.NullString
-		var customJSON5SQL sql.NullString
+		var customString1SQL, customString2SQL, customString3SQL, customString4SQL, customString5SQL sql.NullString
+		var customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL sql.NullFloat64
+		var customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL sql.NullTime
+		var customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL sql.NullString
 
 		// Convert external ID, timezone, language
 		if existingContact.ExternalID != nil {
@@ -923,51 +843,58 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			}
 		}
 
-		// Execute the update query with all fields
-		_, err = tx.ExecContext(ctx, updateQuery,
-			externalIDSQL,
-			timezoneSQL,
-			languageSQL,
-			firstNameSQL,
-			lastNameSQL,
-			phoneSQL,
-			addressLine1SQL,
-			addressLine2SQL,
-			countrySQL,
-			postcodeSQL,
-			stateSQL,
-			jobTitleSQL,
-			lifetimeValueSQL,
-			ordersCountSQL,
-			lastOrderAtSQL,
-			customString1SQL,
-			customString2SQL,
-			customString3SQL,
-			customString4SQL,
-			customString5SQL,
-			customNumber1SQL,
-			customNumber2SQL,
-			customNumber3SQL,
-			customNumber4SQL,
-			customNumber5SQL,
-			customDatetime1SQL,
-			customDatetime2SQL,
-			customDatetime3SQL,
-			customDatetime4SQL,
-			customDatetime5SQL,
-			customJSON1SQL,
-			customJSON2SQL,
-			customJSON3SQL,
-			customJSON4SQL,
-			customJSON5SQL,
-			existingContact.Email,
-		)
+		// Build update query using squirrel
+		updateBuilder := psql.Update("contacts").
+			SetMap(sq.Eq{
+				"external_id":       externalIDSQL,
+				"timezone":          timezoneSQL,
+				"language":          languageSQL,
+				"first_name":        firstNameSQL,
+				"last_name":         lastNameSQL,
+				"phone":             phoneSQL,
+				"address_line_1":    addressLine1SQL,
+				"address_line_2":    addressLine2SQL,
+				"country":           countrySQL,
+				"postcode":          postcodeSQL,
+				"state":             stateSQL,
+				"job_title":         jobTitleSQL,
+				"lifetime_value":    lifetimeValueSQL,
+				"orders_count":      ordersCountSQL,
+				"last_order_at":     lastOrderAtSQL,
+				"custom_string_1":   customString1SQL,
+				"custom_string_2":   customString2SQL,
+				"custom_string_3":   customString3SQL,
+				"custom_string_4":   customString4SQL,
+				"custom_string_5":   customString5SQL,
+				"custom_number_1":   customNumber1SQL,
+				"custom_number_2":   customNumber2SQL,
+				"custom_number_3":   customNumber3SQL,
+				"custom_number_4":   customNumber4SQL,
+				"custom_number_5":   customNumber5SQL,
+				"custom_datetime_1": customDatetime1SQL,
+				"custom_datetime_2": customDatetime2SQL,
+				"custom_datetime_3": customDatetime3SQL,
+				"custom_datetime_4": customDatetime4SQL,
+				"custom_datetime_5": customDatetime5SQL,
+				"custom_json_1":     customJSON1SQL,
+				"custom_json_2":     customJSON2SQL,
+				"custom_json_3":     customJSON3SQL,
+				"custom_json_4":     customJSON4SQL,
+				"custom_json_5":     customJSON5SQL,
+				"updated_at":        sq.Expr("NOW()"),
+			}).
+			Where(sq.Eq{"email": existingContact.Email})
+
+		updateQuery, updateArgs, err := updateBuilder.ToSql()
+		if err != nil {
+			return false, fmt.Errorf("failed to build update query: %w", err)
+		}
+
+		// Execute the update query
+		_, err = tx.ExecContext(ctx, updateQuery, updateArgs...)
 		if err != nil {
 			return false, fmt.Errorf("failed to update contact: %w", err)
 		}
-
-		// For updates, return isNew = false
-		isNew = false
 	}
 
 	// Commit the transaction

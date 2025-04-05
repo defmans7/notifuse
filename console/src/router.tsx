@@ -7,7 +7,9 @@ import { CreateWorkspacePage } from './pages/CreateWorkspacePage'
 import { DashboardPage } from './pages/DashboardPage'
 import { WorkspaceSettingsPage } from './pages/WorkspaceSettingsPage'
 import { ContactsPage } from './pages/ContactsPage'
+import { ListsPage } from './pages/ListsPage'
 import { MediaPage } from './pages/MediaPage'
+import { TemplatesPage } from './pages/TemplatesPage'
 import { createRouter } from '@tanstack/react-router'
 
 export interface ContactsSearch {
@@ -79,7 +81,7 @@ const workspaceCampaignsRoute = createRoute({
 const workspaceListsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/lists',
-  component: () => <div>Lists</div>
+  component: ListsPage
 })
 
 const workspaceMediaRoute = createRoute({
@@ -114,7 +116,7 @@ const workspaceSettingsRoute = createRoute({
 const workspaceTemplatesRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/templates',
-  component: () => <div>Templates</div>
+  component: TemplatesPage
 })
 
 // Create the router

@@ -39,8 +39,8 @@ func (l *List) Validate() error {
 	if !govalidator.IsAlphanumeric(l.ID) {
 		return fmt.Errorf("invalid list: id must be alphanumeric")
 	}
-	if len(l.ID) > 20 {
-		return fmt.Errorf("invalid list: id length must be between 1 and 20")
+	if len(l.ID) > 32 {
+		return fmt.Errorf("invalid list: id length must be between 1 and 32")
 	}
 
 	if l.Name == "" {
@@ -154,21 +154,14 @@ func (r *CreateListRequest) Validate() (list *List, workspaceID string, err erro
 	if r.WorkspaceID == "" {
 		return nil, "", fmt.Errorf("invalid create list request: workspace_id is required")
 	}
-	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
-		return nil, "", fmt.Errorf("invalid create list request: workspace_id must be alphanumeric")
-	}
-	if len(r.WorkspaceID) > 20 {
-		return nil, "", fmt.Errorf("invalid create list request: workspace_id length must be between 1 and 20")
-	}
-
 	if r.ID == "" {
 		return nil, "", fmt.Errorf("invalid create list request: id is required")
 	}
 	if !govalidator.IsAlphanumeric(r.ID) {
 		return nil, "", fmt.Errorf("invalid create list request: id must be alphanumeric")
 	}
-	if len(r.ID) > 20 {
-		return nil, "", fmt.Errorf("invalid create list request: id length must be between 1 and 20")
+	if len(r.ID) > 32 {
+		return nil, "", fmt.Errorf("invalid create list request: id length must be between 1 and 32")
 	}
 
 	if r.Name == "" {
@@ -223,9 +216,6 @@ func (r *GetListsRequest) FromURLParams(queryParams url.Values) (err error) {
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("invalid get lists request: workspace_id is required")
 	}
-	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
-		return fmt.Errorf("invalid get lists request: workspace_id must be alphanumeric")
-	}
 	if len(r.WorkspaceID) > 20 {
 		return fmt.Errorf("invalid get lists request: workspace_id length must be between 1 and 20")
 	}
@@ -245,12 +235,6 @@ func (r *GetListRequest) FromURLParams(queryParams url.Values) (err error) {
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("invalid get list request: workspace_id is required")
 	}
-	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
-		return fmt.Errorf("invalid get list request: workspace_id must be alphanumeric")
-	}
-	if len(r.WorkspaceID) > 20 {
-		return fmt.Errorf("invalid get list request: workspace_id length must be between 1 and 20")
-	}
 
 	if r.ID == "" {
 		return fmt.Errorf("invalid get list request: id is required")
@@ -258,8 +242,8 @@ func (r *GetListRequest) FromURLParams(queryParams url.Values) (err error) {
 	if !govalidator.IsAlphanumeric(r.ID) {
 		return fmt.Errorf("invalid get list request: id must be alphanumeric")
 	}
-	if len(r.ID) > 20 {
-		return fmt.Errorf("invalid get list request: id length must be between 1 and 20")
+	if len(r.ID) > 32 {
+		return fmt.Errorf("invalid get list request: id length must be between 1 and 32")
 	}
 
 	return nil
@@ -281,21 +265,14 @@ func (r *UpdateListRequest) Validate() (list *List, workspaceID string, err erro
 	if r.WorkspaceID == "" {
 		return nil, "", fmt.Errorf("invalid update list request: workspace_id is required")
 	}
-	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
-		return nil, "", fmt.Errorf("invalid update list request: workspace_id must be alphanumeric")
-	}
-	if len(r.WorkspaceID) > 20 {
-		return nil, "", fmt.Errorf("invalid update list request: workspace_id length must be between 1 and 20")
-	}
-
 	if r.ID == "" {
 		return nil, "", fmt.Errorf("invalid update list request: id is required")
 	}
 	if !govalidator.IsAlphanumeric(r.ID) {
 		return nil, "", fmt.Errorf("invalid update list request: id must be alphanumeric")
 	}
-	if len(r.ID) > 20 {
-		return nil, "", fmt.Errorf("invalid update list request: id length must be between 1 and 20")
+	if len(r.ID) > 32 {
+		return nil, "", fmt.Errorf("invalid update list request: id length must be between 1 and 32")
 	}
 
 	if r.Name == "" {
@@ -349,12 +326,6 @@ func (r *DeleteListRequest) Validate() (workspaceID string, err error) {
 	if r.WorkspaceID == "" {
 		return "", fmt.Errorf("invalid delete list request: workspace_id is required")
 	}
-	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
-		return "", fmt.Errorf("invalid delete list request: workspace_id must be alphanumeric")
-	}
-	if len(r.WorkspaceID) > 20 {
-		return "", fmt.Errorf("invalid delete list request: workspace_id length must be between 1 and 20")
-	}
 
 	if r.ID == "" {
 		return "", fmt.Errorf("invalid delete list request: id is required")
@@ -362,8 +333,8 @@ func (r *DeleteListRequest) Validate() (workspaceID string, err error) {
 	if !govalidator.IsAlphanumeric(r.ID) {
 		return "", fmt.Errorf("invalid delete list request: id must be alphanumeric")
 	}
-	if len(r.ID) > 20 {
-		return "", fmt.Errorf("invalid delete list request: id length must be between 1 and 20")
+	if len(r.ID) > 32 {
+		return "", fmt.Errorf("invalid delete list request: id length must be between 1 and 32")
 	}
 
 	return r.WorkspaceID, nil

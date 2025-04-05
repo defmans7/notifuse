@@ -53,11 +53,8 @@ func (t *Template) Validate() error {
 	if t.ID == "" {
 		return fmt.Errorf("invalid template: id is required")
 	}
-	if !govalidator.IsAlphanumeric(t.ID) {
-		return fmt.Errorf("invalid template: id must be alphanumeric")
-	}
-	if len(t.ID) > 20 {
-		return fmt.Errorf("invalid template: id length must be between 1 and 20")
+	if len(t.ID) > 32 {
+		return fmt.Errorf("invalid template: id length must be between 1 and 32")
 	}
 
 	if t.Name == "" {
@@ -107,11 +104,8 @@ func (t *TemplateReference) Validate() error {
 	if t.ID == "" {
 		return fmt.Errorf("invalid template reference: id is required")
 	}
-	if !govalidator.IsAlphanumeric(t.ID) {
-		return fmt.Errorf("invalid template reference: id must be alphanumeric")
-	}
-	if len(t.ID) > 20 {
-		return fmt.Errorf("invalid template reference: id length must be between 1 and 20")
+	if len(t.ID) > 32 {
+		return fmt.Errorf("invalid template reference: id length must be between 1 and 32")
 	}
 
 	if t.Version <= 0 {

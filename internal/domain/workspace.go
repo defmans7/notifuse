@@ -20,7 +20,7 @@ type WorkspaceSettings struct {
 	LogoURL     string              `json:"logo_url,omitempty"`
 	CoverURL    string              `json:"cover_url,omitempty"`
 	Timezone    string              `json:"timezone"`
-	FileManager FileManagerSettings `json:"file_manager"`
+	FileManager FileManagerSettings `json:"file_manager,omitempty"`
 }
 
 // Validate validates workspace settings
@@ -45,6 +45,7 @@ func (ws *WorkspaceSettings) Validate(passphrase string) error {
 		return fmt.Errorf("invalid cover URL: %s", ws.CoverURL)
 	}
 
+	// FileManager is completely optional, but if any fields are set, validate them
 	if err := ws.FileManager.Validate(passphrase); err != nil {
 		return fmt.Errorf("invalid file manager settings: %w", err)
 	}
@@ -69,8 +70,8 @@ func (w *Workspace) Validate(passphrase string) error {
 	if !govalidator.IsAlphanumeric(w.ID) {
 		return fmt.Errorf("invalid workspace: id must be alphanumeric")
 	}
-	if len(w.ID) > 20 {
-		return fmt.Errorf("invalid workspace: id length must be between 1 and 20")
+	if len(w.ID) > 32 {
+		return fmt.Errorf("invalid workspace: id length must be between 1 and 32")
 	}
 
 	// Validate Name
@@ -90,6 +91,7 @@ func (w *Workspace) Validate(passphrase string) error {
 }
 
 func (w *Workspace) BeforeSave(secretkey string) error {
+	// Only process FileManager if there's a SecretKey to encrypt
 	if w.Settings.FileManager.SecretKey != "" {
 		if err := w.Settings.FileManager.EncryptSecretKey(secretkey); err != nil {
 			return fmt.Errorf("failed to encrypt secret key: %w", err)
@@ -101,6 +103,7 @@ func (w *Workspace) BeforeSave(secretkey string) error {
 }
 
 func (w *Workspace) AfterLoad(secretkey string) error {
+	// Only decrypt if there's an EncryptedSecretKey present
 	if w.Settings.FileManager.EncryptedSecretKey != "" {
 		if err := w.Settings.FileManager.DecryptSecretKey(secretkey); err != nil {
 			return fmt.Errorf("failed to decrypt secret key: %w", err)
@@ -140,19 +143,34 @@ func (f *FileManagerSettings) EncryptSecretKey(passphrase string) error {
 }
 
 func (f *FileManagerSettings) Validate(passphrase string) error {
-	if f.AccessKey == "" {
-		return fmt.Errorf("access key is required")
+	// Check if any field is set to determine if we should validate
+	isConfigured := f.Endpoint != "" || f.Bucket != "" || f.AccessKey != "" ||
+		f.EncryptedSecretKey != "" || f.SecretKey != "" ||
+		(f.Region != nil) || (f.CDNEndpoint != nil)
+
+	// If no fields are set, consider it valid (optional config)
+	if !isConfigured {
+		return nil
 	}
+
+	// If any field is set, validate required fields are present
 	if f.Endpoint == "" {
-		return fmt.Errorf("endpoint is required")
+		return fmt.Errorf("endpoint is required when file manager is configured")
 	}
+
 	if !govalidator.IsURL(f.Endpoint) {
 		return fmt.Errorf("invalid endpoint: %s", f.Endpoint)
 	}
+
 	if f.Bucket == "" {
-		return fmt.Errorf("bucket is required")
+		return fmt.Errorf("bucket is required when file manager is configured")
 	}
-	// Region is now optional, so we don't check if it's empty
+
+	if f.AccessKey == "" {
+		return fmt.Errorf("access key is required when file manager is configured")
+	}
+
+	// Region is optional, so we don't check if it's empty
 	if f.CDNEndpoint != nil && !govalidator.IsURL(*f.CDNEndpoint) {
 		return fmt.Errorf("invalid cdn endpoint: %s", *f.CDNEndpoint)
 	}
@@ -225,17 +243,9 @@ func (uw *UserWorkspace) Validate() error {
 	if uw.UserID == "" {
 		return fmt.Errorf("invalid user workspace: user_id is required")
 	}
-	if !govalidator.IsAlphanumeric(uw.UserID) {
-		return fmt.Errorf("invalid user workspace: user_id must be alphanumeric")
-	}
-
 	if uw.WorkspaceID == "" {
 		return fmt.Errorf("invalid user workspace: workspace_id is required")
 	}
-	if !govalidator.IsAlphanumeric(uw.WorkspaceID) {
-		return fmt.Errorf("invalid user workspace: workspace_id must be alphanumeric")
-	}
-
 	if uw.Role == "" {
 		return fmt.Errorf("invalid user workspace: role is required")
 	}
@@ -321,8 +331,8 @@ func (r *CreateWorkspaceRequest) Validate(passphrase string) error {
 	if !govalidator.IsAlphanumeric(r.ID) {
 		return fmt.Errorf("invalid create workspace request: id must be alphanumeric")
 	}
-	if len(r.ID) > 20 {
-		return fmt.Errorf("invalid create workspace request: id length must be between 1 and 20")
+	if len(r.ID) > 32 {
+		return fmt.Errorf("invalid create workspace request: id length must be between 1 and 32")
 	}
 
 	// Validate Name
@@ -359,8 +369,8 @@ func (r *UpdateWorkspaceRequest) Validate(passphrase string) error {
 	if !govalidator.IsAlphanumeric(r.ID) {
 		return fmt.Errorf("invalid update workspace request: id must be alphanumeric")
 	}
-	if len(r.ID) > 20 {
-		return fmt.Errorf("invalid update workspace request: id length must be between 1 and 20")
+	if len(r.ID) > 32 {
+		return fmt.Errorf("invalid update workspace request: id length must be between 1 and 32")
 	}
 
 	// Validate Name
@@ -390,8 +400,8 @@ func (r *DeleteWorkspaceRequest) Validate() error {
 	if !govalidator.IsAlphanumeric(r.ID) {
 		return fmt.Errorf("invalid delete workspace request: id must be alphanumeric")
 	}
-	if len(r.ID) > 20 {
-		return fmt.Errorf("invalid delete workspace request: id length must be between 1 and 20")
+	if len(r.ID) > 32 {
+		return fmt.Errorf("invalid delete workspace request: id length must be between 1 and 32")
 	}
 
 	return nil
@@ -409,8 +419,8 @@ func (r *InviteMemberRequest) Validate() error {
 	if !govalidator.IsAlphanumeric(r.WorkspaceID) {
 		return fmt.Errorf("invalid invite member request: workspace_id must be alphanumeric")
 	}
-	if len(r.WorkspaceID) > 20 {
-		return fmt.Errorf("invalid invite member request: workspace_id length must be between 1 and 20")
+	if len(r.WorkspaceID) > 32 {
+		return fmt.Errorf("invalid invite member request: workspace_id length must be between 1 and 32")
 	}
 
 	if r.Email == "" {

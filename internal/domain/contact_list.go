@@ -50,9 +50,6 @@ func (cl *ContactList) Validate() error {
 	if cl.ListID == "" {
 		return fmt.Errorf("list_id is required")
 	}
-	if !govalidator.IsAlphanumeric(cl.ListID) {
-		return fmt.Errorf("list_id must be alphanumeric")
-	}
 	if len(cl.ListID) > 20 {
 		return fmt.Errorf("list_id length must be between 1 and 20")
 	}
