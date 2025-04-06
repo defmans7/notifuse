@@ -18,7 +18,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    margin: '20px auto' // Center horizontally for demo
+    margin: '0px auto' // Center horizontally for demo
   },
   screen: {
     width: '100%',

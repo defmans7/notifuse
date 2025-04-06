@@ -19,7 +19,7 @@ import { AlignLeft, AlignCenter, AlignRight, Image as ImageIcon } from 'lucide-r
 import { MobileWidth } from '../Layout'
 import { FileManager } from '../../../file_manager/fileManager'
 import { ItemFilter, StorageObject } from '../../../file_manager/interfaces'
-import { FilesSettings } from '../../../file_manager/interfaces'
+import { FileManagerSettings } from '../../../../services/api/types'
 import { useEditorContext } from '../../Editor'
 
 interface ImageURLProps {
@@ -188,8 +188,8 @@ const ClickURL = (props: ImageURLProps) => {
 interface UploadButtonProps {
   block: BlockInterface
   updateTree: (path: string, data: any) => void
-  settings: FilesSettings
-  onUpdateSettings: (settings: FilesSettings) => Promise<void>
+  settings?: FileManagerSettings
+  onUpdateSettings: (settings: FileManagerSettings) => Promise<void>
 }
 
 const UploadButton = (props: UploadButtonProps) => {

@@ -10,13 +10,11 @@ import {
 } from 'react'
 import { cloneDeep, get, remove, set } from 'lodash'
 import uuid from 'short-uuid'
-
 import { BlockEditorRenderer } from './BlockEditorRenderer'
 import { BlockDefinitionInterface, BlockInterface, BlockDefinitionMap } from './Block'
 import Container from './Container'
 import Draggable from './Draggable'
 import { DropResult } from './smooth-dnd'
-import { FilesSettings } from '../file_manager/interfaces'
 import {
   UrlParams,
   DomNodeRef,
@@ -24,8 +22,8 @@ import {
   BlockButtonsProps,
   EmailTemplateBlock
 } from './types'
-
 import './UI/editor.css'
+import { FileManagerSettings } from '../../services/api/types'
 
 const EditorContext = createContext<EditorContextValue | null>(null)
 
@@ -56,8 +54,8 @@ export interface EditorContextValue {
   setDeviceWidth: (width: number) => void
   urlParams: UrlParams
   onFocusBlock: (node: DomNodeRef) => void
-  fileManagerSettings: FilesSettings
-  onUpdateFileManagerSettings: (settings: FilesSettings) => Promise<void>
+  fileManagerSettings?: FileManagerSettings
+  onUpdateFileManagerSettings: (settings: FileManagerSettings) => Promise<void>
   onUpdateTemplateData: (templateData: string) => Promise<void>
 }
 
@@ -75,8 +73,8 @@ export interface EditorProps {
   urlParams: UrlParams
   userBlocks: EmailTemplateBlock[]
   onUserBlocksUpdate: (blocks: EmailTemplateBlock[]) => Promise<void>
-  fileManagerSettings: FilesSettings
-  onUpdateFileManagerSettings: (settings: FilesSettings) => Promise<void>
+  fileManagerSettings?: FileManagerSettings
+  onUpdateFileManagerSettings: (settings: FileManagerSettings) => Promise<void>
   onUpdateTemplateData?: (templateData: string) => Promise<void>
 }
 

@@ -1,13 +1,13 @@
 import { Alert, Button, Form, Input, Modal, message } from 'antd'
 import { useState } from 'react'
 import { useForm } from 'antd/lib/form/Form'
-import { FilesSettings } from './interfaces'
+import { FileManagerSettings } from '../../services/api/types'
 import { ListObjectsV2Command, ListObjectsV2CommandInput, S3Client } from '@aws-sdk/client-s3'
 
 interface ButtonFilesSettingsProps {
   children: React.ReactNode
-  settings: FilesSettings
-  onUpdateSettings: (settings: FilesSettings) => Promise<void>
+  settings?: FileManagerSettings
+  onUpdateSettings: (settings: FileManagerSettings) => Promise<void>
 }
 
 const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
@@ -29,15 +29,15 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
 
         // check if the bucket can be reached
         const input: ListObjectsV2CommandInput = {
-          Bucket: values.bucket
+          Bucket: values.bucket || ''
         }
         const command = new ListObjectsV2Command(input)
 
         const s3Client = new S3Client({
-          endpoint: values.endpoint,
+          endpoint: values.endpoint || '',
           credentials: {
-            accessKeyId: values.access_key,
-            secretAccessKey: values.secret_key
+            accessKeyId: values.access_key || '',
+            secretAccessKey: values.secret_key || ''
           },
           region: values.region || 'us-east-1'
         })

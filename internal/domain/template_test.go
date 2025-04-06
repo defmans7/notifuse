@@ -87,7 +87,7 @@ func TestTemplate_Validate(t *testing.T) {
 				FromName:         "Test Sender",
 				Subject:          "Test Subject",
 				Content:          "<html>Test content</html>",
-				VisualEditorTree: MapOfAny{"type": "root"},
+				VisualEditorTree: `{"type": "root"}`,
 			},
 			Category:  string(TemplateCategoryMarketing),
 			CreatedAt: now,
@@ -291,7 +291,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 		FromName:         "Test Sender",
 		Subject:          "Test Subject",
 		Content:          "<html>Test content</html>",
-		VisualEditorTree: MapOfAny{"type": "root"},
+		VisualEditorTree: `{"type": "root"}`,
 	}
 
 	tests := []struct {
@@ -369,7 +369,7 @@ func TestEmailTemplate_Scan_Value(t *testing.T) {
 		FromName:         "Test Sender",
 		Subject:          "Test Subject",
 		Content:          "<html>Test content</html>",
-		VisualEditorTree: MapOfAny{"type": "root"},
+		VisualEditorTree: `{"type": "root"}`,
 	}
 
 	// Test Value() method

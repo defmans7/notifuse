@@ -55,3 +55,25 @@ h1 {
 .tabs-in-header .ant-tabs-tab {
   line-height: 41px;
 }
+
+/* Custom Alert styling with left border */
+.ant-alert {
+  border: none !important;
+  border-left: 3px solid transparent !important;
+}
+
+.ant-alert.ant-alert-info {
+  border-left-color: #1890ff !important;
+}
+
+.ant-alert.ant-alert-success {
+  border-left-color: #52c41a !important;
+}
+
+.ant-alert.ant-alert-warning {
+  border-left-color: #faad14 !important;
+}
+
+.ant-alert.ant-alert-error {
+  border-left-color: #ff4d4f !important;
+}

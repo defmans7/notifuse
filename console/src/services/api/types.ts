@@ -1,3 +1,5 @@
+import { BlockInterface } from '../../components/email_editor/Block'
+
 // Authentication types
 export interface SignInRequest {
   email: string
@@ -78,6 +80,7 @@ export interface UpdateWorkspaceRequest {
     logo_url?: string | null
     cover_url?: string | null
     timezone?: string
+    file_manager?: FileManagerSettings
   }
 }
 
@@ -207,12 +210,29 @@ export type ContactListTotalType = 'pending' | 'unsubscribed' | 'bounced' | 'com
 export interface Template {
   id: string
   name: string
-  description?: string
-  content: string
-  content_type: 'html' | 'plain'
-  subject: string
+  version: number
+  channel: 'email'
+  email?: EmailTemplate
+  category: string
+  template_macro_id?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  test_data?: Record<string, any>
+  settings?: Record<string, any>
   created_at: string
   updated_at: string
+}
+
+export interface EmailTemplate {
+  from_address: string
+  from_name: string
+  reply_to?: string
+  subject: string
+  subject_preview?: string
+  content: string // html
+  visual_editor_tree: BlockInterface
+  text?: string
 }
 
 export interface GetTemplatesRequest {

@@ -26,15 +26,6 @@ export interface FileManagerProps {
   multiple?: boolean
 }
 
-export interface FilesSettings {
-  endpoint: string
-  access_key: string
-  secret_key: string
-  bucket: string
-  region: string
-  cdn_endpoint: string
-}
-
 export interface ItemFilter {
   key: string // item key
   value: any

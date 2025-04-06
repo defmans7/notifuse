@@ -12,7 +12,7 @@ import {
   Tooltip,
   message
 } from 'antd'
-import { FileManagerProps, StorageObject, FilesSettings } from './interfaces'
+import { FileManagerProps, StorageObject } from './interfaces'
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus } from 'lucide-react'
 import dayjs from '../../lib/dayjs'
@@ -28,7 +28,7 @@ import {
   DeleteObjectCommandInput
 } from '@aws-sdk/client-s3'
 import GetContentType from './fileExtensions'
-
+import { FileManagerSettings } from '../../services/api/types'
 // Common styles
 const styles = {
   folderRow: {
@@ -51,8 +51,8 @@ const styles = {
 
 // Extend FileManagerProps to include settings and onUpdateSettings
 export interface ExtendedFileManagerProps extends FileManagerProps {
-  settings: FilesSettings
-  onUpdateSettings: (settings: FilesSettings) => Promise<void>
+  settings?: FileManagerSettings
+  onUpdateSettings: (settings: FileManagerSettings) => Promise<void>
 }
 
 export const FileManager = (props: ExtendedFileManagerProps) => {
@@ -79,7 +79,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
 
     setIsLoading(true)
     const input: ListObjectsV2CommandInput = {
-      Bucket: props.settings.bucket
+      Bucket: props.settings?.bucket || ''
     }
 
     const command = new ListObjectsV2Command(input)
@@ -93,10 +93,10 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
 
       const newItems = response.Contents.map((x) => {
         const key = x.Key as string
-        let endpoint = props.settings.endpoint + '/' + props.settings.bucket
+        let endpoint = props.settings?.endpoint || '' + '/' + props.settings?.bucket || ''
 
-        if (props.settings.cdn_endpoint !== '') {
-          endpoint = props.settings.cdn_endpoint
+        if (props.settings?.cdn_endpoint !== '') {
+          endpoint = props.settings?.cdn_endpoint || ''
         }
 
         const isFolder = key.endsWith('/')
@@ -149,30 +149,30 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
       setItems(newItems)
       setIsLoading(false)
     })
-  }, [props.settings.bucket, props.settings.cdn_endpoint, props.settings.endpoint])
+  }, [props.settings?.bucket, props.settings?.cdn_endpoint, props.settings?.endpoint])
 
   // init
   useEffect(() => {
-    if (props.settings.endpoint === '') {
+    if (props.settings?.endpoint === '') {
       return
     }
     if (s3ClientRef.current) return
 
     s3ClientRef.current = new S3Client({
-      endpoint: props.settings.endpoint,
+      endpoint: props.settings?.endpoint || '',
       credentials: {
-        accessKeyId: props.settings.access_key,
-        secretAccessKey: props.settings.secret_key
+        accessKeyId: props.settings?.access_key || '',
+        secretAccessKey: props.settings?.secret_key || ''
       },
-      region: props.settings.region || 'us-east-1'
+      region: props.settings?.region || 'us-east-1'
     })
 
     fetchObjects()
   }, [
-    props.settings.endpoint,
-    props.settings.access_key,
-    props.settings.secret_key,
-    props.settings.region,
+    props.settings?.endpoint,
+    props.settings?.access_key,
+    props.settings?.secret_key,
+    props.settings?.region,
     fetchObjects
   ])
 
@@ -185,7 +185,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
     const s3Client = s3ClientRef.current
 
     const input: DeleteObjectCommandInput = {
-      Bucket: props.settings.bucket,
+      Bucket: props.settings?.bucket || '',
       Key: key
     }
 
@@ -255,7 +255,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
       const key = currentPath === '' ? folderName + '/' : currentPath + folderName + '/'
 
       const input: ListObjectsV2CommandInput = {
-        Bucket: props.settings.bucket,
+        Bucket: props.settings?.bucket || '',
         Prefix: key
       }
 
@@ -269,7 +269,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
           }
 
           const input: PutObjectCommandInput = {
-            Bucket: props.settings.bucket,
+            Bucket: props.settings?.bucket || '',
             Key: key,
             Body: ''
           }
@@ -326,7 +326,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
       s3ClientRef.current
         .send(
           new PutObjectCommand({
-            Bucket: props.settings.bucket,
+            Bucket: props.settings?.bucket || '',
             Key: currentPath + file.name,
             Body: file,
             ContentType: file.type
@@ -351,7 +351,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
     }
   }
 
-  if (props.settings.endpoint === '') {
+  if (!props.settings?.endpoint) {
     return (
       <Alert
         style={styles.marginBottomSmall}
@@ -374,7 +374,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
 
   return (
     <div style={{ ...styles.filesContainer, height: props.height }}>
-      {props.settings.endpoint !== '' && (
+      {props.settings?.endpoint !== '' && (
         <>
           <div style={{ ...styles.padding, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
             <div style={styles.pullRight}>
@@ -449,7 +449,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
             <Space>
               <div>
                 <Button type="text" onClick={() => goToPath('')}>
-                  {props.settings.bucket}
+                  {props.settings?.bucket || ''}
                 </Button>
                 {currentPath
                   .split('/')

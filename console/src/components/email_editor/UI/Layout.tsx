@@ -36,8 +36,8 @@ const FindBlockById = (currentBlock: BlockInterface, id: string): BlockInterface
 }
 
 interface LayoutProps {
-  form: FormInstance<TemplateDataFormField>
   macros: Array<{ id: string; name: string }>
+  onUpdateMacro: (macroId: string) => void
   height?: number
 }
 
@@ -56,7 +56,7 @@ export const Layout = (props: LayoutProps) => {
   const [editingTemplateData, setEditingTemplateData] = useState('')
 
   // Get the current test data value from the form
-  const templateData = Form.useWatch('template_data', props.form) || editor.templateDataValue
+  const templateData = editor.templateDataValue
 
   // Format JSON for display
   const formattedTemplateData = (() => {
@@ -345,9 +345,9 @@ export const Layout = (props: LayoutProps) => {
                     options={props.macros.map((x) => {
                       return { label: x.name, value: x.id }
                     })}
-                    onChange={(val: string) =>
-                      props.form.setFieldsValue({ template_macro_id: val })
-                    }
+                    onChange={(val: string) => {
+                      props.onUpdateMacro(val)
+                    }}
                   />
                 </Form.Item>
               )}

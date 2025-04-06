@@ -1,17 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Row, Col, Typography, Space, Tag, Button } from 'antd'
+import { Card, Row, Col, Typography, Button } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
-import type { Template } from '../services/api/types'
-import { FileTextOutlined, Html5Outlined, EditOutlined } from '@ant-design/icons'
+import type { Template, Workspace } from '../services/api/types'
+import { EditOutlined } from '@ant-design/icons'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
+import { useAuth } from '../contexts/AuthContext'
 
 const { Title, Paragraph, Text } = Typography
 
 export function TemplatesPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/templates' })
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
+  const { workspaces } = useAuth()
+  const [workspace, setWorkspace] = useState<Workspace | null>(null)
+
+  // current workspace from workspaceId
+  useEffect(() => {
+    if (workspaces.length > 0) {
+      const currentWorkspace = workspaces.find((w) => w.id === workspaceId)
+      if (currentWorkspace) {
+        setWorkspace(currentWorkspace)
+      }
+    }
+  }, [workspaces, workspaceId])
 
   const { data, isLoading } = useQuery({
     queryKey: ['templates', workspaceId],
@@ -30,7 +43,9 @@ export function TemplatesPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <Title level={2}>Templates</Title>
-        <CreateTemplateDrawer workspaceId={workspaceId} />
+        {workspace && data?.templates && data.templates.length > 0 && (
+          <CreateTemplateDrawer workspace={workspace} />
+        )}
       </div>
 
       {isLoading ? (
@@ -49,22 +64,9 @@ export function TemplatesPage() {
                 title={
                   <div className="flex items-center justify-between">
                     <Text strong>{template.name}</Text>
-                    <Space>
-                      <Tag color={template.content_type === 'html' ? 'blue' : 'green'}>
-                        {template.content_type === 'html' ? (
-                          <>
-                            <Html5Outlined /> HTML
-                          </>
-                        ) : (
-                          <>
-                            <FileTextOutlined /> Plain Text
-                          </>
-                        )}
-                      </Tag>
-                    </Space>
                   </div>
                 }
-                bordered={false}
+                variant="outlined"
                 className="h-full"
                 extra={
                   <Button
@@ -78,18 +80,9 @@ export function TemplatesPage() {
                   <Text type="secondary">ID: {template.id}</Text>
                 </div>
 
-                {template.description && (
-                  <Paragraph
-                    ellipsis={{ rows: 2, expandable: true, symbol: 'more' }}
-                    className="mb-4"
-                  >
-                    {template.description}
-                  </Paragraph>
-                )}
-
                 <div className="mb-4">
                   <Text strong>Subject: </Text>
-                  <Text>{template.subject}</Text>
+                  <Text>{template.email?.subject}</Text>
                 </div>
 
                 <div className="text-xs text-gray-500 mt-4">
@@ -107,15 +100,17 @@ export function TemplatesPage() {
           </Title>
           <Paragraph type="secondary">Create your first template to get started</Paragraph>
           <div className="mt-4">
-            <CreateTemplateDrawer workspaceId={workspaceId} buttonProps={{ size: 'large' }} />
+            {workspace && (
+              <CreateTemplateDrawer workspace={workspace} buttonProps={{ size: 'large' }} />
+            )}
           </div>
         </div>
       )}
 
-      {selectedTemplate && (
+      {workspace && selectedTemplate && (
         <CreateTemplateDrawer
           template={selectedTemplate}
-          workspaceId={workspaceId}
+          workspace={workspace}
           buttonProps={{ style: { display: 'none' } }}
           onClose={handleDrawerClose}
         />

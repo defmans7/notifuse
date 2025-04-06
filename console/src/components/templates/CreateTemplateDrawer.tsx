@@ -10,34 +10,44 @@ import {
   Tabs,
   Row,
   Col,
-  Divider,
   Tag,
   Alert
 } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
-import type { Template } from '../../services/api/types'
+import type { Template, Workspace, FileManagerSettings } from '../../services/api/types'
 import { PlusOutlined } from '@ant-design/icons'
-import { useParams } from '@tanstack/react-router'
-import { DefaultEditor } from '../../components/email_editor'
-import { kebabCase } from 'lodash'
+import { Editor, ExportHTML } from '../../components/email_editor'
+import { cloneDeep, kebabCase } from 'lodash'
 import IphoneEmailPreview from './PhonePreview'
-
-// Extended template interface with additional properties
-interface ExtendedTemplate extends Template {
-  category?: string
-  from_address?: string
-  from_name?: string
-  reply_to?: string
-  visual_editor_tree?: any
-  utm_source?: string
-  utm_medium?: string
-  utm_campaign?: string
-}
+import { DesktopWidth, Layout } from '../../components/email_editor/UI/Layout'
+import { SelectedBlockButtonsProp } from '../../components/email_editor/Editor'
+import SelectedBlockButtons from '../../components/email_editor/UI/SelectedBlockButtons'
+import ButtonBlockDefinition from '../../components/email_editor/UI/definitions/Button'
+import ColumnBlockDefinition from '../../components/email_editor/UI/definitions/Column'
+import Columns168BlockDefinition from '../../components/email_editor/UI/definitions/Columns168'
+import Columns204BlockDefinition from '../../components/email_editor/UI/definitions/Columns204'
+import Columns420BlockDefinition from '../../components/email_editor/UI/definitions/Columns420'
+import Columns816BlockDefinition from '../../components/email_editor/UI/definitions/Columns816'
+import Columns888BlockDefinition from '../../components/email_editor/UI/definitions/Columns888'
+import Columns1212BlockDefinition from '../../components/email_editor/UI/definitions/Columns1212'
+import Columns6666BlockDefinition from '../../components/email_editor/UI/definitions/Columns6666'
+import DividerBlockDefinition from '../../components/email_editor/UI/definitions/Divider'
+import HeadingBlockDefinition from '../../components/email_editor/UI/definitions/Heading'
+import ImageBlockDefinition from '../../components/email_editor/UI/definitions/Image'
+import OneColumnBlockDefinition from '../../components/email_editor/UI/definitions/OneColumn'
+import OpenTrackingBlockDefinition from '../../components/email_editor/UI/definitions/OpenTracking'
+import RootBlockDefinition from '../../components/email_editor/UI/definitions/Root'
+import TextBlockDefinition from '../../components/email_editor/UI/definitions/Text'
+import LiquidTemplateBlockDefinition from '../../components/email_editor/UI/definitions/Liquid'
+import { BlockDefinitionInterface, BlockInterface } from '../../components/email_editor/Block'
+import uuid from 'short-uuid'
+import { useAuth } from '../../contexts/AuthContext'
+import { workspaceService } from '../../services/api/workspace'
 
 interface CreateTemplateDrawerProps {
-  template?: ExtendedTemplate
-  workspaceId?: string
+  workspace: Workspace
+  template?: Template
   buttonProps?: any
   onClose?: () => void
   category?: string
@@ -46,9 +56,106 @@ interface CreateTemplateDrawerProps {
   utmCampaign?: string
 }
 
+// Combine default block definitions with any custom ones
+const blockDefinitions = {
+  root: RootBlockDefinition,
+  column: ColumnBlockDefinition,
+  oneColumn: OneColumnBlockDefinition,
+  columns168: Columns168BlockDefinition,
+  columns204: Columns204BlockDefinition,
+  columns420: Columns420BlockDefinition,
+  columns816: Columns816BlockDefinition,
+  columns888: Columns888BlockDefinition,
+  columns1212: Columns1212BlockDefinition,
+  columns6666: Columns6666BlockDefinition,
+  image: ImageBlockDefinition,
+  divider: DividerBlockDefinition,
+  openTracking: OpenTrackingBlockDefinition,
+  button: ButtonBlockDefinition,
+  text: TextBlockDefinition,
+  heading: HeadingBlockDefinition,
+  liquid: LiquidTemplateBlockDefinition
+}
+
+// Helper function to generate a block from definition
+const generateBlockFromDefinition = (blockDefinition: BlockDefinitionInterface) => {
+  const id = uuid.generate()
+
+  const block: BlockInterface = {
+    id: id,
+    kind: blockDefinition.kind,
+    path: '', // path is set when rendering
+    children: blockDefinition.children
+      ? blockDefinition.children.map((child: BlockDefinitionInterface) => {
+          return generateBlockFromDefinition(child)
+        })
+      : [],
+    data: cloneDeep(blockDefinition.defaultData)
+  }
+
+  return block
+}
+// Create default blocks
+const createDefaultBlocks = () => {
+  // Create default content blocks
+  const text = generateBlockFromDefinition(TextBlockDefinition)
+  const heading = generateBlockFromDefinition(HeadingBlockDefinition)
+  const logo = generateBlockFromDefinition(ImageBlockDefinition)
+  const divider = generateBlockFromDefinition(DividerBlockDefinition)
+  const openTracking = generateBlockFromDefinition(OpenTrackingBlockDefinition)
+  const btn = generateBlockFromDefinition(ButtonBlockDefinition)
+  const column = generateBlockFromDefinition(OneColumnBlockDefinition)
+
+  // Configure logo
+  logo.data.image.src = 'https://notifuse.com/images/logo.png'
+  logo.data.image.alt = 'Logo'
+  logo.data.image.href = 'https://notifuse.com'
+  logo.data.image.width = '100px'
+
+  // Configure heading
+  heading.data.paddingControl = 'separate'
+  heading.data.paddingTop = '40px'
+  heading.data.paddingBottom = '40px'
+  heading.data.editorData[0].children[0].text = 'Hello {{ user.first_name | default:"there" }} 👋'
+
+  // Configure divider
+  divider.data.paddingControl = 'separate'
+  divider.data.paddingTop = '40px'
+  divider.data.paddingBottom = '20px'
+  divider.data.paddingLeft = '200px'
+  divider.data.paddingRight = '200px'
+
+  // Configure text
+  text.data.editorData[0].children[0].text = 'Welcome to the email editor!'
+
+  // Configure button
+  btn.data.button.backgroundColor = '#4e6cff'
+  btn.data.button.text = '👉 Click me'
+
+  // Add all blocks to column
+  column.children[0].children.push(logo)
+  column.children[0].children.push(heading)
+  column.children[0].children.push(text)
+  column.children[0].children.push(divider)
+  column.children[0].children.push(btn)
+  column.children[0].children.push(openTracking)
+
+  // Create root block with column as child
+  const rootData = cloneDeep(RootBlockDefinition.defaultData)
+  const rootBlock: BlockInterface = {
+    id: 'root',
+    kind: 'root',
+    path: '',
+    children: [column],
+    data: rootData
+  }
+
+  return rootBlock
+}
+
 export function CreateTemplateDrawer({
+  workspace,
   template,
-  workspaceId: propWorkspaceId,
   buttonProps = {},
   onClose,
   category,
@@ -58,19 +165,25 @@ export function CreateTemplateDrawer({
 }: CreateTemplateDrawerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
-  const { workspaceId: paramWorkspaceId } = useParams({ from: '/workspace/$workspaceId/templates' })
-  const workspaceId = propWorkspaceId || paramWorkspaceId
+  const { refreshWorkspaces } = useAuth()
   const queryClient = useQueryClient()
-  const [contentType, setContentType] = useState<'html' | 'plain'>(template?.content_type || 'html')
-  const [content, setContent] = useState(template?.content || '')
   const [tab, setTab] = useState<string>('settings')
   const [loading, setLoading] = useState(false)
   const [editorHeight, setEditorHeight] = useState(0)
+  const [visualEditorTree, setVisualEditorTree] = useState<BlockInterface>(
+    template ? (template.email?.visual_editor_tree as BlockInterface) : createDefaultBlocks()
+  )
 
   // Add Form.useWatch for the email fields
   const fromName = Form.useWatch(['email', 'from_name'], form)
   const emailSubject = Form.useWatch(['email', 'subject'], form)
-  const emailContent = Form.useWatch(['email', 'content'], form)
+  const emailPreview = Form.useWatch(['email', 'subject_preview'], form)
+
+  // useWatch don't work when FormItem is not visible
+  //   const utmSourceValue = Form.useWatch('utm_source', form)
+  //   const utmMediumValue = Form.useWatch(['utm_medium'], form)
+  //   const utmCampaignValue = Form.useWatch(['utm_campaign'], form)
+  //   const templateID = Form.useWatch(['id'], form)
 
   // Calculate editor height based on drawer dimensions
   useEffect(() => {
@@ -91,76 +204,59 @@ export function CreateTemplateDrawer({
     }
   }, [isOpen, tab])
 
-  // Auto-open drawer when template is provided (for edit mode)
-  useEffect(() => {
-    if (template) {
-      showDrawer()
-    }
-  }, [template])
-
-  // When content type changes, update the form field
-  useEffect(() => {
-    if (isOpen) {
-      form.setFieldsValue({ content_type: contentType })
-    }
-  }, [contentType, form, isOpen])
-
-  // When content changes from CodeEditor, update the form field
-  useEffect(() => {
-    if (isOpen) {
-      form.setFieldsValue({ content })
-    }
-  }, [content, form, isOpen])
-
   const createTemplateMutation = useMutation({
     mutationFn: (values: any) => {
       if (template) {
         return templatesApi.update({
           ...values,
-          workspace_id: workspaceId,
+          workspace_id: workspace.id,
           id: template.id
         })
       } else {
         return templatesApi.create({
           ...values,
-          workspace_id: workspaceId
+          workspace_id: workspace.id
         })
       }
     },
     onSuccess: () => {
       message.success(`Template ${template ? 'updated' : 'created'} successfully`)
       handleClose()
-      queryClient.invalidateQueries({ queryKey: ['templates', workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['templates', workspace.id] })
     },
     onError: (error) => {
       message.error(`Failed to ${template ? 'update' : 'create'} template: ${error.message}`)
     }
   })
 
+  const defaultTestData = {
+    contact: {
+      first_name: 'John',
+      last_name: 'Doe',
+      email: 'john.doe@example.com'
+    },
+    unsubscribe_link: `${import.meta.env.VITE_API_ENDPOINT}/unsubscribe?email={{ contact.email }}&list_id={{ list.id }}&hmac={{ contact.hmac }}`
+  }
+
   const showDrawer = () => {
     if (template) {
       form.setFieldsValue({
         name: template.name,
         id: template.id || kebabCase(template.name),
-        description: template.description,
-        content: template.content,
-        content_type: template.content_type,
-        subject: template.subject,
         category: template.category || undefined,
         email: {
-          from_address: template.from_address || '',
-          from_name: template.from_name || '',
-          reply_to: template.reply_to || '',
-          subject: template.subject || '',
-          content: template.content || '',
-          visual_editor_tree: template.visual_editor_tree || null
+          from_address: template.email?.from_address || '',
+          from_name: template.email?.from_name || '',
+          reply_to: template.email?.reply_to || '',
+          subject: template.email?.subject || '',
+          content: template.email?.content || '',
+          visual_editor_tree: template.email?.visual_editor_tree || createDefaultBlocks()
         },
+        test_data: template.test_data || defaultTestData,
         utm_source: template.utm_source || utmSource || '',
         utm_medium: template.utm_medium || utmMedium || 'email',
         utm_campaign: template.utm_campaign || utmCampaign || ''
       })
-      setContentType(template.content_type)
-      setContent(template.content)
     }
     setIsOpen(true)
   }
@@ -168,8 +264,6 @@ export function CreateTemplateDrawer({
   const handleClose = () => {
     setIsOpen(false)
     form.resetFields()
-    setContent('')
-    setContentType('html')
     setTab('settings')
     if (onClose) {
       onClose()
@@ -178,6 +272,29 @@ export function CreateTemplateDrawer({
 
   const goNext = () => {
     setTab('template')
+  }
+
+  // Function to handle workspace settings update
+  const handleUpdateWorkspaceSettings = async (settings: FileManagerSettings): Promise<void> => {
+    try {
+      // Update workspace using workspace service
+      await workspaceService.update({
+        id: workspace.id,
+        name: workspace.name,
+        settings: {
+          ...workspace.settings,
+          file_manager: settings
+        }
+      })
+
+      // Refresh workspaces from context
+      await refreshWorkspaces()
+
+      message.success('Workspace settings updated successfully')
+    } catch (error: any) {
+      console.error('Error updating workspace settings:', error)
+      message.error(`Failed to update workspace settings: ${error.message}`)
+    }
   }
 
   const handleSubmit = () => {
@@ -190,20 +307,17 @@ export function CreateTemplateDrawer({
           utm_medium: values.utm_medium,
           utm_campaign: values.utm_campaign,
           utm_content: values.id,
-          utm_id: '{{ rmd_utm_id }}'
+          utm_id: '{{ notifuse_utm_id }}'
         }
 
         // Add logic to export HTML if needed
-        // const result = ExportHTML(values.email.visual_editor_tree, urlParams)
-        // if (result.errors && result.errors.length > 0) {
-        //   message.error(result.errors[0].formattedMessage)
-        //   setLoading(false)
-        //   return
-        // }
-        // values.email.content = result.html
-
-        // For now, just use the content directly
-        values.content = values.email.content || content
+        const result = ExportHTML(values.email.visual_editor_tree, urlParams)
+        if (result.errors && result.errors.length > 0) {
+          message.error(result.errors[0].formattedMessage)
+          setLoading(false)
+          return
+        }
+        values.email.content = result.html
 
         createTemplateMutation.mutate(values)
       })
@@ -215,6 +329,7 @@ export function CreateTemplateDrawer({
               [
                 'name',
                 'id',
+                'category',
                 'email.from_address',
                 'email.from_name',
                 'email.subject',
@@ -240,7 +355,7 @@ export function CreateTemplateDrawer({
           closable={true}
           keyboard={false}
           maskClosable={false}
-          width={tab === 'settings' ? 960 : '95%'}
+          width={'95%'}
           open={isOpen}
           onClose={handleClose}
           className="drawer-no-transition drawer-body-no-padding"
@@ -275,38 +390,40 @@ export function CreateTemplateDrawer({
             </div>
           }
         >
-          <div className="flex justify-center">
-            <Tabs
-              activeKey={tab}
-              centered
-              onChange={(k) => setTab(k)}
-              style={{ display: 'inline-block' }}
-              className="tabs-in-header"
-              items={[
-                {
-                  key: 'settings',
-                  label: '1. Settings'
-                },
-                {
-                  key: 'template',
-                  label: '2. Template'
-                }
-              ]}
-            />
-          </div>
-          <div className="relative">
-            {tab === 'settings' ? (
-              <Form
-                form={form}
-                layout="vertical"
-                initialValues={{
-                  content_type: 'html',
-                  category: category || undefined,
-                  utm_source: utmSource || '',
-                  utm_medium: utmMedium || 'email',
-                  utm_campaign: utmCampaign || ''
-                }}
-              >
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={{
+              'email.visual_editor_tree': visualEditorTree,
+              category: category || undefined,
+              utm_source: utmSource || '',
+              utm_medium: utmMedium || 'email',
+              utm_campaign: utmCampaign || '',
+              test_data: defaultTestData
+            }}
+          >
+            <div className="flex justify-center">
+              <Tabs
+                activeKey={tab}
+                centered
+                onChange={(k) => setTab(k)}
+                style={{ display: 'inline-block' }}
+                className="tabs-in-header"
+                destroyInactiveTabPane={false}
+                items={[
+                  {
+                    key: 'settings',
+                    label: '1. Settings'
+                  },
+                  {
+                    key: 'template',
+                    label: '2. Template'
+                  }
+                ]}
+              />
+            </div>
+            <div className="relative">
+              {tab === 'settings' ? (
                 <div className="p-8">
                   <Row gutter={24}>
                     <Col span={8}>
@@ -425,7 +542,7 @@ export function CreateTemplateDrawer({
                         <IphoneEmailPreview
                           sender={fromName || 'Sender Name'}
                           subject={emailSubject || 'Email Subject'}
-                          previewText={emailContent || 'Preview text will appear here...'}
+                          previewText={emailPreview || 'Preview text will appear here...'}
                           timestamp="Now"
                           currentTime="12:12"
                         />
@@ -433,13 +550,18 @@ export function CreateTemplateDrawer({
                     </Col>
                   </Row>
 
-                  <div className="text-lg my-8 font-bold">URL Tracking</div>
+                  <div className="text-lg mt-4 mb-8 font-bold">URL Tracking</div>
+
+                  <Alert
+                    type="info"
+                    className="!mb-6"
+                    message="The utm parameters will be automatically added to your email links."
+                  />
 
                   {utmCampaign && (
                     <Alert
                       type="info"
-                      showIcon
-                      className="mb-6"
+                      className="!mb-6"
                       message="The utm_source / medium / campaign parameters are already defined at the Campaign level."
                     />
                   )}
@@ -475,25 +597,61 @@ export function CreateTemplateDrawer({
                     </Col>
                   </Row>
                 </div>
-              </Form>
-            ) : (
-              <div>
-                <DefaultEditor
-                  initialValue={undefined}
-                  height={editorHeight}
-                  onChange={(html) => {
-                    setContent(html)
-                    if (isOpen) {
-                      form.setFieldsValue({
-                        ['email']: { ...form.getFieldValue('email'), content: html }
-                      })
-                    }
-                  }}
-                  onUserBlocksUpdate={async () => {}}
-                />
-              </div>
-            )}
-          </div>
+              ) : (
+                <div>
+                  <Form.Item dependencies={['utm_source', 'utm_medium', 'utm_campaign', 'id']}>
+                    {(form) => {
+                      const utmSourceValue = form.getFieldValue('utm_source')
+                      const utmMediumValue = form.getFieldValue('utm_medium')
+                      const utmCampaignValue = form.getFieldValue('utm_campaign')
+                      const templateID = form.getFieldValue('id')
+                      const testData = form.getFieldValue('test_data')
+
+                      return (
+                        <Editor
+                          blockDefinitions={blockDefinitions}
+                          userBlocks={[]}
+                          onUserBlocksUpdate={async () => {}}
+                          selectedBlockId={'root'}
+                          value={visualEditorTree}
+                          onChange={setVisualEditorTree}
+                          renderSelectedBlockButtons={(props: SelectedBlockButtonsProp) => (
+                            <SelectedBlockButtons {...props} />
+                          )}
+                          deviceWidth={DesktopWidth}
+                          urlParams={{
+                            utm_source: utmSourceValue || '',
+                            utm_medium: utmMediumValue || 'email',
+                            utm_campaign: utmCampaignValue || '',
+                            utm_content: templateID || '',
+                            utm_id: '{{notifuse_utm_id}}'
+                          }}
+                          fileManagerSettings={workspace?.settings.file_manager}
+                          onUpdateFileManagerSettings={handleUpdateWorkspaceSettings}
+                          templateDataValue={JSON.stringify(testData, null, 2)}
+                          onUpdateTemplateData={async (templateData: string) => {
+                            form.setFieldsValue({
+                              test_data: JSON.parse(templateData)
+                            })
+                            // Handle template data updates
+                            return Promise.resolve()
+                          }}
+                        >
+                          <Layout
+                            onUpdateMacro={async (macroId: string) => {
+                              console.log('macroId', macroId)
+                            }}
+                            macros={[]}
+                            height={editorHeight}
+                          />
+                        </Editor>
+                      )
+                    }}
+                  </Form.Item>
+                </div>
+              )}
+            </div>
+          </Form>
         </Drawer>
       )}
     </>

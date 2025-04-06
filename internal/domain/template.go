@@ -139,14 +139,14 @@ func (t TemplateReference) Value() (driver.Value, error) {
 }
 
 type EmailTemplate struct {
-	FromAddress      string   `json:"from_address"`
-	FromName         string   `json:"from_name"`
-	ReplyTo          *string  `json:"reply_to,omitempty"`
-	Subject          string   `json:"subject"`
-	SubjectPreview   *string  `json:"subject_preview,omitempty"`
-	Content          string   `json:"content"` // html
-	VisualEditorTree MapOfAny `json:"visual_editor_tree"`
-	Text             *string  `json:"text,omitempty"`
+	FromAddress      string  `json:"from_address"`
+	FromName         string  `json:"from_name"`
+	ReplyTo          *string `json:"reply_to,omitempty"`
+	Subject          string  `json:"subject"`
+	SubjectPreview   *string `json:"subject_preview,omitempty"`
+	Content          string  `json:"content"` // html
+	VisualEditorTree string  `json:"visual_editor_tree"`
+	Text             *string `json:"text,omitempty"`
 }
 
 func (e *EmailTemplate) Validate() error {
@@ -172,7 +172,7 @@ func (e *EmailTemplate) Validate() error {
 	if e.Content == "" {
 		return fmt.Errorf("invalid email template: content is required")
 	}
-	if e.VisualEditorTree == nil {
+	if e.VisualEditorTree == "" {
 		return fmt.Errorf("invalid email template: visual_editor_tree is required")
 	}
 
