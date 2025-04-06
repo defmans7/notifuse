@@ -189,8 +189,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
-			WithArgs(11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs().
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query
@@ -253,8 +253,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC LIMIT \$4`).
-			WithArgs("%test@example.com%", "%John%", "%US%", 11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs("%test@example.com%", "%John%", "%US%").
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query
@@ -320,8 +320,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.created_at < \$1 ORDER BY c\.created_at DESC LIMIT \$2`).
-			WithArgs(sqlmock.AnyArg(), 11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.created_at < \$1 ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs(sqlmock.AnyArg()).
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query
@@ -401,8 +401,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC LIMIT \$7`).
-			WithArgs("%test@example.com%", "%ext123%", "%John%", "%Doe%", "%+1234567890%", "%US%", 11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs("%test@example.com%", "%ext123%", "%John%", "%Doe%", "%+1234567890%", "%US%").
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query
@@ -472,8 +472,8 @@ func TestGetContacts(t *testing.T) {
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the query to fail
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
-			WithArgs(11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs().
 			WillReturnError(errors.New("database query error"))
 
 		req := &domain.GetContactsRequest{
@@ -521,8 +521,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
-			WithArgs(11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs().
 			WillReturnRows(rows)
 
 		req := &domain.GetContactsRequest{
@@ -570,8 +570,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		).RowError(0, errors.New("row error"))
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
-			WithArgs(11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs().
 			WillReturnRows(rows)
 
 		req := &domain.GetContactsRequest{
@@ -619,8 +619,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
-			WithArgs(11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs().
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query to fail
@@ -673,8 +673,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
-			WithArgs(11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs().
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query with invalid data
@@ -734,8 +734,8 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT \$1`).
-			WithArgs(11).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+			WithArgs().
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query with error during iteration

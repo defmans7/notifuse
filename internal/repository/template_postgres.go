@@ -1,0 +1,437 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/Notifuse/notifuse/internal/domain"
+)
+
+type templateRepository struct {
+	workspaceRepo domain.WorkspaceRepository
+}
+
+// NewTemplateRepository creates a new PostgreSQL template repository
+func NewTemplateRepository(workspaceRepo domain.WorkspaceRepository) domain.TemplateRepository {
+	return &templateRepository{
+		workspaceRepo: workspaceRepo,
+	}
+}
+
+func (r *templateRepository) CreateTemplate(ctx context.Context, workspaceID string, template *domain.Template) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	now := time.Now().UTC()
+	template.CreatedAt = now
+	template.UpdatedAt = now
+
+	// Ensure version is at least 1 for creation
+	if template.Version == 0 {
+		template.Version = 1
+	}
+
+	// Marshal email template to JSON
+	emailJSON, err := json.Marshal(template.Email)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email template: %w", err)
+	}
+
+	// Marshal settings to JSON if not nil
+	var settingsJSON []byte
+	if template.Settings != nil {
+		settingsJSON, err = json.Marshal(template.Settings)
+		if err != nil {
+			return fmt.Errorf("failed to marshal settings: %w", err)
+		}
+	}
+
+	// Marshal test data to JSON if not nil
+	var testDataJSON []byte
+	if template.TestData != nil {
+		testDataJSON, err = json.Marshal(template.TestData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal test data: %w", err)
+		}
+	}
+
+	query := `
+		INSERT INTO templates (
+			id, 
+			name, 
+			version, 
+			channel, 
+			email, 
+			category, 
+			template_macro_id, 
+			utm_source, 
+			utm_medium, 
+			utm_campaign, 
+			test_data, 
+			settings, 
+			created_at, 
+			updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	`
+	_, err = workspaceDB.ExecContext(ctx, query,
+		template.ID,
+		template.Name,
+		template.Version,
+		template.Channel,
+		emailJSON,
+		template.Category,
+		template.TemplateMacroID,
+		template.UTMSource,
+		template.UTMMedium,
+		template.UTMCampaign,
+		testDataJSON,
+		settingsJSON,
+		template.CreatedAt,
+		template.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create template: %w", err)
+	}
+	return nil
+}
+
+func (r *templateRepository) GetTemplateByID(ctx context.Context, workspaceID string, id string, version int64) (*domain.Template, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	var query string
+	var args []interface{}
+
+	if version > 0 {
+		// Get specific version
+		query = `
+			SELECT 
+				id, 
+				name, 
+				version, 
+				channel, 
+				email, 
+				category, 
+				template_macro_id, 
+				utm_source, 
+				utm_medium, 
+				utm_campaign, 
+				test_data, 
+				settings, 
+				created_at, 
+				updated_at
+			FROM templates
+			WHERE id = $1 AND version = $2
+		`
+		args = []interface{}{id, version}
+	} else {
+		// Get latest version
+		query = `
+			SELECT 
+				id, 
+				name, 
+				version, 
+				channel, 
+				email, 
+				category, 
+				template_macro_id, 
+				utm_source, 
+				utm_medium, 
+				utm_campaign, 
+				test_data, 
+				settings, 
+				created_at, 
+				updated_at
+			FROM templates
+			WHERE id = $1
+			ORDER BY version DESC
+			LIMIT 1
+		`
+		args = []interface{}{id}
+	}
+
+	row := workspaceDB.QueryRowContext(ctx, query, args...)
+
+	template, err := scanTemplate(row)
+	if err == sql.ErrNoRows {
+		return nil, &domain.ErrTemplateNotFound{Message: "template not found"}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get template: %w", err)
+	}
+
+	return template, nil
+}
+
+func (r *templateRepository) GetTemplateLatestVersion(ctx context.Context, workspaceID string, id string) (int64, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	query := `
+		SELECT MAX(version) 
+		FROM templates
+		WHERE id = $1
+	`
+
+	var version int64
+	err = workspaceDB.QueryRowContext(ctx, query, id).Scan(&version)
+	if err == sql.ErrNoRows {
+		return 0, &domain.ErrTemplateNotFound{Message: "template not found"}
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to get template latest version: %w", err)
+	}
+
+	return version, nil
+}
+
+func (r *templateRepository) GetTemplates(ctx context.Context, workspaceID string) ([]*domain.Template, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// Get only the latest version of each template
+	query := `
+		WITH latest_versions AS (
+			SELECT id, MAX(version) as max_version
+			FROM templates
+			GROUP BY id
+		)
+		SELECT 
+			t.id, 
+			t.name, 
+			t.version, 
+			t.channel, 
+			t.email, 
+			t.category, 
+			t.template_macro_id, 
+			t.utm_source, 
+			t.utm_medium, 
+			t.utm_campaign, 
+			t.test_data, 
+			t.settings, 
+			t.created_at, 
+			t.updated_at
+		FROM templates t
+		JOIN latest_versions lv ON t.id = lv.id AND t.version = lv.max_version
+		ORDER BY t.updated_at DESC
+	`
+
+	rows, err := workspaceDB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get templates: %w", err)
+	}
+	defer rows.Close()
+
+	var templates []*domain.Template
+	for rows.Next() {
+		template, err := scanTemplate(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan template: %w", err)
+		}
+		templates = append(templates, template)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating template rows: %w", err)
+	}
+
+	return templates, nil
+}
+
+func (r *templateRepository) UpdateTemplate(ctx context.Context, workspaceID string, template *domain.Template) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// Get the latest version
+	latestVersion, err := r.GetTemplateLatestVersion(ctx, workspaceID, template.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get template latest version: %w", err)
+	}
+
+	// Increment version
+	template.Version = latestVersion + 1
+	template.UpdatedAt = time.Now().UTC()
+
+	// Marshal email template to JSON
+	emailJSON, err := json.Marshal(template.Email)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email template: %w", err)
+	}
+
+	// Marshal settings to JSON if not nil
+	var settingsJSON []byte
+	if template.Settings != nil {
+		settingsJSON, err = json.Marshal(template.Settings)
+		if err != nil {
+			return fmt.Errorf("failed to marshal settings: %w", err)
+		}
+	}
+
+	// Marshal test data to JSON if not nil
+	var testDataJSON []byte
+	if template.TestData != nil {
+		testDataJSON, err = json.Marshal(template.TestData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal test data: %w", err)
+		}
+	}
+
+	// Create a new version instead of updating the existing one
+	query := `
+		INSERT INTO templates (
+			id, 
+			name, 
+			version, 
+			channel, 
+			email, 
+			category, 
+			template_macro_id, 
+			utm_source, 
+			utm_medium, 
+			utm_campaign, 
+			test_data, 
+			settings, 
+			created_at, 
+			updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	`
+	_, err = workspaceDB.ExecContext(ctx, query,
+		template.ID,
+		template.Name,
+		template.Version,
+		template.Channel,
+		emailJSON,
+		template.Category,
+		template.TemplateMacroID,
+		template.UTMSource,
+		template.UTMMedium,
+		template.UTMCampaign,
+		testDataJSON,
+		settingsJSON,
+		template.CreatedAt,
+		template.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update template: %w", err)
+	}
+
+	return nil
+}
+
+func (r *templateRepository) DeleteTemplate(ctx context.Context, workspaceID string, id string) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	query := `DELETE FROM templates WHERE id = $1`
+
+	result, err := workspaceDB.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete template: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	if rows == 0 {
+		return &domain.ErrTemplateNotFound{Message: "template not found"}
+	}
+
+	return nil
+}
+
+// scanTemplate scans a template from a database row
+func scanTemplate(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*domain.Template, error) {
+	var (
+		template                                           domain.Template
+		emailJSON, testDataJSON, settingsJSON              []byte
+		templateMacroID, utmSource, utmMedium, utmCampaign sql.NullString
+	)
+
+	err := scanner.Scan(
+		&template.ID,
+		&template.Name,
+		&template.Version,
+		&template.Channel,
+		&emailJSON,
+		&template.Category,
+		&templateMacroID,
+		&utmSource,
+		&utmMedium,
+		&utmCampaign,
+		&testDataJSON,
+		&settingsJSON,
+		&template.CreatedAt,
+		&template.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal email template
+	var email domain.EmailTemplate
+	if err := json.Unmarshal(emailJSON, &email); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal email template: %w", err)
+	}
+	template.Email = &email
+
+	// Handle nullable fields
+	if templateMacroID.Valid {
+		template.TemplateMacroID = &templateMacroID.String
+	}
+	if utmSource.Valid {
+		template.UTMSource = &utmSource.String
+	}
+	if utmMedium.Valid {
+		template.UTMMedium = &utmMedium.String
+	}
+	if utmCampaign.Valid {
+		template.UTMCampaign = &utmCampaign.String
+	}
+
+	// Unmarshal test data if not nil
+	if len(testDataJSON) > 0 {
+		var testData domain.MapOfAny
+		if err := json.Unmarshal(testDataJSON, &testData); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal test data: %w", err)
+		}
+		template.TestData = testData
+	}
+
+	// Unmarshal settings if not nil
+	if len(settingsJSON) > 0 {
+		var settings domain.MapOfAny
+		if err := json.Unmarshal(settingsJSON, &settings); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal settings: %w", err)
+		}
+		template.Settings = settings
+	}
+
+	return &template, nil
+}

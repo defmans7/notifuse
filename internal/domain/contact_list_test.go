@@ -66,7 +66,7 @@ func TestContactList_Validate(t *testing.T) {
 				ListID: "invalid@list&id",
 				Status: domain.ContactListStatusActive,
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "missing status",

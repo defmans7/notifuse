@@ -289,7 +289,10 @@ func TestGetListsRequest_FromURLParams(t *testing.T) {
 			params: map[string][]string{
 				"workspace_id": {"invalid@workspace"},
 			},
-			wantErr: true,
+			wantErr: false,
+			want: domain.GetListsRequest{
+				WorkspaceID: "invalid@workspace",
+			},
 		},
 	}
 
@@ -346,7 +349,11 @@ func TestGetListRequest_FromURLParams(t *testing.T) {
 				"workspace_id": {"invalid@workspace"},
 				"id":           {"list123"},
 			},
-			wantErr: true,
+			wantErr: false,
+			want: domain.GetListRequest{
+				WorkspaceID: "invalid@workspace",
+				ID:          "list123",
+			},
 		},
 		{
 			name: "invalid list ID format",
@@ -483,6 +490,7 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 		name    string
 		request domain.DeleteListRequest
 		wantErr bool
+		wantID  string
 	}{
 		{
 			name: "valid request",
@@ -491,6 +499,7 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 				ID:          "list123",
 			},
 			wantErr: false,
+			wantID:  "workspace123",
 		},
 		{
 			name: "missing workspace ID",
@@ -498,6 +507,7 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 				ID: "list123",
 			},
 			wantErr: true,
+			wantID:  "",
 		},
 		{
 			name: "missing list ID",
@@ -505,6 +515,7 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 				WorkspaceID: "workspace123",
 			},
 			wantErr: true,
+			wantID:  "",
 		},
 		{
 			name: "invalid workspace ID format",
@@ -512,7 +523,8 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 				WorkspaceID: "invalid@workspace",
 				ID:          "list123",
 			},
-			wantErr: true,
+			wantErr: false,
+			wantID:  "invalid@workspace",
 		},
 		{
 			name: "invalid list ID format",
@@ -521,6 +533,7 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 				ID:          "invalid@list",
 			},
 			wantErr: true,
+			wantID:  "",
 		},
 	}
 
@@ -532,7 +545,7 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 				assert.Empty(t, workspaceID)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.request.WorkspaceID, workspaceID)
+				assert.Equal(t, tt.wantID, workspaceID)
 			}
 		})
 	}

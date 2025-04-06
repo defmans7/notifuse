@@ -246,21 +246,12 @@ export interface GetTemplateRequest {
 
 export interface CreateTemplateRequest {
   workspace_id: string
-  name: string
-  description?: string
-  content: string
-  content_type: 'html' | 'plain'
-  subject: string
+  template: Template
 }
 
 export interface UpdateTemplateRequest {
   workspace_id: string
-  id: string
-  name: string
-  description?: string
-  content: string
-  content_type: 'html' | 'plain'
-  subject: string
+  template: Template
 }
 
 export interface DeleteTemplateRequest {

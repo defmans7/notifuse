@@ -2,9 +2,12 @@ package domain
 
 import (
 	"bytes"
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -206,4 +209,267 @@ func (x *EmailTemplate) Scan(val interface{}) error {
 
 func (x EmailTemplate) Value() (driver.Value, error) {
 	return json.Marshal(x)
+}
+
+//go:generate mockgen -destination mocks/mock_template_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TemplateService
+//go:generate mockgen -destination mocks/mock_template_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain TemplateRepository
+
+// Request/Response types
+type CreateTemplateRequest struct {
+	WorkspaceID     string         `json:"workspace_id"`
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Channel         string         `json:"channel"`
+	Email           *EmailTemplate `json:"email"`
+	Category        string         `json:"category"`
+	TemplateMacroID *string        `json:"template_macro_id,omitempty"`
+	UTMSource       *string        `json:"utm_source,omitempty"`
+	UTMMedium       *string        `json:"utm_medium,omitempty"`
+	UTMCampaign     *string        `json:"utm_campaign,omitempty"`
+	TestData        MapOfAny       `json:"test_data,omitempty"`
+	Settings        MapOfAny       `json:"settings,omitempty"`
+}
+
+func (r *CreateTemplateRequest) Validate() (template *Template, workspaceID string, err error) {
+	if r.WorkspaceID == "" {
+		return nil, "", fmt.Errorf("invalid create template request: workspace_id is required")
+	}
+	if r.ID == "" {
+		return nil, "", fmt.Errorf("invalid create template request: id is required")
+	}
+	if len(r.ID) > 32 {
+		return nil, "", fmt.Errorf("invalid create template request: id length must be between 1 and 32")
+	}
+
+	if r.Name == "" {
+		return nil, "", fmt.Errorf("invalid create template request: name is required")
+	}
+	if len(r.Name) > 255 {
+		return nil, "", fmt.Errorf("invalid create template request: name length must be between 1 and 255")
+	}
+
+	if r.Channel == "" {
+		return nil, "", fmt.Errorf("invalid create template request: channel is required")
+	}
+	if len(r.Channel) > 20 {
+		return nil, "", fmt.Errorf("invalid create template request: channel length must be between 1 and 20")
+	}
+
+	if r.Category == "" {
+		return nil, "", fmt.Errorf("invalid create template request: category is required")
+	}
+	if len(r.Category) > 20 {
+		return nil, "", fmt.Errorf("invalid create template request: category length must be between 1 and 20")
+	}
+
+	if r.Email == nil {
+		return nil, "", fmt.Errorf("invalid create template request: email is required")
+	}
+
+	if err := r.Email.Validate(); err != nil {
+		return nil, "", fmt.Errorf("invalid create template request: %w", err)
+	}
+
+	return &Template{
+		ID:              r.ID,
+		Name:            r.Name,
+		Version:         1, // Start with version 1 for new templates
+		Channel:         r.Channel,
+		Email:           r.Email,
+		Category:        r.Category,
+		TemplateMacroID: r.TemplateMacroID,
+		UTMSource:       r.UTMSource,
+		UTMMedium:       r.UTMMedium,
+		UTMCampaign:     r.UTMCampaign,
+		TestData:        r.TestData,
+		Settings:        r.Settings,
+	}, r.WorkspaceID, nil
+}
+
+type GetTemplatesRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+}
+
+func (r *GetTemplatesRequest) FromURLParams(queryParams url.Values) (err error) {
+	r.WorkspaceID = queryParams.Get("workspace_id")
+
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("invalid get templates request: workspace_id is required")
+	}
+	if len(r.WorkspaceID) > 20 {
+		return fmt.Errorf("invalid get templates request: workspace_id length must be between 1 and 20")
+	}
+
+	return nil
+}
+
+type GetTemplateRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+	Version     int64  `json:"version,omitempty"`
+}
+
+func (r *GetTemplateRequest) FromURLParams(queryParams url.Values) (err error) {
+	r.WorkspaceID = queryParams.Get("workspace_id")
+	r.ID = queryParams.Get("id")
+	versionStr := queryParams.Get("version")
+
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("invalid get template request: workspace_id is required")
+	}
+
+	if r.ID == "" {
+		return fmt.Errorf("invalid get template request: id is required")
+	}
+	if len(r.ID) > 32 {
+		return fmt.Errorf("invalid get template request: id length must be between 1 and 32")
+	}
+
+	if versionStr != "" {
+		version, err := strconv.ParseInt(versionStr, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid get template request: version must be a valid integer")
+		}
+		r.Version = version
+	}
+
+	return nil
+}
+
+type UpdateTemplateRequest struct {
+	WorkspaceID     string         `json:"workspace_id"`
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Channel         string         `json:"channel"`
+	Email           *EmailTemplate `json:"email"`
+	Category        string         `json:"category"`
+	TemplateMacroID *string        `json:"template_macro_id,omitempty"`
+	UTMSource       *string        `json:"utm_source,omitempty"`
+	UTMMedium       *string        `json:"utm_medium,omitempty"`
+	UTMCampaign     *string        `json:"utm_campaign,omitempty"`
+	TestData        MapOfAny       `json:"test_data,omitempty"`
+	Settings        MapOfAny       `json:"settings,omitempty"`
+}
+
+func (r *UpdateTemplateRequest) Validate() (template *Template, workspaceID string, err error) {
+	if r.WorkspaceID == "" {
+		return nil, "", fmt.Errorf("invalid update template request: workspace_id is required")
+	}
+	if r.ID == "" {
+		return nil, "", fmt.Errorf("invalid update template request: id is required")
+	}
+	if len(r.ID) > 32 {
+		return nil, "", fmt.Errorf("invalid update template request: id length must be between 1 and 32")
+	}
+
+	if r.Name == "" {
+		return nil, "", fmt.Errorf("invalid update template request: name is required")
+	}
+	if len(r.Name) > 255 {
+		return nil, "", fmt.Errorf("invalid update template request: name length must be between 1 and 255")
+	}
+
+	if r.Channel == "" {
+		return nil, "", fmt.Errorf("invalid update template request: channel is required")
+	}
+	if len(r.Channel) > 20 {
+		return nil, "", fmt.Errorf("invalid update template request: channel length must be between 1 and 20")
+	}
+
+	if r.Category == "" {
+		return nil, "", fmt.Errorf("invalid update template request: category is required")
+	}
+	if len(r.Category) > 20 {
+		return nil, "", fmt.Errorf("invalid update template request: category length must be between 1 and 20")
+	}
+
+	if r.Email == nil {
+		return nil, "", fmt.Errorf("invalid update template request: email is required")
+	}
+
+	if err := r.Email.Validate(); err != nil {
+		return nil, "", fmt.Errorf("invalid update template request: %w", err)
+	}
+
+	return &Template{
+		ID:              r.ID,
+		Name:            r.Name,
+		Channel:         r.Channel,
+		Email:           r.Email,
+		Category:        r.Category,
+		TemplateMacroID: r.TemplateMacroID,
+		UTMSource:       r.UTMSource,
+		UTMMedium:       r.UTMMedium,
+		UTMCampaign:     r.UTMCampaign,
+		TestData:        r.TestData,
+		Settings:        r.Settings,
+	}, r.WorkspaceID, nil
+}
+
+type DeleteTemplateRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+}
+
+func (r *DeleteTemplateRequest) Validate() (workspaceID string, id string, err error) {
+	if r.WorkspaceID == "" {
+		return "", "", fmt.Errorf("invalid delete template request: workspace_id is required")
+	}
+
+	if r.ID == "" {
+		return "", "", fmt.Errorf("invalid delete template request: id is required")
+	}
+	if len(r.ID) > 32 {
+		return "", "", fmt.Errorf("invalid delete template request: id length must be between 1 and 32")
+	}
+
+	return r.WorkspaceID, r.ID, nil
+}
+
+// TemplateService provides operations for managing templates
+type TemplateService interface {
+	// CreateTemplate creates a new template
+	CreateTemplate(ctx context.Context, workspaceID string, template *Template) error
+
+	// GetTemplateByID retrieves a template by ID and optional version
+	GetTemplateByID(ctx context.Context, workspaceID string, id string, version int64) (*Template, error)
+
+	// GetTemplates retrieves all templates
+	GetTemplates(ctx context.Context, workspaceID string) ([]*Template, error)
+
+	// UpdateTemplate updates an existing template
+	UpdateTemplate(ctx context.Context, workspaceID string, template *Template) error
+
+	// DeleteTemplate deletes a template by ID
+	DeleteTemplate(ctx context.Context, workspaceID string, id string) error
+}
+
+// TemplateRepository provides database operations for templates
+type TemplateRepository interface {
+	// CreateTemplate creates a new template in the database
+	CreateTemplate(ctx context.Context, workspaceID string, template *Template) error
+
+	// GetTemplateByID retrieves a template by its ID and optional version
+	GetTemplateByID(ctx context.Context, workspaceID string, id string, version int64) (*Template, error)
+
+	// GetTemplateLatestVersion retrieves the latest version of a template
+	GetTemplateLatestVersion(ctx context.Context, workspaceID string, id string) (int64, error)
+
+	// GetTemplates retrieves all templates
+	GetTemplates(ctx context.Context, workspaceID string) ([]*Template, error)
+
+	// UpdateTemplate updates an existing template, creating a new version
+	UpdateTemplate(ctx context.Context, workspaceID string, template *Template) error
+
+	// DeleteTemplate deletes a template
+	DeleteTemplate(ctx context.Context, workspaceID string, id string) error
+}
+
+// ErrTemplateNotFound is returned when a template is not found
+type ErrTemplateNotFound struct {
+	Message string
+}
+
+func (e *ErrTemplateNotFound) Error() string {
+	return e.Message
 }
