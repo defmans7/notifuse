@@ -8,3 +8,5 @@ server/tmp/
 tmp/
 
 bin/
+coverage.html
+coverage.out

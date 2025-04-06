@@ -2,6 +2,8 @@ package domain
 
 import (
 	"encoding/json"
+	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -400,4 +402,546 @@ func TestEmailTemplate_Scan_Value(t *testing.T) {
 	// Test Scan() method with nil
 	err = newEmail.Scan(nil)
 	assert.NoError(t, err)
+}
+
+func TestCreateTemplateRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		request *CreateTemplateRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing ID",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "ID too long",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "this_id_is_way_too_long_for_the_validation_to_pass_properly",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing name",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing channel",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing category",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing email",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email:       nil,
+				Category:    string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid email template",
+			request: &CreateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "invalid-email",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			template, workspaceID, err := tt.request.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, template)
+				assert.Equal(t, tt.request.WorkspaceID, workspaceID)
+				assert.Equal(t, tt.request.ID, template.ID)
+				assert.Equal(t, tt.request.Name, template.Name)
+				assert.Equal(t, int64(1), template.Version) // Should always be 1 for new templates
+				assert.Equal(t, tt.request.Channel, template.Channel)
+				assert.Equal(t, tt.request.Email, template.Email)
+				assert.Equal(t, tt.request.Category, template.Category)
+			}
+		})
+	}
+}
+
+func TestGetTemplatesRequest_FromURLParams(t *testing.T) {
+	tests := []struct {
+		name        string
+		queryParams url.Values
+		wantErr     bool
+	}{
+		{
+			name: "valid request",
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+			},
+			wantErr: false,
+		},
+		{
+			name:        "missing workspace_id",
+			queryParams: url.Values{},
+			wantErr:     true,
+		},
+		{
+			name: "workspace_id too long",
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace_id_that_is_way_too_long_for_validation"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &GetTemplatesRequest{}
+			err := req.FromURLParams(tt.queryParams)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.queryParams.Get("workspace_id"), req.WorkspaceID)
+			}
+		})
+	}
+}
+
+func TestGetTemplateRequest_FromURLParams(t *testing.T) {
+	tests := []struct {
+		name        string
+		queryParams url.Values
+		wantErr     bool
+	}{
+		{
+			name: "valid request with ID only",
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+				"id":           []string{"template123"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid request with ID and version",
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+				"id":           []string{"template123"},
+				"version":      []string{"2"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace_id",
+			queryParams: url.Values{
+				"id": []string{"template123"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing id",
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "id too long",
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+				"id":           []string{"template_id_that_is_way_too_long_for_validation_to_pass_properly"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid version format",
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+				"id":           []string{"template123"},
+				"version":      []string{"not-a-number"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &GetTemplateRequest{}
+			err := req.FromURLParams(tt.queryParams)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.queryParams.Get("workspace_id"), req.WorkspaceID)
+				assert.Equal(t, tt.queryParams.Get("id"), req.ID)
+				if versionStr := tt.queryParams.Get("version"); versionStr != "" {
+					version, _ := strconv.ParseInt(versionStr, 10, 64)
+					assert.Equal(t, version, req.Version)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateTemplateRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		request *UpdateTemplateRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing ID",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "ID too long",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "this_id_is_way_too_long_for_the_validation_to_pass_properly",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing name",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing channel",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing category",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing email",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email:       nil,
+				Category:    string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid email template",
+			request: &UpdateTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+				Name:        "Test Template",
+				Channel:     "email",
+				Email: &EmailTemplate{
+					FromAddress:      "invalid-email",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: `{"type": "root"}`,
+				},
+				Category: string(TemplateCategoryMarketing),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			template, workspaceID, err := tt.request.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, template)
+				assert.Equal(t, tt.request.WorkspaceID, workspaceID)
+				assert.Equal(t, tt.request.ID, template.ID)
+				assert.Equal(t, tt.request.Name, template.Name)
+				assert.Equal(t, tt.request.Channel, template.Channel)
+				assert.Equal(t, tt.request.Email, template.Email)
+				assert.Equal(t, tt.request.Category, template.Category)
+			}
+		})
+	}
+}
+
+func TestDeleteTemplateRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		request *DeleteTemplateRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: &DeleteTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "template123",
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: &DeleteTemplateRequest{
+				WorkspaceID: "",
+				ID:          "template123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing ID",
+			request: &DeleteTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "ID too long",
+			request: &DeleteTemplateRequest{
+				WorkspaceID: "workspace123",
+				ID:          "this_id_is_way_too_long_for_the_validation_to_pass_properly",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workspaceID, id, err := tt.request.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.request.WorkspaceID, workspaceID)
+				assert.Equal(t, tt.request.ID, id)
+			}
+		})
+	}
+}
+
+func TestErrTemplateNotFound_Error(t *testing.T) {
+	err := &ErrTemplateNotFound{Message: "template not found"}
+	assert.Equal(t, "template not found", err.Error())
 }
