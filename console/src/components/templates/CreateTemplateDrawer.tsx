@@ -170,20 +170,18 @@ export function CreateTemplateDrawer({
   const [tab, setTab] = useState<string>('settings')
   const [loading, setLoading] = useState(false)
   const [editorHeight, setEditorHeight] = useState(0)
+
+  // set the tree apart to avoid rerendering the Email Editor when the tree changes
   const [visualEditorTree, setVisualEditorTree] = useState<BlockInterface>(
-    template ? (template.email?.visual_editor_tree as BlockInterface) : createDefaultBlocks()
+    template
+      ? (JSON.parse(template.email?.visual_editor_tree || '{}') as BlockInterface)
+      : createDefaultBlocks()
   )
 
   // Add Form.useWatch for the email fields
   const fromName = Form.useWatch(['email', 'from_name'], form)
   const emailSubject = Form.useWatch(['email', 'subject'], form)
   const emailPreview = Form.useWatch(['email', 'subject_preview'], form)
-
-  // useWatch don't work when FormItem is not visible
-  //   const utmSourceValue = Form.useWatch('utm_source', form)
-  //   const utmMediumValue = Form.useWatch(['utm_medium'], form)
-  //   const utmCampaignValue = Form.useWatch(['utm_campaign'], form)
-  //   const templateID = Form.useWatch(['id'], form)
 
   // Calculate editor height based on drawer dimensions
   useEffect(() => {
@@ -209,12 +207,14 @@ export function CreateTemplateDrawer({
       if (template) {
         return templatesApi.update({
           ...values,
+          channel: 'email',
           workspace_id: workspace.id,
           id: template.id
         })
       } else {
         return templatesApi.create({
           ...values,
+          channel: 'email',
           workspace_id: workspace.id
         })
       }
@@ -223,9 +223,11 @@ export function CreateTemplateDrawer({
       message.success(`Template ${template ? 'updated' : 'created'} successfully`)
       handleClose()
       queryClient.invalidateQueries({ queryKey: ['templates', workspace.id] })
+      setLoading(false)
     },
     onError: (error) => {
       message.error(`Failed to ${template ? 'update' : 'create'} template: ${error.message}`)
+      setLoading(false)
     }
   })
 
@@ -297,53 +299,6 @@ export function CreateTemplateDrawer({
     }
   }
 
-  const handleSubmit = () => {
-    setLoading(true)
-    form
-      .validateFields()
-      .then((values) => {
-        const urlParams = {
-          utm_source: values.utm_source,
-          utm_medium: values.utm_medium,
-          utm_campaign: values.utm_campaign,
-          utm_content: values.id,
-          utm_id: '{{ notifuse_utm_id }}'
-        }
-
-        // Add logic to export HTML if needed
-        const result = ExportHTML(values.email.visual_editor_tree, urlParams)
-        if (result.errors && result.errors.length > 0) {
-          message.error(result.errors[0].formattedMessage)
-          setLoading(false)
-          return
-        }
-        values.email.content = result.html
-
-        createTemplateMutation.mutate(values)
-      })
-      .catch((info) => {
-        console.log('Validate Failed:', info)
-        if (info.errorFields) {
-          info.errorFields.forEach((field: any) => {
-            if (
-              [
-                'name',
-                'id',
-                'category',
-                'email.from_address',
-                'email.from_name',
-                'email.subject',
-                'email.reply_to'
-              ].indexOf(field.name[0]) !== -1
-            ) {
-              setTab('settings')
-            }
-          })
-        }
-        setLoading(false)
-      })
-  }
-
   return (
     <>
       <Button type="primary" onClick={showDrawer} icon={<PlusOutlined />} {...buttonProps}>
@@ -380,7 +335,7 @@ export function CreateTemplateDrawer({
                 {tab === 'template' && (
                   <Button
                     loading={loading || createTemplateMutation.isPending}
-                    onClick={handleSubmit}
+                    onClick={() => form.submit()}
                     type="primary"
                   >
                     Save
@@ -393,6 +348,52 @@ export function CreateTemplateDrawer({
           <Form
             form={form}
             layout="vertical"
+            onFinish={(values) => {
+              //   console.log('values', values)
+              setLoading(true)
+              const urlParams = {
+                utm_source: values.utm_source,
+                utm_medium: values.utm_medium,
+                utm_campaign: values.utm_campaign,
+                utm_content: values.id,
+                utm_id: '{{ notifuse_utm_id }}'
+              }
+
+              // Convert visualEditorTree to JSON string
+              values.email.visual_editor_tree = visualEditorTree
+
+              // Add logic to export HTML if needed
+              const result = ExportHTML(visualEditorTree, urlParams)
+              if (result.errors && result.errors.length > 0) {
+                message.error(result.errors[0].formattedMessage)
+                setLoading(false)
+                return
+              }
+              values.email.content = result.html
+
+              createTemplateMutation.mutate(values)
+            }}
+            onFinishFailed={(info) => {
+              console.log('Validate Failed:', info)
+              if (info.errorFields) {
+                info.errorFields.forEach((field: any) => {
+                  if (
+                    [
+                      'name',
+                      'id',
+                      'category',
+                      'email.from_address',
+                      'email.from_name',
+                      'email.subject',
+                      'email.reply_to'
+                    ].indexOf(field.name[0]) !== -1
+                  ) {
+                    setTab('settings')
+                  }
+                })
+              }
+              setLoading(false)
+            }}
             initialValues={{
               'email.visual_editor_tree': visualEditorTree,
               category: category || undefined,
@@ -423,7 +424,7 @@ export function CreateTemplateDrawer({
               />
             </div>
             <div className="relative">
-              {tab === 'settings' ? (
+              <div style={{ display: tab === 'settings' ? 'block' : 'none' }}>
                 <div className="p-8">
                   <Row gutter={24}>
                     <Col span={8}>
@@ -597,59 +598,59 @@ export function CreateTemplateDrawer({
                     </Col>
                   </Row>
                 </div>
-              ) : (
-                <div>
-                  <Form.Item dependencies={['utm_source', 'utm_medium', 'utm_campaign', 'id']}>
-                    {(form) => {
-                      const utmSourceValue = form.getFieldValue('utm_source')
-                      const utmMediumValue = form.getFieldValue('utm_medium')
-                      const utmCampaignValue = form.getFieldValue('utm_campaign')
-                      const templateID = form.getFieldValue('id')
-                      const testData = form.getFieldValue('test_data')
+              </div>
 
-                      return (
-                        <Editor
-                          blockDefinitions={blockDefinitions}
-                          userBlocks={[]}
-                          onUserBlocksUpdate={async () => {}}
-                          selectedBlockId={'root'}
-                          value={visualEditorTree}
-                          onChange={setVisualEditorTree}
-                          renderSelectedBlockButtons={(props: SelectedBlockButtonsProp) => (
-                            <SelectedBlockButtons {...props} />
-                          )}
-                          deviceWidth={DesktopWidth}
-                          urlParams={{
-                            utm_source: utmSourceValue || '',
-                            utm_medium: utmMediumValue || 'email',
-                            utm_campaign: utmCampaignValue || '',
-                            utm_content: templateID || '',
-                            utm_id: '{{notifuse_utm_id}}'
+              <div style={{ display: tab === 'template' ? 'block' : 'none' }}>
+                <Form.Item dependencies={['utm_source', 'utm_medium', 'utm_campaign', 'id']}>
+                  {(form) => {
+                    const utmSourceValue = form.getFieldValue('utm_source')
+                    const utmMediumValue = form.getFieldValue('utm_medium')
+                    const utmCampaignValue = form.getFieldValue('utm_campaign')
+                    const templateID = form.getFieldValue('id')
+                    const testData = form.getFieldValue('test_data')
+
+                    return (
+                      <Editor
+                        blockDefinitions={blockDefinitions}
+                        userBlocks={[]}
+                        onUserBlocksUpdate={async () => {}}
+                        selectedBlockId={'root'}
+                        value={visualEditorTree}
+                        onChange={setVisualEditorTree}
+                        renderSelectedBlockButtons={(props: SelectedBlockButtonsProp) => (
+                          <SelectedBlockButtons {...props} />
+                        )}
+                        deviceWidth={DesktopWidth}
+                        urlParams={{
+                          utm_source: utmSourceValue || '',
+                          utm_medium: utmMediumValue || 'email',
+                          utm_campaign: utmCampaignValue || '',
+                          utm_content: templateID || '',
+                          utm_id: '{{notifuse_utm_id}}'
+                        }}
+                        fileManagerSettings={workspace?.settings.file_manager}
+                        onUpdateFileManagerSettings={handleUpdateWorkspaceSettings}
+                        templateDataValue={JSON.stringify(testData, null, 2)}
+                        onUpdateTemplateData={async (templateData: string) => {
+                          form.setFieldsValue({
+                            test_data: JSON.parse(templateData)
+                          })
+                          // Handle template data updates
+                          return Promise.resolve()
+                        }}
+                      >
+                        <Layout
+                          onUpdateMacro={async (macroId: string) => {
+                            console.log('macroId', macroId)
                           }}
-                          fileManagerSettings={workspace?.settings.file_manager}
-                          onUpdateFileManagerSettings={handleUpdateWorkspaceSettings}
-                          templateDataValue={JSON.stringify(testData, null, 2)}
-                          onUpdateTemplateData={async (templateData: string) => {
-                            form.setFieldsValue({
-                              test_data: JSON.parse(templateData)
-                            })
-                            // Handle template data updates
-                            return Promise.resolve()
-                          }}
-                        >
-                          <Layout
-                            onUpdateMacro={async (macroId: string) => {
-                              console.log('macroId', macroId)
-                            }}
-                            macros={[]}
-                            height={editorHeight}
-                          />
-                        </Editor>
-                      )
-                    }}
-                  </Form.Item>
-                </div>
-              )}
+                          macros={[]}
+                          height={editorHeight}
+                        />
+                      </Editor>
+                    )
+                  }}
+                </Form.Item>
+              </div>
             </div>
           </Form>
         </Drawer>

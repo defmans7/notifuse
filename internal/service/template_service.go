@@ -15,7 +15,7 @@ type TemplateService struct {
 	logger      logger.Logger
 }
 
-func NewTemplateService(repo domain.TemplateRepository, authService domain.AuthService, logger logger.Logger) domain.TemplateService {
+func NewTemplateService(repo domain.TemplateRepository, authService domain.AuthService, logger logger.Logger) *TemplateService {
 	return &TemplateService{
 		repo:        repo,
 		authService: authService,

@@ -34,7 +34,7 @@ type App struct {
 	contactRepo     domain.ContactRepository
 	listRepo        domain.ListRepository
 	contactListRepo domain.ContactListRepository
-
+	templateRepo    domain.TemplateRepository
 	// Services
 	authService        *service.AuthService
 	userService        *service.UserService
@@ -42,6 +42,7 @@ type App struct {
 	contactService     *service.ContactService
 	listService        *service.ListService
 	contactListService *service.ContactListService
+	templateService    *service.TemplateService
 
 	// HTTP handlers
 	mux    *http.ServeMux
@@ -168,6 +169,7 @@ func (a *App) InitRepositories() error {
 	a.contactRepo = repository.NewContactRepository(a.workspaceRepo)
 	a.listRepo = repository.NewListRepository(a.workspaceRepo)
 	a.contactListRepo = repository.NewContactListRepository(a.workspaceRepo)
+	a.templateRepo = repository.NewTemplateRepository(a.workspaceRepo)
 
 	return nil
 }
@@ -205,6 +207,7 @@ func (a *App) InitServices() error {
 	a.contactService = service.NewContactService(a.contactRepo, a.workspaceRepo, a.authService, a.logger)
 	a.listService = service.NewListService(a.listRepo, a.authService, a.logger)
 	a.contactListService = service.NewContactListService(a.contactListRepo, a.authService, a.contactRepo, a.listRepo, a.logger)
+	a.templateService = service.NewTemplateService(a.templateRepo, a.authService, a.logger)
 
 	// Create workspace service last since it depends on other services
 	a.workspaceService = service.NewWorkspaceService(
@@ -244,6 +247,7 @@ func (a *App) InitHandlers() error {
 	contactHandler := httpHandler.NewContactHandler(a.contactService, a.config.Security.PasetoPublicKey, a.logger)
 	listHandler := httpHandler.NewListHandler(a.listService, a.config.Security.PasetoPublicKey, a.logger)
 	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, a.config.Security.PasetoPublicKey, a.logger)
+	templateHandler := httpHandler.NewTemplateHandler(a.templateService, a.config.Security.PasetoPublicKey, a.logger)
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
@@ -252,6 +256,7 @@ func (a *App) InitHandlers() error {
 	contactHandler.RegisterRoutes(a.mux)
 	listHandler.RegisterRoutes(a.mux)
 	contactListHandler.RegisterRoutes(a.mux)
+	templateHandler.RegisterRoutes(a.mux)
 	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	return nil

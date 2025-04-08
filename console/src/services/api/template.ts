@@ -14,11 +14,17 @@ import type {
 
 export const templatesApi = {
   list: async (params: GetTemplatesRequest): Promise<GetTemplatesResponse> => {
-    const response = await api.get<GetTemplatesResponse>(`/api/templates.list`)
+    const response = await api.get<GetTemplatesResponse>(
+      `/api/templates.list?workspace_id=${params.workspace_id}`
+    )
     return response
   },
   get: async (params: GetTemplateRequest): Promise<GetTemplateResponse> => {
-    const response = await api.get<GetTemplateResponse>(`/api/templates.get?id=${params.id}`)
+    let url = `/api/templates.get?workspace_id=${params.workspace_id}&id=${params.id}`
+    if (params.version) {
+      url += `&version=${params.version}`
+    }
+    const response = await api.get<GetTemplateResponse>(url)
     return response
   },
   create: async (params: CreateTemplateRequest): Promise<CreateTemplateResponse> => {
@@ -26,7 +32,7 @@ export const templatesApi = {
     return response
   },
   update: async (params: UpdateTemplateRequest): Promise<UpdateTemplateResponse> => {
-    const response = await api.put<UpdateTemplateResponse>(`/api/templates.update`, params)
+    const response = await api.post<UpdateTemplateResponse>(`/api/templates.update`, params)
     return response
   },
   delete: async (params: DeleteTemplateRequest): Promise<DeleteTemplateResponse> => {

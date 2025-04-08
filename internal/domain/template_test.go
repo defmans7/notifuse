@@ -89,7 +89,7 @@ func TestTemplate_Validate(t *testing.T) {
 				FromName:         "Test Sender",
 				Subject:          "Test Subject",
 				Content:          "<html>Test content</html>",
-				VisualEditorTree: `{"type": "root"}`,
+				VisualEditorTree: MapOfAny{"type": "root"},
 			},
 			Category:  string(TemplateCategoryMarketing),
 			CreatedAt: now,
@@ -288,66 +288,94 @@ func TestTemplateReference_Scan_Value(t *testing.T) {
 }
 
 func TestEmailTemplate_Validate(t *testing.T) {
-	validEmail := &EmailTemplate{
-		FromAddress:      "test@example.com",
-		FromName:         "Test Sender",
-		Subject:          "Test Subject",
-		Content:          "<html>Test content</html>",
-		VisualEditorTree: `{"type": "root"}`,
-	}
-
 	tests := []struct {
-		name    string
-		email   *EmailTemplate
-		wantErr bool
+		name     string
+		template *EmailTemplate
+		wantErr  bool
 	}{
 		{
-			name:    "valid email template",
-			email:   validEmail,
+			name: "valid template",
+			template: &EmailTemplate{
+				FromAddress:      "test@example.com",
+				FromName:         "Test Sender",
+				Subject:          "Test Subject",
+				Content:          "<html>Test content</html>",
+				VisualEditorTree: MapOfAny{"type": "root"},
+			},
 			wantErr: false,
 		},
 		{
 			name: "invalid email template - missing from address",
-			email: func() *EmailTemplate {
-				e := *validEmail
+			template: func() *EmailTemplate {
+				e := &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: MapOfAny{"type": "root"},
+				}
 				e.FromAddress = ""
-				return &e
+				return e
 			}(),
 			wantErr: true,
 		},
 		{
 			name: "invalid email template - invalid email format",
-			email: func() *EmailTemplate {
-				e := *validEmail
+			template: func() *EmailTemplate {
+				e := &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: MapOfAny{"type": "root"},
+				}
 				e.FromAddress = "invalid-email"
-				return &e
+				return e
 			}(),
 			wantErr: true,
 		},
 		{
 			name: "invalid email template - missing from name",
-			email: func() *EmailTemplate {
-				e := *validEmail
+			template: func() *EmailTemplate {
+				e := &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: MapOfAny{"type": "root"},
+				}
 				e.FromName = ""
-				return &e
+				return e
 			}(),
 			wantErr: true,
 		},
 		{
 			name: "invalid email template - missing subject",
-			email: func() *EmailTemplate {
-				e := *validEmail
+			template: func() *EmailTemplate {
+				e := &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: MapOfAny{"type": "root"},
+				}
 				e.Subject = ""
-				return &e
+				return e
 			}(),
 			wantErr: true,
 		},
 		{
 			name: "invalid email template - missing content",
-			email: func() *EmailTemplate {
-				e := *validEmail
+			template: func() *EmailTemplate {
+				e := &EmailTemplate{
+					FromAddress:      "test@example.com",
+					FromName:         "Test Sender",
+					Subject:          "Test Subject",
+					Content:          "<html>Test content</html>",
+					VisualEditorTree: MapOfAny{"type": "root"},
+				}
 				e.Content = ""
-				return &e
+				return e
 			}(),
 			wantErr: true,
 		},
@@ -355,7 +383,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.email.Validate()
+			err := tt.template.Validate()
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -371,7 +399,7 @@ func TestEmailTemplate_Scan_Value(t *testing.T) {
 		FromName:         "Test Sender",
 		Subject:          "Test Subject",
 		Content:          "<html>Test content</html>",
-		VisualEditorTree: `{"type": "root"}`,
+		VisualEditorTree: MapOfAny{"type": "root"},
 	}
 
 	// Test Value() method
@@ -422,7 +450,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -440,7 +468,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -458,7 +486,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -476,7 +504,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -494,7 +522,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -512,7 +540,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -530,7 +558,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: "",
 			},
@@ -560,7 +588,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -722,7 +750,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -740,7 +768,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -758,7 +786,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -776,7 +804,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -794,7 +822,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -812,7 +840,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},
@@ -830,7 +858,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: "",
 			},
@@ -860,7 +888,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
 					Content:          "<html>Test content</html>",
-					VisualEditorTree: `{"type": "root"}`,
+					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
 			},

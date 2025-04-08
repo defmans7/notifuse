@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -37,30 +36,6 @@ func (r *templateRepository) CreateTemplate(ctx context.Context, workspaceID str
 		template.Version = 1
 	}
 
-	// Marshal email template to JSON
-	emailJSON, err := json.Marshal(template.Email)
-	if err != nil {
-		return fmt.Errorf("failed to marshal email template: %w", err)
-	}
-
-	// Marshal settings to JSON if not nil
-	var settingsJSON []byte
-	if template.Settings != nil {
-		settingsJSON, err = json.Marshal(template.Settings)
-		if err != nil {
-			return fmt.Errorf("failed to marshal settings: %w", err)
-		}
-	}
-
-	// Marshal test data to JSON if not nil
-	var testDataJSON []byte
-	if template.TestData != nil {
-		testDataJSON, err = json.Marshal(template.TestData)
-		if err != nil {
-			return fmt.Errorf("failed to marshal test data: %w", err)
-		}
-	}
-
 	query := `
 		INSERT INTO templates (
 			id, 
@@ -85,17 +60,18 @@ func (r *templateRepository) CreateTemplate(ctx context.Context, workspaceID str
 		template.Name,
 		template.Version,
 		template.Channel,
-		emailJSON,
+		template.Email,
 		template.Category,
 		template.TemplateMacroID,
 		template.UTMSource,
 		template.UTMMedium,
 		template.UTMCampaign,
-		testDataJSON,
-		settingsJSON,
+		template.TestData,
+		template.Settings,
 		template.CreatedAt,
 		template.UpdatedAt,
 	)
+
 	if err != nil {
 		return fmt.Errorf("failed to create template: %w", err)
 	}
@@ -271,30 +247,6 @@ func (r *templateRepository) UpdateTemplate(ctx context.Context, workspaceID str
 	template.Version = latestVersion + 1
 	template.UpdatedAt = time.Now().UTC()
 
-	// Marshal email template to JSON
-	emailJSON, err := json.Marshal(template.Email)
-	if err != nil {
-		return fmt.Errorf("failed to marshal email template: %w", err)
-	}
-
-	// Marshal settings to JSON if not nil
-	var settingsJSON []byte
-	if template.Settings != nil {
-		settingsJSON, err = json.Marshal(template.Settings)
-		if err != nil {
-			return fmt.Errorf("failed to marshal settings: %w", err)
-		}
-	}
-
-	// Marshal test data to JSON if not nil
-	var testDataJSON []byte
-	if template.TestData != nil {
-		testDataJSON, err = json.Marshal(template.TestData)
-		if err != nil {
-			return fmt.Errorf("failed to marshal test data: %w", err)
-		}
-	}
-
 	// Create a new version instead of updating the existing one
 	query := `
 		INSERT INTO templates (
@@ -320,14 +272,14 @@ func (r *templateRepository) UpdateTemplate(ctx context.Context, workspaceID str
 		template.Name,
 		template.Version,
 		template.Channel,
-		emailJSON,
+		template.Email,
 		template.Category,
 		template.TemplateMacroID,
 		template.UTMSource,
 		template.UTMMedium,
 		template.UTMCampaign,
-		testDataJSON,
-		settingsJSON,
+		template.TestData,
+		template.Settings,
 		template.CreatedAt,
 		template.UpdatedAt,
 	)
@@ -370,7 +322,6 @@ func scanTemplate(scanner interface {
 }) (*domain.Template, error) {
 	var (
 		template                                           domain.Template
-		emailJSON, testDataJSON, settingsJSON              []byte
 		templateMacroID, utmSource, utmMedium, utmCampaign sql.NullString
 	)
 
@@ -379,27 +330,20 @@ func scanTemplate(scanner interface {
 		&template.Name,
 		&template.Version,
 		&template.Channel,
-		&emailJSON,
+		&template.Email,
 		&template.Category,
 		&templateMacroID,
 		&utmSource,
 		&utmMedium,
 		&utmCampaign,
-		&testDataJSON,
-		&settingsJSON,
+		&template.TestData,
+		&template.Settings,
 		&template.CreatedAt,
 		&template.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	// Unmarshal email template
-	var email domain.EmailTemplate
-	if err := json.Unmarshal(emailJSON, &email); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal email template: %w", err)
-	}
-	template.Email = &email
 
 	// Handle nullable fields
 	if templateMacroID.Valid {
@@ -413,24 +357,6 @@ func scanTemplate(scanner interface {
 	}
 	if utmCampaign.Valid {
 		template.UTMCampaign = &utmCampaign.String
-	}
-
-	// Unmarshal test data if not nil
-	if len(testDataJSON) > 0 {
-		var testData domain.MapOfAny
-		if err := json.Unmarshal(testDataJSON, &testData); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal test data: %w", err)
-		}
-		template.TestData = testData
-	}
-
-	// Unmarshal settings if not nil
-	if len(settingsJSON) > 0 {
-		var settings domain.MapOfAny
-		if err := json.Unmarshal(settingsJSON, &settings); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal settings: %w", err)
-		}
-		template.Settings = settings
 	}
 
 	return &template, nil

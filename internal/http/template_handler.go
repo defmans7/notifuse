@@ -56,7 +56,9 @@ func (h *TemplateHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, templates)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"templates": templates,
+	})
 }
 
 func (h *TemplateHandler) handleGet(w http.ResponseWriter, r *http.Request) {

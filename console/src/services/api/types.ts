@@ -231,7 +231,7 @@ export interface EmailTemplate {
   subject: string
   subject_preview?: string
   content: string // html
-  visual_editor_tree: BlockInterface
+  visual_editor_tree: string
   text?: string
 }
 
@@ -242,16 +242,37 @@ export interface GetTemplatesRequest {
 export interface GetTemplateRequest {
   workspace_id: string
   id: string
+  version?: number
 }
 
 export interface CreateTemplateRequest {
   workspace_id: string
-  template: Template
+  id: string
+  name: string
+  channel: string
+  email: EmailTemplate
+  category: string
+  template_macro_id?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  test_data?: Record<string, any>
+  settings?: Record<string, any>
 }
 
 export interface UpdateTemplateRequest {
   workspace_id: string
-  template: Template
+  id: string
+  name: string
+  channel: string
+  email: EmailTemplate
+  category: string
+  template_macro_id?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  test_data?: Record<string, any>
+  settings?: Record<string, any>
 }
 
 export interface DeleteTemplateRequest {

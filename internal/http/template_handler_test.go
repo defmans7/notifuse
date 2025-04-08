@@ -81,9 +81,9 @@ func createTestEmailTemplate() *domain.EmailTemplate {
 	return &domain.EmailTemplate{
 		FromAddress:      "test@example.com",
 		FromName:         "Test Sender",
-		Subject:          "Test Subject",
-		Content:          "<p>Test Content</p>",
-		VisualEditorTree: "{}",
+		Subject:          "Test Email",
+		Content:          "<html><body>Test</body></html>",
+		VisualEditorTree: domain.MapOfAny{},
 	}
 }
 
@@ -210,10 +210,12 @@ func TestTemplateHandler_HandleList(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
 
 			if tc.expectBody && resp.StatusCode == http.StatusOK {
-				var responseTemplates []*domain.Template
-				err := json.NewDecoder(resp.Body).Decode(&responseTemplates)
+				var responseMap map[string]interface{}
+				err := json.NewDecoder(resp.Body).Decode(&responseMap)
 				require.NoError(t, err, "Failed to decode response body")
-				assert.NotEmpty(t, responseTemplates)
+				templates, ok := responseMap["templates"].([]interface{})
+				assert.True(t, ok, "Response should contain a templates array")
+				assert.NotEmpty(t, templates)
 			} else if resp.StatusCode != http.StatusOK {
 				// Optionally check error message structure for non-OK responses
 				var errResp map[string]interface{}

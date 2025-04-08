@@ -23,7 +23,7 @@ func setupTemplateServiceTest(ctrl *gomock.Controller) (*service.TemplateService
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	templateService := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
-	return templateService.(*service.TemplateService), mockRepo, mockAuthService, mockLogger
+	return templateService, mockRepo, mockAuthService, mockLogger
 }
 
 // Gomock matcher for validating the template passed to CreateTemplate
@@ -69,9 +69,9 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 		Email: &domain.EmailTemplate{
 			FromAddress:      "test@example.com",
 			FromName:         "Test Sender",
-			Subject:          "Test Subject",
-			Content:          "<h1>Hello {{name}}</h1>",
-			VisualEditorTree: "{}",
+			Subject:          "Test Email",
+			Content:          "<html><body>Test</body></html>",
+			VisualEditorTree: domain.MapOfAny{},
 		},
 	}
 
@@ -184,9 +184,9 @@ func TestTemplateService_GetTemplateByID(t *testing.T) {
 		Email: &domain.EmailTemplate{
 			FromAddress:      "test@example.com",
 			FromName:         "Test Sender",
-			Subject:          "Test Subject",
-			Content:          "<h1>Hello {{name}}</h1>",
-			VisualEditorTree: "{}",
+			Subject:          "Test Email",
+			Content:          "<html><body>Test</body></html>",
+			VisualEditorTree: domain.MapOfAny{},
 		},
 	}
 
@@ -358,7 +358,7 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 			FromName:         "Old Sender",
 			Subject:          "Old Subject",
 			Content:          "<p>Old</p>",
-			VisualEditorTree: "{\"old\": true}",
+			VisualEditorTree: domain.MapOfAny{"old": true},
 		},
 	}
 
@@ -368,11 +368,11 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 		Channel:  "email",
 		Category: "transactional",
 		Email: &domain.EmailTemplate{
-			FromAddress:      "new@example.com", // Updated field
-			FromName:         "New Sender",      // Updated field
-			Subject:          "New Subject",     // Updated field
-			Content:          "<h1>New</h1>",    // Updated field
-			VisualEditorTree: "{\"new\": true}", // Updated field
+			FromAddress:      "new@example.com",            // Updated field
+			FromName:         "New Sender",                 // Updated field
+			Subject:          "New Subject",                // Updated field
+			Content:          "<h1>New</h1>",               // Updated field
+			VisualEditorTree: domain.MapOfAny{"new": true}, // Updated field
 		},
 		// Version, CreatedAt, UpdatedAt should be handled by the service
 	}
