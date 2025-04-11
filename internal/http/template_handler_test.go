@@ -16,6 +16,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	apphttp "github.com/Notifuse/notifuse/internal/http"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -80,11 +81,16 @@ func setupTemplateHandlerTest(t *testing.T) (*mocks.MockTemplateService, *MockLo
 
 func createTestEmailTemplate() *domain.EmailTemplate {
 	return &domain.EmailTemplate{
-		FromAddress:      "test@example.com",
-		FromName:         "Test Sender",
-		Subject:          "Test Email",
-		MJML:             "<html><body>Test</body></html>",
-		VisualEditorTree: domain.MapOfAny{},
+		FromAddress:     "test@example.com",
+		FromName:        "Test Sender",
+		Subject:         "Test Email",
+		CompiledPreview: "<html><body>Test</body></html>",
+		VisualEditorTree: mjml.EmailBlock{
+			Kind: "root",
+			Data: map[string]interface{}{
+				"styles": map[string]interface{}{},
+			},
+		},
 	}
 }
 
@@ -694,20 +700,6 @@ func createTestTextBlockHandler(id, textContent string) notifusemjml.EmailBlock 
 			map[string]interface{}{"type": "paragraph", "children": []interface{}{map[string]interface{}{"text": textContent}}},
 		}},
 	}
-}
-
-// --- Test Setup ---
-func setupCompileTest(t *testing.T) (*gomock.Controller, *mocks.MockTemplateService, *apphttp.TemplateHandler, paseto.V4AsymmetricPublicKey) {
-	ctrl := gomock.NewController(t)
-	mockService := mocks.NewMockTemplateService(ctrl)
-	testLogger := &MockLoggerForTemplate{}
-
-	sk := paseto.NewV4AsymmetricSecretKey()
-	require.NotNil(t, sk, "Failed to generate secret key")
-	pk := sk.Public()
-
-	handler := apphttp.NewTemplateHandler(mockService, pk, testLogger)
-	return ctrl, mockService, handler, pk
 }
 
 func TestHandleCompile_ServiceError(t *testing.T) {

@@ -33,15 +33,18 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, workspaceID string
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
-	// Set initial version *before* validation
+	// Set initial version and timestamps
 	template.Version = 1
+	now := time.Now().UTC()
+	template.CreatedAt = now
+	template.UpdatedAt = now
 
-	// Validate template
+	// Validate template after setting required fields
 	if err := template.Validate(); err != nil {
 		return fmt.Errorf("invalid template: %w", err)
 	}
 
-	// Create template
+	// Create template in repository
 	if err := s.repo.CreateTemplate(ctx, workspaceID, template); err != nil {
 		s.logger.WithField("template_id", template.ID).Error(fmt.Sprintf("Failed to create template: %v", err))
 		return fmt.Errorf("failed to create template: %w", err)

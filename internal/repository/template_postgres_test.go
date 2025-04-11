@@ -12,6 +12,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -149,8 +150,8 @@ func createTestTemplate() *domain.Template {
 			FromAddress:      "test@example.com",
 			FromName:         "Test Sender",
 			Subject:          "Test Email",
-			MJML:             "<html><body>Test</body></html>",
-			VisualEditorTree: domain.MapOfAny{"root": true}, // Add required field
+			CompiledPreview:  "<html><body>Test</body></html>",
+			VisualEditorTree: mjml.EmailBlock{}, // Add required field
 		},
 		Category:  "Test Category",
 		TestData:  domain.MapOfAny{"name": "Test User"},

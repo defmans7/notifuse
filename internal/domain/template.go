@@ -91,7 +91,7 @@ func (t *Template) Validate() error {
 		return fmt.Errorf("invalid template: email is required")
 	}
 
-	if err := t.Email.Validate(); err != nil {
+	if err := t.Email.Validate(t.TestData); err != nil {
 		return fmt.Errorf("invalid template: %w", err)
 	}
 
@@ -143,17 +143,17 @@ func (t TemplateReference) Value() (driver.Value, error) {
 }
 
 type EmailTemplate struct {
-	FromAddress      string   `json:"from_address"`
-	FromName         string   `json:"from_name"`
-	ReplyTo          *string  `json:"reply_to,omitempty"`
-	Subject          string   `json:"subject"`
-	SubjectPreview   *string  `json:"subject_preview,omitempty"`
-	MJML             string   `json:"mjml"` // html
-	VisualEditorTree MapOfAny `json:"visual_editor_tree"`
-	Text             *string  `json:"text,omitempty"`
+	FromAddress      string          `json:"from_address"`
+	FromName         string          `json:"from_name"`
+	ReplyTo          *string         `json:"reply_to,omitempty"`
+	Subject          string          `json:"subject"`
+	SubjectPreview   *string         `json:"subject_preview,omitempty"`
+	CompiledPreview  string          `json:"compiled_preview"` // compiled html
+	VisualEditorTree mjml.EmailBlock `json:"visual_editor_tree"`
+	Text             *string         `json:"text,omitempty"`
 }
 
-func (e *EmailTemplate) Validate() error {
+func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	// Validate required fields
 	if e.FromAddress == "" {
 		return fmt.Errorf("invalid email template: from_address is required")
@@ -173,11 +173,39 @@ func (e *EmailTemplate) Validate() error {
 	if len(e.Subject) > 255 {
 		return fmt.Errorf("invalid email template: subject length must be between 1 and 255")
 	}
-	if e.MJML == "" {
-		return fmt.Errorf("invalid email template: mjml is required")
+	if e.VisualEditorTree.Kind != "root" {
+		return fmt.Errorf("invalid email template: visual_editor_tree must have kind 'root'")
 	}
-	if e.VisualEditorTree == nil {
-		return fmt.Errorf("invalid email template: visual_editor_tree is required")
+	if e.VisualEditorTree.Data == nil {
+		return fmt.Errorf("invalid email template: visual_editor_tree root block must have data (styles)")
+	}
+	if e.CompiledPreview == "" {
+		// Extract root styles from the tree data
+		rootDataMap, ok := e.VisualEditorTree.Data.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("invalid email template: root block data is not a map")
+		}
+		rootStyles, _ := rootDataMap["styles"].(map[string]interface{})
+		if rootStyles == nil {
+			return fmt.Errorf("invalid email template: root block styles are missing")
+		}
+
+		// Prepare template data JSON string
+		var templateDataStr string
+		if testData != nil && len(testData) > 0 {
+			jsonDataBytes, err := json.Marshal(testData)
+			if err != nil {
+				return fmt.Errorf("failed to marshal test_data: %w", err)
+			}
+			templateDataStr = string(jsonDataBytes)
+		}
+
+		// Compile tree to MJML using our pkg/mjml function
+		mjmlResult, err := mjml.TreeToMjml(rootStyles, e.VisualEditorTree, templateDataStr, map[string]string{}, 0, nil)
+		if err != nil {
+			return fmt.Errorf("failed to generate MJML from tree: %w", err)
+		}
+		e.CompiledPreview = mjmlResult
 	}
 
 	// Validate optional fields
@@ -267,7 +295,7 @@ func (r *CreateTemplateRequest) Validate() (template *Template, workspaceID stri
 		return nil, "", fmt.Errorf("invalid create template request: email is required")
 	}
 
-	if err := r.Email.Validate(); err != nil {
+	if err := r.Email.Validate(r.TestData); err != nil {
 		return nil, "", fmt.Errorf("invalid create template request: %w", err)
 	}
 
@@ -388,7 +416,7 @@ func (r *UpdateTemplateRequest) Validate() (template *Template, workspaceID stri
 		return nil, "", fmt.Errorf("invalid update template request: email is required")
 	}
 
-	if err := r.Email.Validate(); err != nil {
+	if err := r.Email.Validate(r.TestData); err != nil {
 		return nil, "", fmt.Errorf("invalid update template request: %w", err)
 	}
 

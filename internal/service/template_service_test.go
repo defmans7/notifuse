@@ -11,6 +11,7 @@ import (
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks" // Corrected import path
 	"github.com/Notifuse/notifuse/internal/service"                  // Added logger import
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks" // Corrected import path
 	"github.com/golang/mock/gomock"                   // Added gomock import
@@ -62,38 +63,41 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 	workspaceID := "ws-123"
 	userID := "user-456"
 	templateID := "tmpl-abc"
-
-	// Base valid template structure (without ID, CreatedAt, UpdatedAt for create)
-	baseTemplate := &domain.Template{
-		ID:       templateID, // Service expects ID to be set by caller
+	templateToCreate := &domain.Template{
+		ID:       templateID,
 		Name:     "Test Template",
 		Channel:  "email",
 		Category: "transactional",
 		Email: &domain.EmailTemplate{
-			FromAddress:      "test@example.com",
-			FromName:         "Test Sender",
-			Subject:          "Test Email",
-			MJML:             "<html><body>Test</body></html>",
-			VisualEditorTree: domain.MapOfAny{},
+			FromAddress:     "test@example.com",
+			FromName:        "Test Sender",
+			Subject:         "Test Email",
+			CompiledPreview: "<p>Test</p>",
+			VisualEditorTree: mjml.EmailBlock{
+				Kind: "root",
+				Data: map[string]interface{}{"styles": map[string]interface{}{}},
+			},
 		},
+		// Version should be set to 1 by the service
+		// CreatedAt and UpdatedAt should be set by the service
 	}
 
 	t.Run("Success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		templateService, mockRepo, mockAuthService, _ := setupTemplateServiceTest(ctrl)
-
-		// Create a fresh copy for this test case to avoid mutation across tests
-		templateToCreate := *baseTemplate // Shallow copy is fine here
+		templateToPass := *templateToCreate // Use a copy
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{ID: userID}, nil)
-		mockRepo.EXPECT().CreateTemplate(ctx, workspaceID, EqTemplateWithVersion1(&templateToCreate)).Return(nil)
+		// Expect CreateTemplate with Version 1 set
+		mockRepo.EXPECT().CreateTemplate(ctx, workspaceID, EqTemplateWithVersion1(&templateToPass)).Return(nil)
 
-		err := templateService.CreateTemplate(ctx, workspaceID, &templateToCreate)
+		err := templateService.CreateTemplate(ctx, workspaceID, &templateToPass)
 
 		assert.NoError(t, err)
-		// Assert Version is set on the object passed to the service
-		assert.Equal(t, int64(1), templateToCreate.Version)
+		assert.Equal(t, int64(1), templateToPass.Version)
+		assert.WithinDuration(t, time.Now().UTC(), templateToPass.CreatedAt, 5*time.Second)
+		assert.WithinDuration(t, time.Now().UTC(), templateToPass.UpdatedAt, 5*time.Second)
 	})
 
 	t.Run("Authentication Failure", func(t *testing.T) {
@@ -101,12 +105,11 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 		defer ctrl.Finish()
 		templateService, _, mockAuthService, _ := setupTemplateServiceTest(ctrl)
 		authErr := errors.New("auth error")
-		templateToCreate := *baseTemplate // Use a copy
+		templateToPass := *templateToCreate // Use a copy
 
-		// Return nil user and error
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, authErr)
 
-		err := templateService.CreateTemplate(ctx, workspaceID, &templateToCreate)
+		err := templateService.CreateTemplate(ctx, workspaceID, &templateToPass)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to authenticate user")
@@ -117,10 +120,8 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		templateService, _, mockAuthService, _ := setupTemplateServiceTest(ctrl)
-
-		// Create invalid template directly
-		invalidTemplate := *baseTemplate // Copy
-		invalidTemplate.Name = ""        // Make invalid
+		invalidTemplate := *templateToCreate // Copy
+		invalidTemplate.Name = ""            // Make invalid
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{ID: userID}, nil)
 
@@ -134,9 +135,8 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		templateService, _, mockAuthService, _ := setupTemplateServiceTest(ctrl)
-
-		invalidTemplate := *baseTemplate // Copy
-		invalidTemplate.Email = nil      // Make invalid
+		invalidTemplate := *templateToCreate // Copy
+		invalidTemplate.Email = nil          // Make invalid
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{ID: userID}, nil)
 
@@ -151,16 +151,14 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 		defer ctrl.Finish()
 		templateService, mockRepo, mockAuthService, mockLogger := setupTemplateServiceTest(ctrl)
 		repoErr := errors.New("db error")
-		templateToCreate := *baseTemplate // Use a copy
+		templateToPass := *templateToCreate // Use a copy
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{ID: userID}, nil)
-		// Match any template here, as we expect the repo call itself to fail
 		mockRepo.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(repoErr)
-		// Expect logging on error (match template ID and specific error message)
-		mockLogger.EXPECT().WithField("template_id", templateToCreate.ID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("template_id", templateID).Return(mockLogger)
 		mockLogger.EXPECT().Error(fmt.Sprintf("Failed to create template: %v", repoErr)).Return()
 
-		err := templateService.CreateTemplate(ctx, workspaceID, &templateToCreate)
+		err := templateService.CreateTemplate(ctx, workspaceID, &templateToPass)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create template")
@@ -188,8 +186,8 @@ func TestTemplateService_GetTemplateByID(t *testing.T) {
 			FromAddress:      "test@example.com",
 			FromName:         "Test Sender",
 			Subject:          "Test Email",
-			MJML:             "<html><body>Test</body></html>",
-			VisualEditorTree: domain.MapOfAny{},
+			CompiledPreview:  "<html><body>Test</body></html>",
+			VisualEditorTree: mjml.EmailBlock{},
 		},
 	}
 
@@ -346,7 +344,7 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 	workspaceID := "ws-123"
 	userID := "user-456"
 	templateID := "tmpl-abc"
-	now := time.Now().UTC()
+	existingCreatedAt := time.Now().Add(-1 * time.Hour).UTC()
 
 	existingTemplate := &domain.Template{
 		ID:        templateID,
@@ -354,14 +352,16 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 		Version:   1,
 		Channel:   "email",
 		Category:  "transactional",
-		CreatedAt: now.Add(-time.Hour), // Ensure CreatedAt is preserved
-		UpdatedAt: now.Add(-time.Hour),
+		CreatedAt: existingCreatedAt,
 		Email: &domain.EmailTemplate{
-			FromAddress:      "old@example.com",
-			FromName:         "Old Sender",
-			Subject:          "Old Subject",
-			MJML:             "<p>Old</p>",
-			VisualEditorTree: domain.MapOfAny{"old": true},
+			FromAddress:     "old@example.com",
+			FromName:        "Old Sender",
+			Subject:         "Old Subject",
+			CompiledPreview: "<p>Old</p>",
+			VisualEditorTree: mjml.EmailBlock{
+				Kind: "root",
+				Data: map[string]interface{}{"styles": map[string]interface{}{}},
+			},
 		},
 	}
 
@@ -371,11 +371,14 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 		Channel:  "email",
 		Category: "transactional",
 		Email: &domain.EmailTemplate{
-			FromAddress:      "new@example.com",            // Updated field
-			FromName:         "New Sender",                 // Updated field
-			Subject:          "New Subject",                // Updated field
-			MJML:             "<h1>New</h1>",               // Updated field
-			VisualEditorTree: domain.MapOfAny{"new": true}, // Updated field
+			FromAddress:     "new@example.com", // Updated field
+			FromName:        "New Sender",      // Updated field
+			Subject:         "New Subject",     // Updated field
+			CompiledPreview: "<h1>New</h1>",    // Updated field
+			VisualEditorTree: mjml.EmailBlock{
+				Kind: "root",
+				Data: map[string]interface{}{"styles": map[string]interface{}{}},
+			},
 		},
 		// Version, CreatedAt, UpdatedAt should be handled by the service
 	}
