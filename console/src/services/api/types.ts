@@ -1,4 +1,4 @@
-import { BlockInterface } from '../../components/email_editor/Block'
+import type { BlockInterface } from '../../components/email_editor/Block'
 
 // Authentication types
 export interface SignInRequest {
@@ -230,7 +230,7 @@ export interface EmailTemplate {
   reply_to?: string
   subject: string
   subject_preview?: string
-  content: string // html
+  mjml: string // html
   visual_editor_tree: string
   text?: string
 }
@@ -298,4 +298,29 @@ export interface UpdateTemplateResponse {
 
 export interface DeleteTemplateResponse {
   status: string
+}
+
+// Represents a detail within an MJML compilation error
+export interface MjmlErrorDetail {
+  line: number
+  message: string
+  tagName: string
+}
+
+// Represents the structured error returned by the MJML compiler
+export interface MjmlCompileError {
+  message: string
+  details: MjmlErrorDetail[]
+}
+
+export interface CompileTemplateRequest {
+  workspace_id: string
+  visual_editor_tree: BlockInterface
+  test_data?: Record<string, any> | null
+}
+
+export interface CompileTemplateResponse {
+  mjml: string
+  html: string
+  error?: MjmlCompileError // Use the structured error type, optional
 }

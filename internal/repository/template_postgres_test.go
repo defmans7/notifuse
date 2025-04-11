@@ -149,7 +149,7 @@ func createTestTemplate() *domain.Template {
 			FromAddress:      "test@example.com",
 			FromName:         "Test Sender",
 			Subject:          "Test Email",
-			Content:          "<html><body>Test</body></html>",
+			MJML:             "<html><body>Test</body></html>",
 			VisualEditorTree: domain.MapOfAny{"root": true}, // Add required field
 		},
 		Category:  "Test Category",

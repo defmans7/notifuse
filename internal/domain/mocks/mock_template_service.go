@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
+	mjml "github.com/Notifuse/notifuse/pkg/mjml"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -33,6 +34,21 @@ func NewMockTemplateService(ctrl *gomock.Controller) *MockTemplateService {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTemplateService) EXPECT() *MockTemplateServiceMockRecorder {
 	return m.recorder
+}
+
+// CompileTemplate mocks base method.
+func (m *MockTemplateService) CompileTemplate(arg0 context.Context, arg1 string, arg2 mjml.EmailBlock, arg3 domain.MapOfAny) (*domain.CompileTemplateResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CompileTemplate", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*domain.CompileTemplateResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CompileTemplate indicates an expected call of CompileTemplate.
+func (mr *MockTemplateServiceMockRecorder) CompileTemplate(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompileTemplate", reflect.TypeOf((*MockTemplateService)(nil).CompileTemplate), arg0, arg1, arg2, arg3)
 }
 
 // CreateTemplate mocks base method.

@@ -7,9 +7,9 @@ import mjml2html from 'mjml-browser'
 import AceInput from '../Widgets/AceInput'
 import { usePrismjs } from '../Widgets/PrismJS'
 import { Liquid } from 'liquidjs'
-import { json2mjml, treeToMjmlJSON } from '../Preview'
 import { cloneDeep } from 'lodash'
 import { returnUpdatedTree } from '../../Editor'
+import { treeToMjml } from '../../utils'
 
 const LiquidTemplateBlockDefinition: BlockDefinitionInterface = {
   name: 'Liquid + MJML',
@@ -80,21 +80,12 @@ const LiquidTemplateBlockDefinition: BlockDefinitionInterface = {
         const engine = new Liquid()
         engine.parse(code)
 
-        // TODO: clone the block and the tree, update the liquidCode, update the tree with the new block, and check if the mjml is valid
         const newBlock = cloneDeep(props.block)
         newBlock.data.liquidCode = code
         const newTree = returnUpdatedTree(props.tree, props.block.path, newBlock)
 
         const mjml = mjml2html(
-          json2mjml(
-            treeToMjmlJSON(
-              newTree.data.styles,
-              newTree,
-              props.templateData,
-              props.urlParams,
-              undefined
-            )
-          )
+          treeToMjml(newTree.data.styles, newTree, props.templateData, props.urlParams, undefined)
         )
 
         if (mjml.errors.length > 0) {

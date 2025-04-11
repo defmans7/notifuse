@@ -17,7 +17,7 @@ import {
 } from 'antd'
 import BorderInputs from '../Widgets/BorderInputs'
 import PaddingInputs from '../Widgets/PaddingInputs'
-import { AlignLeft, AlignCenter, AlignRight, MousePointer, SquareMousePointer } from 'lucide-react'
+import { AlignLeft, AlignCenter, AlignRight, SquareMousePointer } from 'lucide-react'
 import ColorPickerInput from '../Widgets/ColorPicker'
 import { FontStyleInputs } from '../Widgets/FontStyleInputs'
 import { Fonts } from '../Widgets/ElementForms'

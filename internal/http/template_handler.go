@@ -2,12 +2,14 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	// Import alias needed here too
 )
 
 type TemplateHandler struct {
@@ -35,6 +37,7 @@ func (h *TemplateHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/templates.create", requireAuth(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("/api/templates.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("/api/templates.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
+	mux.Handle("/api/templates.compile", requireAuth(http.HandlerFunc(h.handleCompile)))
 }
 
 func (h *TemplateHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -185,4 +188,33 @@ func (h *TemplateHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 	})
+}
+
+func (h *TemplateHandler) handleCompile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req domain.CompileTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode compile request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	workspaceID, tree, testData, err := req.Validate()
+	if err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.service.CompileTemplate(r.Context(), workspaceID, tree, testData)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Warn("Template compilation failed")
+		WriteJSONError(w, fmt.Sprintf("Compilation failed: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }

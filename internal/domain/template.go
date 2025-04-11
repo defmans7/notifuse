@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Notifuse/notifuse/pkg/mjml" // Import the mjml package
 	"github.com/asaskevich/govalidator"
 )
 
@@ -147,7 +148,7 @@ type EmailTemplate struct {
 	ReplyTo          *string  `json:"reply_to,omitempty"`
 	Subject          string   `json:"subject"`
 	SubjectPreview   *string  `json:"subject_preview,omitempty"`
-	Content          string   `json:"content"` // html
+	MJML             string   `json:"mjml"` // html
 	VisualEditorTree MapOfAny `json:"visual_editor_tree"`
 	Text             *string  `json:"text,omitempty"`
 }
@@ -172,8 +173,8 @@ func (e *EmailTemplate) Validate() error {
 	if len(e.Subject) > 255 {
 		return fmt.Errorf("invalid email template: subject length must be between 1 and 255")
 	}
-	if e.Content == "" {
-		return fmt.Errorf("invalid email template: content is required")
+	if e.MJML == "" {
+		return fmt.Errorf("invalid email template: mjml is required")
 	}
 	if e.VisualEditorTree == nil {
 		return fmt.Errorf("invalid email template: visual_editor_tree is required")
@@ -426,6 +427,38 @@ func (r *DeleteTemplateRequest) Validate() (workspaceID string, id string, err e
 	return r.WorkspaceID, r.ID, nil
 }
 
+// --- Compile Request/Response ---
+
+type CompileTemplateRequest struct {
+	WorkspaceID      string          `json:"workspace_id"`
+	VisualEditorTree mjml.EmailBlock `json:"visual_editor_tree"` // Use the struct from pkg/mjml
+	TestData         MapOfAny        `json:"test_data,omitempty"`
+}
+
+func (r *CompileTemplateRequest) Validate() (workspaceID string, tree mjml.EmailBlock, testData MapOfAny, err error) {
+	if r.WorkspaceID == "" {
+		return "", mjml.EmailBlock{}, nil, fmt.Errorf("invalid compile template request: workspace_id is required")
+	}
+	// Basic validation for the tree root kind
+	if r.VisualEditorTree.Kind != "root" {
+		return "", mjml.EmailBlock{}, nil, fmt.Errorf("invalid compile template request: visual_editor_tree must have kind 'root'")
+	}
+	if r.VisualEditorTree.Data == nil {
+		// Add default root styles if missing, or return error? Let's return error for now.
+		// Alternatively, could initialize with default rootStyles here.
+		return "", mjml.EmailBlock{}, nil, fmt.Errorf("invalid compile template request: visual_editor_tree root block must have data (styles)")
+	}
+
+	return r.WorkspaceID, r.VisualEditorTree, r.TestData, nil
+}
+
+type CompileTemplateResponse struct {
+	Success bool    `json:"success"`
+	MJML    *string `json:"mjml,omitempty"`  // Pointer, omit if nil
+	HTML    *string `json:"html,omitempty"`  // Pointer, omit if nil
+	Error   *error  `json:"error,omitempty"` // Pointer, omit if nil
+}
+
 // TemplateService provides operations for managing templates
 type TemplateService interface {
 	// CreateTemplate creates a new template
@@ -442,6 +475,9 @@ type TemplateService interface {
 
 	// DeleteTemplate deletes a template by ID
 	DeleteTemplate(ctx context.Context, workspaceID string, id string) error
+
+	// CompileTemplate compiles a visual editor tree to MJML and HTML
+	CompileTemplate(ctx context.Context, workspaceID string, tree mjml.EmailBlock, testData MapOfAny) (*CompileTemplateResponse, error) // Use mjml.EmailBlock
 }
 
 // TemplateRepository provides database operations for templates

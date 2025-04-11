@@ -10,9 +10,12 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks" // Corrected import path
 	"github.com/Notifuse/notifuse/internal/service"                  // Added logger import
-	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"                // Corrected import path
-	"github.com/golang/mock/gomock"                                  // Added gomock import
+	"github.com/Notifuse/notifuse/pkg/logger"
+	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks" // Corrected import path
+	"github.com/golang/mock/gomock"                   // Added gomock import
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	// Keep testify/assert
 )
 
@@ -70,7 +73,7 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 			FromAddress:      "test@example.com",
 			FromName:         "Test Sender",
 			Subject:          "Test Email",
-			Content:          "<html><body>Test</body></html>",
+			MJML:             "<html><body>Test</body></html>",
 			VisualEditorTree: domain.MapOfAny{},
 		},
 	}
@@ -185,7 +188,7 @@ func TestTemplateService_GetTemplateByID(t *testing.T) {
 			FromAddress:      "test@example.com",
 			FromName:         "Test Sender",
 			Subject:          "Test Email",
-			Content:          "<html><body>Test</body></html>",
+			MJML:             "<html><body>Test</body></html>",
 			VisualEditorTree: domain.MapOfAny{},
 		},
 	}
@@ -357,7 +360,7 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 			FromAddress:      "old@example.com",
 			FromName:         "Old Sender",
 			Subject:          "Old Subject",
-			Content:          "<p>Old</p>",
+			MJML:             "<p>Old</p>",
 			VisualEditorTree: domain.MapOfAny{"old": true},
 		},
 	}
@@ -371,7 +374,7 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 			FromAddress:      "new@example.com",            // Updated field
 			FromName:         "New Sender",                 // Updated field
 			Subject:          "New Subject",                // Updated field
-			Content:          "<h1>New</h1>",               // Updated field
+			MJML:             "<h1>New</h1>",               // Updated field
 			VisualEditorTree: domain.MapOfAny{"new": true}, // Updated field
 		},
 		// Version, CreatedAt, UpdatedAt should be handled by the service
@@ -562,4 +565,196 @@ func TestTemplateService_DeleteTemplate(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to delete template")
 		assert.ErrorIs(t, err, repoErr)
 	})
+}
+
+// Helper types/funcs from other tests or define locally if needed
+type MockLogger struct{}
+
+func (l *MockLogger) Debug(msg string)                                       {}
+func (l *MockLogger) Info(msg string)                                        {}
+func (l *MockLogger) Warn(msg string)                                        {}
+func (l *MockLogger) Error(msg string)                                       {}
+func (l *MockLogger) Fatal(msg string)                                       {}
+func (l *MockLogger) WithField(key string, value interface{}) logger.Logger  { return l }
+func (l *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }
+
+// --- Helper to create a basic text block ---
+func createTestTextBlock(id, textContent string) notifusemjml.EmailBlock {
+	return notifusemjml.EmailBlock{
+		ID:   id,
+		Kind: "text",
+		Data: map[string]interface{}{
+			"align": "left",
+			"editorData": []interface{}{
+				map[string]interface{}{
+					"type": "paragraph",
+					"children": []interface{}{
+						map[string]interface{}{"text": textContent},
+					},
+				},
+			},
+		},
+	}
+}
+
+// --- Helper to create a valid nested structure for testing success ---
+func createValidTestTree(textBlock notifusemjml.EmailBlock) notifusemjml.EmailBlock {
+	columnBlock := notifusemjml.EmailBlock{
+		ID:       "col1",
+		Kind:     "column",
+		Data:     map[string]interface{}{"styles": map[string]interface{}{"verticalAlign": "top"}},
+		Children: []notifusemjml.EmailBlock{textBlock},
+	}
+	sectionBlock := notifusemjml.EmailBlock{
+		ID:       "sec1",
+		Kind:     "oneColumn", // Acts as mj-section
+		Data:     map[string]interface{}{"styles": map[string]interface{}{"textAlign": "left"}},
+		Children: []notifusemjml.EmailBlock{columnBlock},
+	}
+	rootStyles := map[string]interface{}{ // Basic root styles
+		"body":      map[string]interface{}{"width": "600px", "backgroundColor": "#ffffff"},
+		"paragraph": map[string]interface{}{"color": "#000000", "fontSize": "16px", "margin": "0px", "fontFamily": "Arial"},
+	}
+	return notifusemjml.EmailBlock{
+		ID: "root", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []notifusemjml.EmailBlock{sectionBlock},
+	}
+}
+
+func TestCompileTemplate_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockLogger := &MockLogger{}
+
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "ws_123"
+	userID := "user_abc"
+	testTree := createValidTestTree(createTestTextBlock("txt1", "Hello {{name}}"))
+	testData := domain.MapOfAny{"name": "Tester"}
+
+	// Mock expectations
+	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(&domain.User{ID: userID}, nil)
+
+	// --- Act ---
+	resp, err := svc.CompileTemplate(ctx, workspaceID, testTree, testData)
+
+	// --- Assert ---
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	assert.True(t, resp.Success, "Success should be true")
+	assert.Nil(t, resp.Error, "Error should be nil on success")
+	require.NotNil(t, resp.MJML, "MJML should not be nil on success")
+	require.NotNil(t, resp.HTML, "HTML should not be nil on success")
+
+	assert.Contains(t, *resp.MJML, "<mj-section", "MJML should contain <mj-section>")
+	assert.Contains(t, *resp.MJML, "<mj-column", "MJML should contain <mj-column>")
+	assert.Contains(t, *resp.MJML, "<mj-text", "MJML should contain <mj-text>")
+	assert.Contains(t, *resp.MJML, "Hello Tester", "MJML should contain processed liquid variable")
+
+	assert.Contains(t, *resp.HTML, "<html", "HTML should contain <html>")
+	assert.Contains(t, *resp.HTML, "Hello Tester", "HTML should contain processed liquid variable")
+
+	// t.Logf("Generated MJML:\n%s", *resp.MJML)
+	// t.Logf("Generated HTML:\n%s", *resp.HTML)
+}
+
+// Renamed test to focus on TreeToMjml internal errors (like Liquid)
+func TestCompileTemplate_TreeToMjmlError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockLogger := &MockLogger{}
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "ws_123"
+	userID := "user_abc"
+
+	// Create a tree containing a block that will cause TreeToMjml to return an error (e.g., bad liquid)
+	badLiquidBlock := notifusemjml.EmailBlock{
+		ID: "badliq", Kind: "liquid", Data: map[string]interface{}{"liquidCode": "{% invalid tag %}"},
+	}
+	badLiquidTree := createValidTestTree(badLiquidBlock) // Embed the bad block in a valid structure
+
+	// Mock Auth
+	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(&domain.User{ID: userID}, nil)
+
+	// --- Act ---
+	resp, err := svc.CompileTemplate(ctx, workspaceID, badLiquidTree, nil)
+
+	// --- Assert ---
+	require.Error(t, err, "Expected a standard Go error for TreeToMjml failure (bad liquid)")
+	require.Nil(t, resp, "Response should be nil when a standard Go error occurs")
+	assert.Contains(t, err.Error(), "failed to generate MJML from tree", "Error should indicate MJML generation failure")
+	assert.Contains(t, err.Error(), "liquid rendering error", "Error should wrap the liquid error")
+
+	// Note: Testing the specific mjmlgo.Error path (where err is nil but resp.Success is false)
+	// would ideally involve mocking mjmlgo.ToHTML or using specific input known to cause mjmlgo.Error.
+}
+
+func TestCompileTemplate_AuthError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockLogger := &MockLogger{}
+
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "ws_123"
+	// Use a valid tree for this auth error test
+	testTree := createValidTestTree(createTestTextBlock("txt1", "Test"))
+	authErr := errors.New("authentication failed")
+
+	// Mock expectations
+	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(nil, authErr)
+
+	// --- Act ---
+	resp, err := svc.CompileTemplate(ctx, workspaceID, testTree, nil)
+
+	// --- Assert ---
+	require.Error(t, err)
+	require.Nil(t, resp)
+	assert.Contains(t, err.Error(), "failed to authenticate user", "Error message should indicate auth failure")
+	assert.ErrorIs(t, err, authErr, "Original auth error should be wrapped")
+}
+
+func TestCompileTemplate_InvalidTreeData(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockLogger := &MockLogger{}
+
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "ws_123"
+	userID := "user_abc"
+	invalidTree := notifusemjml.EmailBlock{
+		ID: "root_invalid", Kind: "root", Data: nil, Children: nil,
+	}
+
+	// Mock expectations
+	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(&domain.User{ID: userID}, nil)
+
+	// --- Act ---
+	resp, err := svc.CompileTemplate(ctx, workspaceID, invalidTree, nil)
+
+	// --- Assert ---
+	require.Error(t, err)
+	require.Nil(t, resp)
+	// Update assertion to match the actual error message when Data is nil
+	assert.Contains(t, err.Error(), "invalid root block data format", "Error message should indicate invalid root data")
+
 }

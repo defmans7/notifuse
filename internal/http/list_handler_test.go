@@ -169,10 +169,15 @@ func TestListHandler_HandleList(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, rr.Code)
 
 			if tc.expectedStatus == http.StatusOK {
-				var response []*domain.List
+				var response map[string]interface{}
 				err := json.NewDecoder(rr.Body).Decode(&response)
 				assert.NoError(t, err)
-				assert.NotEmpty(t, response)
+				assert.Contains(t, response, "lists")
+				if tc.expectedLists {
+					lists, ok := response["lists"].([]interface{})
+					assert.True(t, ok)
+					assert.NotEmpty(t, lists)
+				}
 			}
 		})
 	}

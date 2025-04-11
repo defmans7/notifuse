@@ -251,7 +251,7 @@ export function CreateTemplateDrawer({
           from_name: template.email?.from_name || '',
           reply_to: template.email?.reply_to || '',
           subject: template.email?.subject || '',
-          content: template.email?.content || '',
+          content: template.email?.mjml || '',
           visual_editor_tree: template.email?.visual_editor_tree || createDefaultBlocks()
         },
         test_data: template.test_data || defaultTestData,

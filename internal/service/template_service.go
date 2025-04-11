@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	mjmlgo "github.com/Boostport/mjml-go"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
 )
 
 type TemplateService struct {
@@ -139,4 +142,68 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, workspaceID string
 	}
 
 	return nil
+}
+
+func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID string, tree notifusemjml.EmailBlock, testData domain.MapOfAny) (*domain.CompileTemplateResponse, error) {
+	// Authenticate user for workspace
+	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		// Return standard Go error for non-compilation issues
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Extract root styles from the tree data
+	rootDataMap, ok := tree.Data.(map[string]interface{})
+	if !ok {
+		s.logger.Error("CompileTemplate: Root block data is not a map")
+		// Return standard Go error for non-compilation issues
+		return nil, fmt.Errorf("invalid root block data format")
+	}
+	rootStyles, _ := rootDataMap["styles"].(map[string]interface{})
+	if rootStyles == nil {
+		s.logger.Error("CompileTemplate: Root block styles are missing")
+		// Return standard Go error for non-compilation issues
+		return nil, fmt.Errorf("root block styles are required for compilation")
+	}
+
+	// Prepare template data JSON string
+	var templateDataStr string
+	if testData != nil && len(testData) > 0 {
+		jsonDataBytes, err := json.Marshal(testData)
+		if err != nil {
+			s.logger.WithField("error", err).Error("Failed to marshal test_data to JSON")
+			// Return standard Go error for non-compilation issues
+			return nil, fmt.Errorf("failed to marshal test_data: %w", err)
+		}
+		templateDataStr = string(jsonDataBytes)
+	}
+
+	// Compile tree to MJML using our pkg/mjml function
+	mjmlResult, err := notifusemjml.TreeToMjml(rootStyles, tree, templateDataStr, map[string]string{}, 0, nil)
+	if err != nil {
+		s.logger.WithField("error", err).Error("Failed to compile tree to MJML")
+		// Treat TreeToMjml errors (like invalid Liquid/JSON) as compilation failures
+		// but return standard Go error for now, as they are not mjmlgo.Error type
+		return nil, fmt.Errorf("failed to generate MJML from tree: %w", err)
+	}
+
+	// Compile MJML to HTML using mjml-go library
+	htmlResult, err := mjmlgo.ToHTML(ctx, mjmlResult)
+	if err != nil {
+		// Return the response struct with Success=false and the Error details
+		return &domain.CompileTemplateResponse{
+			Success: false,
+			MJML:    &mjmlResult, // Include original MJML for context if desired
+			HTML:    nil,
+			Error:   &err, // Populate the error field
+		}, nil
+	}
+
+	// Return successful response
+	return &domain.CompileTemplateResponse{
+		Success: true,
+		MJML:    &mjmlResult,
+		HTML:    &htmlResult,
+		Error:   nil,
+	}, nil
 }

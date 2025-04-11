@@ -88,7 +88,7 @@ func TestTemplate_Validate(t *testing.T) {
 				FromAddress:      "test@example.com",
 				FromName:         "Test Sender",
 				Subject:          "Test Subject",
-				Content:          "<html>Test content</html>",
+				MJML:             "<html>Test content</html>",
 				VisualEditorTree: MapOfAny{"type": "root"},
 			},
 			Category:  string(TemplateCategoryMarketing),
@@ -299,7 +299,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 				FromAddress:      "test@example.com",
 				FromName:         "Test Sender",
 				Subject:          "Test Subject",
-				Content:          "<html>Test content</html>",
+				MJML:             "<html>Test content</html>",
 				VisualEditorTree: MapOfAny{"type": "root"},
 			},
 			wantErr: false,
@@ -311,7 +311,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				}
 				e.FromAddress = ""
@@ -326,7 +326,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				}
 				e.FromAddress = "invalid-email"
@@ -341,7 +341,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				}
 				e.FromName = ""
@@ -356,7 +356,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				}
 				e.Subject = ""
@@ -365,16 +365,16 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "invalid email template - missing content",
+			name: "invalid email template - missing mjml",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				}
-				e.Content = ""
+				e.MJML = ""
 				return e
 			}(),
 			wantErr: true,
@@ -398,7 +398,7 @@ func TestEmailTemplate_Scan_Value(t *testing.T) {
 		FromAddress:      "test@example.com",
 		FromName:         "Test Sender",
 		Subject:          "Test Subject",
-		Content:          "<html>Test content</html>",
+		MJML:             "<html>Test content</html>",
 		VisualEditorTree: MapOfAny{"type": "root"},
 	}
 
@@ -417,7 +417,7 @@ func TestEmailTemplate_Scan_Value(t *testing.T) {
 	assert.Equal(t, email.FromAddress, newEmail.FromAddress)
 	assert.Equal(t, email.FromName, newEmail.FromName)
 	assert.Equal(t, email.Subject, newEmail.Subject)
-	assert.Equal(t, email.Content, newEmail.Content)
+	assert.Equal(t, email.MJML, newEmail.MJML)
 
 	// Test Scan() method with string
 	err = newEmail.Scan(string(bytes))
@@ -425,7 +425,7 @@ func TestEmailTemplate_Scan_Value(t *testing.T) {
 	assert.Equal(t, email.FromAddress, newEmail.FromAddress)
 	assert.Equal(t, email.FromName, newEmail.FromName)
 	assert.Equal(t, email.Subject, newEmail.Subject)
-	assert.Equal(t, email.Content, newEmail.Content)
+	assert.Equal(t, email.MJML, newEmail.MJML)
 
 	// Test Scan() method with nil
 	err = newEmail.Scan(nil)
@@ -449,7 +449,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -467,7 +467,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -485,7 +485,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -503,7 +503,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -521,7 +521,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -539,7 +539,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -557,7 +557,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: "",
@@ -587,7 +587,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "invalid-email",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -749,7 +749,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -767,7 +767,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -785,7 +785,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -803,7 +803,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -821,7 +821,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -839,7 +839,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),
@@ -857,7 +857,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "test@example.com",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: "",
@@ -887,7 +887,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 					FromAddress:      "invalid-email",
 					FromName:         "Test Sender",
 					Subject:          "Test Subject",
-					Content:          "<html>Test content</html>",
+					MJML:             "<html>Test content</html>",
 					VisualEditorTree: MapOfAny{"type": "root"},
 				},
 				Category: string(TemplateCategoryMarketing),

@@ -57,7 +57,9 @@ func (h *ListHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, lists)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"lists": lists,
+	})
 }
 
 func (h *ListHandler) handleGet(w http.ResponseWriter, r *http.Request) {

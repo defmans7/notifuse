@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Row, Col, Typography, Button } from 'antd'
+import { Typography, Button, Popover, Table, Tooltip, Tag, Space } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
 import type { Template, Workspace } from '../services/api/types'
-import { EditOutlined } from '@ant-design/icons'
+import { EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
 import { useAuth } from '../contexts/AuthContext'
+import dayjs from '../lib/dayjs'
+import TemplatePreviewPopover from '../components/TemplatePreviewPopover'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -39,6 +41,113 @@ export function TemplatesPage() {
     setSelectedTemplate(null)
   }
 
+  const columns = [
+    {
+      title: 'Template',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string, record: Template) => (
+        <div>
+          <Text strong>{text}</Text>
+          <div>
+            <Text type="secondary" className="text-xs">
+              <Tooltip title={'ID for API: ' + record.id}>{record.id}</Tooltip>
+            </Text>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Category',
+      dataIndex: 'category',
+      key: 'category',
+      render: (category: string) => {
+        const colorMap: Record<string, string> = {
+          transactional: 'green',
+          campaign: 'purple',
+          automation: 'cyan',
+          other: 'magenta'
+        }
+        return <Tag color={colorMap[category] || 'default'}>{category}</Tag>
+      }
+    },
+    {
+      title: 'Subject',
+      dataIndex: ['email', 'subject'],
+      key: 'subject',
+      render: (subject: string, record: Template) => (
+        <div>
+          <Text>{subject}</Text>
+          {record.email?.subject_preview && (
+            <div>
+              <Text type="secondary" className="text-xs">
+                {record.email.subject_preview}
+              </Text>
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      title: 'UTM',
+      key: 'utm',
+      render: (_: any, record: Template) => (
+        <div className="space-y-1">
+          {record.utm_source && (
+            <div>
+              <Text type="secondary" className="text-xs">
+                utm_source: {record.utm_source}
+              </Text>
+            </div>
+          )}
+          {record.utm_medium && (
+            <div>
+              <Text type="secondary" className="text-xs">
+                utm_medium: {record.utm_medium}
+              </Text>
+            </div>
+          )}
+          {record.utm_campaign && (
+            <div>
+              <Text type="secondary" className="text-xs">
+                utm_campaign: {record.utm_campaign}
+              </Text>
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      title: 'Created',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => (
+        <Tooltip
+          title={
+            dayjs(date).tz(workspace?.settings.timezone).format('llll') +
+            ' in ' +
+            workspace?.settings.timezone
+          }
+        >
+          <span>{dayjs(date).format('ll')}</span>
+        </Tooltip>
+      )
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_: any, record: Template) => (
+        <Space size="middle">
+          <TemplatePreviewPopover record={record} workspaceId={workspaceId!}>
+            <Button type="text" icon={<EyeOutlined />} />
+          </TemplatePreviewPopover>
+          <Button type="text" icon={<EditOutlined />} onClick={() => setSelectedTemplate(record)} />
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => {}} />
+        </Space>
+      )
+    }
+  ]
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -49,50 +158,14 @@ export function TemplatesPage() {
       </div>
 
       {isLoading ? (
-        <Row gutter={[16, 16]}>
-          {[1, 2, 3].map((key) => (
-            <Col xs={24} sm={12} lg={8} key={key}>
-              <Card loading variant="outlined" />
-            </Col>
-          ))}
-        </Row>
+        <Table columns={columns} dataSource={[]} loading={true} rowKey="id" />
       ) : hasTemplates ? (
-        <Row gutter={[16, 16]}>
-          {data.templates.map((template: Template) => (
-            <Col xs={24} sm={12} lg={8} key={template.id}>
-              <Card
-                title={
-                  <div className="flex items-center justify-between">
-                    <Text strong>{template.name}</Text>
-                  </div>
-                }
-                variant="outlined"
-                className="h-full"
-                extra={
-                  <Button
-                    type="text"
-                    icon={<EditOutlined />}
-                    onClick={() => setSelectedTemplate(template)}
-                  />
-                }
-              >
-                <div className="mb-4">
-                  <Text type="secondary">ID: {template.id}</Text>
-                </div>
-
-                <div className="mb-4">
-                  <Text strong>Subject: </Text>
-                  <Text>{template.email?.subject}</Text>
-                </div>
-
-                <div className="text-xs text-gray-500 mt-4">
-                  <div>Created: {new Date(template.created_at).toLocaleString()}</div>
-                  <div>Updated: {new Date(template.updated_at).toLocaleString()}</div>
-                </div>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+        <Table
+          columns={columns}
+          dataSource={data.templates}
+          rowKey="id"
+          pagination={{ hideOnSinglePage: true }}
+        />
       ) : (
         <div className="text-center py-12">
           <Title level={4} type="secondary">

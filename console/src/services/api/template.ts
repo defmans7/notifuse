@@ -9,7 +9,9 @@ import type {
   UpdateTemplateRequest,
   UpdateTemplateResponse,
   DeleteTemplateRequest,
-  DeleteTemplateResponse
+  DeleteTemplateResponse,
+  CompileTemplateRequest,
+  CompileTemplateResponse
 } from './types'
 
 export const templatesApi = {
@@ -37,6 +39,10 @@ export const templatesApi = {
   },
   delete: async (params: DeleteTemplateRequest): Promise<DeleteTemplateResponse> => {
     const response = await api.post<DeleteTemplateResponse>(`/api/templates.delete`, params)
+    return response
+  },
+  compile: async (params: CompileTemplateRequest): Promise<CompileTemplateResponse> => {
+    const response = await api.post<CompileTemplateResponse>(`/api/templates.compile`, params)
     return response
   }
 }
