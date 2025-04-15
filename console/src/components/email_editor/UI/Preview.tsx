@@ -1,17 +1,17 @@
-import { useState, useRef } from 'react'
-import { Alert, Button, Space, Tabs } from 'antd'
+import { useState, useRef, useEffect } from 'react'
+import { Alert, Button, Space, Tabs, Spin } from 'antd'
 import { DesktopOutlined, MobileOutlined, EditOutlined } from '@ant-design/icons'
-import mjml2html from 'mjml-browser'
-import { Liquid } from 'liquidjs'
 import { usePrismjs } from './Widgets/PrismJS'
 
 import { DesktopWidth, MobileWidth } from './Layout'
 import Iframe from './Widgets/Iframe'
+import { templatesApi } from '../../../services/api/template'
+import type { MjmlCompileError } from '../../../services/api/types'
 
 import 'prismjs/components/prism-xml-doc'
-import { treeToMjml } from '../utils'
 
 interface PreviewProps {
+  workspaceId: string
   tree: any
   templateData: string
   isMobile: boolean
@@ -25,58 +25,93 @@ interface PreviewProps {
 
 const Preview = (props: PreviewProps) => {
   const [tab, setTab] = useState('html')
-  const mjml = treeToMjml(
-    props.tree.data.styles,
-    props.tree,
-    props.templateData,
-    props.urlParams,
-    undefined
-  )
-  // console.log('mjml', mjml)
-  // const mjmlBody = Prism.highlight(mjml, Prism.languages.xml, 'xml')
-  const html = mjml2html(mjml)
+  const [compiledHtml, setCompiledHtml] = useState<string | null>(null)
+  const [compiledMjml, setCompiledMjml] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [mjmlError, setMjmlError] = useState<MjmlCompileError | null>(null)
+
+  useEffect(() => {
+    const compileTemplate = async () => {
+      if (!props.workspaceId || !props.tree) {
+        setApiError('Missing workspace ID or template tree.')
+        setCompiledHtml(null)
+        setCompiledMjml(null)
+        setMjmlError(null)
+        setIsLoading(false)
+        return
+      }
+
+      setIsLoading(true)
+      setApiError(null)
+      setMjmlError(null)
+      setCompiledHtml(null)
+      setCompiledMjml(null)
+
+      let testDataJson = {}
+      if (props.templateData && props.templateData.trim() !== '') {
+        try {
+          testDataJson = JSON.parse(props.templateData)
+        } catch (e) {
+          console.error('Invalid template data JSON:', e)
+          setApiError('Invalid Test Data JSON. Please check the syntax in the Test Data panel.')
+          setIsLoading(false)
+          setCompiledMjml(null)
+          setCompiledHtml(null)
+          return
+        }
+      }
+
+      try {
+        const req = {
+          workspace_id: props.workspaceId,
+          visual_editor_tree: props.tree,
+          test_data: testDataJson
+        }
+        const response = await templatesApi.compile(req)
+
+        if (response.error) {
+          setMjmlError(response.error)
+          setCompiledMjml(response.mjml)
+          setApiError(null)
+          setCompiledHtml(null)
+          setTab('mjml')
+        } else {
+          setCompiledHtml(response.html)
+          setCompiledMjml(response.mjml)
+          setApiError(null)
+          setMjmlError(null)
+        }
+      } catch (err: any) {
+        console.error('API Compile Error in Preview:', err)
+        const errorMsg =
+          err.response?.data?.error || err.message || 'Failed to compile template preview.'
+        setApiError(errorMsg)
+        setMjmlError(null)
+        setCompiledMjml(null)
+        setCompiledHtml(null)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    compileTemplate()
+  }, [props.tree, props.templateData, props.workspaceId, props.urlParams])
 
   const iframeProps = {
-    content: html.html,
+    content: compiledHtml || '',
     style: {
-      width: props.isMobile ? '400px' : '100%',
+      width: props.isMobile ? MobileWidth + 'px' : '100%',
       height: '100%',
       margin: '0 auto 0 auto',
       display: 'block',
-      transition: 'all 0.1s'
+      border: 'none',
+      transition: 'width 0.3s ease-in-out'
     },
     sizeSelector: '.ant-drawer-body',
-    id: 'htmlCompiled'
+    id: 'visual-editor-preview-iframe'
   }
 
-  let templateError
-  let jsonData = {}
-  if (props.templateData && props.templateData !== '') {
-    jsonData = JSON.parse(props.templateData)
-  }
-
-  try {
-    const engine = new Liquid()
-    // Check if html.html contains any Nunjucks filter syntax that might be incompatible with Liquid
-    let templateContent = html.html
-    if (templateContent.includes('|') && /\|\s*\w+\s*\(/.test(templateContent)) {
-      console.warn(
-        'Detected potential Nunjucks filter syntax in HTML that might be incompatible with Liquid'
-      )
-      // Convert Nunjucks filter syntax to Liquid filter syntax
-      templateContent = templateContent.replace(/\|\s*(\w+)\s*\(([^)]*)\)/g, '|$1:$2')
-      engine.parseAndRenderSync(templateContent, jsonData)
-    } else {
-      engine.parseAndRenderSync(html.html, jsonData)
-    }
-  } catch (e: any) {
-    templateError = e.message
-    console.error('Liquid rendering error in preview:', e)
-  }
-
-  // console.log('html', html.errors)
-
-  // Apply syntax highlighting using usePrismjs hook
   const preRef = useRef<HTMLPreElement>(null)
   usePrismjs(preRef, ['line-numbers'])
 
@@ -126,40 +161,95 @@ const Preview = (props: PreviewProps) => {
           ]}
         />
       </div>
-      {templateError && <Alert message={templateError} type="error" />}
-      {tab === 'html' && (
-        <div className="xpeditor-transparent" style={{ height: '100%' }}>
-          <Iframe {...iframeProps} />
+
+      {isLoading && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: 'calc(100% - 50px)'
+          }}
+        >
+          <Spin size="large" tip="Compiling Preview..." />
         </div>
       )}
 
-      {tab === 'mjml' && (
-        <div className="xpeditor-code-bg">
-          {html.errors &&
-            html.errors.length > 0 &&
-            html.errors.map((err: any, i: number) => (
-              <Alert
-                key={i}
-                className="xpeditor-margin-b-s"
-                message={err.formattedMessage}
-                type="error"
-              />
-            ))}
-          <pre
-            ref={preRef}
-            className="language-xml"
-            style={{
-              margin: '0',
-              borderRadius: '4px',
-              padding: 'O',
-              fontSize: '12px',
-              wordWrap: 'break-word',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'normal'
-            }}
-          >
-            <code className="language-xml">{mjml}</code>
-          </pre>
+      {!isLoading && apiError && (
+        <Alert
+          message="Preview Error"
+          description={apiError}
+          type="error"
+          showIcon
+          style={{ margin: '10px' }}
+        />
+      )}
+
+      {!isLoading && tab === 'html' && !apiError && (
+        <div
+          className="xpeditor-transparent"
+          style={{ height: 'calc(100% - 50px)', overflow: 'hidden' }}
+        >
+          {compiledHtml ? (
+            <Iframe {...iframeProps} />
+          ) : (
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              {mjmlError ? 'HTML preview unavailable due to MJML errors.' : 'No HTML generated.'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isLoading && tab === 'mjml' && !apiError && (
+        <div
+          className="xpeditor-code-bg"
+          style={{ height: 'calc(100% - 50px)', overflowY: 'auto' }}
+        >
+          {mjmlError && (
+            <Alert
+              message={`MJML Compilation Error: ${mjmlError.message}`}
+              type="error"
+              showIcon
+              description={
+                mjmlError.details && mjmlError.details.length > 0 ? (
+                  <ul className="list-disc list-inside mt-2 text-xs">
+                    {mjmlError.details.map((detail, index) => (
+                      <li key={index}>
+                        Line {detail.line} ({detail.tagName}): {detail.message}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  'No specific details provided.'
+                )
+              }
+              style={{ margin: '10px 10px 0 10px' }}
+            />
+          )}
+          {compiledMjml ? (
+            <pre
+              ref={preRef}
+              key={compiledMjml}
+              className="language-xml line-numbers"
+              style={{
+                margin: '10px',
+                borderRadius: '4px',
+                padding: '10px',
+                fontSize: '12px',
+                wordWrap: 'break-word',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'normal'
+              }}
+            >
+              <code className="language-xml">{compiledMjml}</code>
+            </pre>
+          ) : (
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              {mjmlError
+                ? 'MJML source unavailable due to compilation errors.'
+                : 'No MJML source available.'}
+            </div>
+          )}
         </div>
       )}
     </>

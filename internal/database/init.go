@@ -141,6 +141,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			utm_campaign VARCHAR(255),
 			test_data JSONB,
 			settings JSONB,
+			deleted_at TIMESTAMP,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id, version)

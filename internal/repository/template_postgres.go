@@ -205,6 +205,7 @@ func (r *templateRepository) GetTemplates(ctx context.Context, workspaceID strin
 			t.updated_at
 		FROM templates t
 		JOIN latest_versions lv ON t.id = lv.id AND t.version = lv.max_version
+		WHERE t.deleted_at IS NULL
 		ORDER BY t.updated_at DESC
 	`
 
@@ -297,7 +298,8 @@ func (r *templateRepository) DeleteTemplate(ctx context.Context, workspaceID str
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `DELETE FROM templates WHERE id = $1`
+	// Soft delete by setting deleted_at
+	query := `UPDATE templates SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
 
 	result, err := workspaceDB.ExecContext(ctx, query, id)
 	if err != nil {

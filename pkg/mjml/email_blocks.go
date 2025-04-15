@@ -697,7 +697,24 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					continue
 				}
 
-				partText := escapeHTML(part.Text)
+				partText := ""
+
+				// --- Liquid Processing ---
+				if strings.Contains(partText, "{{") || strings.Contains(partText, "{%") {
+					engine := liquid.NewEngine()
+					var jsonData map[string]interface{}
+					err := json.Unmarshal([]byte(templateData), &jsonData)
+					if err != nil {
+						return "", fmt.Errorf("invalid JSON in templateData for text block (ID: %s): %w", block.ID, err)
+					}
+					renderedContent, err := engine.ParseAndRenderString(partText, jsonData)
+					if err != nil {
+						return "", fmt.Errorf("liquid rendering error in text block (ID: %s): %w", block.ID, err)
+					}
+					partText = renderedContent // Update content with rendered result
+				} else {
+					partText = escapeHTML(part.Text)
+				}
 
 				// Extract styles/flags from the partMap
 				isBold := getMapBool(partMap, "bold")
@@ -884,21 +901,6 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 			}
 		} // End lines loop
 		content = strings.TrimSpace(contentSb.String())
-
-		// --- Liquid Processing ---
-		if templateData != "" && (strings.Contains(content, "{{") || strings.Contains(content, "{%")) {
-			engine := liquid.NewEngine()
-			var jsonData map[string]interface{}
-			err := json.Unmarshal([]byte(templateData), &jsonData)
-			if err != nil {
-				return "", fmt.Errorf("invalid JSON in templateData for text block (ID: %s): %w", block.ID, err)
-			}
-			renderedContent, err := engine.ParseAndRenderString(content, jsonData)
-			if err != nil {
-				return "", fmt.Errorf("liquid rendering error in text block (ID: %s): %w", block.ID, err)
-			}
-			content = renderedContent // Update content with rendered result
-		}
 		children = nil
 
 	case "heading": // Very similar to text, but uses HeadingBlockData
@@ -948,7 +950,26 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					continue
 				}
 
-				partText := escapeHTML(part.Text)
+				partText := ""
+
+				// --- Liquid Processing --- (identical to text block)
+				if strings.Contains(part.Text, "{{") || strings.Contains(part.Text, "{%") {
+					engine := liquid.NewEngine()
+					var jsonData map[string]interface{}
+					err := json.Unmarshal([]byte(templateData), &jsonData)
+					if err != nil {
+						return "", fmt.Errorf("invalid JSON in templateData for heading block (ID: %s): %w", block.ID, err)
+					}
+					renderedContent, err := engine.ParseAndRenderString(part.Text, jsonData)
+					if err != nil {
+						return "", fmt.Errorf("liquid rendering error in heading block (ID: %s): %w", block.ID, err)
+					}
+					log.Printf("Heading block partText: %s", renderedContent)
+					partText = renderedContent
+				} else {
+					partText = escapeHTML(part.Text)
+				}
+
 				isBold := getMapBool(partMap, "bold")
 				isItalic := getMapBool(partMap, "italic")
 				isUnderlined := getMapBool(partMap, "underlined")
@@ -1124,20 +1145,6 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		} // End lines loop
 		content = strings.TrimSpace(contentSb.String())
 
-		// --- Liquid Processing --- (identical to text block)
-		if templateData != "" && (strings.Contains(content, "{{") || strings.Contains(content, "{%")) {
-			engine := liquid.NewEngine()
-			var jsonData map[string]interface{}
-			err := json.Unmarshal([]byte(templateData), &jsonData)
-			if err != nil {
-				return "", fmt.Errorf("invalid JSON in templateData for heading block (ID: %s): %w", block.ID, err)
-			}
-			renderedContent, err := engine.ParseAndRenderString(content, jsonData)
-			if err != nil {
-				return "", fmt.Errorf("liquid rendering error in heading block (ID: %s): %w", block.ID, err)
-			}
-			content = renderedContent
-		}
 		children = nil
 
 	case "image":

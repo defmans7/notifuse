@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -113,6 +114,12 @@ func (h *TemplateHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.CreateTemplate(r.Context(), workspaceID, template); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to create template")
+
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			WriteJSONError(w, "Template id already exists", http.StatusBadRequest)
+			return
+		}
+
 		WriteJSONError(w, "Failed to create template", http.StatusInternalServerError)
 		return
 	}

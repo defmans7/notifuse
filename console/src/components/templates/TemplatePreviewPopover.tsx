@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Popover, Typography, Spin, Alert, Tabs } from 'antd'
-import type { Template, MjmlCompileError } from '../services/api/types'
-import { templatesApi } from '../services/api/template'
-import { BlockInterface } from './email_editor/Block' // Assuming BlockInterface is here
-import { usePrismjs } from './email_editor/UI/Widgets/PrismJS'
+import type { Template, MjmlCompileError } from '../../services/api/types'
+import { templatesApi } from '../../services/api/template'
+import { BlockInterface } from '../../components/email_editor/Block' // Assuming BlockInterface is here
+import { usePrismjs } from '../../components/email_editor/UI/Widgets/PrismJS'
 // We don't need the usePrismjs hook if we call Prism directly
 // import { usePrismjs } from './email_editor/UI/Widgets/PrismJS'
 
@@ -77,7 +77,7 @@ const TemplatePreviewPopover: React.FC<TemplatePreviewPopoverProps> = ({
       const req = {
         workspace_id: workspaceId,
         visual_editor_tree: treeObject as any,
-        test_data: record.test_data
+        test_data: record.test_data || {}
       }
       // console.log('Compile Request:', req)
       const response = await templatesApi.compile(req)
@@ -185,31 +185,30 @@ const TemplatePreviewPopover: React.FC<TemplatePreviewPopoverProps> = ({
               <Alert message="Error loading preview" description={error} type="error" showIcon />
             </div>
           )}
-        {!isLoading &&
-          mjmlError &&
-          previewMjml && ( // MJML Compilation Error
-            <div className="p-4 overflow-auto flex-grow flex flex-col">
-              <Alert
-                message={`MJML Compilation Error: ${mjmlError.message}`}
-                type="error"
-                showIcon
-                description={
-                  mjmlError.details && mjmlError.details.length > 0 ? (
-                    <ul className="list-disc list-inside mt-2 text-xs">
-                      {mjmlError.details.map((detail, index) => (
-                        <li key={index}>
-                          Line {detail.line} ({detail.tagName}): {detail.message}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    'No specific details provided.'
-                  )
-                }
-                className="mb-4 flex-shrink-0" // Prevent alert from growing too large
-              />
-            </div>
-          )}
+        {!isLoading && mjmlError && (
+          // MJML Compilation Error
+          <div className="p-4 overflow-auto flex-grow flex flex-col">
+            <Alert
+              message={`MJML Compilation Error: ${mjmlError.message}`}
+              type="error"
+              showIcon
+              description={
+                mjmlError.details && mjmlError.details.length > 0 ? (
+                  <ul className="list-disc list-inside mt-2 text-xs">
+                    {mjmlError.details.map((detail, index) => (
+                      <li key={index}>
+                        Line {detail.line} ({detail.tagName}): {detail.message}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  'No specific details provided.'
+                )
+              }
+              className="mb-4 flex-shrink-0" // Prevent alert from growing too large
+            />
+          </div>
+        )}
         {!isLoading &&
           items.length > 0 && ( // Success case
             <Tabs

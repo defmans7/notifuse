@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	mjmlgo "github.com/Boostport/mjml-go"
 	"github.com/Notifuse/notifuse/pkg/mjml" // Import the mjml package
 	"github.com/asaskevich/govalidator"
 )
@@ -50,6 +51,7 @@ type Template struct {
 	Settings        MapOfAny       `json:"settings,omitempty"` // Channels specific 3rd-party settings
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       *time.Time     `json:"deleted_at,omitempty"`
 }
 
 func (t *Template) Validate() error {
@@ -89,6 +91,10 @@ func (t *Template) Validate() error {
 	// Then validate the email template
 	if t.Email == nil {
 		return fmt.Errorf("invalid template: email is required")
+	}
+
+	if t.TestData == nil {
+		t.TestData = MapOfAny{}
 	}
 
 	if err := t.Email.Validate(t.TestData); err != nil {
@@ -481,10 +487,10 @@ func (r *CompileTemplateRequest) Validate() (workspaceID string, tree mjml.Email
 }
 
 type CompileTemplateResponse struct {
-	Success bool    `json:"success"`
-	MJML    *string `json:"mjml,omitempty"`  // Pointer, omit if nil
-	HTML    *string `json:"html,omitempty"`  // Pointer, omit if nil
-	Error   *error  `json:"error,omitempty"` // Pointer, omit if nil
+	Success bool          `json:"success"`
+	MJML    *string       `json:"mjml,omitempty"`  // Pointer, omit if nil
+	HTML    *string       `json:"html,omitempty"`  // Pointer, omit if nil
+	Error   *mjmlgo.Error `json:"error,omitempty"` // Pointer, omit if nil
 }
 
 // TemplateService provides operations for managing templates

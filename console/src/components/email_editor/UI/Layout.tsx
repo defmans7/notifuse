@@ -15,7 +15,7 @@ import { Blocks, BlocksProps } from './Blocks'
 import Preview from './Preview'
 import Settings from './Settings'
 import AceInput from './Widgets/AceInput'
-import { StrictCSSProperties, TemplateDataFormField } from '../types'
+import { StrictCSSProperties } from '../types'
 import { usePrismjs } from './Widgets/PrismJS'
 import SimpleBar from 'simplebar-react'
 
@@ -36,6 +36,7 @@ const FindBlockById = (currentBlock: BlockInterface, id: string): BlockInterface
 }
 
 interface LayoutProps {
+  workspaceId: string
   macros: Array<{ id: string; name: string }>
   onUpdateMacro: (macroId: string) => void
   height?: number
@@ -215,6 +216,7 @@ export const Layout = (props: LayoutProps) => {
         {isPreview && (
           <>
             <Preview
+              workspaceId={props.workspaceId}
               tree={editor.currentTree}
               templateData={templateData}
               isMobile={editor.deviceWidth === MobileWidth}

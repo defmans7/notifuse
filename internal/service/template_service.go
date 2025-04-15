@@ -184,10 +184,14 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID strin
 	// Compile tree to MJML using our pkg/mjml function
 	mjmlResult, err := notifusemjml.TreeToMjml(rootStyles, tree, templateDataStr, map[string]string{}, 0, nil)
 	if err != nil {
-		s.logger.WithField("error", err).Error("Failed to compile tree to MJML")
-		// Treat TreeToMjml errors (like invalid Liquid/JSON) as compilation failures
-		// but return standard Go error for now, as they are not mjmlgo.Error type
-		return nil, fmt.Errorf("failed to generate MJML from tree: %w", err)
+		return &domain.CompileTemplateResponse{
+			Success: false,
+			MJML:    nil,
+			HTML:    nil,
+			Error: &mjmlgo.Error{
+				Message: err.Error(),
+			},
+		}, nil
 	}
 
 	// Compile MJML to HTML using mjml-go library
@@ -198,7 +202,9 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID strin
 			Success: false,
 			MJML:    &mjmlResult, // Include original MJML for context if desired
 			HTML:    nil,
-			Error:   &err, // Populate the error field
+			Error: &mjmlgo.Error{
+				Message: err.Error(),
+			},
 		}, nil
 	}
 

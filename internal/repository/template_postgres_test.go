@@ -457,6 +457,7 @@ func TestTemplateRepository_GetTemplates(t *testing.T) {
 			t.created_at, t.updated_at
 		FROM templates t
 		JOIN latest_versions lv ON t.id = lv.id AND t.version = lv.max_version
+		WHERE t.deleted_at IS NULL
 		ORDER BY t.updated_at DESC
 	`)).WillReturnRows(rows)
 
@@ -673,7 +674,7 @@ func TestTemplateRepository_DeleteTemplate(t *testing.T) {
 
 	// === Test Case 1: Success ===
 	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	mockSQL.ExpectExec(regexp.QuoteMeta(`DELETE FROM templates WHERE id = $1`)).
+	mockSQL.ExpectExec(regexp.QuoteMeta(`UPDATE templates SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`)).
 		WithArgs(templateID).
 		WillReturnResult(sqlmock.NewResult(0, 1)) // 1 row affected
 
@@ -684,7 +685,7 @@ func TestTemplateRepository_DeleteTemplate(t *testing.T) {
 
 	// === Test Case 2: Template Not Found (0 rows affected) ===
 	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	mockSQL.ExpectExec(regexp.QuoteMeta(`DELETE FROM templates WHERE id = $1`)).
+	mockSQL.ExpectExec(regexp.QuoteMeta(`UPDATE templates SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`)).
 		WithArgs("not-found-id").
 		WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows affected
 
@@ -697,23 +698,23 @@ func TestTemplateRepository_DeleteTemplate(t *testing.T) {
 
 	// === Test Case 3: DB Error on Exec ===
 	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	mockSQL.ExpectExec(regexp.QuoteMeta(`DELETE FROM templates`)).
-		WithArgs(templateID).
-		WillReturnError(fmt.Errorf("db delete error"))
+	mockSQL.ExpectExec(regexp.QuoteMeta(`UPDATE templates SET deleted_at = NOW()`)). // Simplified regex for update
+												WithArgs(templateID).
+												WillReturnError(fmt.Errorf("db update error"))
 
 	err = repo.DeleteTemplate(ctx, workspaceID, templateID)
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, sql.ErrNoRows)
 	assert.Contains(t, err.Error(), "failed to delete template")
-	assert.Contains(t, err.Error(), "db delete error")
+	assert.Contains(t, err.Error(), "db update error") // Check for update error message
 	mockWorkspaceRepo.AssertExpectations(t)
 	require.NoError(t, mockSQL.ExpectationsWereMet())
 
 	// === Test Case 4: Error getting RowsAffected (less common) ===
 	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	mockSQL.ExpectExec(regexp.QuoteMeta(`DELETE FROM templates`)).
-		WithArgs(templateID).
-		WillReturnResult(sqlmock.NewErrorResult(fmt.Errorf("rows affected error"))) // Simulate error getting rows affected
+	mockSQL.ExpectExec(regexp.QuoteMeta(`UPDATE templates SET deleted_at = NOW()`)). // Simplified regex for update
+												WithArgs(templateID).
+												WillReturnResult(sqlmock.NewErrorResult(fmt.Errorf("rows affected error"))) // Simulate error getting rows affected
 
 	err = repo.DeleteTemplate(ctx, workspaceID, templateID)
 	require.Error(t, err)

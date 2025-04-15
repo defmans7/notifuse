@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Typography, Button, Popover, Table, Tooltip, Tag, Space } from 'antd'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Typography, Button, Table, Tooltip, Tag, Space, Popconfirm, message } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
 import type { Template, Workspace } from '../services/api/types'
@@ -8,12 +8,13 @@ import { EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
 import { useAuth } from '../contexts/AuthContext'
 import dayjs from '../lib/dayjs'
-import TemplatePreviewPopover from '../components/TemplatePreviewPopover'
+import TemplatePreviewPopover from '../components/templates/TemplatePreviewPopover'
 
 const { Title, Paragraph, Text } = Typography
 
 export function TemplatesPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/templates' })
+  const queryClient = useQueryClient()
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const { workspaces } = useAuth()
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
@@ -34,6 +35,22 @@ export function TemplatesPage() {
       return templatesApi.list({ workspace_id: workspaceId })
     }
   })
+
+  const deleteMutation = useMutation({
+    mutationFn: templatesApi.delete,
+    onSuccess: () => {
+      message.success('Template deleted successfully')
+      queryClient.invalidateQueries({ queryKey: ['templates', workspaceId] })
+    },
+    onError: (error: any) => {
+      const errorMsg = error?.response?.data?.error || error.message
+      message.error(`Failed to delete template: ${errorMsg}`)
+    }
+  })
+
+  const handleDelete = (templateId: string) => {
+    deleteMutation.mutate({ workspace_id: workspaceId!, id: templateId })
+  }
 
   const hasTemplates = !isLoading && data?.templates && data.templates.length > 0
 
@@ -142,7 +159,21 @@ export function TemplatesPage() {
             <Button type="text" icon={<EyeOutlined />} />
           </TemplatePreviewPopover>
           <Button type="text" icon={<EditOutlined />} onClick={() => setSelectedTemplate(record)} />
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => {}} />
+          <Popconfirm
+            title="Delete the template?"
+            description="Are you sure you want to delete this template? All versions will be deleted."
+            onConfirm={() => handleDelete(record.id)}
+            okText="Yes, Delete"
+            cancelText="Cancel"
+            placement="topRight"
+          >
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deleteMutation.isPending}
+            />
+          </Popconfirm>
         </Space>
       )
     }

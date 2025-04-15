@@ -17,7 +17,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
 import type { Template, Workspace, FileManagerSettings } from '../../services/api/types'
 import { PlusOutlined } from '@ant-design/icons'
-import { Editor, ExportHTML } from '../../components/email_editor'
+import { Editor } from '../../components/email_editor'
 import { cloneDeep, kebabCase } from 'lodash'
 import IphoneEmailPreview from './PhonePreview'
 import { DesktopWidth, Layout } from '../../components/email_editor/UI/Layout'
@@ -116,7 +116,8 @@ const createDefaultBlocks = () => {
   heading.data.paddingControl = 'separate'
   heading.data.paddingTop = '40px'
   heading.data.paddingBottom = '40px'
-  heading.data.editorData[0].children[0].text = 'Hello {{ user.first_name | default:"there" }} 👋'
+  heading.data.editorData[0].children[0].text =
+    'Hello {{ contact.first_name | default:"there" }} 👋'
 
   // Configure divider
   divider.data.paddingControl = 'separate'
@@ -177,6 +178,16 @@ export function CreateTemplateDrawer({
       ? (JSON.parse(template.email?.visual_editor_tree || '{}') as BlockInterface)
       : createDefaultBlocks()
   )
+
+  // watch template id field and fetch the template to verify if it already exists
+  // const templateId = Form.useWatch(['id'], form)
+  // useEffect(() => {
+  //   if (templateId && !template) {
+  //     templatesApi.get(templateId).then((res) => {
+  //       console.log('res', res)
+  //     })
+  //   }
+  // }, [templateId])
 
   // Add Form.useWatch for the email fields
   const fromName = Form.useWatch(['email', 'from_name'], form)
@@ -351,26 +362,7 @@ export function CreateTemplateDrawer({
             onFinish={(values) => {
               //   console.log('values', values)
               setLoading(true)
-              const urlParams = {
-                utm_source: values.utm_source,
-                utm_medium: values.utm_medium,
-                utm_campaign: values.utm_campaign,
-                utm_content: values.id,
-                utm_id: '{{ notifuse_utm_id }}'
-              }
-
-              // Convert visualEditorTree to JSON string
               values.email.visual_editor_tree = visualEditorTree
-
-              // Add logic to export HTML if needed
-              const result = ExportHTML(visualEditorTree, urlParams)
-              if (result.errors && result.errors.length > 0) {
-                message.error(result.errors[0].formattedMessage)
-                setLoading(false)
-                return
-              }
-              values.email.content = result.html
-
               createTemplateMutation.mutate(values)
             }}
             onFinishFailed={(info) => {
@@ -403,6 +395,10 @@ export function CreateTemplateDrawer({
               test_data: defaultTestData
             }}
           >
+            <Form.Item name="test_data" hidden>
+              <Input type="hidden" />
+            </Form.Item>
+
             <div className="flex justify-center">
               <Tabs
                 activeKey={tab}
@@ -435,6 +431,7 @@ export function CreateTemplateDrawer({
                             if (!template) {
                               const id = kebabCase(e.target.value)
                               form.setFieldsValue({ id: id })
+                              form.validateFields(['id'])
                             }
                           }}
                         />
@@ -450,6 +447,20 @@ export function CreateTemplateDrawer({
                             type: 'string',
                             pattern: /^[a-z0-9]+(-[a-z0-9]+)*$/,
                             message: 'ID must contain only lowercase letters, numbers, and hyphens'
+                          },
+                          {
+                            validator: (rule, value, callback) => {
+                              if (value && !template) {
+                                templatesApi
+                                  .get({ workspace_id: workspace.id, id: value })
+                                  .then(() => {
+                                    callback('Template ID already exists')
+                                  })
+                                  .catch(() => {
+                                    callback()
+                                  })
+                              }
+                            }
                           }
                         ]}
                       >
@@ -640,6 +651,7 @@ export function CreateTemplateDrawer({
                         }}
                       >
                         <Layout
+                          workspaceId={workspace.id}
                           onUpdateMacro={async (macroId: string) => {
                             console.log('macroId', macroId)
                           }}
