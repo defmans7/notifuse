@@ -43,83 +43,95 @@ export function ListsPage() {
           ))}
         </Row>
       ) : hasLists ? (
-        <Row gutter={[16, 16]}>
+        <div className="space-y-4">
           {data.lists.map((list: List) => (
-            <Col xs={24} sm={12} lg={8} key={list.id}>
-              <Card
-                title={
-                  <div className="flex items-center justify-between">
-                    <Text strong>{list.name}</Text>
-                    <Space>
-                      {list.is_double_optin && <Tag color="green">Double Opt-in</Tag>}
-                      {list.is_public && <Tag color="blue">Public</Tag>}
-                    </Space>
-                  </div>
-                }
-                bordered={false}
-                className="h-full"
-              >
-                <div className="mb-4">
-                  <Text type="secondary">ID: {list.id}</Text>
+            <Card
+              title={
+                <div className="flex items-center justify-between">
+                  <Text strong>{list.name}</Text>
                 </div>
-
+              }
+              extra={
+                <Space>
+                  {list.is_double_optin && <Tag color="green">Double Opt-in</Tag>}
+                  {list.is_public && <Tag color="blue">Public</Tag>}
+                  <Text type="secondary">ID: {list.id}</Text>
+                </Space>
+              }
+              bordered={false}
+              key={list.id}
+            >
+              <div className="mb-4">
                 {list.description && (
                   <Paragraph
-                    ellipsis={{ rows: 2, expandable: true, symbol: 'more' }}
-                    className="mb-4"
+                    ellipsis={{ rows: 1, expandable: true, symbol: 'more' }}
+                    className="flex-1 mb-0"
                   >
                     {list.description}
                   </Paragraph>
                 )}
+              </div>
 
-                <Row gutter={[16, 16]} className="mt-4">
-                  <Col span={8}>
-                    <Statistic
-                      title="Active"
-                      value={list.total_active}
-                      prefix={<CheckCircleOutlined className="text-green-500" />}
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Col>
-                  <Col span={8}>
-                    <Statistic
-                      title="Pending"
-                      value={list.total_pending}
-                      prefix={<UsergroupAddOutlined className="text-blue-500" />}
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Col>
-                  <Col span={8}>
-                    <Statistic
-                      title="Unsub"
-                      value={list.total_unsubscribed}
-                      prefix={<StopOutlined className="text-gray-500" />}
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Col>
-                </Row>
-                <Row gutter={[16, 16]} className="mt-2">
-                  <Col span={12}>
-                    <Statistic
-                      title="Bounced"
-                      value={list.total_bounced}
-                      prefix={<WarningOutlined className="text-yellow-500" />}
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic
-                      title="Complaints"
-                      value={list.total_complained}
-                      prefix={<FrownOutlined className="text-red-500" />}
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
+              <Row gutter={[16, 16]} className="mt-4" wrap={false}>
+                <Col flex="1">
+                  <Statistic
+                    title={
+                      <Space>
+                        <CheckCircleOutlined className="text-green-500" /> Active
+                      </Space>
+                    }
+                    value={list.total_active}
+                    valueStyle={{ fontSize: '16px' }}
+                  />
+                </Col>
+                <Col flex="1">
+                  <Statistic
+                    title={
+                      <Space>
+                        <UsergroupAddOutlined className="text-blue-500" /> Pending
+                      </Space>
+                    }
+                    value={list.total_pending}
+                    valueStyle={{ fontSize: '16px' }}
+                  />
+                </Col>
+                <Col flex="1">
+                  <Statistic
+                    title={
+                      <Space>
+                        <StopOutlined className="text-gray-500" /> Unsub
+                      </Space>
+                    }
+                    value={list.total_unsubscribed}
+                    valueStyle={{ fontSize: '16px' }}
+                  />
+                </Col>
+                <Col flex="1">
+                  <Statistic
+                    title={
+                      <Space>
+                        <WarningOutlined className="text-yellow-500" /> Bounced
+                      </Space>
+                    }
+                    value={list.total_bounced}
+                    valueStyle={{ fontSize: '16px' }}
+                  />
+                </Col>
+                <Col flex="1">
+                  <Statistic
+                    title={
+                      <Space>
+                        <FrownOutlined className="text-red-500" /> Complaints
+                      </Space>
+                    }
+                    value={list.total_complained}
+                    valueStyle={{ fontSize: '16px' }}
+                  />
+                </Col>
+              </Row>
+            </Card>
           ))}
-        </Row>
+        </div>
       ) : (
         <div className="text-center py-12">
           <Title level={4} type="secondary">

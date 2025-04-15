@@ -29,6 +29,7 @@ type List struct {
 	UnsubscribeTemplate *TemplateReference `json:"unsubscribe_template,omitempty"`
 	CreatedAt           time.Time          `json:"created_at"`
 	UpdatedAt           time.Time          `json:"updated_at"`
+	DeletedAt           *time.Time         `json:"-" db:"deleted_at"`
 }
 
 // Validate performs validation on the list fields
@@ -89,6 +90,7 @@ type dbList struct {
 	UnsubscribeTemplate *TemplateReference
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+	DeletedAt           *time.Time
 }
 
 // ScanList scans a list from the database
@@ -112,6 +114,7 @@ func ScanList(scanner interface {
 		&dbl.UnsubscribeTemplate,
 		&dbl.CreatedAt,
 		&dbl.UpdatedAt,
+		&dbl.DeletedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -132,6 +135,7 @@ func ScanList(scanner interface {
 		UnsubscribeTemplate: dbl.UnsubscribeTemplate,
 		CreatedAt:           dbl.CreatedAt,
 		UpdatedAt:           dbl.UpdatedAt,
+		DeletedAt:           dbl.DeletedAt,
 	}
 
 	return l, nil

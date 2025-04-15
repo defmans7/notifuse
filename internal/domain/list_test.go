@@ -87,6 +87,7 @@ func TestScanList(t *testing.T) {
 			nil,              // UnsubscribeTemplate
 			now,              // CreatedAt
 			now,              // UpdatedAt
+			nil,              // DeletedAt
 		},
 	}
 
@@ -108,6 +109,7 @@ func TestScanList(t *testing.T) {
 	assert.Nil(t, list.UnsubscribeTemplate)
 	assert.Equal(t, now, list.CreatedAt)
 	assert.Equal(t, now, list.UpdatedAt)
+	assert.Nil(t, list.DeletedAt)
 
 	// Test scan error
 	scanner.err = sql.ErrNoRows
@@ -146,6 +148,12 @@ func (m *mockScanner) Scan(dest ...interface{}) error {
 		case *time.Time:
 			if t, ok := m.data[i].(time.Time); ok {
 				*v = t
+			}
+		case **time.Time:
+			if m.data[i] == nil {
+				*v = nil
+			} else if t, ok := m.data[i].(time.Time); ok {
+				*v = &t
 			}
 		}
 	}

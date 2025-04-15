@@ -118,7 +118,8 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			welcome_template JSONB,
 			unsubscribe_template JSONB,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS contact_lists (
 			email VARCHAR(255) NOT NULL,
@@ -141,9 +142,9 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			utm_campaign VARCHAR(255),
 			test_data JSONB,
 			settings JSONB,
-			deleted_at TIMESTAMP,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP,
 			PRIMARY KEY (id, version)
 		)`,
 	}

@@ -64,7 +64,7 @@ func (r *listRepository) GetListByID(ctx context.Context, workspaceID string, id
 		total_unsubscribed, total_bounced, total_complained, double_optin_template, 
 		welcome_template, unsubscribe_template, created_at, updated_at
 		FROM lists
-		WHERE id = $1
+		WHERE id = $1 AND deleted_at IS NULL
 	`
 
 	row := workspaceDB.QueryRowContext(ctx, query, id)
@@ -93,6 +93,7 @@ func (r *listRepository) GetLists(ctx context.Context, workspaceID string) ([]*d
 		total_unsubscribed, total_bounced, total_complained, double_optin_template, 
 		welcome_template, unsubscribe_template, created_at, updated_at
 		FROM lists
+		WHERE deleted_at IS NULL
 		ORDER BY created_at DESC
 	`
 
@@ -130,7 +131,7 @@ func (r *listRepository) UpdateList(ctx context.Context, workspaceID string, lis
 	query := `
 		UPDATE lists
 		SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5
-		WHERE id = $6
+		WHERE id = $6 AND deleted_at IS NULL
 	`
 
 	result, err := workspaceDB.ExecContext(ctx, query,
@@ -152,7 +153,7 @@ func (r *listRepository) UpdateList(ctx context.Context, workspaceID string, lis
 	}
 
 	if rows == 0 {
-		return &domain.ErrListNotFound{Message: "list not found"}
+		return &domain.ErrListNotFound{Message: "list not found or already deleted"}
 	}
 
 	return nil
@@ -166,11 +167,11 @@ func (r *listRepository) DeleteList(ctx context.Context, workspaceID string, id 
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `DELETE FROM lists WHERE id = $1`
+	query := `UPDATE lists SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`
 
-	result, err := workspaceDB.ExecContext(ctx, query, id)
+	result, err := workspaceDB.ExecContext(ctx, query, time.Now().UTC(), id)
 	if err != nil {
-		return fmt.Errorf("failed to delete list: %w", err)
+		return fmt.Errorf("failed to soft delete list: %w", err)
 	}
 
 	rows, err := result.RowsAffected()
@@ -179,7 +180,7 @@ func (r *listRepository) DeleteList(ctx context.Context, workspaceID string, id 
 	}
 
 	if rows == 0 {
-		return &domain.ErrListNotFound{Message: "list not found"}
+		return &domain.ErrListNotFound{Message: "list not found or already deleted"}
 	}
 
 	return nil
@@ -207,7 +208,7 @@ func (r *listRepository) IncrementTotal(ctx context.Context, workspaceID string,
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := fmt.Sprintf("UPDATE lists SET %s = %s + 1 WHERE id = $1", columnName, columnName)
+	query := fmt.Sprintf("UPDATE lists SET %s = %s + 1 WHERE id = $1 AND deleted_at IS NULL", columnName, columnName)
 	result, err := workspaceDB.ExecContext(ctx, query, listID)
 	if err != nil {
 		return fmt.Errorf("failed to increment total: %w", err)
@@ -219,7 +220,7 @@ func (r *listRepository) IncrementTotal(ctx context.Context, workspaceID string,
 	}
 
 	if rows == 0 {
-		return &domain.ErrListNotFound{Message: "list not found"}
+		return &domain.ErrListNotFound{Message: "list not found or already deleted"}
 	}
 
 	return nil
@@ -247,7 +248,7 @@ func (r *listRepository) DecrementTotal(ctx context.Context, workspaceID string,
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := fmt.Sprintf("UPDATE lists SET %s = GREATEST(%s - 1, 0) WHERE id = $1", columnName, columnName)
+	query := fmt.Sprintf("UPDATE lists SET %s = GREATEST(%s - 1, 0) WHERE id = $1 AND deleted_at IS NULL", columnName, columnName)
 	result, err := workspaceDB.ExecContext(ctx, query, listID)
 	if err != nil {
 		return fmt.Errorf("failed to decrement total: %w", err)
@@ -259,7 +260,7 @@ func (r *listRepository) DecrementTotal(ctx context.Context, workspaceID string,
 	}
 
 	if rows == 0 {
-		return &domain.ErrListNotFound{Message: "list not found"}
+		return &domain.ErrListNotFound{Message: "list not found or already deleted"}
 	}
 
 	return nil
