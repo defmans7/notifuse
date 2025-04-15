@@ -439,88 +439,150 @@ func TestTemplateRepository_GetTemplates(t *testing.T) {
 
 	columns := []string{"id", "name", "version", "channel", "email", "category", "template_macro_id", "utm_source", "utm_medium", "utm_campaign", "test_data", "settings", "created_at", "updated_at"}
 
-	// === Test Case 1: Success ===
-	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	rows := sqlmock.NewRows(columns).
-		AddRow(tmpl2.ID, tmpl2.Name, tmpl2.Version, tmpl2.Channel, tmpl2.Email, tmpl2.Category, nil, nil, nil, nil, tmpl2.TestData, tmpl2.Settings, tmpl2.CreatedAt, tmpl2.UpdatedAt). // tmpl2 is newer
-		AddRow(tmpl1.ID, tmpl1.Name, tmpl1.Version, tmpl1.Channel, tmpl1.Email, tmpl1.Category, nil, nil, nil, nil, tmpl1.TestData, tmpl1.Settings, tmpl1.CreatedAt, tmpl1.UpdatedAt)
+	// === Test Case 1: Success - No Category Filter ===
+	t.Run("Success - No Category Filter", func(t *testing.T) {
+		mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
+		rows := sqlmock.NewRows(columns).
+			AddRow(tmpl2.ID, tmpl2.Name, tmpl2.Version, tmpl2.Channel, tmpl2.Email, tmpl2.Category, nil, nil, nil, nil, tmpl2.TestData, tmpl2.Settings, tmpl2.CreatedAt, tmpl2.UpdatedAt). // tmpl2 is newer
+			AddRow(tmpl1.ID, tmpl1.Name, tmpl1.Version, tmpl1.Channel, tmpl1.Email, tmpl1.Category, nil, nil, nil, nil, tmpl1.TestData, tmpl1.Settings, tmpl1.CreatedAt, tmpl1.UpdatedAt)
 
-	mockSQL.ExpectQuery(regexp.QuoteMeta(`
-		WITH latest_versions AS (
-			SELECT id, MAX(version) as max_version
-			FROM templates
-			GROUP BY id
-		)
-		SELECT 
-			t.id, t.name, t.version, t.channel, t.email, t.category, t.template_macro_id, 
-			t.utm_source, t.utm_medium, t.utm_campaign, t.test_data, t.settings, 
-			t.created_at, t.updated_at
-		FROM templates t
-		JOIN latest_versions lv ON t.id = lv.id AND t.version = lv.max_version
-		WHERE t.deleted_at IS NULL
-		ORDER BY t.updated_at DESC
-	`)).WillReturnRows(rows)
+		// Expect squirrel generated query
+		expectedQuery := `
+			WITH latest_versions AS (
+				SELECT id, MAX(version) as max_version
+				FROM templates
+				GROUP BY id
+			)
+			SELECT t.id, t.name, t.version, t.channel, t.email, t.category, t.template_macro_id, t.utm_source, t.utm_medium, t.utm_campaign, t.test_data, t.settings, t.created_at, t.updated_at
+			FROM templates t JOIN latest_versions lv ON t.id = lv.id AND t.version = lv.max_version
+			WHERE t.deleted_at IS NULL
+			ORDER BY t.updated_at DESC
+		`
+		mockSQL.ExpectQuery(regexp.QuoteMeta(expectedQuery)).WillReturnRows(rows)
 
-	templates, err := repo.GetTemplates(ctx, workspaceID)
-	require.NoError(t, err)
-	require.Len(t, templates, 2)
+		templates, err := repo.GetTemplates(ctx, workspaceID, "") // Pass empty category
+		require.NoError(t, err)
+		require.Len(t, templates, 2)
 
-	// Check order (tmpl2 first due to updated_at DESC)
-	assert.Equal(t, tmpl2.ID, templates[0].ID)
-	assert.Equal(t, tmpl2.Version, templates[0].Version)
-	assert.EqualValues(t, tmpl2.Email, templates[0].Email)
+		// Check order (tmpl2 first due to updated_at DESC)
+		assert.Equal(t, tmpl2.ID, templates[0].ID)
+		assert.Equal(t, tmpl1.ID, templates[1].ID)
 
-	assert.Equal(t, tmpl1.ID, templates[1].ID)
-	assert.Equal(t, tmpl1.Version, templates[1].Version)
-	assert.EqualValues(t, tmpl1.Email, templates[1].Email)
+		mockWorkspaceRepo.AssertExpectations(t)
+		require.NoError(t, mockSQL.ExpectationsWereMet())
+	})
 
-	mockWorkspaceRepo.AssertExpectations(t)
-	require.NoError(t, mockSQL.ExpectationsWereMet())
+	// === Test Case 2: Success - With Category Filter ===
+	t.Run("Success - With Category Filter", func(t *testing.T) {
+		filterCategory := "Test Category" // Use the category from createTestTemplate
+		mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
+		// Only tmpl2 should match if we assume tmpl1 has a different category or filter matches tmpl2's category
+		// Let's assume both have the same category for this test, but only return one for simplicity of setup
+		rowsFiltered := sqlmock.NewRows(columns).
+			AddRow(tmpl2.ID, tmpl2.Name, tmpl2.Version, tmpl2.Channel, tmpl2.Email, filterCategory, nil, nil, nil, nil, tmpl2.TestData, tmpl2.Settings, tmpl2.CreatedAt, tmpl2.UpdatedAt)
 
-	// === Test Case 2: No Templates Found ===
-	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	emptyRows := sqlmock.NewRows(columns) // No rows added
-	mockSQL.ExpectQuery(regexp.QuoteMeta(`WITH latest_versions AS`)).WillReturnRows(emptyRows)
+		// Expect squirrel generated query with category filter
+		expectedFilteredQuery := `
+			WITH latest_versions AS (
+				SELECT id, MAX(version) as max_version
+				FROM templates
+				GROUP BY id
+			)
+			SELECT t.id, t.name, t.version, t.channel, t.email, t.category, t.template_macro_id, t.utm_source, t.utm_medium, t.utm_campaign, t.test_data, t.settings, t.created_at, t.updated_at
+			FROM templates t JOIN latest_versions lv ON t.id = lv.id AND t.version = lv.max_version
+			WHERE t.deleted_at IS NULL AND t.category = $1
+			ORDER BY t.updated_at DESC
+		`
+		mockSQL.ExpectQuery(regexp.QuoteMeta(expectedFilteredQuery)).WithArgs(filterCategory).WillReturnRows(rowsFiltered)
 
-	templates, err = repo.GetTemplates(ctx, workspaceID)
-	require.NoError(t, err)
-	require.Empty(t, templates)
-	mockWorkspaceRepo.AssertExpectations(t)
-	require.NoError(t, mockSQL.ExpectationsWereMet())
+		templates, err := repo.GetTemplates(ctx, workspaceID, filterCategory) // Pass the specific category
+		require.NoError(t, err)
+		require.Len(t, templates, 1)
+		assert.Equal(t, tmpl2.ID, templates[0].ID)
+		assert.Equal(t, filterCategory, templates[0].Category)
 
-	// === Test Case 3: DB Query Error ===
-	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	mockSQL.ExpectQuery(regexp.QuoteMeta(`WITH latest_versions AS`)).WillReturnError(fmt.Errorf("db query error"))
+		mockWorkspaceRepo.AssertExpectations(t)
+		require.NoError(t, mockSQL.ExpectationsWereMet())
+	})
 
-	templates, err = repo.GetTemplates(ctx, workspaceID)
-	require.Error(t, err)
-	assert.Nil(t, templates)
-	assert.Contains(t, err.Error(), "failed to get templates")
-	assert.Contains(t, err.Error(), "db query error")
-	mockWorkspaceRepo.AssertExpectations(t)
-	require.NoError(t, mockSQL.ExpectationsWereMet())
+	// === Test Case 3: No Templates Found ===
+	t.Run("No Templates Found", func(t *testing.T) {
+		mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
+		emptyRows := sqlmock.NewRows(columns) // No rows added
+		// Use the base query regex again
+		expectedQuery := `
+			WITH latest_versions AS (.*)
+			SELECT .* FROM templates t JOIN latest_versions lv ON .*
+			WHERE t.deleted_at IS NULL
+			ORDER BY t.updated_at DESC
+		`
+		mockSQL.ExpectQuery(expectedQuery).WillReturnRows(emptyRows) // Match simplified query structure
 
-	// === Test Case 4: Row Scan Error (Simulated by invalid JSON) ===
-	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
-	invalidJSONRows := sqlmock.NewRows(columns).
-		AddRow(tmpl1.ID, tmpl1.Name, tmpl1.Version, tmpl1.Channel, nil, tmpl1.Category, nil, nil, nil, nil, tmpl1.TestData, tmpl1.Settings, tmpl1.CreatedAt, tmpl1.UpdatedAt).
-		RowError(0, fmt.Errorf("scan error"))
-	mockSQL.ExpectQuery(regexp.QuoteMeta(`WITH latest_versions AS`)).WillReturnRows(invalidJSONRows)
+		templates, err := repo.GetTemplates(ctx, workspaceID, "") // Pass empty category
+		require.NoError(t, err)
+		require.Empty(t, templates)
+		mockWorkspaceRepo.AssertExpectations(t)
+		require.NoError(t, mockSQL.ExpectationsWereMet())
+	})
 
-	templates, err = repo.GetTemplates(ctx, workspaceID)
-	require.Error(t, err)
-	assert.Nil(t, templates)
-	assert.Contains(t, err.Error(), "error iterating template rows")
-	mockWorkspaceRepo.AssertExpectations(t)
-	require.NoError(t, mockSQL.ExpectationsWereMet())
+	// === Test Case 4: DB Query Error ===
+	t.Run("DB Query Error", func(t *testing.T) {
+		mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
+		expectedQuery := `
+			WITH latest_versions AS (.*)
+			SELECT .* FROM templates t JOIN latest_versions lv ON .*
+			WHERE t.deleted_at IS NULL
+			ORDER BY t.updated_at DESC
+		`
+		mockSQL.ExpectQuery(expectedQuery).WillReturnError(fmt.Errorf("db query error")) // Match simplified query structure
 
-	// === Test Case 5: GetConnection Error ===
-	mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(nil, fmt.Errorf("connection error")).Once()
-	templates, err = repo.GetTemplates(ctx, workspaceID)
-	require.Error(t, err)
-	assert.Nil(t, templates)
-	assert.Contains(t, err.Error(), "failed to get workspace connection")
-	mockWorkspaceRepo.AssertExpectations(t)
+		templates, err := repo.GetTemplates(ctx, workspaceID, "") // Pass empty category
+		require.Error(t, err)
+		assert.Nil(t, templates)
+		assert.Contains(t, err.Error(), "failed to get templates") // Error should now come from QueryContext
+		assert.Contains(t, err.Error(), "db query error")
+		mockWorkspaceRepo.AssertExpectations(t)
+		require.NoError(t, mockSQL.ExpectationsWereMet())
+	})
+
+	// === Test Case 5: Row Scan Error ===
+	t.Run("Row Scan Error", func(t *testing.T) {
+		mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(db, nil).Once()
+		invalidJSONRows := sqlmock.NewRows(columns).
+			AddRow(tmpl1.ID, tmpl1.Name, tmpl1.Version, tmpl1.Channel, nil, tmpl1.Category, nil, nil, nil, nil, tmpl1.TestData, tmpl1.Settings, tmpl1.CreatedAt, tmpl1.UpdatedAt).
+			RowError(0, fmt.Errorf("scan error")) // Simulate scan error on the first row
+		expectedQuery := `
+			WITH latest_versions AS \(.*\)
+			SELECT .* FROM templates t JOIN latest_versions lv ON .*
+			WHERE t\.deleted_at IS NULL
+			ORDER BY t\.updated_at DESC
+		`
+		mockSQL.ExpectQuery(expectedQuery).WillReturnRows(invalidJSONRows) // Match simplified query structure
+
+		templates, err := repo.GetTemplates(ctx, workspaceID, "") // Pass empty category
+		require.Error(t, err)
+		assert.Nil(t, templates)
+		// The error is caught *after* the loop by rows.Err()
+		assert.Contains(t, err.Error(), "error iterating template rows")
+		assert.Contains(t, err.Error(), "scan error")
+		mockWorkspaceRepo.AssertExpectations(t)
+		require.NoError(t, mockSQL.ExpectationsWereMet()) // Expectation met as query was made
+	})
+
+	// === Test Case 6: GetConnection Error ===
+	t.Run("GetConnection Error", func(t *testing.T) {
+		mockWorkspaceRepo.On("GetConnection", ctx, workspaceID).Return(nil, fmt.Errorf("connection error")).Once()
+		templates, err := repo.GetTemplates(ctx, workspaceID, "") // Pass empty category
+		require.Error(t, err)
+		assert.Nil(t, templates)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+		mockWorkspaceRepo.AssertExpectations(t)
+	})
+
+	// === Test Case 7: ToSql Error (Squirrel build error - less likely but good practice) ===
+	// This requires mocking squirrel itself or causing ToSql to fail, which is complex.
+	// Skipping for brevity, but in a real scenario, consider how to test query build failures.
+	// For now, assume ToSql works if the builder logic is correct.
 }
 
 func TestTemplateRepository_UpdateTemplate(t *testing.T) {

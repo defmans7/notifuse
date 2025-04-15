@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/Notifuse/notifuse/internal/domain"
 )
 
@@ -174,7 +175,7 @@ func (r *templateRepository) GetTemplateLatestVersion(ctx context.Context, works
 	return version, nil
 }
 
-func (r *templateRepository) GetTemplates(ctx context.Context, workspaceID string) ([]*domain.Template, error) {
+func (r *templateRepository) GetTemplates(ctx context.Context, workspaceID string, category string) ([]*domain.Template, error) {
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
@@ -182,34 +183,47 @@ func (r *templateRepository) GetTemplates(ctx context.Context, workspaceID strin
 	}
 
 	// Get only the latest version of each template
-	query := `
+	latestVersionsCTE := `
 		WITH latest_versions AS (
 			SELECT id, MAX(version) as max_version
 			FROM templates
 			GROUP BY id
 		)
-		SELECT 
-			t.id, 
-			t.name, 
-			t.version, 
-			t.channel, 
-			t.email, 
-			t.category, 
-			t.template_macro_id, 
-			t.utm_source, 
-			t.utm_medium, 
-			t.utm_campaign, 
-			t.test_data, 
-			t.settings, 
-			t.created_at, 
-			t.updated_at
-		FROM templates t
-		JOIN latest_versions lv ON t.id = lv.id AND t.version = lv.max_version
-		WHERE t.deleted_at IS NULL
-		ORDER BY t.updated_at DESC
 	`
 
-	rows, err := workspaceDB.QueryContext(ctx, query)
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	selectBuilder := psql.Select(
+		"t.id",
+		"t.name",
+		"t.version",
+		"t.channel",
+		"t.email",
+		"t.category",
+		"t.template_macro_id",
+		"t.utm_source",
+		"t.utm_medium",
+		"t.utm_campaign",
+		"t.test_data",
+		"t.settings",
+		"t.created_at",
+		"t.updated_at",
+	).Prefix(latestVersionsCTE).
+		From("templates t").
+		Join("latest_versions lv ON t.id = lv.id AND t.version = lv.max_version").
+		Where(sq.Eq{"t.deleted_at": nil}).
+		OrderBy("t.updated_at DESC")
+
+	if category != "" {
+		selectBuilder = selectBuilder.Where(sq.Eq{"t.category": category})
+	}
+
+	query, args, err := selectBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := workspaceDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get templates: %w", err)
 	}

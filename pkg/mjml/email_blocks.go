@@ -697,23 +697,32 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					continue
 				}
 
-				partText := ""
+				partText := part.Text // Assign the actual text content first
 
 				// --- Liquid Processing ---
 				if strings.Contains(partText, "{{") || strings.Contains(partText, "{%") {
-					engine := liquid.NewEngine()
+					log.Printf("Liquid processing: %s", partText)
+					engine := liquid.NewEngine() // Consider creating the engine once outside the loop if performance is critical
 					var jsonData map[string]interface{}
-					err := json.Unmarshal([]byte(templateData), &jsonData)
-					if err != nil {
-						return "", fmt.Errorf("invalid JSON in templateData for text block (ID: %s): %w", block.ID, err)
+					if templateData != "" { // Check if templateData is provided
+						err := json.Unmarshal([]byte(templateData), &jsonData)
+						if err != nil {
+							// Return specific error for invalid JSON in templateData
+							return "", fmt.Errorf("invalid JSON in templateData for text block (ID: %s): %w", block.ID, err)
+						}
+					} else {
+						// Initialize empty map if templateData is empty, prevents nil map error in Render
+						jsonData = make(map[string]interface{})
 					}
 					renderedContent, err := engine.ParseAndRenderString(partText, jsonData)
 					if err != nil {
+						// Return specific error for Liquid rendering issues
 						return "", fmt.Errorf("liquid rendering error in text block (ID: %s): %w", block.ID, err)
 					}
 					partText = renderedContent // Update content with rendered result
 				} else {
-					partText = escapeHTML(part.Text)
+					// Only escape if it wasn't processed as Liquid
+					partText = escapeHTML(partText)
 				}
 
 				// Extract styles/flags from the partMap
@@ -950,24 +959,29 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					continue
 				}
 
-				partText := ""
+				partText := part.Text // Assign the actual text content first
 
 				// --- Liquid Processing --- (identical to text block)
-				if strings.Contains(part.Text, "{{") || strings.Contains(part.Text, "{%") {
+				if strings.Contains(partText, "{{") || strings.Contains(partText, "{%") {
 					engine := liquid.NewEngine()
 					var jsonData map[string]interface{}
-					err := json.Unmarshal([]byte(templateData), &jsonData)
-					if err != nil {
-						return "", fmt.Errorf("invalid JSON in templateData for heading block (ID: %s): %w", block.ID, err)
+					if templateData != "" { // Check if templateData is provided
+						err := json.Unmarshal([]byte(templateData), &jsonData)
+						if err != nil {
+							return "", fmt.Errorf("invalid JSON in templateData for heading block (ID: %s): %w", block.ID, err)
+						}
+					} else {
+						jsonData = make(map[string]interface{})
 					}
-					renderedContent, err := engine.ParseAndRenderString(part.Text, jsonData)
+					renderedContent, err := engine.ParseAndRenderString(partText, jsonData) // Use partText here
 					if err != nil {
 						return "", fmt.Errorf("liquid rendering error in heading block (ID: %s): %w", block.ID, err)
 					}
 					log.Printf("Heading block partText: %s", renderedContent)
 					partText = renderedContent
 				} else {
-					partText = escapeHTML(part.Text)
+					// Only escape if it wasn't processed as Liquid
+					partText = escapeHTML(partText)
 				}
 
 				isBold := getMapBool(partMap, "bold")

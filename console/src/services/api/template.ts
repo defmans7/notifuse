@@ -14,11 +14,23 @@ import type {
   CompileTemplateResponse
 } from './types'
 
-export const templatesApi = {
+// Define the interface for the API object
+interface TemplatesApi {
+  list: (params: GetTemplatesRequest) => Promise<GetTemplatesResponse>
+  get: (params: GetTemplateRequest) => Promise<GetTemplateResponse>
+  create: (params: CreateTemplateRequest) => Promise<CreateTemplateResponse>
+  update: (params: UpdateTemplateRequest) => Promise<UpdateTemplateResponse>
+  delete: (params: DeleteTemplateRequest) => Promise<DeleteTemplateResponse>
+  compile: (params: CompileTemplateRequest) => Promise<CompileTemplateResponse>
+}
+
+export const templatesApi: TemplatesApi = {
   list: async (params: GetTemplatesRequest): Promise<GetTemplatesResponse> => {
-    const response = await api.get<GetTemplatesResponse>(
-      `/api/templates.list?workspace_id=${params.workspace_id}`
-    )
+    let url = `/api/templates.list?workspace_id=${params.workspace_id}`
+    if (params.category) {
+      url += `&category=${params.category}`
+    }
+    const response = await api.get<GetTemplatesResponse>(url)
     return response
   },
   get: async (params: GetTemplateRequest): Promise<GetTemplateResponse> => {

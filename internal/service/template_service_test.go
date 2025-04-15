@@ -296,9 +296,9 @@ func TestTemplateService_GetTemplates(t *testing.T) {
 		templateService, mockRepo, mockAuthService, _ := setupTemplateServiceTest(ctrl)
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{ID: userID}, nil)
-		mockRepo.EXPECT().GetTemplates(ctx, workspaceID).Return(expectedTemplates, nil)
+		mockRepo.EXPECT().GetTemplates(ctx, workspaceID, "").Return(expectedTemplates, nil)
 
-		templates, err := templateService.GetTemplates(ctx, workspaceID)
+		templates, err := templateService.GetTemplates(ctx, workspaceID, "")
 
 		assert.NoError(t, err)
 		assert.Equal(t, expectedTemplates, templates)
@@ -312,7 +312,7 @@ func TestTemplateService_GetTemplates(t *testing.T) {
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, authErr)
 
-		templates, err := templateService.GetTemplates(ctx, workspaceID)
+		templates, err := templateService.GetTemplates(ctx, workspaceID, "")
 
 		assert.Error(t, err)
 		assert.Nil(t, templates)
@@ -327,10 +327,10 @@ func TestTemplateService_GetTemplates(t *testing.T) {
 		repoErr := errors.New("db error")
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{ID: userID}, nil)
-		mockRepo.EXPECT().GetTemplates(ctx, workspaceID).Return(nil, repoErr)
+		mockRepo.EXPECT().GetTemplates(ctx, workspaceID, "").Return(nil, repoErr)
 		mockLogger.EXPECT().Error(fmt.Sprintf("Failed to get templates: %v", repoErr)).Return()
 
-		templates, err := templateService.GetTemplates(ctx, workspaceID)
+		templates, err := templateService.GetTemplates(ctx, workspaceID, "")
 
 		assert.Error(t, err)
 		assert.Nil(t, templates)
@@ -693,10 +693,12 @@ func TestCompileTemplate_TreeToMjmlError(t *testing.T) {
 	resp, err := svc.CompileTemplate(ctx, workspaceID, badLiquidTree, nil)
 
 	// --- Assert ---
-	require.Error(t, err, "Expected a standard Go error for TreeToMjml failure (bad liquid)")
-	require.Nil(t, resp, "Response should be nil when a standard Go error occurs")
-	assert.Contains(t, err.Error(), "failed to generate MJML from tree", "Error should indicate MJML generation failure")
-	assert.Contains(t, err.Error(), "liquid rendering error", "Error should wrap the liquid error")
+	require.NoError(t, err, "CompileTemplate should return nil error even on internal failure")
+	require.NotNil(t, resp, "CompileTemplate should return a response struct even on internal failure")
+	assert.False(t, resp.Success, "Response Success should be false on TreeToMjml failure")
+	require.NotNil(t, resp.Error, "Response Error should not be nil on TreeToMjml failure")
+	// Check that the error message originates from the TreeToMjml function and indicates a liquid error
+	assert.Contains(t, resp.Error.Message, "liquid rendering error in liquid block", "Error message should wrap the liquid error")
 
 	// Note: Testing the specific mjmlgo.Error path (where err is nil but resp.Success is false)
 	// would ideally involve mocking mjmlgo.ToHTML or using specific input known to cause mjmlgo.Error.

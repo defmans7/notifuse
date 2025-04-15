@@ -237,6 +237,7 @@ export interface EmailTemplate {
 
 export interface GetTemplatesRequest {
   workspace_id: string
+  category?: string
 }
 
 export interface GetTemplateRequest {

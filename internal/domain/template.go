@@ -323,16 +323,24 @@ func (r *CreateTemplateRequest) Validate() (template *Template, workspaceID stri
 
 type GetTemplatesRequest struct {
 	WorkspaceID string `json:"workspace_id"`
+	Category    string `json:"category,omitempty"`
 }
 
 func (r *GetTemplatesRequest) FromURLParams(queryParams url.Values) (err error) {
 	r.WorkspaceID = queryParams.Get("workspace_id")
+	r.Category = queryParams.Get("category")
 
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("invalid get templates request: workspace_id is required")
 	}
 	if len(r.WorkspaceID) > 20 {
 		return fmt.Errorf("invalid get templates request: workspace_id length must be between 1 and 20")
+	}
+
+	if r.Category != "" {
+		if len(r.Category) > 20 {
+			return fmt.Errorf("invalid get templates request: category length must be between 1 and 20")
+		}
 	}
 
 	return nil
@@ -502,7 +510,7 @@ type TemplateService interface {
 	GetTemplateByID(ctx context.Context, workspaceID string, id string, version int64) (*Template, error)
 
 	// GetTemplates retrieves all templates
-	GetTemplates(ctx context.Context, workspaceID string) ([]*Template, error)
+	GetTemplates(ctx context.Context, workspaceID string, category string) ([]*Template, error)
 
 	// UpdateTemplate updates an existing template
 	UpdateTemplate(ctx context.Context, workspaceID string, template *Template) error
@@ -526,7 +534,7 @@ type TemplateRepository interface {
 	GetTemplateLatestVersion(ctx context.Context, workspaceID string, id string) (int64, error)
 
 	// GetTemplates retrieves all templates
-	GetTemplates(ctx context.Context, workspaceID string) ([]*Template, error)
+	GetTemplates(ctx context.Context, workspaceID string, category string) ([]*Template, error)
 
 	// UpdateTemplate updates an existing template, creating a new version
 	UpdateTemplate(ctx context.Context, workspaceID string, template *Template) error

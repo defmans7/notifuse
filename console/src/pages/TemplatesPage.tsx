@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Typography, Button, Table, Tooltip, Tag, Space, Popconfirm, message } from 'antd'
-import { useParams } from '@tanstack/react-router'
+import {
+  Typography,
+  Button,
+  Table,
+  Tooltip,
+  Tag,
+  Space,
+  Popconfirm,
+  message,
+  Segmented
+} from 'antd'
+import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
 import type { Template, Workspace } from '../services/api/types'
 import { EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -12,12 +22,42 @@ import TemplatePreviewPopover from '../components/templates/TemplatePreviewPopov
 
 const { Title, Paragraph, Text } = Typography
 
+// Define search params interface
+interface TemplatesSearch {
+  category?: string
+}
+
 export function TemplatesPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/templates' })
+  // Use useSearch to get query params
+  const search = useSearch({ from: '/workspace/$workspaceId/templates' }) as TemplatesSearch
+  const navigate = useNavigate({ from: '/workspace/$workspaceId/templates' })
   const queryClient = useQueryClient()
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const { workspaces } = useAuth()
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  // Derive selectedCategory from search params, default to 'all'
+  const selectedCategory = search.category || 'all'
+
+  // Function to update search params
+  const setSelectedCategory = (category: string) => {
+    navigate({
+      search: (prev) => ({ ...prev, category: category === 'all' ? undefined : category })
+    })
+  }
+
+  // Backend categories + All
+  const categories = [
+    { label: 'All', value: 'all' },
+    { label: 'Marketing', value: 'marketing' },
+    { label: 'Transactional', value: 'transactional' },
+    { label: 'Welcome', value: 'welcome' },
+    { label: 'Opt-in', value: 'opt_in' },
+    { label: 'Unsubscribe', value: 'unsubscribe' },
+    { label: 'Bounce', value: 'bounce' },
+    { label: 'Blocklist', value: 'blocklist' },
+    { label: 'Other', value: 'other' }
+  ]
 
   // current workspace from workspaceId
   useEffect(() => {
@@ -30,9 +70,16 @@ export function TemplatesPage() {
   }, [workspaces, workspaceId])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['templates', workspaceId],
+    // Use selectedCategory from search params in queryKey
+    queryKey: ['templates', workspaceId, selectedCategory],
     queryFn: () => {
-      return templatesApi.list({ workspace_id: workspaceId })
+      const params: { workspace_id: string; category?: string } = {
+        workspace_id: workspaceId
+      }
+      if (selectedCategory !== 'all') {
+        params.category = selectedCategory
+      }
+      return templatesApi.list(params)
     }
   })
 
@@ -40,7 +87,8 @@ export function TemplatesPage() {
     mutationFn: templatesApi.delete,
     onSuccess: () => {
       message.success('Template deleted successfully')
-      queryClient.invalidateQueries({ queryKey: ['templates', workspaceId] })
+      // Use selectedCategory from search params in invalidation
+      queryClient.invalidateQueries({ queryKey: ['templates', workspaceId, selectedCategory] })
     },
     onError: (error: any) => {
       const errorMsg = error?.response?.data?.error || error.message
@@ -188,6 +236,16 @@ export function TemplatesPage() {
         )}
       </div>
 
+      <div className="mb-4">
+        <Segmented
+          options={categories}
+          // Use selectedCategory from search params as value
+          value={selectedCategory}
+          // Update search params on change
+          onChange={(value) => setSelectedCategory(value as string)}
+        />
+      </div>
+
       {isLoading ? (
         <Table columns={columns} dataSource={[]} loading={true} rowKey="id" />
       ) : hasTemplates ? (
@@ -199,15 +257,32 @@ export function TemplatesPage() {
         />
       ) : (
         <div className="text-center py-12">
-          <Title level={4} type="secondary">
-            No templates found
-          </Title>
-          <Paragraph type="secondary">Create your first template to get started</Paragraph>
-          <div className="mt-4">
-            {workspace && (
-              <CreateTemplateDrawer workspace={workspace} buttonProps={{ size: 'large' }} />
-            )}
-          </div>
+          {selectedCategory === 'all' ? (
+            <>
+              <Title level={4} type="secondary">
+                No templates found
+              </Title>
+              <Paragraph type="secondary">Create your first template to get started</Paragraph>
+              <div className="mt-4">
+                {workspace && (
+                  <CreateTemplateDrawer workspace={workspace} buttonProps={{ size: 'large' }} />
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <Title level={4} type="secondary">
+                No templates found for category "{selectedCategory}"
+              </Title>
+              <Paragraph type="secondary">
+                Try selecting a different category or{' '}
+                <Button type="link" onClick={() => setSelectedCategory('all')} className="p-0">
+                  reset the filter
+                </Button>
+                .
+              </Paragraph>
+            </>
+          )}
         </div>
       )}
 
