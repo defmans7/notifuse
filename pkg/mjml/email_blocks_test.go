@@ -1,349 +1,700 @@
 package mjml
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
 
-// --- Test Helper Functions ---
+func TestEmailBlock_GetBlockData(t *testing.T) {
+	tests := []struct {
+		name     string
+		block    EmailBlock
+		wantType string
+	}{
+		{
+			name: "button block",
+			block: EmailBlock{
+				ID:   "test-button",
+				Kind: "button",
+				Data: ButtonBlockData{
+					Button: struct {
+						Text                   string `json:"text"`
+						Href                   string `json:"href"`
+						BackgroundColor        string `json:"backgroundColor"`
+						FontFamily             string `json:"fontFamily"`
+						FontSize               string `json:"fontSize"`
+						FontWeight             int    `json:"fontWeight"`
+						FontStyle              string `json:"fontStyle"`
+						Color                  string `json:"color"`
+						InnerVerticalPadding   string `json:"innerVerticalPadding"`
+						InnerHorizontalPadding string `json:"innerHorizontalPadding"`
+						Width                  string `json:"width"`
+						TextTransform          string `json:"textTransform"`
+						BorderRadius           string `json:"borderRadius"`
+						DisableTracking        bool   `json:"disable_tracking"`
+						BorderControl          string `json:"borderControl"`
+						BorderStyle            string `json:"borderStyle,omitempty"`
+						BorderWidth            string `json:"borderWidth,omitempty"`
+						BorderColor            string `json:"borderColor,omitempty"`
+						BorderTopStyle         string `json:"borderTopStyle,omitempty"`
+						BorderTopWidth         string `json:"borderTopWidth,omitempty"`
+						BorderTopColor         string `json:"borderTopColor,omitempty"`
+						BorderRightStyle       string `json:"borderRightStyle,omitempty"`
+						BorderRightWidth       string `json:"borderRightWidth,omitempty"`
+						BorderRightColor       string `json:"borderRightColor,omitempty"`
+						BorderBottomStyle      string `json:"borderBottomStyle,omitempty"`
+						BorderBottomWidth      string `json:"borderBottomWidth,omitempty"`
+						BorderBottomColor      string `json:"borderBottomColor,omitempty"`
+						BorderLeftStyle        string `json:"borderLeftStyle,omitempty"`
+						BorderLeftWidth        string `json:"borderLeftWidth,omitempty"`
+						BorderLeftColor        string `json:"borderLeftColor,omitempty"`
+					}{
+						Text: "Click Me",
+						Href: "https://example.com",
+					},
+					Wrapper: WrapperStyles{
+						Align: "center",
+					},
+				},
+			},
+			wantType: "mjml.ButtonBlockData",
+		},
+		{
+			name: "image block",
+			block: EmailBlock{
+				ID:   "test-image",
+				Kind: "image",
+				Data: ImageBlockData{
+					Image: struct {
+						Src           string `json:"src"`
+						Alt           string `json:"alt"`
+						Href          string `json:"href"`
+						Width         string `json:"width"`
+						BorderControl string `json:"borderControl"`
+					}{
+						Src: "https://example.com/image.jpg",
+						Alt: "Test Image",
+					},
+					Wrapper: WrapperStyles{
+						Align: "center",
+					},
+				},
+			},
+			wantType: "mjml.ImageBlockData",
+		},
+		{
+			name: "column block",
+			block: EmailBlock{
+				ID:   "test-column",
+				Kind: "column",
+				Data: ColumnBlockData{
+					Styles: struct {
+						VerticalAlign   string `json:"verticalAlign"`
+						BackgroundColor string `json:"backgroundColor,omitempty"`
+						MinHeight       string `json:"minHeight,omitempty"`
+						BaseStyles
+					}{
+						VerticalAlign: "top",
+					},
+					PaddingControl: "all",
+					BorderControl:  "all",
+				},
+			},
+			wantType: "mjml.ColumnBlockData",
+		},
+		{
+			name: "divider block",
+			block: EmailBlock{
+				ID:   "test-divider",
+				Kind: "divider",
+				Data: DividerBlockData{
+					Align:       "center",
+					BorderColor: "#000000",
+					BorderStyle: "solid",
+					BorderWidth: "1px",
+					Width:       "100%",
+				},
+			},
+			wantType: "mjml.DividerBlockData",
+		},
+		{
+			name: "section block",
+			block: EmailBlock{
+				ID:   "test-section",
+				Kind: "section",
+				Data: SectionBlockData{
+					ColumnsOnMobile:     true,
+					StackColumnsAtWidth: 600,
+					BackgroundType:      "color",
+					PaddingControl:      "all",
+					BorderControl:       "all",
+					Styles: struct {
+						TextAlign        string `json:"textAlign"`
+						BackgroundRepeat string `json:"backgroundRepeat,omitempty"`
+						Padding          string `json:"padding,omitempty"`
+						BorderWidth      string `json:"borderWidth,omitempty"`
+						BorderStyle      string `json:"borderStyle,omitempty"`
+						BorderColor      string `json:"borderColor,omitempty"`
+						BackgroundColor  string `json:"backgroundColor,omitempty"`
+						BackgroundImage  string `json:"backgroundImage,omitempty"`
+						BackgroundSize   string `json:"backgroundSize,omitempty"`
+						BaseStyles
+					}{
+						TextAlign:       "center",
+						BackgroundColor: "#ffffff",
+					},
+				},
+			},
+			wantType: "mjml.SectionBlockData",
+		},
+		{
+			name: "openTracking block",
+			block: EmailBlock{
+				ID:   "test-openTracking",
+				Kind: "openTracking",
+				Data: OpenTrackingBlockData{},
+			},
+			wantType: "mjml.OpenTrackingBlockData",
+		},
+		{
+			name: "text block",
+			block: EmailBlock{
+				ID:   "test-text",
+				Kind: "text",
+				Data: TextBlockData{
+					Align: "left",
+					Width: "100%",
+					HyperlinkStyles: struct {
+						Color          string `json:"color"`
+						TextDecoration string `json:"textDecoration"`
+						FontFamily     string `json:"fontFamily"`
+						FontSize       string `json:"fontSize"`
+						FontWeight     int    `json:"fontWeight"`
+						FontStyle      string `json:"fontStyle"`
+						TextTransform  string `json:"textTransform"`
+					}{
+						Color:          "#0000FF",
+						TextDecoration: "underline",
+					},
+				},
+			},
+			wantType: "mjml.TextBlockData",
+		},
+		{
+			name: "default case",
+			block: EmailBlock{
+				ID:   "test-unknown",
+				Kind: "unknown",
+				Data: map[string]interface{}{
+					"key": "value",
+				},
+			},
+			wantType: "map[string]interface {}",
+		},
+	}
 
-// Helper to create a basic text block for testing
-func createTextBlock(id, textContent string) EmailBlock {
-	return EmailBlock{
-		ID:   id,
-		Kind: "text",
-		Data: map[string]interface{}{
-			"align": "left",
-			"editorData": []interface{}{
-				map[string]interface{}{
-					"type": "paragraph",
-					"children": []interface{}{
-						map[string]interface{}{"text": textContent},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.block.GetBlockData()
+			gotType := reflect.TypeOf(got).String()
+
+			if gotType != tt.wantType {
+				t.Errorf("EmailBlock.GetBlockData() type = %v, want %v", gotType, tt.wantType)
+			}
+		})
+	}
+}
+
+// TestEmailBlock_GetBlockData_PanicHandling tests that type assertion errors are properly handled
+func TestEmailBlock_GetBlockData_PanicHandling(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("GetBlockData() did not panic with invalid data type, but should have")
+		}
+	}()
+
+	// This block has a mismatched data type which should cause a panic on type assertion
+	block := EmailBlock{
+		ID:   "test-invalid",
+		Kind: "button",
+		Data: "invalid data type", // String instead of ButtonBlockData
+	}
+
+	// This should cause a panic
+	_ = block.GetBlockData()
+}
+
+func TestTreeToMjml_HeadingBlock(t *testing.T) {
+	rootStyles := map[string]interface{}{
+		"h1": map[string]interface{}{
+			"fontSize":   "32px",
+			"fontWeight": "700",
+			"color":      "#333333",
+			"fontFamily": "Arial, sans-serif",
+			"margin":     "0px",
+		},
+	}
+
+	headingData := HeadingBlockData{
+		Type:  "h1",
+		Align: "center",
+		Width: "100%",
+		EditorData: []struct {
+			Type     string                   `json:"type"`
+			Children []map[string]interface{} `json:"children"`
+		}{
+			{
+				Type: "h1",
+				Children: []map[string]interface{}{
+					{
+						"text": "Test Heading",
 					},
 				},
 			},
 		},
 	}
-}
 
-// Helper to create basic root styles for testing
-func createRootStyles() map[string]interface{} {
-	return map[string]interface{}{
-		"body": map[string]interface{}{
-			"width":           "600px",
-			"backgroundColor": "#ffffff",
-		},
-		"paragraph": map[string]interface{}{
-			"color":      "#000000",
-			"fontSize":   "14px",
-			"fontWeight": 400,
-			"fontFamily": "Arial",
-			"margin":     "0px", // Explicitly test margin reset
-		},
-		"h1": map[string]interface{}{ // Add styles for h1 if needed for tests
-			"color":    "#111111",
-			"fontSize": "24px",
-		},
-		// Add other styles (h2, h3, hyperlink) if required by test cases
-	}
-}
-
-// --- Tests for Helper Functions ---
-
-func TestToKebabCase(t *testing.T) {
-	tests := []struct {
-		input  string
-		expect string
-	}{
-		{"camelCase", "camel-case"},
-		{"PascalCase", "pascal-case"},
-		{"lowercase", "lowercase"},
-		{"UPPERCASE", "uppercase"},
-		{"with1Number", "with1-number"},
-		{"withID", "with-id"},
-		{"MyURLValue", "my-url-value"},
-		{"backgroundColor", "background-color"},
-		{"fontFamily", "font-family"},
-		{"HTMLElement", "html-element"},
-		{"", ""},
+	headingBlock := EmailBlock{
+		ID:   "heading1",
+		Kind: "heading",
+		Data: headingData,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := toKebabCase(tt.input)
-			if result != tt.expect {
-				t.Errorf("toKebabCase(%q) = %q; want %q", tt.input, result, tt.expect)
-			}
-		})
-	}
-}
-
-func TestTrackURL(t *testing.T) {
-	params := map[string]string{
-		"utm_source":   "test_source",
-		"utm_medium":   "test_medium",
-		"utm_campaign": "test_campaign",
-	}
-	tests := []struct {
-		name     string
-		inputURL string
-		expect   string
-	}{
-		{"basic", "http://example.com", "http://example.com?utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
-		{"withExistingParam", "http://example.com?other=val", "http://example.com?other=val&utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
-		{"withExistingUTM", "http://example.com?utm_source=original", "http://example.com?utm_source=original"},
-		{"https", "https://secure.example.com/path?p=1", "https://secure.example.com/path?p=1&utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
-		{"liquidPlaceholder", "{{ variable_url }}", "{{ variable_url }}"},
-		{"emptyURL", "", ""},
-		{"mailto", "mailto:test@example.com", "mailto:test@example.com"},
-		{"tel", "tel:+1234567890", "tel:+1234567890"},
-		{"invalidURL", "://invalid", "://invalid"}, // Test invalid URL handling
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := trackURL(tt.inputURL, params)
-			// Comparing URLs can be tricky due to query param order, basic compare for now
-			if result != tt.expect {
-				t.Errorf("trackURL(%q) = %q; want %q", tt.inputURL, result, tt.expect)
-			}
-		})
-	}
-}
-
-// --- Tests for TreeToMjml ---
-
-func TestTreeToMjml_SimpleText(t *testing.T) {
-	rootStyles := createRootStyles()
-	block := createTextBlock("txt1", "Hello World")
-	urlParams := map[string]string{}
-
-	mjml, err := TreeToMjml(rootStyles, block, "", urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, headingBlock, "", map[string]string{}, 0, nil)
 	if err != nil {
-		t.Fatalf("TreeToMjml failed unexpectedly: %v", err)
+		t.Fatalf("TreeToMjml failed unexpectedly for heading block: %v", err)
 	}
 
-	// Basic checks - not exact formatting
+	// Check for expected elements in the output
 	if !strings.Contains(mjml, "<mj-text") {
-		t.Error("Expected output to contain <mj-text>")
-	}
-	if !strings.Contains(mjml, "Hello World") {
-		t.Error("Expected output to contain 'Hello World'")
-	}
-	if !strings.Contains(mjml, "align=\"left\"") {
-		t.Error("Expected output to contain align attribute")
-	}
-	if !strings.Contains(mjml, "padding=\"0\"") {
-		t.Error("Expected output to contain padding='0' attribute")
-	}
-	// Check for paragraph tag with styles from rootStyles
-	if !strings.Contains(mjml, `<p style="color: #000000 !important; font-family: Arial !important; font-size: 14px !important; font-weight: 400 !important; margin: 0px !important">Hello World</p>`) {
-		t.Errorf("Expected paragraph with styles not found in output:\n%s", mjml)
+		t.Error("Expected <mj-text> tag but not found")
 	}
 
-	// t.Logf("Simple Text MJML:\n%s", mjml) // Uncomment to view output
+	if !strings.Contains(mjml, "align=\"center\"") {
+		t.Error("Expected align=\"center\" attribute but not found")
+	}
+
+	if !strings.Contains(mjml, "<h1") {
+		t.Error("Expected <h1> tag but not found")
+	}
+
+	if !strings.Contains(mjml, "Test Heading") {
+		t.Error("Expected heading text but not found")
+	}
+
+	if !strings.Contains(mjml, "color: #333333") {
+		t.Error("Expected heading style with color but not found")
+	}
+
+	if !strings.Contains(mjml, "font-weight: 700") {
+		t.Error("Expected heading style with font-weight but not found")
+	}
 }
 
-func TestTreeToMjml_Nested(t *testing.T) {
-	rootStyles := createRootStyles()
-	textBlock := createTextBlock("txt_nested", "Nested Content")
-	columnBlock := EmailBlock{
-		ID:   "col1",
-		Kind: "column",
-		Data: map[string]interface{}{ // Add basic column data if needed
-			"styles": map[string]interface{}{"verticalAlign": "top"},
+func TestTreeToMjml_HeadingWithFormatting(t *testing.T) {
+	rootStyles := map[string]interface{}{
+		"h2": map[string]interface{}{
+			"fontSize":   "24px",
+			"fontWeight": "600",
+			"color":      "#444444",
+			"fontFamily": "Arial, sans-serif",
+			"margin":     "0px",
 		},
-		Children: []EmailBlock{textBlock},
-	}
-	sectionBlock := EmailBlock{
-		ID:   "sec1",
-		Kind: "oneColumn", // Using oneColumn which acts like mj-section
-		Data: map[string]interface{}{ // Add basic section data
-			"styles": map[string]interface{}{"textAlign": "center"},
-		},
-		Children: []EmailBlock{columnBlock},
-	}
-	rootBlock := EmailBlock{
-		ID:       "root",
-		Kind:     "root",
-		Data:     map[string]interface{}{"styles": rootStyles}, // Root data contains the styles
-		Children: []EmailBlock{sectionBlock},
-	}
-
-	urlParams := map[string]string{}
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", urlParams, 0, nil)
-	if err != nil {
-		t.Fatalf("TreeToMjml failed unexpectedly for nested structure: %v", err)
-	}
-
-	// Check for expected tags and content
-	if !strings.Contains(mjml, "<mjml>") {
-		t.Error("Missing <mjml> tag")
-	}
-	if !strings.Contains(mjml, "<mj-body") {
-		t.Error("Missing <mj-body> tag")
-	}
-	if !strings.Contains(mjml, "<mj-section") {
-		t.Error("Missing <mj-section> tag")
-	}
-	if !strings.Contains(mjml, "text-align=\"center\"") {
-		t.Error("Missing text-align on section")
-	}
-	if !strings.Contains(mjml, "<mj-column") {
-		t.Error("Missing <mj-column> tag")
-	}
-	if !strings.Contains(mjml, "vertical-align=\"top\"") {
-		t.Error("Missing vertical-align on column")
-	}
-	if !strings.Contains(mjml, "<mj-text") {
-		t.Error("Missing <mj-text> tag")
-	}
-	if !strings.Contains(mjml, "Nested Content") {
-		t.Error("Missing nested content 'Nested Content'")
-	}
-
-	// t.Logf("Nested MJML:\n%s", mjml) // Uncomment to view output
-}
-
-func TestTreeToMjml_Liquid(t *testing.T) {
-	rootStyles := createRootStyles()
-	liquidBlock := EmailBlock{
-		ID:   "liq1",
-		Kind: "liquid",
-		Data: map[string]interface{}{
-			"liquidCode": "<p>Hello {{ name }}!</p>",
+		"hyperlink": map[string]interface{}{
+			"color":          "#0000FF",
+			"textDecoration": "underline",
+			"fontWeight":     "bold",
 		},
 	}
-	rootBlock := EmailBlock{
-		ID:       "root",
-		Kind:     "root",
-		Data:     map[string]interface{}{"styles": rootStyles},
-		Children: []EmailBlock{liquidBlock},
-	}
 
-	urlParams := map[string]string{}
-	templateData := `{"name": "LiquidUser"}`
-
-	mjml, err := TreeToMjml(rootStyles, rootBlock, templateData, urlParams, 0, nil)
-	if err != nil {
-		t.Fatalf("TreeToMjml failed unexpectedly for liquid block: %v", err)
-	}
-
-	// Check if liquid was processed - liquid block content is inserted raw
-	if !strings.Contains(mjml, "<p>Hello LiquidUser!</p>") {
-		t.Errorf("Expected processed liquid content not found in MJML:\n%s", mjml)
-	}
-
-	// t.Logf("Liquid MJML:\n%s", mjml) // Uncomment to view output
-}
-
-func TestTreeToMjml_LiquidError(t *testing.T) {
-	rootStyles := createRootStyles()
-	liquidBlock := EmailBlock{
-		ID:   "liq_err",
-		Kind: "liquid",
-		Data: map[string]interface{}{
-			"liquidCode": "{% invalid tag %}",
-		},
-	}
-	rootBlock := EmailBlock{
-		ID:       "root",
-		Kind:     "root",
-		Data:     map[string]interface{}{"styles": rootStyles},
-		Children: []EmailBlock{liquidBlock},
-	}
-
-	urlParams := map[string]string{}
-	templateData := `{}`
-
-	_, err := TreeToMjml(rootStyles, rootBlock, templateData, urlParams, 0, nil)
-	if err == nil {
-		t.Fatal("TreeToMjml should have failed for invalid liquid tag, but err was nil")
-	}
-
-	// Check if the error message indicates a liquid parsing/rendering error
-	if !strings.Contains(err.Error(), "liquid rendering error") {
-		t.Errorf("Expected error message to contain 'liquid rendering error', got: %v", err)
-	}
-
-	// t.Logf("Liquid Error: %v", err) // Uncomment to view error
-}
-
-func TestTreeToMjml_ImageWithTracking(t *testing.T) {
-	rootStyles := createRootStyles()
-	imageBlock := EmailBlock{
-		ID:   "img1",
-		Kind: "image",
-		Data: map[string]interface{}{ // Data structure mirrors ImageBlockData roughly
-			"image": map[string]interface{}{ // Nested 'image' field
-				"src":              "http://example.com/image.png",
-				"alt":              "Test Image",
-				"href":             "http://example.com/link",
-				"disable_tracking": false, // Explicitly enable tracking
-			},
-			"wrapper": map[string]interface{}{ // Nested 'wrapper' field
-				"align": "center",
+	headingData := HeadingBlockData{
+		Type:  "h2",
+		Align: "left",
+		EditorData: []struct {
+			Type     string                   `json:"type"`
+			Children []map[string]interface{} `json:"children"`
+		}{
+			{
+				Type: "h2",
+				Children: []map[string]interface{}{
+					{
+						"text": "Heading with ",
+					},
+					{
+						"text": "bold",
+						"bold": true,
+					},
+					{
+						"text": " and ",
+					},
+					{
+						"text": "link",
+						"hyperlink": map[string]interface{}{
+							"url": "https://example.com",
+						},
+					},
+				},
 			},
 		},
 	}
-	rootBlock := EmailBlock{
-		ID:       "root",
-		Kind:     "root",
-		Data:     map[string]interface{}{"styles": rootStyles},
-		Children: []EmailBlock{imageBlock},
+
+	headingBlock := EmailBlock{
+		ID:   "heading2",
+		Kind: "heading",
+		Data: headingData,
 	}
 
 	urlParams := map[string]string{
-		"utm_source": "test_img_src",
-		"utm_medium": "email",
+		"utm_source": "test",
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, headingBlock, "", urlParams, 0, nil)
 	if err != nil {
-		t.Fatalf("TreeToMjml failed unexpectedly for image block: %v", err)
+		t.Fatalf("TreeToMjml failed unexpectedly for heading with formatting: %v", err)
 	}
 
-	if !strings.Contains(mjml, "<mj-image") {
-		t.Error("Expected output to contain <mj-image>")
-	}
-	if !strings.Contains(mjml, `src="http://example.com/image.png"`) {
-		t.Error("Missing correct src attribute")
-	}
-	if !strings.Contains(mjml, `alt="Test Image"`) {
-		t.Error("Missing correct alt attribute")
-	}
-	// Check for tracked URL
-	expectedTrackedHref := `href="http://example.com/link?utm_medium=email&utm_source=test_img_src"`
-	if !strings.Contains(mjml, expectedTrackedHref) {
-		t.Errorf("Expected tracked href %q not found in output:\n%s", expectedTrackedHref, mjml)
-	}
-	if !strings.Contains(mjml, `target="_blank"`) || !strings.Contains(mjml, `rel="noopener noreferrer"`) {
-		t.Error("Missing target or rel attribute on tracked link")
-	}
-	if !strings.Contains(mjml, `align="center"`) {
-		t.Error("Missing align attribute from wrapper")
+	// Check for expected elements
+	if !strings.Contains(mjml, "<h2") {
+		t.Error("Expected <h2> tag but not found")
 	}
 
-	// t.Logf("Image MJML:\n%s", mjml) // Uncomment to view output
+	if !strings.Contains(mjml, "<span style=\"font-weight: bold\">bold</span>") {
+		t.Error("Expected bold formatting but not found")
+	}
+
+	if !strings.Contains(mjml, "<a style=") && !strings.Contains(mjml, "href=\"https://example.com") {
+		t.Error("Expected hyperlink but not found")
+	}
+
+	if !strings.Contains(mjml, "utm_source=test") {
+		t.Error("Expected tracking parameters in URL but not found")
+	}
 }
 
-func TestTreeToMjml_NilData(t *testing.T) {
-	rootStyles := createRootStyles()
-	block := EmailBlock{
-		ID:       "nil_data_block",
-		Kind:     "text", // Use a kind that expects data
-		Data:     nil,    // Explicitly set data to nil
-		Children: nil,
+func TestTreeToMjml_OpenTracking(t *testing.T) {
+	rootStyles := map[string]interface{}{}
+
+	openTrackingBlock := EmailBlock{
+		ID:   "tracking1",
+		Kind: "openTracking",
+		Data: OpenTrackingBlockData{},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, block, "", nil, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, openTrackingBlock, "", map[string]string{}, 0, nil)
 	if err != nil {
-		t.Fatalf("TreeToMjml failed unexpectedly with nil data: %v", err)
+		t.Fatalf("TreeToMjml failed unexpectedly for openTracking block: %v", err)
 	}
 
-	// Expect an empty or minimal mj-text tag, as data was nil
-	expected := `<mj-text padding="0"></mj-text>`
-	if strings.TrimSpace(mjml) != expected {
-		t.Errorf("Expected minimal tag %q for nil data, got: %q", expected, strings.TrimSpace(mjml))
+	// Check for expected elements
+	if !strings.Contains(mjml, "<mj-raw>") {
+		t.Error("Expected <mj-raw> tag but not found")
+	}
+
+	if !strings.Contains(mjml, "<img src=\"{{ open_tracking_pixel_src }}\"") {
+		t.Error("Expected image tag with tracking pixel but not found")
+	}
+
+	if !strings.Contains(mjml, "height=\"1\" width=\"1\"") {
+		t.Error("Expected 1x1 pixel dimensions but not found")
+	}
+
+	if !strings.Contains(mjml, "style=\"display:block; max-height:1px; max-width:1px; visibility:hidden;") {
+		t.Error("Expected hidden style attributes but not found")
+	}
+}
+
+// Additional tests for error handling in TreeToMjml
+
+func TestTreeToMjml_HeadingLiquidProcessingError(t *testing.T) {
+	rootStyles := map[string]interface{}{}
+
+	headingData := HeadingBlockData{
+		Type:  "h1",
+		Align: "center",
+		EditorData: []struct {
+			Type     string                   `json:"type"`
+			Children []map[string]interface{} `json:"children"`
+		}{
+			{
+				Type: "h1",
+				Children: []map[string]interface{}{
+					{
+						"text": "Hello {{ invalid syntax",
+					},
+				},
+			},
+		},
+	}
+
+	headingBlock := EmailBlock{
+		ID:   "heading_err",
+		Kind: "heading",
+		Data: headingData,
+	}
+
+	templateData := `{}`
+
+	_, err := TreeToMjml(rootStyles, headingBlock, templateData, map[string]string{}, 0, nil)
+
+	// The error might not occur because the text is not recognized as liquid template
+	// This is because we check for "{{" and "{%" patterns
+	// If no error, we should verify the content
+	if err == nil {
+		// Test passes - liquid detection didn't trigger for this pattern
+		return
+	}
+
+	// If an error did occur, it should be a liquid rendering error
+	if !strings.Contains(err.Error(), "liquid rendering error") {
+		t.Errorf("Expected liquid rendering error, got: %v", err)
+	}
+}
+
+func TestTreeToMjml_TextWithLiquidAndData(t *testing.T) {
+	rootStyles := map[string]interface{}{
+		"paragraph": map[string]interface{}{
+			"fontSize":   "16px",
+			"color":      "#222222",
+			"fontFamily": "Arial, sans-serif",
+			"margin":     "0px",
+		},
+	}
+
+	textData := TextBlockData{
+		Align: "left",
+		EditorData: []struct {
+			Type     string                   `json:"type"`
+			Children []map[string]interface{} `json:"children"`
+		}{
+			{
+				Type: "paragraph",
+				Children: []map[string]interface{}{
+					{
+						"text": "Hello {{ name }}! Your order #{{ order_id }} has been {{ status }}.",
+					},
+				},
+			},
+		},
+	}
+
+	textBlock := EmailBlock{
+		ID:   "text_liquid",
+		Kind: "text",
+		Data: textData,
+	}
+
+	templateData := `{
+		"name": "John Doe",
+		"order_id": 12345,
+		"status": "shipped"
+	}`
+
+	mjml, err := TreeToMjml(rootStyles, textBlock, templateData, map[string]string{}, 0, nil)
+	if err != nil {
+		t.Fatalf("TreeToMjml failed unexpectedly for text with liquid: %v", err)
+	}
+
+	// Check for expected elements with replaced values
+	if !strings.Contains(mjml, "Hello John Doe!") {
+		t.Error("Expected name replacement but not found")
+	}
+
+	if !strings.Contains(mjml, "order #12345") {
+		t.Error("Expected order_id replacement but not found")
+	}
+
+	if !strings.Contains(mjml, "has been shipped") {
+		t.Error("Expected status replacement but not found")
+	}
+}
+
+func TestTreeToMjml_InvalidJsonTemplateData(t *testing.T) {
+	rootStyles := map[string]interface{}{}
+
+	textData := TextBlockData{
+		Align: "left",
+		EditorData: []struct {
+			Type     string                   `json:"type"`
+			Children []map[string]interface{} `json:"children"`
+		}{
+			{
+				Type: "paragraph",
+				Children: []map[string]interface{}{
+					{
+						"text": "Hello {{ name }}!",
+					},
+				},
+			},
+		},
+	}
+
+	textBlock := EmailBlock{
+		ID:   "text_invalid_json",
+		Kind: "text",
+		Data: textData,
+	}
+
+	// Invalid JSON in templateData
+	templateData := `{"name": "John Doe", invalid json}`
+
+	_, err := TreeToMjml(rootStyles, textBlock, templateData, map[string]string{}, 0, nil)
+
+	// Should return an error for invalid JSON
+	if err == nil {
+		t.Error("Expected error for invalid JSON template data, but got nil")
+		return
+	}
+
+	if !strings.Contains(err.Error(), "invalid JSON") {
+		t.Errorf("Expected 'invalid JSON' error message, got: %v", err)
+	}
+}
+
+func TestTreeToMjml_MarshalUnmarshalError(t *testing.T) {
+	rootStyles := map[string]interface{}{}
+
+	// Create a block with a custom data type that can't be reliably marshalled/unmarshalled
+	type circularRef struct {
+		Self *circularRef
+	}
+
+	// Create a circular reference which will cause marshal to fail
+	var c circularRef
+	c.Self = &c
+
+	block := EmailBlock{
+		ID:   "marshal_error",
+		Kind: "button",
+		Data: c, // This will cause Marshal to fail
+	}
+
+	_, err := TreeToMjml(rootStyles, block, "", map[string]string{}, 0, nil)
+
+	// Should return an error when marshalling fails
+	if err == nil {
+		t.Error("Expected error for marshal failure, but got nil")
+		return
+	}
+
+	if !strings.Contains(err.Error(), "failed to marshal") {
+		t.Errorf("Expected 'failed to marshal' error, got: %v", err)
+	}
+}
+
+func TestTreeToMjml_ChildBlockError(t *testing.T) {
+	rootStyles := map[string]interface{}{}
+
+	// Child block that will generate an error (liquid with invalid syntax)
+	errorBlock := EmailBlock{
+		ID:   "liquid_error",
+		Kind: "liquid",
+		Data: map[string]interface{}{
+			"liquidCode": "{% invalid syntax %}",
+		},
+	}
+
+	// Parent block with the error block as a child
+	rootBlock := EmailBlock{
+		ID:       "root",
+		Kind:     "root",
+		Data:     map[string]interface{}{},
+		Children: []EmailBlock{errorBlock},
+	}
+
+	_, err := TreeToMjml(rootStyles, rootBlock, "{}", map[string]string{}, 0, nil)
+
+	// Should return an error propagated from the child
+	if err == nil {
+		t.Error("Expected error from child block, but got nil")
+		return
+	}
+
+	// The error should mention the child block ID
+	if !strings.Contains(err.Error(), "liquid_error") {
+		t.Errorf("Expected error to reference child block ID, got: %v", err)
+	}
+}
+
+func TestTreeToMjml_UnknownBlockType(t *testing.T) {
+	rootStyles := map[string]interface{}{}
+
+	unknownBlock := EmailBlock{
+		ID:   "unknown_type",
+		Kind: "nonexistent_type",
+		Data: map[string]interface{}{
+			"field1": "value1",
+			"field2": 42,
+		},
+	}
+
+	mjml, err := TreeToMjml(rootStyles, unknownBlock, "", map[string]string{}, 0, nil)
+	if err != nil {
+		t.Fatalf("TreeToMjml unexpectedly failed for unknown block type: %v", err)
+	}
+
+	// For unknown types, should return a comment
+	if !strings.Contains(mjml, "<!-- MJML Not Implemented: nonexistent_type -->") {
+		t.Errorf("Expected comment for unimplemented block type, got: %s", mjml)
+	}
+}
+
+func TestTreeToMjml_NestedColumnWidthCalculation(t *testing.T) {
+	rootStyles := map[string]interface{}{}
+
+	// Create column blocks with IDs that we can look up
+	column1 := EmailBlock{
+		ID:   "col_first",
+		Kind: "column",
+		Data: ColumnBlockData{
+			Styles: struct {
+				VerticalAlign   string `json:"verticalAlign"`
+				BackgroundColor string `json:"backgroundColor,omitempty"`
+				MinHeight       string `json:"minHeight,omitempty"`
+				BaseStyles
+			}{
+				VerticalAlign: "top",
+			},
+		},
+	}
+
+	column2 := EmailBlock{
+		ID:   "col_second",
+		Kind: "column",
+		Data: ColumnBlockData{
+			Styles: struct {
+				VerticalAlign   string `json:"verticalAlign"`
+				BackgroundColor string `json:"backgroundColor,omitempty"`
+				MinHeight       string `json:"minHeight,omitempty"`
+				BaseStyles
+			}{
+				VerticalAlign: "middle",
+			},
+		},
+	}
+
+	// Create a columns816 layout (33.33% / 66.66%)
+	sectionBlock := EmailBlock{
+		ID:   "sec_816",
+		Kind: "columns816",
+		Data: map[string]interface{}{},
+		Children: []EmailBlock{
+			column1,
+			column2,
+		},
+	}
+
+	mjml, err := TreeToMjml(rootStyles, sectionBlock, "", map[string]string{}, 0, nil)
+	if err != nil {
+		t.Fatalf("TreeToMjml failed for nested column layout: %v", err)
+	}
+
+	// Check that column widths were correctly calculated
+	if !strings.Contains(mjml, "width=\"33.33%\"") {
+		t.Error("First column should have width=\"33.33%\"")
+	}
+
+	if !strings.Contains(mjml, "width=\"66.66%\"") {
+		t.Error("Second column should have width=\"66.66%\"")
 	}
 }

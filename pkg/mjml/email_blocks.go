@@ -15,6 +15,9 @@ import (
 
 // indentPad returns a string of n spaces
 func indentPad(n int) string {
+	if n <= 0 {
+		return ""
+	}
 	return strings.Repeat(" ", n)
 }
 
@@ -319,10 +322,8 @@ type TextBlockData struct {
 		TextTransform  string `json:"textTransform"`
 	} `json:"hyperlinkStyles"`
 	EditorData []struct {
-		Type     string `json:"type"`
-		Children []struct {
-			Text string `json:"text"`
-		} `json:"children"`
+		Type     string                   `json:"type"`
+		Children []map[string]interface{} `json:"children"` // Changed to map to preserve all fields
 	} `json:"editorData"`
 	BackgroundColor string `json:"backgroundColor,omitempty"`
 	PaddingControl  string `json:"paddingControl,omitempty"` // "all" or "separate"
@@ -339,10 +340,8 @@ type HeadingBlockData struct {
 	Align      string `json:"align"` // "left", "center", "right"
 	Width      string `json:"width"`
 	EditorData []struct {
-		Type     string `json:"type"`
-		Children []struct {
-			Text string `json:"text"`
-		} `json:"children"`
+		Type     string                   `json:"type"`
+		Children []map[string]interface{} `json:"children"` // Changed to map to preserve all fields
 	} `json:"editorData"`
 	BackgroundColor string `json:"backgroundColor,omitempty"`
 	PaddingControl  string `json:"paddingControl,omitempty"` // "all" or "separate"
@@ -697,7 +696,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					continue
 				}
 
-				partText := part.Text // Assign the actual text content first
+				partText := getMapString(partMap, "text") // Get text from map
 
 				// --- Liquid Processing ---
 				if strings.Contains(partText, "{{") || strings.Contains(partText, "{%") {
@@ -959,7 +958,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					continue
 				}
 
-				partText := part.Text // Assign the actual text content first
+				partText := getMapString(partMap, "text") // Get text from map
 
 				// --- Liquid Processing --- (identical to text block)
 				if strings.Contains(partText, "{{") || strings.Contains(partText, "{%") {
@@ -1237,6 +1236,13 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		if err := unmarshalBlockData(&buttonData); err != nil {
 			return "", err
 		}
+		// Add validation: Check if essential fields were populated
+		if buttonData.Button.Text == "" {
+			// Log or return error if critical data is missing after unmarshal
+			log.Printf("Warning: Button block (ID: %s) missing text after data unmarshal. Input data might be invalid.", block.ID)
+			// Depending on desired strictness, we could return an error:
+			// return "", fmt.Errorf("invalid data for button block (ID: %s): missing button text", block.ID)
+		}
 
 		tagName = "mj-button"
 		buttonAttrs := make(map[string]interface{})
@@ -1384,6 +1390,34 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		}
 		return renderedContent, nil // Return raw rendered content
 
+	case "spacer": // <<< ADD THIS CASE
+		var spacerData map[string]interface{} // Use map for simple structure
+		if block.Data != nil {
+			var ok bool
+			spacerData, ok = block.Data.(map[string]interface{})
+			if !ok {
+				// Attempt unmarshal if it's not already a map
+				if err := unmarshalBlockData(&spacerData); err != nil {
+					// If unmarshal also fails, return error or log warning
+					log.Printf("Warning: spacer block data (ID: %s) is not map[string]interface{} and failed to unmarshal: %v", block.ID, err)
+					spacerData = make(map[string]interface{}) // Use empty map
+				}
+			}
+		} else {
+			spacerData = make(map[string]interface{}) // Use empty map if Data is nil
+		}
+
+		tagName = "mj-spacer"
+		spacerAttrs := make(map[string]interface{})
+		if height, ok := spacerData["height"]; ok {
+			spacerAttrs["height"] = fmt.Sprintf("%v", height)
+		}
+		if bgColor, ok := spacerData["backgroundColor"]; ok && fmt.Sprintf("%v", bgColor) != "" {
+			spacerAttrs["container-background-color"] = fmt.Sprintf("%v", bgColor)
+		}
+		// Spacers generally don't have padding or borders in the same way
+		attributes = spacerAttrs
+
 	default:
 		log.Printf("Warning: MJML conversion not implemented for block kind: %s (ID: %s)", block.Kind, block.ID)
 		return fmt.Sprintf("%s<!-- MJML Not Implemented: %s -->", space, block.Kind), nil
@@ -1462,8 +1496,12 @@ func applyPaddingFromStruct(paddingControl, padding, paddingTop, paddingRight, p
 		if paddingLeft != "" && paddingLeft != "0px" {
 			attrs["padding-left"] = paddingLeft
 		}
+	} else { // Added else block for default/invalid control
+		// Default behavior: use shorthand padding if provided and not zero
+		if padding != "" && padding != "0px" {
+			attrs["padding"] = padding
+		} // Otherwise, leave attrs unchanged (don't default to padding:0 here)
 	}
-	// If neither control applied and padding:0 was set, it remains.
 }
 
 // applyBordersFromStruct adds border attributes based on struct fields.
@@ -1503,53 +1541,77 @@ func applyBordersFromStruct(
 
 // applyPaddingToStyleListFromStruct adds padding styles based on struct fields.
 func applyPaddingToStyleListFromStruct(paddingControl, padding, paddingTop, paddingRight, paddingBottom, paddingLeft string, styleList *[]string, suffix string) {
-	if paddingControl == "all" && padding != "" && padding != "0px" {
-		*styleList = append(*styleList, fmt.Sprintf("padding: %s%s", padding, suffix))
+	if paddingControl == "all" {
+		// Check value *without* suffix first
+		if padding != "" && padding != "0px" {
+			*styleList = append(*styleList, fmt.Sprintf("padding: %s%s", padding, suffix))
+		}
 	} else if paddingControl == "separate" {
-		if paddingTop != "" && paddingTop != "0px" {
+		// Check value without suffix or "!important" suffix
+		if paddingTop != "" && paddingTop != "0px" && paddingTop != "0px !important" {
 			*styleList = append(*styleList, fmt.Sprintf("padding-top: %s%s", paddingTop, suffix))
 		}
-		if paddingRight != "" && paddingRight != "0px" {
+		if paddingRight != "" && paddingRight != "0px" && paddingRight != "0px !important" {
 			*styleList = append(*styleList, fmt.Sprintf("padding-right: %s%s", paddingRight, suffix))
 		}
-		if paddingBottom != "" && paddingBottom != "0px" {
+		if paddingBottom != "" && paddingBottom != "0px" && paddingBottom != "0px !important" {
 			*styleList = append(*styleList, fmt.Sprintf("padding-bottom: %s%s", paddingBottom, suffix))
 		}
-		if paddingLeft != "" && paddingLeft != "0px" {
+		if paddingLeft != "" && paddingLeft != "0px" && paddingLeft != "0px !important" {
 			*styleList = append(*styleList, fmt.Sprintf("padding-left: %s%s", paddingLeft, suffix))
 		}
+	} else {
+		// Default behavior: use shorthand padding if provided and not zero (check *without* suffix)
+		if padding != "" && padding != "0px" {
+			*styleList = append(*styleList, fmt.Sprintf("padding: %s%s", padding, suffix))
+		}
+		// No default padding:0 is added here, as it might conflict with other styles
 	}
 }
 
 // applyMarginToStyleListFromStruct adds margin styles based on struct fields.
 func applyMarginToStyleListFromStruct(marginControl, margin, marginTop, marginRight, marginBottom, marginLeft string, styleList *[]string, suffix string) {
 	hasSpecificMargin := false
-	if marginControl == "all" && margin != "" && margin != "0px" {
-		*styleList = append(*styleList, fmt.Sprintf("margin: %s%s", margin, suffix))
-		hasSpecificMargin = true
+	if marginControl == "all" {
+		// Check value *without* suffix first
+		if margin != "" && margin != "0px" {
+			*styleList = append(*styleList, fmt.Sprintf("margin: %s%s", margin, suffix))
+			hasSpecificMargin = true
+		}
 	} else if marginControl == "separate" {
-		var marginStyles []string
-		if marginTop != "" && marginTop != "0px" {
-			marginStyles = append(marginStyles, fmt.Sprintf("margin-top: %s%s", marginTop, suffix))
+		// Check value without suffix or "!important" suffix
+		if marginTop != "" && marginTop != "0px" && marginTop != "0px !important" {
+			*styleList = append(*styleList, fmt.Sprintf("margin-top: %s%s", marginTop, suffix))
+			hasSpecificMargin = true
 		}
-		if marginRight != "" && marginRight != "0px" {
-			marginStyles = append(marginStyles, fmt.Sprintf("margin-right: %s%s", marginRight, suffix))
+		if marginRight != "" && marginRight != "0px" && marginRight != "0px !important" {
+			*styleList = append(*styleList, fmt.Sprintf("margin-right: %s%s", marginRight, suffix))
+			hasSpecificMargin = true
 		}
-		if marginBottom != "" && marginBottom != "0px" {
-			marginStyles = append(marginStyles, fmt.Sprintf("margin-bottom: %s%s", marginBottom, suffix))
+		if marginBottom != "" && marginBottom != "0px" && marginBottom != "0px !important" {
+			*styleList = append(*styleList, fmt.Sprintf("margin-bottom: %s%s", marginBottom, suffix))
+			hasSpecificMargin = true
 		}
-		if marginLeft != "" && marginLeft != "0px" {
-			marginStyles = append(marginStyles, fmt.Sprintf("margin-left: %s%s", marginLeft, suffix))
+		if marginLeft != "" && marginLeft != "0px" && marginLeft != "0px !important" {
+			*styleList = append(*styleList, fmt.Sprintf("margin-left: %s%s", marginLeft, suffix))
+			hasSpecificMargin = true
 		}
-
-		if len(marginStyles) > 0 {
-			*styleList = append(*styleList, strings.Join(marginStyles, "; ")) // Add separate margins
+	} else {
+		// Default behavior: use shorthand margin if provided and not zero (check *without* suffix)
+		if margin != "" && margin != "0px" {
+			*styleList = append(*styleList, fmt.Sprintf("margin: %s%s", margin, suffix))
 			hasSpecificMargin = true
 		}
 	}
-	// Ensure margin:0 is applied if no specific margin is set (matches original logic)
+
+	// Ensure margin:0 is applied if no specific margin is set
 	if !hasSpecificMargin {
-		*styleList = append(*styleList, fmt.Sprintf("margin: 0px%s", suffix))
+		// Use explicit !important suffix for the default margin
+		if suffix == "" {
+			*styleList = append(*styleList, "margin: 0px !important")
+		} else {
+			*styleList = append(*styleList, fmt.Sprintf("margin: 0px%s", suffix))
+		}
 	}
 }
 
