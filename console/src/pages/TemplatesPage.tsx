@@ -16,6 +16,7 @@ import { templatesApi } from '../services/api/template'
 import type { Template, Workspace } from '../services/api/types'
 import { EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
+import { renderCategoryTag } from '../components/templates'
 import { useAuth } from '../contexts/AuthContext'
 import dayjs from '../lib/dayjs'
 import TemplatePreviewPopover from '../components/templates/TemplatePreviewPopover'
@@ -126,15 +127,27 @@ export function TemplatesPage() {
       title: 'Category',
       dataIndex: 'category',
       key: 'category',
-      render: (category: string) => {
-        const colorMap: Record<string, string> = {
-          transactional: 'green',
-          campaign: 'purple',
-          automation: 'cyan',
-          other: 'magenta'
-        }
-        return <Tag color={colorMap[category] || 'default'}>{category}</Tag>
-      }
+      render: (category: string) => renderCategoryTag(category)
+    },
+    {
+      title: 'Sender',
+      key: 'sender',
+      render: (_: any, record: Template) => (
+        <div>
+          {record.email?.from_name && (
+            <div>
+              <Text>{record.email.from_name}</Text>
+            </div>
+          )}
+          {record.email?.from_address && (
+            <div>
+              <Text type="secondary" className="text-xs">
+                {record.email.from_address}
+              </Text>
+            </div>
+          )}
+        </div>
+      )
     },
     {
       title: 'Subject',
@@ -206,7 +219,14 @@ export function TemplatesPage() {
           <TemplatePreviewPopover record={record} workspaceId={workspaceId!}>
             <Button type="text" icon={<EyeOutlined />} />
           </TemplatePreviewPopover>
-          <Button type="text" icon={<EditOutlined />} onClick={() => setSelectedTemplate(record)} />
+          {workspace && (
+            <CreateTemplateDrawer
+              template={record}
+              workspace={workspace}
+              buttonContent={<EditOutlined />}
+              buttonProps={{ type: 'text', size: 'small' }}
+            />
+          )}
           <Popconfirm
             title="Delete the template?"
             description="Are you sure you want to delete this template? All versions will be deleted."
@@ -284,15 +304,6 @@ export function TemplatesPage() {
             </>
           )}
         </div>
-      )}
-
-      {workspace && selectedTemplate && (
-        <CreateTemplateDrawer
-          template={selectedTemplate}
-          workspace={workspace}
-          buttonProps={{ style: { display: 'none' } }}
-          onClose={handleDrawerClose}
-        />
       )}
     </div>
   )

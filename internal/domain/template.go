@@ -71,7 +71,7 @@ func (t *Template) Validate() error {
 	}
 
 	if t.Version <= 0 {
-		return fmt.Errorf("invalid template: version is required and must be positive")
+		return fmt.Errorf("invalid template: version must be positive")
 	}
 
 	if t.Channel == "" {
@@ -118,8 +118,8 @@ func (t *TemplateReference) Validate() error {
 		return fmt.Errorf("invalid template reference: id length must be between 1 and 32")
 	}
 
-	if t.Version <= 0 {
-		return fmt.Errorf("invalid template reference: version is required and must be positive")
+	if t.Version < 0 {
+		return fmt.Errorf("invalid template reference: version must be zero or positive")
 	}
 
 	return nil

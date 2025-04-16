@@ -125,7 +125,7 @@ export interface InviteMemberResponse {
 // List types
 export interface TemplateReference {
   id: string
-  variant_id: string
+  version: number
 }
 
 export interface List {
@@ -231,7 +231,7 @@ export interface EmailTemplate {
   subject: string
   subject_preview?: string
   mjml: string // html
-  visual_editor_tree: string
+  visual_editor_tree: BlockInterface
   text?: string
 }
 

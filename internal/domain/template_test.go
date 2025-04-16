@@ -109,6 +109,15 @@ func TestTemplate_Validate(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name: "invalid template with version 0",
+			template: func() *Template {
+				t := createValidTemplate()
+				t.Version = 0
+				return t
+			}(),
+			wantErr: true,
+		},
+		{
 			name: "invalid template - missing ID",
 			template: func() *Template {
 				t := createValidTemplate()
@@ -227,6 +236,14 @@ func TestTemplateReference_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid reference with version 0",
+			ref: &TemplateReference{
+				ID:      "test123",
+				Version: 0,
+			},
+			wantErr: false,
+		},
+		{
 			name: "invalid reference - missing ID",
 			ref: &TemplateReference{
 				ID:      "",
@@ -235,10 +252,10 @@ func TestTemplateReference_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "invalid reference - missing version",
+			name: "invalid reference - negative version",
 			ref: &TemplateReference{
 				ID:      "test123",
-				Version: 0,
+				Version: -1,
 			},
 			wantErr: true,
 		},

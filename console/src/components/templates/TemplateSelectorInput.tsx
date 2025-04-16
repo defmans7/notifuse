@@ -1,0 +1,201 @@
+import React, { useState, useEffect } from 'react'
+import { Input, Drawer, List, Empty, Spin, Button } from 'antd'
+import { EyeOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { templatesApi } from '../../services/api/template'
+import type { Template } from '../../services/api/types'
+import TemplatePreviewPopover from './TemplatePreviewPopover'
+import { CreateTemplateDrawer } from './CreateTemplateDrawer'
+import { useAuth } from '../../contexts/AuthContext'
+
+interface TemplateSelectorInputProps {
+  value?: string
+  onChange?: (value: string) => void
+  workspaceId: string
+  category?:
+    | 'marketing'
+    | 'transactional'
+    | 'welcome'
+    | 'opt_in'
+    | 'unsubscribe'
+    | 'bounce'
+    | 'blocklist'
+    | 'other'
+  placeholder?: string
+}
+
+const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
+  value,
+  onChange,
+  workspaceId,
+  category,
+  placeholder = 'Select a template'
+}) => {
+  const [open, setOpen] = useState<boolean>(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const { workspaces } = useAuth()
+
+  // Find the current workspace from the workspaces array
+  const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
+
+  // Fetch templates with optional category filter
+  const {
+    data: templatesResponse,
+    isLoading,
+    refetch
+  } = useQuery({
+    queryKey: ['templates', workspaceId, category],
+    queryFn: async () => {
+      // Assume the API accepts a category parameter for filtering
+      const response = await templatesApi.list({
+        workspace_id: workspaceId,
+        category: category
+      })
+      return response
+    },
+    enabled: !!workspaceId
+  })
+
+  // Fetch selected template details if we only have the ID
+  useEffect(() => {
+    if (value && workspaceId && !selectedTemplate) {
+      // Fetch template details using the value (template ID)
+      templatesApi
+        .get({ workspace_id: workspaceId, id: value })
+        .then((response) => {
+          if (response.template) {
+            setSelectedTemplate(response.template)
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch template details:', error)
+        })
+    }
+  }, [value, workspaceId, selectedTemplate])
+
+  // Get templates array from response
+  const templates = templatesResponse?.templates || []
+
+  // Filter templates based on search query
+  const filteredTemplates = templates.filter((template) =>
+    template.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const handleSelect = (template: Template) => {
+    setSelectedTemplate(template)
+    onChange?.(template.id)
+    setOpen(false)
+  }
+
+  const showDrawer = () => {
+    setOpen(true)
+  }
+
+  const onClose = () => {
+    setOpen(false)
+    setSearchQuery('')
+  }
+
+  // Handle template creation complete - refetch templates and select the new one
+  const handleTemplateCreated = async () => {
+    await refetch()
+    // Templates will be refetched, wait for the drawer to close before refetching
+    setTimeout(() => {
+      setOpen(true) // Reopen the template selection drawer
+    }, 500)
+  }
+
+  return (
+    <>
+      <Input
+        value={selectedTemplate?.name || ''}
+        placeholder={placeholder}
+        readOnly
+        onClick={showDrawer}
+        addonAfter={
+          selectedTemplate && (
+            <TemplatePreviewPopover record={selectedTemplate} workspaceId={workspaceId}>
+              <EyeOutlined style={{ cursor: 'pointer' }} />
+            </TemplatePreviewPopover>
+          )
+        }
+      />
+
+      <Drawer
+        title="Select Template"
+        width={600}
+        onClose={onClose}
+        open={open}
+        bodyStyle={{ paddingBottom: 80 }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Input
+            placeholder="Search templates..."
+            prefix={<SearchOutlined />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size="large" />
+          </div>
+        ) : filteredTemplates.length > 0 ? (
+          <List
+            itemLayout="horizontal"
+            dataSource={filteredTemplates}
+            renderItem={(template) => (
+              <List.Item
+                actions={[
+                  <TemplatePreviewPopover key="preview" record={template} workspaceId={workspaceId}>
+                    <Button type="text" icon={<EyeOutlined />} />
+                  </TemplatePreviewPopover>,
+                  <Button key="select" type="link" onClick={() => handleSelect(template)}>
+                    Select
+                  </Button>
+                ]}
+              >
+                <List.Item.Meta
+                  title={
+                    <a onClick={() => handleSelect(template)} style={{ cursor: 'pointer' }}>
+                      {template.name}
+                    </a>
+                  }
+                  description={template.category || 'No category'}
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty
+            description={
+              category
+                ? `No templates found for ${category.replace('_', ' ')} category`
+                : 'No templates found'
+            }
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          >
+            {currentWorkspace && (
+              <CreateTemplateDrawer
+                workspace={currentWorkspace}
+                category={category}
+                buttonProps={{
+                  type: 'primary',
+                  icon: <PlusOutlined />,
+                  children: category
+                    ? `Create New ${category.replace('_', ' ')} Template`
+                    : 'Create New Template'
+                }}
+                onClose={handleTemplateCreated}
+              />
+            )}
+          </Empty>
+        )}
+      </Drawer>
+    </>
+  )
+}
+
+export default TemplateSelectorInput

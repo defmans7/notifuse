@@ -9,6 +9,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/asaskevich/govalidator"
 	"github.com/google/uuid"
 )
@@ -23,6 +24,7 @@ type WorkspaceService struct {
 	contactService     domain.ContactService
 	listService        domain.ListService
 	contactListService domain.ContactListService
+	templateService    domain.TemplateService
 	secretKey          string
 }
 
@@ -36,6 +38,7 @@ func NewWorkspaceService(
 	contactService domain.ContactService,
 	listService domain.ListService,
 	contactListService domain.ContactListService,
+	templateService domain.TemplateService,
 	secretKey string,
 ) *WorkspaceService {
 	return &WorkspaceService{
@@ -48,6 +51,7 @@ func NewWorkspaceService(
 		contactService:     contactService,
 		listService:        listService,
 		contactListService: contactListService,
+		templateService:    templateService,
 		secretKey:          secretKey,
 	}
 }
@@ -188,6 +192,17 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, fmt.Errorf(operation.Error)
 	}
 
+	// create default templates:
+	// - double optin confirmation
+	// - welcome email
+	// - unsubscribe confirmation
+	if err := s.createDefaultTemplates(ctx, id, userDetails.Email); err != nil {
+		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create default templates")
+		// Continue with workspace creation even if template creation fails
+		// We don't want to fail the entire workspace creation just because templates failed
+		s.logger.WithField("workspace_id", id).Info("Continuing workspace creation despite template creation failure")
+	}
+
 	// create a default list for the workspace
 	list := &domain.List{
 		ID:            "test",
@@ -221,6 +236,91 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 	}
 
 	return workspace, nil
+}
+
+// createDefaultTemplates creates the default email templates for a new workspace
+func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspaceID string, fromEmail string) error {
+	// Common template settings
+	fromName := "Your Company"
+
+	// 1. Opt-in confirmation template
+	optinTemplate := &domain.Template{
+		ID:        "double-optin-confirmation",
+		Name:      "Double Opt-in Confirmation",
+		Version:   1, // Will be set in CreateTemplate
+		Channel:   "email",
+		Category:  string(domain.TemplateCategoryOptIn),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Email: &domain.EmailTemplate{
+			FromAddress:      fromEmail,
+			FromName:         fromName,
+			Subject:          "Please confirm your subscription",
+			VisualEditorTree: mjml.DefaultOptinConfirmationEmail(),
+			CompiledPreview:  "", // Will be computed during validation
+		},
+		TestData: domain.MapOfAny{
+			"confirmation_url": "https://example.com/confirm?token=example_token",
+			"current_year":     time.Now().Year(),
+		},
+	}
+
+	if err := s.templateService.CreateTemplate(ctx, workspaceID, optinTemplate); err != nil {
+		return fmt.Errorf("failed to create opt-in confirmation template: %w", err)
+	}
+
+	// 2. Welcome email template
+	welcomeTemplate := &domain.Template{
+		ID:        "welcome-email",
+		Name:      "Welcome Email",
+		Version:   1, // Will be set in CreateTemplate
+		Channel:   "email",
+		Category:  string(domain.TemplateCategoryWelcome),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Email: &domain.EmailTemplate{
+			FromAddress:      fromEmail,
+			FromName:         fromName,
+			Subject:          "Welcome to our community!",
+			VisualEditorTree: mjml.DefaultWelcomeEmail(),
+			CompiledPreview:  "", // Will be computed during validation
+		},
+		TestData: domain.MapOfAny{
+			"unsubscribe_url": "https://example.com/unsubscribe?token=example_token",
+			"current_year":    time.Now().Year(),
+		},
+	}
+
+	if err := s.templateService.CreateTemplate(ctx, workspaceID, welcomeTemplate); err != nil {
+		return fmt.Errorf("failed to create welcome email template: %w", err)
+	}
+
+	// 3. Unsubscribe confirmation template
+	unsubscribeTemplate := &domain.Template{
+		ID:        "unsubscribe-confirmation",
+		Name:      "Unsubscribe Confirmation",
+		Version:   1, // Will be set in CreateTemplate
+		Channel:   "email",
+		Category:  string(domain.TemplateCategoryUnsubscribe),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Email: &domain.EmailTemplate{
+			FromAddress:      fromEmail,
+			FromName:         fromName,
+			Subject:          "You have been unsubscribed",
+			VisualEditorTree: mjml.DefaultUnsubscribeConfirmationEmail(),
+			CompiledPreview:  "", // Will be computed during validation
+		},
+		TestData: domain.MapOfAny{
+			"current_year": time.Now().Year(),
+		},
+	}
+
+	if err := s.templateService.CreateTemplate(ctx, workspaceID, unsubscribeTemplate); err != nil {
+		return fmt.Errorf("failed to create unsubscribe confirmation template: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateWorkspace updates a workspace if the user is an owner

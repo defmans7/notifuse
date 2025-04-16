@@ -29,8 +29,9 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	ctx := context.Background()
 	user := &domain.User{ID: "test-user"}
@@ -108,7 +109,8 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -192,11 +194,13 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
 	workspaceID := "testworkspace1"
@@ -232,6 +236,10 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
 		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
+
+		// Mock template service expectations for createDefaultTemplates
+		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(nil).Times(3)
+
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
 
@@ -360,6 +368,56 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to upsert contact")
 	})
 
+	t.Run("template creation error still allows workspace creation", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID:    "testowner",
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				LogoURL:    "https://example.com/logo.png",
+				CoverURL:   "https://example.com/cover.png",
+				Timezone:   "UTC",
+				FileManager: domain.FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
+		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
+		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
+		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
+		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
+
+		// Simulate template creation error
+		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(errors.New("template creation failed"))
+
+		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
+		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+
+		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		})
+
+		// Should still succeed despite template error
+		require.NoError(t, err)
+		assert.Equal(t, expectedWorkspace.ID, workspace.ID)
+	})
+
 	t.Run("workspace already exists", func(t *testing.T) {
 		expectedUser := &domain.User{
 			ID:    "testowner",
@@ -399,7 +457,8 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -552,7 +611,8 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, "secret_key")
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()

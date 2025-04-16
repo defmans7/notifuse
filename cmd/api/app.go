@@ -220,6 +220,7 @@ func (a *App) InitServices() error {
 		a.contactService,
 		a.listService,
 		a.contactListService,
+		a.templateService,
 		a.config.Security.SecretKey,
 	)
 

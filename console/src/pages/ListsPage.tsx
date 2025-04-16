@@ -1,16 +1,16 @@
-import React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Row, Col, Statistic, Tag, Skeleton, Typography, Space } from 'antd'
+import { Card, Row, Col, Statistic, Tag, Typography, Space, Tooltip } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { listsApi } from '../services/api/list'
 import type { List } from '../services/api/types'
-import { CreateListDrawer } from '../components/lists/CreateListDrawer'
+import { CreateListDrawer } from '../components/lists/ListDrawer'
 import {
   UsergroupAddOutlined,
   CheckCircleOutlined,
   StopOutlined,
   WarningOutlined,
-  FrownOutlined
+  FrownOutlined,
+  EditOutlined
 } from '@ant-design/icons'
 
 const { Title, Paragraph, Text } = Typography
@@ -54,20 +54,34 @@ export function ListsPage() {
               extra={
                 <Space>
                   {list.is_double_optin && <Tag color="green">Double Opt-in</Tag>}
-                  {list.is_public && <Tag color="blue">Public</Tag>}
-                  <Text type="secondary">ID: {list.id}</Text>
+                  {list.is_public && <Tag color="green">Public</Tag>}
+                  {!list.is_public && <Tag color="red">Private</Tag>}
+                  <CreateListDrawer
+                    workspaceId={workspaceId}
+                    list={list}
+                    buttonProps={{
+                      type: 'text',
+                      size: 'small',
+                      buttonContent: (
+                        <Tooltip title="Edit List">
+                          <EditOutlined />
+                        </Tooltip>
+                      )
+                    }}
+                  />
                 </Space>
               }
               bordered={false}
               key={list.id}
             >
               <div className="mb-4">
+                <Text>ID: {list.id}</Text>
                 {list.description && (
                   <Paragraph
                     ellipsis={{ rows: 1, expandable: true, symbol: 'more' }}
                     className="flex-1 mb-0"
                   >
-                    {list.description}
+                    Description: {list.description}
                   </Paragraph>
                 )}
               </div>

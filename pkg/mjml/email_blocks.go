@@ -1189,7 +1189,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 				imageAttrs["width"] = width // Keep original if not a simple number
 				log.Printf("Warning: mj-image width '%s' is not a simple pixel value. Passing as is.", width)
 			}
-			// Old code: imageAttrs["width"] = strings.TrimSuffix(width, "px")
+			// Old code: imageAttrs["width"] = width
 		}
 		// Add fluid-on-mobile if needed (assuming it's a boolean field in ImageBlockData, which it isn't currently)
 		// if imgData.Image.FullWidthOnMobile { imageAttrs["fluid-on-mobile"] = true }
@@ -1298,7 +1298,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 			buttonAttrs["border-radius"] = br
 		}
 		if width := buttonData.Button.Width; width != "auto" {
-			buttonAttrs["width"] = strings.TrimSuffix(width, "px")
+			buttonAttrs["width"] = width
 		}
 		// buttonAttrs["vertical-align"] = buttonData.Wrapper.VerticalAlign // Field does not exist on WrapperStyles
 
@@ -1339,7 +1339,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		dividerAttrs["border-style"] = dividerData.BorderStyle
 		dividerAttrs["border-width"] = dividerData.BorderWidth
 		if width := dividerData.Width; width != "" && width != "100%" { // Check if width is defined
-			dividerAttrs["width"] = strings.TrimSuffix(width, "px")
+			dividerAttrs["width"] = width
 		}
 		dividerAttrs["padding"] = "0" // Reset default padding initially
 

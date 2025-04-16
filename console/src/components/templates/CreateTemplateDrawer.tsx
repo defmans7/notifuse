@@ -49,6 +49,7 @@ interface CreateTemplateDrawerProps {
   workspace: Workspace
   template?: Template
   buttonProps?: any
+  buttonContent?: React.ReactNode
   onClose?: () => void
   category?: string
   utmSource?: string
@@ -154,10 +155,32 @@ const createDefaultBlocks = () => {
   return rootBlock
 }
 
+/**
+ * Renders a Tag component with the appropriate color for an email template category
+ */
+export const renderCategoryTag = (category: string) => {
+  let color = 'default'
+
+  if (['marketing', 'transactional'].includes(category)) {
+    color = 'green'
+  } else if (category === 'welcome') {
+    color = 'blue'
+  } else if (['opt_in', 'unsubscribe', 'bounce', 'blocklist'].includes(category)) {
+    color = 'purple'
+  }
+
+  return (
+    <Tag color={color}>
+      {category.charAt(0).toUpperCase() + category.slice(1).replace('_', '-')}
+    </Tag>
+  )
+}
+
 export function CreateTemplateDrawer({
   workspace,
   template,
   buttonProps = {},
+  buttonContent,
   onClose,
   category,
   utmSource,
@@ -173,21 +196,24 @@ export function CreateTemplateDrawer({
   const [editorHeight, setEditorHeight] = useState(0)
 
   // set the tree apart to avoid rerendering the Email Editor when the tree changes
-  const [visualEditorTree, setVisualEditorTree] = useState<BlockInterface>(
-    template
-      ? (JSON.parse(template.email?.visual_editor_tree || '{}') as BlockInterface)
-      : createDefaultBlocks()
-  )
+  const [visualEditorTree, setVisualEditorTree] = useState<BlockInterface>(() => {
+    if (template && template.email?.visual_editor_tree) {
+      // Check if visual_editor_tree is already an object
+      if (typeof template.email.visual_editor_tree === 'object') {
+        return template.email.visual_editor_tree as unknown as BlockInterface
+      }
 
-  // watch template id field and fetch the template to verify if it already exists
-  // const templateId = Form.useWatch(['id'], form)
-  // useEffect(() => {
-  //   if (templateId && !template) {
-  //     templatesApi.get(templateId).then((res) => {
-  //       console.log('res', res)
-  //     })
-  //   }
-  // }, [templateId])
+      // Otherwise parse it from string
+      try {
+        return JSON.parse(template.email.visual_editor_tree) as BlockInterface
+      } catch (error) {
+        console.error('Error parsing visual editor tree:', error)
+        message.error('Error loading template: Invalid template data')
+        return createDefaultBlocks()
+      }
+    }
+    return createDefaultBlocks()
+  })
 
   // Add Form.useWatch for the email fields
   const fromName = Form.useWatch(['email', 'from_name'], form)
@@ -312,8 +338,8 @@ export function CreateTemplateDrawer({
 
   return (
     <>
-      <Button type="primary" onClick={showDrawer} icon={<PlusOutlined />} {...buttonProps}>
-        {template ? 'Edit Template' : 'Create Template'}
+      <Button type="primary" onClick={showDrawer} {...buttonProps}>
+        {buttonContent || (template ? 'Edit Template' : 'Create Template')}
       </Button>
       {isOpen && (
         <Drawer
@@ -481,20 +507,32 @@ export function CreateTemplateDrawer({
                           disabled={category ? true : false}
                           options={[
                             {
+                              value: 'marketing',
+                              label: renderCategoryTag('marketing')
+                            },
+                            {
                               value: 'transactional',
-                              label: <Tag color="green">Transactional</Tag>
+                              label: renderCategoryTag('transactional')
                             },
                             {
-                              value: 'campaign',
-                              label: <Tag color="purple">Campaign</Tag>
+                              value: 'welcome',
+                              label: renderCategoryTag('welcome')
                             },
                             {
-                              value: 'automation',
-                              label: <Tag color="cyan">Automation</Tag>
+                              value: 'opt_in',
+                              label: renderCategoryTag('opt_in')
                             },
                             {
-                              value: 'other',
-                              label: <Tag color="magenta">Other...</Tag>
+                              value: 'unsubscribe',
+                              label: renderCategoryTag('unsubscribe')
+                            },
+                            {
+                              value: 'bounce',
+                              label: renderCategoryTag('bounce')
+                            },
+                            {
+                              value: 'blocklist',
+                              label: renderCategoryTag('blocklist')
                             }
                           ]}
                         />
@@ -643,11 +681,23 @@ export function CreateTemplateDrawer({
                         onUpdateFileManagerSettings={handleUpdateWorkspaceSettings}
                         templateDataValue={JSON.stringify(testData, null, 2)}
                         onUpdateTemplateData={async (templateData: string) => {
-                          form.setFieldsValue({
-                            test_data: JSON.parse(templateData)
-                          })
-                          // Handle template data updates
-                          return Promise.resolve()
+                          try {
+                            // Check if templateData is already an object
+                            const parsedData =
+                              typeof templateData === 'object'
+                                ? templateData
+                                : JSON.parse(templateData)
+
+                            form.setFieldsValue({
+                              test_data: parsedData
+                            })
+                            // Handle template data updates
+                            return Promise.resolve()
+                          } catch (error) {
+                            console.error('Error parsing template data:', error)
+                            message.error('Invalid JSON in template data')
+                            return Promise.reject(error)
+                          }
                         }}
                       >
                         <Layout

@@ -29,7 +29,7 @@ func TestListService_CreateList(t *testing.T) {
 		Name: "Test List",
 	}
 
-	t.Run("successful creation", func(t *testing.T) {
+	t.Run("successful create", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
 		mockRepo.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockLogger.EXPECT().WithField("list_id", list.ID).Return(mockLogger).Times(0)
@@ -39,6 +39,42 @@ func TestListService_CreateList(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotZero(t, list.CreatedAt)
 		assert.NotZero(t, list.UpdatedAt)
+	})
+
+	t.Run("create with template fields", func(t *testing.T) {
+		listWithTemplates := &domain.List{
+			ID:            "list123",
+			Name:          "List With Templates",
+			IsDoubleOptin: true,
+			DoubleOptInTemplate: &domain.TemplateReference{
+				ID:      "template123",
+				Version: 1,
+			},
+			WelcomeTemplate: &domain.TemplateReference{
+				ID:      "welcome123",
+				Version: 2,
+			},
+			UnsubscribeTemplate: &domain.TemplateReference{
+				ID:      "unsub123",
+				Version: 3,
+			},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, wsID string, l *domain.List) error {
+				assert.Equal(t, "list123", l.ID)
+				assert.Equal(t, "template123", l.DoubleOptInTemplate.ID)
+				assert.Equal(t, int64(1), l.DoubleOptInTemplate.Version)
+				assert.Equal(t, "welcome123", l.WelcomeTemplate.ID)
+				assert.Equal(t, int64(2), l.WelcomeTemplate.Version)
+				assert.Equal(t, "unsub123", l.UnsubscribeTemplate.ID)
+				assert.Equal(t, int64(3), l.UnsubscribeTemplate.Version)
+				return nil
+			})
+
+		err := service.CreateList(ctx, workspaceID, listWithTemplates)
+		assert.NoError(t, err)
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
@@ -207,6 +243,42 @@ func TestListService_UpdateList(t *testing.T) {
 		err := service.UpdateList(ctx, workspaceID, list)
 		assert.NoError(t, err)
 		assert.NotZero(t, list.UpdatedAt)
+	})
+
+	t.Run("update with template fields", func(t *testing.T) {
+		listWithTemplates := &domain.List{
+			ID:            "list123",
+			Name:          "Updated List",
+			IsDoubleOptin: true,
+			DoubleOptInTemplate: &domain.TemplateReference{
+				ID:      "template123",
+				Version: 1,
+			},
+			WelcomeTemplate: &domain.TemplateReference{
+				ID:      "welcome123",
+				Version: 2,
+			},
+			UnsubscribeTemplate: &domain.TemplateReference{
+				ID:      "unsub123",
+				Version: 3,
+			},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().UpdateList(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, wsID string, l *domain.List) error {
+				assert.Equal(t, "list123", l.ID)
+				assert.Equal(t, "template123", l.DoubleOptInTemplate.ID)
+				assert.Equal(t, int64(1), l.DoubleOptInTemplate.Version)
+				assert.Equal(t, "welcome123", l.WelcomeTemplate.ID)
+				assert.Equal(t, int64(2), l.WelcomeTemplate.Version)
+				assert.Equal(t, "unsub123", l.UnsubscribeTemplate.ID)
+				assert.Equal(t, int64(3), l.UnsubscribeTemplate.Version)
+				return nil
+			})
+
+		err := service.UpdateList(ctx, workspaceID, listWithTemplates)
+		assert.NoError(t, err)
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
