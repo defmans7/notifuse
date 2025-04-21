@@ -43,8 +43,8 @@ func DefaultTemplateStructure() EmailBlock {
 	// Access the content column
 	contentColumn := emailTemplate.Children[0].Children[0]
 
-	// Clear any default children
-	contentColumn.Children = []EmailBlock{}
+	// Initialize children array with standard blocks
+	newChildren := []EmailBlock{}
 
 	// Add standard logo
 	logoBlock := DeepCopyBlock(blocks["image"])
@@ -53,7 +53,7 @@ func DefaultTemplateStructure() EmailBlock {
 	logoBlock.Data.(map[string]interface{})["image"].(map[string]interface{})["alt"] = "Logo"
 	logoBlock.Data.(map[string]interface{})["image"].(map[string]interface{})["width"] = "100px"
 	logoBlock.Data.(map[string]interface{})["wrapper"].(map[string]interface{})["align"] = "center"
-	contentColumn.Children = append(contentColumn.Children, logoBlock)
+	newChildren = append(newChildren, logoBlock)
 
 	// Add standard footer
 	dividerBlock := DeepCopyBlock(blocks["divider"])
@@ -63,7 +63,7 @@ func DefaultTemplateStructure() EmailBlock {
 	dividerBlock.Data.(map[string]interface{})["paddingBottom"] = "20px"
 	dividerBlock.Data.(map[string]interface{})["paddingLeft"] = "200px"
 	dividerBlock.Data.(map[string]interface{})["paddingRight"] = "200px"
-	contentColumn.Children = append(contentColumn.Children, dividerBlock)
+	newChildren = append(newChildren, dividerBlock)
 
 	// Add standard copyright footer
 	footerBlock := DeepCopyBlock(blocks["text"])
@@ -81,14 +81,26 @@ func DefaultTemplateStructure() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, footerBlock)
+	newChildren = append(newChildren, footerBlock)
 
 	// Add tracking pixel
 	openTrackingBlock := DeepCopyBlock(blocks["openTracking"])
 	openTrackingBlock.ID = "open-tracking"
-	contentColumn.Children = append(contentColumn.Children, openTrackingBlock)
+	newChildren = append(newChildren, openTrackingBlock)
 
-	return emailTemplate
+	// Create a new column with the children properly set
+	updatedColumn := DeepCopyBlock(contentColumn)
+	updatedColumn.Children = newChildren
+
+	// Create a new section with the updated column
+	updatedSection := DeepCopyBlock(emailTemplate.Children[0])
+	updatedSection.Children = []EmailBlock{updatedColumn}
+
+	// Create a new root with the updated section
+	updatedRoot := DeepCopyBlock(emailTemplate)
+	updatedRoot.Children = []EmailBlock{updatedSection}
+
+	return updatedRoot
 }
 
 // DefaultOptinConfirmationEmail returns an EmailBlock tree for an opt-in confirmation email
@@ -99,17 +111,18 @@ func DefaultOptinConfirmationEmail() EmailBlock {
 	emailTemplate := DefaultTemplateStructure()
 
 	// Access the content column to add our specific blocks
-	contentColumn := emailTemplate.Children[0].Children[0]
+	contentSection := emailTemplate.Children[0]
+	contentColumn := contentSection.Children[0]
 
 	// Store the standard blocks (logo, divider, footer, tracking)
 	standardBlocks := contentColumn.Children
 
-	// Clear the children to add content in the middle
-	contentColumn.Children = []EmailBlock{}
+	// Initialize new children array
+	newChildren := []EmailBlock{}
 
 	// Add logo if standard blocks exist
 	if len(standardBlocks) > 0 {
-		contentColumn.Children = append(contentColumn.Children, standardBlocks[0]) // Add logo
+		newChildren = append(newChildren, standardBlocks[0]) // Add logo
 	}
 
 	// Add heading
@@ -125,7 +138,7 @@ func DefaultOptinConfirmationEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, headingBlock)
+	newChildren = append(newChildren, headingBlock)
 
 	// Add text content
 	textBlock := DeepCopyBlock(blocks["text"])
@@ -139,7 +152,7 @@ func DefaultOptinConfirmationEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, textBlock)
+	newChildren = append(newChildren, textBlock)
 
 	// Add confirm button
 	buttonBlock := DeepCopyBlock(blocks["button"])
@@ -147,7 +160,7 @@ func DefaultOptinConfirmationEmail() EmailBlock {
 	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["backgroundColor"] = "#4e6cff"
 	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["href"] = "{{ confirmation_url }}"
 	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["text"] = "CONFIRM SUBSCRIPTION"
-	contentColumn.Children = append(contentColumn.Children, buttonBlock)
+	newChildren = append(newChildren, buttonBlock)
 
 	// Add disclaimer
 	disclaimerBlock := DeepCopyBlock(blocks["text"])
@@ -165,14 +178,26 @@ func DefaultOptinConfirmationEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, disclaimerBlock)
+	newChildren = append(newChildren, disclaimerBlock)
 
 	// Add back the standard blocks (divider, footer, tracking) if they exist
 	if len(standardBlocks) > 1 {
-		contentColumn.Children = append(contentColumn.Children, standardBlocks[1:]...)
+		newChildren = append(newChildren, standardBlocks[1:]...)
 	}
 
-	return emailTemplate
+	// Create a new column with the children properly set
+	updatedColumn := DeepCopyBlock(contentColumn)
+	updatedColumn.Children = newChildren
+
+	// Create a new section with the updated column
+	updatedSection := DeepCopyBlock(contentSection)
+	updatedSection.Children = []EmailBlock{updatedColumn}
+
+	// Create a new root with the updated section
+	updatedRoot := DeepCopyBlock(emailTemplate)
+	updatedRoot.Children = []EmailBlock{updatedSection}
+
+	return updatedRoot
 }
 
 // DefaultUnsubscribeConfirmationEmail returns an EmailBlock tree for an unsubscribe confirmation email
@@ -183,17 +208,18 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 	emailTemplate := DefaultTemplateStructure()
 
 	// Access the content column to add our specific blocks
-	contentColumn := emailTemplate.Children[0].Children[0]
+	contentSection := emailTemplate.Children[0]
+	contentColumn := contentSection.Children[0]
 
 	// Store the standard blocks (logo, divider, footer, tracking)
 	standardBlocks := contentColumn.Children
 
-	// Clear the children to add content in the middle
-	contentColumn.Children = []EmailBlock{}
+	// Initialize new children array
+	newChildren := []EmailBlock{}
 
 	// Add logo if standard blocks exist
 	if len(standardBlocks) > 0 {
-		contentColumn.Children = append(contentColumn.Children, standardBlocks[0]) // Add logo
+		newChildren = append(newChildren, standardBlocks[0]) // Add logo
 	}
 
 	// Add heading
@@ -209,7 +235,7 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, headingBlock)
+	newChildren = append(newChildren, headingBlock)
 
 	// Add text content
 	textBlock := DeepCopyBlock(blocks["text"])
@@ -223,7 +249,7 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, textBlock)
+	newChildren = append(newChildren, textBlock)
 
 	// Add resubscribe section
 	resubTextBlock := DeepCopyBlock(blocks["text"])
@@ -237,7 +263,7 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, resubTextBlock)
+	newChildren = append(newChildren, resubTextBlock)
 
 	// Add resubscribe button
 	buttonBlock := DeepCopyBlock(blocks["button"])
@@ -245,14 +271,26 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["backgroundColor"] = "#4e6cff"
 	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["href"] = "{{ resubscribe_url }}"
 	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["text"] = "RESUBSCRIBE"
-	contentColumn.Children = append(contentColumn.Children, buttonBlock)
+	newChildren = append(newChildren, buttonBlock)
 
 	// Add back the standard blocks (divider, footer, tracking) if they exist
 	if len(standardBlocks) > 1 {
-		contentColumn.Children = append(contentColumn.Children, standardBlocks[1:]...)
+		newChildren = append(newChildren, standardBlocks[1:]...)
 	}
 
-	return emailTemplate
+	// Create a new column with the children properly set
+	updatedColumn := DeepCopyBlock(contentColumn)
+	updatedColumn.Children = newChildren
+
+	// Create a new section with the updated column
+	updatedSection := DeepCopyBlock(contentSection)
+	updatedSection.Children = []EmailBlock{updatedColumn}
+
+	// Create a new root with the updated section
+	updatedRoot := DeepCopyBlock(emailTemplate)
+	updatedRoot.Children = []EmailBlock{updatedSection}
+
+	return updatedRoot
 }
 
 // DefaultWelcomeEmail returns an EmailBlock tree for a welcome email
@@ -263,17 +301,18 @@ func DefaultWelcomeEmail() EmailBlock {
 	emailTemplate := DefaultTemplateStructure()
 
 	// Access the content column to add our specific blocks
-	contentColumn := emailTemplate.Children[0].Children[0]
+	contentSection := emailTemplate.Children[0]
+	contentColumn := contentSection.Children[0]
 
 	// Store the standard blocks (logo, divider, footer, tracking)
 	standardBlocks := contentColumn.Children
 
-	// Clear the children to add content in the middle
-	contentColumn.Children = []EmailBlock{}
+	// Initialize new children array
+	newChildren := []EmailBlock{}
 
 	// Add logo if standard blocks exist
 	if len(standardBlocks) > 0 {
-		contentColumn.Children = append(contentColumn.Children, standardBlocks[0]) // Add logo
+		newChildren = append(newChildren, standardBlocks[0]) // Add logo
 	}
 
 	// Add heading
@@ -289,7 +328,7 @@ func DefaultWelcomeEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, headingBlock)
+	newChildren = append(newChildren, headingBlock)
 
 	// Add text content
 	textBlock := DeepCopyBlock(blocks["text"])
@@ -303,7 +342,7 @@ func DefaultWelcomeEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, textBlock)
+	newChildren = append(newChildren, textBlock)
 
 	// Add welcome message
 	welcomeTextBlock := DeepCopyBlock(blocks["text"])
@@ -317,7 +356,7 @@ func DefaultWelcomeEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, welcomeTextBlock)
+	newChildren = append(newChildren, welcomeTextBlock)
 
 	// Add unsubscribe text
 	unsubTextBlock := DeepCopyBlock(blocks["text"])
@@ -335,7 +374,7 @@ func DefaultWelcomeEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, unsubTextBlock)
+	newChildren = append(newChildren, unsubTextBlock)
 
 	// Add unsubscribe link
 	unsubLinkBlock := DeepCopyBlock(blocks["text"])
@@ -355,14 +394,26 @@ func DefaultWelcomeEmail() EmailBlock {
 			},
 		},
 	}
-	contentColumn.Children = append(contentColumn.Children, unsubLinkBlock)
+	newChildren = append(newChildren, unsubLinkBlock)
 
 	// Add back the standard blocks (divider, footer, tracking) if they exist
 	if len(standardBlocks) > 1 {
-		contentColumn.Children = append(contentColumn.Children, standardBlocks[1:]...)
+		newChildren = append(newChildren, standardBlocks[1:]...)
 	}
 
-	return emailTemplate
+	// Create a new column with the children properly set
+	updatedColumn := DeepCopyBlock(contentColumn)
+	updatedColumn.Children = newChildren
+
+	// Create a new section with the updated column
+	updatedSection := DeepCopyBlock(contentSection)
+	updatedSection.Children = []EmailBlock{updatedColumn}
+
+	// Create a new root with the updated section
+	updatedRoot := DeepCopyBlock(emailTemplate)
+	updatedRoot.Children = []EmailBlock{updatedSection}
+
+	return updatedRoot
 }
 
 // DefaultEmailStyles returns a base email template with standard styling
@@ -409,9 +460,9 @@ func DefaultBlocks() map[string]EmailBlock {
 					"fontWeight":     400,
 					"paddingControl": "separate",
 					"padding":        "0px",
-					"paddingTop":     "0px",
+					"paddingTop":     "60px",
 					"paddingRight":   "0px",
-					"paddingBottom":  "10px",
+					"paddingBottom":  "60px",
 					"paddingLeft":    "0px",
 					"margin":         0,
 					"fontFamily":     "Helvetica, sans-serif",
@@ -423,9 +474,9 @@ func DefaultBlocks() map[string]EmailBlock {
 					"fontWeight":     400,
 					"paddingControl": "separate",
 					"padding":        "0px",
-					"paddingTop":     "0px",
+					"paddingTop":     "40px",
 					"paddingRight":   "0px",
-					"paddingBottom":  "10px",
+					"paddingBottom":  "40px",
 					"paddingLeft":    "0px",
 					"margin":         0,
 					"fontFamily":     "Helvetica, sans-serif",
@@ -437,9 +488,9 @@ func DefaultBlocks() map[string]EmailBlock {
 					"fontWeight":     400,
 					"paddingControl": "separate",
 					"padding":        "0px",
-					"paddingTop":     "0px",
+					"paddingTop":     "20px",
 					"paddingRight":   "0px",
-					"paddingBottom":  "10px",
+					"paddingBottom":  "20px",
 					"paddingLeft":    "0px",
 					"margin":         0,
 					"fontFamily":     "Helvetica, sans-serif",
