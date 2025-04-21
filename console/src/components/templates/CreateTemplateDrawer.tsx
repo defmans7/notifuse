@@ -16,7 +16,6 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
 import type { Template, Workspace, FileManagerSettings } from '../../services/api/types'
-import { PlusOutlined } from '@ant-design/icons'
 import { Editor } from '../../components/email_editor'
 import { cloneDeep, kebabCase } from 'lodash'
 import IphoneEmailPreview from './PhonePreview'

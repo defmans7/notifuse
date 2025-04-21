@@ -190,7 +190,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockUserService := domainmocks.NewMockUserServiceInterface(ctrl)
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
-	mockConfig := &config.Config{Environment: "development"}
+	mockConfig := &config.Config{}
 	mockContactService := domainmocks.NewMockContactService(ctrl)
 	mockListService := domainmocks.NewMockListService(ctrl)
 	mockContactListService := domainmocks.NewMockContactListService(ctrl)
@@ -400,12 +400,11 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
 		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
 
-		// Simulate template creation error
-		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(errors.New("template creation failed"))
+		// Simulate template creation error for all three templates
+		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(errors.New("template creation failed")).AnyTimes()
 
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
-		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
 			Endpoint:  "https://s3.amazonaws.com",

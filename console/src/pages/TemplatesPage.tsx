@@ -113,14 +113,9 @@ export function TemplatesPage() {
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Template) => (
-        <div>
+        <Tooltip title={'ID for API: ' + record.id}>
           <Text strong>{text}</Text>
-          <div>
-            <Text type="secondary" className="text-xs">
-              <Tooltip title={'ID for API: ' + record.id}>{record.id}</Tooltip>
-            </Text>
-          </div>
-        </div>
+        </Tooltip>
       )
     },
     {
