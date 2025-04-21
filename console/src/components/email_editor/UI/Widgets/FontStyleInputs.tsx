@@ -96,6 +96,7 @@ export const FontStyleInputs = (props: FontStyleInputsProps) => {
             props.onChange(props.styles)
           }}
           defaultValue="none"
+          popupMatchSelectWidth={false}
           options={TextTransforms}
         />
         <Select
@@ -108,6 +109,7 @@ export const FontStyleInputs = (props: FontStyleInputsProps) => {
           }}
           defaultValue="none"
           options={TextDecorations}
+          popupMatchSelectWidth={false}
         />
       </Space.Compact>
     </>

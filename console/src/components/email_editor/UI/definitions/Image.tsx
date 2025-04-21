@@ -736,7 +736,8 @@ const ImageBlockDefinition: BlockDefinitionInterface = {
     const wrapperStyles: any = {}
     const imageStyles: any = {
       width: props.block.data.image.width,
-      height: props.block.data.image.height
+      height: props.block.data.image.height,
+      display: 'inline-block'
     }
 
     wrapperStyles.textAlign = props.block.data.wrapper.align

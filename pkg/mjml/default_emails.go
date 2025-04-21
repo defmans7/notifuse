@@ -504,7 +504,7 @@ func DefaultBlocks() map[string]EmailBlock {
 					"padding":        "0px",
 					"paddingTop":     "0px",
 					"paddingRight":   "0px",
-					"paddingBottom":  "10px",
+					"paddingBottom":  "20px",
 					"paddingLeft":    "0px",
 					"margin":         0,
 					"fontFamily":     "Helvetica, sans-serif",

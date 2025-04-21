@@ -256,6 +256,7 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 			FromAddress:      fromEmail,
 			FromName:         fromName,
 			Subject:          "Please confirm your subscription",
+			SubjectPreview:   func() *string { s := "Please confirm your subscription"; return &s }(),
 			VisualEditorTree: mjml.DefaultOptinConfirmationEmail(),
 			CompiledPreview:  "", // Will be computed during validation
 		},
@@ -282,6 +283,7 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 			FromAddress:      fromEmail,
 			FromName:         fromName,
 			Subject:          "Welcome to our community!",
+			SubjectPreview:   func() *string { s := "Welcome to our community!"; return &s }(),
 			VisualEditorTree: mjml.DefaultWelcomeEmail(),
 			CompiledPreview:  "", // Will be computed during validation
 		},
@@ -308,6 +310,7 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 			FromAddress:      fromEmail,
 			FromName:         fromName,
 			Subject:          "You have been unsubscribed",
+			SubjectPreview:   func() *string { s := "You have been unsubscribed"; return &s }(),
 			VisualEditorTree: mjml.DefaultUnsubscribeConfirmationEmail(),
 			CompiledPreview:  "", // Will be computed during validation
 		},
