@@ -1,8 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
-import { Card, Row, Col, Statistic, Tag, Typography, Space, Tooltip } from 'antd'
+import {
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Tag,
+  Typography,
+  Space,
+  Tooltip,
+  Descriptions,
+  Button,
+  Divider
+} from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { listsApi } from '../services/api/list'
-import type { List } from '../services/api/types'
+import { templatesApi } from '../services/api/template'
+import type { List, TemplateReference } from '../services/api/types'
 import { CreateListDrawer } from '../components/lists/ListDrawer'
 import {
   UsergroupAddOutlined,
@@ -12,8 +25,65 @@ import {
   FrownOutlined,
   EditOutlined
 } from '@ant-design/icons'
+import { Check, X } from 'lucide-react'
+import TemplatePreviewPopover from '../components/templates/TemplatePreviewPopover'
+import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
+import { useAuth } from '../contexts/AuthContext'
 
 const { Title, Paragraph, Text } = Typography
+
+// Component to fetch template data and render the preview popover
+const TemplatePreviewButton = ({
+  templateRef,
+  workspaceId
+}: {
+  templateRef: TemplateReference
+  workspaceId: string
+}) => {
+  const { workspaces } = useAuth()
+  const workspace = workspaces.find((w) => w.id === workspaceId)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['template', workspaceId, templateRef.id, templateRef.version],
+    queryFn: async () => {
+      const response = await templatesApi.get({
+        workspace_id: workspaceId,
+        id: templateRef.id,
+        version: templateRef.version
+      })
+      return response.template
+    },
+    enabled: !!templateRef && !!workspaceId,
+    // No need to refetch often - template won't change
+    staleTime: 1000 * 60 * 5 // 5 minutes
+  })
+
+  if (isLoading || !data) {
+    return (
+      <Button type="link" size="small" loading={isLoading}>
+        preview
+      </Button>
+    )
+  }
+
+  return (
+    <Space>
+      <TemplatePreviewPopover record={data} workspaceId={workspaceId}>
+        <Button type="link" size="small">
+          preview
+        </Button>
+      </TemplatePreviewPopover>
+      {workspace && (
+        <CreateTemplateDrawer
+          template={data}
+          workspace={workspace}
+          buttonContent="edit"
+          buttonProps={{ type: 'link', size: 'small' }}
+        />
+      )}
+    </Space>
+  )
+}
 
 export function ListsPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/lists' })
@@ -74,19 +144,7 @@ export function ListsPage() {
               bordered={false}
               key={list.id}
             >
-              <div className="mb-4">
-                <Text>ID: {list.id}</Text>
-                {list.description && (
-                  <Paragraph
-                    ellipsis={{ rows: 1, expandable: true, symbol: 'more' }}
-                    className="flex-1 mb-0"
-                  >
-                    Description: {list.description}
-                  </Paragraph>
-                )}
-              </div>
-
-              <Row gutter={[16, 16]} className="mt-4" wrap={false}>
+              <Row gutter={[16, 16]} wrap={false}>
                 <Col flex="1">
                   <Statistic
                     title={
@@ -143,6 +201,59 @@ export function ListsPage() {
                   />
                 </Col>
               </Row>
+
+              <Divider />
+
+              <Descriptions size="small" column={2}>
+                <Descriptions.Item label="ID">{list.id}</Descriptions.Item>
+
+                <Descriptions.Item label="Description">{list.description}</Descriptions.Item>
+
+                {/* Double Opt-in Template */}
+                <Descriptions.Item label="Double Opt-in Template">
+                  {list.double_optin_template ? (
+                    <Space>
+                      <Check size={16} className="text-green-500" />
+                      <TemplatePreviewButton
+                        templateRef={list.double_optin_template}
+                        workspaceId={workspaceId}
+                      />
+                    </Space>
+                  ) : (
+                    <X size={16} className="text-red-500" />
+                  )}
+                </Descriptions.Item>
+
+                {/* Welcome Template */}
+                <Descriptions.Item label="Welcome Template">
+                  {list.welcome_template ? (
+                    <Space>
+                      <Check size={16} className="text-green-500" />
+                      <TemplatePreviewButton
+                        templateRef={list.welcome_template}
+                        workspaceId={workspaceId}
+                      />
+                    </Space>
+                  ) : (
+                    <X size={16} className="text-red-500" />
+                  )}
+                </Descriptions.Item>
+
+                {/* Unsubscribe Template */}
+                <Descriptions.Item label="Unsubscribe Template">
+                  {list.unsubscribe_template ? (
+                    <Space>
+                      <Check size={16} className="text-green-500" />
+                      <TemplatePreviewButton
+                        templateRef={list.unsubscribe_template}
+                        workspaceId={workspaceId}
+                      />
+                    </Space>
+                  ) : (
+                    <X size={16} className="text-red-500" />
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
             </Card>
           ))}
         </div>

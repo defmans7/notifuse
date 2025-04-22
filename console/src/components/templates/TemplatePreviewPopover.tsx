@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Popover, Typography, Spin, Alert, Tabs } from 'antd'
+import { Drawer, Typography, Spin, Alert, Tabs } from 'antd'
 import type { Template, MjmlCompileError } from '../../services/api/types'
 import { templatesApi } from '../../services/api/template'
 import { BlockInterface } from '../../components/email_editor/Block' // Assuming BlockInterface is here
@@ -110,7 +110,7 @@ const TemplatePreviewPopover: React.FC<TemplatePreviewPopoverProps> = ({
     if (isOpen && workspaceId) {
       fetchPreview()
     } else if (!isOpen) {
-      // Reset state when popover closes to avoid showing stale data briefly on reopen
+      // Reset state when drawer closes to avoid showing stale data briefly on reopen
       setPreviewHtml(null)
       setPreviewMjml(null)
       setError(null)
@@ -145,8 +145,8 @@ const TemplatePreviewPopover: React.FC<TemplatePreviewPopoverProps> = ({
       children: <MJMLPreview previewMjml={previewMjml} />
     })
   }
-  const content = (
-    <div className="w-[460px]">
+  const drawerContent = (
+    <div>
       {/* Header details */}
       <div className="mb-4 space-y-2">
         <div>
@@ -233,17 +233,23 @@ const TemplatePreviewPopover: React.FC<TemplatePreviewPopoverProps> = ({
   )
 
   return (
-    <Popover
-      placement="left"
-      content={content}
-      trigger="click"
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      // Destroy popover contents when closed to ensure clean state on reopen
-      destroyTooltipOnHide={true}
-    >
-      {children}
-    </Popover>
+    <>
+      <div onClick={() => setIsOpen(true)}>{children}</div>
+      <Drawer
+        title={`${record.name}`}
+        placement="right"
+        width={650}
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        destroyOnClose={true}
+        maskClosable={true}
+        mask={true}
+        keyboard={true}
+        forceRender={false}
+      >
+        {drawerContent}
+      </Drawer>
+    </>
   )
 }
 

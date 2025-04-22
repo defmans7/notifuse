@@ -1,18 +1,5 @@
 import { useState, useEffect } from 'react'
-import {
-  Button,
-  Drawer,
-  Form,
-  Input,
-  Select,
-  Space,
-  message,
-  Tabs,
-  Row,
-  Col,
-  Tag,
-  Alert
-} from 'antd'
+import { Button, Drawer, Form, Input, Select, Space, App, Tabs, Row, Col, Tag, Alert } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
 import type { Template, Workspace, FileManagerSettings } from '../../services/api/types'
@@ -193,6 +180,7 @@ export function CreateTemplateDrawer({
   const [tab, setTab] = useState<string>('settings')
   const [loading, setLoading] = useState(false)
   const [editorHeight, setEditorHeight] = useState(0)
+  const { message } = App.useApp()
 
   // set the tree apart to avoid rerendering the Email Editor when the tree changes
   const [visualEditorTree, setVisualEditorTree] = useState<BlockInterface>(() => {
@@ -285,15 +273,16 @@ export function CreateTemplateDrawer({
         email: {
           from_address: template.email?.from_address || '',
           from_name: template.email?.from_name || '',
-          reply_to: template.email?.reply_to || '',
+          reply_to: template.email?.reply_to || undefined,
           subject: template.email?.subject || '',
+          subject_preview: template.email?.subject_preview || '',
           content: template.email?.mjml || '',
           visual_editor_tree: template.email?.visual_editor_tree || createDefaultBlocks()
         },
         test_data: template.test_data || defaultTestData,
-        utm_source: template.utm_source || utmSource || '',
+        utm_source: template.utm_source || utmSource || undefined,
         utm_medium: template.utm_medium || utmMedium || 'email',
-        utm_campaign: template.utm_campaign || utmCampaign || ''
+        utm_campaign: template.utm_campaign || utmCampaign || undefined
       })
     }
     setIsOpen(true)
@@ -371,7 +360,9 @@ export function CreateTemplateDrawer({
                 {tab === 'template' && (
                   <Button
                     loading={loading || createTemplateMutation.isPending}
-                    onClick={() => form.submit()}
+                    onClick={() => {
+                      form.submit()
+                    }}
                     type="primary"
                   >
                     Save
@@ -385,15 +376,15 @@ export function CreateTemplateDrawer({
             form={form}
             layout="vertical"
             onFinish={(values) => {
-              //   console.log('values', values)
               setLoading(true)
               values.email.visual_editor_tree = visualEditorTree
               createTemplateMutation.mutate(values)
             }}
             onFinishFailed={(info) => {
-              console.log('Validate Failed:', info)
               if (info.errorFields) {
                 info.errorFields.forEach((field: any) => {
+                  // field.name can be an array, so we need to concatenate the array into a string
+                  const fieldName = field.name.join('.')
                   if (
                     [
                       'name',
@@ -402,8 +393,9 @@ export function CreateTemplateDrawer({
                       'email.from_address',
                       'email.from_name',
                       'email.subject',
+                      'email.subject_preview',
                       'email.reply_to'
-                    ].indexOf(field.name[0]) !== -1
+                    ].indexOf(fieldName) !== -1
                   ) {
                     setTab('settings')
                   }
@@ -474,17 +466,16 @@ export function CreateTemplateDrawer({
                             message: 'ID must contain only lowercase letters, numbers, and hyphens'
                           },
                           {
-                            validator: (rule, value, callback) => {
+                            validator: async (rule, value) => {
                               if (value && !template) {
-                                templatesApi
-                                  .get({ workspace_id: workspace.id, id: value })
-                                  .then(() => {
-                                    callback('Template ID already exists')
-                                  })
-                                  .catch(() => {
-                                    callback()
-                                  })
+                                try {
+                                  await templatesApi.get({ workspace_id: workspace.id, id: value })
+                                  return Promise.reject('Template ID already exists')
+                                } catch (error) {
+                                  return Promise.resolve()
+                                }
                               }
+                              return Promise.resolve()
                             }
                           }
                         ]}

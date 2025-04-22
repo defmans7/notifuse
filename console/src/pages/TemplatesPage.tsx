@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Typography,
-  Button,
-  Table,
-  Tooltip,
-  Tag,
-  Space,
-  Popconfirm,
-  message,
-  Segmented
-} from 'antd'
+import { Typography, Button, Table, Tooltip, Space, Popconfirm, message, Segmented } from 'antd'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
 import type { Template, Workspace } from '../services/api/types'
@@ -34,7 +24,6 @@ export function TemplatesPage() {
   const search = useSearch({ from: '/workspace/$workspaceId/templates' }) as TemplatesSearch
   const navigate = useNavigate({ from: '/workspace/$workspaceId/templates' })
   const queryClient = useQueryClient()
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const { workspaces } = useAuth()
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   // Derive selectedCategory from search params, default to 'all'
@@ -102,10 +91,6 @@ export function TemplatesPage() {
   }
 
   const hasTemplates = !isLoading && data?.templates && data.templates.length > 0
-
-  const handleDrawerClose = () => {
-    setSelectedTemplate(null)
-  }
 
   const columns = [
     {
