@@ -1,16 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { Table, Tag, Button } from 'antd'
+import { Table, Tag, Button, Space } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { contactsApi, type Contact, type ListContactsRequest } from '../services/api/contacts'
+import { listsApi } from '../services/api/list'
 import React from 'react'
 import { workspaceContactsRoute } from '../router'
 import { Filter } from '../components/filters/Filter'
 import { ContactUpsertDrawer } from '../components/contacts/ContactUpsertDrawer'
+import { ImportContactsButton } from '../components/contacts/ImportContactsButton'
 import { CountriesFormOptions } from '../components/utils/countries_timezones'
 import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
+import type { List } from '../services/api/types'
 
 const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
@@ -65,6 +68,12 @@ export function ContactsPage() {
 
   const [visibleColumns, setVisibleColumns] =
     React.useState<Record<string, boolean>>(DEFAULT_VISIBLE_COLUMNS)
+
+  // Fetch lists for the current workspace
+  const { data: listsData } = useQuery({
+    queryKey: ['lists', workspaceId],
+    queryFn: () => listsApi.list({ workspace_id: workspaceId })
+  })
 
   // Load saved state from localStorage on mount
   React.useEffect(() => {
@@ -436,7 +445,10 @@ export function ContactsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Contacts</h2>
-        <ContactUpsertDrawer workspaceId={workspaceId} />
+        <Space>
+          <ImportContactsButton lists={listsData?.lists || []} workspaceId={workspaceId} />
+          <ContactUpsertDrawer workspaceId={workspaceId} />
+        </Space>
       </div>
 
       <div className="flex justify-between items-center mb-6">

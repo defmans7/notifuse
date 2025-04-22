@@ -4,7 +4,7 @@ import { EyeOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
 import type { Template } from '../../services/api/types'
-import TemplatePreviewPopover from './TemplatePreviewPopover'
+import TemplatePreviewPopover from './TemplatePreviewDrawer'
 import { CreateTemplateDrawer } from './CreateTemplateDrawer'
 import { useAuth } from '../../contexts/AuthContext'
 

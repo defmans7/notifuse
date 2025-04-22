@@ -2,20 +2,20 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Drawer, Typography, Spin, Alert, Tabs } from 'antd'
 import type { Template, MjmlCompileError } from '../../services/api/types'
 import { templatesApi } from '../../services/api/template'
-import { BlockInterface } from '../../components/email_editor/Block' // Assuming BlockInterface is here
-import { usePrismjs } from '../../components/email_editor/UI/Widgets/PrismJS'
+import { BlockInterface } from '../email_editor/Block' // Assuming BlockInterface is here
+import { usePrismjs } from '../email_editor/UI/Widgets/PrismJS'
 // We don't need the usePrismjs hook if we call Prism directly
 // import { usePrismjs } from './email_editor/UI/Widgets/PrismJS'
 
 const { Text } = Typography
 
-interface TemplatePreviewPopoverProps {
+interface TemplatePreviewDrawerProps {
   record: Template
   workspaceId: string
   children: React.ReactNode
 }
 
-const TemplatePreviewPopover: React.FC<TemplatePreviewPopoverProps> = ({
+const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   record,
   workspaceId,
   children
@@ -274,4 +274,4 @@ const MJMLPreview = ({ previewMjml }: { previewMjml: string }) => {
   )
 }
 
-export default TemplatePreviewPopover
+export default TemplatePreviewDrawer

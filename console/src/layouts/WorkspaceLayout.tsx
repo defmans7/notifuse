@@ -1,4 +1,4 @@
-import { Layout, Menu, Select, Space, Button, Popover, Dropdown } from 'antd'
+import { Layout, Menu, Select, Space, Button, Dropdown } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
 import {
   MailOutlined,
@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { Workspace } from '../services/api/types'
 import logo from '../assets/logo.png'
+import { ContactsCsvUploadProvider } from '../components/contacts/ContactsCsvUploadProvider'
 
 const { Content, Sider } = Layout
 
@@ -103,95 +104,97 @@ export function WorkspaceLayout() {
   ]
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Layout>
-        <Sider width={250} theme="light" style={{ position: 'relative' }}>
-          <div style={{ padding: '16px 0 0 24px' }}>
-            <img
-              src={logo}
-              alt="Notifuse"
-              style={{ height: '32px', cursor: 'pointer' }}
-              onClick={() => navigate({ to: '/' })}
+    <ContactsCsvUploadProvider workspaceId={workspaceId}>
+      <Layout style={{ minHeight: '100vh' }}>
+        <Layout>
+          <Sider width={250} theme="light" style={{ position: 'relative' }}>
+            <div style={{ padding: '16px 0 0 24px' }}>
+              <img
+                src={logo}
+                alt="Notifuse"
+                style={{ height: '32px', cursor: 'pointer' }}
+                onClick={() => navigate({ to: '/' })}
+              />
+            </div>
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <Select
+                value={workspaceId}
+                onChange={handleWorkspaceChange}
+                style={{ width: '100%' }}
+                placeholder="Select workspace"
+                options={workspaces.map((workspace: Workspace) => ({
+                  label: (
+                    <Space>
+                      {workspace.settings.logo_url && (
+                        <img
+                          src={workspace.settings.logo_url}
+                          alt=""
+                          style={{
+                            height: '16px',
+                            width: '16px',
+                            marginRight: '8px',
+                            objectFit: 'contain',
+                            verticalAlign: 'middle'
+                          }}
+                        />
+                      )}
+                      {workspace.name}
+                    </Space>
+                  ),
+                  value: workspace.id
+                }))}
+              />
+            </div>
+            <Menu
+              mode="inline"
+              selectedKeys={[selectedKey]}
+              style={{ height: 'calc(100% - 120px)', borderRight: 0 }}
+              items={menuItems}
             />
-          </div>
-          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <Select
-              value={workspaceId}
-              onChange={handleWorkspaceChange}
-              style={{ width: '100%' }}
-              placeholder="Select workspace"
-              options={workspaces.map((workspace: Workspace) => ({
-                label: (
-                  <Space>
-                    {workspace.settings.logo_url && (
-                      <img
-                        src={workspace.settings.logo_url}
-                        alt=""
-                        style={{
-                          height: '16px',
-                          width: '16px',
-                          marginRight: '8px',
-                          objectFit: 'contain',
-                          verticalAlign: 'middle'
-                        }}
-                      />
-                    )}
-                    {workspace.name}
-                  </Space>
-                ),
-                value: workspace.id
-              }))}
-            />
-          </div>
-          <Menu
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            style={{ height: 'calc(100% - 120px)', borderRight: 0 }}
-            items={menuItems}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              padding: '16px',
-              borderTop: '1px solid #f0f0f0',
-              background: '#fff'
-            }}
-          >
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: 'logout',
-                    label: (
-                      <Space>
-                        <LogoutOutlined />
-                        Logout
-                      </Space>
-                    ),
-                    onClick: () => signout()
-                  }
-                ]
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: '16px',
+                borderTop: '1px solid #f0f0f0',
+                background: '#fff'
               }}
-              trigger={['click']}
-              placement="bottomRight"
             >
-              <Button type="text" block>
-                <div style={{ padding: '4px 8px', color: '#595959', cursor: 'pointer' }}>
-                  {user?.email}
-                </div>
-              </Button>
-            </Dropdown>
-          </div>
-        </Sider>
-        <Layout style={{ padding: '24px' }}>
-          <Content>
-            <Outlet />
-          </Content>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'logout',
+                      label: (
+                        <Space>
+                          <LogoutOutlined />
+                          Logout
+                        </Space>
+                      ),
+                      onClick: () => signout()
+                    }
+                  ]
+                }}
+                trigger={['click']}
+                placement="bottomRight"
+              >
+                <Button type="text" block>
+                  <div style={{ padding: '4px 8px', color: '#595959', cursor: 'pointer' }}>
+                    {user?.email}
+                  </div>
+                </Button>
+              </Dropdown>
+            </div>
+          </Sider>
+          <Layout style={{ padding: '24px' }}>
+            <Content>
+              <Outlet />
+            </Content>
+          </Layout>
         </Layout>
       </Layout>
-    </Layout>
+    </ContactsCsvUploadProvider>
   )
 }

@@ -9,7 +9,7 @@ import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDraw
 import { renderCategoryTag } from '../components/templates'
 import { useAuth } from '../contexts/AuthContext'
 import dayjs from '../lib/dayjs'
-import TemplatePreviewPopover from '../components/templates/TemplatePreviewPopover'
+import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -195,10 +195,10 @@ export function TemplatesPage() {
       title: 'Actions',
       key: 'actions',
       render: (_: any, record: Template) => (
-        <Space size="middle">
-          <TemplatePreviewPopover record={record} workspaceId={workspaceId!}>
+        <Space>
+          <TemplatePreviewDrawer record={record} workspaceId={workspaceId!}>
             <Button type="text" icon={<EyeOutlined />} />
-          </TemplatePreviewPopover>
+          </TemplatePreviewDrawer>
           {workspace && (
             <CreateTemplateDrawer
               template={record}
@@ -215,12 +215,7 @@ export function TemplatesPage() {
             cancelText="Cancel"
             placement="topRight"
           >
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              loading={deleteMutation.isPending}
-            />
+            <Button type="text" icon={<DeleteOutlined />} loading={deleteMutation.isPending} />
           </Popconfirm>
         </Space>
       )

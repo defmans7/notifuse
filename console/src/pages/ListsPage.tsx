@@ -30,7 +30,7 @@ import {
   DeleteOutlined
 } from '@ant-design/icons'
 import { Check, X } from 'lucide-react'
-import TemplatePreviewPopover from '../components/templates/TemplatePreviewPopover'
+import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
 import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
@@ -74,11 +74,11 @@ const TemplatePreviewButton = ({
 
   return (
     <Space>
-      <TemplatePreviewPopover record={data} workspaceId={workspaceId}>
+      <TemplatePreviewDrawer record={data} workspaceId={workspaceId}>
         <Button type="link" size="small">
           preview
         </Button>
-      </TemplatePreviewPopover>
+      </TemplatePreviewDrawer>
       {workspace && (
         <CreateTemplateDrawer
           template={data}
@@ -168,7 +168,7 @@ export function ListsPage() {
               }
               extra={
                 <Space>
-                  <Button type="text" danger size="small" onClick={() => openDeleteModal(list)}>
+                  <Button type="text" size="small" onClick={() => openDeleteModal(list)}>
                     <Tooltip title="Delete List">
                       <DeleteOutlined />
                     </Tooltip>

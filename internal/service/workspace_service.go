@@ -205,13 +205,16 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 
 	// create a default list for the workspace
 	list := &domain.List{
-		ID:            "test",
-		Name:          "Test List",
-		IsDoubleOptin: false,
-		IsPublic:      false,
-		Description:   "This is a test list",
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		ID:                  "test",
+		Name:                "Test List",
+		IsDoubleOptin:       true,
+		IsPublic:            false,
+		Description:         "This is a test list",
+		DoubleOptInTemplate: &domain.TemplateReference{ID: "double-optin-confirmation"},
+		WelcomeTemplate:     &domain.TemplateReference{ID: "welcome-email"},
+		UnsubscribeTemplate: &domain.TemplateReference{ID: "unsubscribe-confirmation"},
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
 	}
 
 	err = s.listService.CreateList(ctx, id, list)
