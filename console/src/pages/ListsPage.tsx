@@ -10,7 +10,10 @@ import {
   Tooltip,
   Descriptions,
   Button,
-  Divider
+  Divider,
+  Modal,
+  Input,
+  message
 } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { listsApi } from '../services/api/list'
@@ -23,12 +26,15 @@ import {
   StopOutlined,
   WarningOutlined,
   FrownOutlined,
-  EditOutlined
+  EditOutlined,
+  DeleteOutlined
 } from '@ant-design/icons'
 import { Check, X } from 'lucide-react'
 import TemplatePreviewPopover from '../components/templates/TemplatePreviewPopover'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
 import { useAuth } from '../contexts/AuthContext'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -87,6 +93,11 @@ const TemplatePreviewButton = ({
 
 export function ListsPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/lists' })
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
+  const [listToDelete, setListToDelete] = useState<List | null>(null)
+  const [confirmationInput, setConfirmationInput] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['lists', workspaceId],
@@ -94,6 +105,40 @@ export function ListsPage() {
       return listsApi.list({ workspace_id: workspaceId })
     }
   })
+
+  const handleDelete = async () => {
+    if (!listToDelete) return
+
+    setIsDeleting(true)
+    try {
+      await listsApi.delete({
+        workspace_id: workspaceId,
+        id: listToDelete.id
+      })
+
+      message.success(`List "${listToDelete.name}" deleted successfully`)
+      queryClient.invalidateQueries({ queryKey: ['lists', workspaceId] })
+      setDeleteModalVisible(false)
+      setListToDelete(null)
+      setConfirmationInput('')
+    } catch (error) {
+      message.error('Failed to delete list')
+      console.error(error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const openDeleteModal = (list: List) => {
+    setListToDelete(list)
+    setDeleteModalVisible(true)
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteModalVisible(false)
+    setListToDelete(null)
+    setConfirmationInput('')
+  }
 
   const hasLists = !isLoading && data?.lists && data.lists.length > 0
 
@@ -123,9 +168,11 @@ export function ListsPage() {
               }
               extra={
                 <Space>
-                  {list.is_double_optin && <Tag color="green">Double Opt-in</Tag>}
-                  {list.is_public && <Tag color="green">Public</Tag>}
-                  {!list.is_public && <Tag color="red">Private</Tag>}
+                  <Button type="text" danger size="small" onClick={() => openDeleteModal(list)}>
+                    <Tooltip title="Delete List">
+                      <DeleteOutlined />
+                    </Tooltip>
+                  </Button>
                   <CreateListDrawer
                     workspaceId={workspaceId}
                     list={list}
@@ -141,7 +188,7 @@ export function ListsPage() {
                   />
                 </Space>
               }
-              bordered={false}
+              variant="borderless"
               key={list.id}
             >
               <Row gutter={[16, 16]} wrap={false}>
@@ -208,6 +255,13 @@ export function ListsPage() {
                 <Descriptions.Item label="ID">{list.id}</Descriptions.Item>
 
                 <Descriptions.Item label="Description">{list.description}</Descriptions.Item>
+                <Descriptions.Item label="Visibility">
+                  {list.is_public ? (
+                    <Tag color="green">Public</Tag>
+                  ) : (
+                    <Tag color="volcano">Private</Tag>
+                  )}
+                </Descriptions.Item>
 
                 {/* Double Opt-in Template */}
                 <Descriptions.Item label="Double Opt-in Template">
@@ -268,6 +322,46 @@ export function ListsPage() {
           </div>
         </div>
       )}
+
+      <Modal
+        title="Delete List"
+        open={deleteModalVisible}
+        onCancel={closeDeleteModal}
+        footer={[
+          <Button key="cancel" onClick={closeDeleteModal}>
+            Cancel
+          </Button>,
+          <Button
+            key="delete"
+            type="primary"
+            danger
+            loading={isDeleting}
+            disabled={confirmationInput !== (listToDelete?.id || '')}
+            onClick={handleDelete}
+          >
+            Delete
+          </Button>
+        ]}
+      >
+        {listToDelete && (
+          <>
+            <p>Are you sure you want to delete the list "{listToDelete.name}"?</p>
+            <p>
+              This action cannot be undone. To confirm, please enter the list ID:{' '}
+              <Text code>{listToDelete.id}</Text>
+            </p>
+            <Input
+              placeholder="Enter list ID to confirm"
+              value={confirmationInput}
+              onChange={(e) => setConfirmationInput(e.target.value)}
+              status={confirmationInput && confirmationInput !== listToDelete.id ? 'error' : ''}
+            />
+            {confirmationInput && confirmationInput !== listToDelete.id && (
+              <p className="text-red-500 mt-2">ID doesn't match</p>
+            )}
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -127,6 +127,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			status VARCHAR(20) NOT NULL,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP,
 			PRIMARY KEY (email, list_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS templates (

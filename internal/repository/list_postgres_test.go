@@ -307,18 +307,37 @@ func TestListRepository(t *testing.T) {
 
 	t.Run("DeleteList", func(t *testing.T) {
 		t.Run("successful deletion", func(t *testing.T) {
+			// Expect begin transaction
+			sqlMock.ExpectBegin()
+
+			// Expect list update
 			sqlMock.ExpectExec(regexp.QuoteMeta(`UPDATE lists SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`)).
 				WithArgs(sqlmock.AnyArg(), testList.ID).
 				WillReturnResult(sqlmock.NewResult(0, 1))
+
+			// Expect contact_list update
+			sqlMock.ExpectExec(regexp.QuoteMeta(`UPDATE contact_lists SET deleted_at = $1 WHERE list_id = $2 AND deleted_at IS NULL`)).
+				WithArgs(sqlmock.AnyArg(), testList.ID).
+				WillReturnResult(sqlmock.NewResult(0, 0)) // No rows affected is fine for contact lists
+
+			// Expect commit
+			sqlMock.ExpectCommit()
 
 			err := repo.DeleteList(context.Background(), "workspace123", testList.ID)
 			require.NoError(t, err)
 		})
 
 		t.Run("list not found", func(t *testing.T) {
+			// Expect begin transaction
+			sqlMock.ExpectBegin()
+
+			// Expect list update - no rows affected
 			sqlMock.ExpectExec(regexp.QuoteMeta(`UPDATE lists SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`)).
 				WithArgs(sqlmock.AnyArg(), testList.ID).
 				WillReturnResult(sqlmock.NewResult(0, 0))
+
+			// Expect rollback since list not found
+			sqlMock.ExpectRollback()
 
 			err := repo.DeleteList(context.Background(), "workspace123", testList.ID)
 			require.Error(t, err)
@@ -326,9 +345,16 @@ func TestListRepository(t *testing.T) {
 		})
 
 		t.Run("database error", func(t *testing.T) {
+			// Expect begin transaction
+			sqlMock.ExpectBegin()
+
+			// Expect list update - error
 			sqlMock.ExpectExec(regexp.QuoteMeta(`UPDATE lists SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`)).
 				WithArgs(sqlmock.AnyArg(), testList.ID).
 				WillReturnError(errors.New("database error"))
+
+			// Expect rollback
+			sqlMock.ExpectRollback()
 
 			err := repo.DeleteList(context.Background(), "workspace123", testList.ID)
 			require.Error(t, err)
@@ -336,9 +362,16 @@ func TestListRepository(t *testing.T) {
 		})
 
 		t.Run("list already deleted", func(t *testing.T) {
+			// Expect begin transaction
+			sqlMock.ExpectBegin()
+
+			// Expect list update - no rows affected
 			sqlMock.ExpectExec(regexp.QuoteMeta(`UPDATE lists SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`)).
 				WithArgs(sqlmock.AnyArg(), testList.ID).
 				WillReturnResult(sqlmock.NewResult(0, 0))
+
+			// Expect rollback
+			sqlMock.ExpectRollback()
 
 			err := repo.DeleteList(context.Background(), "workspace123", testList.ID)
 			require.Error(t, err)

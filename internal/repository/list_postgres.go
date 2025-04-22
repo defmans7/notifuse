@@ -176,9 +176,20 @@ func (r *listRepository) DeleteList(ctx context.Context, workspaceID string, id 
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `UPDATE lists SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`
+	// Start a transaction to ensure both list and contact_list entries are deleted together
+	tx, err := workspaceDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
 
-	result, err := workspaceDB.ExecContext(ctx, query, time.Now().UTC(), id)
+	// Defer rollback - it will be a no-op if Commit() is called
+	defer tx.Rollback()
+
+	now := time.Now().UTC()
+
+	// First soft delete the list
+	listQuery := `UPDATE lists SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`
+	result, err := tx.ExecContext(ctx, listQuery, now, id)
 	if err != nil {
 		return fmt.Errorf("failed to soft delete list: %w", err)
 	}
@@ -190,6 +201,18 @@ func (r *listRepository) DeleteList(ctx context.Context, workspaceID string, id 
 
 	if rows == 0 {
 		return &domain.ErrListNotFound{Message: "list not found or already deleted"}
+	}
+
+	// Then soft delete all related contact_list entries
+	contactListQuery := `UPDATE contact_lists SET deleted_at = $1 WHERE list_id = $2 AND deleted_at IS NULL`
+	_, err = tx.ExecContext(ctx, contactListQuery, now, id)
+	if err != nil {
+		return fmt.Errorf("failed to soft delete contact list entries: %w", err)
+	}
+
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil

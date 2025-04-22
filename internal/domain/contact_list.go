@@ -35,6 +35,7 @@ type ContactList struct {
 	Status    ContactListStatus `json:"status"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
+	DeletedAt *time.Time        `json:"deleted_at"`
 }
 
 // Validate performs validation on the contact list fields
@@ -87,6 +88,7 @@ type dbContactList struct {
 	Status    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DeletedAt *time.Time
 }
 
 // ScanContactList scans a contact list from the database
@@ -100,6 +102,7 @@ func ScanContactList(scanner interface {
 		&dbcl.Status,
 		&dbcl.CreatedAt,
 		&dbcl.UpdatedAt,
+		&dbcl.DeletedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -110,6 +113,7 @@ func ScanContactList(scanner interface {
 		Status:    ContactListStatus(dbcl.Status),
 		CreatedAt: dbcl.CreatedAt,
 		UpdatedAt: dbcl.UpdatedAt,
+		DeletedAt: dbcl.DeletedAt,
 	}
 
 	return cl, nil

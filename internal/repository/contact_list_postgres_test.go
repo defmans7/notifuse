@@ -97,10 +97,10 @@ func TestContactListRepository_GetContactListByIDs(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
-			AddRow(email, listID, domain.ContactListStatusActive, time.Now(), time.Now())
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"}).
+			AddRow(email, listID, domain.ContactListStatusActive, time.Now(), time.Now(), nil)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(email, listID).
 			WillReturnRows(rows)
 
@@ -116,7 +116,7 @@ func TestContactListRepository_GetContactListByIDs(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(email, listID).
 			WillReturnError(sql.ErrNoRows)
 
@@ -142,10 +142,10 @@ func TestContactListRepository_GetContactListByIDs(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
-			AddRow(nil, nil, nil, nil, nil) // Invalid data to cause scan error
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"}).
+			AddRow(nil, nil, nil, nil, nil, nil) // Invalid data to cause scan error
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(email, listID).
 			WillReturnRows(rows)
 
@@ -169,10 +169,10 @@ func TestContactListRepository_GetContactsByListID(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
-			AddRow("test@example.com", listID, domain.ContactListStatusActive, time.Now(), time.Now())
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"}).
+			AddRow("test@example.com", listID, domain.ContactListStatusActive, time.Now(), time.Now(), nil)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(listID).
 			WillReturnRows(rows)
 
@@ -187,7 +187,7 @@ func TestContactListRepository_GetContactsByListID(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(listID).
 			WillReturnError(errors.New("query error"))
 
@@ -213,9 +213,9 @@ func TestContactListRepository_GetContactsByListID(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"})
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"})
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(listID).
 			WillReturnRows(rows)
 
@@ -229,10 +229,10 @@ func TestContactListRepository_GetContactsByListID(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
-			AddRow(nil, nil, nil, nil, nil) // Invalid data to cause scan error
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"}).
+			AddRow(nil, nil, nil, nil, nil, nil) // Invalid data to cause scan error
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(listID).
 			WillReturnRows(rows)
 
@@ -256,10 +256,10 @@ func TestContactListRepository_GetListsByEmail(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
-			AddRow(email, "list123", domain.ContactListStatusActive, time.Now(), time.Now())
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"}).
+			AddRow(email, "list123", domain.ContactListStatusActive, time.Now(), time.Now(), nil)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(email).
 			WillReturnRows(rows)
 
@@ -274,7 +274,7 @@ func TestContactListRepository_GetListsByEmail(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(email).
 			WillReturnError(errors.New("query error"))
 
@@ -300,9 +300,9 @@ func TestContactListRepository_GetListsByEmail(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"})
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"})
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(email).
 			WillReturnRows(rows)
 
@@ -316,10 +316,10 @@ func TestContactListRepository_GetListsByEmail(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at"}).
-			AddRow(nil, nil, nil, nil, nil) // Invalid data to cause scan error
+		rows := sqlmock.NewRows([]string{"email", "list_id", "status", "created_at", "updated_at", "deleted_at"}).
+			AddRow(nil, nil, nil, nil, nil, nil) // Invalid data to cause scan error
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at`).
+		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at, deleted_at`).
 			WithArgs(email).
 			WillReturnRows(rows)
 
@@ -420,9 +420,9 @@ func TestContactListRepository_RemoveContactFromList(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectExec(`DELETE FROM contact_lists`).
-			WithArgs(email, listID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`UPDATE contact_lists SET deleted_at = (.+) WHERE email = (.+) AND list_id = (.+)`).
+			WithArgs(sqlmock.AnyArg(), email, listID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
 		require.NoError(t, err)
@@ -433,8 +433,8 @@ func TestContactListRepository_RemoveContactFromList(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectExec(`DELETE FROM contact_lists`).
-			WithArgs(email, listID).
+		mock.ExpectExec(`UPDATE contact_lists SET deleted_at = (.+) WHERE email = (.+) AND list_id = (.+)`).
+			WithArgs(sqlmock.AnyArg(), email, listID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
@@ -457,8 +457,8 @@ func TestContactListRepository_RemoveContactFromList(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectExec(`DELETE FROM contact_lists`).
-			WithArgs(email, listID).
+		mock.ExpectExec(`UPDATE contact_lists SET deleted_at = (.+) WHERE email = (.+) AND list_id = (.+)`).
+			WithArgs(sqlmock.AnyArg(), email, listID).
 			WillReturnError(errors.New("execution error"))
 
 		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
@@ -471,9 +471,10 @@ func TestContactListRepository_RemoveContactFromList(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectExec(`DELETE FROM contact_lists`).
-			WithArgs(email, listID).
-			WillReturnResult(sqlmock.NewErrorResult(errors.New("rows affected error")))
+		result := sqlmock.NewErrorResult(errors.New("rows affected error"))
+		mock.ExpectExec(`UPDATE contact_lists SET deleted_at = (.+) WHERE email = (.+) AND list_id = (.+)`).
+			WithArgs(sqlmock.AnyArg(), email, listID).
+			WillReturnResult(result)
 
 		err := repo.RemoveContactFromList(ctx, workspaceID, email, listID)
 		require.Error(t, err)

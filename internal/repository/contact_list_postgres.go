@@ -33,10 +33,10 @@ func (r *contactListRepository) AddContactToList(ctx context.Context, workspaceI
 	contactList.UpdatedAt = now
 
 	query := `
-		INSERT INTO contact_lists (email, list_id, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO contact_lists (email, list_id, status, created_at, updated_at, deleted_at)
+		VALUES ($1, $2, $3, $4, $5, NULL)
 		ON CONFLICT (email, list_id) DO UPDATE
-		SET status = $3, updated_at = $5
+		SET status = $3, updated_at = $5, deleted_at = NULL
 	`
 	_, err = workspaceDB.ExecContext(ctx, query,
 		contactList.Email,
@@ -60,9 +60,9 @@ func (r *contactListRepository) GetContactListByIDs(ctx context.Context, workspa
 	}
 
 	query := `
-		SELECT email, list_id, status, created_at, updated_at
+		SELECT email, list_id, status, created_at, updated_at, deleted_at
 		FROM contact_lists
-		WHERE email = $1 AND list_id = $2
+		WHERE email = $1 AND list_id = $2 AND deleted_at IS NULL
 	`
 
 	row := workspaceDB.QueryRowContext(ctx, query, email, listID)
@@ -87,9 +87,9 @@ func (r *contactListRepository) GetContactsByListID(ctx context.Context, workspa
 	}
 
 	query := `
-		SELECT email, list_id, status, created_at, updated_at
+		SELECT email, list_id, status, created_at, updated_at, deleted_at
 		FROM contact_lists
-		WHERE list_id = $1
+		WHERE list_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 	`
 
@@ -124,9 +124,9 @@ func (r *contactListRepository) GetListsByEmail(ctx context.Context, workspaceID
 	}
 
 	query := `
-		SELECT email, list_id, status, created_at, updated_at
+		SELECT email, list_id, status, created_at, updated_at, deleted_at
 		FROM contact_lists
-		WHERE email = $1
+		WHERE email = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 	`
 
@@ -164,7 +164,7 @@ func (r *contactListRepository) UpdateContactListStatus(ctx context.Context, wor
 
 	query := `
 		UPDATE contact_lists
-		SET status = $1, updated_at = $2
+		SET status = $1, updated_at = $2, deleted_at = NULL	
 		WHERE email = $3 AND list_id = $4
 	`
 
@@ -199,9 +199,9 @@ func (r *contactListRepository) RemoveContactFromList(ctx context.Context, works
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `DELETE FROM contact_lists WHERE email = $1 AND list_id = $2`
+	query := `UPDATE contact_lists SET deleted_at = $1 WHERE email = $2 AND list_id = $3`
 
-	result, err := workspaceDB.ExecContext(ctx, query, email, listID)
+	result, err := workspaceDB.ExecContext(ctx, query, time.Now().UTC(), email, listID)
 	if err != nil {
 		return fmt.Errorf("failed to remove contact from list: %w", err)
 	}
