@@ -153,13 +153,14 @@ export function WorkspaceLayout() {
             />
             <div
               style={{
-                position: 'absolute',
+                position: 'fixed',
                 bottom: 0,
                 left: 0,
-                right: 0,
+                width: '250px',
                 padding: '16px',
                 borderTop: '1px solid #f0f0f0',
-                background: '#fff'
+                background: '#fff',
+                zIndex: 1
               }}
             >
               <Dropdown
