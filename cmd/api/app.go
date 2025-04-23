@@ -209,7 +209,7 @@ func (a *App) InitServices() error {
 	a.listService = service.NewListService(a.listRepo, a.authService, a.logger)
 	a.contactListService = service.NewContactListService(a.contactListRepo, a.authService, a.contactRepo, a.listRepo, a.logger)
 	a.templateService = service.NewTemplateService(a.templateRepo, a.authService, a.logger)
-	a.emailService = service.NewEmailService(a.logger, a.authService, a.config.Security.SecretKey)
+	a.emailService = service.NewEmailService(a.logger, a.authService, a.config.Security.SecretKey, a.workspaceRepo, a.templateRepo)
 	// Create workspace service last since it depends on other services
 	a.workspaceService = service.NewWorkspaceService(
 		a.workspaceRepo,

@@ -501,6 +501,40 @@ type CompileTemplateResponse struct {
 	Error   *mjmlgo.Error `json:"error,omitempty"` // Pointer, omit if nil
 }
 
+// TestTemplateRequest represents a request to test a template
+type TestTemplateRequest struct {
+	WorkspaceID    string `json:"workspace_id"`
+	TemplateID     string `json:"template_id"`
+	ProviderType   string `json:"provider_type"` // "marketing" or "transactional"
+	RecipientEmail string `json:"recipient_email"`
+}
+
+func (r *TestTemplateRequest) Validate() (string, string, string, string, error) {
+	if r.WorkspaceID == "" {
+		return "", "", "", "", fmt.Errorf("workspace_id is required")
+	}
+	if r.TemplateID == "" {
+		return "", "", "", "", fmt.Errorf("template_id is required")
+	}
+	if r.ProviderType != "marketing" && r.ProviderType != "transactional" {
+		return "", "", "", "", fmt.Errorf("provider_type must be either 'marketing' or 'transactional'")
+	}
+	if r.RecipientEmail == "" {
+		return "", "", "", "", fmt.Errorf("recipient_email is required")
+	}
+	if !govalidator.IsEmail(r.RecipientEmail) {
+		return "", "", "", "", fmt.Errorf("invalid recipient_email format")
+	}
+
+	return r.WorkspaceID, r.TemplateID, r.ProviderType, r.RecipientEmail, nil
+}
+
+// TestTemplateResponse represents the response from testing a template
+type TestTemplateResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
 // TemplateService provides operations for managing templates
 type TemplateService interface {
 	// CreateTemplate creates a new template

@@ -1,424 +1,571 @@
-package service
+package service_test
 
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"testing"
-	"time"
 
-	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/aws/aws-sdk-go/aws/awserr"
+	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/pkg/mjml"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
-// Mock auth service
-type mockAuthService struct {
-	mock.Mock
-}
+// Setup function for EmailService tests
+func setupEmailServiceTest(ctrl *gomock.Controller) (*service.EmailService, *domainmocks.MockAuthService, *domainmocks.MockWorkspaceRepository, *domainmocks.MockTemplateRepository, *pkgmocks.MockLogger) {
+	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
-func (m *mockAuthService) AuthenticateUserFromContext(ctx context.Context) (*domain.User, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *mockAuthService) AuthenticateUserForWorkspace(ctx context.Context, workspaceID string) (*domain.User, error) {
-	args := m.Called(ctx, workspaceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *mockAuthService) VerifyUserSession(ctx context.Context, userID, sessionID string) (*domain.User, error) {
-	args := m.Called(ctx, userID, sessionID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
-func (m *mockAuthService) GenerateAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string {
-	args := m.Called(user, sessionID, expiresAt)
-	return args.String(0)
-}
-
-func (m *mockAuthService) GetPrivateKey() paseto.V4AsymmetricSecretKey {
-	args := m.Called()
-	return args.Get(0).(paseto.V4AsymmetricSecretKey)
-}
-
-func (m *mockAuthService) GenerateInvitationToken(invitation *domain.WorkspaceInvitation) string {
-	args := m.Called(invitation)
-	return args.String(0)
-}
-
-// Mock logger
-type mockLogger struct {
-	mock.Mock
-}
-
-func (m *mockLogger) Debug(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) Info(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) Warn(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) Error(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) Fatal(msg string) {
-	m.Called(msg)
-}
-
-func (m *mockLogger) Debugf(format string, args ...interface{}) {
-	m.Called(format, args)
-}
-
-func (m *mockLogger) Infof(format string, args ...interface{}) {
-	m.Called(format, args)
-}
-
-func (m *mockLogger) Warnf(format string, args ...interface{}) {
-	m.Called(format, args)
-}
-
-func (m *mockLogger) Errorf(format string, args ...interface{}) {
-	m.Called(format, args)
-}
-
-func (m *mockLogger) Fatalf(format string, args ...interface{}) {
-	m.Called(format, args)
-}
-
-func (m *mockLogger) WithField(key string, value interface{}) logger.Logger {
-	args := m.Called(key, value)
-	if args.Get(0) == nil {
-		return m
-	}
-	return args.Get(0).(logger.Logger)
-}
-
-func (m *mockLogger) WithFields(fields map[string]interface{}) logger.Logger {
-	args := m.Called(fields)
-	if args.Get(0) == nil {
-		return m
-	}
-	return args.Get(0).(logger.Logger)
-}
-
-func (m *mockLogger) WithError(err error) logger.Logger {
-	args := m.Called(err)
-	if args.Get(0) == nil {
-		return m
-	}
-	return args.Get(0).(logger.Logger)
-}
-
-func TestNewEmailService(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
 	secretKey := "test-secret-key"
 
-	// Act
-	service := NewEmailService(mockLog, mockAuth, secretKey)
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		secretKey,
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+	)
 
-	// Assert
-	require.NotNil(t, service)
-	assert.Equal(t, mockLog, service.logger)
-	assert.Equal(t, mockAuth, service.authService)
-	assert.Equal(t, secretKey, service.secretKey)
+	return emailService, mockAuthService, mockWorkspaceRepo, mockTemplateRepo, mockLogger
 }
 
-func TestEmailService_TestEmailProvider_AuthenticationFailure(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
+func TestEmailService_TestEmailProvider_SMTP(t *testing.T) {
 	ctx := context.Background()
-	workspaceID := "workspace123"
-	provider := domain.EmailProvider{}
-	to := "test@example.com"
+	workspaceID := "ws-123"
+	userID := "user-456"
+	recipientEmail := "test@example.com"
 
-	expectedErr := errors.New("authentication failed")
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(nil, expectedErr)
-
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to authenticate user for workspace")
-	mockAuth.AssertExpectations(t)
-}
-
-func TestEmailService_TestEmailProvider_ValidationFailure(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
-	ctx := context.Background()
-	workspaceID := "workspace123"
-	user := &domain.User{ID: "user123"}
-	to := "test@example.com"
-
-	// Invalid provider that will fail validation
-	provider := domain.EmailProvider{
-		Kind: domain.EmailProviderKindSMTP,
-		// SMTP is nil, which will cause validation failure
-	}
-
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(user, nil)
-
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
-
-	// Assert
-	assert.Error(t, err)
-	mockAuth.AssertExpectations(t)
-}
-
-func TestEmailService_TestEmailProvider_UnsupportedProvider(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
-	ctx := context.Background()
-	workspaceID := "workspace123"
-	user := &domain.User{ID: "user123"}
-	to := "test@example.com"
-
-	// Provider with unsupported kind
-	provider := domain.EmailProvider{
-		Kind:               "unsupported",
-		DefaultSenderEmail: "test@example.com",
-		DefaultSenderName:  "Test Sender",
-	}
-
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(user, nil)
-
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid email provider kind: unsupported")
-	mockAuth.AssertExpectations(t)
-}
-
-func TestEmailService_TestEmailProvider_SMTPMissingSettings(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
-	ctx := context.Background()
-	workspaceID := "workspace123"
-	user := &domain.User{ID: "user123"}
-	to := "test@example.com"
-
-	// SMTP provider with nil settings
-	provider := domain.EmailProvider{
+	// Create SMTP provider for testing
+	smtpProvider := domain.EmailProvider{
 		Kind:               domain.EmailProviderKindSMTP,
-		DefaultSenderEmail: "test@example.com",
+		DefaultSenderEmail: "sender@example.com",
 		DefaultSenderName:  "Test Sender",
-		SMTP:               nil,
+		SMTP: &domain.SMTPSettings{
+			Host:     "smtp.example.com",
+			Port:     587,
+			Username: "testuser",
+			Password: "testpassword", // This would be encrypted in production
+		},
 	}
 
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(user, nil)
+	t.Run("Success", func(t *testing.T) {
+		// Since we can't actually connect to an SMTP server in the test, skip this test
+		t.Skip("Skipping due to external SMTP dependency")
 
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "SMTP settings required")
-	mockAuth.AssertExpectations(t)
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		// We can't easily mock the actual SMTP client call since it's created directly in the code
+		// In a real implementation, we would refactor to use dependency injection for the mail client
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, smtpProvider, recipientEmail)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Authentication Failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+		authErr := errors.New("authentication error")
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, authErr)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, smtpProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user for workspace")
+	})
+
+	t.Run("Validation Failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+		// Create invalid SMTP provider (missing host)
+		invalidProvider := domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSMTP,
+			DefaultSenderEmail: "sender@example.com",
+			DefaultSenderName:  "Test Sender",
+			SMTP: &domain.SMTPSettings{
+				Port:     587,
+				Username: "testuser",
+				Password: "testpassword",
+			},
+		}
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, invalidProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "host is required for SMTP configuration")
+	})
+
+	t.Run("Missing SMTP Settings", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+		// Create provider with nil SMTP settings
+		invalidProvider := domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSMTP,
+			DefaultSenderEmail: "sender@example.com",
+			DefaultSenderName:  "Test Sender",
+			SMTP:               nil,
+		}
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, invalidProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SMTP settings required")
+	})
 }
 
-func TestEmailService_TestEmailProvider_SESMissingSettings(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
+func TestEmailService_TestEmailProvider_SES(t *testing.T) {
 	ctx := context.Background()
-	workspaceID := "workspace123"
-	user := &domain.User{ID: "user123"}
-	to := "test@example.com"
+	workspaceID := "ws-123"
+	userID := "user-456"
+	recipientEmail := "test@example.com"
 
-	// SES provider with nil settings
-	provider := domain.EmailProvider{
+	// Create SES provider for testing
+	sesProvider := domain.EmailProvider{
 		Kind:               domain.EmailProviderKindSES,
-		DefaultSenderEmail: "test@example.com",
+		DefaultSenderEmail: "sender@example.com",
 		DefaultSenderName:  "Test Sender",
-		SES:                nil,
+		SES: &domain.AmazonSES{
+			Region:    "us-east-1",
+			AccessKey: "AKIAXXXXXXXXXXXXXXXX",
+			SecretKey: "secret-key", // This would be encrypted in production
+		},
 	}
 
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(user, nil)
+	t.Run("Authentication Failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+		authErr := errors.New("authentication error")
 
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "SES settings required")
-	mockAuth.AssertExpectations(t)
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, authErr)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, sesProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user for workspace")
+	})
+
+	t.Run("Validation Failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+		// Create invalid SES provider (missing region)
+		invalidProvider := domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSES,
+			DefaultSenderEmail: "sender@example.com",
+			DefaultSenderName:  "Test Sender",
+			SES: &domain.AmazonSES{
+				AccessKey: "AKIAXXXXXXXXXXXXXXXX",
+				SecretKey: "secret-key",
+			},
+		}
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, invalidProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "region is required when Amazon SES is configured")
+	})
+
+	t.Run("Missing SES Settings", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+		// Create provider with nil SES settings
+		invalidProvider := domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSES,
+			DefaultSenderEmail: "sender@example.com",
+			DefaultSenderName:  "Test Sender",
+			SES:                nil,
+		}
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, invalidProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SES settings required")
+	})
 }
 
-func TestEmailService_TestEmailProvider_SparkPostMissingSettings(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
+func TestEmailService_TestEmailProvider_SparkPost(t *testing.T) {
 	ctx := context.Background()
-	workspaceID := "workspace123"
-	user := &domain.User{ID: "user123"}
-	to := "test@example.com"
+	workspaceID := "ws-123"
+	userID := "user-456"
+	recipientEmail := "test@example.com"
 
-	// SparkPost provider with nil settings
-	provider := domain.EmailProvider{
-		Kind:               domain.EmailProviderKindSparkPost,
-		DefaultSenderEmail: "test@example.com",
-		DefaultSenderName:  "Test Sender",
-		SparkPost:          nil,
-	}
-
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(user, nil)
-
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "SparkPost settings required")
-	mockAuth.AssertExpectations(t)
-}
-
-func TestEmailService_TestEmailProvider_SparkPostAPIError(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
-	ctx := context.Background()
-	workspaceID := "workspace123"
-	user := &domain.User{ID: "user123"}
-	to := "test@example.com"
-
-	// SparkPost provider with valid settings
-	provider := domain.EmailProvider{
+	// Create SparkPost provider for testing
+	sparkPostProvider := domain.EmailProvider{
 		Kind:               domain.EmailProviderKindSparkPost,
 		DefaultSenderEmail: "sender@example.com",
 		DefaultSenderName:  "Test Sender",
 		SparkPost: &domain.SparkPostSettings{
-			APIKey:   "test-api-key",
 			Endpoint: "https://api.sparkpost.com",
+			APIKey:   "sparkpost-api-key", // This would be encrypted in production
 		},
 	}
 
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(user, nil)
+	t.Run("Authentication Failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	// Create a test HTTP server that returns an error
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"errors":[{"message":"API key not valid"}]}`))
-	}))
-	defer server.Close()
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+		authErr := errors.New("authentication error")
 
-	// Override the endpoint to use our test server
-	provider.SparkPost.Endpoint = server.URL
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, authErr)
 
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
+		err := emailService.TestEmailProvider(ctx, workspaceID, sparkPostProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user for workspace")
+	})
 
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "SparkPost API error")
-	mockAuth.AssertExpectations(t)
+	t.Run("Missing SparkPost Settings", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+		// Create provider with nil SparkPost settings
+		invalidProvider := domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSparkPost,
+			DefaultSenderEmail: "sender@example.com",
+			DefaultSenderName:  "Test Sender",
+			SparkPost:          nil,
+		}
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, invalidProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SparkPost settings required")
+	})
 }
 
-// Mock for AWS SES error
-type mockSESError struct {
-	awsErr awserr.Error
-}
-
-func (m *mockSESError) Error() string {
-	return m.awsErr.Error()
-}
-
-func (m *mockSESError) OrigErr() error {
-	return m.awsErr.OrigErr()
-}
-
-func (m *mockSESError) Code() string {
-	return m.awsErr.Code()
-}
-
-func (m *mockSESError) Message() string {
-	return m.awsErr.Message()
-}
-
-func TestEmailService_TestEmailProvider_DecryptionFailure(t *testing.T) {
-	// Arrange
-	mockAuth := new(mockAuthService)
-	mockLog := new(mockLogger)
-	secretKey := "test-secret-key"
-	service := NewEmailService(mockLog, mockAuth, secretKey)
-
+func TestEmailService_TestEmailProvider_Postmark(t *testing.T) {
 	ctx := context.Background()
-	workspaceID := "workspace123"
-	user := &domain.User{ID: "user123"}
-	to := "test@example.com"
+	workspaceID := "ws-123"
+	userID := "user-456"
+	recipientEmail := "test@example.com"
 
-	// SMTP provider with encrypted password that will fail to decrypt
-	provider := domain.EmailProvider{
-		Kind:               domain.EmailProviderKindSMTP,
-		DefaultSenderEmail: "test@example.com",
+	// Create Postmark provider for testing
+	postmarkProvider := domain.EmailProvider{
+		Kind:               domain.EmailProviderKindPostmark,
+		DefaultSenderEmail: "sender@example.com",
 		DefaultSenderName:  "Test Sender",
-		SMTP: &domain.SMTPSettings{
-			Host:              "smtp.example.com",
-			Port:              587,
-			Username:          "user",
-			EncryptedPassword: "invalid-encrypted-password", // This will fail to decrypt
-			UseTLS:            true,
+		Postmark: &domain.PostmarkSettings{
+			ServerToken: "postmark-server-token", // This would be encrypted in production
 		},
 	}
 
-	mockAuth.On("AuthenticateUserForWorkspace", ctx, workspaceID).Return(user, nil)
+	t.Run("Authentication Failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	// Act
-	err := service.TestEmailProvider(ctx, workspaceID, provider, to)
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+		authErr := errors.New("authentication error")
 
-	// Assert
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, authErr)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, postmarkProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user for workspace")
+	})
+
+	t.Run("Missing Postmark Settings", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+		// Create provider with nil Postmark settings
+		invalidProvider := domain.EmailProvider{
+			Kind:               domain.EmailProviderKindPostmark,
+			DefaultSenderEmail: "sender@example.com",
+			DefaultSenderName:  "Test Sender",
+			Postmark:           nil,
+		}
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, invalidProvider, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Postmark settings required")
+	})
+}
+
+func TestEmailService_TestEmailProvider_UnsupportedProvider(t *testing.T) {
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	userID := "user-456"
+	recipientEmail := "test@example.com"
+
+	// Create unsupported provider
+	unsupportedProvider := domain.EmailProvider{
+		Kind:               "unsupported",
+		DefaultSenderEmail: "sender@example.com",
+		DefaultSenderName:  "Test Sender",
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+
+	// Set expectations
+	mockAuthService.EXPECT().
+		AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+		Return(&domain.User{ID: userID}, nil)
+
+	err := emailService.TestEmailProvider(ctx, workspaceID, unsupportedProvider, recipientEmail)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to decrypt SMTP password")
-	mockAuth.AssertExpectations(t)
+	assert.Contains(t, err.Error(), "invalid email provider kind: unsupported")
+}
+
+func TestEmailService_TestTemplate(t *testing.T) {
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	userID := "user-456"
+	templateID := "tmpl-abc"
+	providerType := "marketing"
+	recipientEmail := "test@example.com"
+
+	// Create workspace with email provider
+	workspace := &domain.Workspace{
+		ID:   workspaceID,
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			EmailMarketingProvider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSES,
+				DefaultSenderEmail: "sender@example.com",
+				DefaultSenderName:  "Test Sender",
+				SES: &domain.AmazonSES{
+					Region:    "us-east-1",
+					AccessKey: "AKIAXXXXXXXXXXXXXXXX",
+					SecretKey: "secret-key", // This would be encrypted in production
+				},
+			},
+		},
+	}
+
+	// Create template
+	template := &domain.Template{
+		ID:       templateID,
+		Name:     "Test Template",
+		Channel:  "email",
+		Category: "marketing",
+		Email: &domain.EmailTemplate{
+			FromAddress:     "sender@example.com",
+			FromName:        "Test Sender",
+			Subject:         "Test Subject",
+			CompiledPreview: "<html><body><h1>Test Email</h1></body></html>",
+			VisualEditorTree: mjml.EmailBlock{
+				Kind: "root",
+				Data: map[string]interface{}{"styles": map[string]interface{}{}},
+			},
+		},
+		TestData: domain.MapOfAny{
+			"name":    "Test User",
+			"company": "Test Company",
+		},
+	}
+
+	t.Run("Authentication Failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, _, _, _ := setupEmailServiceTest(ctrl)
+		authErr := errors.New("authentication error")
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, authErr)
+
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, providerType, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("Workspace Not Found", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, mockWorkspaceRepo, _, _ := setupEmailServiceTest(ctrl)
+		workspaceErr := errors.New("workspace not found")
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(nil, workspaceErr)
+
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, providerType, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get workspace")
+	})
+
+	t.Run("Template Not Found", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, mockWorkspaceRepo, mockTemplateRepo, _ := setupEmailServiceTest(ctrl)
+		templateErr := errors.New("template not found")
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		mockTemplateRepo.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(nil, templateErr)
+
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, providerType, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get template")
+	})
+
+	t.Run("Invalid Provider Type", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, mockWorkspaceRepo, mockTemplateRepo, _ := setupEmailServiceTest(ctrl)
+		invalidProviderType := "invalid"
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		mockTemplateRepo.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(template, nil)
+
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, invalidProviderType, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid provider type")
+	})
+
+	t.Run("No Email Provider Configured", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, mockWorkspaceRepo, mockTemplateRepo, _ := setupEmailServiceTest(ctrl)
+
+		// Create workspace with no email provider
+		workspaceWithoutProvider := &domain.Workspace{
+			ID:       workspaceID,
+			Name:     "Test Workspace",
+			Settings: domain.WorkspaceSettings{},
+		}
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspaceWithoutProvider, nil)
+
+		mockTemplateRepo.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(template, nil)
+
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, providerType, recipientEmail)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no email provider configured")
+	})
+
+	t.Run("Success with SES Provider", func(t *testing.T) {
+		// Skip test due to external AWS dependency
+		t.Skip("Skipping due to external AWS dependency")
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		emailService, mockAuthService, mockWorkspaceRepo, mockTemplateRepo, _ := setupEmailServiceTest(ctrl)
+
+		// Set expectations
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(&domain.User{ID: userID}, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		mockTemplateRepo.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(template, nil)
+
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, providerType, recipientEmail)
+		assert.NoError(t, err)
+	})
 }

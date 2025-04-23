@@ -1,5 +1,5 @@
 import { api } from './client'
-import type {
+import {
   GetTemplatesRequest,
   GetTemplatesResponse,
   GetTemplateRequest,
@@ -14,8 +14,8 @@ import type {
   CompileTemplateResponse
 } from './types'
 
-// Define the interface for the API object
-interface TemplatesApi {
+// Define the API interfaces
+export interface TemplatesApi {
   list: (params: GetTemplatesRequest) => Promise<GetTemplatesResponse>
   get: (params: GetTemplateRequest) => Promise<GetTemplateResponse>
   create: (params: CreateTemplateRequest) => Promise<CreateTemplateResponse>

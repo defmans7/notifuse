@@ -330,4 +330,5 @@ func (p *PostmarkSettings) Validate(passphrase string) error {
 // EmailServiceInterface defines the interface for email operations
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
+	TestTemplate(ctx context.Context, workspaceID string, templateID string, providerType string, recipientEmail string) error
 }

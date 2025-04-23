@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Typography, Button, Table, Tooltip, Space, Popconfirm, message, Segmented } from 'antd'
+import {
+  Typography,
+  Button,
+  Table,
+  Tooltip,
+  Space,
+  Popconfirm,
+  message,
+  Segmented,
+  Modal,
+  Input
+} from 'antd'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
+import { emailService } from '../services/api/email'
 import type { Template, Workspace } from '../services/api/types'
-import { EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons'
+import { EditOutlined, EyeOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
 import { renderCategoryTag } from '../components/templates'
 import { useAuth } from '../contexts/AuthContext'
@@ -18,6 +30,53 @@ interface TemplatesSearch {
   category?: string
 }
 
+// Add a new constant for the SendTemplateModal component
+const SendTemplateModal = ({
+  isOpen,
+  onClose,
+  onSend,
+  loading
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onSend: (email: string) => void
+  loading: boolean
+}) => {
+  const [email, setEmail] = useState('')
+
+  return (
+    <Modal
+      title="Send Test Email"
+      open={isOpen}
+      onCancel={onClose}
+      footer={[
+        <Button key="cancel" onClick={onClose}>
+          Cancel
+        </Button>,
+        <Button
+          key="send"
+          type="primary"
+          onClick={() => onSend(email)}
+          disabled={!email || loading}
+          loading={loading}
+        >
+          Send Test Email
+        </Button>
+      ]}
+    >
+      <div className="py-2">
+        <p className="mb-4">Send a test email using this template to verify how it will look.</p>
+        <Input
+          placeholder="recipient@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          type="email"
+        />
+      </div>
+    </Modal>
+  )
+}
+
 export function TemplatesPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/templates' })
   // Use useSearch to get query params
@@ -28,6 +87,10 @@ export function TemplatesPage() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   // Derive selectedCategory from search params, default to 'all'
   const selectedCategory = search.category || 'all'
+  // Add state for the test template modal
+  const [testModalOpen, setTestModalOpen] = useState(false)
+  const [testLoading, setTestLoading] = useState(false)
+  const [templateToTest, setTemplateToTest] = useState<Template | null>(null)
 
   // Function to update search params
   const setSelectedCategory = (category: string) => {
@@ -91,6 +154,38 @@ export function TemplatesPage() {
   }
 
   const hasTemplates = !isLoading && data?.templates && data.templates.length > 0
+
+  // Add function to handle testing a template
+  const handleTestTemplate = (template: Template) => {
+    setTemplateToTest(template)
+    setTestModalOpen(true)
+  }
+
+  // Add function to send the test email
+  const sendTestEmail = async (email: string) => {
+    if (!templateToTest || !workspace) return
+
+    setTestLoading(true)
+    try {
+      const response = await emailService.testTemplate(
+        workspaceId!,
+        templateToTest.id,
+        templateToTest.category === 'marketing' ? 'marketing' : 'transactional',
+        email
+      )
+
+      if (response.success) {
+        message.success('Test email sent successfully')
+        setTestModalOpen(false)
+      } else {
+        message.error(`Failed to send test email: ${response.error || 'Unknown error'}`)
+      }
+    } catch (error: any) {
+      message.error(`Error: ${error?.message || 'Something went wrong'}`)
+    } finally {
+      setTestLoading(false)
+    }
+  }
 
   const columns = [
     {
@@ -196,27 +291,44 @@ export function TemplatesPage() {
       key: 'actions',
       render: (_: any, record: Template) => (
         <Space>
-          <TemplatePreviewDrawer record={record} workspaceId={workspaceId!}>
-            <Button type="text" icon={<EyeOutlined />} />
-          </TemplatePreviewDrawer>
           {workspace && (
-            <CreateTemplateDrawer
-              template={record}
-              workspace={workspace}
-              buttonContent={<EditOutlined />}
-              buttonProps={{ type: 'text', size: 'small' }}
-            />
+            <Tooltip title="Edit Template">
+              <>
+                <CreateTemplateDrawer
+                  template={record}
+                  workspace={workspace}
+                  buttonContent={<EditOutlined />}
+                  buttonProps={{ type: 'text', size: 'small' }}
+                />
+              </>
+            </Tooltip>
           )}
-          <Popconfirm
-            title="Delete the template?"
-            description="Are you sure you want to delete this template? All versions will be deleted."
-            onConfirm={() => handleDelete(record.id)}
-            okText="Yes, Delete"
-            cancelText="Cancel"
-            placement="topRight"
-          >
-            <Button type="text" icon={<DeleteOutlined />} loading={deleteMutation.isPending} />
-          </Popconfirm>
+          <Tooltip title="Delete Template">
+            <Popconfirm
+              title="Delete the template?"
+              description="Are you sure you want to delete this template? All versions will be deleted."
+              onConfirm={() => handleDelete(record.id)}
+              okText="Yes, Delete"
+              cancelText="Cancel"
+              placement="topRight"
+            >
+              <Button type="text" icon={<DeleteOutlined />} loading={deleteMutation.isPending} />
+            </Popconfirm>
+          </Tooltip>
+          <Tooltip title="Send Test Email">
+            <Button
+              type="text"
+              icon={<SendOutlined />}
+              onClick={() => handleTestTemplate(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Preview Template">
+            <>
+              <TemplatePreviewDrawer record={record} workspaceId={workspaceId!}>
+                <Button type="text" icon={<EyeOutlined />} />
+              </TemplatePreviewDrawer>
+            </>
+          </Tooltip>
         </Space>
       )
     }
@@ -280,6 +392,14 @@ export function TemplatesPage() {
           )}
         </div>
       )}
+
+      {/* Add the SendTemplateModal component */}
+      <SendTemplateModal
+        isOpen={testModalOpen}
+        onClose={() => setTestModalOpen(false)}
+        onSend={sendTestEmail}
+        loading={testLoading}
+      />
     </div>
   )
 }

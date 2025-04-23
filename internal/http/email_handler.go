@@ -42,6 +42,7 @@ func (h *EmailHandler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Register RPC-style endpoints with dot notation
 	mux.Handle("/api/email.testProvider", requireAuth(http.HandlerFunc(h.handleTestEmailProvider)))
+	mux.Handle("/api/email.testTemplate", requireAuth(http.HandlerFunc(h.handleTestTemplate)))
 }
 
 // Add the handler for testEmailProvider
@@ -73,4 +74,50 @@ func (h *EmailHandler) handleTestEmailProvider(w http.ResponseWriter, r *http.Re
 		resp.Error = err.Error()
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleTestTemplate handles requests to test a template
+func (h *EmailHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req domain.TestTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	workspaceID, templateID, providerType, recipientEmail, err := req.Validate()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err = h.emailService.TestTemplate(r.Context(), workspaceID, templateID, providerType, recipientEmail)
+
+	// Create response
+	response := domain.TestTemplateResponse{
+		Success: err == nil,
+	}
+
+	// If there's an error, include it in the response
+	if err != nil {
+		if _, ok := err.(*domain.ErrTemplateNotFound); ok {
+			writeError(w, http.StatusNotFound, "Template not found")
+			return
+		}
+
+		h.logger.WithFields(map[string]interface{}{
+			"error":        err.Error(),
+			"workspace_id": workspaceID,
+			"template_id":  templateID,
+		}).Error("Failed to test template")
+
+		response.Error = err.Error()
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }

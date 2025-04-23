@@ -1,5 +1,10 @@
 import { api } from './client'
-import { EmailProvider, TestEmailProviderResponse } from './types'
+import {
+  EmailProvider,
+  TestEmailProviderResponse,
+  TestTemplateRequest,
+  TestTemplateResponse
+} from './types'
 
 export const emailService = {
   /**
@@ -19,5 +24,28 @@ export const emailService = {
       to,
       workspace_id: workspaceId
     })
+  },
+
+  /**
+   * Test a template by sending a test email
+   * @param workspaceId The ID of the workspace
+   * @param templateId The ID of the template to test
+   * @param providerType The type of email provider to use ("marketing" or "transactional")
+   * @param recipientEmail The email address to send the test email to
+   * @returns A response indicating success or failure
+   */
+  testTemplate: (
+    workspaceId: string,
+    templateId: string,
+    providerType: 'marketing' | 'transactional',
+    recipientEmail: string
+  ): Promise<TestTemplateResponse> => {
+    const request: TestTemplateRequest = {
+      workspace_id: workspaceId,
+      template_id: templateId,
+      provider_type: providerType,
+      recipient_email: recipientEmail
+    }
+    return api.post<TestTemplateResponse>('/api/email.testTemplate', request)
   }
 }

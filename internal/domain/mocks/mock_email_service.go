@@ -48,3 +48,17 @@ func (mr *MockEmailServiceInterfaceMockRecorder) TestEmailProvider(arg0, arg1, a
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TestEmailProvider", reflect.TypeOf((*MockEmailServiceInterface)(nil).TestEmailProvider), arg0, arg1, arg2, arg3)
 }
+
+// TestTemplate mocks base method.
+func (m *MockEmailServiceInterface) TestTemplate(arg0 context.Context, arg1, arg2, arg3, arg4 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TestTemplate", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// TestTemplate indicates an expected call of TestTemplate.
+func (mr *MockEmailServiceInterfaceMockRecorder) TestTemplate(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TestTemplate", reflect.TypeOf((*MockEmailServiceInterface)(nil).TestTemplate), arg0, arg1, arg2, arg3, arg4)
+}

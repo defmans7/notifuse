@@ -381,3 +381,16 @@ export interface TestEmailProviderResponse {
   success: boolean
   error?: string
 }
+
+// Test template types
+export interface TestTemplateRequest {
+  workspace_id: string
+  template_id: string
+  provider_type: 'marketing' | 'transactional'
+  recipient_email: string
+}
+
+export interface TestTemplateResponse {
+  success: boolean
+  error?: string
+}
