@@ -155,7 +155,7 @@ export function WorkspaceSettings({
         loading={loading}
       >
         {workspace && (
-          <Descriptions column={1} bordered>
+          <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="Workspace Name">{workspace.name}</Descriptions.Item>
             <Descriptions.Item label="Website URL">
               {workspace.settings.website_url || 'Not specified'}

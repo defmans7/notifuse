@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Card,
   Form,
@@ -8,12 +8,12 @@ import {
   Row,
   Col,
   InputNumber,
-  Typography,
   Alert,
   Select,
   Modal,
   message,
-  Space
+  Space,
+  Descriptions
 } from 'antd'
 import { EmailProvider, EmailProviderKind, Workspace } from '../services/api/types'
 import { MailOutlined } from '@ant-design/icons'
@@ -51,16 +51,37 @@ export function EmailProviderSettings({
 }: EmailProviderSettingsProps) {
   const [marketingForm] = Form.useForm<EmailProviderFormValues>()
   const [transactionalForm] = Form.useForm<EmailProviderFormValues>()
-  const [marketingProvider, setMarketingProvider] = useState<EmailProviderKind | null>(
-    workspace?.settings?.email_marketing?.kind || null
-  )
-  const [transactionalProvider, setTransactionalProvider] = useState<EmailProviderKind | null>(
-    workspace?.settings?.email_transactional?.kind || null
-  )
+  const [marketingProvider, setMarketingProvider] = useState<EmailProviderKind | null>(null)
+  const [transactionalProvider, setTransactionalProvider] = useState<EmailProviderKind | null>(null)
   const [testModalVisible, setTestModalVisible] = useState(false)
   const [testEmail, setTestEmail] = useState('')
   const [testLoading, setTestLoading] = useState(false)
   const [providerToTest, setProviderToTest] = useState<'marketing' | 'transactional'>('marketing')
+  const [editingMarketing, setEditingMarketing] = useState(false)
+  const [editingTransactional, setEditingTransactional] = useState(false)
+
+  // Update provider states when workspace changes
+  useEffect(() => {
+    if (workspace) {
+      // Update marketing provider
+      if (workspace.settings?.email_marketing?.kind) {
+        setMarketingProvider(workspace.settings.email_marketing.kind)
+        marketingForm.setFieldsValue({
+          ...workspace.settings.email_marketing,
+          kind: workspace.settings.email_marketing.kind
+        })
+      }
+
+      // Update transactional provider
+      if (workspace.settings?.email_transactional?.kind) {
+        setTransactionalProvider(workspace.settings.email_transactional.kind)
+        transactionalForm.setFieldsValue({
+          ...workspace.settings.email_transactional,
+          kind: workspace.settings.email_transactional.kind
+        })
+      }
+    }
+  }, [workspace, marketingForm, transactionalForm])
 
   if (!workspace) {
     return null
@@ -69,11 +90,13 @@ export function EmailProviderSettings({
   const handleMarketingProviderSelect = (provider: EmailProviderKind) => {
     setMarketingProvider(provider)
     marketingForm.setFieldsValue({ kind: provider })
+    setEditingMarketing(true)
   }
 
   const handleTransactionalProviderSelect = (provider: EmailProviderKind) => {
     setTransactionalProvider(provider)
     transactionalForm.setFieldsValue({ kind: provider })
+    setEditingTransactional(true)
   }
 
   const handleMarketingSave = async (values: EmailProviderFormValues) => {
@@ -155,25 +178,33 @@ export function EmailProviderSettings({
 
     setTestLoading(true)
     try {
-      const form = providerToTest === 'marketing' ? marketingForm : transactionalForm
-      const formValues = await form.validateFields()
+      let provider: EmailProvider
 
-      // Construct provider object from form values
-      const provider: EmailProvider = {
-        kind: formValues.kind,
-        default_sender_email: formValues.default_sender_email || '',
-        default_sender_name: formValues.default_sender_name || 'Default Sender'
-      }
-
-      // Add provider-specific settings
-      if (formValues.kind === 'ses' && formValues.ses) {
-        provider.ses = formValues.ses
-      } else if (formValues.kind === 'smtp' && formValues.smtp) {
-        provider.smtp = formValues.smtp
-      } else if (formValues.kind === 'sparkpost' && formValues.sparkpost) {
-        provider.sparkpost = formValues.sparkpost
-      } else if (formValues.kind === 'postmark' && formValues.postmark) {
-        provider.postmark = formValues.postmark
+      if (providerToTest === 'marketing') {
+        if (editingMarketing) {
+          // Use form values when editing
+          const formValues = await marketingForm.validateFields()
+          provider = constructProviderFromForm(formValues)
+        } else {
+          // Use current workspace settings when not editing
+          if (!workspace.settings.email_marketing) {
+            throw new Error('No marketing email provider configured')
+          }
+          provider = workspace.settings.email_marketing
+        }
+      } else {
+        // transactional
+        if (editingTransactional) {
+          // Use form values when editing
+          const formValues = await transactionalForm.validateFields()
+          provider = constructProviderFromForm(formValues)
+        } else {
+          // Use current workspace settings when not editing
+          if (!workspace.settings.email_transactional) {
+            throw new Error('No transactional email provider configured')
+          }
+          provider = workspace.settings.email_transactional
+        }
       }
 
       const response = await emailService.testProvider(workspace.id, provider, testEmail)
@@ -196,14 +227,54 @@ export function EmailProviderSettings({
     }
   }
 
+  // Helper function to construct provider object from form values
+  const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailProvider => {
+    const provider: EmailProvider = {
+      kind: formValues.kind,
+      default_sender_email: formValues.default_sender_email || '',
+      default_sender_name: formValues.default_sender_name || 'Default Sender'
+    }
+
+    // Add provider-specific settings
+    if (formValues.kind === 'ses' && formValues.ses) {
+      provider.ses = formValues.ses
+    } else if (formValues.kind === 'smtp' && formValues.smtp) {
+      provider.smtp = formValues.smtp
+    } else if (formValues.kind === 'sparkpost' && formValues.sparkpost) {
+      provider.sparkpost = formValues.sparkpost
+    } else if (formValues.kind === 'postmark' && formValues.postmark) {
+      provider.postmark = formValues.postmark
+    }
+
+    return provider
+  }
+
   const openTestModal = async (provider: 'marketing' | 'transactional') => {
+    // Only validate the form if we're in editing mode
+    const isEditing = provider === 'marketing' ? editingMarketing : editingTransactional
     const form = provider === 'marketing' ? marketingForm : transactionalForm
 
-    try {
-      // Validate the form first
-      await form.validateFields()
+    // Check if there's a configured provider when not editing
+    if (!isEditing) {
+      const existingProvider =
+        provider === 'marketing'
+          ? workspace?.settings?.email_marketing
+          : workspace?.settings?.email_transactional
 
-      // If validation passes, set the provider and show the modal
+      if (!existingProvider) {
+        message.error('No email provider configured')
+        return
+      }
+
+      // If not editing and provider exists, show test modal directly
+      setProviderToTest(provider)
+      setTestModalVisible(true)
+      return
+    }
+
+    try {
+      // Validate the form when in editing mode
+      await form.validateFields()
       setProviderToTest(provider)
       setTestModalVisible(true)
     } catch (error) {
@@ -467,6 +538,119 @@ export function EmailProviderSettings({
     }
   }
 
+  const renderProviderDescription = (providerType: 'marketing' | 'transactional') => {
+    const provider =
+      providerType === 'marketing'
+        ? workspace.settings.email_marketing
+        : workspace.settings.email_transactional
+
+    if (!provider) return null
+
+    // Create provider logo element based on provider kind
+    let logoElement
+    if (provider.kind === 'smtp') {
+      logoElement = (
+        <Space>
+          <MailOutlined style={{ fontSize: 24, marginRight: 8 }} />
+          {provider.kind.toUpperCase()}
+        </Space>
+      )
+    } else if (provider.kind === 'ses') {
+      logoElement = (
+        <img src="/amazonses.png" alt="Amazon SES" style={{ height: 24, marginRight: 8 }} />
+      )
+    } else if (provider.kind === 'sparkpost') {
+      logoElement = (
+        <img src="/sparkpost.png" alt="SparkPost" style={{ height: 24, marginRight: 8 }} />
+      )
+    } else if (provider.kind === 'postmark') {
+      logoElement = (
+        <img src="/postmark.png" alt="Postmark" style={{ height: 24, marginRight: 8 }} />
+      )
+    }
+
+    const items = [
+      {
+        key: 'type',
+        label: 'Provider Type',
+        children: <Space>{logoElement}</Space>
+      },
+      {
+        key: 'sender',
+        label: 'Sender Details',
+        children: `${provider.default_sender_name} <${provider.default_sender_email}>`
+      }
+    ]
+
+    // Add provider-specific details
+    if (provider.kind === 'smtp' && provider.smtp) {
+      items.push(
+        {
+          key: 'host',
+          label: 'SMTP Host',
+          children: `${provider.smtp.host}:${provider.smtp.port}`
+        },
+        {
+          key: 'username',
+          label: 'SMTP User',
+          children: provider.smtp.username
+        },
+        {
+          key: 'security',
+          label: 'TLS Enabled',
+          children: provider.smtp.use_tls ? 'Yes' : 'No'
+        }
+      )
+    } else if (provider.kind === 'ses' && provider.ses) {
+      items.push(
+        {
+          key: 'region',
+          label: 'AWS Region',
+          children: provider.ses.region
+        },
+        {
+          key: 'access_key',
+          label: 'AWS Access Key',
+          children: provider.ses.access_key
+        },
+        {
+          key: 'sandbox',
+          label: 'Sandbox Mode',
+          children: provider.ses.sandbox_mode ? 'Enabled' : 'Disabled'
+        }
+      )
+    } else if (provider.kind === 'sparkpost' && provider.sparkpost) {
+      items.push(
+        {
+          key: 'endpoint',
+          label: 'API Endpoint',
+          children: provider.sparkpost.endpoint
+        },
+        {
+          key: 'sandbox',
+          label: 'Sandbox Mode',
+          children: provider.sparkpost.sandbox_mode ? 'Enabled' : 'Disabled'
+        }
+      )
+    } else if (provider.kind === 'postmark' && provider.postmark) {
+      items.push({
+        key: 'postmark',
+        label: 'Integration',
+        children: 'Postmark API Connected'
+      })
+    }
+
+    return (
+      <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
+        {items.map((item) => (
+          <Descriptions.Item key={item.key} label={item.label}>
+            {item.children}
+          </Descriptions.Item>
+        ))}
+      </Descriptions>
+    )
+  }
+
   return (
     <div className="email-provider-settings">
       <Card
@@ -474,10 +658,23 @@ export function EmailProviderSettings({
         className="workspace-card"
         style={{ marginBottom: 24 }}
         extra={
-          marketingProvider && (
-            <Button type="primary" size="small" ghost onClick={() => setMarketingProvider(null)}>
-              Change provider
-            </Button>
+          marketingProvider &&
+          !editingMarketing && (
+            <Space>
+              {isOwner && (
+                <Button onClick={() => setEditingMarketing(true)} size="small">
+                  Edit
+                </Button>
+              )}
+              {isOwner && (
+                <Button size="small" onClick={() => openTestModal('marketing')}>
+                  Test
+                </Button>
+              )}
+              <Button type="primary" size="small" ghost onClick={() => setMarketingProvider(null)}>
+                Change provider
+              </Button>
+            </Space>
           )
         }
       >
@@ -491,37 +688,40 @@ export function EmailProviderSettings({
             />
             {renderProviderGrid(handleMarketingProviderSelect)}
           </>
+        ) : !editingMarketing ? (
+          renderProviderDescription('marketing')
         ) : (
-          <Form
-            form={marketingForm}
-            layout="horizontal"
-            onFinish={handleMarketingSave}
-            initialValues={{
-              kind: marketingProvider
-            }}
-            {...FORM_LAYOUT}
-          >
-            <Form.Item name="kind" hidden>
-              <Input />
-            </Form.Item>
-
-            {renderProviderForm(marketingProvider, 'marketing')}
-
-            {isOwner && (
-              <Form.Item wrapperCol={{ offset: 8, span: 16 }}>
-                <Space>
-                  {workspace?.settings?.email_marketing && (
-                    <Button onClick={() => openTestModal('marketing')} disabled={loading}>
-                      Test Integration
-                    </Button>
-                  )}
-                  <Button type="primary" htmlType="submit" loading={loading}>
-                    Save Settings
-                  </Button>
-                </Space>
+          <>
+            <Form
+              form={marketingForm}
+              layout="horizontal"
+              onFinish={(values) => {
+                handleMarketingSave(values).then(() => setEditingMarketing(false))
+              }}
+              initialValues={{
+                kind: marketingProvider
+              }}
+              {...FORM_LAYOUT}
+            >
+              <Form.Item name="kind" hidden>
+                <Input />
               </Form.Item>
-            )}
-          </Form>
+
+              {renderProviderForm(marketingProvider, 'marketing')}
+
+              {isOwner && (
+                <Form.Item wrapperCol={{ offset: 8, span: 16 }}>
+                  <Space>
+                    <Button onClick={() => setEditingMarketing(false)}>Cancel</Button>
+                    <Button onClick={() => openTestModal('marketing')}>Test Integration</Button>
+                    <Button type="primary" htmlType="submit" loading={loading}>
+                      Save Settings
+                    </Button>
+                  </Space>
+                </Form.Item>
+              )}
+            </Form>
+          </>
         )}
       </Card>
 
@@ -529,15 +729,28 @@ export function EmailProviderSettings({
         title="Transactional Email Provider"
         className="workspace-card"
         extra={
-          transactionalProvider && (
-            <Button
-              type="primary"
-              size="small"
-              ghost
-              onClick={() => setTransactionalProvider(null)}
-            >
-              Change provider
-            </Button>
+          transactionalProvider &&
+          !editingTransactional && (
+            <Space>
+              {isOwner && (
+                <Button onClick={() => setEditingTransactional(true)} size="small">
+                  Edit
+                </Button>
+              )}
+              {isOwner && (
+                <Button size="small" onClick={() => openTestModal('transactional')}>
+                  Test
+                </Button>
+              )}
+              <Button
+                type="primary"
+                size="small"
+                ghost
+                onClick={() => setTransactionalProvider(null)}
+              >
+                Change provider
+              </Button>
+            </Space>
           )
         }
       >
@@ -551,11 +764,15 @@ export function EmailProviderSettings({
             />
             {renderProviderGrid(handleTransactionalProviderSelect, true)}
           </>
+        ) : !editingTransactional ? (
+          renderProviderDescription('transactional')
         ) : (
           <Form
             form={transactionalForm}
             layout="horizontal"
-            onFinish={handleTransactionalSave}
+            onFinish={(values) => {
+              handleTransactionalSave(values).then(() => setEditingTransactional(false))
+            }}
             initialValues={{
               kind: transactionalProvider
             }}
@@ -570,17 +787,9 @@ export function EmailProviderSettings({
             {isOwner && (
               <Form.Item wrapperCol={{ offset: 8, span: 16 }}>
                 <Space>
-                  {workspace?.settings?.email_transactional && (
-                    <Button onClick={() => openTestModal('transactional')} disabled={loading}>
-                      Test Integration
-                    </Button>
-                  )}
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    loading={loading}
-                    style={{ marginRight: 8 }}
-                  >
+                  <Button onClick={() => setEditingTransactional(false)}>Cancel</Button>
+                  <Button onClick={() => openTestModal('transactional')}>Test Integration</Button>
+                  <Button type="primary" htmlType="submit" loading={loading}>
                     Save Settings
                   </Button>
                 </Space>
