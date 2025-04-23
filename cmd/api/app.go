@@ -43,6 +43,7 @@ type App struct {
 	listService        *service.ListService
 	contactListService *service.ContactListService
 	templateService    *service.TemplateService
+	emailService       *service.EmailService
 
 	// HTTP handlers
 	mux    *http.ServeMux
@@ -208,7 +209,7 @@ func (a *App) InitServices() error {
 	a.listService = service.NewListService(a.listRepo, a.authService, a.logger)
 	a.contactListService = service.NewContactListService(a.contactListRepo, a.authService, a.contactRepo, a.listRepo, a.logger)
 	a.templateService = service.NewTemplateService(a.templateRepo, a.authService, a.logger)
-
+	a.emailService = service.NewEmailService(a.logger, a.authService, a.config.Security.SecretKey)
 	// Create workspace service last since it depends on other services
 	a.workspaceService = service.NewWorkspaceService(
 		a.workspaceRepo,
@@ -249,7 +250,7 @@ func (a *App) InitHandlers() error {
 	listHandler := httpHandler.NewListHandler(a.listService, a.config.Security.PasetoPublicKey, a.logger)
 	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, a.config.Security.PasetoPublicKey, a.logger)
 	templateHandler := httpHandler.NewTemplateHandler(a.templateService, a.config.Security.PasetoPublicKey, a.logger)
-
+	emailHandler := httpHandler.NewEmailHandler(a.emailService, a.config.Security.PasetoPublicKey, a.logger, a.config.Security.SecretKey)
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
 	workspaceHandler.RegisterRoutes(a.mux)
@@ -258,6 +259,7 @@ func (a *App) InitHandlers() error {
 	listHandler.RegisterRoutes(a.mux)
 	contactListHandler.RegisterRoutes(a.mux)
 	templateHandler.RegisterRoutes(a.mux)
+	emailHandler.RegisterRoutes(a.mux)
 	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	return nil

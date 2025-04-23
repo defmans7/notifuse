@@ -56,7 +56,7 @@ export function WorkspaceSettingsPage() {
 
   return (
     <div className="workspace-settings">
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: '800px' }}>
         <WorkspaceSettings
           workspace={workspace}
           loading={false}

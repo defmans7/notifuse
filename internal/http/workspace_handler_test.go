@@ -217,12 +217,18 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 		},
 	}
 	workspaceSvc.EXPECT().
-		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC", gomock.Any()).
-		DoAndReturn(func(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string, fileManager domain.FileManagerSettings) (*domain.Workspace, error) {
+		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, id, name string, settings domain.WorkspaceSettings) (*domain.Workspace, error) {
+			// Verify settings
+			assert.Equal(t, "https://updated.com", settings.WebsiteURL)
+			assert.Equal(t, "https://updated.com/logo.png", settings.LogoURL)
+			assert.Equal(t, "https://updated.com/cover.png", settings.CoverURL)
+			assert.Equal(t, "UTC", settings.Timezone)
+
 			// Verify file manager settings
-			assert.Equal(t, "https://s3.amazonaws.com", fileManager.Endpoint)
-			assert.Equal(t, "my-bucket", fileManager.Bucket)
-			assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", fileManager.AccessKey)
+			assert.Equal(t, "https://s3.amazonaws.com", settings.FileManager.Endpoint)
+			assert.Equal(t, "my-bucket", settings.FileManager.Bucket)
+			assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", settings.FileManager.AccessKey)
 			return expectedWorkspace, nil
 		})
 
@@ -248,9 +254,11 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
+	// Execute request
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response domain.Workspace
@@ -746,10 +754,10 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 
 	// Mock service error
 	workspaceSvc.EXPECT().
-		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "UTC", gomock.Any()).
-		Return(nil, fmt.Errorf("database error"))
+		UpdateWorkspace(gomock.Any(), "testworkspace1", "Updated Workspace", gomock.Any()).
+		Return(nil, fmt.Errorf("service error"))
 
-	// Create request with valid data
+	// Create request
 	reqBody := domain.UpdateWorkspaceRequest{
 		ID:   "testworkspace1",
 		Name: "Updated Workspace",
@@ -771,11 +779,17 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.update", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
+	// Execute request
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	// Assert response
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Contains(t, w.Body.String(), "Failed to update workspace")
+
+	var response errorResponse
+	err = json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Failed to update workspace", response.Error)
 }
 
 func TestWorkspaceHandler_Delete_MethodNotAllowed(t *testing.T) {

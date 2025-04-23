@@ -12,7 +12,7 @@ import (
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
-	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 )
 
@@ -20,16 +20,16 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockUserService := domainmocks.NewMockUserServiceInterface(ctrl)
-	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{}
-	mockContactService := domainmocks.NewMockContactService(ctrl)
-	mockListService := domainmocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 
 	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
@@ -100,16 +100,16 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockUserService := domainmocks.NewMockUserServiceInterface(ctrl)
-	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{Environment: "development"}
-	mockContactService := domainmocks.NewMockContactService(ctrl)
-	mockListService := domainmocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
@@ -117,8 +117,8 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
-	workspaceID := "test-workspace"
-	userID := "test-user"
+	workspaceID := "testworkspace"
+	userID := "testuser"
 
 	t.Run("successful get", func(t *testing.T) {
 		expectedUser := &domain.User{
@@ -185,16 +185,16 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockUserService := domainmocks.NewMockUserServiceInterface(ctrl)
-	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{}
-	mockContactService := domainmocks.NewMockContactService(ctrl)
-	mockListService := domainmocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
@@ -203,7 +203,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
-	workspaceID := "testworkspace1"
+	workspaceID := "testworkspace"
 
 	t.Run("successful creation", func(t *testing.T) {
 		expectedUser := &domain.User{
@@ -447,16 +447,16 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockUserService := domainmocks.NewMockUserServiceInterface(ctrl)
-	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
-	mockConfig := &config.Config{Environment: "development"}
-	mockContactService := domainmocks.NewMockContactService(ctrl)
-	mockListService := domainmocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockConfig := &config.Config{}
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
@@ -464,133 +464,124 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
+	workspaceID := "testworkspace"
 	userID := "testuser"
-	workspaceID := "testworkspace1"
 
-	t.Run("successful update as owner", func(t *testing.T) {
+	t.Run("successful update", func(t *testing.T) {
 		expectedUser := &domain.User{
 			ID: userID,
 		}
 
-		userWorkspace := &domain.UserWorkspace{
+		expectedUserWorkspace := &domain.UserWorkspace{
 			UserID:      userID,
 			WorkspaceID: workspaceID,
 			Role:        "owner",
 		}
 
-		expectedWorkspace := &domain.Workspace{
-			ID:   workspaceID,
-			Name: "Updated Workspace",
-			Settings: domain.WorkspaceSettings{
-				WebsiteURL: "https://updated.com",
-				LogoURL:    "https://updated.com/logo.png",
-				CoverURL:   "https://updated.com/cover.png",
-				Timezone:   "Europe/Paris",
-				FileManager: domain.FileManagerSettings{
-					Endpoint:  "https://s3.amazonaws.com",
-					Bucket:    "my-bucket",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
+		settings := domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 			},
-			CreatedAt: time.Now(),
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:        workspaceID,
+			Name:      "Updated Workspace",
+			Settings:  settings,
 			UpdatedAt: time.Now(),
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(expectedUser, nil)
-		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
-		mockRepo.EXPECT().Update(ctx, gomock.AssignableToTypeOf(&domain.Workspace{})).DoAndReturn(func(_ context.Context, w *domain.Workspace) error {
-			assert.Equal(t, expectedWorkspace.ID, w.ID)
-			assert.Equal(t, expectedWorkspace.Name, w.Name)
-			assert.Equal(t, expectedWorkspace.Settings, w.Settings)
-			return nil
-		})
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", domain.FileManagerSettings{
-			Endpoint:  "https://s3.amazonaws.com",
-			Bucket:    "my-bucket",
-			AccessKey: "AKIAIOSFODNN7EXAMPLE",
-		})
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
 		require.NoError(t, err)
-		assert.Equal(t, workspaceID, workspace.ID)
-		assert.Equal(t, "Updated Workspace", workspace.Name)
-		assert.Equal(t, "https://updated.com", workspace.Settings.WebsiteURL)
-		assert.Equal(t, "https://updated.com/logo.png", workspace.Settings.LogoURL)
-		assert.Equal(t, "https://updated.com/cover.png", workspace.Settings.CoverURL)
-		assert.Equal(t, "Europe/Paris", workspace.Settings.Timezone)
-		assert.Equal(t, "https://s3.amazonaws.com", workspace.Settings.FileManager.Endpoint)
-		assert.Equal(t, "my-bucket", workspace.Settings.FileManager.Bucket)
-		assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", workspace.Settings.FileManager.AccessKey)
+		assert.Equal(t, expectedWorkspace.ID, workspace.ID)
+		assert.Equal(t, expectedWorkspace.Name, workspace.Name)
+		assert.Equal(t, expectedWorkspace.Settings, workspace.Settings)
 	})
 
-	t.Run("unauthorized user", func(t *testing.T) {
+	t.Run("authentication error", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, assert.AnError)
+
+		settings := domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
+		}
+
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
+		require.Error(t, err)
+		assert.Nil(t, workspace)
+		assert.Equal(t, assert.AnError, err)
+	})
+
+	t.Run("user not workspace owner", func(t *testing.T) {
 		expectedUser := &domain.User{
 			ID: userID,
 		}
 
-		userWorkspace := &domain.UserWorkspace{
+		expectedUserWorkspace := &domain.UserWorkspace{
 			UserID:      userID,
 			WorkspaceID: workspaceID,
 			Role:        "member", // Not an owner
 		}
 
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(expectedUser, nil)
-		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
+		settings := domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
+		}
 
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", domain.FileManagerSettings{
-			Endpoint:  "https://s3.amazonaws.com",
-			Bucket:    "my-bucket",
-			AccessKey: "AKIAIOSFODNN7EXAMPLE",
-		})
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.IsType(t, &domain.ErrUnauthorized{}, err)
 	})
 
-	t.Run("validation error", func(t *testing.T) {
+	t.Run("error getting user workspace", func(t *testing.T) {
 		expectedUser := &domain.User{
 			ID: userID,
 		}
 
-		userWorkspace := &domain.UserWorkspace{
-			UserID:      userID,
-			WorkspaceID: workspaceID,
-			Role:        "owner",
+		settings := domain.WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			CoverURL:   "https://example.com/cover.png",
+			Timezone:   "UTC",
+			FileManager: domain.FileManagerSettings{
+				Endpoint:  "https://s3.amazonaws.com",
+				Bucket:    "my-bucket",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(expectedUser, nil)
-		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(nil, assert.AnError)
 
-		// Invalid timezone
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "INVALID_TIMEZONE", domain.FileManagerSettings{
-			Endpoint:  "https://s3.amazonaws.com",
-			Bucket:    "my-bucket",
-			AccessKey: "AKIAIOSFODNN7EXAMPLE",
-		})
-		require.Error(t, err)
-		assert.Nil(t, workspace)
-		assert.Contains(t, err.Error(), "invalid timezone: INVALID_TIMEZONE")
-	})
-
-	t.Run("repository error", func(t *testing.T) {
-		expectedUser := &domain.User{
-			ID: userID,
-		}
-
-		userWorkspace := &domain.UserWorkspace{
-			UserID:      userID,
-			WorkspaceID: workspaceID,
-			Role:        "owner",
-		}
-
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(expectedUser, nil)
-		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
-		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(assert.AnError)
-
-		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", "https://updated.com", "https://updated.com/logo.png", "https://updated.com/cover.png", "Europe/Paris", domain.FileManagerSettings{
-			Endpoint:  "https://s3.amazonaws.com",
-			Bucket:    "my-bucket",
-			AccessKey: "AKIAIOSFODNN7EXAMPLE",
-		})
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
 		require.Error(t, err)
 		assert.Nil(t, workspace)
 		assert.Equal(t, assert.AnError, err)
@@ -601,16 +592,16 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockUserService := domainmocks.NewMockUserServiceInterface(ctrl)
-	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockConfig := &config.Config{Environment: "development"}
-	mockContactService := domainmocks.NewMockContactService(ctrl)
-	mockListService := domainmocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations

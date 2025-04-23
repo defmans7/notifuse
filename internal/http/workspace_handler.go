@@ -171,11 +171,7 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		r.Context(),
 		req.ID,
 		req.Name,
-		req.Settings.WebsiteURL,
-		req.Settings.LogoURL,
-		req.Settings.CoverURL,
-		req.Settings.Timezone,
-		req.Settings.FileManager,
+		req.Settings,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update workspace")

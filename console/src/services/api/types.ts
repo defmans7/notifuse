@@ -48,21 +48,24 @@ export interface FileManagerSettings {
   cdn_endpoint?: string
 }
 
-export type EmailProviderKind = 'smtp' | 'ses' | 'sparkpost'
+export type EmailProviderKind = 'smtp' | 'ses' | 'sparkpost' | 'postmark'
 
 export interface EmailProvider {
   kind: EmailProviderKind
   ses?: AmazonSES
   smtp?: SMTPSettings
   sparkpost?: SparkPostSettings
+  postmark?: PostmarkSettings
+  default_sender_email: string
+  default_sender_name: string
 }
 
 export interface AmazonSES {
   region: string
   access_key: string
   secret_key?: string
-  sender_email: string
-  sandbox_mode?: boolean
+  encrypted_secret_key?: string
+  sandbox_mode: boolean
 }
 
 export interface SMTPSettings {
@@ -70,14 +73,20 @@ export interface SMTPSettings {
   port: number
   username: string
   password?: string
-  sender_email: string
+  encrypted_password?: string
   use_tls: boolean
 }
 
 export interface SparkPostSettings {
   api_key?: string
-  sender_email: string
-  sandbox_mode?: boolean
+  encrypted_api_key?: string
+  sandbox_mode: boolean
+  endpoint: string
+}
+
+export interface PostmarkSettings {
+  server_token?: string
+  encrypted_server_token?: string
 }
 
 export interface CreateWorkspaceRequest {
@@ -360,4 +369,15 @@ export interface CompileTemplateResponse {
   mjml: string
   html: string
   error?: MjmlCompileError // Use the structured error type, optional
+}
+
+export interface TestEmailProviderRequest {
+  provider: EmailProvider
+  to: string
+  workspace_id: string
+}
+
+export interface TestEmailProviderResponse {
+  success: boolean
+  error?: string
 }

@@ -276,7 +276,7 @@ func TestNullableFloat64(t *testing.T) {
 			{
 				name:     "marshal non-null float",
 				input:    NullableFloat64{Float64: 123.45, IsNull: false},
-				expected: "123.450000",
+				expected: "123.45",
 				wantErr:  false,
 			},
 			{

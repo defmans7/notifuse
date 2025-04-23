@@ -1044,6 +1044,7 @@ func stringPtr(s string) *string {
 
 func TestEmailProvider_Validate(t *testing.T) {
 	passphrase := "test-passphrase"
+
 	testCases := []struct {
 		name       string
 		provider   EmailProvider
@@ -1053,11 +1054,12 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "valid SES provider",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSES,
+				Kind:               EmailProviderKindSES,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
 				SES: &AmazonSES{
-					Region:      "us-east-1",
-					AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-					SenderEmail: "test@example.com",
+					Region:    "us-east-1",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				},
 			},
 			wantErr: false,
@@ -1065,13 +1067,14 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "valid SMTP provider",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSMTP,
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
 				SMTP: &SMTPSettings{
-					Host:        "smtp.example.com",
-					Port:        587,
-					Username:    "user",
-					SenderEmail: "test@example.com",
-					UseTLS:      true,
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "user",
+					UseTLS:   true,
 				},
 			},
 			wantErr: false,
@@ -1079,9 +1082,11 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "valid SparkPost provider",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSparkPost,
+				Kind:               EmailProviderKindSparkPost,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
 				SparkPost: &SparkPostSettings{
-					SenderEmail: "test@example.com",
+					Endpoint: "https://api.sparkpost.com",
 				},
 			},
 			wantErr: false,
@@ -1094,9 +1099,51 @@ func TestEmailProvider_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "missing default sender email",
+			provider: EmailProvider{
+				Kind:              EmailProviderKindSES,
+				DefaultSenderName: "Default Sender",
+				SES: &AmazonSES{
+					Region:    "us-east-1",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
+			},
+			wantErr:    true,
+			errorCheck: "default sender email is required",
+		},
+		{
+			name: "missing default sender name",
+			provider: EmailProvider{
+				Kind:               EmailProviderKindSES,
+				DefaultSenderEmail: "default@example.com",
+				SES: &AmazonSES{
+					Region:    "us-east-1",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
+			},
+			wantErr:    true,
+			errorCheck: "default sender name is required",
+		},
+		{
+			name: "invalid default sender email",
+			provider: EmailProvider{
+				Kind:               EmailProviderKindSES,
+				DefaultSenderEmail: "not-an-email",
+				DefaultSenderName:  "Default Sender",
+				SES: &AmazonSES{
+					Region:    "us-east-1",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				},
+			},
+			wantErr:    true,
+			errorCheck: "invalid default sender email",
+		},
+		{
 			name: "invalid provider kind",
 			provider: EmailProvider{
-				Kind: "invalid",
+				Kind:               "invalid",
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
 			},
 			wantErr:    true,
 			errorCheck: "invalid email provider kind",
@@ -1104,8 +1151,10 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "SES provider with missing settings",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSES,
-				SES:  nil,
+				Kind:               EmailProviderKindSES,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
+				SES:                nil,
 			},
 			wantErr:    true,
 			errorCheck: "SES settings required",
@@ -1113,8 +1162,10 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "SMTP provider with missing settings",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSMTP,
-				SMTP: nil,
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
+				SMTP:               nil,
 			},
 			wantErr:    true,
 			errorCheck: "SMTP settings required",
@@ -1122,8 +1173,10 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "SparkPost provider with missing settings",
 			provider: EmailProvider{
-				Kind:      EmailProviderKindSparkPost,
-				SparkPost: nil,
+				Kind:               EmailProviderKindSparkPost,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
+				SparkPost:          nil,
 			},
 			wantErr:    true,
 			errorCheck: "SparkPost settings required",
@@ -1131,11 +1184,12 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "SES provider with invalid settings",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSES,
+				Kind:               EmailProviderKindSES,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
 				SES: &AmazonSES{
-					Region:      "",
-					AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-					SenderEmail: "test@example.com",
+					Region:    "",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				},
 			},
 			wantErr:    true,
@@ -1144,12 +1198,13 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "SMTP provider with invalid settings",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSMTP,
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
 				SMTP: &SMTPSettings{
-					Host:        "",
-					Port:        587,
-					Username:    "user",
-					SenderEmail: "test@example.com",
+					Host:     "",
+					Port:     587,
+					Username: "user",
 				},
 			},
 			wantErr:    true,
@@ -1158,13 +1213,15 @@ func TestEmailProvider_Validate(t *testing.T) {
 		{
 			name: "SparkPost provider with invalid settings",
 			provider: EmailProvider{
-				Kind: EmailProviderKindSparkPost,
-				SparkPost: &SparkPostSettings{
-					SenderEmail: "invalid-email",
+				Kind:               EmailProviderKindSparkPost,
+				DefaultSenderEmail: "default@example.com",
+				DefaultSenderName:  "Default Sender",
+				SparkPost:          &SparkPostSettings{
+					// Missing endpoint
 				},
 			},
 			wantErr:    true,
-			errorCheck: "invalid sender email",
+			errorCheck: "endpoint is required",
 		},
 	}
 
@@ -1188,12 +1245,13 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 
 	t.Run("SES provider encryption/decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind: EmailProviderKindSES,
+			Kind:               EmailProviderKindSES,
+			DefaultSenderEmail: "default@example.com",
+			DefaultSenderName:  "Default Sender",
 			SES: &AmazonSES{
-				Region:      "us-east-1",
-				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-				SecretKey:   "secret-key",
-				SenderEmail: "test@example.com",
+				Region:    "us-east-1",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				SecretKey: "secret-key",
 			},
 		}
 
@@ -1211,14 +1269,15 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 
 	t.Run("SMTP provider encryption/decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind: EmailProviderKindSMTP,
+			Kind:               EmailProviderKindSMTP,
+			DefaultSenderEmail: "default@example.com",
+			DefaultSenderName:  "Default Sender",
 			SMTP: &SMTPSettings{
-				Host:        "smtp.example.com",
-				Port:        587,
-				Username:    "user",
-				Password:    "password",
-				SenderEmail: "test@example.com",
-				UseTLS:      true,
+				Host:     "smtp.example.com",
+				Port:     587,
+				Username: "user",
+				Password: "password",
+				UseTLS:   true,
 			},
 		}
 
@@ -1236,10 +1295,12 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 
 	t.Run("SparkPost provider encryption/decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind: EmailProviderKindSparkPost,
+			Kind:               EmailProviderKindSparkPost,
+			DefaultSenderEmail: "default@example.com",
+			DefaultSenderName:  "Default Sender",
 			SparkPost: &SparkPostSettings{
-				APIKey:      "api-key",
-				SenderEmail: "test@example.com",
+				APIKey:   "api-key",
+				Endpoint: "https://api.sparkpost.com",
 			},
 		}
 
@@ -1257,12 +1318,13 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 
 	t.Run("Wrong passphrase decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind: EmailProviderKindSES,
+			Kind:               EmailProviderKindSES,
+			DefaultSenderEmail: "default@example.com",
+			DefaultSenderName:  "Default Sender",
 			SES: &AmazonSES{
-				Region:      "us-east-1",
-				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-				SecretKey:   "secret-key",
-				SenderEmail: "test@example.com",
+				Region:    "us-east-1",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				SecretKey: "secret-key",
 			},
 		}
 
@@ -1287,22 +1349,20 @@ func TestSMTPSettings_Validate(t *testing.T) {
 		{
 			name: "valid settings",
 			settings: SMTPSettings{
-				Host:        "smtp.example.com",
-				Port:        587,
-				Username:    "user",
-				SenderEmail: "test@example.com",
-				UseTLS:      true,
+				Host:     "smtp.example.com",
+				Port:     587,
+				Username: "user",
+				UseTLS:   true,
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing host",
 			settings: SMTPSettings{
-				Host:        "",
-				Port:        587,
-				Username:    "user",
-				SenderEmail: "test@example.com",
-				UseTLS:      true,
+				Host:     "",
+				Port:     587,
+				Username: "user",
+				UseTLS:   true,
 			},
 			wantErr: true,
 			errMsg:  "host is required",
@@ -1310,10 +1370,10 @@ func TestSMTPSettings_Validate(t *testing.T) {
 		{
 			name: "invalid port (zero)",
 			settings: SMTPSettings{
-				Host:        "smtp.example.com",
-				Port:        0,
-				Username:    "user",
-				SenderEmail: "test@example.com",
+				Host:     "smtp.example.com",
+				Port:     0,
+				Username: "user",
+				UseTLS:   true,
 			},
 			wantErr: true,
 			errMsg:  "invalid port number",
@@ -1321,10 +1381,10 @@ func TestSMTPSettings_Validate(t *testing.T) {
 		{
 			name: "invalid port (negative)",
 			settings: SMTPSettings{
-				Host:        "smtp.example.com",
-				Port:        -1,
-				Username:    "user",
-				SenderEmail: "test@example.com",
+				Host:     "smtp.example.com",
+				Port:     -1,
+				Username: "user",
+				UseTLS:   true,
 			},
 			wantErr: true,
 			errMsg:  "invalid port number",
@@ -1332,10 +1392,10 @@ func TestSMTPSettings_Validate(t *testing.T) {
 		{
 			name: "invalid port (too large)",
 			settings: SMTPSettings{
-				Host:        "smtp.example.com",
-				Port:        70000,
-				Username:    "user",
-				SenderEmail: "test@example.com",
+				Host:     "smtp.example.com",
+				Port:     70000,
+				Username: "user",
+				UseTLS:   true,
 			},
 			wantErr: true,
 			errMsg:  "invalid port number",
@@ -1343,36 +1403,13 @@ func TestSMTPSettings_Validate(t *testing.T) {
 		{
 			name: "missing username",
 			settings: SMTPSettings{
-				Host:        "smtp.example.com",
-				Port:        587,
-				Username:    "",
-				SenderEmail: "test@example.com",
-			},
-			wantErr: true,
-			errMsg:  "username is required",
-		},
-		{
-			name: "missing sender email",
-			settings: SMTPSettings{
 				Host:     "smtp.example.com",
 				Port:     587,
-				Username: "user",
+				Username: "",
 				UseTLS:   true,
 			},
 			wantErr: true,
-			errMsg:  "sender email is required",
-		},
-		{
-			name: "invalid sender email",
-			settings: SMTPSettings{
-				Host:        "smtp.example.com",
-				Port:        587,
-				Username:    "user",
-				SenderEmail: "invalid-email",
-				UseTLS:      true,
-			},
-			wantErr: true,
-			errMsg:  "invalid sender email",
+			errMsg:  "username is required",
 		},
 	}
 
@@ -1396,12 +1433,11 @@ func TestSMTPSettings_EncryptDecryptPassword(t *testing.T) {
 	password := "test-password"
 
 	settings := SMTPSettings{
-		Host:        "smtp.example.com",
-		Port:        587,
-		Username:    "user",
-		Password:    password,
-		SenderEmail: "test@example.com",
-		UseTLS:      true,
+		Host:     "smtp.example.com",
+		Port:     587,
+		Username: "user",
+		Password: password,
+		UseTLS:   true,
 	}
 
 	// Test encryption
@@ -1438,28 +1474,19 @@ func TestSparkPostSettings_Validate(t *testing.T) {
 		{
 			name: "valid settings",
 			settings: SparkPostSettings{
-				SenderEmail: "test@example.com",
-				APIKey:      "test-api-key",
+				APIKey:   "test-api-key",
+				Endpoint: "https://api.sparkpost.com",
 			},
 			wantErr: false,
 		},
 		{
-			name: "missing sender email",
+			name: "missing endpoint",
 			settings: SparkPostSettings{
-				SenderEmail: "",
-				APIKey:      "test-api-key",
+				APIKey:   "test-api-key",
+				Endpoint: "",
 			},
 			wantErr: true,
-			errMsg:  "sender email is required",
-		},
-		{
-			name: "invalid sender email",
-			settings: SparkPostSettings{
-				SenderEmail: "invalid-email",
-				APIKey:      "test-api-key",
-			},
-			wantErr: true,
-			errMsg:  "invalid sender email",
+			errMsg:  "endpoint is required",
 		},
 	}
 
@@ -1483,8 +1510,8 @@ func TestSparkPostSettings_EncryptDecryptAPIKey(t *testing.T) {
 	apiKey := "test-api-key"
 
 	settings := SparkPostSettings{
-		SenderEmail: "test@example.com",
-		APIKey:      apiKey,
+		APIKey:   apiKey,
+		Endpoint: "https://api.sparkpost.com",
 	}
 
 	// Test encryption
@@ -1521,18 +1548,16 @@ func TestAmazonSES_Validate(t *testing.T) {
 		{
 			name: "valid settings",
 			settings: AmazonSES{
-				Region:      "us-east-1",
-				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-				SenderEmail: "test@example.com",
+				Region:    "us-east-1",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing region",
 			settings: AmazonSES{
-				Region:      "",
-				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-				SenderEmail: "test@example.com",
+				Region:    "",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 			},
 			wantErr: true,
 			errMsg:  "region is required",
@@ -1540,31 +1565,11 @@ func TestAmazonSES_Validate(t *testing.T) {
 		{
 			name: "missing access key",
 			settings: AmazonSES{
-				Region:      "us-east-1",
-				AccessKey:   "",
-				SenderEmail: "test@example.com",
+				Region:    "us-east-1",
+				AccessKey: "",
 			},
 			wantErr: true,
 			errMsg:  "access key is required",
-		},
-		{
-			name: "missing sender email",
-			settings: AmazonSES{
-				Region:    "us-east-1",
-				AccessKey: "AKIAIOSFODNN7EXAMPLE",
-			},
-			wantErr: true,
-			errMsg:  "sender email is required",
-		},
-		{
-			name: "invalid sender email",
-			settings: AmazonSES{
-				Region:      "us-east-1",
-				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-				SenderEmail: "invalid-email",
-			},
-			wantErr: true,
-			errMsg:  "invalid sender email",
 		},
 	}
 
@@ -1588,10 +1593,9 @@ func TestAmazonSES_EncryptDecryptSecretKey(t *testing.T) {
 	secretKey := "test-secret-key"
 
 	settings := AmazonSES{
-		Region:      "us-east-1",
-		AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-		SecretKey:   secretKey,
-		SenderEmail: "test@example.com",
+		Region:    "us-east-1",
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey: secretKey,
 	}
 
 	// Test encryption
@@ -1632,21 +1636,23 @@ func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
 				LogoURL:    "https://example.com/logo.png",
 				Timezone:   "UTC",
 				EmailMarketingProvider: EmailProvider{
-					Kind: EmailProviderKindSES,
+					Kind:               EmailProviderKindSES,
+					DefaultSenderEmail: "default-marketing@example.com",
+					DefaultSenderName:  "Default Marketing Sender",
 					SES: &AmazonSES{
-						Region:      "us-east-1",
-						AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-						SenderEmail: "marketing@example.com",
+						Region:    "us-east-1",
+						AccessKey: "AKIAIOSFODNN7EXAMPLE",
 					},
 				},
 				EmailTransactionalProvider: EmailProvider{
-					Kind: EmailProviderKindSMTP,
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "default-transactional@example.com",
+					DefaultSenderName:  "Default Transactional Sender",
 					SMTP: &SMTPSettings{
-						Host:        "smtp.example.com",
-						Port:        587,
-						Username:    "user",
-						SenderEmail: "notifications@example.com",
-						UseTLS:      true,
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						UseTLS:   true,
 					},
 				},
 			},
@@ -1659,13 +1665,14 @@ func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
 				LogoURL:    "https://example.com/logo.png",
 				Timezone:   "UTC",
 				EmailTransactionalProvider: EmailProvider{
-					Kind: EmailProviderKindSMTP,
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "default-transactional@example.com",
+					DefaultSenderName:  "Default Transactional Sender",
 					SMTP: &SMTPSettings{
-						Host:        "smtp.example.com",
-						Port:        587,
-						Username:    "user",
-						SenderEmail: "notifications@example.com",
-						UseTLS:      true,
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						UseTLS:   true,
 					},
 				},
 			},
@@ -1678,9 +1685,11 @@ func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
 				LogoURL:    "https://example.com/logo.png",
 				Timezone:   "UTC",
 				EmailMarketingProvider: EmailProvider{
-					Kind: EmailProviderKindSparkPost,
+					Kind:               EmailProviderKindSparkPost,
+					DefaultSenderEmail: "default-marketing@example.com",
+					DefaultSenderName:  "Default Marketing Sender",
 					SparkPost: &SparkPostSettings{
-						SenderEmail: "marketing@example.com",
+						Endpoint: "https://api.sparkpost.com",
 					},
 				},
 			},
@@ -1693,8 +1702,10 @@ func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
 				LogoURL:    "https://example.com/logo.png",
 				Timezone:   "UTC",
 				EmailMarketingProvider: EmailProvider{
-					Kind: EmailProviderKindSES,
-					SES:  nil, // Missing required SES settings
+					Kind:               EmailProviderKindSES,
+					DefaultSenderEmail: "default@example.com",
+					DefaultSenderName:  "Default Sender",
+					SES:                nil, // Missing required SES settings
 				},
 			},
 			wantErr:    true,
@@ -1707,12 +1718,13 @@ func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
 				LogoURL:    "https://example.com/logo.png",
 				Timezone:   "UTC",
 				EmailTransactionalProvider: EmailProvider{
-					Kind: EmailProviderKindSMTP,
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "default@example.com",
+					DefaultSenderName:  "Default Sender",
 					SMTP: &SMTPSettings{
-						Host:        "", // Missing required host
-						Port:        587,
-						Username:    "user",
-						SenderEmail: "notifications@example.com",
+						Host:     "", // Missing required host
+						Port:     587,
+						Username: "user",
 					},
 				},
 			},
@@ -1746,23 +1758,25 @@ func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 			LogoURL:    "https://example.com/logo.png",
 			Timezone:   "UTC",
 			EmailMarketingProvider: EmailProvider{
-				Kind: EmailProviderKindSES,
+				Kind:               EmailProviderKindSES,
+				DefaultSenderEmail: "default-marketing@example.com",
+				DefaultSenderName:  "Default Marketing Sender",
 				SES: &AmazonSES{
-					Region:      "us-east-1",
-					AccessKey:   "AKIAIOSFODNN7EXAMPLE",
-					SecretKey:   "marketing-secret-key",
-					SenderEmail: "marketing@example.com",
+					Region:    "us-east-1",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+					SecretKey: "marketing-secret-key",
 				},
 			},
 			EmailTransactionalProvider: EmailProvider{
-				Kind: EmailProviderKindSMTP,
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "default-transactional@example.com",
+				DefaultSenderName:  "Default Transactional Sender",
 				SMTP: &SMTPSettings{
-					Host:        "smtp.example.com",
-					Port:        587,
-					Username:    "user",
-					Password:    "transactional-password",
-					SenderEmail: "notifications@example.com",
-					UseTLS:      true,
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "user",
+					Password: "transactional-password",
+					UseTLS:   true,
 				},
 			},
 		},

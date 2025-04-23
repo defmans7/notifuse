@@ -330,7 +330,7 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 }
 
 // UpdateWorkspace updates a workspace if the user is an owner
-func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, websiteURL string, logoURL string, coverURL string, timezone string, fileManager domain.FileManagerSettings) (*domain.Workspace, error) {
+func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name string, settings domain.WorkspaceSettings) (*domain.Workspace, error) {
 	user, err := s.authService.AuthenticateUserForWorkspace(ctx, id)
 	if err != nil {
 		return nil, err
@@ -349,15 +349,9 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	}
 
 	workspace := &domain.Workspace{
-		ID:   id,
-		Name: name,
-		Settings: domain.WorkspaceSettings{
-			WebsiteURL:  websiteURL,
-			LogoURL:     logoURL,
-			CoverURL:    coverURL,
-			Timezone:    timezone,
-			FileManager: fileManager,
-		},
+		ID:        id,
+		Name:      name,
+		Settings:  settings,
 		UpdatedAt: time.Now(),
 	}
 
