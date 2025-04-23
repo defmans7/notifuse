@@ -10,10 +10,9 @@ import {
   Select,
   App,
   Typography,
-  Divider,
   Tooltip
 } from 'antd'
-import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { Workspace } from '../services/api/types'
 import { workspaceService } from '../services/api/workspace'
 import { useNavigate } from '@tanstack/react-router'
@@ -129,16 +128,10 @@ export function WorkspaceSettings({
           <Space>
             {workspace && isOwner && (
               <>
-                <Tooltip title="Delete workspace">
-                  <Button
-                    danger
-                    type="text"
-                    ghost
-                    size="small"
-                    onClick={showDeleteModal}
-                    icon={<DeleteOutlined />}
-                  />
-                </Tooltip>
+                <Button type="default" size="small" onClick={showDeleteModal}>
+                  Delete
+                </Button>
+
                 <Button
                   type="primary"
                   size="small"
@@ -146,7 +139,7 @@ export function WorkspaceSettings({
                   onClick={showEditModal}
                   disabled={loading || !workspace}
                 >
-                  <EditOutlined /> Edit
+                  Edit
                 </Button>
               </>
             )}
