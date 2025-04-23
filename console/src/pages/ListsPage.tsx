@@ -35,6 +35,7 @@ import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDraw
 import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { ImportContactsToListButton } from '../components/lists/ImportContactsToListButton'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -185,6 +186,11 @@ export function ListsPage() {
                         </Tooltip>
                       )
                     }}
+                  />
+                  <ImportContactsToListButton
+                    list={list}
+                    workspaceId={workspaceId}
+                    lists={data.lists}
                   />
                 </Space>
               }

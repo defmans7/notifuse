@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { message } from 'antd'
 import { FileManager, ExtendedFileManagerProps } from '../components/file_manager/fileManager'
-import { FilesSettings, StorageObject } from '../components/file_manager/interfaces'
+import { StorageObject } from '../components/file_manager/interfaces'
 import { useParams } from '@tanstack/react-router'
 import { useAuth } from '../contexts/AuthContext'
 import { workspaceService } from '../services/api/workspace'
-import { Workspace } from '../services/api/types'
+import { Workspace, FileManagerSettings } from '../services/api/types'
 
 export function MediaPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
@@ -32,7 +32,7 @@ export function MediaPage() {
     // Handle selected items as needed
   }
 
-  const handleUpdateSettings = async (newSettings: FilesSettings) => {
+  const handleUpdateSettings = async (newSettings: FileManagerSettings) => {
     try {
       if (!currentWorkspace || !workspaceId) {
         message.error('Workspace not found')
@@ -75,18 +75,18 @@ export function MediaPage() {
     withSelection: true,
     multiple: true,
     settings: {
-      endpoint: currentWorkspace?.settings.file_manager.endpoint || '',
-      access_key: currentWorkspace?.settings.file_manager.access_key || '',
-      bucket: currentWorkspace?.settings.file_manager.bucket || '',
-      region: currentWorkspace?.settings.file_manager.region || '',
-      secret_key: currentWorkspace?.settings.file_manager.secret_key || '',
-      cdn_endpoint: currentWorkspace?.settings.file_manager.cdn_endpoint || ''
+      endpoint: currentWorkspace?.settings?.file_manager?.endpoint || '',
+      access_key: currentWorkspace?.settings?.file_manager?.access_key || '',
+      bucket: currentWorkspace?.settings?.file_manager?.bucket || '',
+      region: currentWorkspace?.settings?.file_manager?.region || '',
+      secret_key: currentWorkspace?.settings?.file_manager?.secret_key || '',
+      cdn_endpoint: currentWorkspace?.settings?.file_manager?.cdn_endpoint || ''
     },
     onUpdateSettings: handleUpdateSettings
   }
 
-  console.log('fileManagerProps', fileManagerProps)
-  console.log('currentWorkspace', currentWorkspace)
+  // console.log('fileManagerProps', fileManagerProps)
+  // console.log('currentWorkspace', currentWorkspace)
 
   return (
     <div className="p-6">

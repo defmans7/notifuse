@@ -49,7 +49,7 @@ func (ns NullableString) MarshalJSON() ([]byte, error) {
 	if ns.IsNull {
 		return []byte("null"), nil
 	}
-	return []byte(`"` + ns.String + `"`), nil
+	return json.Marshal(ns.String)
 }
 
 // UnmarshalJSON implements json.Unmarshaler
@@ -132,7 +132,7 @@ func (nf NullableFloat64) MarshalJSON() ([]byte, error) {
 	if nf.IsNull {
 		return []byte("null"), nil
 	}
-	return []byte(fmt.Sprintf("%f", nf.Float64)), nil
+	return json.Marshal(nf.Float64)
 }
 
 // UnmarshalJSON implements json.Unmarshaler

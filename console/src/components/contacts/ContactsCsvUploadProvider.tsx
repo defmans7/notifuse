@@ -7,6 +7,7 @@ import { ContactsCsvUploadDrawer } from './ContactsCsvUploadDrawer'
 // Create a context for the singleton
 export const CsvUploadContext = React.createContext<{
   openDrawer: (workspaceId: string, lists?: List[]) => void
+  openDrawerWithSelectedList: (workspaceId: string, lists?: List[], selectedList?: string) => void
 } | null>(null)
 
 interface ContactsCsvUploadDrawerProviderProps {
@@ -20,20 +21,34 @@ export const ContactsCsvUploadProvider: React.FC<ContactsCsvUploadDrawerProvider
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [contextLists, setContextLists] = useState<List[]>([])
   const [contextWorkspaceId, setContextWorkspaceId] = useState<string>('')
+  const [selectedList, setSelectedList] = useState<string | undefined>(undefined)
 
   const openDrawer = (workspaceId: string, lists: List[] = []) => {
     setContextWorkspaceId(workspaceId)
     setContextLists(lists)
+    setSelectedList(undefined)
+    setDrawerVisible(true)
+  }
+
+  const openDrawerWithSelectedList = (
+    workspaceId: string,
+    lists: List[] = [],
+    selectedList?: string
+  ) => {
+    setContextWorkspaceId(workspaceId)
+    setContextLists(lists)
+    setSelectedList(selectedList)
     setDrawerVisible(true)
   }
 
   return (
-    <CsvUploadContext.Provider value={{ openDrawer }}>
+    <CsvUploadContext.Provider value={{ openDrawer, openDrawerWithSelectedList }}>
       {children}
       {drawerVisible && (
         <ContactsCsvUploadDrawer
           workspaceId={contextWorkspaceId}
           lists={contextLists}
+          selectedList={selectedList}
           onSuccess={() => {}}
           isVisible={drawerVisible}
           onClose={() => setDrawerVisible(false)}

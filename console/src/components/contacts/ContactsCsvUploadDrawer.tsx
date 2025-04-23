@@ -45,6 +45,7 @@ const getProgressStorageKey = (workspaceId: string, fileName: string): string =>
 export interface ContactsCsvUploadDrawerProps {
   workspaceId: string
   lists?: List[]
+  selectedList?: string
   onSuccess?: () => void
   isVisible: boolean
   onClose: () => void
@@ -112,6 +113,7 @@ const contactFields = [
 export function ContactsCsvUploadDrawer({
   workspaceId,
   lists = [],
+  selectedList,
   onSuccess,
   isVisible,
   onClose
@@ -129,7 +131,9 @@ export function ContactsCsvUploadDrawer({
   const [processingCancelled, setProcessingCancelled] = useState<boolean>(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [savedProgressExists, setSavedProgressExists] = useState<boolean>(false)
-  const [selectedListIds, setSelectedListIds] = useState<string[]>([])
+  const [selectedListIds, setSelectedListIds] = useState<string[]>(
+    selectedList ? [selectedList] : []
+  )
   const [uploadComplete, setUploadComplete] = useState<boolean>(false)
   const [successCount, setSuccessCount] = useState<number>(0)
   const [failureCount, setFailureCount] = useState<number>(0)
@@ -146,6 +150,13 @@ export function ContactsCsvUploadDrawer({
     resume: () => {},
     isPaused: false
   })
+
+  // Initialize form with selectedList when provided
+  useEffect(() => {
+    if (selectedList) {
+      form.setFieldsValue({ selectedListIds: [selectedList] })
+    }
+  }, [selectedList, form])
 
   // Check for saved progress
   const checkForSavedProgress = (filename: string) => {

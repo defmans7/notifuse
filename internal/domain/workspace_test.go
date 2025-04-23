@@ -1041,3 +1041,761 @@ func TestFileManagerSettings_EncryptSecretKey_Error(t *testing.T) {
 func stringPtr(s string) *string {
 	return &s
 }
+
+func TestEmailProvider_Validate(t *testing.T) {
+	passphrase := "test-passphrase"
+	testCases := []struct {
+		name       string
+		provider   EmailProvider
+		wantErr    bool
+		errorCheck string
+	}{
+		{
+			name: "valid SES provider",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSES,
+				SES: &AmazonSES{
+					Region:      "us-east-1",
+					AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+					SenderEmail: "test@example.com",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid SMTP provider",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSMTP,
+				SMTP: &SMTPSettings{
+					Host:        "smtp.example.com",
+					Port:        587,
+					Username:    "user",
+					SenderEmail: "test@example.com",
+					UseTLS:      true,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid SparkPost provider",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSparkPost,
+				SparkPost: &SparkPostSettings{
+					SenderEmail: "test@example.com",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty provider (not configured)",
+			provider: EmailProvider{
+				Kind: "",
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid provider kind",
+			provider: EmailProvider{
+				Kind: "invalid",
+			},
+			wantErr:    true,
+			errorCheck: "invalid email provider kind",
+		},
+		{
+			name: "SES provider with missing settings",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSES,
+				SES:  nil,
+			},
+			wantErr:    true,
+			errorCheck: "SES settings required",
+		},
+		{
+			name: "SMTP provider with missing settings",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSMTP,
+				SMTP: nil,
+			},
+			wantErr:    true,
+			errorCheck: "SMTP settings required",
+		},
+		{
+			name: "SparkPost provider with missing settings",
+			provider: EmailProvider{
+				Kind:      EmailProviderKindSparkPost,
+				SparkPost: nil,
+			},
+			wantErr:    true,
+			errorCheck: "SparkPost settings required",
+		},
+		{
+			name: "SES provider with invalid settings",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSES,
+				SES: &AmazonSES{
+					Region:      "",
+					AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+					SenderEmail: "test@example.com",
+				},
+			},
+			wantErr:    true,
+			errorCheck: "region is required",
+		},
+		{
+			name: "SMTP provider with invalid settings",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSMTP,
+				SMTP: &SMTPSettings{
+					Host:        "",
+					Port:        587,
+					Username:    "user",
+					SenderEmail: "test@example.com",
+				},
+			},
+			wantErr:    true,
+			errorCheck: "host is required",
+		},
+		{
+			name: "SparkPost provider with invalid settings",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSparkPost,
+				SparkPost: &SparkPostSettings{
+					SenderEmail: "invalid-email",
+				},
+			},
+			wantErr:    true,
+			errorCheck: "invalid sender email",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.provider.Validate(passphrase)
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.errorCheck != "" {
+					assert.Contains(t, err.Error(), tc.errorCheck)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	t.Run("SES provider encryption/decryption", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindSES,
+			SES: &AmazonSES{
+				Region:      "us-east-1",
+				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+				SecretKey:   "secret-key",
+				SenderEmail: "test@example.com",
+			},
+		}
+
+		// Test encryption
+		err := provider.EncryptSecretKeys(passphrase)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, provider.SES.EncryptedSecretKey)
+		assert.Empty(t, provider.SES.SecretKey)
+
+		// Test decryption
+		err = provider.DecryptSecretKeys(passphrase)
+		assert.NoError(t, err)
+		assert.Equal(t, "secret-key", provider.SES.SecretKey)
+	})
+
+	t.Run("SMTP provider encryption/decryption", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindSMTP,
+			SMTP: &SMTPSettings{
+				Host:        "smtp.example.com",
+				Port:        587,
+				Username:    "user",
+				Password:    "password",
+				SenderEmail: "test@example.com",
+				UseTLS:      true,
+			},
+		}
+
+		// Test encryption
+		err := provider.EncryptSecretKeys(passphrase)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, provider.SMTP.EncryptedPassword)
+		assert.Empty(t, provider.SMTP.Password)
+
+		// Test decryption
+		err = provider.DecryptSecretKeys(passphrase)
+		assert.NoError(t, err)
+		assert.Equal(t, "password", provider.SMTP.Password)
+	})
+
+	t.Run("SparkPost provider encryption/decryption", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindSparkPost,
+			SparkPost: &SparkPostSettings{
+				APIKey:      "api-key",
+				SenderEmail: "test@example.com",
+			},
+		}
+
+		// Test encryption
+		err := provider.EncryptSecretKeys(passphrase)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, provider.SparkPost.EncryptedAPIKey)
+		assert.Empty(t, provider.SparkPost.APIKey)
+
+		// Test decryption
+		err = provider.DecryptSecretKeys(passphrase)
+		assert.NoError(t, err)
+		assert.Equal(t, "api-key", provider.SparkPost.APIKey)
+	})
+
+	t.Run("Wrong passphrase decryption", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindSES,
+			SES: &AmazonSES{
+				Region:      "us-east-1",
+				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+				SecretKey:   "secret-key",
+				SenderEmail: "test@example.com",
+			},
+		}
+
+		// Encrypt with correct passphrase
+		err := provider.EncryptSecretKeys(passphrase)
+		assert.NoError(t, err)
+
+		// Try to decrypt with wrong passphrase
+		err = provider.DecryptSecretKeys("wrong-passphrase")
+		assert.Error(t, err)
+	})
+}
+
+func TestSMTPSettings_Validate(t *testing.T) {
+	passphrase := "test-passphrase"
+	testCases := []struct {
+		name     string
+		settings SMTPSettings
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name: "valid settings",
+			settings: SMTPSettings{
+				Host:        "smtp.example.com",
+				Port:        587,
+				Username:    "user",
+				SenderEmail: "test@example.com",
+				UseTLS:      true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing host",
+			settings: SMTPSettings{
+				Host:        "",
+				Port:        587,
+				Username:    "user",
+				SenderEmail: "test@example.com",
+				UseTLS:      true,
+			},
+			wantErr: true,
+			errMsg:  "host is required",
+		},
+		{
+			name: "invalid port (zero)",
+			settings: SMTPSettings{
+				Host:        "smtp.example.com",
+				Port:        0,
+				Username:    "user",
+				SenderEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "invalid port number",
+		},
+		{
+			name: "invalid port (negative)",
+			settings: SMTPSettings{
+				Host:        "smtp.example.com",
+				Port:        -1,
+				Username:    "user",
+				SenderEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "invalid port number",
+		},
+		{
+			name: "invalid port (too large)",
+			settings: SMTPSettings{
+				Host:        "smtp.example.com",
+				Port:        70000,
+				Username:    "user",
+				SenderEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "invalid port number",
+		},
+		{
+			name: "missing username",
+			settings: SMTPSettings{
+				Host:        "smtp.example.com",
+				Port:        587,
+				Username:    "",
+				SenderEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "username is required",
+		},
+		{
+			name: "missing sender email",
+			settings: SMTPSettings{
+				Host:     "smtp.example.com",
+				Port:     587,
+				Username: "user",
+				UseTLS:   true,
+			},
+			wantErr: true,
+			errMsg:  "sender email is required",
+		},
+		{
+			name: "invalid sender email",
+			settings: SMTPSettings{
+				Host:        "smtp.example.com",
+				Port:        587,
+				Username:    "user",
+				SenderEmail: "invalid-email",
+				UseTLS:      true,
+			},
+			wantErr: true,
+			errMsg:  "invalid sender email",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.settings.Validate(passphrase)
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.errMsg != "" {
+					assert.Contains(t, err.Error(), tc.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSMTPSettings_EncryptDecryptPassword(t *testing.T) {
+	passphrase := "test-passphrase"
+	password := "test-password"
+
+	settings := SMTPSettings{
+		Host:        "smtp.example.com",
+		Port:        587,
+		Username:    "user",
+		Password:    password,
+		SenderEmail: "test@example.com",
+		UseTLS:      true,
+	}
+
+	// Test encryption
+	err := settings.EncryptPassword(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedPassword)
+	assert.Equal(t, password, settings.Password) // Original password should be unchanged
+
+	// Save encrypted password
+	encryptedPassword := settings.EncryptedPassword
+
+	// Test decryption
+	settings.Password = "" // Clear password
+	err = settings.DecryptPassword(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, password, settings.Password)
+
+	// Test decryption with wrong passphrase
+	settings.Password = "" // Clear password
+	settings.EncryptedPassword = encryptedPassword
+	err = settings.DecryptPassword("wrong-passphrase")
+	assert.Error(t, err)
+	assert.NotEqual(t, password, settings.Password)
+}
+
+func TestSparkPostSettings_Validate(t *testing.T) {
+	passphrase := "test-passphrase"
+	testCases := []struct {
+		name     string
+		settings SparkPostSettings
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name: "valid settings",
+			settings: SparkPostSettings{
+				SenderEmail: "test@example.com",
+				APIKey:      "test-api-key",
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing sender email",
+			settings: SparkPostSettings{
+				SenderEmail: "",
+				APIKey:      "test-api-key",
+			},
+			wantErr: true,
+			errMsg:  "sender email is required",
+		},
+		{
+			name: "invalid sender email",
+			settings: SparkPostSettings{
+				SenderEmail: "invalid-email",
+				APIKey:      "test-api-key",
+			},
+			wantErr: true,
+			errMsg:  "invalid sender email",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.settings.Validate(passphrase)
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.errMsg != "" {
+					assert.Contains(t, err.Error(), tc.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSparkPostSettings_EncryptDecryptAPIKey(t *testing.T) {
+	passphrase := "test-passphrase"
+	apiKey := "test-api-key"
+
+	settings := SparkPostSettings{
+		SenderEmail: "test@example.com",
+		APIKey:      apiKey,
+	}
+
+	// Test encryption
+	err := settings.EncryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedAPIKey)
+	assert.Equal(t, apiKey, settings.APIKey) // Original API key should be unchanged
+
+	// Save encrypted API key
+	encryptedAPIKey := settings.EncryptedAPIKey
+
+	// Test decryption
+	settings.APIKey = "" // Clear API key
+	err = settings.DecryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, apiKey, settings.APIKey)
+
+	// Test decryption with wrong passphrase
+	settings.APIKey = "" // Clear API key
+	settings.EncryptedAPIKey = encryptedAPIKey
+	err = settings.DecryptAPIKey("wrong-passphrase")
+	assert.Error(t, err)
+	assert.NotEqual(t, apiKey, settings.APIKey)
+}
+
+func TestAmazonSES_Validate(t *testing.T) {
+	passphrase := "test-passphrase"
+	testCases := []struct {
+		name     string
+		settings AmazonSES
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name: "valid settings",
+			settings: AmazonSES{
+				Region:      "us-east-1",
+				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+				SenderEmail: "test@example.com",
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing region",
+			settings: AmazonSES{
+				Region:      "",
+				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+				SenderEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "region is required",
+		},
+		{
+			name: "missing access key",
+			settings: AmazonSES{
+				Region:      "us-east-1",
+				AccessKey:   "",
+				SenderEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "access key is required",
+		},
+		{
+			name: "missing sender email",
+			settings: AmazonSES{
+				Region:    "us-east-1",
+				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			},
+			wantErr: true,
+			errMsg:  "sender email is required",
+		},
+		{
+			name: "invalid sender email",
+			settings: AmazonSES{
+				Region:      "us-east-1",
+				AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+				SenderEmail: "invalid-email",
+			},
+			wantErr: true,
+			errMsg:  "invalid sender email",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.settings.Validate(passphrase)
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.errMsg != "" {
+					assert.Contains(t, err.Error(), tc.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAmazonSES_EncryptDecryptSecretKey(t *testing.T) {
+	passphrase := "test-passphrase"
+	secretKey := "test-secret-key"
+
+	settings := AmazonSES{
+		Region:      "us-east-1",
+		AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+		SecretKey:   secretKey,
+		SenderEmail: "test@example.com",
+	}
+
+	// Test encryption
+	err := settings.EncryptSecretKey(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedSecretKey)
+	assert.Equal(t, secretKey, settings.SecretKey) // Original secret key should be unchanged
+
+	// Save encrypted secret key
+	encryptedSecretKey := settings.EncryptedSecretKey
+
+	// Test decryption
+	settings.SecretKey = "" // Clear secret key
+	err = settings.DecryptSecretKey(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, secretKey, settings.SecretKey)
+
+	// Test decryption with wrong passphrase
+	settings.SecretKey = "" // Clear secret key
+	settings.EncryptedSecretKey = encryptedSecretKey
+	err = settings.DecryptSecretKey("wrong-passphrase")
+	assert.Error(t, err)
+	assert.NotEqual(t, secretKey, settings.SecretKey)
+}
+
+func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
+	passphrase := "test-passphrase"
+	testCases := []struct {
+		name       string
+		settings   WorkspaceSettings
+		wantErr    bool
+		errorCheck string
+	}{
+		{
+			name: "valid settings with both email providers",
+			settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				LogoURL:    "https://example.com/logo.png",
+				Timezone:   "UTC",
+				EmailMarketingProvider: EmailProvider{
+					Kind: EmailProviderKindSES,
+					SES: &AmazonSES{
+						Region:      "us-east-1",
+						AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+						SenderEmail: "marketing@example.com",
+					},
+				},
+				EmailTransactionalProvider: EmailProvider{
+					Kind: EmailProviderKindSMTP,
+					SMTP: &SMTPSettings{
+						Host:        "smtp.example.com",
+						Port:        587,
+						Username:    "user",
+						SenderEmail: "notifications@example.com",
+						UseTLS:      true,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid settings with only transactional provider",
+			settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				LogoURL:    "https://example.com/logo.png",
+				Timezone:   "UTC",
+				EmailTransactionalProvider: EmailProvider{
+					Kind: EmailProviderKindSMTP,
+					SMTP: &SMTPSettings{
+						Host:        "smtp.example.com",
+						Port:        587,
+						Username:    "user",
+						SenderEmail: "notifications@example.com",
+						UseTLS:      true,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid settings with only marketing provider",
+			settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				LogoURL:    "https://example.com/logo.png",
+				Timezone:   "UTC",
+				EmailMarketingProvider: EmailProvider{
+					Kind: EmailProviderKindSparkPost,
+					SparkPost: &SparkPostSettings{
+						SenderEmail: "marketing@example.com",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid marketing provider",
+			settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				LogoURL:    "https://example.com/logo.png",
+				Timezone:   "UTC",
+				EmailMarketingProvider: EmailProvider{
+					Kind: EmailProviderKindSES,
+					SES:  nil, // Missing required SES settings
+				},
+			},
+			wantErr:    true,
+			errorCheck: "invalid email marketing provider settings",
+		},
+		{
+			name: "invalid transactional provider",
+			settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				LogoURL:    "https://example.com/logo.png",
+				Timezone:   "UTC",
+				EmailTransactionalProvider: EmailProvider{
+					Kind: EmailProviderKindSMTP,
+					SMTP: &SMTPSettings{
+						Host:        "", // Missing required host
+						Port:        587,
+						Username:    "user",
+						SenderEmail: "notifications@example.com",
+					},
+				},
+			},
+			wantErr:    true,
+			errorCheck: "invalid email transactional provider settings",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.settings.Validate(passphrase)
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.errorCheck != "" {
+					assert.Contains(t, err.Error(), tc.errorCheck)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
+	passphrase := "test-passphrase"
+	workspace := &Workspace{
+		ID:   "test123",
+		Name: "Test Workspace",
+		Settings: WorkspaceSettings{
+			WebsiteURL: "https://example.com",
+			LogoURL:    "https://example.com/logo.png",
+			Timezone:   "UTC",
+			EmailMarketingProvider: EmailProvider{
+				Kind: EmailProviderKindSES,
+				SES: &AmazonSES{
+					Region:      "us-east-1",
+					AccessKey:   "AKIAIOSFODNN7EXAMPLE",
+					SecretKey:   "marketing-secret-key",
+					SenderEmail: "marketing@example.com",
+				},
+			},
+			EmailTransactionalProvider: EmailProvider{
+				Kind: EmailProviderKindSMTP,
+				SMTP: &SMTPSettings{
+					Host:        "smtp.example.com",
+					Port:        587,
+					Username:    "user",
+					Password:    "transactional-password",
+					SenderEmail: "notifications@example.com",
+					UseTLS:      true,
+				},
+			},
+		},
+	}
+
+	// Test BeforeSave - encryption
+	err := workspace.BeforeSave(passphrase)
+	assert.NoError(t, err)
+
+	// Check that secret keys are encrypted and cleared
+	assert.NotEmpty(t, workspace.Settings.EmailMarketingProvider.SES.EncryptedSecretKey)
+	assert.Empty(t, workspace.Settings.EmailMarketingProvider.SES.SecretKey)
+	assert.NotEmpty(t, workspace.Settings.EmailTransactionalProvider.SMTP.EncryptedPassword)
+	assert.Empty(t, workspace.Settings.EmailTransactionalProvider.SMTP.Password)
+
+	// Save the encrypted values
+	marketingEncryptedKey := workspace.Settings.EmailMarketingProvider.SES.EncryptedSecretKey
+	transactionalEncryptedPassword := workspace.Settings.EmailTransactionalProvider.SMTP.EncryptedPassword
+
+	// Test AfterLoad - decryption
+	err = workspace.AfterLoad(passphrase)
+	assert.NoError(t, err)
+
+	// Check that secret keys are decrypted
+	assert.Equal(t, "marketing-secret-key", workspace.Settings.EmailMarketingProvider.SES.SecretKey)
+	assert.Equal(t, "transactional-password", workspace.Settings.EmailTransactionalProvider.SMTP.Password)
+
+	// Test AfterLoad with wrong passphrase
+	workspace.Settings.EmailMarketingProvider.SES.SecretKey = ""
+	workspace.Settings.EmailMarketingProvider.SES.EncryptedSecretKey = marketingEncryptedKey
+	workspace.Settings.EmailTransactionalProvider.SMTP.Password = ""
+	workspace.Settings.EmailTransactionalProvider.SMTP.EncryptedPassword = transactionalEncryptedPassword
+
+	err = workspace.AfterLoad("wrong-passphrase")
+	assert.Error(t, err)
+}

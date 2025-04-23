@@ -221,13 +221,6 @@ export function ContactUpsertDrawer({
     }
   }, [contact, form, drawerVisible])
 
-  const handleAddField = () => {
-    if (selectedFieldToAdd && !selectedFields.includes(selectedFieldToAdd)) {
-      setSelectedFields([...selectedFields, selectedFieldToAdd])
-      setSelectedFieldToAdd(null)
-    }
-  }
-
   const handleRemoveField = (field: string) => {
     setSelectedFields(selectedFields.filter((f) => f !== field))
     form.setFieldValue(field, undefined)
@@ -389,11 +382,11 @@ export function ContactUpsertDrawer({
   return (
     <>
       <Button onClick={() => setDrawerVisible(true)} {...defaultButtonProps} loading={loading}>
-        {buttonContent || (contact ? 'Update Contact' : 'Insert Contact')}
+        {buttonContent || (contact ? 'Update Contact' : 'Add Contact')}
       </Button>
 
       <Drawer
-        title={contact ? 'Update Contact' : 'Insert Contact'}
+        title={contact ? 'Update Contact' : 'Add Contact'}
         width={500}
         open={drawerVisible}
         onClose={handleClose}

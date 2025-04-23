@@ -14,6 +14,7 @@ import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
 import type { List } from '../services/api/types'
+import { PlusOutlined } from '@ant-design/icons'
 
 const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
@@ -447,7 +448,16 @@ export function ContactsPage() {
         <h2 className="text-2xl font-bold">Contacts</h2>
         <Space>
           <ImportContactsButton lists={listsData?.lists || []} workspaceId={workspaceId} />
-          <ContactUpsertDrawer workspaceId={workspaceId} />
+          <ContactUpsertDrawer
+            workspaceId={workspaceId}
+            buttonProps={{
+              buttonContent: (
+                <>
+                  <PlusOutlined /> Add Contact
+                </>
+              )
+            }}
+          />
         </Space>
       </div>
 

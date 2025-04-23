@@ -35,6 +35,8 @@ export interface WorkspaceSettings {
   cover_url: string | null
   timezone: string
   file_manager?: FileManagerSettings
+  email_marketing?: EmailProvider
+  email_transactional?: EmailProvider
 }
 
 export interface FileManagerSettings {
@@ -44,6 +46,38 @@ export interface FileManagerSettings {
   region?: string
   secret_key?: string
   cdn_endpoint?: string
+}
+
+export type EmailProviderKind = 'smtp' | 'ses' | 'sparkpost'
+
+export interface EmailProvider {
+  kind: EmailProviderKind
+  ses?: AmazonSES
+  smtp?: SMTPSettings
+  sparkpost?: SparkPostSettings
+}
+
+export interface AmazonSES {
+  region: string
+  access_key: string
+  secret_key?: string
+  sender_email: string
+  sandbox_mode?: boolean
+}
+
+export interface SMTPSettings {
+  host: string
+  port: number
+  username: string
+  password?: string
+  sender_email: string
+  use_tls: boolean
+}
+
+export interface SparkPostSettings {
+  api_key?: string
+  sender_email: string
+  sandbox_mode?: boolean
 }
 
 export interface CreateWorkspaceRequest {
@@ -81,6 +115,8 @@ export interface UpdateWorkspaceRequest {
     cover_url?: string | null
     timezone?: string
     file_manager?: FileManagerSettings
+    email_marketing?: EmailProvider
+    email_transactional?: EmailProvider
   }
 }
 

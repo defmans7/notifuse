@@ -111,7 +111,10 @@ func (s *ContactService) BatchImportContacts(ctx context.Context, workspaceID st
 	// Validate and upsert
 	for i, contact := range contacts {
 		now := time.Now().UTC()
-		contact.CreatedAt = now
+		// Set created_at to now if not provided
+		if contact.CreatedAt.IsZero() {
+			contact.CreatedAt = now
+		}
 		contact.UpdatedAt = now
 
 		// init operation
@@ -165,6 +168,14 @@ func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, 
 		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Invalid contact: %v", err))
 		return operation
 	}
+
+	// Set created_at to now if not provided
+	if contact.CreatedAt.IsZero() {
+		contact.CreatedAt = time.Now().UTC()
+	}
+
+	// Always update the updated_at timestamp
+	contact.UpdatedAt = time.Now().UTC()
 
 	isNew, err := s.repo.UpsertContact(ctx, workspaceID, contact)
 	if err != nil {
