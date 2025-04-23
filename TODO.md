@@ -3,6 +3,7 @@
 - integrer https://www.npmjs.com/package/disposable-email-domains
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
+- bug template html content differs in inbox vs preview
 - create user segment
 - update user segment
 - delete user segment

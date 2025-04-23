@@ -191,6 +191,22 @@ func TestContactService_DeleteContact(t *testing.T) {
 	workspaceID := "test-workspace"
 	email := "test@example.com"
 
+	t.Run("successful deletion", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockContactRepo.EXPECT().DeleteContact(ctx, email, workspaceID).Return(nil)
+
+		err := service.DeleteContact(ctx, email, workspaceID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("authentication error", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, fmt.Errorf("auth error"))
+
+		err := service.DeleteContact(ctx, email, workspaceID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
 	t.Run("contact not found", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
 		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
@@ -257,6 +273,20 @@ func TestContactService_UpsertContact(t *testing.T) {
 		result := service.UpsertContact(ctx, workspaceID, contact)
 		assert.Equal(t, domain.UpsertContactOperationError, result.Action)
 		assert.Contains(t, result.Error, "repo error")
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		invalidContact := &domain.Contact{
+			Email: "", // Empty email should fail validation
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockLogger.EXPECT().WithField("email", invalidContact.Email).Return(mockLogger)
+		mockLogger.EXPECT().Error(gomock.Any()) // Any validation error message
+
+		result := service.UpsertContact(ctx, workspaceID, invalidContact)
+		assert.Equal(t, domain.UpsertContactOperationError, result.Action)
+		assert.NotEmpty(t, result.Error)
 	})
 }
 
@@ -386,5 +416,127 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 		result := service.UpsertContact(ctx, workspaceID, contactWithNulls)
 		assert.Equal(t, domain.UpsertContactOperationUpdate, result.Action)
 		assert.Empty(t, result.Error)
+	})
+}
+
+func TestContactService_BatchImportContacts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockContactRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	service := NewContactService(mockRepo, mockWorkspaceRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "workspace123"
+
+	t.Run("authentication error", func(t *testing.T) {
+		contacts := []*domain.Contact{
+			{Email: "contact1@example.com"},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+
+		response := service.BatchImportContacts(ctx, workspaceID, contacts)
+		assert.NotNil(t, response)
+		assert.Contains(t, response.Error, "failed to authenticate user")
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		contacts := []*domain.Contact{
+			{Email: ""}, // Invalid email
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+
+		response := service.BatchImportContacts(ctx, workspaceID, contacts)
+		assert.NotNil(t, response)
+
+		// Find the error operation in the response
+		var foundErrorOp bool
+		for _, op := range response.Operations {
+			if op != nil && op.Action == domain.UpsertContactOperationError {
+				foundErrorOp = true
+				assert.Equal(t, "", op.Email)
+				assert.Contains(t, op.Error, "invalid contact")
+				break
+			}
+		}
+		assert.True(t, foundErrorOp, "No error operation found in response")
+	})
+
+	t.Run("repository error", func(t *testing.T) {
+		contacts := []*domain.Contact{
+			{Email: "valid@example.com"},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(false, errors.New("repo error"))
+
+		response := service.BatchImportContacts(ctx, workspaceID, contacts)
+		assert.NotNil(t, response)
+
+		// Find the error operation in the response
+		var foundErrorOp bool
+		for _, op := range response.Operations {
+			if op != nil && op.Action == domain.UpsertContactOperationError {
+				foundErrorOp = true
+				assert.Equal(t, "valid@example.com", op.Email)
+				assert.Contains(t, op.Error, "failed to upsert contact")
+				break
+			}
+		}
+		assert.True(t, foundErrorOp, "No error operation found in response")
+	})
+
+	t.Run("successful mixed operations", func(t *testing.T) {
+		contacts := []*domain.Contact{
+			{Email: "new@example.com"},
+			{Email: "existing@example.com"},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+
+		// First contact is new
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
+				assert.Equal(t, "new@example.com", contact.Email)
+				assert.NotZero(t, contact.CreatedAt)
+				assert.NotZero(t, contact.UpdatedAt)
+				return true, nil // true means it's a new contact
+			})
+
+		// Second contact is an update
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, contact *domain.Contact) (bool, error) {
+				assert.Equal(t, "existing@example.com", contact.Email)
+				assert.NotZero(t, contact.CreatedAt)
+				assert.NotZero(t, contact.UpdatedAt)
+				return false, nil // false means it's an existing contact
+			})
+
+		response := service.BatchImportContacts(ctx, workspaceID, contacts)
+		assert.NotNil(t, response)
+		assert.Empty(t, response.Error)
+
+		// Due to how the method works, we need to filter to verify the operations
+		createOperations := []*domain.UpsertContactOperation{}
+		updateOperations := []*domain.UpsertContactOperation{}
+
+		for _, op := range response.Operations {
+			if op != nil {
+				if op.Action == domain.UpsertContactOperationCreate && op.Email == "new@example.com" {
+					createOperations = append(createOperations, op)
+				} else if op.Action == domain.UpsertContactOperationUpdate && op.Email == "existing@example.com" {
+					updateOperations = append(updateOperations, op)
+				}
+			}
+		}
+
+		assert.GreaterOrEqual(t, len(createOperations), 1)
+		assert.GreaterOrEqual(t, len(updateOperations), 1)
 	})
 }
