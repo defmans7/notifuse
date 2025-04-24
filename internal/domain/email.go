@@ -3,12 +3,27 @@ package domain
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/asaskevich/govalidator"
+	"github.com/aws/aws-sdk-go/service/ses"
 )
 
 //go:generate mockgen -destination mocks/mock_email_service.go -package mocks github.com/Notifuse/notifuse/internal/domain EmailServiceInterface
+//go:generate mockgen -destination mocks/mock_http_client.go -package mocks github.com/Notifuse/notifuse/internal/domain HTTPClient
+//go:generate mockgen -destination mocks/mock_ses_client.go -package mocks github.com/Notifuse/notifuse/internal/domain SESClient
+//go:generate mockgen -destination mocks/mock_mjml_renderer.go -package mocks github.com/Notifuse/notifuse/internal/domain MJMLRenderer
+
+// HTTPClient defines the interface for HTTP operations
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// SESClient defines the interface for AWS SES operations
+type SESClient interface {
+	SendEmail(input *ses.SendEmailInput) (*ses.SendEmailOutput, error)
+}
 
 // AmazonSES contains SES email provider settings
 type AmazonSES struct {
@@ -327,8 +342,14 @@ func (p *PostmarkSettings) Validate(passphrase string) error {
 	return nil
 }
 
-// EmailServiceInterface defines the interface for email operations
+// MJMLRenderer defines the interface for MJML rendering operations
+type MJMLRenderer interface {
+	TreeToMjml(rootStyles map[string]interface{}, tree interface{}, templateDataStr string, helpers map[string]string, depth int, parent interface{}) (string, error)
+}
+
+// EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
 	TestTemplate(ctx context.Context, workspaceID string, templateID string, providerType string, recipientEmail string) error
+	SendEmail(ctx context.Context, workspaceID string, providerType string, from string, to string, subject string, content string) error
 }
