@@ -28,7 +28,8 @@ func NewTemplateService(repo domain.TemplateRepository, authService domain.AuthS
 
 func (s *TemplateService) CreateTemplate(ctx context.Context, workspaceID string, template *domain.Template) error {
 	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -55,7 +56,8 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, workspaceID string
 
 func (s *TemplateService) GetTemplateByID(ctx context.Context, workspaceID string, id string, version int64) (*domain.Template, error) {
 	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -75,7 +77,8 @@ func (s *TemplateService) GetTemplateByID(ctx context.Context, workspaceID strin
 
 func (s *TemplateService) GetTemplates(ctx context.Context, workspaceID string, category string) ([]*domain.Template, error) {
 	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -92,7 +95,8 @@ func (s *TemplateService) GetTemplates(ctx context.Context, workspaceID string, 
 
 func (s *TemplateService) UpdateTemplate(ctx context.Context, workspaceID string, template *domain.Template) error {
 	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -130,7 +134,8 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, workspaceID string
 
 func (s *TemplateService) DeleteTemplate(ctx context.Context, workspaceID string, id string) error {
 	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -148,11 +153,19 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, workspaceID string
 }
 
 func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID string, tree notifusemjml.EmailBlock, testData domain.MapOfAny) (*domain.CompileTemplateResponse, error) {
-	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		// Return standard Go error for non-compilation issues
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	// Check if user is already authenticated in context
+	if user := ctx.Value("authenticated_user"); user == nil {
+		// Authenticate user for workspace
+		var user *domain.User
+		var err error
+		ctx, user, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+		if err != nil {
+			// Return standard Go error for non-compilation issues
+			return nil, fmt.Errorf("failed to authenticate user: %w", err)
+		}
+
+		// Store user in context for future use
+		ctx = context.WithValue(ctx, "authenticated_user", user)
 	}
 
 	// Extract root styles from the tree data

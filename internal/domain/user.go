@@ -15,6 +15,11 @@ const (
 	SessionIDKey contextKey = "session_id"
 )
 
+// WorkspaceUserKey creates a context key for storing a workspace-specific user
+func WorkspaceUserKey(workspaceID string) contextKey {
+	return contextKey("workspace_user_" + workspaceID)
+}
+
 // User represents a user in the system
 type User struct {
 	ID        string    `json:"id" db:"id"`

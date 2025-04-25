@@ -30,7 +30,7 @@ func TestListService_CreateList(t *testing.T) {
 	}
 
 	t.Run("successful create", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockLogger.EXPECT().WithField("list_id", list.ID).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
@@ -60,7 +60,7 @@ func TestListService_CreateList(t *testing.T) {
 			},
 		}
 
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, wsID string, l *domain.List) error {
 				assert.Equal(t, "list123", l.ID)
@@ -78,7 +78,7 @@ func TestListService_CreateList(t *testing.T) {
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, errors.New("auth error"))
 
 		err := service.CreateList(ctx, workspaceID, list)
 		assert.Error(t, err)
@@ -87,7 +87,7 @@ func TestListService_CreateList(t *testing.T) {
 
 	t.Run("validation failure", func(t *testing.T) {
 		invalidList := &domain.List{} // Missing required fields
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 
 		err := service.CreateList(ctx, workspaceID, invalidList)
 		assert.Error(t, err)
@@ -95,7 +95,7 @@ func TestListService_CreateList(t *testing.T) {
 	})
 
 	t.Run("repository failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(errors.New("db error"))
 		mockLogger.EXPECT().WithField("list_id", list.ID).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -125,7 +125,7 @@ func TestListService_GetListByID(t *testing.T) {
 	}
 
 	t.Run("successful retrieval", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().GetListByID(ctx, workspaceID, listID).Return(expectedList, nil)
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
@@ -136,7 +136,7 @@ func TestListService_GetListByID(t *testing.T) {
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, errors.New("auth error"))
 
 		list, err := service.GetListByID(ctx, workspaceID, listID)
 		assert.Error(t, err)
@@ -145,7 +145,7 @@ func TestListService_GetListByID(t *testing.T) {
 	})
 
 	t.Run("list not found", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().GetListByID(ctx, workspaceID, listID).Return(nil, &domain.ErrListNotFound{})
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger).Times(0)
 
@@ -157,7 +157,7 @@ func TestListService_GetListByID(t *testing.T) {
 	})
 
 	t.Run("repository error", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().GetListByID(ctx, workspaceID, listID).Return(nil, errors.New("db error"))
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -187,7 +187,7 @@ func TestListService_GetLists(t *testing.T) {
 	}
 
 	t.Run("successful retrieval", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().GetLists(ctx, workspaceID).Return(expectedLists, nil)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
 
@@ -197,7 +197,7 @@ func TestListService_GetLists(t *testing.T) {
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, errors.New("auth error"))
 
 		lists, err := service.GetLists(ctx, workspaceID)
 		assert.Error(t, err)
@@ -206,7 +206,7 @@ func TestListService_GetLists(t *testing.T) {
 	})
 
 	t.Run("repository error", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().GetLists(ctx, workspaceID).Return(nil, errors.New("db error"))
 		mockLogger.EXPECT().Error(gomock.Any())
 
@@ -235,7 +235,7 @@ func TestListService_UpdateList(t *testing.T) {
 	}
 
 	t.Run("successful update", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().UpdateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockLogger.EXPECT().WithField("list_id", list.ID).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
@@ -264,7 +264,7 @@ func TestListService_UpdateList(t *testing.T) {
 			},
 		}
 
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().UpdateList(ctx, workspaceID, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, wsID string, l *domain.List) error {
 				assert.Equal(t, "list123", l.ID)
@@ -282,7 +282,7 @@ func TestListService_UpdateList(t *testing.T) {
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, errors.New("auth error"))
 
 		err := service.UpdateList(ctx, workspaceID, list)
 		assert.Error(t, err)
@@ -291,7 +291,7 @@ func TestListService_UpdateList(t *testing.T) {
 
 	t.Run("validation failure", func(t *testing.T) {
 		invalidList := &domain.List{} // Missing required fields
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 
 		err := service.UpdateList(ctx, workspaceID, invalidList)
 		assert.Error(t, err)
@@ -299,7 +299,7 @@ func TestListService_UpdateList(t *testing.T) {
 	})
 
 	t.Run("repository failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().UpdateList(ctx, workspaceID, gomock.Any()).Return(errors.New("db error"))
 		mockLogger.EXPECT().WithField("list_id", list.ID).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -325,7 +325,7 @@ func TestListService_DeleteList(t *testing.T) {
 	listID := "list123"
 
 	t.Run("successful deletion", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().DeleteList(ctx, workspaceID, listID).Return(nil)
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
@@ -335,7 +335,7 @@ func TestListService_DeleteList(t *testing.T) {
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, errors.New("auth error"))
 
 		err := service.DeleteList(ctx, workspaceID, listID)
 		assert.Error(t, err)
@@ -343,7 +343,7 @@ func TestListService_DeleteList(t *testing.T) {
 	})
 
 	t.Run("repository failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().DeleteList(ctx, workspaceID, listID).Return(errors.New("db error"))
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -370,7 +370,7 @@ func TestListService_IncrementTotal(t *testing.T) {
 	totalType := domain.TotalTypeActive
 
 	t.Run("successful increment", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().IncrementTotal(ctx, workspaceID, listID, totalType).Return(nil)
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
@@ -380,7 +380,7 @@ func TestListService_IncrementTotal(t *testing.T) {
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, errors.New("auth error"))
 
 		err := service.IncrementTotal(ctx, workspaceID, listID, totalType)
 		assert.Error(t, err)
@@ -388,7 +388,7 @@ func TestListService_IncrementTotal(t *testing.T) {
 	})
 
 	t.Run("invalid total type", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 
 		err := service.IncrementTotal(ctx, workspaceID, listID, domain.ContactListTotalType("invalid"))
 		assert.Error(t, err)
@@ -396,7 +396,7 @@ func TestListService_IncrementTotal(t *testing.T) {
 	})
 
 	t.Run("repository failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().IncrementTotal(ctx, workspaceID, listID, totalType).Return(errors.New("db error"))
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
 		mockLogger.EXPECT().WithField("total_type", totalType).Return(mockLogger)
@@ -424,7 +424,7 @@ func TestListService_DecrementTotal(t *testing.T) {
 	totalType := domain.TotalTypeActive
 
 	t.Run("successful decrement", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().DecrementTotal(ctx, workspaceID, listID, totalType).Return(nil)
 		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
@@ -434,7 +434,7 @@ func TestListService_DecrementTotal(t *testing.T) {
 	})
 
 	t.Run("authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(nil, errors.New("auth error"))
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, errors.New("auth error"))
 
 		err := service.DecrementTotal(ctx, workspaceID, listID, totalType)
 		assert.Error(t, err)
@@ -442,7 +442,7 @@ func TestListService_DecrementTotal(t *testing.T) {
 	})
 
 	t.Run("invalid total type", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 
 		err := service.DecrementTotal(ctx, workspaceID, listID, domain.ContactListTotalType("invalid"))
 		assert.Error(t, err)
@@ -450,7 +450,7 @@ func TestListService_DecrementTotal(t *testing.T) {
 	})
 
 	t.Run("repository failure", func(t *testing.T) {
-		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(&domain.User{}, nil)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockRepo.EXPECT().DecrementTotal(ctx, workspaceID, listID, totalType).Return(errors.New("db error"))
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
 		mockLogger.EXPECT().WithField("total_type", totalType).Return(mockLogger)

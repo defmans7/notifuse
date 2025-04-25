@@ -72,18 +72,25 @@ func (s *AuthService) AuthenticateUserFromContext(ctx context.Context) (*domain.
 }
 
 // AuthenticateUserForWorkspace checks if the user exists and the session is valid for a specific workspace
-func (s *AuthService) AuthenticateUserForWorkspace(ctx context.Context, workspaceID string) (*domain.User, error) {
-	user, err := s.AuthenticateUserFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// get worspace user
-	_, err = s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
-	if err != nil {
-		return nil, err
+func (s *AuthService) AuthenticateUserForWorkspace(ctx context.Context, workspaceID string) (context.Context, *domain.User, error) {
+	// Check if user is already set in context for this workspace
+	if workspaceUser, ok := ctx.Value(domain.WorkspaceUserKey(workspaceID)).(*domain.User); ok && workspaceUser != nil {
+		return ctx, workspaceUser, nil
 	}
 
-	return user, nil
+	user, err := s.AuthenticateUserFromContext(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	// get workspace user
+	_, err = s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	// Store user in context for future calls - return the new context to the caller
+	newCtx := context.WithValue(ctx, domain.WorkspaceUserKey(workspaceID), user)
+	return newCtx, user, nil
 }
 
 // VerifyUserSession checks if the user exists and the session is valid

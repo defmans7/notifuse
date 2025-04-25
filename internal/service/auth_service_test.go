@@ -128,11 +128,35 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 				UpdatedAt:   time.Now(),
 			}, nil)
 
-		result, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
+		newCtx, result, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.Equal(t, userID, result.ID)
+
+		// Verify that the user is stored in the context
+		storedUser, ok := newCtx.Value(domain.WorkspaceUserKey(workspaceID)).(*domain.User)
+		require.True(t, ok)
+		require.Equal(t, userID, storedUser.ID)
+	})
+
+	t.Run("user already in context", func(t *testing.T) {
+		user := &domain.User{
+			ID:    userID,
+			Email: "test@example.com",
+		}
+
+		// Create a context with the user already stored for this workspace
+		ctx := context.WithValue(context.Background(), domain.WorkspaceUserKey(workspaceID), user)
+
+		// No mock expectations should be called since the user is already in context
+
+		newCtx, result, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Equal(t, userID, result.ID)
+		require.Equal(t, ctx, newCtx) // Context should be unchanged
 	})
 
 	t.Run("user not in workspace", func(t *testing.T) {
@@ -157,10 +181,11 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 			GetUserWorkspace(ctx, userID, workspaceID).
 			Return(nil, errors.New("not found"))
 
-		result, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
+		newCtx, result, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
 
 		require.Error(t, err)
 		require.Nil(t, result)
+		require.Equal(t, ctx, newCtx) // Context should be unchanged on error
 	})
 }
 

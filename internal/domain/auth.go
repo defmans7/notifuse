@@ -18,7 +18,7 @@ type AuthRepository interface {
 
 type AuthService interface {
 	AuthenticateUserFromContext(ctx context.Context) (*User, error)
-	AuthenticateUserForWorkspace(ctx context.Context, workspaceID string) (*User, error)
+	AuthenticateUserForWorkspace(ctx context.Context, workspaceID string) (context.Context, *User, error)
 	VerifyUserSession(ctx context.Context, userID, sessionID string) (*User, error)
 	GenerateAuthToken(user *User, sessionID string, expiresAt time.Time) string
 	GetPrivateKey() paseto.V4AsymmetricSecretKey

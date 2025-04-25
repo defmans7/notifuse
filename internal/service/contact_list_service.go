@@ -34,9 +34,9 @@ func NewContactListService(
 }
 
 func (s *ContactListService) AddContactToList(ctx context.Context, workspaceID string, contactList *domain.ContactList) error {
-
 	// Verify contact exists by email
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -81,7 +81,8 @@ func (s *ContactListService) AddContactToList(ctx context.Context, workspaceID s
 }
 
 func (s *ContactListService) GetContactListByIDs(ctx context.Context, workspaceID string, email, listID string) (*domain.ContactList, error) {
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -101,7 +102,8 @@ func (s *ContactListService) GetContactListByIDs(ctx context.Context, workspaceI
 }
 
 func (s *ContactListService) GetContactsByListID(ctx context.Context, workspaceID string, listID string) ([]*domain.ContactList, error) {
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -124,7 +126,8 @@ func (s *ContactListService) GetContactsByListID(ctx context.Context, workspaceI
 
 func (s *ContactListService) GetListsByEmail(ctx context.Context, workspaceID string, email string) ([]*domain.ContactList, error) {
 	// Verify contact exists by email
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -146,7 +149,8 @@ func (s *ContactListService) GetListsByEmail(ctx context.Context, workspaceID st
 
 func (s *ContactListService) UpdateContactListStatus(ctx context.Context, workspaceID string, email, listID string, status domain.ContactListStatus) error {
 	// Verify contact list exists
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -167,7 +171,8 @@ func (s *ContactListService) UpdateContactListStatus(ctx context.Context, worksp
 }
 
 func (s *ContactListService) RemoveContactFromList(ctx context.Context, workspaceID string, email, listID string) error {
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}

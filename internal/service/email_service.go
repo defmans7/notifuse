@@ -26,6 +26,7 @@ type EmailService struct {
 	secretKey       string
 	workspaceRepo   domain.WorkspaceRepository
 	templateRepo    domain.TemplateRepository
+	templateService *TemplateService
 	httpClient      domain.HTTPClient
 	mjmlRenderer    domain.MJMLRenderer
 	createSESClient func(region, accessKey, secretKey string) domain.SESClient
@@ -38,15 +39,17 @@ func NewEmailService(
 	secretKey string,
 	workspaceRepo domain.WorkspaceRepository,
 	templateRepo domain.TemplateRepository,
+	templateService *TemplateService,
 ) *EmailService {
 	return &EmailService{
-		logger:        logger,
-		authService:   authService,
-		secretKey:     secretKey,
-		workspaceRepo: workspaceRepo,
-		templateRepo:  templateRepo,
-		httpClient:    &http.Client{Timeout: time.Second * 10},
-		mjmlRenderer:  &mjmlRendererAdapter{},
+		logger:          logger,
+		authService:     authService,
+		secretKey:       secretKey,
+		workspaceRepo:   workspaceRepo,
+		templateRepo:    templateRepo,
+		templateService: templateService,
+		httpClient:      &http.Client{Timeout: time.Second * 10},
+		mjmlRenderer:    &mjmlRendererAdapter{},
 		createSESClient: func(region, accessKey, secretKey string) domain.SESClient {
 			sess, _ := session.NewSession(&aws.Config{
 				Region:      aws.String(region),
@@ -64,6 +67,7 @@ func NewEmailServiceWithDependencies(
 	secretKey string,
 	workspaceRepo domain.WorkspaceRepository,
 	templateRepo domain.TemplateRepository,
+	templateService *TemplateService,
 	httpClient domain.HTTPClient,
 	mjmlRenderer domain.MJMLRenderer,
 	createSESClient func(region, accessKey, secretKey string) domain.SESClient,
@@ -74,6 +78,7 @@ func NewEmailServiceWithDependencies(
 		secretKey:       secretKey,
 		workspaceRepo:   workspaceRepo,
 		templateRepo:    templateRepo,
+		templateService: templateService,
 		httpClient:      httpClient,
 		mjmlRenderer:    mjmlRenderer,
 		createSESClient: createSESClient,
@@ -144,7 +149,8 @@ func (m *mjmlRendererAdapter) TreeToMjml(rootStyles map[string]interface{}, tree
 // TestEmailProvider validates and tests an email provider
 func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string, provider domain.EmailProvider, to string) error {
 	// Authenticate user for the workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user for workspace: %w", err)
 	}
@@ -165,7 +171,8 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 // TestTemplate tests a template by sending a test email
 func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, providerType string, recipientEmail string) error {
 	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate user: %w", err)
 	}
@@ -221,38 +228,22 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 			emailSubject = "Notifuse: Test Template Email"
 		}
 
-		if template.Email.CompiledPreview != "" {
-			// Use the compiled preview, but in a real implementation, we would parse template variables
-			// with the test data
-			emailContent = template.Email.CompiledPreview
-		} else {
-			// Extract root styles from the tree data
-			rootDataMap, ok := template.Email.VisualEditorTree.Data.(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("invalid template: root block data is not a map")
-			}
-			rootStyles, _ := rootDataMap["styles"].(map[string]interface{})
-			if rootStyles == nil {
-				return fmt.Errorf("invalid template: root block styles are missing")
-			}
-
-			// Prepare template data JSON string
-			var templateDataStr string
-			if testData != nil && len(testData) > 0 {
-				jsonDataBytes, err := json.Marshal(testData)
-				if err != nil {
-					return fmt.Errorf("failed to marshal test_data: %w", err)
-				}
-				templateDataStr = string(jsonDataBytes)
-			}
-
-			// Compile tree to MJML using the injected mjmlRenderer
-			mjmlContent, err := s.mjmlRenderer.TreeToMjml(rootStyles, template.Email.VisualEditorTree, templateDataStr, make(map[string]string), 0, nil)
-			if err != nil {
-				return fmt.Errorf("failed to generate preview: %w", err)
-			}
-			emailContent = mjmlContent
+		// Use templateService to compile the template with the tree
+		compileResult, err := s.templateService.CompileTemplate(ctx, workspaceID, template.Email.VisualEditorTree, testData)
+		if err != nil {
+			return fmt.Errorf("failed to compile template: %w", err)
 		}
+
+		if !compileResult.Success || compileResult.HTML == nil {
+			errorMsg := "Unknown error"
+			if compileResult.Error != nil {
+				errorMsg = compileResult.Error.Message
+			}
+			return fmt.Errorf("template compilation failed: %s", errorMsg)
+		}
+
+		emailContent = *compileResult.HTML
+
 	} else {
 		emailSubject = "Notifuse: Test Template Email"
 		emailContent = "<h1>Notifuse: Test Template Email</h1><p>This is a test email from template " + template.Name + ".</p>"
@@ -270,7 +261,8 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 		emailProvider = *optionalProvider[0]
 	} else {
 		// Authenticate user for workspace
-		_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+		var err error
+		ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 		if err != nil {
 			return fmt.Errorf("failed to authenticate user: %w", err)
 		}
