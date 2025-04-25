@@ -351,5 +351,5 @@ type MJMLRenderer interface {
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
 	TestTemplate(ctx context.Context, workspaceID string, templateID string, providerType string, recipientEmail string) error
-	SendEmail(ctx context.Context, workspaceID string, providerType string, from string, to string, subject string, content string) error
+	SendEmail(ctx context.Context, workspaceID string, providerType string, fromAddress string, fromName string, to string, subject string, content string, optionalProvider ...*EmailProvider) error
 }

@@ -154,240 +154,12 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 		return err
 	}
 
-	switch provider.Kind {
-	case domain.EmailProviderKindSMTP:
-		if provider.SMTP == nil {
-			return fmt.Errorf("SMTP settings required")
-		}
-		// Decrypt password if needed
-		if provider.SMTP.EncryptedPassword != "" && provider.SMTP.Password == "" {
-			if err := provider.SMTP.DecryptPassword(s.secretKey); err != nil {
-				return fmt.Errorf("failed to decrypt SMTP password: %w", err)
-			}
-		}
-		// Use go-mail to send a test email
-		msg := mail.NewMsg()
-		if err := msg.From(provider.DefaultSenderEmail); err != nil {
-			return fmt.Errorf("invalid sender email: %w", err)
-		}
-		if err := msg.To(to); err != nil {
-			return fmt.Errorf("invalid recipient email: %w", err)
-		}
-		msg.Subject("Notifuse: Test Email Provider")
-		msg.SetBodyString(mail.TypeTextPlain, "This is a test email from Notifuse. Your provider is working!")
+	// Prepare email content
+	subject := "Notifuse: Test Email Provider"
+	htmlContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
 
-		client, err := mail.NewClient(
-			provider.SMTP.Host,
-			mail.WithPort(provider.SMTP.Port),
-			mail.WithUsername(provider.SMTP.Username),
-			mail.WithPassword(provider.SMTP.Password),
-			mail.WithSMTPAuth(mail.SMTPAuthPlain),
-			mail.WithTLSPolicy(mail.TLSMandatory),
-			mail.WithTimeout(10*time.Second),
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create SMTP client: %w", err)
-		}
-		if err := client.DialAndSend(msg); err != nil {
-			return fmt.Errorf("failed to send test email: %w", err)
-		}
-		return nil
-	case domain.EmailProviderKindSES:
-		if provider.SES == nil {
-			return fmt.Errorf("SES settings required")
-		}
-
-		// Decrypt secret key if needed
-		if provider.SES.EncryptedSecretKey != "" && provider.SES.SecretKey == "" {
-			if err := provider.SES.DecryptSecretKey(s.secretKey); err != nil {
-				return fmt.Errorf("failed to decrypt SES secret key: %w", err)
-			}
-		}
-
-		// Create SES client using the dependency
-		svc := s.createSESClient(provider.SES.Region, provider.SES.AccessKey, provider.SES.SecretKey)
-
-		// Prepare the email
-		input := &ses.SendEmailInput{
-			Destination: &ses.Destination{
-				ToAddresses: []*string{
-					aws.String(to),
-				},
-			},
-			Message: &ses.Message{
-				Body: &ses.Body{
-					Html: &ses.Content{
-						Charset: aws.String("UTF-8"),
-						Data:    aws.String("<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your Amazon SES provider is working!</p>"),
-					},
-					Text: &ses.Content{
-						Charset: aws.String("UTF-8"),
-						Data:    aws.String("This is a test email from Notifuse. Your Amazon SES provider is working!"),
-					},
-				},
-				Subject: &ses.Content{
-					Charset: aws.String("UTF-8"),
-					Data:    aws.String("Notifuse: Test Email Provider"),
-				},
-			},
-			Source: aws.String(provider.DefaultSenderEmail),
-		}
-
-		// Send the email
-		_, err = svc.SendEmail(input)
-		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				switch aerr.Code() {
-				case ses.ErrCodeMessageRejected:
-					return fmt.Errorf("message rejected: %s", aerr.Error())
-				case ses.ErrCodeMailFromDomainNotVerifiedException:
-					return fmt.Errorf("mail from domain not verified: %s", aerr.Error())
-				case ses.ErrCodeConfigurationSetDoesNotExistException:
-					return fmt.Errorf("configuration set does not exist: %s", aerr.Error())
-				default:
-					return fmt.Errorf("SES error: %s", aerr.Error())
-				}
-			}
-			return fmt.Errorf("failed to send test email: %w", err)
-		}
-
-		return nil
-	case domain.EmailProviderKindSparkPost:
-		if provider.SparkPost == nil {
-			return fmt.Errorf("SparkPost settings required")
-		}
-
-		// Decrypt API key if needed
-		if provider.SparkPost.EncryptedAPIKey != "" && provider.SparkPost.APIKey == "" {
-			if err := provider.SparkPost.DecryptAPIKey(s.secretKey); err != nil {
-				return fmt.Errorf("failed to decrypt SparkPost API key: %w", err)
-			}
-		}
-
-		// Since we can't directly include the SparkPost API client as a dependency,
-		// we'll use a simple HTTP request to the SparkPost API
-		apiURL := provider.SparkPost.Endpoint + "/api/v1/transmissions"
-
-		// Create the request payload
-		payload := map[string]interface{}{
-			"options": map[string]interface{}{
-				"sandbox": provider.SparkPost.SandboxMode,
-			},
-			"content": map[string]interface{}{
-				"from": map[string]string{
-					"email": provider.DefaultSenderEmail,
-					"name":  provider.DefaultSenderName,
-				},
-				"subject": "Notifuse: Test Email Provider",
-				"text":    "This is a test email from Notifuse. Your SparkPost provider is working!",
-				"html":    "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your SparkPost provider is working!</p>",
-			},
-			"recipients": []map[string]string{
-				{
-					"address": to,
-				},
-			},
-		}
-
-		// Convert payload to JSON
-		jsonPayload, err := json.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("failed to marshal SparkPost request: %w", err)
-		}
-
-		// Create the HTTP request
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			return fmt.Errorf("failed to create HTTP request: %w", err)
-		}
-
-		// Set headers
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", provider.SparkPost.APIKey)
-
-		// Use the injected HTTP client
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("failed to send request to SparkPost API: %w", err)
-		}
-		defer resp.Body.Close()
-
-		// Read the response body
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read SparkPost API response: %w", err)
-		}
-
-		// Check response status
-		if resp.StatusCode >= 400 {
-			return fmt.Errorf("SparkPost API error (%d): %s", resp.StatusCode, string(body))
-		}
-
-		return nil
-	case domain.EmailProviderKindPostmark:
-		if provider.Postmark == nil {
-			return fmt.Errorf("Postmark settings required")
-		}
-
-		// Decrypt server token if needed
-		if provider.Postmark.EncryptedServerToken != "" && provider.Postmark.ServerToken == "" {
-			if err := provider.Postmark.DecryptServerToken(s.secretKey); err != nil {
-				return fmt.Errorf("failed to decrypt Postmark server token: %w", err)
-			}
-		}
-
-		// Create a simple HTTP request to the Postmark API
-		apiURL := "https://api.postmarkapp.com/email"
-
-		// Create the request payload
-		payload := map[string]interface{}{
-			"From":          provider.DefaultSenderEmail,
-			"To":            to,
-			"Subject":       "Notifuse: Test Email Provider",
-			"TextBody":      "This is a test email from Notifuse. Your Postmark provider is working!",
-			"HtmlBody":      "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your Postmark provider is working!</p>",
-			"MessageStream": "outbound",
-		}
-
-		// Convert payload to JSON
-		jsonPayload, err := json.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("failed to marshal Postmark request: %w", err)
-		}
-
-		// Create the HTTP request
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			return fmt.Errorf("failed to create HTTP request: %w", err)
-		}
-
-		// Set headers
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("X-Postmark-Server-Token", provider.Postmark.ServerToken)
-
-		// Use the injected HTTP client
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("failed to send request to Postmark API: %w", err)
-		}
-		defer resp.Body.Close()
-
-		// Read the response body
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read Postmark API response: %w", err)
-		}
-
-		// Check response status
-		if resp.StatusCode >= 400 {
-			return fmt.Errorf("Postmark API error (%d): %s", resp.StatusCode, string(body))
-		}
-
-		return nil
-	default:
-		return fmt.Errorf("unsupported provider kind: %s", provider.Kind)
-	}
+	// Send email using SendEmail method with the direct provider
+	return s.SendEmail(ctx, workspaceID, "", provider.DefaultSenderEmail, provider.DefaultSenderName, to, subject, htmlContent, &provider)
 }
 
 // TestTemplate tests a template by sending a test email
@@ -486,220 +258,52 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 		emailContent = "<h1>Notifuse: Test Template Email</h1><p>This is a test email from template " + template.Name + ".</p>"
 	}
 
-	// Send the email using the appropriate provider
-	// This is simplified - in a real implementation you would have more sophisticated email sending
-	switch emailProvider.Kind {
-	case domain.EmailProviderKindSES:
-		if emailProvider.SES == nil {
-			return fmt.Errorf("SES provider is not configured")
-		}
-
-		// Decrypt secret key if needed
-		if emailProvider.SES.EncryptedSecretKey != "" && emailProvider.SES.SecretKey == "" {
-			if err := emailProvider.SES.DecryptSecretKey(s.secretKey); err != nil {
-				return fmt.Errorf("failed to decrypt SES secret key: %w", err)
-			}
-		}
-
-		// Create SES client using the dependency
-		svc := s.createSESClient(emailProvider.SES.Region, emailProvider.SES.AccessKey, emailProvider.SES.SecretKey)
-
-		// Create the email
-		input := &ses.SendEmailInput{
-			Destination: &ses.Destination{
-				ToAddresses: []*string{aws.String(recipientEmail)},
-			},
-			Message: &ses.Message{
-				Body: &ses.Body{
-					Html: &ses.Content{
-						Charset: aws.String("UTF-8"),
-						Data:    aws.String(emailContent),
-					},
-				},
-				Subject: &ses.Content{
-					Charset: aws.String("UTF-8"),
-					Data:    aws.String(emailSubject),
-				},
-			},
-			Source: aws.String(emailProvider.DefaultSenderEmail),
-		}
-
-		// Send the email
-		_, err = svc.SendEmail(input)
-		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				return fmt.Errorf("SES error: %s", aerr.Error())
-			}
-			return fmt.Errorf("failed to send test email: %w", err)
-		}
-
-	case domain.EmailProviderKindSparkPost:
-		if emailProvider.SparkPost == nil {
-			return fmt.Errorf("SparkPost provider is not configured")
-		}
-
-		// Decrypt API key if needed
-		if emailProvider.SparkPost.EncryptedAPIKey != "" && emailProvider.SparkPost.APIKey == "" {
-			if err := emailProvider.SparkPost.DecryptAPIKey(s.secretKey); err != nil {
-				return fmt.Errorf("failed to decrypt SparkPost API key: %w", err)
-			}
-		}
-
-		// Create the HTTP request to SparkPost API
-		apiURL := emailProvider.SparkPost.Endpoint + "/api/v1/transmissions"
-
-		// Create the request payload
-		payload := map[string]interface{}{
-			"options": map[string]interface{}{
-				"sandbox": emailProvider.SparkPost.SandboxMode,
-			},
-			"content": map[string]interface{}{
-				"from": map[string]string{
-					"email": emailProvider.DefaultSenderEmail,
-					"name":  emailProvider.DefaultSenderName,
-				},
-				"subject": emailSubject,
-				"html":    emailContent,
-			},
-			"recipients": []map[string]string{
-				{
-					"address": recipientEmail,
-				},
-			},
-		}
-
-		// Convert payload to JSON
-		jsonPayload, err := json.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("failed to marshal SparkPost request: %w", err)
-		}
-
-		// Create the HTTP request
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			return fmt.Errorf("failed to create HTTP request: %w", err)
-		}
-
-		// Set headers
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", emailProvider.SparkPost.APIKey)
-
-		// Use the injected HTTP client
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("failed to send request to SparkPost API: %w", err)
-		}
-		defer resp.Body.Close()
-
-		// Read the response body
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read SparkPost API response: %w", err)
-		}
-
-		// Check response status
-		if resp.StatusCode >= 400 {
-			return fmt.Errorf("SparkPost API error (%d): %s", resp.StatusCode, string(body))
-		}
-
-	case domain.EmailProviderKindPostmark:
-		if emailProvider.Postmark == nil {
-			return fmt.Errorf("Postmark provider is not configured")
-		}
-
-		// Decrypt server token if needed
-		if emailProvider.Postmark.EncryptedServerToken != "" && emailProvider.Postmark.ServerToken == "" {
-			if err := emailProvider.Postmark.DecryptServerToken(s.secretKey); err != nil {
-				return fmt.Errorf("failed to decrypt Postmark server token: %w", err)
-			}
-		}
-
-		// Create a simple HTTP request to the Postmark API
-		apiURL := "https://api.postmarkapp.com/email"
-
-		// Create the request payload
-		payload := map[string]interface{}{
-			"From":          emailProvider.DefaultSenderEmail,
-			"To":            recipientEmail,
-			"Subject":       emailSubject,
-			"HtmlBody":      emailContent,
-			"MessageStream": "outbound",
-		}
-
-		// Convert payload to JSON
-		jsonPayload, err := json.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("failed to marshal Postmark request: %w", err)
-		}
-
-		// Create the HTTP request
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			return fmt.Errorf("failed to create HTTP request: %w", err)
-		}
-
-		// Set headers
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("X-Postmark-Server-Token", emailProvider.Postmark.ServerToken)
-
-		// Use the injected HTTP client
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("failed to send request to Postmark API: %w", err)
-		}
-		defer resp.Body.Close()
-
-		// Read the response body
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read Postmark API response: %w", err)
-		}
-
-		// Check response status
-		if resp.StatusCode >= 400 {
-			return fmt.Errorf("Postmark API error (%d): %s", resp.StatusCode, string(body))
-		}
-
-	default:
-		return fmt.Errorf("unsupported provider kind: %s", emailProvider.Kind)
-	}
-
-	return nil
+	// Send the email using SendEmail method - we pass empty string for providerType since we're providing the provider directly
+	return s.SendEmail(ctx, workspaceID, "", emailProvider.DefaultSenderEmail, emailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &emailProvider)
 }
 
-// SendEmail sends an email using the specified provider type
-func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, providerType string, from string, to string, subject string, content string) error {
-	// Authenticate user for workspace
-	_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
-	}
-
-	// Get the workspace to retrieve email provider settings
-	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to get workspace: %w", err)
-	}
-
-	// Determine which email provider to use based on providerType
+// SendEmail sends an email using the specified provider type or a direct provider
+func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, providerType string, fromAddress string, fromName string, to string, subject string, content string, optionalProvider ...*domain.EmailProvider) error {
+	// Direct provider takes precedence if provided
 	var emailProvider domain.EmailProvider
-	if providerType == "marketing" {
-		emailProvider = workspace.Settings.EmailMarketingProvider
-	} else if providerType == "transactional" {
-		emailProvider = workspace.Settings.EmailTransactionalProvider
+	if len(optionalProvider) > 0 && optionalProvider[0] != nil {
+		emailProvider = *optionalProvider[0]
 	} else {
-		return fmt.Errorf("invalid provider type: %s", providerType)
+		// Authenticate user for workspace
+		_, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+		if err != nil {
+			return fmt.Errorf("failed to authenticate user: %w", err)
+		}
+
+		// Get the workspace to retrieve email provider settings
+		workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
+		if err != nil {
+			return fmt.Errorf("failed to get workspace: %w", err)
+		}
+
+		// Determine which email provider to use based on providerType
+		if providerType == "marketing" {
+			emailProvider = workspace.Settings.EmailMarketingProvider
+		} else if providerType == "transactional" {
+			emailProvider = workspace.Settings.EmailTransactionalProvider
+		} else {
+			return fmt.Errorf("invalid provider type: %s", providerType)
+		}
+
+		// Validate that the provider is configured
+		if emailProvider.Kind == "" {
+			return fmt.Errorf("no email provider configured for type: %s", providerType)
+		}
 	}
 
-	// Validate that the provider is configured
-	if emailProvider.Kind == "" {
-		return fmt.Errorf("no email provider configured for type: %s", providerType)
+	// If fromAddress is not provided, use the default sender email from the provider
+	if fromAddress == "" {
+		fromAddress = emailProvider.DefaultSenderEmail
 	}
 
-	// If from email is not provided, use the default sender email from the provider
-	if from == "" {
-		from = emailProvider.DefaultSenderEmail
+	// If fromName is not provided, use the default sender name from the provider
+	if fromName == "" {
+		fromName = emailProvider.DefaultSenderName
 	}
 
 	// Send the email using the appropriate provider
@@ -717,8 +321,8 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 
 		// Use go-mail to send the email
 		msg := mail.NewMsg()
-		if err := msg.From(from); err != nil {
-			return fmt.Errorf("invalid sender email: %w", err)
+		if err := msg.FromFormat(fromAddress, fromName); err != nil {
+			return fmt.Errorf("invalid sender: %w", err)
 		}
 		if err := msg.To(to); err != nil {
 			return fmt.Errorf("invalid recipient email: %w", err)
@@ -757,6 +361,9 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 		// Create SES client using the dependency
 		svc := s.createSESClient(emailProvider.SES.Region, emailProvider.SES.AccessKey, emailProvider.SES.SecretKey)
 
+		// Format the "From" header with name and email
+		fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)
+
 		// Create the email
 		input := &ses.SendEmailInput{
 			Destination: &ses.Destination{
@@ -774,11 +381,11 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 					Data:    aws.String(subject),
 				},
 			},
-			Source: aws.String(from),
+			Source: aws.String(fromHeader),
 		}
 
 		// Send the email
-		_, err = svc.SendEmail(input)
+		_, err := svc.SendEmail(input)
 		if err != nil {
 			if aerr, ok := err.(awserr.Error); ok {
 				return fmt.Errorf("SES error: %s", aerr.Error())
@@ -798,10 +405,6 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 			}
 		}
 
-		// Extract sender name and email from the from field
-		senderName := emailProvider.DefaultSenderName
-		senderEmail := from
-
 		// Create the HTTP request to SparkPost API
 		apiURL := emailProvider.SparkPost.Endpoint + "/api/v1/transmissions"
 
@@ -812,8 +415,8 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 			},
 			"content": map[string]interface{}{
 				"from": map[string]string{
-					"email": senderEmail,
-					"name":  senderName,
+					"email": fromAddress,
+					"name":  fromName,
 				},
 				"subject": subject,
 				"html":    content,
@@ -874,9 +477,12 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 		// Create a simple HTTP request to the Postmark API
 		apiURL := "https://api.postmarkapp.com/email"
 
+		// Format the "From" header with name and email
+		fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)
+
 		// Create the request payload
 		payload := map[string]interface{}{
-			"From":          from,
+			"From":          fromHeader,
 			"To":            to,
 			"Subject":       subject,
 			"HtmlBody":      content,

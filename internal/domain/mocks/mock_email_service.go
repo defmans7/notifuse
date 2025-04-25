@@ -36,17 +36,22 @@ func (m *MockEmailServiceInterface) EXPECT() *MockEmailServiceInterfaceMockRecor
 }
 
 // SendEmail mocks base method.
-func (m *MockEmailServiceInterface) SendEmail(arg0 context.Context, arg1, arg2, arg3, arg4, arg5, arg6 string) error {
+func (m *MockEmailServiceInterface) SendEmail(arg0 context.Context, arg1, arg2, arg3, arg4, arg5, arg6, arg7 string, arg8 ...*domain.EmailProvider) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendEmail", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	varargs := []interface{}{arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7}
+	for _, a := range arg8 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SendEmail", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendEmail indicates an expected call of SendEmail.
-func (mr *MockEmailServiceInterfaceMockRecorder) SendEmail(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
+func (mr *MockEmailServiceInterfaceMockRecorder) SendEmail(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}, arg8 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEmail", reflect.TypeOf((*MockEmailServiceInterface)(nil).SendEmail), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	varargs := append([]interface{}{arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7}, arg8...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEmail", reflect.TypeOf((*MockEmailServiceInterface)(nil).SendEmail), varargs...)
 }
 
 // TestEmailProvider mocks base method.
