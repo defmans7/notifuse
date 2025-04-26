@@ -399,10 +399,10 @@ func (r *CancelBroadcastRequest) Validate() error {
 
 // SendToIndividualRequest defines the request to send a broadcast to an individual
 type SendToIndividualRequest struct {
-	WorkspaceID string `json:"workspace_id"`
-	BroadcastID string `json:"broadcast_id"`
-	RecipientID string `json:"recipient_id"`
-	VariationID string `json:"variation_id,omitempty"`
+	WorkspaceID    string `json:"workspace_id"`
+	BroadcastID    string `json:"broadcast_id"`
+	RecipientEmail string `json:"recipient_email"`
+	VariationID    string `json:"variation_id,omitempty"`
 }
 
 // Validate validates the send to individual request
@@ -415,8 +415,8 @@ func (r *SendToIndividualRequest) Validate() error {
 		return fmt.Errorf("broadcast_id is required")
 	}
 
-	if r.RecipientID == "" {
-		return fmt.Errorf("recipient_id is required")
+	if r.RecipientEmail == "" {
+		return fmt.Errorf("recipient_email is required")
 	}
 
 	return nil

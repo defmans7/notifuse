@@ -1,8 +1,3 @@
-// Package schema defines the database schema for development.
-//
-// DEVELOPMENT USE ONLY
-// This file contains the current database schema and is used for development and testing.
-// Before deploying to production, these table definitions should be converted to proper migrations.
 package schema
 
 // TableDefinitions contains all the SQL statements to create the database tables
@@ -57,4 +52,5 @@ var TableNames = []string{
 	"user_workspaces",
 	"workspace_invitations",
 	"contacts",
+	"broadcasts",
 }

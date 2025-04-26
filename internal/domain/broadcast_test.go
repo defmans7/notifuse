@@ -839,27 +839,27 @@ func TestSendToIndividualRequest_Validate(t *testing.T) {
 		{
 			name: "valid request",
 			request: domain.SendToIndividualRequest{
-				WorkspaceID: "workspace123",
-				BroadcastID: "broadcast123",
-				RecipientID: "recipient123",
+				WorkspaceID:    "workspace123",
+				BroadcastID:    "broadcast123",
+				RecipientEmail: "recipient@123.com",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid request with variation",
 			request: domain.SendToIndividualRequest{
-				WorkspaceID: "workspace123",
-				BroadcastID: "broadcast123",
-				RecipientID: "recipient123",
-				VariationID: "variation1",
+				WorkspaceID:    "workspace123",
+				BroadcastID:    "broadcast123",
+				RecipientEmail: "recipient@123.com",
+				VariationID:    "variation1",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing workspace ID",
 			request: domain.SendToIndividualRequest{
-				BroadcastID: "broadcast123",
-				RecipientID: "recipient123",
+				BroadcastID:    "broadcast123",
+				RecipientEmail: "recipient@123.com",
 			},
 			wantErr: true,
 			errMsg:  "workspace_id is required",
@@ -867,8 +867,8 @@ func TestSendToIndividualRequest_Validate(t *testing.T) {
 		{
 			name: "missing broadcast ID",
 			request: domain.SendToIndividualRequest{
-				WorkspaceID: "workspace123",
-				RecipientID: "recipient123",
+				WorkspaceID:    "workspace123",
+				RecipientEmail: "recipient@123.com",
 			},
 			wantErr: true,
 			errMsg:  "broadcast_id is required",
@@ -880,7 +880,7 @@ func TestSendToIndividualRequest_Validate(t *testing.T) {
 				BroadcastID: "broadcast123",
 			},
 			wantErr: true,
-			errMsg:  "recipient_id is required",
+			errMsg:  "recipient_email is required",
 		},
 	}
 

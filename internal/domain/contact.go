@@ -962,3 +962,21 @@ func (c *Contact) MergeContactLists(list *ContactList) {
 	// If we get here, this is a new list, so append it
 	c.ContactLists = append(c.ContactLists, list)
 }
+
+// ToMapOfAny converts the contact to a MapOfAny using JSON marshal/unmarshal
+// This is useful for template rendering or API responses
+func (c *Contact) ToMapOfAny() (MapOfAny, error) {
+	// Marshal the contact to JSON
+	jsonBytes, err := json.Marshal(c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal contact: %w", err)
+	}
+
+	// Unmarshal the JSON bytes into a MapOfAny
+	var result MapOfAny
+	if err := json.Unmarshal(jsonBytes, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal contact to map: %w", err)
+	}
+
+	return result, nil
+}

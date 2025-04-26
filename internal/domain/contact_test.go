@@ -1460,3 +1460,183 @@ func TestFromJSON_AdditionalCases(t *testing.T) {
 		})
 	}
 }
+
+// TestContact_ToMapOfAny tests the ToMapOfAny method
+func TestContact_ToMapOfAny(t *testing.T) {
+	now := time.Now().UTC()
+
+	tests := []struct {
+		name        string
+		contact     *Contact
+		expectError bool
+		validate    func(t *testing.T, result MapOfAny)
+	}{
+		{
+			name: "basic contact with required fields only",
+			contact: &Contact{
+				Email:     "test@example.com",
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			expectError: false,
+			validate: func(t *testing.T, result MapOfAny) {
+				assert.Equal(t, "test@example.com", result["email"])
+				assert.NotNil(t, result["created_at"])
+				assert.NotNil(t, result["updated_at"])
+			},
+		},
+		{
+			name: "contact with optional string fields",
+			contact: &Contact{
+				Email:     "test@example.com",
+				CreatedAt: now,
+				UpdatedAt: now,
+				FirstName: &NullableString{String: "John", IsNull: false},
+				LastName:  &NullableString{String: "Doe", IsNull: false},
+				Phone:     &NullableString{String: "+1234567890", IsNull: false},
+			},
+			expectError: false,
+			validate: func(t *testing.T, result MapOfAny) {
+				assert.Equal(t, "test@example.com", result["email"])
+				assert.Equal(t, "John", result["first_name"])
+				assert.Equal(t, "Doe", result["last_name"])
+				assert.Equal(t, "+1234567890", result["phone"])
+			},
+		},
+		{
+			name: "contact with numeric fields",
+			contact: &Contact{
+				Email:         "test@example.com",
+				CreatedAt:     now,
+				UpdatedAt:     now,
+				LifetimeValue: &NullableFloat64{Float64: 100.50, IsNull: false},
+				OrdersCount:   &NullableFloat64{Float64: 5, IsNull: false},
+				CustomNumber1: &NullableFloat64{Float64: 42.0, IsNull: false},
+			},
+			expectError: false,
+			validate: func(t *testing.T, result MapOfAny) {
+				assert.Equal(t, "test@example.com", result["email"])
+				assert.Equal(t, 100.50, result["lifetime_value"])
+				assert.Equal(t, float64(5), result["orders_count"])
+				assert.Equal(t, float64(42.0), result["custom_number_1"])
+			},
+		},
+		{
+			name: "contact with date fields",
+			contact: &Contact{
+				Email:       "test@example.com",
+				CreatedAt:   now,
+				UpdatedAt:   now,
+				LastOrderAt: &NullableTime{Time: now, IsNull: false},
+			},
+			expectError: false,
+			validate: func(t *testing.T, result MapOfAny) {
+				assert.Equal(t, "test@example.com", result["email"])
+				assert.NotNil(t, result["last_order_at"])
+			},
+		},
+		{
+			name: "contact with JSON fields",
+			contact: &Contact{
+				Email:     "test@example.com",
+				CreatedAt: now,
+				UpdatedAt: now,
+				CustomJSON1: &NullableJSON{
+					Data:   map[string]interface{}{"preferences": map[string]interface{}{"theme": "dark"}},
+					IsNull: false,
+				},
+				CustomJSON2: &NullableJSON{
+					Data:   []interface{}{"tag1", "tag2"},
+					IsNull: false,
+				},
+			},
+			expectError: false,
+			validate: func(t *testing.T, result MapOfAny) {
+				assert.Equal(t, "test@example.com", result["email"])
+				// JSON fields should be preserved in the map
+				prefsMap, ok := result["custom_json_1"].(map[string]interface{})
+				assert.True(t, ok)
+				preferences, ok := prefsMap["preferences"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, "dark", preferences["theme"])
+
+				tags, ok := result["custom_json_2"].([]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, 2, len(tags))
+				assert.Equal(t, "tag1", tags[0])
+				assert.Equal(t, "tag2", tags[1])
+			},
+		},
+		{
+			name: "contact with all types of fields",
+			contact: &Contact{
+				Email:           "test@example.com",
+				ExternalID:      &NullableString{String: "ext123", IsNull: false},
+				FirstName:       &NullableString{String: "John", IsNull: false},
+				LastName:        &NullableString{String: "Doe", IsNull: false},
+				LifetimeValue:   &NullableFloat64{Float64: 100.50, IsNull: false},
+				OrdersCount:     &NullableFloat64{Float64: 5, IsNull: false},
+				LastOrderAt:     &NullableTime{Time: now, IsNull: false},
+				CustomString1:   &NullableString{String: "Custom 1", IsNull: false},
+				CustomNumber1:   &NullableFloat64{Float64: 42.0, IsNull: false},
+				CustomDatetime1: &NullableTime{Time: now, IsNull: false},
+				CustomJSON1:     &NullableJSON{Data: map[string]interface{}{"key": "value"}, IsNull: false},
+				CreatedAt:       now,
+				UpdatedAt:       now,
+			},
+			expectError: false,
+			validate: func(t *testing.T, result MapOfAny) {
+				assert.Equal(t, "test@example.com", result["email"])
+				assert.Equal(t, "ext123", result["external_id"])
+				assert.Equal(t, "John", result["first_name"])
+				assert.Equal(t, "Doe", result["last_name"])
+				assert.Equal(t, 100.50, result["lifetime_value"])
+				assert.Equal(t, float64(5), result["orders_count"])
+				assert.NotNil(t, result["last_order_at"])
+				assert.Equal(t, "Custom 1", result["custom_string_1"])
+				assert.Equal(t, float64(42.0), result["custom_number_1"])
+				assert.NotNil(t, result["custom_datetime_1"])
+
+				jsonField, ok := result["custom_json_1"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, "value", jsonField["key"])
+			},
+		},
+		{
+			name: "contact with null fields",
+			contact: &Contact{
+				Email:       "test@example.com",
+				FirstName:   &NullableString{String: "", IsNull: true},
+				LastName:    &NullableString{String: "", IsNull: true},
+				CustomJSON1: &NullableJSON{Data: nil, IsNull: true},
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			},
+			expectError: false,
+			validate: func(t *testing.T, result MapOfAny) {
+				assert.Equal(t, "test@example.com", result["email"])
+				// Null fields should be converted to null/nil in the map
+				assert.Nil(t, result["first_name"])
+				assert.Nil(t, result["last_name"])
+				assert.Nil(t, result["custom_json_1"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.contact.ToMapOfAny()
+
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+
+			// Run the custom validation function
+			tt.validate(t, result)
+		})
+	}
+}

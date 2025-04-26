@@ -3,25 +3,32 @@
 - integrer https://www.npmjs.com/package/disposable-email-domains
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
-- create user segment
-- update user segment
-- delete user segment
-- get user segment
-- list user segments
+
+## broadcast
+
 - test template with transactional email provider
-- create campaign
-- update campaign
-- delete campaign
-- get campaign
-- list campaigns
 - start campaign
 - stop campaign
 - schedule campaign
+
+## API access
+
 - create service account for API access
 - delete service account
+
+## transactional email
+
 - create transactional email
 - update transactional email
 - delete transactional email
 - get transactional email
 - list transactional emails
 - test transactional email
+
+## user segments
+
+- create user segment
+- update user segment
+- delete user segment
+- get user segment
+- list user segments

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -12,9 +13,11 @@ import (
 
 // BroadcastService implements the domain.BroadcastService interface
 type BroadcastService struct {
-	repo     domain.BroadcastRepository
-	emailSvc domain.EmailServiceInterface
-	logger   logger.Logger
+	repo        domain.BroadcastRepository
+	contactRepo domain.ContactRepository
+	emailSvc    domain.EmailServiceInterface
+	templateSvc domain.TemplateService
+	logger      logger.Logger
 }
 
 // NewBroadcastService creates a new broadcast service
@@ -22,11 +25,15 @@ func NewBroadcastService(
 	repo domain.BroadcastRepository,
 	emailSvc domain.EmailServiceInterface,
 	logger logger.Logger,
+	contactRepo domain.ContactRepository,
+	templateSvc domain.TemplateService,
 ) *BroadcastService {
 	return &BroadcastService{
-		repo:     repo,
-		emailSvc: emailSvc,
-		logger:   logger,
+		repo:        repo,
+		emailSvc:    emailSvc,
+		logger:      logger,
+		contactRepo: contactRepo,
+		templateSvc: templateSvc,
 	}
 }
 
@@ -459,10 +466,10 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.BroadcastID,
-			"recipient_id": request.RecipientID,
+			"error":           err,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"recipient_email": request.RecipientEmail,
 		}).Error("Failed to validate send to individual request")
 		return err
 	}
@@ -471,10 +478,10 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.BroadcastID)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.BroadcastID,
-			"recipient_id": request.RecipientID,
+			"error":           err,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"recipient_email": request.RecipientEmail,
 		}).Error("Failed to get broadcast for individual sending")
 		return err
 	}
@@ -485,18 +492,18 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		// If no variation ID specified, use the first one
 		variationID = broadcast.TestSettings.Variations[0].ID
 		s.logger.WithFields(map[string]interface{}{
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.BroadcastID,
-			"recipient_id": request.RecipientID,
-			"variation_id": variationID,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"recipient_email": request.RecipientEmail,
+			"variation_id":    variationID,
 		}).Debug("No variation specified, using first variation")
 	} else if variationID == "" {
 		err := fmt.Errorf("broadcast has no variations")
 		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.BroadcastID,
-			"recipient_id": request.RecipientID,
+			"error":           err,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"recipient_email": request.RecipientEmail,
 		}).Error("Cannot send broadcast with no variations")
 		return err
 	}
@@ -513,49 +520,130 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	if variation == nil {
 		err := fmt.Errorf("variation with ID %s not found in broadcast", variationID)
 		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.BroadcastID,
-			"recipient_id": request.RecipientID,
-			"variation_id": variationID,
+			"error":           err,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"recipient_email": request.RecipientEmail,
+			"variation_id":    variationID,
 		}).Error("Variation not found in broadcast")
 		return err
 	}
 
-	// TODO: Fetch recipient data from recipient repository or user service
-	// This would typically involve getting the recipient's email, name, and any other personalization data
-
-	// TODO: Render template with recipient data
-	// This would involve fetching the template using the variation.TemplateID and version,
-	// then rendering it with recipient data
-
-	// Send the email
-	err = s.emailSvc.SendEmail(
-		ctx,
-		request.WorkspaceID,
-		"broadcast", // Email provider type - adjust as needed
-		variation.FromEmail,
-		variation.FromName,
-		request.RecipientID, // Assuming RecipientID is the email address for now
-		variation.Subject,
-		"Template content will go here", // Replace with actual rendered content
-	)
-	if err != nil {
+	// Fetch the contact if it exists to get the template data
+	contact, err := s.contactRepo.GetContactByEmail(ctx, request.WorkspaceID, request.RecipientEmail)
+	if err != nil && !strings.Contains(err.Error(), "contact not found") {
+		// Log other errors but still return nil,false
 		s.logger.WithFields(map[string]interface{}{
 			"error":        err,
 			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.BroadcastID,
-			"recipient_id": request.RecipientID,
-			"variation_id": variationID,
+			"email":        request.RecipientEmail,
+		}).Error("Error fetching contact by email")
+		return err
+	}
+
+	// Fetch the template
+	template, err := s.templateSvc.GetTemplateByID(ctx, request.WorkspaceID, variation.TemplateID, variation.TemplateVersion)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":            err,
+			"workspace_id":     request.WorkspaceID,
+			"broadcast_id":     request.BroadcastID,
+			"template_id":      variation.TemplateID,
+			"template_version": variation.TemplateVersion,
+		}).Error("Failed to fetch template for broadcast")
+		return err
+	}
+
+	// Prepare contact data for template
+	var templateData domain.MapOfAny
+	if contact != nil {
+		// Convert contact to JSON-compatible map using ToMapOfAny
+		contactData, err := contact.ToMapOfAny()
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"error":           err,
+				"workspace_id":    request.WorkspaceID,
+				"broadcast_id":    request.BroadcastID,
+				"recipient_email": request.RecipientEmail,
+			}).Error("Failed to convert contact to map")
+			return err
+		}
+
+		templateData = domain.MapOfAny{
+			"contact": contactData,
+			"broadcast": domain.MapOfAny{
+				"id":   broadcast.ID,
+				"name": broadcast.Name,
+			},
+			"variation": domain.MapOfAny{
+				"id":   variation.ID,
+				"name": variation.Name,
+			},
+		}
+	} else {
+		// If no contact data available, use empty data
+		templateData = domain.MapOfAny{
+			"contact": domain.MapOfAny{
+				"email": request.RecipientEmail,
+			},
+		}
+	}
+
+	// Compile the template with contact data
+	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, request.WorkspaceID, template.Email.VisualEditorTree, templateData)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":           err,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"template_id":     variation.TemplateID,
+			"recipient_email": request.RecipientEmail,
+		}).Error("Failed to compile template for broadcast")
+		return err
+	}
+
+	if !compiledTemplate.Success || compiledTemplate.HTML == nil {
+		errMsg := "Template compilation failed"
+		if compiledTemplate.Error != nil {
+			errMsg = compiledTemplate.Error.Message
+		}
+		s.logger.WithFields(map[string]interface{}{
+			"error":           errMsg,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"template_id":     variation.TemplateID,
+			"recipient_email": request.RecipientEmail,
+		}).Error("Failed to generate HTML from template")
+		return fmt.Errorf("template compilation failed: %s", errMsg)
+	}
+
+	// Send the email with compiled HTML content
+	err = s.emailSvc.SendEmail(
+		ctx,
+		request.WorkspaceID,
+		"marketing", // Email provider type - adjust as needed
+		variation.FromEmail,
+		variation.FromName,
+		request.RecipientEmail,
+		variation.Subject,
+		*compiledTemplate.HTML, // Use the compiled HTML content
+	)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":           err,
+			"workspace_id":    request.WorkspaceID,
+			"broadcast_id":    request.BroadcastID,
+			"recipient_email": request.RecipientEmail,
+			"variation_id":    variationID,
 		}).Error("Failed to send email to individual recipient")
 		return err
 	}
 
 	s.logger.WithFields(map[string]interface{}{
-		"workspace_id": request.WorkspaceID,
-		"broadcast_id": request.BroadcastID,
-		"recipient_id": request.RecipientID,
-		"variation_id": variationID,
+		"workspace_id":    request.WorkspaceID,
+		"broadcast_id":    request.BroadcastID,
+		"recipient_email": request.RecipientEmail,
+		"variation_id":    variationID,
 	}).Info("Email sent to individual recipient successfully")
 
 	// TODO: Record send event in analytics or message tracking system

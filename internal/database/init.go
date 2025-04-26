@@ -148,6 +148,33 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			deleted_at TIMESTAMP,
 			PRIMARY KEY (id, version)
 		)`,
+		`CREATE TABLE IF NOT EXISTS broadcasts (
+			id VARCHAR(32) NOT NULL,
+			workspace_id VARCHAR(32) NOT NULL,
+			name VARCHAR(255) NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			audience JSONB NOT NULL,
+			schedule JSONB NOT NULL,
+			test_settings JSONB NOT NULL,
+			goal_id VARCHAR(32),
+			tracking_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+			utm_parameters JSONB,
+			metadata JSONB,
+			sent_count INTEGER NOT NULL DEFAULT 0,
+			delivered_count INTEGER NOT NULL DEFAULT 0,
+			failed_count INTEGER NOT NULL DEFAULT 0,
+			winning_variation VARCHAR(32),
+			test_sent_at TIMESTAMP,
+			winner_sent_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL,
+			scheduled_at TIMESTAMP,
+			started_at TIMESTAMP,
+			completed_at TIMESTAMP,
+			cancelled_at TIMESTAMP,
+			paused_at TIMESTAMP,
+			PRIMARY KEY (id)
+		)`,
 	}
 
 	// Run all table creation queries

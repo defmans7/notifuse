@@ -174,6 +174,8 @@ func TestInitializeWorkspaceDatabase(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS templates").
 			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS broadcasts").
+			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err = InitializeWorkspaceDatabase(db)
 		assert.NoError(t, err)
