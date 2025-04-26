@@ -9,10 +9,11 @@ import {
   FolderOpenOutlined,
   PictureOutlined
 } from '@ant-design/icons'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { Workspace } from '../services/api/types'
-import logo from '../assets/logo.png'
 import { ContactsCsvUploadProvider } from '../components/contacts/ContactsCsvUploadProvider'
+import { useState } from 'react'
 
 const { Content, Sider } = Layout
 
@@ -20,6 +21,7 @@ export function WorkspaceLayout() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
   const { signout, workspaces, user } = useAuth()
   const navigate = useNavigate()
+  const [collapsed, setCollapsed] = useState(false)
 
   // Use useMatches to determine the current route path
   const matches = useMatches()
@@ -107,42 +109,51 @@ export function WorkspaceLayout() {
     <ContactsCsvUploadProvider workspaceId={workspaceId}>
       <Layout style={{ minHeight: '100vh' }}>
         <Layout>
-          <Sider width={250} theme="light" style={{ position: 'relative' }}>
-            <div style={{ padding: '16px 0 0 24px' }}>
-              <img
-                src={logo}
-                alt="Notifuse"
-                style={{ height: '32px', cursor: 'pointer' }}
-                onClick={() => navigate({ to: '/' })}
-              />
-            </div>
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <Select
-                value={workspaceId}
-                onChange={handleWorkspaceChange}
-                style={{ width: '100%' }}
-                placeholder="Select workspace"
-                options={workspaces.map((workspace: Workspace) => ({
-                  label: (
-                    <Space>
-                      {workspace.settings.logo_url && (
-                        <img
-                          src={workspace.settings.logo_url}
-                          alt=""
-                          style={{
-                            height: '16px',
-                            width: '16px',
-                            marginRight: '8px',
-                            objectFit: 'contain',
-                            verticalAlign: 'middle'
-                          }}
-                        />
-                      )}
-                      {workspace.name}
-                    </Space>
-                  ),
-                  value: workspace.id
-                }))}
+          <Sider
+            width={224}
+            theme="light"
+            style={{ position: 'relative' }}
+            collapsible
+            collapsed={collapsed}
+            trigger={null}
+          >
+            <div
+              style={{ padding: '24px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              {!collapsed && (
+                <Select
+                  value={workspaceId}
+                  onChange={handleWorkspaceChange}
+                  style={{ width: '100%' }}
+                  placeholder="Select workspace"
+                  options={workspaces.map((workspace: Workspace) => ({
+                    label: (
+                      <Space>
+                        {workspace.settings.logo_url && (
+                          <img
+                            src={workspace.settings.logo_url}
+                            alt=""
+                            style={{
+                              height: '16px',
+                              width: '16px',
+                              marginRight: '8px',
+                              objectFit: 'contain',
+                              verticalAlign: 'middle'
+                            }}
+                          />
+                        )}
+                        {workspace.name}
+                      </Space>
+                    ),
+                    value: workspace.id
+                  }))}
+                />
+              )}
+              <Button
+                type="text"
+                icon={collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                onClick={() => setCollapsed(!collapsed)}
+                style={{ fontSize: '16px' }}
               />
             </div>
             <Menu
@@ -156,37 +167,48 @@ export function WorkspaceLayout() {
                 position: 'fixed',
                 bottom: 0,
                 left: 0,
-                width: '250px',
+                width: collapsed ? '80px' : '224px',
                 padding: '16px',
                 borderTop: '1px solid #f0f0f0',
                 background: '#fff',
-                zIndex: 1
+                zIndex: 1,
+                transition: 'width 0.2s'
               }}
             >
-              <Dropdown
-                menu={{
-                  items: [
-                    {
-                      key: 'logout',
-                      label: (
-                        <Space>
-                          <LogoutOutlined />
-                          Logout
-                        </Space>
-                      ),
-                      onClick: () => signout()
-                    }
-                  ]
-                }}
-                trigger={['click']}
-                placement="bottomRight"
-              >
-                <Button type="text" block>
-                  <div style={{ padding: '4px 8px', color: '#595959', cursor: 'pointer' }}>
-                    {user?.email}
-                  </div>
-                </Button>
-              </Dropdown>
+              {!collapsed && (
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'logout',
+                        label: (
+                          <Space>
+                            <LogoutOutlined />
+                            Logout
+                          </Space>
+                        ),
+                        onClick: () => signout()
+                      }
+                    ]
+                  }}
+                  trigger={['click']}
+                  placement="bottomRight"
+                >
+                  <Button type="text" block>
+                    <div style={{ padding: '4px 8px', color: '#595959', cursor: 'pointer' }}>
+                      {user?.email}
+                    </div>
+                  </Button>
+                </Dropdown>
+              )}
+              {collapsed && (
+                <Button
+                  type="text"
+                  icon={<LogoutOutlined />}
+                  onClick={() => signout()}
+                  style={{ width: '100%' }}
+                />
+              )}
             </div>
           </Sider>
           <Layout style={{ padding: '24px' }}>

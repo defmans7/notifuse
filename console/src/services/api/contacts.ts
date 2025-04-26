@@ -73,7 +73,7 @@ export interface Contact {
 
 export interface ListContactsResponse {
   contacts: Contact[]
-  cursor?: string
+  next_cursor?: string
 }
 
 export enum UpsertContactOperationAction {

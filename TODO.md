@@ -3,7 +3,6 @@
 - integrer https://www.npmjs.com/package/disposable-email-domains
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
-- cursor pagination contact : id + created_at
 - create user segment
 - update user segment
 - delete user segment

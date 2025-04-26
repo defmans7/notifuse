@@ -69,6 +69,11 @@ export function ContactsPage() {
   const [visibleColumns, setVisibleColumns] =
     React.useState<Record<string, boolean>>(DEFAULT_VISIBLE_COLUMNS)
 
+  // Track accumulated contacts
+  const [allContacts, setAllContacts] = React.useState<Contact[]>([])
+  // Track cursor state internally instead of in URL
+  const [currentCursor, setCurrentCursor] = React.useState<string | undefined>(undefined)
+
   // Fetch lists for the current workspace
   const { data: listsData } = useQuery({
     queryKey: ['lists', workspaceId],
@@ -147,12 +152,12 @@ export function ContactsPage() {
       })
   }, [search])
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['contacts', workspaceId, search],
-    queryFn: () => {
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['contacts', workspaceId, { ...search, cursor: currentCursor }],
+    queryFn: async () => {
       const request: ListContactsRequest = {
         workspace_id: workspaceId,
-        cursor: search.cursor,
+        cursor: currentCursor,
         limit: search.limit || 10,
         email: search.email,
         external_id: search.external_id,
@@ -164,8 +169,43 @@ export function ContactsPage() {
         with_contact_lists: true
       }
       return contactsApi.list(request)
-    }
+    },
+    // Add staleTime to prevent unnecessary refetches
+    staleTime: 30000
   })
+
+  // Update allContacts when data changes - modified to handle first load correctly
+  React.useEffect(() => {
+    // If data is still loading or not available, don't update
+    if (isLoading || !data) return
+
+    // If we have data
+    if (data.contacts) {
+      if (!currentCursor) {
+        // Initial load or filter change - replace all contacts
+        setAllContacts(data.contacts)
+      } else if (data.contacts.length > 0) {
+        // If we have a cursor and new contacts, append them
+        setAllContacts((prev) => [...prev, ...data.contacts])
+      }
+    }
+  }, [data, currentCursor, isLoading])
+
+  // Reset contacts and cursor when filters change
+  React.useEffect(() => {
+    // Reset accumulated contacts and cursor when search params change
+    setAllContacts([])
+    setCurrentCursor(undefined)
+  }, [
+    search.email,
+    search.external_id,
+    search.first_name,
+    search.last_name,
+    search.phone,
+    search.country,
+    search.language,
+    search.limit
+  ])
 
   const columns: ColumnsType<Contact> = [
     {
@@ -428,18 +468,14 @@ export function ContactsPage() {
   ].filter((col) => !col.hidden)
 
   const handleLoadMore = () => {
-    if (data?.cursor) {
-      navigate({
-        to: workspaceContactsRoute.id,
-        search: {
-          ...search,
-          cursor: data.cursor
-        },
-        params: { workspaceId },
-        replace: true
-      })
+    if (data?.next_cursor) {
+      setCurrentCursor(data.next_cursor)
     }
   }
+
+  // Show empty state when there's no data and no loading
+  const showEmptyState =
+    !isLoading && !isFetching && (!data || data.contacts.length === 0) && allContacts.length === 0
 
   return (
     <div className="p-6">
@@ -473,17 +509,22 @@ export function ContactsPage() {
 
       <Table
         columns={columns}
-        dataSource={data?.contacts}
+        dataSource={allContacts}
         rowKey={(record) => record.email}
-        loading={isLoading}
+        loading={isLoading || isFetching}
         pagination={false}
         scroll={{ x: 'max-content' }}
         style={{ minWidth: 800 }}
+        locale={{
+          emptyText: showEmptyState
+            ? 'No contacts found. Add some contacts to get started.'
+            : 'Loading...'
+        }}
       />
 
-      {data?.cursor && (
+      {data?.next_cursor && (
         <div className="flex justify-center mt-4">
-          <Button onClick={handleLoadMore} loading={isLoading}>
+          <Button onClick={handleLoadMore} loading={isLoading || isFetching}>
             Load More
           </Button>
         </div>
