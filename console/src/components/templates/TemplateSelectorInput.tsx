@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Input, Drawer, List, Empty, Spin, Button } from 'antd'
-import { EyeOutlined, SearchOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons'
+import { EyeOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
 import type { Template } from '../../services/api/types'

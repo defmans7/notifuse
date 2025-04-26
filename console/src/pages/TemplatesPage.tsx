@@ -16,7 +16,13 @@ import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
 import { emailService } from '../services/api/email'
 import type { Template, Workspace } from '../services/api/types'
-import { EditOutlined, EyeOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons'
+import {
+  EditOutlined,
+  EyeOutlined,
+  DeleteOutlined,
+  SendOutlined,
+  CopyOutlined
+} from '@ant-design/icons'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
 import { renderCategoryTag } from '../components/templates'
 import { useAuth } from '../contexts/AuthContext'
@@ -298,6 +304,18 @@ export function TemplatesPage() {
                   template={record}
                   workspace={workspace}
                   buttonContent={<EditOutlined />}
+                  buttonProps={{ type: 'text', size: 'small' }}
+                />
+              </>
+            </Tooltip>
+          )}
+          {workspace && (
+            <Tooltip title="Clone Template">
+              <>
+                <CreateTemplateDrawer
+                  fromTemplate={record}
+                  workspace={workspace}
+                  buttonContent={<CopyOutlined />}
                   buttonProps={{ type: 'text', size: 'small' }}
                 />
               </>
