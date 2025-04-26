@@ -311,7 +311,86 @@ func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.P
 
 // ResumeBroadcast resumes a paused broadcast
 func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.ResumeBroadcastRequest) error {
-	// TODO: Implement
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to validate resume broadcast request")
+		return err
+	}
+
+	// Retrieve the broadcast
+	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.ID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to get broadcast for resuming")
+		return err
+	}
+
+	// Only paused broadcasts can be resumed
+	if broadcast.Status != domain.BroadcastStatusPaused {
+		err := fmt.Errorf("only broadcasts with paused status can be resumed, current status: %s", broadcast.Status)
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+			"status":       broadcast.Status,
+		}).Error("Cannot resume broadcast with invalid status")
+		return err
+	}
+
+	// Update broadcast status
+	now := time.Now().UTC()
+	broadcast.UpdatedAt = now
+
+	// If broadcast was originally scheduled and not yet started
+	if broadcast.ScheduledAt != nil && broadcast.ScheduledAt.After(now) && broadcast.StartedAt == nil {
+		broadcast.Status = domain.BroadcastStatusScheduled
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+			"scheduled_at": broadcast.ScheduledAt,
+		}).Info("Broadcast resumed to scheduled status")
+	} else {
+		// If broadcast was already in progress or scheduled time has passed
+		broadcast.Status = domain.BroadcastStatusSending
+		if broadcast.StartedAt == nil {
+			broadcast.StartedAt = &now
+		}
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+			"started_at":   broadcast.StartedAt,
+		}).Info("Broadcast resumed to sending status")
+	}
+
+	// Clear the paused timestamp
+	broadcast.PausedAt = nil
+
+	// Persist the changes
+	err = s.repo.UpdateBroadcast(ctx, broadcast)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to update broadcast in repository")
+		return err
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"workspace_id": request.WorkspaceID,
+		"broadcast_id": request.ID,
+		"status":       broadcast.Status,
+	}).Info("Broadcast resumed successfully")
+
+	// TODO: Trigger message processing if status is sending
+
 	return nil
 }
 
@@ -377,6 +456,109 @@ func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.
 
 // SendToIndividual sends a broadcast to an individual recipient
 func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain.SendToIndividualRequest) error {
-	// TODO: Implement
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"recipient_id": request.RecipientID,
+		}).Error("Failed to validate send to individual request")
+		return err
+	}
+
+	// Retrieve the broadcast
+	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.BroadcastID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"recipient_id": request.RecipientID,
+		}).Error("Failed to get broadcast for individual sending")
+		return err
+	}
+
+	// Determine which variation to use
+	variationID := request.VariationID
+	if variationID == "" && len(broadcast.TestSettings.Variations) > 0 {
+		// If no variation ID specified, use the first one
+		variationID = broadcast.TestSettings.Variations[0].ID
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"recipient_id": request.RecipientID,
+			"variation_id": variationID,
+		}).Debug("No variation specified, using first variation")
+	} else if variationID == "" {
+		err := fmt.Errorf("broadcast has no variations")
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"recipient_id": request.RecipientID,
+		}).Error("Cannot send broadcast with no variations")
+		return err
+	}
+
+	// Find the specified variation
+	var variation *domain.BroadcastVariation
+	for _, v := range broadcast.TestSettings.Variations {
+		if v.ID == variationID {
+			variation = &v
+			break
+		}
+	}
+
+	if variation == nil {
+		err := fmt.Errorf("variation with ID %s not found in broadcast", variationID)
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"recipient_id": request.RecipientID,
+			"variation_id": variationID,
+		}).Error("Variation not found in broadcast")
+		return err
+	}
+
+	// TODO: Fetch recipient data from recipient repository or user service
+	// This would typically involve getting the recipient's email, name, and any other personalization data
+
+	// TODO: Render template with recipient data
+	// This would involve fetching the template using the variation.TemplateID and version,
+	// then rendering it with recipient data
+
+	// Send the email
+	err = s.emailSvc.SendEmail(
+		ctx,
+		request.WorkspaceID,
+		"broadcast", // Email provider type - adjust as needed
+		variation.FromEmail,
+		variation.FromName,
+		request.RecipientID, // Assuming RecipientID is the email address for now
+		variation.Subject,
+		"Template content will go here", // Replace with actual rendered content
+	)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"recipient_id": request.RecipientID,
+			"variation_id": variationID,
+		}).Error("Failed to send email to individual recipient")
+		return err
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"workspace_id": request.WorkspaceID,
+		"broadcast_id": request.BroadcastID,
+		"recipient_id": request.RecipientID,
+		"variation_id": variationID,
+	}).Info("Email sent to individual recipient successfully")
+
+	// TODO: Record send event in analytics or message tracking system
+
 	return nil
 }

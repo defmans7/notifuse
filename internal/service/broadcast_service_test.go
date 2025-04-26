@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1497,4 +1499,459 @@ func TestBroadcastService_PauseBroadcast(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "database error")
 	})
+}
+
+func TestBroadcastService_SendToIndividual(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockLogger := mocks.NewMockLogger(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+
+	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger)
+
+	// Common test data
+	workspaceID := "workspace123"
+	broadcastID := "broadcast123"
+	recipientID := "recipient123"
+	variationID := "variation123"
+
+	// Create a sample broadcast
+	broadcast := &domain.Broadcast{
+		ID:          broadcastID,
+		WorkspaceID: workspaceID,
+		Status:      domain.BroadcastStatusDraft,
+		TestSettings: domain.BroadcastTestSettings{
+			Variations: []domain.BroadcastVariation{
+				{
+					ID:        variationID,
+					Name:      "Variation A",
+					Subject:   "Test Subject",
+					FromName:  "Test Sender",
+					FromEmail: "test@example.com",
+				},
+				{
+					ID:        "variation456",
+					Name:      "Variation B",
+					Subject:   "Another Subject",
+					FromName:  "Another Sender",
+					FromEmail: "another@example.com",
+				},
+			},
+		},
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID: workspaceID,
+			BroadcastID: broadcastID,
+			RecipientID: recipientID,
+			VariationID: variationID,
+		}
+
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		selectedVariation := broadcast.TestSettings.Variations[0]
+		mockEmailSvc.EXPECT().SendEmail(
+			gomock.Any(),
+			workspaceID,
+			"broadcast",
+			selectedVariation.FromEmail,
+			selectedVariation.FromName,
+			recipientID,
+			selectedVariation.Subject,
+			gomock.Any(),
+		).Return(nil)
+
+		err := service.SendToIndividual(context.Background(), request)
+		assert.NoError(t, err)
+	})
+
+	t.Run("DefaultVariation", func(t *testing.T) {
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID: workspaceID,
+			BroadcastID: broadcastID,
+			RecipientID: recipientID,
+			// No variation ID specified, should use the first one
+		}
+
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		firstVariation := broadcast.TestSettings.Variations[0]
+		mockEmailSvc.EXPECT().SendEmail(
+			gomock.Any(),
+			workspaceID,
+			"broadcast",
+			firstVariation.FromEmail,
+			firstVariation.FromName,
+			recipientID,
+			firstVariation.Subject,
+			gomock.Any(),
+		).Return(nil)
+
+		err := service.SendToIndividual(context.Background(), request)
+		assert.NoError(t, err)
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID: workspaceID,
+			BroadcastID: broadcastID,
+			// Missing RecipientID
+		}
+
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		err := service.SendToIndividual(context.Background(), request)
+		assert.Error(t, err)
+		// No repository calls should be made
+	})
+
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID: workspaceID,
+			BroadcastID: broadcastID,
+			RecipientID: recipientID,
+		}
+
+		notFoundErr := &domain.ErrBroadcastNotFound{ID: broadcastID}
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(nil, notFoundErr)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		err := service.SendToIndividual(context.Background(), request)
+		assert.Error(t, err)
+		assert.Equal(t, notFoundErr, err)
+	})
+
+	t.Run("NoVariations", func(t *testing.T) {
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID: workspaceID,
+			BroadcastID: broadcastID,
+			RecipientID: recipientID,
+		}
+
+		broadcastNoVariations := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Variations: []domain.BroadcastVariation{}, // Empty variations
+			},
+		}
+
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcastNoVariations, nil)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		err := service.SendToIndividual(context.Background(), request)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcast has no variations")
+	})
+
+	t.Run("VariationNotFound", func(t *testing.T) {
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID: workspaceID,
+			BroadcastID: broadcastID,
+			RecipientID: recipientID,
+			VariationID: "non-existent-variation",
+		}
+
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		err := service.SendToIndividual(context.Background(), request)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "variation with ID non-existent-variation not found")
+	})
+
+	t.Run("EmailServiceError", func(t *testing.T) {
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID: workspaceID,
+			BroadcastID: broadcastID,
+			RecipientID: recipientID,
+			VariationID: variationID,
+		}
+
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		selectedVariation := broadcast.TestSettings.Variations[0]
+		emailError := errors.New("email service error")
+		mockEmailSvc.EXPECT().SendEmail(
+			gomock.Any(),
+			workspaceID,
+			"broadcast",
+			selectedVariation.FromEmail,
+			selectedVariation.FromName,
+			recipientID,
+			selectedVariation.Subject,
+			gomock.Any(),
+		).Return(emailError)
+
+		err := service.SendToIndividual(context.Background(), request)
+		assert.Error(t, err)
+		assert.Equal(t, emailError, err)
+	})
+}
+
+func TestBroadcastService_ResumeBroadcast(t *testing.T) {
+	now := time.Now().UTC()
+	futureTime := now.Add(24 * time.Hour)
+	pastTime := now.Add(-24 * time.Hour)
+	workspaceID := uuid.New().String()
+	broadcastID := uuid.New().String()
+
+	tests := []struct {
+		name           string
+		request        *domain.ResumeBroadcastRequest
+		setupMocks     func(*mocks.MockBroadcastRepository, *pkgmocks.MockLogger)
+		expectedError  error
+		expectedStatus domain.BroadcastStatus
+	}{
+		{
+			name: "ResumeToScheduled",
+			request: &domain.ResumeBroadcastRequest{
+				WorkspaceID: workspaceID,
+				ID:          broadcastID,
+			},
+			setupMocks: func(mockRepo *mocks.MockBroadcastRepository, mockLogger *pkgmocks.MockLogger) {
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+				mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+				mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+				pausedBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusPaused,
+					ScheduledAt: &futureTime,
+					PausedAt:    nil,
+					StartedAt:   nil,
+				}
+
+				expectedBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusScheduled,
+					ScheduledAt: &futureTime,
+					PausedAt:    nil,
+					StartedAt:   nil,
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(pausedBroadcast, nil)
+				mockRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, broadcast *domain.Broadcast) error {
+						assert.Equal(t, expectedBroadcast.Status, broadcast.Status)
+						assert.Equal(t, expectedBroadcast.ScheduledAt, broadcast.ScheduledAt)
+						assert.Nil(t, broadcast.PausedAt)
+						assert.Nil(t, broadcast.StartedAt)
+						// Validate UpdatedAt is set and recent
+						assert.False(t, broadcast.UpdatedAt.IsZero())
+						assert.WithinDuration(t, time.Now(), broadcast.UpdatedAt, 2*time.Second)
+						return nil
+					})
+			},
+			expectedError:  nil,
+			expectedStatus: domain.BroadcastStatusScheduled,
+		},
+		{
+			name: "ResumeToSending_PastSchedule",
+			request: &domain.ResumeBroadcastRequest{
+				WorkspaceID: workspaceID,
+				ID:          broadcastID,
+			},
+			setupMocks: func(mockRepo *mocks.MockBroadcastRepository, mockLogger *pkgmocks.MockLogger) {
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+				mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+				mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+				pausedBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusPaused,
+					ScheduledAt: &pastTime,
+					PausedAt:    nil,
+				}
+
+				expectedBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusSending,
+					ScheduledAt: &pastTime,
+					PausedAt:    nil,
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(pausedBroadcast, nil)
+				mockRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, broadcast *domain.Broadcast) error {
+						assert.Equal(t, expectedBroadcast.Status, broadcast.Status)
+						assert.Equal(t, expectedBroadcast.ScheduledAt, broadcast.ScheduledAt)
+						assert.Nil(t, broadcast.PausedAt)
+						assert.NotNil(t, broadcast.StartedAt)
+						// Validate UpdatedAt is set and recent
+						assert.False(t, broadcast.UpdatedAt.IsZero())
+						assert.False(t, broadcast.StartedAt.IsZero())
+						assert.WithinDuration(t, time.Now(), broadcast.UpdatedAt, 2*time.Second)
+						assert.WithinDuration(t, time.Now(), *broadcast.StartedAt, 2*time.Second)
+						return nil
+					})
+			},
+			expectedError:  nil,
+			expectedStatus: domain.BroadcastStatusSending,
+		},
+		{
+			name: "ResumeToSending_AlreadyStarted",
+			request: &domain.ResumeBroadcastRequest{
+				WorkspaceID: workspaceID,
+				ID:          broadcastID,
+			},
+			setupMocks: func(mockRepo *mocks.MockBroadcastRepository, mockLogger *pkgmocks.MockLogger) {
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+				mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+				mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+				startTime := pastTime.Add(1 * time.Hour)
+				pausedBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusPaused,
+					ScheduledAt: &pastTime,
+					PausedAt:    nil,
+					StartedAt:   &startTime,
+				}
+
+				expectedBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusSending,
+					ScheduledAt: &pastTime,
+					PausedAt:    nil,
+					StartedAt:   &startTime,
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(pausedBroadcast, nil)
+				mockRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, broadcast *domain.Broadcast) error {
+						assert.Equal(t, expectedBroadcast.Status, broadcast.Status)
+						assert.Equal(t, expectedBroadcast.ScheduledAt, broadcast.ScheduledAt)
+						assert.Nil(t, broadcast.PausedAt)
+						assert.Equal(t, startTime, *broadcast.StartedAt)
+						// Validate UpdatedAt is set and recent
+						assert.False(t, broadcast.UpdatedAt.IsZero())
+						assert.WithinDuration(t, time.Now(), broadcast.UpdatedAt, 2*time.Second)
+						return nil
+					})
+			},
+			expectedError:  nil,
+			expectedStatus: domain.BroadcastStatusSending,
+		},
+		{
+			name: "ValidationError",
+			request: &domain.ResumeBroadcastRequest{
+				// Missing WorkspaceID
+				ID: broadcastID,
+			},
+			setupMocks: func(mockRepo *mocks.MockBroadcastRepository, mockLogger *pkgmocks.MockLogger) {
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+				mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+				// No repository calls expected
+			},
+			expectedError: errors.New("workspace_id is required"),
+		},
+		{
+			name: "BroadcastNotFound",
+			request: &domain.ResumeBroadcastRequest{
+				WorkspaceID: workspaceID,
+				ID:          broadcastID,
+			},
+			setupMocks: func(mockRepo *mocks.MockBroadcastRepository, mockLogger *pkgmocks.MockLogger) {
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+				mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(nil, errors.New("broadcast not found"))
+			},
+			expectedError: errors.New("broadcast not found"),
+		},
+		{
+			name: "NonPausedStatus",
+			request: &domain.ResumeBroadcastRequest{
+				WorkspaceID: workspaceID,
+				ID:          broadcastID,
+			},
+			setupMocks: func(mockRepo *mocks.MockBroadcastRepository, mockLogger *pkgmocks.MockLogger) {
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+				mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+				draftBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusDraft,
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(draftBroadcast, nil)
+			},
+			expectedError: fmt.Errorf("only broadcasts with paused status can be resumed, current status: %s", domain.BroadcastStatusDraft),
+		},
+		{
+			name: "RepositoryError",
+			request: &domain.ResumeBroadcastRequest{
+				WorkspaceID: workspaceID,
+				ID:          broadcastID,
+			},
+			setupMocks: func(mockRepo *mocks.MockBroadcastRepository, mockLogger *pkgmocks.MockLogger) {
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+				mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+				mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+				pausedBroadcast := &domain.Broadcast{
+					ID:          broadcastID,
+					WorkspaceID: workspaceID,
+					Status:      domain.BroadcastStatusPaused,
+					ScheduledAt: &futureTime,
+					PausedAt:    nil,
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(pausedBroadcast, nil)
+				mockRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(errors.New("repository error"))
+			},
+			expectedError: errors.New("repository error"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+			mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+			mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+			service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger)
+
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockRepo, mockLogger)
+			}
+
+			err := service.ResumeBroadcast(context.Background(), tt.request)
+
+			if tt.expectedError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
