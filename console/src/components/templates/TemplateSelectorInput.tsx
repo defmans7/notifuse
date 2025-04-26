@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Input, Drawer, List, Empty, Spin, Button } from 'antd'
-import { EyeOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons'
+import { EyeOutlined, SearchOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
 import type { Template } from '../../services/api/types'
@@ -22,6 +22,7 @@ interface TemplateSelectorInputProps {
     | 'blocklist'
     | 'other'
   placeholder?: string
+  utmDisabled?: boolean
 }
 
 const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
@@ -29,7 +30,8 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
   onChange,
   workspaceId,
   category,
-  placeholder = 'Select a template'
+  placeholder = 'Select a template',
+  utmDisabled = false
 }) => {
   const [open, setOpen] = useState<boolean>(false)
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
@@ -106,6 +108,15 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
     }, 500)
   }
 
+  // Handle clone template complete - same as handleTemplateCreated
+  const handleTemplateCloned = async () => {
+    await refetch()
+    // Templates will be refetched, wait for the drawer to close before refetching
+    setTimeout(() => {
+      setOpen(true) // Reopen the template selection drawer
+    }, 500)
+  }
+
   return (
     <>
       <Input
@@ -131,13 +142,27 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
           body: { paddingBottom: 80 }
         }}
       >
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
           <Input
             placeholder="Search templates..."
             prefix={<SearchOutlined />}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ flex: 1 }}
           />
+          {currentWorkspace && (
+            <CreateTemplateDrawer
+              workspace={currentWorkspace}
+              category={category}
+              utmDisabled={utmDisabled}
+              buttonProps={{
+                type: 'primary',
+                icon: <PlusOutlined />,
+                children: null
+              }}
+              onClose={handleTemplateCreated}
+            />
+          )}
         </div>
 
         {isLoading ? (
@@ -147,13 +172,30 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
         ) : filteredTemplates.length > 0 ? (
           <List
             itemLayout="horizontal"
+            bordered
             dataSource={filteredTemplates}
+            size="small"
             renderItem={(template) => (
               <List.Item
                 actions={[
                   <TemplatePreviewPopover key="preview" record={template} workspaceId={workspaceId}>
                     <Button type="text" icon={<EyeOutlined />} />
                   </TemplatePreviewPopover>,
+                  currentWorkspace && (
+                    <CreateTemplateDrawer
+                      key="clone"
+                      workspace={currentWorkspace}
+                      fromTemplate={template}
+                      category={category}
+                      utmDisabled={utmDisabled}
+                      buttonProps={{
+                        type: 'link',
+                        title: 'Clone'
+                      }}
+                      buttonContent="Clone"
+                      onClose={handleTemplateCloned}
+                    />
+                  ),
                   <Button key="select" type="link" onClick={() => handleSelect(template)}>
                     Select
                   </Button>
@@ -183,11 +225,12 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
               <CreateTemplateDrawer
                 workspace={currentWorkspace}
                 category={category}
+                utmDisabled={utmDisabled}
                 buttonProps={{
                   type: 'primary',
                   icon: <PlusOutlined />,
                   children: category
-                    ? `Create New ${category.replace('_', ' ')} Template`
+                    ? `Create New ${category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' ')} Template`
                     : 'Create New Template'
                 }}
                 onClose={handleTemplateCreated}

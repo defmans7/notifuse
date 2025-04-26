@@ -34,13 +34,12 @@ import { workspaceService } from '../../services/api/workspace'
 interface CreateTemplateDrawerProps {
   workspace: Workspace
   template?: Template
+  fromTemplate?: Template
   buttonProps?: any
   buttonContent?: React.ReactNode
   onClose?: () => void
   category?: string
-  utmSource?: string
-  utmMedium?: string
-  utmCampaign?: string
+  utmDisabled?: boolean
 }
 
 // Combine default block definitions with any custom ones
@@ -165,13 +164,12 @@ export const renderCategoryTag = (category: string) => {
 export function CreateTemplateDrawer({
   workspace,
   template,
+  fromTemplate,
   buttonProps = {},
   buttonContent,
   onClose,
   category,
-  utmSource,
-  utmMedium,
-  utmCampaign
+  utmDisabled = false
 }: CreateTemplateDrawerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
@@ -280,10 +278,44 @@ export function CreateTemplateDrawer({
           visual_editor_tree: template.email?.visual_editor_tree || createDefaultBlocks()
         },
         test_data: template.test_data || defaultTestData,
-        utm_source: template.utm_source || utmSource || undefined,
-        utm_medium: template.utm_medium || utmMedium || 'email',
-        utm_campaign: template.utm_campaign || utmCampaign || undefined
+        utm_source: template.utm_source || undefined,
+        utm_medium: template.utm_medium || 'email',
+        utm_campaign: template.utm_campaign || undefined
       })
+    } else if (fromTemplate) {
+      // Clone template functionality - append "copy" as suffix instead of "Copy of" prefix
+      form.setFieldsValue({
+        name: `${fromTemplate.name} copy`,
+        id: kebabCase(`${fromTemplate.name}-copy`),
+        category: fromTemplate.category || category || undefined,
+        email: {
+          from_address: fromTemplate.email?.from_address || '',
+          from_name: fromTemplate.email?.from_name || '',
+          reply_to: fromTemplate.email?.reply_to || undefined,
+          subject: fromTemplate.email?.subject || '',
+          subject_preview: fromTemplate.email?.subject_preview || '',
+          content: fromTemplate.email?.mjml || '',
+          visual_editor_tree: fromTemplate.email?.visual_editor_tree || createDefaultBlocks()
+        },
+        test_data: fromTemplate.test_data || defaultTestData,
+        utm_source: fromTemplate.utm_source || undefined,
+        utm_medium: fromTemplate.utm_medium || 'email',
+        utm_campaign: fromTemplate.utm_campaign || undefined
+      })
+
+      // Update the visual editor tree
+      if (fromTemplate.email?.visual_editor_tree) {
+        if (typeof fromTemplate.email.visual_editor_tree === 'object') {
+          setVisualEditorTree(fromTemplate.email.visual_editor_tree as unknown as BlockInterface)
+        } else {
+          try {
+            setVisualEditorTree(JSON.parse(fromTemplate.email.visual_editor_tree) as BlockInterface)
+          } catch (error) {
+            console.error('Error parsing visual editor tree:', error)
+            message.error('Error loading template: Invalid template data')
+          }
+        }
+      }
     }
     setIsOpen(true)
   }
@@ -327,11 +359,20 @@ export function CreateTemplateDrawer({
   return (
     <>
       <Button type="primary" onClick={showDrawer} {...buttonProps}>
-        {buttonContent || (template ? 'Edit Template' : 'Create Template')}
+        {buttonContent ||
+          (template ? 'Edit Template' : fromTemplate ? 'Clone Template' : 'Create Template')}
       </Button>
       {isOpen && (
         <Drawer
-          title={<>{template ? 'Edit email template' : 'Create an email template'}</>}
+          title={
+            <>
+              {template
+                ? 'Edit email template'
+                : fromTemplate
+                  ? 'Clone email template'
+                  : 'Create an email template'}
+            </>
+          }
           closable={true}
           keyboard={false}
           maskClosable={false}
@@ -406,9 +447,9 @@ export function CreateTemplateDrawer({
             initialValues={{
               'email.visual_editor_tree': visualEditorTree,
               category: category || undefined,
-              utm_source: utmSource || '',
-              utm_medium: utmMedium || 'email',
-              utm_campaign: utmCampaign || '',
+              utm_source: '',
+              utm_medium: 'email',
+              utm_campaign: '',
               test_data: defaultTestData
             }}
           >
@@ -590,52 +631,49 @@ export function CreateTemplateDrawer({
                     </Col>
                   </Row>
 
-                  <div className="text-lg mt-4 mb-8 font-bold">URL Tracking</div>
+                  {!utmDisabled && (
+                    <>
+                      <div className="text-lg mt-4 mb-8 font-bold">URL Tracking</div>
 
-                  <Alert
-                    type="info"
-                    className="!mb-6"
-                    message="The utm parameters will be automatically added to your email links."
-                  />
+                      <Alert
+                        type="info"
+                        className="!mb-6"
+                        message="The utm parameters will be automatically added to your email links."
+                      />
 
-                  {utmCampaign && (
-                    <Alert
-                      type="info"
-                      className="!mb-6"
-                      message="The utm_source / medium / campaign parameters are already defined at the Campaign level."
-                    />
+                      <Row gutter={24}>
+                        <Col span={8}>
+                          <Form.Item
+                            name="utm_source"
+                            label="utm_source"
+                            rules={[{ required: false, type: 'string' }]}
+                          >
+                            <Input placeholder="business.com" />
+                          </Form.Item>
+                        </Col>
+
+                        <Col span={8}>
+                          <Form.Item
+                            name="utm_medium"
+                            label="utm_medium"
+                            rules={[{ required: false, type: 'string' }]}
+                          >
+                            <Input placeholder="email" />
+                          </Form.Item>
+                        </Col>
+
+                        <Col span={8}>
+                          <Form.Item
+                            name="utm_campaign"
+                            label="utm_campaign"
+                            rules={[{ required: false, type: 'string' }]}
+                          >
+                            <Input />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </>
                   )}
-                  <Row gutter={24}>
-                    <Col span={8}>
-                      <Form.Item
-                        name="utm_source"
-                        label="utm_source"
-                        rules={[{ required: false, type: 'string' }]}
-                      >
-                        <Input placeholder="business.com" disabled={utmSource ? true : false} />
-                      </Form.Item>
-                    </Col>
-
-                    <Col span={8}>
-                      <Form.Item
-                        name="utm_medium"
-                        label="utm_medium"
-                        rules={[{ required: false, type: 'string' }]}
-                      >
-                        <Input placeholder="email" disabled={utmMedium ? true : false} />
-                      </Form.Item>
-                    </Col>
-
-                    <Col span={8}>
-                      <Form.Item
-                        name="utm_campaign"
-                        label="utm_campaign"
-                        rules={[{ required: false, type: 'string' }]}
-                      >
-                        <Input disabled={utmCampaign ? true : false} />
-                      </Form.Item>
-                    </Col>
-                  </Row>
                 </div>
               </div>
 

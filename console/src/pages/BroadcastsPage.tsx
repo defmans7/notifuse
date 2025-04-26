@@ -17,6 +17,7 @@ import {
 } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { broadcastApi, Broadcast, BroadcastStatus } from '../services/api/broadcast'
+import { listsApi } from '../services/api/list'
 import {
   CalendarOutlined,
   SendOutlined,
@@ -77,6 +78,16 @@ export function BroadcastsPage() {
       return broadcastApi.list({ workspace_id: workspaceId })
     }
   })
+
+  // Fetch lists for the current workspace
+  const { data: listsData } = useQuery({
+    queryKey: ['lists', workspaceId],
+    queryFn: () => {
+      return listsApi.list({ workspace_id: workspaceId })
+    }
+  })
+
+  const lists = listsData?.lists || []
 
   const handleDeleteBroadcast = async () => {
     if (!broadcastToDelete) return
@@ -173,6 +184,7 @@ export function BroadcastsPage() {
             workspace={currentWorkspace}
             broadcast={selectedBroadcast || undefined}
             onClose={handleCloseDrawer}
+            lists={lists}
             buttonContent={
               <Space>
                 <MailOutlined />
@@ -360,6 +372,7 @@ export function BroadcastsPage() {
               <UpsertBroadcastDrawer
                 workspace={currentWorkspace}
                 buttonProps={{ size: 'large', icon: <MailOutlined /> }}
+                lists={lists}
                 buttonContent="Create Broadcast"
               />
             )}

@@ -7,7 +7,6 @@ import {
   Select,
   Space,
   App,
-  Tabs,
   Row,
   Col,
   Switch,
@@ -15,16 +14,14 @@ import {
   InputNumber,
   Popconfirm
 } from 'antd'
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   broadcastApi,
   Broadcast,
   CreateBroadcastRequest,
   UpdateBroadcastRequest
 } from '../../services/api/broadcast'
-import { templatesApi } from '../../services/api/template'
 import type { Workspace } from '../../services/api/types'
-import { useParams } from '@tanstack/react-router'
 import dayjs from '../../lib/dayjs'
 import TemplateSelectorInput from '../templates/TemplateSelectorInput'
 import { DeleteOutlined } from '@ant-design/icons'
@@ -119,6 +116,7 @@ interface UpsertBroadcastDrawerProps {
   buttonProps?: any
   buttonContent?: React.ReactNode
   onClose?: () => void
+  lists?: { id: string; name: string }[]
 }
 
 export function UpsertBroadcastDrawer({
@@ -126,13 +124,14 @@ export function UpsertBroadcastDrawer({
   broadcast,
   buttonProps = {},
   buttonContent,
-  onClose
+  onClose,
+  lists = []
 }: UpsertBroadcastDrawerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
 
   // Watch campaign name changes using Form.useWatch
   const campaignName = Form.useWatch('name', form)
@@ -219,10 +218,7 @@ export function UpsertBroadcastDrawer({
               id: 'default',
               name: 'Default',
               template_id: '',
-              template_version: 1,
-              subject: '',
-              from_name: '',
-              from_email: ''
+              template_version: 1
             }
           ]
         },
@@ -237,10 +233,28 @@ export function UpsertBroadcastDrawer({
   }
 
   const handleClose = () => {
-    setIsOpen(false)
-    form.resetFields()
-    if (onClose) {
-      onClose()
+    const campaignName = form.getFieldValue('name')
+
+    if (campaignName) {
+      modal.confirm({
+        title: 'Unsaved changes',
+        content: 'You have unsaved changes. Are you sure you want to close this drawer?',
+        okText: 'Yes',
+        cancelText: 'No',
+        onOk: () => {
+          setIsOpen(false)
+          form.resetFields()
+          if (onClose) {
+            onClose()
+          }
+        }
+      })
+    } else {
+      setIsOpen(false)
+      form.resetFields()
+      if (onClose) {
+        onClose()
+      }
     }
   }
 
@@ -312,7 +326,7 @@ export function UpsertBroadcastDrawer({
               <Row gutter={48}>
                 {/* Left Column */}
                 <Col span={12}>
-                  <div className="text-xs mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                  <div className="text-xs mb-6 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
                     Broadcast Settings
                   </div>
 
@@ -324,50 +338,34 @@ export function UpsertBroadcastDrawer({
                     <Input placeholder="E.g. Weekly Newsletter - May 2023" />
                   </Form.Item>
 
-                  <div className="text-xs mt-8 mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                  <div className="text-xs mt-8 mb-6 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
                     Audience Selection
                   </div>
-
-                  <Form.Item
-                    noStyle
-                    dependencies={[['audience', 'lists']]}
-                    rules={[
-                      {
-                        validator: async (_, form) => {
-                          const lists = form.getFieldValue(['audience', 'lists']) || []
-
-                          if (lists.length === 0) {
-                            return Promise.reject(
-                              new Error('Please select lists for your audience')
-                            )
-                          }
-
-                          return Promise.resolve()
-                        }
-                      }
-                    ]}
-                  >
-                    {() => null}
-                  </Form.Item>
 
                   <Form.Item
                     name={['audience', 'lists']}
                     label="Lists"
                     extra="Select the contact lists to include in this broadcast"
+                    rules={[
+                      {
+                        required: true,
+                        type: 'array',
+                        min: 1,
+                        message: 'Please select at least one list'
+                      }
+                    ]}
                   >
                     <Select
                       mode="multiple"
                       placeholder="Select lists"
-                      options={[
-                        // These would be fetched from an API in a real implementation
-                        { value: 'list-1', label: 'Marketing Contacts' },
-                        { value: 'list-2', label: 'Newsletter Subscribers' },
-                        { value: 'list-3', label: 'New Customers' }
-                      ]}
+                      options={lists.map((list) => ({
+                        value: list.id,
+                        label: list.name
+                      }))}
                     />
                   </Form.Item>
 
-                  <div className="text-xs mt-12 mb-4 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                  <div className="text-xs mt-12 mb-4 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
                     Advanced Options
                   </div>
 
@@ -429,7 +427,7 @@ export function UpsertBroadcastDrawer({
 
                 {/* Right Column */}
                 <Col span={12}>
-                  <div className="text-xs mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                  <div className="text-xs mb-6 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
                     Template
                   </div>
 
@@ -487,7 +485,7 @@ export function UpsertBroadcastDrawer({
                             <ABTestingConfig form={form} />
 
                             {/* Variations management will be added here */}
-                            <div className="text-xs mt-4 mb-4 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                            <div className="text-xs mt-4 mb-4 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
                               Variations
                             </div>
 
@@ -512,11 +510,41 @@ export function UpsertBroadcastDrawer({
                                             key={`template-${field.key}`}
                                             name={[field.name, 'template_id']}
                                             label="Template"
-                                            rules={[{ required: true }]}
+                                            rules={[
+                                              { required: true },
+                                              ({ getFieldsValue }) => ({
+                                                validator(_, value) {
+                                                  if (!value) return Promise.resolve()
+
+                                                  // Get all variations
+                                                  const allVariations =
+                                                    getFieldsValue()?.test_settings?.variations ||
+                                                    []
+
+                                                  // Check if this template is used in any other variation
+                                                  const duplicates = allVariations.filter(
+                                                    (v: any, i: number) =>
+                                                      v?.template_id === value && i !== field.name
+                                                  )
+
+                                                  if (duplicates.length > 0) {
+                                                    return Promise.reject(
+                                                      new Error(
+                                                        'This template is already used in another variation'
+                                                      )
+                                                    )
+                                                  }
+
+                                                  return Promise.resolve()
+                                                }
+                                              })
+                                            ]}
                                           >
                                             <TemplateSelectorInput
                                               workspaceId={workspace.id}
                                               placeholder="Select template"
+                                              category="marketing"
+                                              utmDisabled={true}
                                             />
                                           </Form.Item>
                                         </Col>
@@ -545,7 +573,8 @@ export function UpsertBroadcastDrawer({
 
                                   {fields.length < 5 && (
                                     <Button
-                                      type="dashed"
+                                      type="primary"
+                                      ghost
                                       onClick={() =>
                                         add({
                                           id: `variation-${fields.length + 1}`,
@@ -577,6 +606,8 @@ export function UpsertBroadcastDrawer({
                             <TemplateSelectorInput
                               workspaceId={workspace.id}
                               placeholder="Select template"
+                              category="marketing"
+                              utmDisabled={true}
                             />
                           </Form.Item>
                         </div>
@@ -584,7 +615,7 @@ export function UpsertBroadcastDrawer({
                     }}
                   </Form.Item>
 
-                  <div className="text-xs mt-8 mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                  <div className="text-xs mt-8 mb-6 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
                     Scheduling
                   </div>
 
