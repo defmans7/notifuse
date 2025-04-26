@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"encoding/base64"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -112,15 +115,42 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 	}
 
 	if req.Cursor != "" {
-		cursorTime, err := time.Parse(time.RFC3339, req.Cursor)
+		// Decode the base64 cursor
+		decodedCursor, err := base64.StdEncoding.DecodeString(req.Cursor)
 		if err != nil {
-			return nil, fmt.Errorf("invalid cursor format: %w", err)
+			return nil, fmt.Errorf("invalid cursor encoding: %w", err)
 		}
-		sb = sb.Where(sq.Lt{"c.created_at": cursorTime})
+
+		// Parse the compound cursor (timestamp~email)
+		cursorStr := string(decodedCursor)
+		cursorParts := strings.Split(cursorStr, "~")
+		if len(cursorParts) != 2 {
+			return nil, fmt.Errorf("invalid cursor format: expected timestamp~email")
+		}
+
+		cursorTime, err := time.Parse(time.RFC3339, cursorParts[0])
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor timestamp format: %w", err)
+		}
+
+		cursorEmail := cursorParts[1]
+
+		// Use a compound condition for pagination:
+		// Either created_at is less than cursor time
+		// OR created_at equals cursor time AND email is greater than cursor email (for lexicographical ordering)
+		sb = sb.Where(
+			sq.Or{
+				sq.Lt{"c.created_at": cursorTime},
+				sq.And{
+					sq.Eq{"c.created_at": cursorTime},
+					sq.Gt{"c.email": cursorEmail},
+				},
+			},
+		)
 	}
 
-	// Add order by and limit
-	sb = sb.OrderBy("c.created_at DESC").Limit(uint64(req.Limit + 1)) // Get one extra
+	// Add order by with a compound sort (created_at DESC, email ASC) to ensure deterministic ordering
+	sb = sb.OrderBy("c.created_at DESC", "c.email ASC").Limit(uint64(req.Limit + 1)) // Get one extra
 
 	// Build the final query
 	query, args, err := sb.ToSql()
@@ -156,7 +186,12 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		// Remove the extra contact we fetched
 		lastContact := contacts[req.Limit-1]
 		contacts = contacts[:req.Limit]
-		nextCursor = lastContact.CreatedAt.Format(time.RFC3339)
+
+		// Create a compound cursor with timestamp and email using tilde as separator
+		cursorStr := fmt.Sprintf("%s~%s", lastContact.CreatedAt.Format(time.RFC3339), lastContact.Email)
+
+		// Base64 encode the cursor to make it URL-friendly
+		nextCursor = base64.StdEncoding.EncodeToString([]byte(cursorStr))
 	}
 
 	// If WithContactLists is true, fetch contact lists in a separate query

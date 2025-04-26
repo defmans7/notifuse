@@ -8,7 +8,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { WorkspaceSettingsPage } from './pages/WorkspaceSettingsPage'
 import { ContactsPage } from './pages/ContactsPage'
 import { ListsPage } from './pages/ListsPage'
-import { MediaPage } from './pages/MediaPage'
+import { FileManagerPage } from './pages/FileManagerPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 import { createRouter } from '@tanstack/react-router'
 
@@ -84,10 +84,10 @@ const workspaceListsRoute = createRoute({
   component: ListsPage
 })
 
-const workspaceMediaRoute = createRoute({
+const workspaceFileManagerRoute = createRoute({
   getParentRoute: () => workspaceRoute,
-  path: '/media',
-  component: MediaPage
+  path: '/file-manager',
+  component: FileManagerPage
 })
 
 export const workspaceContactsRoute = createRoute({
@@ -103,7 +103,7 @@ export const workspaceContactsRoute = createRoute({
     phone: search.phone as string | undefined,
     country: search.country as string | undefined,
     language: search.language as string | undefined,
-    limit: search.limit ? Number(search.limit) : 20
+    limit: search.limit ? Number(search.limit) : 10
   })
 })
 
@@ -130,7 +130,7 @@ const routeTree = rootRoute.addChildren([
     workspaceCampaignsRoute,
     workspaceContactsRoute,
     workspaceListsRoute,
-    workspaceMediaRoute,
+    workspaceFileManagerRoute,
     workspaceSettingsRoute,
     workspaceTemplatesRoute
   ])

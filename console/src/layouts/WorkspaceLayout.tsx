@@ -35,8 +35,8 @@ export function WorkspaceLayout() {
     selectedKey = 'templates'
   } else if (currentPath.includes('/contacts')) {
     selectedKey = 'contacts'
-  } else if (currentPath.includes('/media')) {
-    selectedKey = 'media'
+  } else if (currentPath.includes('/file-manager')) {
+    selectedKey = 'file-manager'
   }
 
   const handleWorkspaceChange = (workspaceId: string) => {
@@ -84,11 +84,11 @@ export function WorkspaceLayout() {
       )
     },
     {
-      key: 'media',
+      key: 'file-manager',
       icon: <PictureOutlined />,
       label: (
-        <Link to="/workspace/$workspaceId/media" params={{ workspaceId }}>
-          Media
+        <Link to="/workspace/$workspaceId/file-manager" params={{ workspaceId }}>
+          File Manager
         </Link>
       )
     },

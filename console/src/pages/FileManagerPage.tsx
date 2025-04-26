@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { workspaceService } from '../services/api/workspace'
 import { Workspace, FileManagerSettings } from '../services/api/types'
 
-export function MediaPage() {
+export function FileManagerPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
   const { workspaces, refreshWorkspaces } = useAuth()
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null)
@@ -91,7 +91,7 @@ export function MediaPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Media Library</h2>
+        <h2 className="text-2xl font-bold">File Manager</h2>
       </div>
 
       <FileManager {...fileManagerProps} />

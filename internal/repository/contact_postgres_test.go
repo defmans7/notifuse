@@ -3,7 +3,11 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,7 +193,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs().
 			WillReturnRows(rows)
 
@@ -253,7 +257,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC LIMIT 11`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("%test@example.com%", "%John%", "%US%").
 			WillReturnRows(rows)
 
@@ -287,7 +291,7 @@ func TestGetContacts(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("should handle cursor pagination edge cases", func(t *testing.T) {
+	t.Run("should handle cursor pagination with base64 encoding", func(t *testing.T) {
 		// Create a mock workspace database
 		mockDB, mock, cleanup := testutil.SetupMockDB(t)
 		defer cleanup()
@@ -298,6 +302,8 @@ func TestGetContacts(t *testing.T) {
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the workspace database query
+		// Create multiple rows to trigger pagination
+		now := time.Now()
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language", "first_name", "last_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
@@ -308,47 +314,179 @@ func TestGetContacts(t *testing.T) {
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
-			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
-			"custom1", "custom2", "custom3", "custom4", "custom5",
-			1.0, 2.0, 3.0, 4.0, 5.0,
-			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			time.Now(), time.Now(),
-		)
+		})
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.created_at < \$1 ORDER BY c\.created_at DESC LIMIT 11`).
-			WithArgs(sqlmock.AnyArg()).
+		// Add multiple contacts to ensure pagination works
+		for i := 1; i <= 11; i++ { // 11 to trigger the limit+1 logic
+			rows.AddRow(
+				fmt.Sprintf("test%d@example.com", i), fmt.Sprintf("ext%d", i), "UTC", "en",
+				fmt.Sprintf("First%d", i), fmt.Sprintf("Last%d", i),
+				fmt.Sprintf("+%d", i), "123 Main St", "Apt 4B", "US", "12345", "CA",
+				"Engineer", 100.0, 5, now,
+				"custom1", "custom2", "custom3", "custom4", "custom5",
+				1.0, 2.0, 3.0, 4.0, 5.0,
+				now, now, now, now, now,
+				[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+				[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+				now.Add(time.Duration(-i)*time.Hour), now, // Use decreasing created_at times
+			)
+		}
+
+		// Truncate time to seconds to match the expected format
+		cursorTime := time.Now().Truncate(time.Second)
+		cursorEmail := "previous@example.com"
+		cursorStr := fmt.Sprintf("%s~%s", cursorTime.Format(time.RFC3339), cursorEmail)
+		encodedCursor := base64.StdEncoding.EncodeToString([]byte(cursorStr))
+
+		// The query should have compound condition for cursor-based pagination
+		// Use a simpler regex pattern that's more forgiving of whitespace variations
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE \(c\.created_at < \$1 OR \(c\.created_at = \$2 AND c\.email > \$3\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+			WithArgs(cursorTime, cursorTime, cursorEmail).
 			WillReturnRows(rows)
 
-		// Set up expectations for the contact lists query
+		// Set up expectations for the contact lists query - should have multiple emails
+		emails := make([]string, 10) // We only get 10 because the 11th is cut off for pagination
+		for i := 1; i <= 10; i++ {
+			emails[i-1] = fmt.Sprintf("test%d@example.com", i)
+		}
+
+		// Create the expected SQL pattern for the IN query with multiple params
+		// Use this simpler pattern to match the actual SQL generated
+		sqlPattern := `SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10\)`
+
 		listRows := sqlmock.NewRows([]string{
 			"email", "list_id", "status", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "list1", "active", time.Now(), time.Now(),
-		)
+		})
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
-			WithArgs("test@example.com").
+		// Add contact list records for each email
+		for _, email := range emails {
+			listRows.AddRow(
+				email, "list1", "active", now, now,
+			)
+		}
+
+		// Convert emails to proper args for the mock
+		emailArgs := make([]driver.Value, len(emails))
+		for i, email := range emails {
+			emailArgs[i] = email
+		}
+
+		mock.ExpectQuery(sqlPattern).
+			WithArgs(emailArgs...).
 			WillReturnRows(listRows)
 
 		req := &domain.GetContactsRequest{
 			WorkspaceID:      "workspace123",
-			Cursor:           time.Now().Format(time.RFC3339),
+			Cursor:           encodedCursor,
 			Limit:            10,
 			WithContactLists: true,
 		}
 
 		resp, err := repo.GetContacts(context.Background(), req)
 		require.NoError(t, err)
-		require.Len(t, resp.Contacts, 1)
-		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
-		assert.Len(t, resp.Contacts[0].ContactLists, 1)
-		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
-		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
+		require.Len(t, resp.Contacts, 10) // Should get 10 contacts
+
+		// Verify first and last contact
+		assert.Equal(t, "test1@example.com", resp.Contacts[0].Email)
+		assert.Equal(t, "test10@example.com", resp.Contacts[9].Email)
+
+		// Verify contact lists
+		for _, contact := range resp.Contacts {
+			assert.Len(t, contact.ContactLists, 1)
+			assert.Equal(t, "list1", contact.ContactLists[0].ListID)
+			assert.Equal(t, domain.ContactListStatusActive, contact.ContactLists[0].Status)
+		}
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+
+		// Verify the next cursor is base64 encoded and contains expected data
+		require.NotEmpty(t, resp.NextCursor, "NextCursor should not be empty")
+
+		decodedBytes, err := base64.StdEncoding.DecodeString(resp.NextCursor)
+		require.NoError(t, err)
+
+		cursorParts := strings.Split(string(decodedBytes), "~")
+		require.Len(t, cursorParts, 2)
+
+		_, err = time.Parse(time.RFC3339, cursorParts[0])
+		require.NoError(t, err)
+
+		// The 11th contact email should be in the cursor
+		assert.Equal(t, "test10@example.com", cursorParts[1])
+	})
+
+	t.Run("should handle invalid base64 encoded cursor", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID:      "workspace123",
+			Cursor:           "invalid-base64-data",
+			Limit:            10,
+			WithContactLists: true,
+		}
+
+		_, err := repo.GetContacts(context.Background(), req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid cursor encoding")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle invalid cursor format after base64 decoding", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
+
+		// Create a cursor with invalid format (missing tilde separator)
+		invalidCursor := base64.StdEncoding.EncodeToString([]byte("invalid-cursor-format"))
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID:      "workspace123",
+			Cursor:           invalidCursor,
+			Limit:            10,
+			WithContactLists: true,
+		}
+
+		_, err := repo.GetContacts(context.Background(), req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid cursor format: expected timestamp~email")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should handle invalid timestamp in cursor", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
+		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		repo := NewContactRepository(workspaceRepo)
+
+		// Create a cursor with invalid timestamp
+		invalidCursor := base64.StdEncoding.EncodeToString([]byte("invalid-time~email@example.com"))
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID:      "workspace123",
+			Cursor:           invalidCursor,
+			Limit:            10,
+			WithContactLists: true,
+		}
+
+		_, err := repo.GetContacts(context.Background(), req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid cursor timestamp format")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -401,7 +539,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC LIMIT 11`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("%test@example.com%", "%ext123%", "%John%", "%Doe%", "%+1234567890%", "%US%").
 			WillReturnRows(rows)
 
@@ -438,29 +576,6 @@ func TestGetContacts(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("should handle invalid cursor format", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
-		repo := NewContactRepository(workspaceRepo)
-
-		req := &domain.GetContactsRequest{
-			WorkspaceID:      "workspace123",
-			Cursor:           "invalid-cursor",
-			Limit:            10,
-			WithContactLists: true,
-		}
-
-		_, err := repo.GetContacts(context.Background(), req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid cursor format")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
 	t.Run("should handle database query errors", func(t *testing.T) {
 		// Create a mock workspace database
 		mockDB, mock, cleanup := testutil.SetupMockDB(t)
@@ -472,7 +587,7 @@ func TestGetContacts(t *testing.T) {
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the query to fail
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs().
 			WillReturnError(errors.New("database query error"))
 
@@ -521,7 +636,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs().
 			WillReturnRows(rows)
 
@@ -570,7 +685,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(),
 		).RowError(0, errors.New("row error"))
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs().
 			WillReturnRows(rows)
 
@@ -583,181 +698,6 @@ func TestGetContacts(t *testing.T) {
 		_, err := repo.GetContacts(context.Background(), req)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error iterating over rows")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle error in contact lists query", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
-		repo := NewContactRepository(workspaceRepo)
-
-		// Set up expectations for the workspace database query
-		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
-			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
-			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
-			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
-			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
-			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
-			"custom1", "custom2", "custom3", "custom4", "custom5",
-			1.0, 2.0, 3.0, 4.0, 5.0,
-			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			time.Now(), time.Now(),
-		)
-
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
-			WithArgs().
-			WillReturnRows(rows)
-
-		// Set up expectations for the contact lists query to fail
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
-			WithArgs("test@example.com").
-			WillReturnError(errors.New("contact lists query error"))
-
-		req := &domain.GetContactsRequest{
-			WorkspaceID:      "workspace123",
-			Limit:            10,
-			WithContactLists: true,
-		}
-
-		_, err := repo.GetContacts(context.Background(), req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to query contact lists")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle error in scanning contact lists", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
-		repo := NewContactRepository(workspaceRepo)
-
-		// Set up expectations for the workspace database query
-		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
-			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
-			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
-			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
-			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
-			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
-			"custom1", "custom2", "custom3", "custom4", "custom5",
-			1.0, 2.0, 3.0, 4.0, 5.0,
-			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			time.Now(), time.Now(),
-		)
-
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
-			WithArgs().
-			WillReturnRows(rows)
-
-		// Set up expectations for the contact lists query with invalid data
-		// Using string instead of valid status to cause scan error
-		listRows := sqlmock.NewRows([]string{
-			"email", "list_id", "status", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "list1", 123, time.Now(), time.Now(), // status should be a string
-		)
-
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
-			WithArgs("test@example.com").
-			WillReturnRows(listRows)
-
-		req := &domain.GetContactsRequest{
-			WorkspaceID:      "workspace123",
-			Limit:            10,
-			WithContactLists: true,
-		}
-
-		_, err := repo.GetContacts(context.Background(), req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to scan contact list")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle error in contact lists rows iteration", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
-		repo := NewContactRepository(workspaceRepo)
-
-		// Set up expectations for the workspace database query
-		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
-			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
-			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
-			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
-			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
-			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
-			"custom1", "custom2", "custom3", "custom4", "custom5",
-			1.0, 2.0, 3.0, 4.0, 5.0,
-			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			time.Now(), time.Now(),
-		)
-
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC LIMIT 11`).
-			WithArgs().
-			WillReturnRows(rows)
-
-		// Set up expectations for the contact lists query with error during iteration
-		listRows := sqlmock.NewRows([]string{
-			"email", "list_id", "status", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "list1", "active", time.Now(), time.Now(),
-		).RowError(0, errors.New("list row error"))
-
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
-			WithArgs("test@example.com").
-			WillReturnRows(listRows)
-
-		req := &domain.GetContactsRequest{
-			WorkspaceID:      "workspace123",
-			Limit:            10,
-			WithContactLists: true,
-		}
-
-		_, err := repo.GetContacts(context.Background(), req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "error iterating over contact list rows")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }

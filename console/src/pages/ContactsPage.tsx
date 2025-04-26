@@ -13,7 +13,6 @@ import { CountriesFormOptions } from '../components/utils/countries_timezones'
 import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
-import type { List } from '../services/api/types'
 import { PlusOutlined } from '@ant-design/icons'
 
 const filterFields: FilterField[] = [
@@ -154,7 +153,7 @@ export function ContactsPage() {
       const request: ListContactsRequest = {
         workspace_id: workspaceId,
         cursor: search.cursor,
-        limit: search.limit || 20,
+        limit: search.limit || 10,
         email: search.email,
         external_id: search.external_id,
         first_name: search.first_name,
