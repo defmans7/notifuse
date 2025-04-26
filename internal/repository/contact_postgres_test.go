@@ -338,10 +338,13 @@ func TestGetContacts(t *testing.T) {
 		cursorStr := fmt.Sprintf("%s~%s", cursorTime.Format(time.RFC3339), cursorEmail)
 		encodedCursor := base64.StdEncoding.EncodeToString([]byte(cursorStr))
 
+		// Parse the time back from the string to ensure it matches exactly what the test expects
+		parsedTime, _ := time.Parse(time.RFC3339, cursorTime.Format(time.RFC3339))
+
 		// The query should have compound condition for cursor-based pagination
 		// Use a simpler regex pattern that's more forgiving of whitespace variations
 		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE \(c\.created_at < \$1 OR \(c\.created_at = \$2 AND c\.email > \$3\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
-			WithArgs(cursorTime, cursorTime, cursorEmail).
+			WithArgs(parsedTime, parsedTime, cursorEmail).
 			WillReturnRows(rows)
 
 		// Set up expectations for the contact lists query - should have multiple emails
