@@ -11,7 +11,6 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -26,10 +25,8 @@ type EmailService struct {
 	secretKey       string
 	workspaceRepo   domain.WorkspaceRepository
 	templateRepo    domain.TemplateRepository
-	templateService *TemplateService
+	templateService domain.TemplateService
 	httpClient      domain.HTTPClient
-	mjmlRenderer    domain.MJMLRenderer
-	createSESClient func(region, accessKey, secretKey string) domain.SESClient
 }
 
 // NewEmailService creates a new EmailService instance
@@ -39,7 +36,7 @@ func NewEmailService(
 	secretKey string,
 	workspaceRepo domain.WorkspaceRepository,
 	templateRepo domain.TemplateRepository,
-	templateService *TemplateService,
+	templateService domain.TemplateService,
 ) *EmailService {
 	return &EmailService{
 		logger:          logger,
@@ -49,101 +46,21 @@ func NewEmailService(
 		templateRepo:    templateRepo,
 		templateService: templateService,
 		httpClient:      &http.Client{Timeout: time.Second * 10},
-		mjmlRenderer:    &mjmlRendererAdapter{},
-		createSESClient: func(region, accessKey, secretKey string) domain.SESClient {
-			sess, _ := session.NewSession(&aws.Config{
-				Region:      aws.String(region),
-				Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
-			})
-			return ses.New(sess)
-		},
 	}
 }
 
-// For testing
-func NewEmailServiceWithDependencies(
-	logger logger.Logger,
-	authService domain.AuthService,
-	secretKey string,
-	workspaceRepo domain.WorkspaceRepository,
-	templateRepo domain.TemplateRepository,
-	templateService *TemplateService,
-	httpClient domain.HTTPClient,
-	mjmlRenderer domain.MJMLRenderer,
-	createSESClient func(region, accessKey, secretKey string) domain.SESClient,
-) *EmailService {
-	return &EmailService{
-		logger:          logger,
-		authService:     authService,
-		secretKey:       secretKey,
-		workspaceRepo:   workspaceRepo,
-		templateRepo:    templateRepo,
-		templateService: templateService,
-		httpClient:      httpClient,
-		mjmlRenderer:    mjmlRenderer,
-		createSESClient: createSESClient,
-	}
+// SetHTTPClient sets a custom HTTP client (useful for testing)
+func (s *EmailService) SetHTTPClient(client domain.HTTPClient) {
+	s.httpClient = client
 }
 
-// Adapter for MJML renderer
-type mjmlRendererAdapter struct{}
-
-func (m *mjmlRendererAdapter) TreeToMjml(rootStyles map[string]interface{}, tree interface{}, templateDataStr string, helpers map[string]string, depth int, parent interface{}) (string, error) {
-	// Convert tree to EmailBlock
-	emailBlock, ok := tree.(domain.EmailBlock)
-	if !ok {
-		// Try to convert from map to EmailBlock if direct type assertion fails
-		if treeMap, isMap := tree.(map[string]interface{}); isMap {
-			var block domain.EmailBlock
-			jsonData, err := json.Marshal(treeMap)
-			if err != nil {
-				return "", fmt.Errorf("failed to marshal tree to JSON: %w", err)
-			}
-			if err := json.Unmarshal(jsonData, &block); err != nil {
-				return "", fmt.Errorf("failed to unmarshal tree to EmailBlock: %w", err)
-			}
-			emailBlock = block
-		} else {
-			return "", fmt.Errorf("tree is not a valid EmailBlock")
-		}
-	}
-
-	// Convert parent to *EmailBlock if not nil
-	var parentBlock *mjml.EmailBlock
-	if parent != nil {
-		if parentPtr, ok := parent.(*domain.EmailBlock); ok {
-			// Convert domain.EmailBlock to mjml.EmailBlock
-			jsonData, err := json.Marshal(parentPtr)
-			if err != nil {
-				return "", fmt.Errorf("failed to marshal parent to JSON: %w", err)
-			}
-			var mjmlParent mjml.EmailBlock
-			if err := json.Unmarshal(jsonData, &mjmlParent); err != nil {
-				return "", fmt.Errorf("failed to unmarshal parent to mjml.EmailBlock: %w", err)
-			}
-			parentBlock = &mjmlParent
-		} else {
-			return "", fmt.Errorf("parent is not a valid *EmailBlock")
-		}
-	}
-
-	// Convert domain.EmailBlock to mjml.EmailBlock
-	jsonData, err := json.Marshal(emailBlock)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal EmailBlock to JSON: %w", err)
-	}
-	var mjmlBlock mjml.EmailBlock
-	if err := json.Unmarshal(jsonData, &mjmlBlock); err != nil {
-		return "", fmt.Errorf("failed to unmarshal EmailBlock to mjml.EmailBlock: %w", err)
-	}
-
-	// Convert helpers map[string]string to urlParams
-	urlParams := make(map[string]string)
-	for k, v := range helpers {
-		urlParams[k] = v
-	}
-
-	return mjml.TreeToMjml(rootStyles, mjmlBlock, templateDataStr, urlParams, depth, parentBlock)
+// CreateSESClient creates a new SES client with the provided credentials
+func CreateSESClient(region, accessKey, secretKey string) domain.SESClient {
+	sess, _ := session.NewSession(&aws.Config{
+		Region:      aws.String(region),
+		Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
+	})
+	return ses.New(sess)
 }
 
 // TestEmailProvider validates and tests an email provider
@@ -350,8 +267,8 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 			}
 		}
 
-		// Create SES client using the dependency
-		svc := s.createSESClient(emailProvider.SES.Region, emailProvider.SES.AccessKey, emailProvider.SES.SecretKey)
+		// Create a fresh SES client for this request
+		svc := CreateSESClient(emailProvider.SES.Region, emailProvider.SES.AccessKey, emailProvider.SES.SecretKey)
 
 		// Format the "From" header with name and email
 		fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)

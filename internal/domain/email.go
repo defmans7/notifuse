@@ -13,7 +13,6 @@ import (
 //go:generate mockgen -destination mocks/mock_email_service.go -package mocks github.com/Notifuse/notifuse/internal/domain EmailServiceInterface
 //go:generate mockgen -destination mocks/mock_http_client.go -package mocks github.com/Notifuse/notifuse/internal/domain HTTPClient
 //go:generate mockgen -destination mocks/mock_ses_client.go -package mocks github.com/Notifuse/notifuse/internal/domain SESClient
-//go:generate mockgen -destination mocks/mock_mjml_renderer.go -package mocks github.com/Notifuse/notifuse/internal/domain MJMLRenderer
 
 // HTTPClient defines the interface for HTTP operations
 type HTTPClient interface {
@@ -340,11 +339,6 @@ func (p *PostmarkSettings) Validate(passphrase string) error {
 	}
 
 	return nil
-}
-
-// MJMLRenderer defines the interface for MJML rendering operations
-type MJMLRenderer interface {
-	TreeToMjml(rootStyles map[string]interface{}, tree interface{}, templateDataStr string, helpers map[string]string, depth int, parent interface{}) (string, error)
 }
 
 // EmailServiceInterface defines the interface for the email service
