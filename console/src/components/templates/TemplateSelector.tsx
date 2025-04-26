@@ -19,9 +19,7 @@ interface TemplateSelectorProps {
   placeholder?: string
   required?: boolean
   rules?: Rule[]
-  utmSource?: string
-  utmMedium?: string
-  utmCampaign?: string
+  utmDisabled?: boolean
 }
 
 const TemplateSelector: React.FC<TemplateSelectorProps> = ({
@@ -32,9 +30,7 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   placeholder,
   required = false,
   rules = [],
-  utmSource,
-  utmMedium,
-  utmCampaign
+  utmDisabled = false
 }) => {
   const defaultRules = required ? [{ required: true, message: `Please select a template` }] : []
   const combinedRules = [...defaultRules, ...rules]
@@ -45,9 +41,7 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
         workspaceId={workspaceId}
         category={category}
         placeholder={placeholder}
-        utmSource={utmSource}
-        utmMedium={utmMedium}
-        utmCampaign={utmCampaign}
+        utmDisabled={utmDisabled}
       />
     </Form.Item>
   )
