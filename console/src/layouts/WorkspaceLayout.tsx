@@ -28,7 +28,7 @@ export function WorkspaceLayout() {
   const currentPath = matches[matches.length - 1]?.pathname || ''
 
   // Determine which key should be selected based on the current path
-  let selectedKey = 'campaigns'
+  let selectedKey = 'broadcasts'
   if (currentPath.includes('/settings')) {
     selectedKey = 'settings'
   } else if (currentPath.includes('/lists')) {
@@ -77,11 +77,11 @@ export function WorkspaceLayout() {
       )
     },
     {
-      key: 'campaigns',
+      key: 'broadcasts',
       icon: <MailOutlined />,
       label: (
-        <Link to="/workspace/$workspaceId/campaigns" params={{ workspaceId }}>
-          Campaigns
+        <Link to="/workspace/$workspaceId/broadcasts" params={{ workspaceId }}>
+          Broadcasts
         </Link>
       )
     },

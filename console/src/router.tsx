@@ -73,9 +73,9 @@ const workspaceRoute = createRoute({
 })
 
 // Create workspace child routes
-const workspaceCampaignsRoute = createRoute({
+const workspaceBroadcastsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
-  path: '/campaigns',
+  path: '/broadcasts',
   component: BroadcastsPage
 })
 
@@ -128,7 +128,7 @@ const routeTree = rootRoute.addChildren([
   acceptInvitationRoute,
   workspaceCreateRoute,
   workspaceRoute.addChildren([
-    workspaceCampaignsRoute,
+    workspaceBroadcastsRoute,
     workspaceContactsRoute,
     workspaceListsRoute,
     workspaceFileManagerRoute,

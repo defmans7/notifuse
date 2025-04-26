@@ -12,7 +12,6 @@ import {
   Col,
   Switch,
   DatePicker,
-  message,
   InputNumber,
   Popconfirm
 } from 'antd'
@@ -20,13 +19,8 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import {
   broadcastApi,
   Broadcast,
-  BroadcastStatus,
   CreateBroadcastRequest,
-  UpdateBroadcastRequest,
-  AudienceSettings,
-  ScheduleSettings,
-  BroadcastTestSettings,
-  BroadcastVariation
+  UpdateBroadcastRequest
 } from '../../services/api/broadcast'
 import { templatesApi } from '../../services/api/template'
 import type { Workspace } from '../../services/api/types'
@@ -36,7 +30,26 @@ import TemplateSelectorInput from '../templates/TemplateSelectorInput'
 import { DeleteOutlined } from '@ant-design/icons'
 import React from 'react'
 
-const { TextArea } = Input
+// Function to extract TLD from URL
+const extractTLD = (url: string): string => {
+  try {
+    if (!url || !url.trim()) return ''
+
+    // Add protocol if missing to make URL parsing work
+    const urlWithProtocol = url.startsWith('http') ? url : `https://${url}`
+    const hostname = new URL(urlWithProtocol).hostname
+
+    // Split by dots and get the last two parts (or just the last if it's a simple domain)
+    const parts = hostname.split('.')
+    if (parts.length >= 2) {
+      return parts.slice(-2).join('.')
+    }
+    return hostname
+  } catch (e) {
+    console.error('Error extracting TLD:', e)
+    return ''
+  }
+}
 
 // Custom component to handle A/B testing configuration
 const ABTestingConfig = ({ form }: { form: any }) => {
@@ -83,15 +96,19 @@ const ABTestingConfig = ({ form }: { form: any }) => {
 // Custom component to handle tracking enabled with disabled state
 const TrackingEnabledField = ({ form }: { form: any }) => {
   const autoSendWinner = Form.useWatch(['test_settings', 'auto_send_winner'], form)
+  const abTestingEnabled = Form.useWatch(['test_settings', 'enabled'], form)
+
+  // Disable tracking toggle when either A/B testing or auto-send winner is enabled
+  const isDisabled = autoSendWinner || abTestingEnabled
 
   return (
     <Form.Item
       name="tracking_enabled"
       label="Enable tracking"
       valuePropName="checked"
-      tooltip="Must be enabled when using auto-send winner feature"
+      tooltip="Automatically enabled with A/B testing or auto-send winner feature"
     >
-      <Switch disabled={autoSendWinner} />
+      <Switch disabled={isDisabled} />
     </Form.Item>
   )
 }
@@ -114,13 +131,19 @@ export function UpsertBroadcastDrawer({
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<string>('settings')
   const [loading, setLoading] = useState(false)
   const { message } = App.useApp()
-  const { workspaceId } = useParams({ from: '/workspace/$workspaceId/campaigns' })
 
   // Watch campaign name changes using Form.useWatch
   const campaignName = Form.useWatch('name', form)
+  const abTestingEnabled = Form.useWatch(['test_settings', 'enabled'], form)
+
+  // Enable tracking when A/B testing is enabled
+  useEffect(() => {
+    if (abTestingEnabled) {
+      form.setFieldValue('tracking_enabled', true)
+    }
+  }, [abTestingEnabled, form])
 
   // Update utm_campaign when campaign name changes
   useEffect(() => {
@@ -137,15 +160,6 @@ export function UpsertBroadcastDrawer({
     }
   }, [campaignName, form, isOpen])
 
-  // Fetch templates for the dropdown selection
-  const { data: templatesData } = useQuery({
-    queryKey: ['templates', workspace.id],
-    queryFn: () => {
-      return templatesApi.list({ workspace_id: workspace.id })
-    },
-    enabled: isOpen
-  })
-
   const upsertBroadcastMutation = useMutation({
     mutationFn: (values: CreateBroadcastRequest | UpdateBroadcastRequest) => {
       if (broadcast) {
@@ -155,13 +169,13 @@ export function UpsertBroadcastDrawer({
       }
     },
     onSuccess: () => {
-      message.success(`Campaign ${broadcast ? 'updated' : 'created'} successfully`)
+      message.success(`Broadcast ${broadcast ? 'updated' : 'created'} successfully`)
       handleClose()
       queryClient.invalidateQueries({ queryKey: ['broadcasts', workspace.id] })
       setLoading(false)
     },
     onError: (error) => {
-      message.error(`Failed to ${broadcast ? 'update' : 'create'} campaign: ${error.message}`)
+      message.error(`Failed to ${broadcast ? 'update' : 'create'} broadcast: ${error.message}`)
       setLoading(false)
     }
   })
@@ -180,6 +194,9 @@ export function UpsertBroadcastDrawer({
         metadata: broadcast.metadata || undefined
       })
     } else {
+      // Extract TLD from website URL
+      const websiteTLD = extractTLD(workspace.settings.website_url || '')
+
       // Set default values for a new broadcast
       form.setFieldsValue({
         name: '',
@@ -190,7 +207,7 @@ export function UpsertBroadcastDrawer({
           skip_duplicate_emails: true
         },
         schedule: {
-          send_immediately: true,
+          send_manually: true,
           use_recipient_timezone: false
         },
         test_settings: {
@@ -211,6 +228,7 @@ export function UpsertBroadcastDrawer({
         },
         tracking_enabled: true,
         utm_parameters: {
+          source: websiteTLD || undefined,
           medium: 'email'
         }
       })
@@ -221,69 +239,27 @@ export function UpsertBroadcastDrawer({
   const handleClose = () => {
     setIsOpen(false)
     form.resetFields()
-    setTab('settings')
     if (onClose) {
       onClose()
     }
   }
 
-  const goNext = () => {
-    setTab('template')
-  }
-
-  const goToSettings = () => {
-    setTab('settings')
-  }
-
-  const goToTemplate = () => {
-    setTab('template')
-  }
-
-  const goToSchedule = () => {
-    setTab('schedule')
-  }
-
-  const renderTabExtra = () => {
+  const renderDrawerFooter = () => {
     return (
       <div className="text-right">
         <Space>
           <Button type="link" loading={loading} onClick={handleClose}>
             Cancel
           </Button>
-
-          {tab === 'settings' && (
-            <Button type="primary" onClick={goNext}>
-              Next
-            </Button>
-          )}
-
-          {tab === 'template' && (
-            <>
-              <Button type="primary" ghost onClick={goToSettings}>
-                Previous
-              </Button>
-              <Button type="primary" onClick={goToSchedule}>
-                Next
-              </Button>
-            </>
-          )}
-
-          {tab === 'schedule' && (
-            <>
-              <Button type="primary" ghost onClick={goToTemplate}>
-                Previous
-              </Button>
-              <Button
-                loading={loading || upsertBroadcastMutation.isPending}
-                onClick={() => {
-                  form.submit()
-                }}
-                type="primary"
-              >
-                Save
-              </Button>
-            </>
-          )}
+          <Button
+            loading={loading || upsertBroadcastMutation.isPending}
+            onClick={() => {
+              form.submit()
+            }}
+            type="primary"
+          >
+            Save
+          </Button>
         </Space>
       </div>
     )
@@ -292,11 +268,11 @@ export function UpsertBroadcastDrawer({
   return (
     <>
       <Button type="primary" onClick={showDrawer} {...buttonProps}>
-        {buttonContent || (broadcast ? 'Edit Campaign' : 'Create Campaign')}
+        {buttonContent || (broadcast ? 'Edit Broadcast' : 'Create Broadcast')}
       </Button>
       {isOpen && (
         <Drawer
-          title={<>{broadcast ? 'Edit campaign' : 'Create a campaign'}</>}
+          title={<>{broadcast ? 'Edit broadcast' : 'Create a broadcast'}</>}
           closable={true}
           keyboard={false}
           maskClosable={false}
@@ -304,7 +280,7 @@ export function UpsertBroadcastDrawer({
           open={isOpen}
           onClose={handleClose}
           className="drawer-no-transition drawer-body-no-padding"
-          extra={renderTabExtra()}
+          extra={renderDrawerFooter()}
         >
           <Form
             form={form}
@@ -327,71 +303,30 @@ export function UpsertBroadcastDrawer({
             }}
             onFinishFailed={(info) => {
               if (info.errorFields) {
-                // Navigate to the tab with errors
-                const errorFieldPaths = info.errorFields.map((field) => field.name.join('.'))
-
-                // Determine which tab contains errors
-                if (
-                  errorFieldPaths.some(
-                    (path) => path.startsWith('name') || path.startsWith('audience')
-                  )
-                ) {
-                  setTab('settings')
-                } else if (errorFieldPaths.some((path) => path.startsWith('test_settings'))) {
-                  setTab('template')
-                } else if (errorFieldPaths.some((path) => path.startsWith('schedule'))) {
-                  setTab('schedule')
-                }
+                message.error(`Please check the form for errors.`)
               }
               setLoading(false)
             }}
           >
-            <div className="flex justify-center">
-              <Tabs
-                activeKey={tab}
-                centered
-                onChange={(k) => setTab(k)}
-                style={{ display: 'inline-block' }}
-                className="tabs-in-header"
-                destroyInactiveTabPane={false}
-                items={[
-                  {
-                    key: 'settings',
-                    label: '1. Settings & Audience'
-                  },
-                  {
-                    key: 'template',
-                    label: '2. Template'
-                  },
-                  {
-                    key: 'schedule',
-                    label: '3. Schedule'
-                  }
-                ]}
-              />
-            </div>
+            <div className="p-8">
+              <Row gutter={48}>
+                {/* Left Column */}
+                <Col span={12}>
+                  <div className="text-xs mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                    Broadcast Settings
+                  </div>
 
-            <div className="relative">
-              {/* Settings & Audience Tab */}
-              <div style={{ display: tab === 'settings' ? 'block' : 'none' }}>
-                <div className="p-8">
-                  <div className="text-lg mb-6 font-bold">Campaign Settings</div>
-                  <Row gutter={24}>
-                    <Col span={12}>
-                      <Form.Item
-                        name="name"
-                        label="Campaign name"
-                        rules={[{ required: true, message: 'Please enter a campaign name' }]}
-                      >
-                        <Input placeholder="E.g. Weekly Newsletter - May 2023" />
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <TrackingEnabledField form={form} />
-                    </Col>
-                  </Row>
+                  <Form.Item
+                    name="name"
+                    label="Broadcast name"
+                    rules={[{ required: true, message: 'Please enter a broadcast name' }]}
+                  >
+                    <Input placeholder="E.g. Weekly Newsletter - May 2023" />
+                  </Form.Item>
 
-                  <div className="text-lg mt-8 mb-6 font-bold">Audience Selection</div>
+                  <div className="text-xs mt-8 mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                    Audience Selection
+                  </div>
 
                   <Form.Item
                     noStyle
@@ -418,7 +353,7 @@ export function UpsertBroadcastDrawer({
                   <Form.Item
                     name={['audience', 'lists']}
                     label="Lists"
-                    extra="Select the contact lists to include in this campaign"
+                    extra="Select the contact lists to include in this broadcast"
                   >
                     <Select
                       mode="multiple"
@@ -432,7 +367,10 @@ export function UpsertBroadcastDrawer({
                     />
                   </Form.Item>
 
-                  <div className="text-lg mt-8 mb-4 font-bold">Advanced Options</div>
+                  <div className="text-xs mt-12 mb-4 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                    Advanced Options
+                  </div>
+
                   <Row gutter={24}>
                     <Col span={12}>
                       <Form.Item
@@ -463,7 +401,9 @@ export function UpsertBroadcastDrawer({
                     <InputNumber min={1} />
                   </Form.Item>
 
-                  <div className="text-lg mt-8 mb-4 font-bold">URL Tracking Parameters</div>
+                  <div className="text-xs mt-12 mb-4 font-bold border-b border-solid border-gray-400 pb-2 text-gray-900">
+                    URL Tracking Parameters
+                  </div>
                   <Row gutter={24}>
                     <Col span={8}>
                       <Form.Item name={['utm_parameters', 'source']} label="utm_source">
@@ -480,28 +420,33 @@ export function UpsertBroadcastDrawer({
                       </Form.Item>
                     </Col>
                     <Col span={8}>
-                      <Form.Item
-                        name={['utm_parameters', 'campaign']}
-                        label="utm_campaign"
-                        tooltip="Automatically generated from campaign name"
-                      >
-                        <Input placeholder="Generated from campaign name" />
+                      <Form.Item name={['utm_parameters', 'campaign']} label="utm_campaign">
+                        <Input />
                       </Form.Item>
                     </Col>
                   </Row>
-                </div>
-              </div>
+                </Col>
 
-              {/* Template Tab */}
-              <div style={{ display: tab === 'template' ? 'block' : 'none' }}>
-                <div className="p-8">
-                  <Form.Item
-                    name={['test_settings', 'enabled']}
-                    label="Enable A/B Testing"
-                    valuePropName="checked"
-                  >
-                    <Switch />
-                  </Form.Item>
+                {/* Right Column */}
+                <Col span={12}>
+                  <div className="text-xs mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                    Template
+                  </div>
+
+                  <Row gutter={24}>
+                    <Col span={12}>
+                      <TrackingEnabledField form={form} />
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        name={['test_settings', 'enabled']}
+                        label="Enable A/B Testing"
+                        valuePropName="checked"
+                      >
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                  </Row>
 
                   <Form.Item
                     noStyle
@@ -542,7 +487,9 @@ export function UpsertBroadcastDrawer({
                             <ABTestingConfig form={form} />
 
                             {/* Variations management will be added here */}
-                            <div className="text-lg mt-4 mb-4 font-bold">Variations</div>
+                            <div className="text-xs mt-4 mb-4 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                              Variations
+                            </div>
 
                             <Form.List name={['test_settings', 'variations']}>
                               {(fields, { add, remove }) => (
@@ -622,75 +569,100 @@ export function UpsertBroadcastDrawer({
                       // If A/B testing is disabled, show single template config
                       return (
                         <div>
-                          <Row gutter={24}>
-                            <Col span={12}>
-                              <Form.Item
-                                name={['test_settings', 'variations', 0, 'template_id']}
-                                label="Template"
-                                rules={[{ required: true }]}
-                              >
-                                <TemplateSelectorInput
-                                  workspaceId={workspace.id}
-                                  placeholder="Select template"
-                                />
-                              </Form.Item>
-                            </Col>
-                          </Row>
+                          <Form.Item
+                            name={['test_settings', 'variations', 0, 'template_id']}
+                            label="Template"
+                            rules={[{ required: true }]}
+                          >
+                            <TemplateSelectorInput
+                              workspaceId={workspace.id}
+                              placeholder="Select template"
+                            />
+                          </Form.Item>
                         </div>
                       )
                     }}
                   </Form.Item>
-                </div>
-              </div>
 
-              {/* Schedule Tab */}
-              <div style={{ display: tab === 'schedule' ? 'block' : 'none' }}>
-                <div className="p-8">
-                  <Form.Item
-                    name={['schedule', 'send_immediately']}
-                    valuePropName="checked"
-                    label="Send immediately after saving"
-                  >
-                    <Switch />
-                  </Form.Item>
+                  <div className="text-xs mt-8 mb-6 font-bold border-b border-solid pb-2 border-gray-400 pb-2 text-gray-900">
+                    Scheduling
+                  </div>
+
+                  <Row gutter={24}>
+                    <Col span={12}>
+                      <Form.Item
+                        name={['schedule', 'send_manually']}
+                        valuePropName="checked"
+                        label="Manual sending (I will trigger the send)"
+                      >
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prevValues, currentValues) => {
+                        return (
+                          prevValues.schedule?.send_manually !==
+                          currentValues.schedule?.send_manually
+                        )
+                      }}
+                    >
+                      {({ getFieldValue }) => {
+                        const sendManually = getFieldValue(['schedule', 'send_manually'])
+
+                        if (!sendManually) {
+                          return (
+                            <Col span={12}>
+                              <Form.Item
+                                name={['schedule', 'scheduled_time']}
+                                label="Schedule date and time"
+                                rules={[
+                                  { required: true, message: 'Please select a date and time' }
+                                ]}
+                              >
+                                <DatePicker
+                                  showTime
+                                  format="YYYY-MM-DD HH:mm"
+                                  disabledDate={(current) => {
+                                    // Can't select days before today
+                                    return current && current < dayjs().startOf('day')
+                                  }}
+                                  style={{ width: '100%' }}
+                                />
+                              </Form.Item>
+                            </Col>
+                          )
+                        }
+
+                        return null
+                      }}
+                    </Form.Item>
+                  </Row>
 
                   <Form.Item
                     noStyle
                     shouldUpdate={(prevValues, currentValues) => {
                       return (
-                        prevValues.schedule?.send_immediately !==
-                        currentValues.schedule?.send_immediately
+                        prevValues.schedule?.send_manually !== currentValues.schedule?.send_manually
                       )
                     }}
                   >
                     {({ getFieldValue }) => {
-                      const sendImmediately = getFieldValue(['schedule', 'send_immediately'])
+                      const sendManually = getFieldValue(['schedule', 'send_manually'])
 
-                      if (!sendImmediately) {
+                      if (!sendManually) {
                         return (
-                          <>
-                            <Form.Item
-                              name={['schedule', 'scheduled_time']}
-                              label="Schedule date and time"
-                              rules={[{ required: true, message: 'Please select a date and time' }]}
-                            >
-                              <DatePicker
-                                showTime
-                                format="YYYY-MM-DD HH:mm"
-                                disabledDate={(current) => {
-                                  // Can't select days before today
-                                  return current && current < dayjs().startOf('day')
-                                }}
-                              />
-                            </Form.Item>
-
-                            <Form.Item
-                              name={['schedule', 'use_recipient_timezone']}
-                              valuePropName="checked"
-                              label="Send according to recipient timezone"
-                            >
-                              <Switch />
-                            </Form.Item>
+                          <Row gutter={24}>
+                            <Col span={12}>
+                              <Form.Item
+                                name={['schedule', 'use_recipient_timezone']}
+                                valuePropName="checked"
+                                label="Send according to recipient timezone"
+                              >
+                                <Switch />
+                              </Form.Item>
+                            </Col>
 
                             <Form.Item
                               noStyle
@@ -709,51 +681,35 @@ export function UpsertBroadcastDrawer({
 
                                 if (useRecipientTimezone) {
                                   return (
-                                    <Row gutter={24}>
-                                      <Col span={12}>
-                                        <Form.Item
-                                          name={['schedule', 'time_window_start']}
-                                          label="Delivery window start"
-                                          rules={[{ required: true }]}
-                                        >
-                                          <Select
-                                            options={Array.from({ length: 24 }, (_, i) => ({
-                                              value: `${i}:00`,
-                                              label: `${i}:00`
-                                            }))}
-                                          />
-                                        </Form.Item>
-                                      </Col>
-                                      <Col span={12}>
-                                        <Form.Item
-                                          name={['schedule', 'time_window_end']}
-                                          label="Delivery window end"
-                                          rules={[{ required: true }]}
-                                        >
-                                          <Select
-                                            options={Array.from({ length: 24 }, (_, i) => ({
-                                              value: `${i}:00`,
-                                              label: `${i}:00`
-                                            }))}
-                                          />
-                                        </Form.Item>
-                                      </Col>
-                                    </Row>
+                                    <Col span={12}>
+                                      <Form.Item
+                                        name={['schedule', 'time_window_start']}
+                                        label="Delivery time"
+                                        rules={[{ required: true }]}
+                                      >
+                                        <Select
+                                          options={Array.from({ length: 24 }, (_, i) => ({
+                                            value: `${i}:00`,
+                                            label: `${i}:00`
+                                          }))}
+                                        />
+                                      </Form.Item>
+                                    </Col>
                                   )
                                 }
 
-                                return null
+                                return <Col span={12}></Col>
                               }}
                             </Form.Item>
-                          </>
+                          </Row>
                         )
                       }
 
                       return null
                     }}
                   </Form.Item>
-                </div>
-              </div>
+                </Col>
+              </Row>
             </div>
           </Form>
         </Drawer>

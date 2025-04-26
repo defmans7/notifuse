@@ -59,7 +59,7 @@ const getStatusBadge = (status: BroadcastStatus) => {
 }
 
 export function BroadcastsPage() {
-  const { workspaceId } = useParams({ from: '/workspace/$workspaceId/campaigns' })
+  const { workspaceId } = useParams({ from: '/workspace/$workspaceId/broadcasts' })
   const [deleteModalVisible, setDeleteModalVisible] = useState(false)
   const [broadcastToDelete, setBroadcastToDelete] = useState<Broadcast | null>(null)
   const [confirmationInput, setConfirmationInput] = useState('')
@@ -167,7 +167,7 @@ export function BroadcastsPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <Title level={2}>Campaigns</Title>
+        <Title level={2}>Broadcasts</Title>
         {currentWorkspace && (
           <UpsertBroadcastDrawer
             workspace={currentWorkspace}
@@ -176,7 +176,7 @@ export function BroadcastsPage() {
             buttonContent={
               <Space>
                 <MailOutlined />
-                Create Campaign
+                Create Broadcast
               </Space>
             }
           />
@@ -205,14 +205,14 @@ export function BroadcastsPage() {
                 <Space>
                   {broadcast.status === 'draft' && (
                     <Button type="text" size="small" onClick={() => openDeleteModal(broadcast)}>
-                      <Tooltip title="Delete Campaign">
+                      <Tooltip title="Delete Broadcast">
                         <DeleteOutlined />
                       </Tooltip>
                     </Button>
                   )}
                   {(broadcast.status === 'draft' || broadcast.status === 'scheduled') && (
                     <Button type="text" size="small" onClick={() => handleEditBroadcast(broadcast)}>
-                      <Tooltip title="Edit Campaign">
+                      <Tooltip title="Edit Broadcast">
                         <EditOutlined />
                       </Tooltip>
                     </Button>
@@ -223,7 +223,7 @@ export function BroadcastsPage() {
                       size="small"
                       onClick={() => handlePauseBroadcast(broadcast)}
                     >
-                      <Tooltip title="Pause Campaign">
+                      <Tooltip title="Pause Broadcast">
                         <PauseCircleOutlined />
                       </Tooltip>
                     </Button>
@@ -234,7 +234,7 @@ export function BroadcastsPage() {
                       size="small"
                       onClick={() => handleResumeBroadcast(broadcast)}
                     >
-                      <Tooltip title="Resume Campaign">
+                      <Tooltip title="Resume Broadcast">
                         <PlayCircleOutlined />
                       </Tooltip>
                     </Button>
@@ -245,7 +245,7 @@ export function BroadcastsPage() {
                       size="small"
                       onClick={() => handleCancelBroadcast(broadcast)}
                     >
-                      <Tooltip title="Cancel Campaign">
+                      <Tooltip title="Cancel Broadcast">
                         <StopOutlined />
                       </Tooltip>
                     </Button>
@@ -352,15 +352,15 @@ export function BroadcastsPage() {
       ) : (
         <div className="text-center py-12">
           <Title level={4} type="secondary">
-            No campaigns found
+            No broadcasts found
           </Title>
-          <Paragraph type="secondary">Create your first campaign to get started</Paragraph>
+          <Paragraph type="secondary">Create your first broadcast to get started</Paragraph>
           <div className="mt-4">
             {currentWorkspace && (
               <UpsertBroadcastDrawer
                 workspace={currentWorkspace}
                 buttonProps={{ size: 'large', icon: <MailOutlined /> }}
-                buttonContent="Create Campaign"
+                buttonContent="Create Broadcast"
               />
             )}
           </div>
@@ -368,7 +368,7 @@ export function BroadcastsPage() {
       )}
 
       <Modal
-        title="Delete Campaign"
+        title="Delete Broadcast"
         open={deleteModalVisible}
         onCancel={closeDeleteModal}
         footer={[
@@ -389,13 +389,13 @@ export function BroadcastsPage() {
       >
         {broadcastToDelete && (
           <>
-            <p>Are you sure you want to delete the campaign "{broadcastToDelete.name}"?</p>
+            <p>Are you sure you want to delete the broadcast "{broadcastToDelete.name}"?</p>
             <p>
-              This action cannot be undone. To confirm, please enter the campaign ID:{' '}
+              This action cannot be undone. To confirm, please enter the broadcast ID:{' '}
               <Text code>{broadcastToDelete.id}</Text>
             </p>
             <Input
-              placeholder="Enter campaign ID to confirm"
+              placeholder="Enter broadcast ID to confirm"
               value={confirmationInput}
               onChange={(e) => setConfirmationInput(e.target.value)}
               status={
