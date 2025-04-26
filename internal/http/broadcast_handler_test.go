@@ -81,6 +81,16 @@ func (m *MockBroadcastService) SendToIndividual(ctx context.Context, request *do
 	return args.Error(0)
 }
 
+func (m *MockBroadcastService) SendWinningVariation(ctx context.Context, request *domain.SendWinningVariationRequest) error {
+	args := m.Called(ctx, request)
+	return args.Error(0)
+}
+
+func (m *MockBroadcastService) SendBroadcast(ctx context.Context, request *domain.SendBroadcastRequest) error {
+	args := m.Called(ctx, request)
+	return args.Error(0)
+}
+
 // MockLogger implements the logger.Logger interface for testing
 type MockLogger struct{}
 
@@ -102,19 +112,10 @@ func createTestBroadcast() *domain.Broadcast {
 		Name:        "Test Broadcast",
 		Status:      domain.BroadcastStatusDraft,
 		Audience: domain.AudienceSettings{
-			Type: "conditions",
-			SegmentConditions: domain.MapOfAny{
-				"operator": "and",
-				"conditions": []interface{}{
-					map[string]interface{}{
-						"field":    "email",
-						"operator": "not_blank",
-					},
-				},
-			},
+			Segments: []string{"segment123"},
 		},
 		Schedule: domain.ScheduleSettings{
-			SendImmediately: true,
+			IsScheduled: false,
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -304,19 +305,10 @@ func TestHandleCreate(t *testing.T) {
 			WorkspaceID: "workspace123",
 			Name:        "Test Broadcast",
 			Audience: domain.AudienceSettings{
-				Type: "conditions",
-				SegmentConditions: domain.MapOfAny{
-					"operator": "and",
-					"conditions": []interface{}{
-						map[string]interface{}{
-							"field":    "email",
-							"operator": "not_blank",
-						},
-					},
-				},
+				Segments: []string{"segment123"},
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 		}
 

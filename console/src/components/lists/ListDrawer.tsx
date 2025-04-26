@@ -171,7 +171,9 @@ export function CreateListDrawer({
         width={400}
         onClose={onClose}
         open={open}
-        bodyStyle={{ paddingBottom: 80 }}
+        styles={{
+          body: { paddingBottom: 80 }
+        }}
         extra={
           <Button
             type="primary"

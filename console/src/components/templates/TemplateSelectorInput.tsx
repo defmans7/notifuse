@@ -127,7 +127,9 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
         width={600}
         onClose={onClose}
         open={open}
-        bodyStyle={{ paddingBottom: 80 }}
+        styles={{
+          body: { paddingBottom: 80 }
+        }}
       >
         <div style={{ marginBottom: 16 }}>
           <Input

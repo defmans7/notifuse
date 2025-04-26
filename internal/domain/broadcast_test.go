@@ -34,21 +34,12 @@ func createValidBroadcast() domain.Broadcast {
 		Name:        "Test Newsletter",
 		Status:      domain.BroadcastStatusDraft,
 		Audience: domain.AudienceSettings{
-			Type: "conditions",
-			SegmentConditions: domain.MapOfAny{
-				"operator": "and",
-				"conditions": []interface{}{
-					map[string]interface{}{
-						"field":    "email",
-						"operator": "not_blank",
-					},
-				},
-			},
+			Lists:               []string{"list123"},
 			ExcludeUnsubscribed: true,
 			SkipDuplicateEmails: true,
 		},
 		Schedule: domain.ScheduleSettings{
-			SendImmediately: true,
+			IsScheduled: false,
 		},
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled: false,
@@ -73,18 +64,12 @@ func createValidBroadcastWithTest() domain.Broadcast {
 				Name:            "Variation A",
 				TemplateID:      "template123",
 				TemplateVersion: 1,
-				Subject:         "Test Subject A",
-				FromName:        "Sender A",
-				FromEmail:       "sender@example.com",
 			},
 			{
 				ID:              "variation2",
 				Name:            "Variation B",
 				TemplateID:      "template123",
 				TemplateVersion: 1,
-				Subject:         "Test Subject B",
-				FromName:        "Sender B",
-				FromEmail:       "sender@example.com",
 			},
 		},
 	}
@@ -149,63 +134,32 @@ func TestBroadcast_Validate(t *testing.T) {
 			errMsg:  "invalid broadcast status",
 		},
 		{
-			name: "missing audience type",
+			name: "missing audience selection",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcast()
-				b.Audience.Type = ""
+				b.Audience.Lists = []string{}
+				b.Audience.Segments = []string{}
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "invalid audience type",
+			errMsg:  "either lists or segments must be specified",
 		},
 		{
-			name: "invalid audience type",
+			name: "both lists and segments specified",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcast()
-				b.Audience.Type = "invalid"
+				b.Audience.Lists = []string{"list1"}
+				b.Audience.Segments = []string{"segment1"}
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "invalid audience type",
-		},
-		{
-			name: "audience type conditions without segment conditions",
-			broadcast: func() domain.Broadcast {
-				b := createValidBroadcast()
-				b.Audience.Type = "conditions"
-				b.Audience.SegmentConditions = nil
-				return b
-			}(),
-			wantErr: true,
-			errMsg:  "segment conditions are required",
-		},
-		{
-			name: "audience type import without recipients",
-			broadcast: func() domain.Broadcast {
-				b := createValidBroadcast()
-				b.Audience.Type = "import"
-				b.Audience.ImportedRecipients = []string{}
-				return b
-			}(),
-			wantErr: true,
-			errMsg:  "imported recipients are required",
-		},
-		{
-			name: "audience type individual without recipient",
-			broadcast: func() domain.Broadcast {
-				b := createValidBroadcast()
-				b.Audience.Type = "individual"
-				b.Audience.IndividualRecipient = ""
-				return b
-			}(),
-			wantErr: true,
-			errMsg:  "individual recipient is required",
+			errMsg:  "both lists and segments are specified",
 		},
 		{
 			name: "scheduled time required when not sending immediately",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcast()
-				b.Schedule.SendImmediately = false
+				b.Schedule.IsScheduled = true
 				return b
 			}(),
 			wantErr: true,
@@ -265,9 +219,6 @@ func TestBroadcast_Validate(t *testing.T) {
 						Name:            "Variation " + string(rune(i+65)),
 						TemplateID:      "template123",
 						TemplateVersion: 1,
-						Subject:         "Test Subject " + string(rune(i+65)),
-						FromName:        "Sender " + string(rune(i+65)),
-						FromEmail:       "sender@example.com",
 					}
 				}
 				b.TestSettings.Variations = variations
@@ -307,34 +258,14 @@ func TestBroadcast_Validate(t *testing.T) {
 			errMsg:  "template_id is required for variation",
 		},
 		{
-			name: "missing subject in variation",
+			name: "tracking must be enabled for auto-send winner",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcastWithTest()
-				b.TestSettings.Variations[0].Subject = ""
+				b.TrackingEnabled = false
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "subject is required for variation",
-		},
-		{
-			name: "missing from name in variation",
-			broadcast: func() domain.Broadcast {
-				b := createValidBroadcastWithTest()
-				b.TestSettings.Variations[0].FromName = ""
-				return b
-			}(),
-			wantErr: true,
-			errMsg:  "from_name is required for variation",
-		},
-		{
-			name: "missing from email in variation",
-			broadcast: func() domain.Broadcast {
-				b := createValidBroadcastWithTest()
-				b.TestSettings.Variations[0].FromEmail = ""
-				return b
-			}(),
-			wantErr: true,
-			errMsg:  "from_email is required for variation",
+			errMsg:  "tracking must be enabled to use auto-send winner feature",
 		},
 	}
 
@@ -368,20 +299,11 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Name:        "Test Newsletter",
 				Audience: domain.AudienceSettings{
-					Type: "conditions",
-					SegmentConditions: domain.MapOfAny{
-						"operator": "and",
-						"conditions": []interface{}{
-							map[string]interface{}{
-								"field":    "email",
-								"operator": "not_blank",
-							},
-						},
-					},
+					Lists:               []string{"list123"},
 					ExcludeUnsubscribed: true,
 				},
 				Schedule: domain.ScheduleSettings{
-					SendImmediately: true,
+					IsScheduled: false,
 				},
 				TestSettings: domain.BroadcastTestSettings{
 					Enabled: false,
@@ -395,16 +317,7 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 			request: domain.CreateBroadcastRequest{
 				Name: "Test Newsletter",
 				Audience: domain.AudienceSettings{
-					Type: "conditions",
-					SegmentConditions: domain.MapOfAny{
-						"operator": "and",
-						"conditions": []interface{}{
-							map[string]interface{}{
-								"field":    "email",
-								"operator": "not_blank",
-							},
-						},
-					},
+					Lists: []string{"list123"},
 				},
 			},
 			wantErr: true,
@@ -415,16 +328,7 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 			request: domain.CreateBroadcastRequest{
 				WorkspaceID: "workspace123",
 				Audience: domain.AudienceSettings{
-					Type: "conditions",
-					SegmentConditions: domain.MapOfAny{
-						"operator": "and",
-						"conditions": []interface{}{
-							map[string]interface{}{
-								"field":    "email",
-								"operator": "not_blank",
-							},
-						},
-					},
+					Lists: []string{"list123"},
 				},
 			},
 			wantErr: true,

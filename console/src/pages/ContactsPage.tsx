@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Table, Tag, Button, Space } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
@@ -65,6 +65,7 @@ export function ContactsPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/contacts' })
   const search = useSearch({ from: workspaceContactsRoute.id })
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const [visibleColumns, setVisibleColumns] =
     React.useState<Record<string, boolean>>(DEFAULT_VISIBLE_COLUMNS)
@@ -152,6 +153,18 @@ export function ContactsPage() {
       })
   }, [search])
 
+  // Force data refresh on mount
+  React.useEffect(() => {
+    // Reset the query on mount to force a refetch
+    queryClient.resetQueries({ queryKey: ['contacts', workspaceId] })
+
+    // Cleanup function to reset state when component unmounts
+    return () => {
+      setAllContacts([])
+      setCurrentCursor(undefined)
+    }
+  }, [workspaceId, queryClient])
+
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['contacts', workspaceId, { ...search, cursor: currentCursor }],
     queryFn: async () => {
@@ -171,7 +184,9 @@ export function ContactsPage() {
       return contactsApi.list(request)
     },
     // Add staleTime to prevent unnecessary refetches
-    staleTime: 30000
+    staleTime: 30000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false
   })
 
   // Update allContacts when data changes - modified to handle first load correctly

@@ -61,7 +61,7 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 	broadcast.UpdatedAt = now
 
 	// Set scheduled time if needed
-	if !broadcast.Schedule.SendImmediately && !broadcast.Schedule.ScheduledTime.IsZero() {
+	if broadcast.Schedule.IsScheduled && !broadcast.Schedule.ScheduledTime.IsZero() {
 		scheduledAt := broadcast.Schedule.ScheduledTime
 		broadcast.ScheduledAt = &scheduledAt
 	}
@@ -622,10 +622,10 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		ctx,
 		request.WorkspaceID,
 		"marketing", // Email provider type - adjust as needed
-		variation.FromEmail,
-		variation.FromName,
+		template.Email.FromAddress,
+		template.Email.FromName,
 		request.RecipientEmail,
-		variation.Subject,
+		template.Email.Subject,
 		*compiledTemplate.HTML, // Use the compiled HTML content
 	)
 	if err != nil {
@@ -647,6 +647,166 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	}).Info("Email sent to individual recipient successfully")
 
 	// TODO: Record send event in analytics or message tracking system
+
+	return nil
+}
+
+// SendWinningVariation sends the winning variation of an A/B test to remaining recipients
+func (s *BroadcastService) SendWinningVariation(ctx context.Context, request *domain.SendWinningVariationRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"variation_id": request.VariationID,
+		}).Error("Failed to validate send winning variation request")
+		return err
+	}
+
+	// Retrieve the broadcast
+	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.BroadcastID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"variation_id": request.VariationID,
+		}).Error("Failed to get broadcast for sending winning variation")
+		return err
+	}
+
+	// Verify that the broadcast has A/B testing enabled
+	if !broadcast.TestSettings.Enabled {
+		err := fmt.Errorf("broadcast does not have A/B testing enabled")
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+		}).Error("Cannot send winning variation for broadcast without A/B testing")
+		return err
+	}
+
+	// Find the specified variation
+	var winningVariation *domain.BroadcastVariation
+	for _, v := range broadcast.TestSettings.Variations {
+		if v.ID == request.VariationID {
+			winningVariation = &v
+			break
+		}
+	}
+
+	if winningVariation == nil {
+		err := fmt.Errorf("variation with ID %s not found in broadcast", request.VariationID)
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"variation_id": request.VariationID,
+		}).Error("Winning variation not found in broadcast")
+		return err
+	}
+
+	// Ensure tracking is enabled when sending the winning variation
+	if !request.TrackingEnabled && broadcast.TrackingEnabled {
+		// If tracking was enabled for the broadcast but not specified in the request,
+		// use the broadcast's tracking setting
+		request.TrackingEnabled = broadcast.TrackingEnabled
+	}
+
+	// Update the broadcast with the winning variation and winner sent time
+	now := time.Now().UTC()
+	broadcast.WinningVariation = request.VariationID
+	broadcast.WinnerSentAt = &now
+	broadcast.TrackingEnabled = request.TrackingEnabled
+	broadcast.UpdatedAt = now
+
+	// Persist the changes
+	err = s.repo.UpdateBroadcast(ctx, broadcast)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"variation_id": request.VariationID,
+		}).Error("Failed to update broadcast with winning variation information")
+		return err
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"workspace_id":     request.WorkspaceID,
+		"broadcast_id":     request.BroadcastID,
+		"variation_id":     request.VariationID,
+		"tracking_enabled": request.TrackingEnabled,
+	}).Info("Broadcast updated with winning variation")
+
+	// TODO: Implement the actual sending of the winning variation to remaining recipients
+	// This would involve fetching the remaining recipients who didn't receive any test variation
+	// and sending them the winning variation email
+
+	return nil
+}
+
+// SendBroadcast sends a broadcast immediately
+func (s *BroadcastService) SendBroadcast(ctx context.Context, request *domain.SendBroadcastRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to validate send broadcast request")
+		return err
+	}
+
+	// Retrieve the broadcast
+	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.ID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to get broadcast for sending")
+		return err
+	}
+
+	// Only draft or scheduled broadcasts can be sent immediately
+	if broadcast.Status != domain.BroadcastStatusDraft && broadcast.Status != domain.BroadcastStatusScheduled {
+		err := fmt.Errorf("only broadcasts with draft or scheduled status can be sent immediately, current status: %s", broadcast.Status)
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+			"status":       broadcast.Status,
+		}).Error("Cannot send broadcast with invalid status")
+		return err
+	}
+
+	// Update broadcast status
+	broadcast.Status = domain.BroadcastStatusSending
+	now := time.Now().UTC()
+	broadcast.StartedAt = &now
+	broadcast.UpdatedAt = now
+
+	// Persist the changes
+	err = s.repo.UpdateBroadcast(ctx, broadcast)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to update broadcast in repository")
+		return err
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"workspace_id": request.WorkspaceID,
+		"broadcast_id": request.ID,
+	}).Info("Broadcast sending started successfully")
+
+	// TODO: Trigger the actual broadcast sending process
+	// This would typically involve adding the broadcast to a queue for processing
+	// or starting a background job to handle the sending
 
 	return nil
 }

@@ -10,6 +10,7 @@ import { ContactsPage } from './pages/ContactsPage'
 import { ListsPage } from './pages/ListsPage'
 import { FileManagerPage } from './pages/FileManagerPage'
 import { TemplatesPage } from './pages/TemplatesPage'
+import { BroadcastsPage } from './pages/BroadcastsPage'
 import { createRouter } from '@tanstack/react-router'
 
 export interface ContactsSearch {
@@ -75,7 +76,7 @@ const workspaceRoute = createRoute({
 const workspaceCampaignsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/campaigns',
-  component: () => <div>Campaigns</div>
+  component: BroadcastsPage
 })
 
 const workspaceListsRoute = createRoute({

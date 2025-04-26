@@ -46,11 +46,6 @@ type BroadcastVariation struct {
 	Name            string            `json:"name"`
 	TemplateID      string            `json:"template_id"`
 	TemplateVersion int64             `json:"template_version"`
-	Subject         string            `json:"subject"`
-	PreviewText     string            `json:"preview_text,omitempty"`
-	FromName        string            `json:"from_name"`
-	FromEmail       string            `json:"from_email"`
-	ReplyTo         string            `json:"reply_to,omitempty"`
 	Metrics         *VariationMetrics `json:"metrics,omitempty"`
 }
 
@@ -66,10 +61,8 @@ type VariationMetrics struct {
 
 // AudienceSettings defines how recipients are determined for a broadcast
 type AudienceSettings struct {
-	Type                string   `json:"type"` // "conditions", "import", "individual"
-	SegmentConditions   MapOfAny `json:"segment_conditions,omitempty"`
-	ImportedRecipients  []string `json:"imported_recipients,omitempty"`
-	IndividualRecipient string   `json:"individual_recipient,omitempty"`
+	Lists               []string `json:"lists,omitempty"`
+	Segments            []string `json:"segments,omitempty"`
 	ExcludeUnsubscribed bool     `json:"exclude_unsubscribed"`
 	SkipDuplicateEmails bool     `json:"skip_duplicate_emails"`
 	RateLimitPerMinute  int      `json:"rate_limit_per_minute,omitempty"`
@@ -77,7 +70,7 @@ type AudienceSettings struct {
 
 // ScheduleSettings defines when a broadcast will be sent
 type ScheduleSettings struct {
-	SendImmediately      bool      `json:"send_immediately"`
+	IsScheduled          bool      `json:"is_scheduled"`
 	ScheduledTime        time.Time `json:"scheduled_time,omitempty"`
 	UseRecipientTimezone bool      `json:"use_recipient_timezone"`
 	TimeWindowStart      string    `json:"time_window_start,omitempty"` // HH:MM format
@@ -170,6 +163,11 @@ func (b *Broadcast) Validate() error {
 			if b.TestSettings.TestDurationHours <= 0 {
 				return fmt.Errorf("test duration must be greater than 0 hours")
 			}
+
+			// Tracking must be enabled to use auto-send winner feature
+			if !b.TrackingEnabled {
+				return fmt.Errorf("tracking must be enabled to use auto-send winner feature")
+			}
 		}
 
 		// Validate variations
@@ -177,41 +175,23 @@ func (b *Broadcast) Validate() error {
 			if variation.TemplateID == "" {
 				return fmt.Errorf("template_id is required for variation %d", i+1)
 			}
-
-			if variation.Subject == "" {
-				return fmt.Errorf("subject is required for variation %d", i+1)
-			}
-
-			if variation.FromName == "" {
-				return fmt.Errorf("from_name is required for variation %d", i+1)
-			}
-
-			if variation.FromEmail == "" {
-				return fmt.Errorf("from_email is required for variation %d", i+1)
-			}
 		}
 	}
 
 	// Validate audience settings
-	switch b.Audience.Type {
-	case "conditions":
-		if b.Audience.SegmentConditions == nil {
-			return fmt.Errorf("segment conditions are required when audience type is 'conditions'")
-		}
-	case "import":
-		if len(b.Audience.ImportedRecipients) == 0 {
-			return fmt.Errorf("imported recipients are required when audience type is 'import'")
-		}
-	case "individual":
-		if b.Audience.IndividualRecipient == "" {
-			return fmt.Errorf("individual recipient is required when audience type is 'individual'")
-		}
+	switch {
+	case len(b.Audience.Lists) > 0 && len(b.Audience.Segments) > 0:
+		return fmt.Errorf("both lists and segments are specified")
+	case len(b.Audience.Lists) > 0:
+		// Lists are specified, no need to check segments
+	case len(b.Audience.Segments) > 0:
+		// Segments are specified, no need to check lists
 	default:
-		return fmt.Errorf("invalid audience type: %s", b.Audience.Type)
+		return fmt.Errorf("either lists or segments must be specified")
 	}
 
 	// Validate schedule settings
-	if !b.Schedule.SendImmediately && b.Schedule.ScheduledTime.IsZero() {
+	if b.Schedule.IsScheduled && b.Schedule.ScheduledTime.IsZero() {
 		return fmt.Errorf("scheduled time is required when not sending immediately")
 	}
 
@@ -436,6 +416,50 @@ type BroadcastListResponse struct {
 	TotalCount int          `json:"total_count"`
 }
 
+// SendWinningVariationRequest defines the request to send the winning variation of an A/B test
+type SendWinningVariationRequest struct {
+	WorkspaceID     string `json:"workspace_id"`
+	BroadcastID     string `json:"broadcast_id"`
+	VariationID     string `json:"variation_id"`
+	TrackingEnabled bool   `json:"tracking_enabled"`
+}
+
+// Validate validates the send winning variation request
+func (r *SendWinningVariationRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if r.BroadcastID == "" {
+		return fmt.Errorf("broadcast_id is required")
+	}
+
+	if r.VariationID == "" {
+		return fmt.Errorf("variation_id is required")
+	}
+
+	return nil
+}
+
+// SendBroadcastRequest defines the request to send a broadcast immediately
+type SendBroadcastRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+}
+
+// Validate validates the send broadcast request
+func (r *SendBroadcastRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if r.ID == "" {
+		return fmt.Errorf("broadcast id is required")
+	}
+
+	return nil
+}
+
 // BroadcastService defines the interface for broadcast operations
 type BroadcastService interface {
 	// CreateBroadcast creates a new broadcast
@@ -462,8 +486,14 @@ type BroadcastService interface {
 	// CancelBroadcast cancels a scheduled broadcast
 	CancelBroadcast(ctx context.Context, request *CancelBroadcastRequest) error
 
+	// SendBroadcast sends a broadcast immediately
+	SendBroadcast(ctx context.Context, request *SendBroadcastRequest) error
+
 	// SendToIndividual sends a broadcast to an individual recipient
 	SendToIndividual(ctx context.Context, request *SendToIndividualRequest) error
+
+	// SendWinningVariation sends the winning variation of an A/B test to remaining recipients
+	SendWinningVariation(ctx context.Context, request *SendWinningVariationRequest) error
 }
 
 // BroadcastRepository defines the interface for broadcast persistence

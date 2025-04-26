@@ -46,11 +46,12 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			WorkspaceID: "ws123",
 			Name:        "Test Broadcast",
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -93,12 +94,13 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			WorkspaceID: "ws123",
 			Name:        "Test Scheduled Broadcast",
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: false,
-				ScheduledTime:   scheduledTime,
+				IsScheduled:   true,
+				ScheduledTime: scheduledTime,
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -152,11 +154,12 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			WorkspaceID: "ws123",
 			Name:        "Test Broadcast",
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -296,11 +299,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			Name:        "Original Broadcast",
 			Status:      domain.BroadcastStatusDraft,
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -315,11 +319,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			ID:          broadcastID,
 			Name:        "Updated Broadcast",
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -369,11 +374,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			ID:          broadcastID,
 			Name:        "Updated Broadcast",
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 		}
 
@@ -422,11 +428,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 				ID:          broadcastID,
 				Name:        "Updated Broadcast",
 				Audience: domain.AudienceSettings{
-					Type:                "individual",
-					IndividualRecipient: "user@example.com",
+					Lists:               []string{"list123"},
+					ExcludeUnsubscribed: true,
+					SkipDuplicateEmails: true,
 				},
 				Schedule: domain.ScheduleSettings{
-					SendImmediately: true,
+					IsScheduled: false,
 				},
 				TestSettings: domain.BroadcastTestSettings{
 					Enabled: false,
@@ -470,11 +477,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 				Name:        "Original Broadcast",
 				Status:      status,
 				Audience: domain.AudienceSettings{
-					Type:                "individual",
-					IndividualRecipient: "user@example.com",
+					Lists:               []string{"list123"},
+					ExcludeUnsubscribed: true,
+					SkipDuplicateEmails: true,
 				},
 				Schedule: domain.ScheduleSettings{
-					SendImmediately: true,
+					IsScheduled: false,
 				},
 				TestSettings: domain.BroadcastTestSettings{
 					Enabled: false,
@@ -489,11 +497,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 				ID:          broadcastID,
 				Name:        "Updated Broadcast",
 				Audience: domain.AudienceSettings{
-					Type:                "individual",
-					IndividualRecipient: "user@example.com",
+					Lists:               []string{"list123"},
+					ExcludeUnsubscribed: true,
+					SkipDuplicateEmails: true,
 				},
 				Schedule: domain.ScheduleSettings{
-					SendImmediately: true,
+					IsScheduled: false,
 				},
 				TestSettings: domain.BroadcastTestSettings{
 					Enabled: false,
@@ -533,11 +542,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			Name:        "Original Broadcast",
 			Status:      domain.BroadcastStatusDraft,
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -552,11 +562,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			ID:          broadcastID,
 			Name:        "Updated Broadcast",
 			Audience: domain.AudienceSettings{
-				Type:                "individual",
-				IndividualRecipient: "user@example.com",
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
 			},
 			Schedule: domain.ScheduleSettings{
-				SendImmediately: true,
+				IsScheduled: false,
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -1536,19 +1547,17 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
 	variation1 := domain.BroadcastVariation{
-		ID:        "var1",
-		Name:      "Variation 1",
-		FromEmail: "from@example.com",
-		FromName:  "Sender Name",
-		Subject:   "Test Subject",
+		ID:              "var1",
+		Name:            "Variation 1",
+		TemplateID:      "template1",
+		TemplateVersion: 1,
 	}
 
 	variation2 := domain.BroadcastVariation{
-		ID:        "var2",
-		Name:      "Variation 2",
-		FromEmail: "from2@example.com",
-		FromName:  "Sender 2",
-		Subject:   "Subject 2",
+		ID:              "var2",
+		Name:            "Variation 2",
+		TemplateID:      "template2",
+		TemplateVersion: 1,
 	}
 
 	broadcast := &domain.Broadcast{
@@ -1580,9 +1589,12 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 
 		// Add the template service expectations
 		mockTemplateSvc.EXPECT().
-			GetTemplateByID(gomock.Any(), "workspace1", gomock.Any(), gomock.Any()).
+			GetTemplateByID(gomock.Any(), "workspace1", "template1", gomock.Any()).
 			Return(&domain.Template{
 				Email: &domain.EmailTemplate{
+					FromAddress:      "from@example.com",
+					FromName:         "Sender Name",
+					Subject:          "Test Subject",
 					VisualEditorTree: mjml.EmailBlock{},
 				},
 			}, nil)
@@ -1645,9 +1657,12 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 
 		// Add the template service expectations
 		mockTemplateSvc.EXPECT().
-			GetTemplateByID(gomock.Any(), "workspace1", gomock.Any(), gomock.Any()).
+			GetTemplateByID(gomock.Any(), "workspace1", "template1", gomock.Any()).
 			Return(&domain.Template{
 				Email: &domain.EmailTemplate{
+					FromAddress:      "from@example.com",
+					FromName:         "Sender Name",
+					Subject:          "Test Subject",
 					VisualEditorTree: mjml.EmailBlock{},
 				},
 			}, nil)
@@ -1816,9 +1831,12 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 
 		// Add the template service expectations
 		mockTemplateSvc.EXPECT().
-			GetTemplateByID(gomock.Any(), "workspace1", gomock.Any(), gomock.Any()).
+			GetTemplateByID(gomock.Any(), "workspace1", "template1", gomock.Any()).
 			Return(&domain.Template{
 				Email: &domain.EmailTemplate{
+					FromAddress:      "from@example.com",
+					FromName:         "Sender Name",
+					Subject:          "Test Subject",
 					VisualEditorTree: mjml.EmailBlock{},
 				},
 			}, nil)
@@ -2252,6 +2270,275 @@ func TestBroadcastService_ResumeBroadcast(t *testing.T) {
 			if tt.expectedError != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedError.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestBroadcastService_SendWinningVariation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+
+	svc := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-123"
+	variationID := "variation-1"
+
+	tests := []struct {
+		name          string
+		setupMocks    func()
+		request       *domain.SendWinningVariationRequest
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "success - tracking enabled",
+			setupMocks: func() {
+				broadcast := &domain.Broadcast{
+					ID:              broadcastID,
+					WorkspaceID:     workspaceID,
+					Name:            "Test A/B Broadcast",
+					Status:          domain.BroadcastStatusSending,
+					TrackingEnabled: true,
+					TestSettings: domain.BroadcastTestSettings{
+						Enabled:          true,
+						SamplePercentage: 50,
+						Variations: []domain.BroadcastVariation{
+							{
+								ID:              variationID,
+								Name:            "Variation A",
+								TemplateID:      "template-1",
+								TemplateVersion: 1,
+							},
+							{
+								ID:              "variation-2",
+								Name:            "Variation B",
+								TemplateID:      "template-2",
+								TemplateVersion: 1,
+							},
+						},
+					},
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+				mockRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, b *domain.Broadcast) error {
+						assert.Equal(t, variationID, b.WinningVariation)
+						assert.NotNil(t, b.WinnerSentAt)
+						assert.True(t, b.TrackingEnabled)
+						return nil
+					})
+
+				// Add logger expectations
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+				mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+			},
+			request: &domain.SendWinningVariationRequest{
+				WorkspaceID:     workspaceID,
+				BroadcastID:     broadcastID,
+				VariationID:     variationID,
+				TrackingEnabled: true,
+			},
+			expectedError: false,
+		},
+		{
+			name: "success - tracking not specified but enabled in broadcast",
+			setupMocks: func() {
+				broadcast := &domain.Broadcast{
+					ID:              broadcastID,
+					WorkspaceID:     workspaceID,
+					Name:            "Test A/B Broadcast",
+					Status:          domain.BroadcastStatusSending,
+					TrackingEnabled: true,
+					TestSettings: domain.BroadcastTestSettings{
+						Enabled:          true,
+						SamplePercentage: 50,
+						Variations: []domain.BroadcastVariation{
+							{
+								ID:              variationID,
+								Name:            "Variation A",
+								TemplateID:      "template-1",
+								TemplateVersion: 1,
+							},
+							{
+								ID:              "variation-2",
+								Name:            "Variation B",
+								TemplateID:      "template-2",
+								TemplateVersion: 1,
+							},
+						},
+					},
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+				mockRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, b *domain.Broadcast) error {
+						assert.Equal(t, variationID, b.WinningVariation)
+						assert.NotNil(t, b.WinnerSentAt)
+						assert.True(t, b.TrackingEnabled)
+						return nil
+					})
+
+				// Add logger expectations
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+				mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+			},
+			request: &domain.SendWinningVariationRequest{
+				WorkspaceID:     workspaceID,
+				BroadcastID:     broadcastID,
+				VariationID:     variationID,
+				TrackingEnabled: false, // Not specified, should use broadcast value
+			},
+			expectedError: false,
+		},
+		{
+			name: "failure - broadcast not found",
+			setupMocks: func() {
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+					Return(nil, &domain.ErrBroadcastNotFound{ID: broadcastID})
+
+				// Add logger expectations
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+				mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+			},
+			request: &domain.SendWinningVariationRequest{
+				WorkspaceID:     workspaceID,
+				BroadcastID:     broadcastID,
+				VariationID:     variationID,
+				TrackingEnabled: true,
+			},
+			expectedError: true,
+			errorContains: "not found",
+		},
+		{
+			name: "failure - A/B testing not enabled",
+			setupMocks: func() {
+				broadcast := &domain.Broadcast{
+					ID:              broadcastID,
+					WorkspaceID:     workspaceID,
+					Name:            "Test Broadcast",
+					Status:          domain.BroadcastStatusSending,
+					TrackingEnabled: true,
+					TestSettings: domain.BroadcastTestSettings{
+						Enabled: false,
+					},
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+
+				// Add logger expectations
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+				mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+			},
+			request: &domain.SendWinningVariationRequest{
+				WorkspaceID:     workspaceID,
+				BroadcastID:     broadcastID,
+				VariationID:     variationID,
+				TrackingEnabled: true,
+			},
+			expectedError: true,
+			errorContains: "does not have A/B testing enabled",
+		},
+		{
+			name: "failure - variation not found",
+			setupMocks: func() {
+				broadcast := &domain.Broadcast{
+					ID:              broadcastID,
+					WorkspaceID:     workspaceID,
+					Name:            "Test A/B Broadcast",
+					Status:          domain.BroadcastStatusSending,
+					TrackingEnabled: true,
+					TestSettings: domain.BroadcastTestSettings{
+						Enabled:          true,
+						SamplePercentage: 50,
+						Variations: []domain.BroadcastVariation{
+							{
+								ID:              "other-variation",
+								Name:            "Other Variation",
+								TemplateID:      "template-other",
+								TemplateVersion: 1,
+							},
+						},
+					},
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+
+				// Add logger expectations
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+				mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+			},
+			request: &domain.SendWinningVariationRequest{
+				WorkspaceID:     workspaceID,
+				BroadcastID:     broadcastID,
+				VariationID:     variationID,
+				TrackingEnabled: true,
+			},
+			expectedError: true,
+			errorContains: "not found in broadcast",
+		},
+		{
+			name: "failure - update broadcast fails",
+			setupMocks: func() {
+				broadcast := &domain.Broadcast{
+					ID:              broadcastID,
+					WorkspaceID:     workspaceID,
+					Name:            "Test A/B Broadcast",
+					Status:          domain.BroadcastStatusSending,
+					TrackingEnabled: true,
+					TestSettings: domain.BroadcastTestSettings{
+						Enabled:          true,
+						SamplePercentage: 50,
+						Variations: []domain.BroadcastVariation{
+							{
+								ID:              variationID,
+								Name:            "Variation A",
+								TemplateID:      "template-1",
+								TemplateVersion: 1,
+							},
+						},
+					},
+				}
+
+				mockRepo.EXPECT().GetBroadcast(gomock.Any(), workspaceID, broadcastID).Return(broadcast, nil)
+				mockRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(fmt.Errorf("database error"))
+
+				// Add logger expectations
+				mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+				mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+			},
+			request: &domain.SendWinningVariationRequest{
+				WorkspaceID:     workspaceID,
+				BroadcastID:     broadcastID,
+				VariationID:     variationID,
+				TrackingEnabled: true,
+			},
+			expectedError: true,
+			errorContains: "database error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMocks()
+
+			err := svc.SendWinningVariation(context.Background(), tt.request)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
 			} else {
 				assert.NoError(t, err)
 			}

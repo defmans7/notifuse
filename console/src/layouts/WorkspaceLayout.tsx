@@ -118,7 +118,7 @@ export function WorkspaceLayout() {
             trigger={null}
           >
             <div
-              style={{ padding: '24px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ padding: '24px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}
             >
               {!collapsed && (
                 <Select
@@ -128,7 +128,7 @@ export function WorkspaceLayout() {
                   placeholder="Select workspace"
                   options={workspaces.map((workspace: Workspace) => ({
                     label: (
-                      <Space>
+                      <Space size="small">
                         {workspace.settings.logo_url && (
                           <img
                             src={workspace.settings.logo_url}
@@ -136,7 +136,6 @@ export function WorkspaceLayout() {
                             style={{
                               height: '16px',
                               width: '16px',
-                              marginRight: '8px',
                               objectFit: 'contain',
                               verticalAlign: 'middle'
                             }}

@@ -81,12 +81,14 @@ const ProviderCard = ({ provider, icon, description, onClick }: ProviderCardProp
     hoverable
     onClick={() => onClick(provider)}
     style={{ textAlign: 'center', height: '100%', padding: '12px' }}
-    bodyStyle={{
-      padding: '12px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center'
+    styles={{
+      body: {
+        padding: '12px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }
     }}
     size="small"
   >
