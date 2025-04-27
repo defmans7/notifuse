@@ -30,6 +30,12 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
 
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
 	t.Run("Success", func(t *testing.T) {
@@ -151,6 +157,12 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
 
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
 	t.Run("Success", func(t *testing.T) {
@@ -214,6 +226,12 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
 	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
@@ -396,6 +414,13 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
@@ -569,6 +594,12 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
 
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
 	t.Run("CancelScheduledBroadcast", func(t *testing.T) {
@@ -684,6 +715,12 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
@@ -993,6 +1030,12 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
 
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
 	t.Run("Success", func(t *testing.T) {
@@ -1153,5 +1196,624 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 		// Verify results
 		require.Error(t, err)
 		assert.Same(t, expectedErr, err)
+	})
+}
+
+func TestBroadcastService_SendToIndividual(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+
+	// Setup logger mock
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+		templateID := "template123"
+		recipientEmail := "user@example.com"
+
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			VariationID:    variationID,
+			RecipientEmail: recipientEmail,
+		}
+
+		// Create a broadcast with test variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: true,
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Create template
+		template := &domain.Template{
+			ID:       templateID,
+			Name:     "Test Template",
+			Version:  1,
+			Channel:  "email",
+			Category: "marketing",
+			Email: &domain.EmailTemplate{
+				FromAddress: "sender@example.com",
+				FromName:    "Sender Name",
+				Subject:     "Test Subject",
+			},
+		}
+
+		// Create contact
+		contact := &domain.Contact{
+			Email:     recipientEmail,
+			FirstName: &domain.NullableString{String: "Test", IsNull: false},
+			LastName:  &domain.NullableString{String: "User", IsNull: false},
+		}
+
+		// Create compiled template result
+		compiledHTML := "<html><body>Hello Test!</body></html>"
+		compiledTemplate := &domain.CompileTemplateResponse{
+			Success: true,
+			HTML:    &compiledHTML,
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		mockContactRepo.EXPECT().
+			GetContactByEmail(gomock.Any(), workspaceID, recipientEmail).
+			Return(contact, nil)
+
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(1)).
+			Return(template, nil)
+
+		mockTemplateSvc.EXPECT().
+			CompileTemplate(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+			Return(compiledTemplate, nil)
+
+		mockEmailSvc.EXPECT().
+			SendEmail(
+				gomock.Any(),
+				workspaceID,
+				"marketing",
+				template.Email.FromAddress,
+				template.Email.FromName,
+				recipientEmail,
+				template.Email.Subject,
+				compiledHTML,
+			).
+			Return(nil)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "nonexistent"
+		recipientEmail := "user@example.com"
+
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+		}
+
+		// Mock repository to return not found error
+		notFoundErr := errors.New("broadcast not found")
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, notFoundErr)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, notFoundErr, err)
+	})
+
+	t.Run("NoVariationSpecified", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+		templateID := "template123"
+		recipientEmail := "user@example.com"
+
+		// No variation ID specified in request
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+		}
+
+		// Create a broadcast with variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: true,
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Create template
+		template := &domain.Template{
+			ID:       templateID,
+			Name:     "Test Template",
+			Version:  1,
+			Channel:  "email",
+			Category: "marketing",
+			Email: &domain.EmailTemplate{
+				FromAddress: "sender@example.com",
+				FromName:    "Sender Name",
+				Subject:     "Test Subject",
+			},
+		}
+
+		// Create compiled template result
+		compiledHTML := "<html><body>Hello!</body></html>"
+		compiledTemplate := &domain.CompileTemplateResponse{
+			Success: true,
+			HTML:    &compiledHTML,
+		}
+
+		// Set up expectations - should use first variation
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		mockContactRepo.EXPECT().
+			GetContactByEmail(gomock.Any(), workspaceID, recipientEmail).
+			Return(nil, errors.New("contact not found"))
+
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(1)).
+			Return(template, nil)
+
+		mockTemplateSvc.EXPECT().
+			CompileTemplate(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+			Return(compiledTemplate, nil)
+
+		mockEmailSvc.EXPECT().
+			SendEmail(
+				gomock.Any(),
+				workspaceID,
+				"marketing",
+				template.Email.FromAddress,
+				template.Email.FromName,
+				recipientEmail,
+				template.Email.Subject,
+				compiledHTML,
+			).
+			Return(nil)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("NoVariations", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		recipientEmail := "user@example.com"
+
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+		}
+
+		// Create a broadcast with NO variations
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled:    true,
+				Variations: []domain.BroadcastVariation{}, // Empty variations
+			},
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcast has no variations")
+	})
+
+	t.Run("VariationNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+		nonExistentVariationID := "var999"
+		templateID := "template123"
+		recipientEmail := "user@example.com"
+
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			VariationID:    nonExistentVariationID, // Non-existent variation
+			RecipientEmail: recipientEmail,
+		}
+
+		// Create a broadcast with different variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: true,
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID, // Different ID
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "variation with ID var999 not found in broadcast")
+	})
+}
+
+func TestBroadcastService_SendWinningVariation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+
+	// Setup logger mock
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+		templateID := "template123"
+
+		request := &domain.SendWinningVariationRequest{
+			WorkspaceID:     workspaceID,
+			BroadcastID:     broadcastID,
+			VariationID:     variationID,
+			TrackingEnabled: true,
+		}
+
+		// Create a broadcast with A/B testing enabled
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: true,
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+			TrackingEnabled: false, // Different from request
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Should update broadcast with winning variation
+		mockRepo.EXPECT().
+			UpdateBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, updatedBroadcast *domain.Broadcast) error {
+				// Verify important properties
+				assert.Equal(t, broadcastID, updatedBroadcast.ID)
+				assert.Equal(t, workspaceID, updatedBroadcast.WorkspaceID)
+				assert.Equal(t, variationID, updatedBroadcast.WinningVariation)
+				assert.True(t, updatedBroadcast.TrackingEnabled)
+				assert.NotNil(t, updatedBroadcast.WinnerSentAt)
+				return nil
+			})
+
+		// Call the service
+		err := service.SendWinningVariation(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "nonexistent"
+		variationID := "var123"
+
+		request := &domain.SendWinningVariationRequest{
+			WorkspaceID:     workspaceID,
+			BroadcastID:     broadcastID,
+			VariationID:     variationID,
+			TrackingEnabled: true,
+		}
+
+		// Mock repository to return not found error
+		notFoundErr := errors.New("broadcast not found")
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, notFoundErr)
+
+		// Call the service
+		err := service.SendWinningVariation(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, notFoundErr, err)
+	})
+
+	t.Run("ABTestingNotEnabled", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+
+		request := &domain.SendWinningVariationRequest{
+			WorkspaceID:     workspaceID,
+			BroadcastID:     broadcastID,
+			VariationID:     variationID,
+			TrackingEnabled: true,
+		}
+
+		// Create a broadcast WITHOUT A/B testing enabled
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: false, // A/B testing disabled
+			},
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Call the service
+		err := service.SendWinningVariation(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcast does not have A/B testing enabled")
+	})
+
+	t.Run("VariationNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+		nonExistentVariationID := "var999"
+		templateID := "template123"
+
+		request := &domain.SendWinningVariationRequest{
+			WorkspaceID:     workspaceID,
+			BroadcastID:     broadcastID,
+			VariationID:     nonExistentVariationID, // Non-existent variation
+			TrackingEnabled: true,
+		}
+
+		// Create a broadcast with different variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: true,
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID, // Different ID
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Call the service
+		err := service.SendWinningVariation(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "variation with ID var999 not found in broadcast")
+	})
+
+	t.Run("UpdateError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+		templateID := "template123"
+
+		request := &domain.SendWinningVariationRequest{
+			WorkspaceID:     workspaceID,
+			BroadcastID:     broadcastID,
+			VariationID:     variationID,
+			TrackingEnabled: true,
+		}
+
+		// Create a broadcast with A/B testing enabled
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: true,
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock repository to return an error on update
+		updateErr := errors.New("database error")
+		mockRepo.EXPECT().
+			UpdateBroadcast(gomock.Any(), gomock.Any()).
+			Return(updateErr)
+
+		// Call the service
+		err := service.SendWinningVariation(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, updateErr, err)
+	})
+
+	t.Run("UseExistingTrackingSettings", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		variationID := "var123"
+		templateID := "template123"
+
+		request := &domain.SendWinningVariationRequest{
+			WorkspaceID:     workspaceID,
+			BroadcastID:     broadcastID,
+			VariationID:     variationID,
+			TrackingEnabled: false, // Not enabling tracking in request
+		}
+
+		// Create a broadcast with tracking enabled
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			TestSettings: domain.BroadcastTestSettings{
+				Enabled: true,
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+			TrackingEnabled: true, // Enabled in broadcast
+		}
+
+		// Set up expectations
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Should update broadcast with winning variation and preserve tracking settings
+		mockRepo.EXPECT().
+			UpdateBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, updatedBroadcast *domain.Broadcast) error {
+				// Verify tracking settings preserved from original broadcast
+				assert.True(t, updatedBroadcast.TrackingEnabled)
+				assert.Equal(t, variationID, updatedBroadcast.WinningVariation)
+				assert.NotNil(t, updatedBroadcast.WinnerSentAt)
+				return nil
+			})
+
+		// Call the service
+		err := service.SendWinningVariation(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
 	})
 }
