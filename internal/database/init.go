@@ -171,7 +171,6 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			winner_sent_at TIMESTAMP,
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL,
-			scheduled_at TIMESTAMP,
 			started_at TIMESTAMP,
 			completed_at TIMESTAMP,
 			cancelled_at TIMESTAMP,

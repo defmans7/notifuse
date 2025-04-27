@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -23,16 +22,18 @@ func (e *MissingParameterError) Error() string {
 }
 
 type BroadcastHandler struct {
-	service   domain.BroadcastService
-	logger    logger.Logger
-	publicKey paseto.V4AsymmetricPublicKey
+	service     domain.BroadcastService
+	templateSvc domain.TemplateService
+	logger      logger.Logger
+	publicKey   paseto.V4AsymmetricPublicKey
 }
 
-func NewBroadcastHandler(service domain.BroadcastService, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger) *BroadcastHandler {
+func NewBroadcastHandler(service domain.BroadcastService, templateSvc domain.TemplateService, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger) *BroadcastHandler {
 	return &BroadcastHandler{
-		service:   service,
-		logger:    logger,
-		publicKey: publicKey,
+		service:     service,
+		templateSvc: templateSvc,
+		logger:      logger,
+		publicKey:   publicKey,
 	}
 }
 
@@ -54,90 +55,24 @@ func (h *BroadcastHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/broadcasts.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 }
 
-// GetBroadcastsRequest is used to extract query parameters for listing broadcasts
-type GetBroadcastsRequest struct {
-	WorkspaceID string `json:"workspace_id"`
-	Status      string `json:"status,omitempty"`
-	Limit       int    `json:"limit,omitempty"`
-	Offset      int    `json:"offset,omitempty"`
-}
-
-// FromURLParams parses URL query parameters into the request
-func (r *GetBroadcastsRequest) FromURLParams(values url.Values) error {
-	r.WorkspaceID = values.Get("workspace_id")
-	if r.WorkspaceID == "" {
-		return &MissingParameterError{Param: "workspace_id"}
-	}
-
-	r.Status = values.Get("status")
-
-	if limitStr := values.Get("limit"); limitStr != "" {
-		var err error
-		r.Limit, err = parseIntParam(limitStr)
-		if err != nil {
-			return fmt.Errorf("invalid limit parameter: %w", err)
-		}
-	}
-
-	if offsetStr := values.Get("offset"); offsetStr != "" {
-		var err error
-		r.Offset, err = parseIntParam(offsetStr)
-		if err != nil {
-			return fmt.Errorf("invalid offset parameter: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// parseIntParam parses a string to an integer
-func parseIntParam(s string) (int, error) {
-	var result int
-	_, err := fmt.Sscanf(s, "%d", &result)
-	if err != nil {
-		return 0, err
-	}
-	return result, nil
-}
-
-// GetBroadcastRequest is used to extract query parameters for getting a single broadcast
-type GetBroadcastRequest struct {
-	WorkspaceID string `json:"workspace_id"`
-	ID          string `json:"id"`
-}
-
-// FromURLParams parses URL query parameters into the request
-func (r *GetBroadcastRequest) FromURLParams(values url.Values) error {
-	r.WorkspaceID = values.Get("workspace_id")
-	if r.WorkspaceID == "" {
-		return &MissingParameterError{Param: "workspace_id"}
-	}
-
-	r.ID = values.Get("id")
-	if r.ID == "" {
-		return &MissingParameterError{Param: "id"}
-	}
-
-	return nil
-}
-
 func (h *BroadcastHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req GetBroadcastsRequest
+	var req domain.GetBroadcastsRequest
 	if err := req.FromURLParams(r.URL.Query()); err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	params := domain.ListBroadcastsParams{
-		WorkspaceID: req.WorkspaceID,
-		Status:      domain.BroadcastStatus(req.Status),
-		Limit:       req.Limit,
-		Offset:      req.Offset,
+		WorkspaceID:   req.WorkspaceID,
+		Status:        domain.BroadcastStatus(req.Status),
+		Limit:         req.Limit,
+		Offset:        req.Offset,
+		WithTemplates: req.WithTemplates,
 	}
 
 	response, err := h.service.ListBroadcasts(r.Context(), params)
@@ -169,7 +104,7 @@ func (h *BroadcastHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req GetBroadcastRequest
+	var req domain.GetBroadcastRequest
 	if err := req.FromURLParams(r.URL.Query()); err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
@@ -184,6 +119,30 @@ func (h *BroadcastHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		h.logger.WithField("error", err.Error()).Error("Failed to get broadcast")
 		WriteJSONError(w, "Failed to get broadcast", http.StatusInternalServerError)
 		return
+	}
+
+	// If WithTemplates is true, fetch template details for each variation
+	if req.WithTemplates {
+		// Use the same logic as in ListBroadcasts to fetch templates
+		for i, variation := range broadcast.TestSettings.Variations {
+			if variation.TemplateID != "" {
+				// Fetch the template for this variation
+				template, err := h.templateSvc.GetTemplateByID(r.Context(), req.WorkspaceID, variation.TemplateID, 1)
+				if err != nil {
+					h.logger.WithFields(map[string]interface{}{
+						"error":        err,
+						"workspace_id": req.WorkspaceID,
+						"broadcast_id": broadcast.ID,
+						"template_id":  variation.TemplateID,
+					}).Warn("Failed to fetch template for broadcast variation")
+					// Continue with the next variation rather than failing the whole request
+					continue
+				}
+
+				// Assign the template to the variation
+				broadcast.SetTemplateForVariation(i, template)
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

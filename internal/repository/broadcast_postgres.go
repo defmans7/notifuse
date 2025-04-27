@@ -58,14 +58,11 @@ func (r *broadcastRepository) CreateBroadcast(ctx context.Context, broadcast *do
 			winner_sent_at, 
 			created_at, 
 			updated_at, 
-			scheduled_at, 
 			started_at, 
 			completed_at, 
 			cancelled_at
-		)
-		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 
-			$16, $17, $18, $19, $20, $21, $22, $23, $24, $25
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
 		)
 	`
 
@@ -92,7 +89,6 @@ func (r *broadcastRepository) CreateBroadcast(ctx context.Context, broadcast *do
 		broadcast.WinnerSentAt,
 		broadcast.CreatedAt,
 		broadcast.UpdatedAt,
-		broadcast.ScheduledAt,
 		broadcast.StartedAt,
 		broadcast.CompletedAt,
 		broadcast.CancelledAt,
@@ -137,7 +133,6 @@ func (r *broadcastRepository) GetBroadcast(ctx context.Context, workspaceID, id 
 			winner_sent_at, 
 			created_at, 
 			updated_at, 
-			scheduled_at, 
 			started_at, 
 			completed_at, 
 			cancelled_at
@@ -190,10 +185,9 @@ func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *do
 			test_sent_at = $19,
 			winner_sent_at = $20,
 			updated_at = $21,
-			scheduled_at = $22,
-			started_at = $23,
-			completed_at = $24,
-			cancelled_at = $25
+			started_at = $22,
+			completed_at = $23,
+			cancelled_at = $24
 		WHERE id = $1 AND workspace_id = $2
 	`
 
@@ -219,7 +213,6 @@ func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *do
 		broadcast.TestSentAt,
 		broadcast.WinnerSentAt,
 		broadcast.UpdatedAt,
-		broadcast.ScheduledAt,
 		broadcast.StartedAt,
 		broadcast.CompletedAt,
 		broadcast.CancelledAt,
@@ -304,7 +297,6 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 				winner_sent_at, 
 				created_at, 
 				updated_at, 
-				scheduled_at, 
 				started_at, 
 				completed_at, 
 				cancelled_at
@@ -339,7 +331,6 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 				winner_sent_at, 
 				created_at, 
 				updated_at, 
-				scheduled_at, 
 				started_at, 
 				completed_at, 
 				cancelled_at
@@ -435,7 +426,6 @@ func scanBroadcast(scanner interface {
 		&broadcast.WinnerSentAt,
 		&broadcast.CreatedAt,
 		&broadcast.UpdatedAt,
-		&broadcast.ScheduledAt,
 		&broadcast.StartedAt,
 		&broadcast.CompletedAt,
 		&broadcast.CancelledAt,

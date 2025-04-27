@@ -45,9 +45,17 @@ func createValidBroadcast() domain.Broadcast {
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled: false,
 		},
-		TrackingEnabled: true,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		TrackingEnabled:   true,
+		TotalSent:         100,
+		TotalDelivered:    95,
+		TotalFailed:       2,
+		TotalBounced:      3,
+		TotalComplained:   1,
+		TotalOpens:        80,
+		TotalClicks:       50,
+		TotalUnsubscribed: 5,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 }
 
@@ -63,10 +71,28 @@ func createValidBroadcastWithTest() domain.Broadcast {
 			{
 				ID:         "variation1",
 				TemplateID: "template123",
+				Metrics: &domain.VariationMetrics{
+					Recipients:   50,
+					Delivered:    48,
+					Opens:        40,
+					Clicks:       25,
+					Bounced:      1,
+					Complained:   1,
+					Unsubscribed: 2,
+				},
 			},
 			{
 				ID:         "variation2",
 				TemplateID: "template123",
+				Metrics: &domain.VariationMetrics{
+					Recipients:   50,
+					Delivered:    47,
+					Opens:        35,
+					Clicks:       20,
+					Bounced:      2,
+					Complained:   0,
+					Unsubscribed: 3,
+				},
 			},
 		},
 	}

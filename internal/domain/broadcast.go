@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -68,6 +69,8 @@ type BroadcastVariation struct {
 	ID         string            `json:"id"`
 	TemplateID string            `json:"template_id"`
 	Metrics    *VariationMetrics `json:"metrics,omitempty"`
+	// joined servers-side
+	Template *Template `json:"template,omitempty"`
 }
 
 // Value implements the driver.Valuer interface for database serialization
@@ -92,12 +95,13 @@ func (v *BroadcastVariation) Scan(value interface{}) error {
 
 // VariationMetrics contains performance metrics for a variation
 type VariationMetrics struct {
-	Recipients int `json:"recipients"`
-	Delivered  int `json:"delivered"`
-	Opens      int `json:"opens"`
-	Clicks     int `json:"clicks"`
-	Bounced    int `json:"bounced"`
-	Complained int `json:"complained"`
+	Recipients   int `json:"recipients"`
+	Delivered    int `json:"delivered"`
+	Opens        int `json:"opens"`
+	Clicks       int `json:"clicks"`
+	Bounced      int `json:"bounced"`
+	Complained   int `json:"complained"`
+	Unsubscribed int `json:"unsubscribed"`
 }
 
 // Value implements the driver.Valuer interface for database serialization
@@ -240,33 +244,33 @@ func (s *ScheduleSettings) SetScheduledDateTime(t time.Time, timezone string) er
 
 // Broadcast represents a one-time communication to multiple recipients (newsletter)
 type Broadcast struct {
-	ID               string                `json:"id"`
-	WorkspaceID      string                `json:"workspace_id"`
-	Name             string                `json:"name"`
-	Status           BroadcastStatus       `json:"status"`
-	Audience         AudienceSettings      `json:"audience"`
-	Schedule         ScheduleSettings      `json:"schedule"`
-	TestSettings     BroadcastTestSettings `json:"test_settings"`
-	TrackingEnabled  bool                  `json:"tracking_enabled"`
-	UTMParameters    *UTMParameters        `json:"utm_parameters,omitempty"`
-	Metadata         MapOfAny              `json:"metadata,omitempty"`
-	TotalSent        int                   `json:"total_sent"`
-	TotalDelivered   int                   `json:"total_delivered"`
-	TotalBounced     int                   `json:"total_bounced"`
-	TotalComplained  int                   `json:"total_complained"`
-	TotalFailed      int                   `json:"total_failed"`
-	TotalOpens       int                   `json:"total_opens"`
-	TotalClicks      int                   `json:"total_clicks"`
-	WinningVariation string                `json:"winning_variation,omitempty"`
-	TestSentAt       *time.Time            `json:"test_sent_at,omitempty"`
-	WinnerSentAt     *time.Time            `json:"winner_sent_at,omitempty"`
-	CreatedAt        time.Time             `json:"created_at"`
-	UpdatedAt        time.Time             `json:"updated_at"`
-	ScheduledAt      *time.Time            `json:"scheduled_at,omitempty"`
-	StartedAt        *time.Time            `json:"started_at,omitempty"`
-	CompletedAt      *time.Time            `json:"completed_at,omitempty"`
-	CancelledAt      *time.Time            `json:"cancelled_at,omitempty"`
-	PausedAt         *time.Time            `json:"paused_at,omitempty"`
+	ID                string                `json:"id"`
+	WorkspaceID       string                `json:"workspace_id"`
+	Name              string                `json:"name"`
+	Status            BroadcastStatus       `json:"status"`
+	Audience          AudienceSettings      `json:"audience"`
+	Schedule          ScheduleSettings      `json:"schedule"`
+	TestSettings      BroadcastTestSettings `json:"test_settings"`
+	TrackingEnabled   bool                  `json:"tracking_enabled"`
+	UTMParameters     *UTMParameters        `json:"utm_parameters,omitempty"`
+	Metadata          MapOfAny              `json:"metadata,omitempty"`
+	TotalSent         int                   `json:"total_sent"`
+	TotalDelivered    int                   `json:"total_delivered"`
+	TotalBounced      int                   `json:"total_bounced"`
+	TotalComplained   int                   `json:"total_complained"`
+	TotalFailed       int                   `json:"total_failed"`
+	TotalOpens        int                   `json:"total_opens"`
+	TotalClicks       int                   `json:"total_clicks"`
+	TotalUnsubscribed int                   `json:"total_unsubscribed"`
+	WinningVariation  string                `json:"winning_variation,omitempty"`
+	TestSentAt        *time.Time            `json:"test_sent_at,omitempty"`
+	WinnerSentAt      *time.Time            `json:"winner_sent_at,omitempty"`
+	CreatedAt         time.Time             `json:"created_at"`
+	UpdatedAt         time.Time             `json:"updated_at"`
+	StartedAt         *time.Time            `json:"started_at,omitempty"`
+	CompletedAt       *time.Time            `json:"completed_at,omitempty"`
+	CancelledAt       *time.Time            `json:"cancelled_at,omitempty"`
+	PausedAt          *time.Time            `json:"paused_at,omitempty"`
 }
 
 // UTMParameters contains UTM tracking parameters for the broadcast
@@ -592,10 +596,11 @@ func (r *DeleteBroadcastRequest) Validate() error {
 
 // ListBroadcastsParams defines parameters for listing broadcasts with pagination
 type ListBroadcastsParams struct {
-	WorkspaceID string
-	Status      BroadcastStatus
-	Limit       int
-	Offset      int
+	WorkspaceID   string
+	Status        BroadcastStatus
+	Limit         int
+	Offset        int
+	WithTemplates bool // Whether to fetch and include template details for each variation
 }
 
 // BroadcastListResponse defines the response for listing broadcasts
@@ -652,6 +657,101 @@ func (r *SendToIndividualRequest) Validate() error {
 	}
 
 	return nil
+}
+
+// GetBroadcastsRequest is used to extract query parameters for listing broadcasts
+type GetBroadcastsRequest struct {
+	WorkspaceID   string `json:"workspace_id"`
+	Status        string `json:"status,omitempty"`
+	Limit         int    `json:"limit,omitempty"`
+	Offset        int    `json:"offset,omitempty"`
+	WithTemplates bool   `json:"with_templates,omitempty"`
+}
+
+// FromURLParams parses URL query parameters into the request
+func (r *GetBroadcastRequest) FromURLParams(values url.Values) error {
+	r.WorkspaceID = values.Get("workspace_id")
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	r.ID = values.Get("id")
+	if r.ID == "" {
+		return fmt.Errorf("id is required")
+	}
+
+	if withTemplatesStr := values.Get("with_templates"); withTemplatesStr != "" {
+		var err error
+		r.WithTemplates, err = ParseBoolParam(withTemplatesStr)
+		if err != nil {
+			return fmt.Errorf("invalid with_templates parameter: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// FromURLParams parses URL query parameters into the request
+func (r *GetBroadcastsRequest) FromURLParams(values url.Values) error {
+	r.WorkspaceID = values.Get("workspace_id")
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	r.Status = values.Get("status")
+
+	if limitStr := values.Get("limit"); limitStr != "" {
+		var err error
+		r.Limit, err = ParseIntParam(limitStr)
+		if err != nil {
+			return fmt.Errorf("invalid limit parameter: %w", err)
+		}
+	}
+
+	if offsetStr := values.Get("offset"); offsetStr != "" {
+		var err error
+		r.Offset, err = ParseIntParam(offsetStr)
+		if err != nil {
+			return fmt.Errorf("invalid offset parameter: %w", err)
+		}
+	}
+
+	if withTemplatesStr := values.Get("with_templates"); withTemplatesStr != "" {
+		var err error
+		r.WithTemplates, err = ParseBoolParam(withTemplatesStr)
+		if err != nil {
+			return fmt.Errorf("invalid with_templates parameter: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// parseIntParam parses a string to an integer
+func ParseIntParam(s string) (int, error) {
+	var result int
+	_, err := fmt.Sscanf(s, "%d", &result)
+	if err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
+// parseBoolParam parses a string to a boolean
+func ParseBoolParam(s string) (bool, error) {
+	var result bool
+	_, err := fmt.Sscanf(s, "%t", &result)
+	if err != nil {
+		return false, err
+	}
+	return result, nil
+}
+
+// GetBroadcastRequest is used to extract query parameters for getting a single broadcast
+type GetBroadcastRequest struct {
+	WorkspaceID   string `json:"workspace_id"`
+	ID            string `json:"id"`
+	WithTemplates bool   `json:"with_templates,omitempty"`
 }
 
 // BroadcastService defines the interface for broadcast operations
@@ -716,4 +816,13 @@ type ErrBroadcastNotFound struct {
 // Error returns the error message
 func (e *ErrBroadcastNotFound) Error() string {
 	return fmt.Sprintf("Broadcast not found with ID: %s", e.ID)
+}
+
+// SetTemplateForVariation assigns a template to a specific variation
+func (b *Broadcast) SetTemplateForVariation(variationIndex int, template *Template) {
+	if b == nil || variationIndex < 0 || variationIndex >= len(b.TestSettings.Variations) {
+		return
+	}
+
+	b.TestSettings.Variations[variationIndex].Template = template
 }

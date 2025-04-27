@@ -131,6 +131,7 @@ export function UpsertBroadcastDrawer({
   const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const { message, modal } = App.useApp()
+  const [formTouched, setFormTouched] = useState(false)
 
   // Watch campaign name changes using Form.useWatch
   const campaignName = Form.useWatch('name', form)
@@ -191,9 +192,6 @@ export function UpsertBroadcastDrawer({
   })
 
   const showDrawer = () => {
-    // Get the default timezone from workspace settings, fallback to UTC if not available
-    const defaultTimezone = workspace.settings?.timezone || 'UTC'
-
     if (broadcast) {
       // For existing broadcasts, we need to ensure the schedule settings
       // match our form structure with the new fields
@@ -239,13 +237,12 @@ export function UpsertBroadcastDrawer({
         }
       })
     }
+    setFormTouched(false)
     setIsOpen(true)
   }
 
   const handleClose = () => {
-    const campaignName = form.getFieldValue('name')
-
-    if (campaignName && !loading && !upsertBroadcastMutation.isPending) {
+    if (formTouched && !loading && !upsertBroadcastMutation.isPending) {
       modal.confirm({
         title: 'Unsaved changes',
         content: 'You have unsaved changes. Are you sure you want to close this drawer?',
@@ -254,6 +251,7 @@ export function UpsertBroadcastDrawer({
         onOk: () => {
           setIsOpen(false)
           form.resetFields()
+          setFormTouched(false)
           if (onClose) {
             onClose()
           }
@@ -262,6 +260,7 @@ export function UpsertBroadcastDrawer({
     } else {
       setIsOpen(false)
       form.resetFields()
+      setFormTouched(false)
       if (onClose) {
         onClose()
       }
@@ -335,6 +334,9 @@ export function UpsertBroadcastDrawer({
                 message.error(`Please check the form for errors.`)
               }
               setLoading(false)
+            }}
+            onValuesChange={() => {
+              setFormTouched(true)
             }}
           >
             <div className="p-8">

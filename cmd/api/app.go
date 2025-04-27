@@ -256,7 +256,7 @@ func (a *App) InitHandlers() error {
 	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, a.config.Security.PasetoPublicKey, a.logger)
 	templateHandler := httpHandler.NewTemplateHandler(a.templateService, a.config.Security.PasetoPublicKey, a.logger)
 	emailHandler := httpHandler.NewEmailHandler(a.emailService, a.config.Security.PasetoPublicKey, a.logger, a.config.Security.SecretKey)
-	broadcastHandler := httpHandler.NewBroadcastHandler(a.broadcastService, a.config.Security.PasetoPublicKey, a.logger)
+	broadcastHandler := httpHandler.NewBroadcastHandler(a.broadcastService, a.templateService, a.config.Security.PasetoPublicKey, a.logger)
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)

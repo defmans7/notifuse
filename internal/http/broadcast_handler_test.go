@@ -13,6 +13,7 @@ import (
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	http_handler "github.com/Notifuse/notifuse/internal/http"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/assert"
@@ -117,14 +118,23 @@ func createTestBroadcast() *domain.Broadcast {
 		Schedule: domain.ScheduleSettings{
 			IsScheduled: false,
 		},
-		CreatedAt: now,
-		UpdatedAt: now,
+		TotalSent:         100,
+		TotalDelivered:    95,
+		TotalFailed:       2,
+		TotalBounced:      3,
+		TotalComplained:   1,
+		TotalOpens:        80,
+		TotalClicks:       50,
+		TotalUnsubscribed: 5,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 }
 
 // setupHandler creates a test handler and mock service
 func setupHandler() (*http_handler.BroadcastHandler, *MockBroadcastService) {
 	mockService := new(MockBroadcastService)
+	mockTemplateService := new(mocks.MockTemplateService)
 	mockLogger := &MockLogger{}
 
 	// Create a mock public key for the handler
@@ -132,7 +142,7 @@ func setupHandler() (*http_handler.BroadcastHandler, *MockBroadcastService) {
 	publicKey := secretKey.Public()
 
 	// Create the handler with a mock public key
-	handler := http_handler.NewBroadcastHandler(mockService, publicKey, mockLogger)
+	handler := http_handler.NewBroadcastHandler(mockService, mockTemplateService, publicKey, mockLogger)
 
 	return handler, mockService
 }

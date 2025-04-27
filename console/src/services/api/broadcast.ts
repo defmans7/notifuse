@@ -15,6 +15,41 @@ export interface VariationMetrics {
   clicks: number
   open_rate: number
   click_rate: number
+  bounced: number
+  complained: number
+  unsubscribed: number
+}
+
+// Define the EmailTemplate interface
+export interface EmailTemplate {
+  from_address: string
+  from_name: string
+  reply_to?: string
+  subject: string
+  subject_preview?: string
+  compiled_preview: string
+  visual_editor_tree: any
+  text?: string
+  previewText?: string
+}
+
+// Define the Template interface
+export interface Template {
+  id: string
+  name: string
+  version: number
+  channel: string
+  email: EmailTemplate
+  category: string
+  template_macro_id?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  test_data?: Record<string, any>
+  settings?: Record<string, any>
+  created_at: string
+  updated_at: string
+  deleted_at?: string
 }
 
 export interface BroadcastVariation {
@@ -27,6 +62,7 @@ export interface BroadcastVariation {
   from_email: string
   reply_to?: string
   metrics?: VariationMetrics
+  template?: Template // Template joined from server when with_templates is true
 }
 
 export interface BroadcastTestSettings {
@@ -78,12 +114,16 @@ export interface Broadcast {
   sent_count: number
   delivered_count: number
   failed_count: number
+  total_opens?: number
+  total_clicks?: number
+  total_bounced?: number
+  total_complained?: number
+  total_unsubscribed?: number
   winning_variation?: string
   test_sent_at?: string
   winner_sent_at?: string
   created_at: string
   updated_at: string
-  scheduled_at?: string
   started_at?: string
   completed_at?: string
   cancelled_at?: string
@@ -120,6 +160,7 @@ export interface ListBroadcastsRequest {
   status?: BroadcastStatus
   limit?: number
   offset?: number
+  with_templates?: boolean
 }
 
 export interface ListBroadcastsResponse {
@@ -130,6 +171,7 @@ export interface ListBroadcastsResponse {
 export interface GetBroadcastRequest {
   workspace_id: string
   id: string
+  with_templates?: boolean
 }
 
 export interface GetBroadcastResponse {
@@ -177,6 +219,8 @@ export const broadcastApi = {
     if (params.status) searchParams.append('status', params.status)
     if (params.limit) searchParams.append('limit', params.limit.toString())
     if (params.offset) searchParams.append('offset', params.offset.toString())
+    if (params.with_templates !== undefined)
+      searchParams.append('with_templates', params.with_templates.toString())
 
     return api.get<ListBroadcastsResponse>(`/api/broadcasts.list?${searchParams.toString()}`)
   },
@@ -185,6 +229,8 @@ export const broadcastApi = {
     const searchParams = new URLSearchParams()
     searchParams.append('workspace_id', params.workspace_id)
     searchParams.append('id', params.id)
+    if (params.with_templates !== undefined)
+      searchParams.append('with_templates', params.with_templates.toString())
 
     return api.get<GetBroadcastResponse>(`/api/broadcasts.get?${searchParams.toString()}`)
   },

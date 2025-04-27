@@ -64,17 +64,6 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 
 	// Set scheduled time if needed
 	if broadcast.Schedule.IsScheduled && (broadcast.Schedule.ScheduledDate != "" && broadcast.Schedule.ScheduledTime != "") {
-		scheduledTime, err := broadcast.Schedule.ParseScheduledDateTime()
-		if err != nil {
-			s.logger.WithFields(map[string]interface{}{
-				"error":        err,
-				"broadcast_id": broadcast.ID,
-				"workspace_id": broadcast.WorkspaceID,
-			}).Error("Failed to parse scheduled date and time")
-			return nil, err
-		}
-		broadcast.ScheduledAt = &scheduledTime
-
 		// Set status to scheduled if the broadcast is scheduled
 		broadcast.Status = domain.BroadcastStatusScheduled
 	}
@@ -179,11 +168,37 @@ func (s *BroadcastService) ListBroadcasts(ctx context.Context, params domain.Lis
 		return nil, err
 	}
 
+	// If WithTemplates is true, fetch template details for each variation
+	if params.WithTemplates {
+		for _, broadcast := range response.Broadcasts {
+			for i, variation := range broadcast.TestSettings.Variations {
+				if variation.TemplateID != "" {
+					// Fetch the template for this variation
+					template, err := s.templateSvc.GetTemplateByID(ctx, params.WorkspaceID, variation.TemplateID, 1)
+					if err != nil {
+						s.logger.WithFields(map[string]interface{}{
+							"error":        err,
+							"workspace_id": params.WorkspaceID,
+							"broadcast_id": broadcast.ID,
+							"template_id":  variation.TemplateID,
+						}).Warn("Failed to fetch template for broadcast variation")
+						// Continue with the next variation rather than failing the whole request
+						continue
+					}
+
+					// Assign the template to the variation
+					broadcast.SetTemplateForVariation(i, template)
+				}
+			}
+		}
+	}
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace_id":     params.WorkspaceID,
 		"status":           params.Status,
 		"limit":            params.Limit,
 		"offset":           params.Offset,
+		"with_templates":   params.WithTemplates,
 		"broadcasts_count": len(response.Broadcasts),
 		"total_count":      response.TotalCount,
 	}).Info("Broadcasts listed successfully")
@@ -236,8 +251,19 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		now := time.Now().UTC()
 		broadcast.StartedAt = &now
 	} else {
-		// Otherwise, set the scheduled time
-		broadcast.ScheduledAt = &request.ScheduledAt
+		// Update the schedule settings with the requested date/time
+		// Use Schedule.SetScheduledDateTime method
+		timezone := request.ScheduledAt.Location().String()
+		if err := broadcast.Schedule.SetScheduledDateTime(request.ScheduledAt, timezone); err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"error":        err,
+				"workspace_id": request.WorkspaceID,
+				"broadcast_id": request.ID,
+			}).Error("Failed to set scheduled date/time")
+			return err
+		}
+
+		broadcast.Schedule.IsScheduled = true
 	}
 
 	// Persist the changes
@@ -368,16 +394,32 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 	now := time.Now().UTC()
 	broadcast.UpdatedAt = now
 
-	// If broadcast was originally scheduled and not yet started
-	if broadcast.ScheduledAt != nil && broadcast.ScheduledAt.After(now) && broadcast.StartedAt == nil {
-		broadcast.Status = domain.BroadcastStatusScheduled
-		s.logger.WithFields(map[string]interface{}{
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.ID,
-			"scheduled_at": broadcast.ScheduledAt,
-		}).Info("Broadcast resumed to scheduled status")
+	// If broadcast was originally scheduled and scheduled time is in the future
+	if broadcast.Schedule.IsScheduled {
+		scheduledTime, err := broadcast.Schedule.ParseScheduledDateTime()
+		isScheduledInFuture := err == nil && scheduledTime.After(now) && broadcast.StartedAt == nil
+
+		if isScheduledInFuture {
+			broadcast.Status = domain.BroadcastStatusScheduled
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id":   request.WorkspaceID,
+				"broadcast_id":   request.ID,
+				"scheduled_time": scheduledTime,
+			}).Info("Broadcast resumed to scheduled status")
+		} else {
+			// If scheduled time has passed or there was an error parsing it
+			broadcast.Status = domain.BroadcastStatusSending
+			if broadcast.StartedAt == nil {
+				broadcast.StartedAt = &now
+			}
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": request.WorkspaceID,
+				"broadcast_id": request.ID,
+				"started_at":   broadcast.StartedAt,
+			}).Info("Broadcast resumed to sending status")
+		}
 	} else {
-		// If broadcast was already in progress or scheduled time has passed
+		// If broadcast wasn't scheduled, resume sending
 		broadcast.Status = domain.BroadcastStatusSending
 		if broadcast.StartedAt == nil {
 			broadcast.StartedAt = &now

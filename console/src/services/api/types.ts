@@ -205,6 +205,7 @@ export interface CreateListRequest {
 
 export interface GetListsRequest {
   workspace_id: string
+  with_templates?: boolean
 }
 
 export interface GetListRequest {
