@@ -195,7 +195,7 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		broadcast.StartedAt = &now
 	} else {
 		// Update the schedule settings with the requested settings
-		broadcast.Schedule.IsScheduled = request.IsScheduled
+		broadcast.Schedule.IsScheduled = true
 		broadcast.Schedule.ScheduledDate = request.ScheduledDate
 		broadcast.Schedule.ScheduledTime = request.ScheduledTime
 		broadcast.Schedule.Timezone = request.Timezone
@@ -224,7 +224,6 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 
 	// TODO: If SendNow is true, trigger the actual sending process
 	// This would typically involve adding the broadcast to a queue for processing
-	// This implementation depends on your message processing architecture
 
 	return nil
 }

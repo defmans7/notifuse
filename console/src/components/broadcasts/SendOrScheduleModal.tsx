@@ -85,30 +85,15 @@ export function SendOrScheduleModal({
         const scheduledDate = dayjs(values.scheduled_date).format('YYYY-MM-DD')
         const scheduledTime = values.scheduled_time
 
-        // Update the broadcast schedule settings
-        await broadcastApi.update({
-          workspace_id: workspaceId,
-          id: broadcast.id,
-          name: broadcast.name,
-          audience: broadcast.audience,
-          test_settings: broadcast.test_settings,
-          tracking_enabled: broadcast.tracking_enabled,
-          schedule: {
-            is_scheduled: true,
-            scheduled_date: scheduledDate,
-            scheduled_time: scheduledTime,
-            timezone: values.timezone,
-            use_recipient_timezone: values.use_recipient_timezone
-          },
-          utm_parameters: broadcast.utm_parameters,
-          metadata: broadcast.metadata
-        })
-
         // Now schedule the broadcast
         await broadcastApi.schedule({
           workspace_id: workspaceId,
           id: broadcast.id,
-          send_now: false
+          send_now: false,
+          scheduled_date: scheduledDate,
+          scheduled_time: scheduledTime,
+          timezone: values.timezone,
+          use_recipient_timezone: values.use_recipient_timezone
         })
 
         message.success(`Broadcast "${broadcast.name}" scheduled successfully`)

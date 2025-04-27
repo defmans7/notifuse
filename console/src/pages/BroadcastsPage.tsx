@@ -414,23 +414,6 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             size="small"
             column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
           >
-            {/* Schedule Information */}
-            {broadcast.schedule.is_scheduled &&
-              broadcast.schedule.scheduled_date &&
-              broadcast.schedule.scheduled_time && (
-                <Descriptions.Item label="Scheduled">
-                  {dayjs(
-                    `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
-                  ).fromNow()}
-                  {broadcast.schedule.timezone && ` (${broadcast.schedule.timezone})`}
-                  {broadcast.schedule.use_recipient_timezone && (
-                    <Tag className="ml-2" color="blue">
-                      Uses recipient timezone
-                    </Tag>
-                  )}
-                </Descriptions.Item>
-              )}
-
             {broadcast.started_at && (
               <Descriptions.Item label="Started">
                 {dayjs(broadcast.started_at).fromNow()}
@@ -526,6 +509,21 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                 </Tooltip>
               </Descriptions.Item>
             )}
+
+            {/* Schedule Information */}
+            {broadcast.schedule.is_scheduled &&
+              broadcast.schedule.scheduled_date &&
+              broadcast.schedule.scheduled_time && (
+                <Descriptions.Item label="Scheduled">
+                  {dayjs(
+                    `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
+                  ).format('lll')}
+                  {' in '}
+                  {broadcast.schedule.use_recipient_timezone
+                    ? 'recipients timezone'
+                    : broadcast.schedule.timezone}
+                </Descriptions.Item>
+              )}
           </Descriptions>
 
           {broadcast.test_settings.enabled && (

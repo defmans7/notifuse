@@ -588,12 +588,11 @@ func TestScheduleBroadcastRequest_Validate(t *testing.T) {
 			request: domain.ScheduleBroadcastRequest{
 				WorkspaceID:          "workspace123",
 				ID:                   "broadcast123",
-				IsScheduled:          true,
+				SendNow:              false,
 				ScheduledDate:        "2023-12-31",
 				ScheduledTime:        "15:30",
 				Timezone:             "UTC",
 				UseRecipientTimezone: false,
-				SendNow:              false,
 			},
 			wantErr: false,
 		},
@@ -610,7 +609,7 @@ func TestScheduleBroadcastRequest_Validate(t *testing.T) {
 			name: "missing workspace ID",
 			request: domain.ScheduleBroadcastRequest{
 				ID:            "broadcast123",
-				IsScheduled:   true,
+				SendNow:       false,
 				ScheduledDate: "2023-12-31",
 				ScheduledTime: "15:30",
 			},
@@ -621,7 +620,7 @@ func TestScheduleBroadcastRequest_Validate(t *testing.T) {
 			name: "missing broadcast ID",
 			request: domain.ScheduleBroadcastRequest{
 				WorkspaceID:   "workspace123",
-				IsScheduled:   true,
+				SendNow:       false,
 				ScheduledDate: "2023-12-31",
 				ScheduledTime: "15:30",
 			},
@@ -629,32 +628,22 @@ func TestScheduleBroadcastRequest_Validate(t *testing.T) {
 			errMsg:  "broadcast id is required",
 		},
 		{
-			name: "missing scheduled fields when not sending now",
+			name: "send_now is false but missing date/time",
 			request: domain.ScheduleBroadcastRequest{
 				WorkspaceID: "workspace123",
 				ID:          "broadcast123",
 				SendNow:     false,
 			},
 			wantErr: true,
-			errMsg:  "either send_now or is_scheduled must be true",
-		},
-		{
-			name: "is_scheduled is true but missing date/time",
-			request: domain.ScheduleBroadcastRequest{
-				WorkspaceID: "workspace123",
-				ID:          "broadcast123",
-				IsScheduled: true,
-			},
-			wantErr: true,
-			errMsg:  "scheduled_date and scheduled_time are required",
+			errMsg:  "scheduled_date and scheduled_time are required when not sending immediately",
 		},
 		{
 			name: "invalid date format",
 			request: domain.ScheduleBroadcastRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "broadcast123",
-				IsScheduled:   true,
-				ScheduledDate: "31-12-2023", // Wrong format, should be YYYY-MM-DD
+				SendNow:       false,
+				ScheduledDate: "12-31-2023", // Invalid format, should be YYYY-MM-DD
 				ScheduledTime: "15:30",
 			},
 			wantErr: true,
@@ -665,12 +654,25 @@ func TestScheduleBroadcastRequest_Validate(t *testing.T) {
 			request: domain.ScheduleBroadcastRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "broadcast123",
-				IsScheduled:   true,
+				SendNow:       false,
 				ScheduledDate: "2023-12-31",
-				ScheduledTime: "3:30PM", // Wrong format, should be HH:MM
+				ScheduledTime: "3:30 PM", // Invalid format, should be HH:MM
 			},
 			wantErr: true,
 			errMsg:  "scheduled time must be in HH:MM format",
+		},
+		{
+			name: "invalid timezone",
+			request: domain.ScheduleBroadcastRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "broadcast123",
+				SendNow:       false,
+				ScheduledDate: "2023-12-31",
+				ScheduledTime: "15:30",
+				Timezone:      "Invalid/Timezone",
+			},
+			wantErr: true,
+			errMsg:  "invalid timezone",
 		},
 	}
 

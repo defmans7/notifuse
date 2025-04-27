@@ -357,22 +357,20 @@ func TestHandleSchedule(t *testing.T) {
 		request := &domain.ScheduleBroadcastRequest{
 			WorkspaceID:          "workspace123",
 			ID:                   "broadcast123",
-			IsScheduled:          true,
+			SendNow:              false,
 			ScheduledDate:        scheduledDate,
 			ScheduledTime:        scheduledTimeStr,
 			Timezone:             "UTC",
 			UseRecipientTimezone: false,
-			SendNow:              false,
 		}
 
 		mockService.On("ScheduleBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.ScheduleBroadcastRequest) bool {
 			return req.WorkspaceID == request.WorkspaceID &&
 				req.ID == request.ID &&
-				req.IsScheduled &&
+				!req.SendNow &&
 				req.ScheduledDate == scheduledDate &&
 				req.ScheduledTime == scheduledTimeStr &&
-				req.Timezone == "UTC" &&
-				!req.SendNow
+				req.Timezone == "UTC"
 		})).Return(nil).Once()
 
 		requestBody, _ := json.Marshal(request)
@@ -428,7 +426,8 @@ func TestHandleSchedule(t *testing.T) {
 		request := &domain.ScheduleBroadcastRequest{
 			WorkspaceID: "workspace123",
 			ID:          "broadcast123",
-			// Neither SendNow nor IsScheduled is set to true
+			SendNow:     false,
+			// Missing scheduled date and time
 		}
 
 		requestBody, _ := json.Marshal(request)

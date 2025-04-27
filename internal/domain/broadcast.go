@@ -497,12 +497,11 @@ func (r *UpdateBroadcastRequest) Validate(existingBroadcast *Broadcast) (*Broadc
 type ScheduleBroadcastRequest struct {
 	WorkspaceID          string `json:"workspace_id"`
 	ID                   string `json:"id"`
-	IsScheduled          bool   `json:"is_scheduled"`
+	SendNow              bool   `json:"send_now"`
 	ScheduledDate        string `json:"scheduled_date,omitempty"`
 	ScheduledTime        string `json:"scheduled_time,omitempty"`
 	Timezone             string `json:"timezone,omitempty"`
 	UseRecipientTimezone bool   `json:"use_recipient_timezone"`
-	SendNow              bool   `json:"send_now"`
 }
 
 // Validate validates the schedule broadcast request
@@ -515,13 +514,10 @@ func (r *ScheduleBroadcastRequest) Validate() error {
 		return fmt.Errorf("broadcast id is required")
 	}
 
-	if !r.SendNow && !r.IsScheduled {
-		return fmt.Errorf("either send_now or is_scheduled must be true")
-	}
-
-	if r.IsScheduled {
+	if !r.SendNow {
+		// If not sending now, we need scheduled date and time
 		if r.ScheduledDate == "" || r.ScheduledTime == "" {
-			return fmt.Errorf("scheduled_date and scheduled_time are required when is_scheduled is true")
+			return fmt.Errorf("scheduled_date and scheduled_time are required when not sending immediately")
 		}
 
 		// Validate date format (YYYY-MM-DD)

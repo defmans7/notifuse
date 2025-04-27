@@ -177,8 +177,11 @@ export interface GetBroadcastResponse {
 export interface ScheduleBroadcastRequest {
   workspace_id: string
   id: string
-  scheduled_at?: string
   send_now: boolean
+  scheduled_date?: string
+  scheduled_time?: string
+  timezone?: string
+  use_recipient_timezone?: boolean
 }
 
 export interface PauseBroadcastRequest {
