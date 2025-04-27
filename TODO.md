@@ -12,9 +12,7 @@
 - schedule campaign
 - pause campaign
 - resume campaign
-- delete campaign
 - get campaign
-- list campaigns
 
 ## API access
 

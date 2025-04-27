@@ -667,3 +667,491 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 		assert.Contains(t, err.Error(), "only broadcasts with scheduled or paused status can be cancelled")
 	})
 }
+
+func TestBroadcastService_ListBroadcasts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Create params for listing broadcasts
+		params := domain.ListBroadcastsParams{
+			WorkspaceID: workspaceID,
+			Status:      domain.BroadcastStatusDraft,
+			Limit:       10,
+			Offset:      0,
+		}
+
+		// Create expected broadcasts
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 1",
+				Status:      domain.BroadcastStatusDraft,
+				CreatedAt:   time.Now().Add(-24 * time.Hour),
+				UpdatedAt:   time.Now().Add(-24 * time.Hour),
+			},
+			{
+				ID:          "bcast2",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 2",
+				Status:      domain.BroadcastStatusDraft,
+				CreatedAt:   time.Now().Add(-12 * time.Hour),
+				UpdatedAt:   time.Now().Add(-12 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 2,
+		}
+
+		// Mock repository to return the expected broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, p domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				// Verify parameters
+				assert.Equal(t, workspaceID, p.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatusDraft, p.Status)
+				assert.Equal(t, 10, p.Limit)
+				assert.Equal(t, 0, p.Offset)
+
+				return expectedResponse, nil
+			})
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.Equal(t, expectedResponse, result)
+		assert.Equal(t, 2, result.TotalCount)
+		assert.Equal(t, 2, len(result.Broadcasts))
+	})
+
+	t.Run("WithTemplates", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Create params with templates option
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Limit:         10,
+			Offset:        0,
+			WithTemplates: true,
+		}
+
+		// Create broadcasts with test settings and variations
+		templateID := "template123"
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast with Template",
+				Status:      domain.BroadcastStatusDraft,
+				TestSettings: domain.BroadcastTestSettings{
+					Enabled: true,
+					Variations: []domain.BroadcastVariation{
+						{
+							ID:         "var1",
+							TemplateID: templateID,
+						},
+					},
+				},
+				CreatedAt: time.Now().Add(-24 * time.Hour),
+				UpdatedAt: time.Now().Add(-24 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 1,
+		}
+
+		// Create template that will be returned
+		template := &domain.Template{
+			ID:       templateID,
+			Name:     "Test Template",
+			Version:  1,
+			Channel:  "email",
+			Category: "marketing",
+			Email: &domain.EmailTemplate{
+				FromAddress:     "test@example.com",
+				FromName:        "Test Sender",
+				Subject:         "Test Subject",
+				CompiledPreview: "<html>Test content</html>",
+			},
+		}
+
+		// Mock repository to return the broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			Return(expectedResponse, nil)
+
+		// Mock template service to return the template
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(1)).
+			Return(template, nil)
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.TotalCount)
+		assert.Equal(t, 1, len(result.Broadcasts))
+		assert.Equal(t, templateID, result.Broadcasts[0].TestSettings.Variations[0].TemplateID)
+	})
+
+	t.Run("RepositoryError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID: workspaceID,
+			Limit:       10,
+			Offset:      0,
+		}
+
+		// Mock repository to return an error
+		expectedErr := errors.New("database error")
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			Return(nil, expectedErr)
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Same(t, expectedErr, err)
+	})
+
+	t.Run("DefaultLimitAndOffset", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Create params with zero limit and negative offset
+		params := domain.ListBroadcastsParams{
+			WorkspaceID: workspaceID,
+			Limit:       0,  // Should default to 50
+			Offset:      -5, // Should default to 0
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: []*domain.Broadcast{},
+			TotalCount: 0,
+		}
+
+		// Mock repository to ensure it receives the default values
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, p domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				// Verify default parameters were applied
+				assert.Equal(t, 50, p.Limit) // Default limit is 50
+				assert.Equal(t, 0, p.Offset) // Default offset is 0
+
+				return expectedResponse, nil
+			})
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.Equal(t, expectedResponse, result)
+	})
+
+	t.Run("MaxLimitEnforced", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Create params with limit exceeding maximum (100)
+		params := domain.ListBroadcastsParams{
+			WorkspaceID: workspaceID,
+			Limit:       200, // Should be capped at 100
+			Offset:      0,
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: []*domain.Broadcast{},
+			TotalCount: 0,
+		}
+
+		// Mock repository to ensure it receives the capped limit
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, p domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				// Verify limit was capped
+				assert.Equal(t, 100, p.Limit) // Maximum limit is 100
+
+				return expectedResponse, nil
+			})
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.Equal(t, expectedResponse, result)
+	})
+
+	t.Run("TemplateError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Create params with templates option
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Limit:         10,
+			Offset:        0,
+			WithTemplates: true,
+		}
+
+		// Create broadcasts with test settings and variations
+		templateID := "template123"
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast with Template",
+				Status:      domain.BroadcastStatusDraft,
+				TestSettings: domain.BroadcastTestSettings{
+					Enabled: true,
+					Variations: []domain.BroadcastVariation{
+						{
+							ID:         "var1",
+							TemplateID: templateID,
+						},
+					},
+				},
+				CreatedAt: time.Now().Add(-24 * time.Hour),
+				UpdatedAt: time.Now().Add(-24 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 1,
+		}
+
+		// Mock repository to return the broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			Return(expectedResponse, nil)
+
+		// Mock template service to return an error
+		templateErr := errors.New("template not found")
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(1)).
+			Return(nil, templateErr)
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results - service should continue despite template error
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.TotalCount)
+		// The broadcast should still be returned even if template fetch failed
+		assert.Equal(t, 1, len(result.Broadcasts))
+	})
+}
+
+func TestBroadcastService_DeleteBroadcast(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast that can be deleted (with draft status)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+		}
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository to delete the broadcast
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create invalid request with missing fields
+		request := &domain.DeleteBroadcastRequest{
+			// Missing WorkspaceID
+			ID: "bcast123",
+		}
+
+		// No repository calls expected
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockRepo.EXPECT().DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace_id is required")
+	})
+
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "nonexistent"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Mock repository to return not found error
+		notFoundErr := &domain.ErrBroadcastNotFound{ID: broadcastID}
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, notFoundErr)
+
+		// No delete call expected
+		mockRepo.EXPECT().DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, notFoundErr, err)
+	})
+
+	t.Run("SendingStatus", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast with 'sending' status which cannot be deleted
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+		}
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// No delete call expected
+		mockRepo.EXPECT().DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcasts in 'sending' status cannot be deleted")
+	})
+
+	t.Run("RepositoryError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast that can be deleted (with draft status)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+		}
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository to return an error on delete
+		expectedErr := errors.New("database error")
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(expectedErr)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, expectedErr, err)
+	})
+}
