@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 )
@@ -60,16 +61,12 @@ func createValidBroadcastWithTest() domain.Broadcast {
 		TestDurationHours:    24,
 		Variations: []domain.BroadcastVariation{
 			{
-				ID:              "variation1",
-				Name:            "Variation A",
-				TemplateID:      "template123",
-				TemplateVersion: 1,
+				ID:         "variation1",
+				TemplateID: "template123",
 			},
 			{
-				ID:              "variation2",
-				Name:            "Variation B",
-				TemplateID:      "template123",
-				TemplateVersion: 1,
+				ID:         "variation2",
+				TemplateID: "template123",
 			},
 		},
 	}
@@ -163,19 +160,44 @@ func TestBroadcast_Validate(t *testing.T) {
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "scheduled time is required",
+			errMsg:  "scheduled date and time are required",
 		},
 		{
-			name: "invalid time window format",
+			name: "invalid date format",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcast()
-				b.Schedule.UseRecipientTimezone = true
-				b.Schedule.TimeWindowStart = "9:00" // Missing leading zero
-				b.Schedule.TimeWindowEnd = "17:00"
+				b.Schedule.IsScheduled = true
+				b.Schedule.ScheduledDate = "05/15/2023" // Wrong format
+				b.Schedule.ScheduledTime = "14:30"
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "time window must be in HH:MM format",
+			errMsg:  "scheduled date must be in YYYY-MM-DD format",
+		},
+		{
+			name: "invalid time format",
+			broadcast: func() domain.Broadcast {
+				b := createValidBroadcast()
+				b.Schedule.IsScheduled = true
+				b.Schedule.ScheduledDate = "2023-05-15"
+				b.Schedule.ScheduledTime = "2:30" // Missing leading zero
+				return b
+			}(),
+			wantErr: true,
+			errMsg:  "scheduled time must be in HH:MM format",
+		},
+		{
+			name: "invalid timezone",
+			broadcast: func() domain.Broadcast {
+				b := createValidBroadcast()
+				b.Schedule.IsScheduled = true
+				b.Schedule.ScheduledDate = "2023-05-15"
+				b.Schedule.ScheduledTime = "14:30"
+				b.Schedule.Timezone = "Invalid/Timezone"
+				return b
+			}(),
+			wantErr: true,
+			errMsg:  "invalid timezone",
 		},
 		{
 			name: "test percentage too low",
@@ -215,10 +237,8 @@ func TestBroadcast_Validate(t *testing.T) {
 				variations := make([]domain.BroadcastVariation, 9)
 				for i := 0; i < 9; i++ {
 					variations[i] = domain.BroadcastVariation{
-						ID:              "variation" + string(rune(i+49)),
-						Name:            "Variation " + string(rune(i+65)),
-						TemplateID:      "template123",
-						TemplateVersion: 1,
+						ID:         "variation" + string(rune(i+49)),
+						TemplateID: "template123",
 					}
 				}
 				b.TestSettings.Variations = variations
@@ -266,6 +286,18 @@ func TestBroadcast_Validate(t *testing.T) {
 			}(),
 			wantErr: true,
 			errMsg:  "tracking must be enabled to use auto-send winner feature",
+		},
+		{
+			name: "valid scheduled broadcast",
+			broadcast: func() domain.Broadcast {
+				b := createValidBroadcast()
+				b.Schedule.IsScheduled = true
+				b.Schedule.ScheduledDate = "2023-05-15"
+				b.Schedule.ScheduledTime = "14:30"
+				b.Schedule.Timezone = "America/New_York"
+				return b
+			}(),
+			wantErr: false,
 		},
 	}
 
@@ -806,4 +838,124 @@ func TestSendToIndividualRequest_Validate(t *testing.T) {
 func TestErrBroadcastNotFound_Error(t *testing.T) {
 	err := &domain.ErrBroadcastNotFound{ID: "broadcast123"}
 	assert.Equal(t, "Broadcast not found with ID: broadcast123", err.Error())
+}
+
+// TestDeleteBroadcastRequestValidate tests the validation of DeleteBroadcastRequest
+func TestDeleteBroadcastRequestValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		request domain.DeleteBroadcastRequest
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "Valid Request",
+			request: domain.DeleteBroadcastRequest{
+				WorkspaceID: "workspace123",
+				ID:          "broadcast123",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Missing WorkspaceID",
+			request: domain.DeleteBroadcastRequest{
+				ID: "broadcast123",
+			},
+			wantErr: true,
+			errMsg:  "workspace_id is required",
+		},
+		{
+			name: "Missing ID",
+			request: domain.DeleteBroadcastRequest{
+				WorkspaceID: "workspace123",
+			},
+			wantErr: true,
+			errMsg:  "broadcast id is required",
+		},
+		{
+			name:    "Empty Request",
+			request: domain.DeleteBroadcastRequest{},
+			wantErr: true,
+			errMsg:  "workspace_id is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.request.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestScheduleSettings_ParseScheduledDateTime tests the ParseScheduledDateTime method
+func TestScheduleSettings_ParseScheduledDateTime(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings domain.ScheduleSettings
+		wantErr  bool
+	}{
+		{
+			name: "basic date and time",
+			settings: domain.ScheduleSettings{
+				ScheduledDate: "2023-05-15",
+				ScheduledTime: "14:30",
+			},
+			wantErr: false,
+		},
+		{
+			name: "with timezone",
+			settings: domain.ScheduleSettings{
+				ScheduledDate: "2023-05-15",
+				ScheduledTime: "14:30",
+				Timezone:      "America/New_York",
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty date and time",
+			settings: domain.ScheduleSettings{
+				ScheduledDate: "",
+				ScheduledTime: "",
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid timezone",
+			settings: domain.ScheduleSettings{
+				ScheduledDate: "2023-05-15",
+				ScheduledTime: "14:30",
+				Timezone:      "Invalid/Timezone",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.settings.ParseScheduledDateTime()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			if !got.IsZero() {
+				// Check that hours and minutes match what was specified
+				if tt.settings.ScheduledTime != "" {
+					assert.Equal(t, tt.settings.ScheduledTime[:2], got.Format("15"))
+					assert.Equal(t, tt.settings.ScheduledTime[3:], got.Format("04"))
+				}
+
+				// Verify that seconds are not zero in the parsed time
+				assert.NotEqual(t, 0, got.Second()+got.Nanosecond(),
+					"Expected non-zero seconds or nanoseconds in parsed time")
+			}
+		})
+	}
 }

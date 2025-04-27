@@ -197,3 +197,156 @@ func TestBroadcastRepository_ListBroadcasts_CountError(t *testing.T) {
 	// 2. An error occurs when executing the count query
 	// 3. The error is propagated correctly and the method returns nil for the response
 }
+
+// TestBroadcastRepository_DeleteBroadcast_ConnectionError tests that the repository
+// handles connection errors correctly when deleting a broadcast.
+func TestBroadcastRepository_DeleteBroadcast_ConnectionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo)
+
+	ctx := context.Background()
+	workspaceID := "ws123"
+	broadcastID := "bc123"
+
+	expectedErr := errors.New("connection error")
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(nil, expectedErr)
+
+	err := repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get workspace connection")
+}
+
+// TestBroadcastRepository_DeleteBroadcast_Success tests successful deletion of a broadcast.
+func TestBroadcastRepository_DeleteBroadcast_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspaceID := "ws123"
+	broadcastID := "bc123"
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	// Expect DELETE query with the correct parameters and returning 1 row affected
+	mock.ExpectExec("DELETE FROM broadcasts").
+		WithArgs(broadcastID, workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestBroadcastRepository_DeleteBroadcast_NotFound tests that the repository
+// handles not found errors correctly when deleting a broadcast.
+func TestBroadcastRepository_DeleteBroadcast_NotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspaceID := "ws123"
+	broadcastID := "nonexistent"
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	// Expect DELETE query with the correct parameters but no rows affected
+	mock.ExpectExec("DELETE FROM broadcasts").
+		WithArgs(broadcastID, workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
+	assert.Error(t, err)
+
+	var notFoundErr *domain.ErrBroadcastNotFound
+	assert.ErrorAs(t, err, &notFoundErr)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestBroadcastRepository_DeleteBroadcast_ExecError tests that the repository
+// handles execution errors correctly when deleting a broadcast.
+func TestBroadcastRepository_DeleteBroadcast_ExecError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspaceID := "ws123"
+	broadcastID := "bc123"
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	// Expect DELETE query but return an error
+	expectedErr := errors.New("database error")
+	mock.ExpectExec("DELETE FROM broadcasts").
+		WithArgs(broadcastID, workspaceID).
+		WillReturnError(expectedErr)
+
+	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to delete broadcast")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestBroadcastRepository_DeleteBroadcast_RowsAffectedError tests that the repository
+// handles errors when getting rows affected.
+func TestBroadcastRepository_DeleteBroadcast_RowsAffectedError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspaceID := "ws123"
+	broadcastID := "bc123"
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	// Create a custom result that returns an error for RowsAffected
+	expectedErr := errors.New("rows affected error")
+	mock.ExpectExec("DELETE FROM broadcasts").
+		WithArgs(broadcastID, workspaceID).
+		WillReturnResult(sqlmock.NewErrorResult(expectedErr))
+
+	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get rows affected")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

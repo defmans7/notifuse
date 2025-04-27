@@ -50,8 +50,8 @@ func (h *BroadcastHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/broadcasts.pause", requireAuth(http.HandlerFunc(h.handlePause)))
 	mux.Handle("/api/broadcasts.resume", requireAuth(http.HandlerFunc(h.handleResume)))
 	mux.Handle("/api/broadcasts.cancel", requireAuth(http.HandlerFunc(h.handleCancel)))
-	mux.Handle("/api/broadcasts.send", requireAuth(http.HandlerFunc(h.handleSend)))
 	mux.Handle("/api/broadcasts.sendToIndividual", requireAuth(http.HandlerFunc(h.handleSendToIndividual)))
+	mux.Handle("/api/broadcasts.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 }
 
 // GetBroadcastsRequest is used to extract query parameters for listing broadcasts
@@ -455,18 +455,18 @@ func (h *BroadcastHandler) handleSendToIndividual(w http.ResponseWriter, r *http
 	})
 }
 
-// HandleSend is an exported version of handleSend for testing purposes
-func (h *BroadcastHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
-	h.handleSend(w, r)
+// HandleDelete is an exported version of handleDelete for testing purposes
+func (h *BroadcastHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
+	h.handleDelete(w, r)
 }
 
-func (h *BroadcastHandler) handleSend(w http.ResponseWriter, r *http.Request) {
+func (h *BroadcastHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req domain.SendBroadcastRequest
+	var req domain.DeleteBroadcastRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
@@ -478,14 +478,14 @@ func (h *BroadcastHandler) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.service.SendBroadcast(r.Context(), &req)
+	err := h.service.DeleteBroadcast(r.Context(), &req)
 	if err != nil {
 		if _, ok := err.(*domain.ErrBroadcastNotFound); ok {
 			WriteJSONError(w, "Broadcast not found", http.StatusNotFound)
 			return
 		}
-		h.logger.WithField("error", err.Error()).Error("Failed to send broadcast")
-		WriteJSONError(w, "Failed to send broadcast", http.StatusInternalServerError)
+		h.logger.WithField("error", err.Error()).Error("Failed to delete broadcast")
+		WriteJSONError(w, "Failed to delete broadcast", http.StatusInternalServerError)
 		return
 	}
 

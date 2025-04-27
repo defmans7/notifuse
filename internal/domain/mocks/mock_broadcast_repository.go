@@ -49,6 +49,20 @@ func (mr *MockBroadcastRepositoryMockRecorder) CreateBroadcast(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBroadcast", reflect.TypeOf((*MockBroadcastRepository)(nil).CreateBroadcast), arg0, arg1)
 }
 
+// DeleteBroadcast mocks base method.
+func (m *MockBroadcastRepository) DeleteBroadcast(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBroadcast", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBroadcast indicates an expected call of DeleteBroadcast.
+func (mr *MockBroadcastRepositoryMockRecorder) DeleteBroadcast(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBroadcast", reflect.TypeOf((*MockBroadcastRepository)(nil).DeleteBroadcast), arg0, arg1, arg2)
+}
+
 // GetBroadcast mocks base method.
 func (m *MockBroadcastRepository) GetBroadcast(arg0 context.Context, arg1, arg2 string) (*domain.Broadcast, error) {
 	m.ctrl.T.Helper()

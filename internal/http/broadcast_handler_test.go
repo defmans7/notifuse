@@ -76,17 +76,17 @@ func (m *MockBroadcastService) CancelBroadcast(ctx context.Context, request *dom
 	return args.Error(0)
 }
 
+func (m *MockBroadcastService) DeleteBroadcast(ctx context.Context, request *domain.DeleteBroadcastRequest) error {
+	args := m.Called(ctx, request)
+	return args.Error(0)
+}
+
 func (m *MockBroadcastService) SendToIndividual(ctx context.Context, request *domain.SendToIndividualRequest) error {
 	args := m.Called(ctx, request)
 	return args.Error(0)
 }
 
 func (m *MockBroadcastService) SendWinningVariation(ctx context.Context, request *domain.SendWinningVariationRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-func (m *MockBroadcastService) SendBroadcast(ctx context.Context, request *domain.SendBroadcastRequest) error {
 	args := m.Called(ctx, request)
 	return args.Error(0)
 }
@@ -819,6 +819,130 @@ func TestHandlePause(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		handler.HandlePause(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}
+
+// TestHandleDelete tests the handleDelete function
+func TestHandleDelete(t *testing.T) {
+	handler, mockService := setupHandler()
+
+	// Test successful delete
+	t.Run("Success", func(t *testing.T) {
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: "workspace123",
+			ID:          "broadcast123",
+		}
+
+		mockService.On("DeleteBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.DeleteBroadcastRequest) bool {
+			return req.WorkspaceID == request.WorkspaceID &&
+				req.ID == request.ID
+		})).Return(nil).Once()
+
+		requestBody, _ := json.Marshal(request)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Direct method call for testing
+		handler.HandleDelete(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.True(t, response["success"].(bool))
+
+		mockService.AssertExpectations(t)
+	})
+
+	// Test validation error
+	t.Run("ValidationError", func(t *testing.T) {
+		request := &domain.DeleteBroadcastRequest{
+			// Missing required fields
+		}
+
+		requestBody, _ := json.Marshal(request)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleDelete(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Test broadcast not found
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: "workspace123",
+			ID:          "nonexistent",
+		}
+
+		// Create a custom handler just for this test
+		customHandler, customMock := setupHandler()
+
+		// Setup mock to return a broadcast not found error
+		customMock.On("DeleteBroadcast", mock.Anything, mock.Anything).Return(
+			&domain.ErrBroadcastNotFound{ID: "nonexistent"},
+		).Once()
+
+		requestBody, _ := json.Marshal(request)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		customHandler.HandleDelete(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		customMock.AssertExpectations(t)
+	})
+
+	// Test service error
+	t.Run("ServiceError", func(t *testing.T) {
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: "workspace123",
+			ID:          "broadcast123",
+		}
+
+		// Create a custom handler just for this test
+		customHandler, customMock := setupHandler()
+
+		// Setup mock to return a generic error
+		customMock.On("DeleteBroadcast", mock.Anything, mock.Anything).Return(
+			errors.New("service error"),
+		).Once()
+
+		requestBody, _ := json.Marshal(request)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		customHandler.HandleDelete(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		customMock.AssertExpectations(t)
+	})
+
+	// Test method not allowed
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.delete", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleDelete(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	// Test invalid JSON
+	t.Run("InvalidJSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBufferString("{invalid json"))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleDelete(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})

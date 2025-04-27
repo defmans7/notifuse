@@ -1,7 +1,10 @@
 package domain
 
 import (
+	"bytes"
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -40,23 +43,81 @@ type BroadcastTestSettings struct {
 	Variations           []BroadcastVariation `json:"variations"`
 }
 
+// Value implements the driver.Valuer interface for database serialization
+func (b BroadcastTestSettings) Value() (driver.Value, error) {
+	return json.Marshal(b)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (b *BroadcastTestSettings) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	v, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(v)
+	return json.Unmarshal(cloned, b)
+}
+
 // BroadcastVariation represents a single variation in an A/B test
 type BroadcastVariation struct {
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	TemplateID      string            `json:"template_id"`
-	TemplateVersion int64             `json:"template_version"`
-	Metrics         *VariationMetrics `json:"metrics,omitempty"`
+	ID         string            `json:"id"`
+	TemplateID string            `json:"template_id"`
+	Metrics    *VariationMetrics `json:"metrics,omitempty"`
+}
+
+// Value implements the driver.Valuer interface for database serialization
+func (v BroadcastVariation) Value() (driver.Value, error) {
+	return json.Marshal(v)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (v *BroadcastVariation) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(b)
+	return json.Unmarshal(cloned, v)
 }
 
 // VariationMetrics contains performance metrics for a variation
 type VariationMetrics struct {
-	Recipients int     `json:"recipients"`
-	Delivered  int     `json:"delivered"`
-	Opens      int     `json:"opens"`
-	Clicks     int     `json:"clicks"`
-	OpenRate   float64 `json:"open_rate"`
-	ClickRate  float64 `json:"click_rate"`
+	Recipients int `json:"recipients"`
+	Delivered  int `json:"delivered"`
+	Opens      int `json:"opens"`
+	Clicks     int `json:"clicks"`
+	Bounced    int `json:"bounced"`
+	Complained int `json:"complained"`
+}
+
+// Value implements the driver.Valuer interface for database serialization
+func (m VariationMetrics) Value() (driver.Value, error) {
+	return json.Marshal(m)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (m *VariationMetrics) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(b)
+	return json.Unmarshal(cloned, m)
 }
 
 // AudienceSettings defines how recipients are determined for a broadcast
@@ -68,13 +129,113 @@ type AudienceSettings struct {
 	RateLimitPerMinute  int      `json:"rate_limit_per_minute,omitempty"`
 }
 
+// Value implements the driver.Valuer interface for database serialization
+func (a AudienceSettings) Value() (driver.Value, error) {
+	return json.Marshal(a)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (a *AudienceSettings) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(b)
+	return json.Unmarshal(cloned, a)
+}
+
 // ScheduleSettings defines when a broadcast will be sent
 type ScheduleSettings struct {
-	IsScheduled          bool      `json:"is_scheduled"`
-	ScheduledTime        time.Time `json:"scheduled_time,omitempty"`
-	UseRecipientTimezone bool      `json:"use_recipient_timezone"`
-	TimeWindowStart      string    `json:"time_window_start,omitempty"` // HH:MM format
-	TimeWindowEnd        string    `json:"time_window_end,omitempty"`   // HH:MM format
+	IsScheduled          bool   `json:"is_scheduled"`
+	ScheduledDate        string `json:"scheduled_date,omitempty"` // Format: YYYY-MM-dd
+	ScheduledTime        string `json:"scheduled_time,omitempty"` // Format: HH:mm
+	Timezone             string `json:"timezone,omitempty"`       // IANA timezone format, e.g. "America/New_York"
+	UseRecipientTimezone bool   `json:"use_recipient_timezone"`
+}
+
+// Value implements the driver.Valuer interface for database serialization
+func (s ScheduleSettings) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (s *ScheduleSettings) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(b)
+	return json.Unmarshal(cloned, s)
+}
+
+// ParseScheduledDateTime parses the ScheduledDate and ScheduledTime fields and returns a time.Time
+func (s *ScheduleSettings) ParseScheduledDateTime() (time.Time, error) {
+	if s.ScheduledDate == "" || s.ScheduledTime == "" {
+		return time.Time{}, nil
+	}
+
+	// Extract current time to preserve seconds and nanoseconds
+	now := time.Now()
+	seconds := now.Second()
+	nanoseconds := now.Nanosecond()
+
+	datetime := fmt.Sprintf("%s %s", s.ScheduledDate, s.ScheduledTime)
+	var t time.Time
+	var err error
+
+	if s.Timezone == "" {
+		t, err = time.Parse("2006-01-02 15:04", datetime)
+		if err != nil {
+			return time.Time{}, err
+		}
+	} else {
+		loc, err := time.LoadLocation(s.Timezone)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid timezone: %s", err)
+		}
+
+		t, err = time.ParseInLocation("2006-01-02 15:04", datetime, loc)
+		if err != nil {
+			return time.Time{}, err
+		}
+	}
+
+	// Add seconds and nanoseconds to preserve current time precision
+	return t.Add(time.Duration(seconds)*time.Second + time.Duration(nanoseconds)*time.Nanosecond), nil
+}
+
+// SetScheduledDateTime formats a time.Time as ScheduledDate and ScheduledTime strings
+func (s *ScheduleSettings) SetScheduledDateTime(t time.Time, timezone string) error {
+	if t.IsZero() {
+		s.ScheduledDate = ""
+		s.ScheduledTime = ""
+		s.Timezone = ""
+		return nil
+	}
+
+	// If timezone is provided, convert time to that timezone
+	if timezone != "" {
+		loc, err := time.LoadLocation(timezone)
+		if err != nil {
+			return fmt.Errorf("invalid timezone: %s", err)
+		}
+		t = t.In(loc)
+		s.Timezone = timezone
+	}
+
+	s.ScheduledDate = t.Format("2006-01-02")
+	s.ScheduledTime = t.Format("15:04")
+	return nil
 }
 
 // Broadcast represents a one-time communication to multiple recipients (newsletter)
@@ -86,13 +247,16 @@ type Broadcast struct {
 	Audience         AudienceSettings      `json:"audience"`
 	Schedule         ScheduleSettings      `json:"schedule"`
 	TestSettings     BroadcastTestSettings `json:"test_settings"`
-	GoalID           string                `json:"goal_id,omitempty"`
 	TrackingEnabled  bool                  `json:"tracking_enabled"`
 	UTMParameters    *UTMParameters        `json:"utm_parameters,omitempty"`
 	Metadata         MapOfAny              `json:"metadata,omitempty"`
-	SentCount        int                   `json:"sent_count"`
-	DeliveredCount   int                   `json:"delivered_count"`
-	FailedCount      int                   `json:"failed_count"`
+	TotalSent        int                   `json:"total_sent"`
+	TotalDelivered   int                   `json:"total_delivered"`
+	TotalBounced     int                   `json:"total_bounced"`
+	TotalComplained  int                   `json:"total_complained"`
+	TotalFailed      int                   `json:"total_failed"`
+	TotalOpens       int                   `json:"total_opens"`
+	TotalClicks      int                   `json:"total_clicks"`
 	WinningVariation string                `json:"winning_variation,omitempty"`
 	TestSentAt       *time.Time            `json:"test_sent_at,omitempty"`
 	WinnerSentAt     *time.Time            `json:"winner_sent_at,omitempty"`
@@ -112,6 +276,26 @@ type UTMParameters struct {
 	Campaign string `json:"campaign,omitempty"`
 	Term     string `json:"term,omitempty"`
 	Content  string `json:"content,omitempty"`
+}
+
+// Value implements the driver.Valuer interface for database serialization
+func (u UTMParameters) Value() (driver.Value, error) {
+	return json.Marshal(u)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (u *UTMParameters) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(b)
+	return json.Unmarshal(cloned, u)
 }
 
 // Validate validates the broadcast struct
@@ -191,17 +375,26 @@ func (b *Broadcast) Validate() error {
 	}
 
 	// Validate schedule settings
-	if b.Schedule.IsScheduled && b.Schedule.ScheduledTime.IsZero() {
-		return fmt.Errorf("scheduled time is required when not sending immediately")
+	if b.Schedule.IsScheduled && (b.Schedule.ScheduledDate == "" || b.Schedule.ScheduledTime == "") {
+		return fmt.Errorf("scheduled date and time are required when not sending immediately")
 	}
 
-	if b.Schedule.UseRecipientTimezone {
-		// If using recipient timezone with a delivery window, validate time window format
-		if b.Schedule.TimeWindowStart != "" || b.Schedule.TimeWindowEnd != "" {
-			// Time window should be in HH:MM format
-			// This is a basic check, more thorough validation could be done
-			if len(b.Schedule.TimeWindowStart) != 5 || len(b.Schedule.TimeWindowEnd) != 5 {
-				return fmt.Errorf("time window must be in HH:MM format")
+	if b.Schedule.IsScheduled {
+		// Validate date format (YYYY-MM-DD)
+		if len(b.Schedule.ScheduledDate) != 10 || b.Schedule.ScheduledDate[4] != '-' || b.Schedule.ScheduledDate[7] != '-' {
+			return fmt.Errorf("scheduled date must be in YYYY-MM-DD format")
+		}
+
+		// Validate time format (HH:MM)
+		if len(b.Schedule.ScheduledTime) != 5 || b.Schedule.ScheduledTime[2] != ':' {
+			return fmt.Errorf("scheduled time must be in HH:MM format")
+		}
+
+		// If a timezone is specified, validate it
+		if b.Schedule.Timezone != "" {
+			_, err := time.LoadLocation(b.Schedule.Timezone)
+			if err != nil {
+				return fmt.Errorf("invalid timezone: %s", err)
 			}
 		}
 	}
@@ -216,7 +409,6 @@ type CreateBroadcastRequest struct {
 	Audience        AudienceSettings      `json:"audience"`
 	Schedule        ScheduleSettings      `json:"schedule"`
 	TestSettings    BroadcastTestSettings `json:"test_settings"`
-	GoalID          string                `json:"goal_id,omitempty"`
 	TrackingEnabled bool                  `json:"tracking_enabled"`
 	UTMParameters   *UTMParameters        `json:"utm_parameters,omitempty"`
 	Metadata        MapOfAny              `json:"metadata,omitempty"`
@@ -231,12 +423,16 @@ func (r *CreateBroadcastRequest) Validate() (*Broadcast, error) {
 		Audience:        r.Audience,
 		Schedule:        r.Schedule,
 		TestSettings:    r.TestSettings,
-		GoalID:          r.GoalID,
 		TrackingEnabled: r.TrackingEnabled,
 		UTMParameters:   r.UTMParameters,
 		Metadata:        r.Metadata,
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
+	}
+
+	// Set status to scheduled if the broadcast is scheduled
+	if r.Schedule.IsScheduled {
+		broadcast.Status = BroadcastStatusScheduled
 	}
 
 	if err := broadcast.Validate(); err != nil {
@@ -254,7 +450,6 @@ type UpdateBroadcastRequest struct {
 	Audience        AudienceSettings      `json:"audience"`
 	Schedule        ScheduleSettings      `json:"schedule"`
 	TestSettings    BroadcastTestSettings `json:"test_settings"`
-	GoalID          string                `json:"goal_id,omitempty"`
 	TrackingEnabled bool                  `json:"tracking_enabled"`
 	UTMParameters   *UTMParameters        `json:"utm_parameters,omitempty"`
 	Metadata        MapOfAny              `json:"metadata,omitempty"`
@@ -282,7 +477,6 @@ func (r *UpdateBroadcastRequest) Validate(existingBroadcast *Broadcast) (*Broadc
 	existingBroadcast.Audience = r.Audience
 	existingBroadcast.Schedule = r.Schedule
 	existingBroadcast.TestSettings = r.TestSettings
-	existingBroadcast.GoalID = r.GoalID
 	existingBroadcast.TrackingEnabled = r.TrackingEnabled
 	existingBroadcast.UTMParameters = r.UTMParameters
 	existingBroadcast.Metadata = r.Metadata
@@ -377,26 +571,20 @@ func (r *CancelBroadcastRequest) Validate() error {
 	return nil
 }
 
-// SendToIndividualRequest defines the request to send a broadcast to an individual
-type SendToIndividualRequest struct {
-	WorkspaceID    string `json:"workspace_id"`
-	BroadcastID    string `json:"broadcast_id"`
-	RecipientEmail string `json:"recipient_email"`
-	VariationID    string `json:"variation_id,omitempty"`
+// DeleteBroadcastRequest defines the request to delete a broadcast
+type DeleteBroadcastRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
 }
 
-// Validate validates the send to individual request
-func (r *SendToIndividualRequest) Validate() error {
+// Validate validates the delete broadcast request
+func (r *DeleteBroadcastRequest) Validate() error {
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("workspace_id is required")
 	}
 
-	if r.BroadcastID == "" {
-		return fmt.Errorf("broadcast_id is required")
-	}
-
-	if r.RecipientEmail == "" {
-		return fmt.Errorf("recipient_email is required")
+	if r.ID == "" {
+		return fmt.Errorf("broadcast id is required")
 	}
 
 	return nil
@@ -441,20 +629,26 @@ func (r *SendWinningVariationRequest) Validate() error {
 	return nil
 }
 
-// SendBroadcastRequest defines the request to send a broadcast immediately
-type SendBroadcastRequest struct {
-	WorkspaceID string `json:"workspace_id"`
-	ID          string `json:"id"`
+// SendToIndividualRequest defines the request to send a broadcast to an individual
+type SendToIndividualRequest struct {
+	WorkspaceID    string `json:"workspace_id"`
+	BroadcastID    string `json:"broadcast_id"`
+	RecipientEmail string `json:"recipient_email"`
+	VariationID    string `json:"variation_id,omitempty"`
 }
 
-// Validate validates the send broadcast request
-func (r *SendBroadcastRequest) Validate() error {
+// Validate validates the send to individual request
+func (r *SendToIndividualRequest) Validate() error {
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("workspace_id is required")
 	}
 
-	if r.ID == "" {
-		return fmt.Errorf("broadcast id is required")
+	if r.BroadcastID == "" {
+		return fmt.Errorf("broadcast_id is required")
+	}
+
+	if r.RecipientEmail == "" {
+		return fmt.Errorf("recipient_email is required")
 	}
 
 	return nil
@@ -486,8 +680,8 @@ type BroadcastService interface {
 	// CancelBroadcast cancels a scheduled broadcast
 	CancelBroadcast(ctx context.Context, request *CancelBroadcastRequest) error
 
-	// SendBroadcast sends a broadcast immediately
-	SendBroadcast(ctx context.Context, request *SendBroadcastRequest) error
+	// DeleteBroadcast deletes a broadcast
+	DeleteBroadcast(ctx context.Context, request *DeleteBroadcastRequest) error
 
 	// SendToIndividual sends a broadcast to an individual recipient
 	SendToIndividual(ctx context.Context, request *SendToIndividualRequest) error
@@ -509,6 +703,9 @@ type BroadcastRepository interface {
 
 	// ListBroadcasts retrieves a list of broadcasts with pagination
 	ListBroadcasts(ctx context.Context, params ListBroadcastsParams) (*BroadcastListResponse, error)
+
+	// DeleteBroadcast deletes a broadcast
+	DeleteBroadcast(ctx context.Context, workspaceID, id string) error
 }
 
 // ErrBroadcastNotFound is an error type for when a broadcast is not found

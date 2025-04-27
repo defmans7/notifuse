@@ -149,14 +149,13 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			PRIMARY KEY (id, version)
 		)`,
 		`CREATE TABLE IF NOT EXISTS broadcasts (
-			id VARCHAR(32) NOT NULL,
+			id VARCHAR(255) NOT NULL,
 			workspace_id VARCHAR(32) NOT NULL,
 			name VARCHAR(255) NOT NULL,
 			status VARCHAR(20) NOT NULL,
 			audience JSONB NOT NULL,
 			schedule JSONB NOT NULL,
 			test_settings JSONB NOT NULL,
-			goal_id VARCHAR(32),
 			tracking_enabled BOOLEAN NOT NULL DEFAULT TRUE,
 			utm_parameters JSONB,
 			metadata JSONB,

@@ -51,7 +51,9 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 
 	// Generate a unique ID for the broadcast if not provided
 	if broadcast.ID == "" {
-		broadcast.ID = uuid.New().String()
+		// Generate a UUID and trim it to 32 characters to fit VARCHAR(32)
+		fullUUID := uuid.New().String()
+		broadcast.ID = fullUUID[:8] + fullUUID[9:13] + fullUUID[14:18] + fullUUID[19:23] + fullUUID[24:32]
 	}
 
 	// Set default values
@@ -61,9 +63,20 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 	broadcast.UpdatedAt = now
 
 	// Set scheduled time if needed
-	if broadcast.Schedule.IsScheduled && !broadcast.Schedule.ScheduledTime.IsZero() {
-		scheduledAt := broadcast.Schedule.ScheduledTime
-		broadcast.ScheduledAt = &scheduledAt
+	if broadcast.Schedule.IsScheduled && (broadcast.Schedule.ScheduledDate != "" && broadcast.Schedule.ScheduledTime != "") {
+		scheduledTime, err := broadcast.Schedule.ParseScheduledDateTime()
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"error":        err,
+				"broadcast_id": broadcast.ID,
+				"workspace_id": broadcast.WorkspaceID,
+			}).Error("Failed to parse scheduled date and time")
+			return nil, err
+		}
+		broadcast.ScheduledAt = &scheduledTime
+
+		// Set status to scheduled if the broadcast is scheduled
+		broadcast.Status = domain.BroadcastStatusScheduled
 	}
 
 	// Persist the broadcast
@@ -461,6 +474,60 @@ func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.
 	return nil
 }
 
+// DeleteBroadcast deletes a broadcast
+func (s *BroadcastService) DeleteBroadcast(ctx context.Context, request *domain.DeleteBroadcastRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to validate delete broadcast request")
+		return err
+	}
+
+	// Retrieve the broadcast to check its status
+	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.ID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to get broadcast for deletion")
+		return err
+	}
+
+	// Broadcasts in 'sending' status cannot be deleted
+	if broadcast.Status == domain.BroadcastStatusSending {
+		err := fmt.Errorf("broadcasts in 'sending' status cannot be deleted")
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+			"status":       broadcast.Status,
+		}).Error("Cannot delete broadcast with sending status")
+		return err
+	}
+
+	// Delete the broadcast
+	err = s.repo.DeleteBroadcast(ctx, request.WorkspaceID, request.ID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.ID,
+		}).Error("Failed to delete broadcast from repository")
+		return err
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"workspace_id": request.WorkspaceID,
+		"broadcast_id": request.ID,
+	}).Info("Broadcast deleted successfully")
+
+	return nil
+}
+
 // SendToIndividual sends a broadcast to an individual recipient
 func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain.SendToIndividualRequest) error {
 	// Validate the request
@@ -542,14 +609,13 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	}
 
 	// Fetch the template
-	template, err := s.templateSvc.GetTemplateByID(ctx, request.WorkspaceID, variation.TemplateID, variation.TemplateVersion)
+	template, err := s.templateSvc.GetTemplateByID(ctx, request.WorkspaceID, variation.TemplateID, 1)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"error":            err,
-			"workspace_id":     request.WorkspaceID,
-			"broadcast_id":     request.BroadcastID,
-			"template_id":      variation.TemplateID,
-			"template_version": variation.TemplateVersion,
+			"error":        err,
+			"workspace_id": request.WorkspaceID,
+			"broadcast_id": request.BroadcastID,
+			"template_id":  variation.TemplateID,
 		}).Error("Failed to fetch template for broadcast")
 		return err
 	}
@@ -576,8 +642,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 				"name": broadcast.Name,
 			},
 			"variation": domain.MapOfAny{
-				"id":   variation.ID,
-				"name": variation.Name,
+				"id": variation.ID,
 			},
 		}
 	} else {
@@ -743,70 +808,6 @@ func (s *BroadcastService) SendWinningVariation(ctx context.Context, request *do
 	// TODO: Implement the actual sending of the winning variation to remaining recipients
 	// This would involve fetching the remaining recipients who didn't receive any test variation
 	// and sending them the winning variation email
-
-	return nil
-}
-
-// SendBroadcast sends a broadcast immediately
-func (s *BroadcastService) SendBroadcast(ctx context.Context, request *domain.SendBroadcastRequest) error {
-	// Validate the request
-	if err := request.Validate(); err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.ID,
-		}).Error("Failed to validate send broadcast request")
-		return err
-	}
-
-	// Retrieve the broadcast
-	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.ID)
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.ID,
-		}).Error("Failed to get broadcast for sending")
-		return err
-	}
-
-	// Only draft or scheduled broadcasts can be sent immediately
-	if broadcast.Status != domain.BroadcastStatusDraft && broadcast.Status != domain.BroadcastStatusScheduled {
-		err := fmt.Errorf("only broadcasts with draft or scheduled status can be sent immediately, current status: %s", broadcast.Status)
-		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.ID,
-			"status":       broadcast.Status,
-		}).Error("Cannot send broadcast with invalid status")
-		return err
-	}
-
-	// Update broadcast status
-	broadcast.Status = domain.BroadcastStatusSending
-	now := time.Now().UTC()
-	broadcast.StartedAt = &now
-	broadcast.UpdatedAt = now
-
-	// Persist the changes
-	err = s.repo.UpdateBroadcast(ctx, broadcast)
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":        err,
-			"workspace_id": request.WorkspaceID,
-			"broadcast_id": request.ID,
-		}).Error("Failed to update broadcast in repository")
-		return err
-	}
-
-	s.logger.WithFields(map[string]interface{}{
-		"workspace_id": request.WorkspaceID,
-		"broadcast_id": request.ID,
-	}).Info("Broadcast sending started successfully")
-
-	// TODO: Trigger the actual broadcast sending process
-	// This would typically involve adding the broadcast to a queue for processing
-	// or starting a background job to handle the sending
 
 	return nil
 }

@@ -28,11 +28,13 @@ import {
   DeleteOutlined,
   MailOutlined,
   PlayCircleOutlined,
-  StopOutlined
+  StopOutlined,
+  CopyOutlined
 } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from '../lib/dayjs'
 import { UpsertBroadcastDrawer } from '../components/broadcasts/UpsertBroadcastDrawer'
+import { SendOrScheduleModal } from '../components/broadcasts/SendOrScheduleModal'
 import { useAuth } from '../contexts/AuthContext'
 
 const { Title, Paragraph, Text } = Typography
@@ -66,6 +68,8 @@ export function BroadcastsPage() {
   const [confirmationInput, setConfirmationInput] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [selectedBroadcast, setSelectedBroadcast] = useState<Broadcast | null>(null)
+  const [isScheduleModalVisible, setIsScheduleModalVisible] = useState(false)
+  const [broadcastToSchedule, setBroadcastToSchedule] = useState<Broadcast | null>(null)
   const queryClient = useQueryClient()
   const { workspaces } = useAuth()
 
@@ -94,12 +98,12 @@ export function BroadcastsPage() {
 
     setIsDeleting(true)
     try {
-      await broadcastApi.cancel({
+      await broadcastApi.delete({
         workspace_id: workspaceId,
         id: broadcastToDelete.id
       })
 
-      message.success(`Broadcast "${broadcastToDelete.name}" cancelled and deleted successfully`)
+      message.success(`Broadcast "${broadcastToDelete.name}" deleted successfully`)
       queryClient.invalidateQueries({ queryKey: ['broadcasts', workspaceId] })
       setDeleteModalVisible(false)
       setBroadcastToDelete(null)
@@ -173,13 +177,23 @@ export function BroadcastsPage() {
     setSelectedBroadcast(null)
   }
 
+  const handleScheduleBroadcast = (broadcast: Broadcast) => {
+    setBroadcastToSchedule(broadcast)
+    setIsScheduleModalVisible(true)
+  }
+
+  const closeScheduleModal = () => {
+    setIsScheduleModalVisible(false)
+    setBroadcastToSchedule(null)
+  }
+
   const hasBroadcasts = !isLoading && data?.broadcasts && data.broadcasts.length > 0
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <Title level={2}>Broadcasts</Title>
-        {currentWorkspace && (
+        {currentWorkspace && hasBroadcasts && (
           <UpsertBroadcastDrawer
             workspace={currentWorkspace}
             broadcast={selectedBroadcast || undefined}
@@ -204,24 +218,17 @@ export function BroadcastsPage() {
           ))}
         </Row>
       ) : hasBroadcasts ? (
-        <div className="space-y-4">
+        <div>
           {data.broadcasts.map((broadcast: Broadcast) => (
             <Card
               title={
-                <div className="flex items-center justify-between">
-                  <Text strong>{broadcast.name}</Text>
-                  <div>{getStatusBadge(broadcast.status)}</div>
-                </div>
+                <Space size="large">
+                  <div>{broadcast.name}</div>
+                  <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
+                </Space>
               }
               extra={
                 <Space>
-                  {broadcast.status === 'draft' && (
-                    <Button type="text" size="small" onClick={() => openDeleteModal(broadcast)}>
-                      <Tooltip title="Delete Broadcast">
-                        <DeleteOutlined />
-                      </Tooltip>
-                    </Button>
-                  )}
                   {(broadcast.status === 'draft' || broadcast.status === 'scheduled') && (
                     <Button type="text" size="small" onClick={() => handleEditBroadcast(broadcast)}>
                       <Tooltip title="Edit Broadcast">
@@ -251,7 +258,7 @@ export function BroadcastsPage() {
                       </Tooltip>
                     </Button>
                   )}
-                  {(broadcast.status === 'scheduled' || broadcast.status === 'paused') && (
+                  {broadcast.status === 'scheduled' && (
                     <Button
                       type="text"
                       size="small"
@@ -262,10 +269,28 @@ export function BroadcastsPage() {
                       </Tooltip>
                     </Button>
                   )}
+                  {broadcast.status === 'draft' && (
+                    <>
+                      <Button type="text" size="small" onClick={() => openDeleteModal(broadcast)}>
+                        <Tooltip title="Delete Broadcast">
+                          <DeleteOutlined />
+                        </Tooltip>
+                      </Button>
+                      <Button
+                        type="primary"
+                        size="small"
+                        ghost
+                        onClick={() => handleScheduleBroadcast(broadcast)}
+                      >
+                        Send or Schedule
+                      </Button>
+                    </>
+                  )}
                 </Space>
               }
               variant="borderless"
               key={broadcast.id}
+              className="!mb-6"
             >
               <Row gutter={[16, 16]} wrap={false}>
                 <Col flex="1">
@@ -301,20 +326,6 @@ export function BroadcastsPage() {
                     valueStyle={{ fontSize: '16px' }}
                   />
                 </Col>
-                {broadcast.test_settings.enabled && (
-                  <Col flex="1">
-                    <Statistic
-                      title={
-                        <Space>
-                          <CalendarOutlined className="text-purple-500" /> A/B Test
-                        </Space>
-                      }
-                      value={broadcast.test_settings.variations.length}
-                      suffix="variations"
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Col>
-                )}
               </Row>
 
               <Divider />
@@ -358,6 +369,31 @@ export function BroadcastsPage() {
                   </Space>
                 </Col>
               </Row>
+
+              {broadcast.test_settings.enabled && (
+                <>
+                  <Divider orientation="left">
+                    <Space>
+                      <CalendarOutlined className="text-purple-500" />
+                      <Text strong>A/B Test Variations</Text>
+                    </Space>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {broadcast.test_settings.variations.map((variation, index) => (
+                      <Col span={8} key={index}>
+                        <Card size="small" title={`Variation ${index + 1}`} bordered={false}>
+                          <Space direction="vertical" size="small">
+                            <Text>{`Template ${index + 1}`}</Text>
+                            <Button size="small" type="primary" ghost>
+                              Preview
+                            </Button>
+                          </Space>
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                </>
+              )}
             </Card>
           ))}
         </div>
@@ -379,6 +415,16 @@ export function BroadcastsPage() {
           </div>
         </div>
       )}
+
+      <SendOrScheduleModal
+        broadcast={broadcastToSchedule}
+        visible={isScheduleModalVisible}
+        onClose={closeScheduleModal}
+        workspaceId={workspaceId}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['broadcasts', workspaceId] })
+        }}
+      />
 
       <Modal
         title="Delete Broadcast"
@@ -406,6 +452,17 @@ export function BroadcastsPage() {
             <p>
               This action cannot be undone. To confirm, please enter the broadcast ID:{' '}
               <Text code>{broadcastToDelete.id}</Text>
+              <Tooltip title="Copy to clipboard">
+                <Button
+                  type="text"
+                  icon={<CopyOutlined />}
+                  size="small"
+                  onClick={() => {
+                    navigator.clipboard.writeText(broadcastToDelete.id)
+                    message.success('Broadcast ID copied to clipboard')
+                  }}
+                />
+              </Tooltip>
             </p>
             <Input
               placeholder="Enter broadcast ID to confirm"

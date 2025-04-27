@@ -90,6 +90,8 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	t.Run("ScheduledTimeSetting", func(t *testing.T) {
 		ctx := context.Background()
 		scheduledTime := time.Now().UTC().Add(24 * time.Hour)
+		scheduledDate := scheduledTime.Format("2006-01-02")
+		scheduledTimeStr := scheduledTime.Format("15:04")
 		request := &domain.CreateBroadcastRequest{
 			WorkspaceID: "ws123",
 			Name:        "Test Scheduled Broadcast",
@@ -100,7 +102,9 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			},
 			Schedule: domain.ScheduleSettings{
 				IsScheduled:   true,
-				ScheduledTime: scheduledTime,
+				ScheduledDate: scheduledDate,
+				ScheduledTime: scheduledTimeStr,
+				Timezone:      "UTC",
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
@@ -114,7 +118,7 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			DoAndReturn(func(_ context.Context, broadcast *domain.Broadcast) error {
 				// Verify scheduled time is set
 				assert.NotNil(t, broadcast.ScheduledAt)
-				assert.Equal(t, scheduledTime.Unix(), broadcast.ScheduledAt.Unix())
+				assert.Equal(t, scheduledTime.Format("2006-01-02 15:04:05"), broadcast.ScheduledAt.Format("2006-01-02 15:04:05"))
 				return nil
 			})
 
@@ -125,7 +129,7 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.NotNil(t, result.ScheduledAt)
-		assert.Equal(t, scheduledTime.Unix(), result.ScheduledAt.Unix())
+		assert.Equal(t, scheduledTime.Format("2006-01-02 15:04:05"), result.ScheduledAt.Format("2006-01-02 15:04:05"))
 	})
 
 	t.Run("ValidationError", func(t *testing.T) {
@@ -1547,17 +1551,13 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
 
 	variation1 := domain.BroadcastVariation{
-		ID:              "var1",
-		Name:            "Variation 1",
-		TemplateID:      "template1",
-		TemplateVersion: 1,
+		ID:         "var1",
+		TemplateID: "template1",
 	}
 
 	variation2 := domain.BroadcastVariation{
-		ID:              "var2",
-		Name:            "Variation 2",
-		TemplateID:      "template2",
-		TemplateVersion: 1,
+		ID:         "var2",
+		TemplateID: "template2",
 	}
 
 	broadcast := &domain.Broadcast{
@@ -1891,7 +1891,6 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 
 		// Create a template for the variation
 		variation1.TemplateID = "template123"
-		variation1.TemplateVersion = 1
 		updatedBroadcast := &domain.Broadcast{
 			ID:          "broadcast1",
 			WorkspaceID: "workspace1",
@@ -2315,16 +2314,12 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 						SamplePercentage: 50,
 						Variations: []domain.BroadcastVariation{
 							{
-								ID:              variationID,
-								Name:            "Variation A",
-								TemplateID:      "template-1",
-								TemplateVersion: 1,
+								ID:         variationID,
+								TemplateID: "template-1",
 							},
 							{
-								ID:              "variation-2",
-								Name:            "Variation B",
-								TemplateID:      "template-2",
-								TemplateVersion: 1,
+								ID:         "variation-2",
+								TemplateID: "template-2",
 							},
 						},
 					},
@@ -2365,16 +2360,12 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 						SamplePercentage: 50,
 						Variations: []domain.BroadcastVariation{
 							{
-								ID:              variationID,
-								Name:            "Variation A",
-								TemplateID:      "template-1",
-								TemplateVersion: 1,
+								ID:         variationID,
+								TemplateID: "template-1",
 							},
 							{
-								ID:              "variation-2",
-								Name:            "Variation B",
-								TemplateID:      "template-2",
-								TemplateVersion: 1,
+								ID:         "variation-2",
+								TemplateID: "template-2",
 							},
 						},
 					},
@@ -2463,10 +2454,8 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 						SamplePercentage: 50,
 						Variations: []domain.BroadcastVariation{
 							{
-								ID:              "other-variation",
-								Name:            "Other Variation",
-								TemplateID:      "template-other",
-								TemplateVersion: 1,
+								ID:         "other-variation",
+								TemplateID: "template-other",
 							},
 						},
 					},
@@ -2501,10 +2490,12 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 						SamplePercentage: 50,
 						Variations: []domain.BroadcastVariation{
 							{
-								ID:              variationID,
-								Name:            "Variation A",
-								TemplateID:      "template-1",
-								TemplateVersion: 1,
+								ID:         variationID,
+								TemplateID: "template-1",
+							},
+							{
+								ID:         "variation-2",
+								TemplateID: "template-2",
 							},
 						},
 					},
@@ -2544,4 +2535,182 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBroadcastService_DeleteBroadcast(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+
+	t.Run("DeleteDraftBroadcast", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bc123"
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast in draft status
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast to Delete",
+			Status:      domain.BroadcastStatusDraft,
+			CreatedAt:   time.Now().UTC(),
+			UpdatedAt:   time.Now().UTC(),
+		}
+
+		// Mock repository to return the broadcast when queried
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock repository to delete the broadcast
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("DeleteScheduledBroadcast", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bc123"
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast in scheduled status
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast to Delete",
+			Status:      domain.BroadcastStatusScheduled,
+			CreatedAt:   time.Now().UTC(),
+			UpdatedAt:   time.Now().UTC(),
+		}
+
+		// Mock repository to return the broadcast when queried
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock repository to delete the broadcast
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("CannotDeleteSendingBroadcast", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bc123"
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast in sending status
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast to Delete",
+			Status:      domain.BroadcastStatusSending,
+			CreatedAt:   time.Now().UTC(),
+			UpdatedAt:   time.Now().UTC(),
+		}
+
+		// Mock repository to return the broadcast when queried
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Repository should not be called to delete
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcasts in 'sending' status cannot be deleted")
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		ctx := context.Background()
+		request := &domain.DeleteBroadcastRequest{
+			// Missing required fields
+		}
+
+		// Repository should not be called with invalid request
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "required")
+	})
+
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "nonexistent"
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Mock repository to return not found error
+		notFoundErr := &domain.ErrBroadcastNotFound{ID: broadcastID}
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, notFoundErr)
+
+		// Repository delete should not be called
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify error is propagated
+		require.Error(t, err)
+		assert.Same(t, notFoundErr, err)
+	})
 }

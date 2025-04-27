@@ -43,13 +43,16 @@ func (r *broadcastRepository) CreateBroadcast(ctx context.Context, broadcast *do
 			audience, 
 			schedule, 
 			test_settings, 
-			goal_id, 
 			tracking_enabled, 
 			utm_parameters, 
 			metadata, 
-			sent_count, 
-			delivered_count, 
-			failed_count, 
+			total_sent, 
+			total_delivered, 
+			total_bounced, 
+			total_complained, 
+			total_failed, 
+			total_opens,
+			total_clicks,
 			winning_variation, 
 			test_sent_at, 
 			winner_sent_at, 
@@ -62,7 +65,7 @@ func (r *broadcastRepository) CreateBroadcast(ctx context.Context, broadcast *do
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 
-			$16, $17, $18, $19, $20, $21, $22, $23
+			$16, $17, $18, $19, $20, $21, $22, $23, $24, $25
 		)
 	`
 
@@ -74,13 +77,16 @@ func (r *broadcastRepository) CreateBroadcast(ctx context.Context, broadcast *do
 		broadcast.Audience,
 		broadcast.Schedule,
 		broadcast.TestSettings,
-		broadcast.GoalID,
 		broadcast.TrackingEnabled,
 		broadcast.UTMParameters,
 		broadcast.Metadata,
-		broadcast.SentCount,
-		broadcast.DeliveredCount,
-		broadcast.FailedCount,
+		broadcast.TotalSent,
+		broadcast.TotalDelivered,
+		broadcast.TotalBounced,
+		broadcast.TotalComplained,
+		broadcast.TotalFailed,
+		broadcast.TotalOpens,
+		broadcast.TotalClicks,
 		broadcast.WinningVariation,
 		broadcast.TestSentAt,
 		broadcast.WinnerSentAt,
@@ -116,13 +122,16 @@ func (r *broadcastRepository) GetBroadcast(ctx context.Context, workspaceID, id 
 			audience, 
 			schedule, 
 			test_settings, 
-			goal_id, 
 			tracking_enabled, 
 			utm_parameters, 
 			metadata, 
-			sent_count, 
-			delivered_count, 
-			failed_count, 
+			total_sent, 
+			total_delivered, 
+			total_bounced, 
+			total_complained, 
+			total_failed, 
+			total_opens,
+			total_clicks,
 			winning_variation, 
 			test_sent_at, 
 			winner_sent_at, 
@@ -167,21 +176,24 @@ func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *do
 			audience = $5,
 			schedule = $6,
 			test_settings = $7,
-			goal_id = $8,
-			tracking_enabled = $9,
-			utm_parameters = $10,
-			metadata = $11,
-			sent_count = $12,
-			delivered_count = $13,
-			failed_count = $14,
-			winning_variation = $15,
-			test_sent_at = $16,
-			winner_sent_at = $17,
-			updated_at = $18,
-			scheduled_at = $19,
-			started_at = $20,
-			completed_at = $21,
-			cancelled_at = $22
+			tracking_enabled = $8,
+			utm_parameters = $9,
+			metadata = $10,
+			total_sent = $11,
+			total_delivered = $12,
+			total_bounced = $13,
+			total_complained = $14,
+			total_failed = $15,
+			total_opens = $16,
+			total_clicks = $17,
+			winning_variation = $18,
+			test_sent_at = $19,
+			winner_sent_at = $20,
+			updated_at = $21,
+			scheduled_at = $22,
+			started_at = $23,
+			completed_at = $24,
+			cancelled_at = $25
 		WHERE id = $1 AND workspace_id = $2
 	`
 
@@ -193,13 +205,16 @@ func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *do
 		broadcast.Audience,
 		broadcast.Schedule,
 		broadcast.TestSettings,
-		broadcast.GoalID,
 		broadcast.TrackingEnabled,
 		broadcast.UTMParameters,
 		broadcast.Metadata,
-		broadcast.SentCount,
-		broadcast.DeliveredCount,
-		broadcast.FailedCount,
+		broadcast.TotalSent,
+		broadcast.TotalDelivered,
+		broadcast.TotalBounced,
+		broadcast.TotalComplained,
+		broadcast.TotalFailed,
+		broadcast.TotalOpens,
+		broadcast.TotalClicks,
 		broadcast.WinningVariation,
 		broadcast.TestSentAt,
 		broadcast.WinnerSentAt,
@@ -274,13 +289,16 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 				audience, 
 				schedule, 
 				test_settings, 
-				goal_id, 
 				tracking_enabled, 
 				utm_parameters, 
 				metadata, 
-				sent_count, 
-				delivered_count, 
-				failed_count, 
+				total_sent, 
+				total_delivered, 
+				total_bounced, 
+				total_complained, 
+				total_failed, 
+				total_opens,
+				total_clicks,
 				winning_variation, 
 				test_sent_at, 
 				winner_sent_at, 
@@ -306,13 +324,16 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 				audience, 
 				schedule, 
 				test_settings, 
-				goal_id, 
 				tracking_enabled, 
 				utm_parameters, 
 				metadata, 
-				sent_count, 
-				delivered_count, 
-				failed_count, 
+				total_sent, 
+				total_delivered, 
+				total_bounced, 
+				total_complained, 
+				total_failed, 
+				total_opens,
+				total_clicks,
 				winning_variation, 
 				test_sent_at, 
 				winner_sent_at, 
@@ -355,6 +376,36 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 	}, nil
 }
 
+// DeleteBroadcast deletes a broadcast from the database
+func (r *broadcastRepository) DeleteBroadcast(ctx context.Context, workspaceID, id string) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	query := `
+		DELETE FROM broadcasts
+		WHERE id = $1 AND workspace_id = $2
+	`
+
+	result, err := workspaceDB.ExecContext(ctx, query, id, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to delete broadcast: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return &domain.ErrBroadcastNotFound{ID: id}
+	}
+
+	return nil
+}
+
 // scanBroadcast scans a row into a Broadcast struct
 func scanBroadcast(scanner interface {
 	Scan(dest ...interface{}) error
@@ -369,13 +420,16 @@ func scanBroadcast(scanner interface {
 		&broadcast.Audience,
 		&broadcast.Schedule,
 		&broadcast.TestSettings,
-		&broadcast.GoalID,
 		&broadcast.TrackingEnabled,
 		&broadcast.UTMParameters,
 		&broadcast.Metadata,
-		&broadcast.SentCount,
-		&broadcast.DeliveredCount,
-		&broadcast.FailedCount,
+		&broadcast.TotalSent,
+		&broadcast.TotalDelivered,
+		&broadcast.TotalBounced,
+		&broadcast.TotalComplained,
+		&broadcast.TotalFailed,
+		&broadcast.TotalOpens,
+		&broadcast.TotalClicks,
 		&broadcast.WinningVariation,
 		&broadcast.TestSentAt,
 		&broadcast.WinnerSentAt,

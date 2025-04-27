@@ -10,7 +10,6 @@ import {
   Row,
   Col,
   Switch,
-  DatePicker,
   InputNumber,
   Popconfirm
 } from 'antd'
@@ -161,10 +160,22 @@ export function UpsertBroadcastDrawer({
 
   const upsertBroadcastMutation = useMutation({
     mutationFn: (values: CreateBroadcastRequest | UpdateBroadcastRequest) => {
+      // Clone the values to avoid modifying the original
+      const payload = { ...values }
+
+      // Make sure schedule is set to not scheduled by default
+      payload.schedule = {
+        is_scheduled: false,
+        use_recipient_timezone: false
+      }
+
+      // For logging or debugging
+      // console.log('Submitting broadcast:', payload);
+
       if (broadcast) {
-        return broadcastApi.update(values as UpdateBroadcastRequest)
+        return broadcastApi.update(payload as UpdateBroadcastRequest)
       } else {
-        return broadcastApi.create(values as CreateBroadcastRequest)
+        return broadcastApi.create(payload as CreateBroadcastRequest)
       }
     },
     onSuccess: () => {
@@ -180,12 +191,16 @@ export function UpsertBroadcastDrawer({
   })
 
   const showDrawer = () => {
+    // Get the default timezone from workspace settings, fallback to UTC if not available
+    const defaultTimezone = workspace.settings?.timezone || 'UTC'
+
     if (broadcast) {
+      // For existing broadcasts, we need to ensure the schedule settings
+      // match our form structure with the new fields
       form.setFieldsValue({
         id: broadcast.id,
         name: broadcast.name,
         audience: broadcast.audience,
-        schedule: broadcast.schedule,
         test_settings: broadcast.test_settings,
         goal_id: broadcast.goal_id || undefined,
         tracking_enabled: broadcast.tracking_enabled,
@@ -205,10 +220,6 @@ export function UpsertBroadcastDrawer({
           exclude_unsubscribed: true,
           skip_duplicate_emails: true
         },
-        schedule: {
-          send_manually: true,
-          use_recipient_timezone: false
-        },
         test_settings: {
           enabled: false,
           sample_percentage: 50,
@@ -217,8 +228,7 @@ export function UpsertBroadcastDrawer({
             {
               id: 'default',
               name: 'Default',
-              template_id: '',
-              template_version: 1
+              template_id: ''
             }
           ]
         },
@@ -235,7 +245,7 @@ export function UpsertBroadcastDrawer({
   const handleClose = () => {
     const campaignName = form.getFieldValue('name')
 
-    if (campaignName) {
+    if (campaignName && !loading && !upsertBroadcastMutation.isPending) {
       modal.confirm({
         title: 'Unsaved changes',
         content: 'You have unsaved changes. Are you sure you want to close this drawer?',
@@ -305,7 +315,12 @@ export function UpsertBroadcastDrawer({
               // Ensure workspace_id is included
               const payload = {
                 ...values,
-                workspace_id: workspace.id
+                workspace_id: workspace.id,
+                // Set default schedule
+                schedule: {
+                  is_scheduled: false,
+                  use_recipient_timezone: false
+                }
               }
 
               // Add ID for updates
@@ -495,17 +510,7 @@ export function UpsertBroadcastDrawer({
                                   {fields.map((field) => (
                                     <div key={field.key} className="border p-4 mb-4 rounded">
                                       <Row gutter={24}>
-                                        <Col span={11}>
-                                          <Form.Item
-                                            key={`name-${field.key}`}
-                                            name={[field.name, 'name']}
-                                            label="Variation name"
-                                            rules={[{ required: true }]}
-                                          >
-                                            <Input placeholder="E.g. Variation A" />
-                                          </Form.Item>
-                                        </Col>
-                                        <Col span={11}>
+                                        <Col span={22}>
                                           <Form.Item
                                             key={`template-${field.key}`}
                                             name={[field.name, 'template_id']}
@@ -578,9 +583,7 @@ export function UpsertBroadcastDrawer({
                                       onClick={() =>
                                         add({
                                           id: `variation-${fields.length + 1}`,
-                                          name: `Variation ${String.fromCharCode(65 + fields.length)}`,
-                                          template_id: '',
-                                          template_version: 1
+                                          template_id: ''
                                         })
                                       }
                                       block
@@ -612,131 +615,6 @@ export function UpsertBroadcastDrawer({
                           </Form.Item>
                         </div>
                       )
-                    }}
-                  </Form.Item>
-
-                  <div className="text-xs mt-8 mb-6 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
-                    Scheduling
-                  </div>
-
-                  <Row gutter={24}>
-                    <Col span={12}>
-                      <Form.Item
-                        name={['schedule', 'send_manually']}
-                        valuePropName="checked"
-                        label="Manual sending (I will trigger the send)"
-                      >
-                        <Switch />
-                      </Form.Item>
-                    </Col>
-
-                    <Form.Item
-                      noStyle
-                      shouldUpdate={(prevValues, currentValues) => {
-                        return (
-                          prevValues.schedule?.send_manually !==
-                          currentValues.schedule?.send_manually
-                        )
-                      }}
-                    >
-                      {({ getFieldValue }) => {
-                        const sendManually = getFieldValue(['schedule', 'send_manually'])
-
-                        if (!sendManually) {
-                          return (
-                            <Col span={12}>
-                              <Form.Item
-                                name={['schedule', 'scheduled_time']}
-                                label="Schedule date and time"
-                                rules={[
-                                  { required: true, message: 'Please select a date and time' }
-                                ]}
-                              >
-                                <DatePicker
-                                  showTime
-                                  format="YYYY-MM-DD HH:mm"
-                                  disabledDate={(current) => {
-                                    // Can't select days before today
-                                    return current && current < dayjs().startOf('day')
-                                  }}
-                                  style={{ width: '100%' }}
-                                />
-                              </Form.Item>
-                            </Col>
-                          )
-                        }
-
-                        return null
-                      }}
-                    </Form.Item>
-                  </Row>
-
-                  <Form.Item
-                    noStyle
-                    shouldUpdate={(prevValues, currentValues) => {
-                      return (
-                        prevValues.schedule?.send_manually !== currentValues.schedule?.send_manually
-                      )
-                    }}
-                  >
-                    {({ getFieldValue }) => {
-                      const sendManually = getFieldValue(['schedule', 'send_manually'])
-
-                      if (!sendManually) {
-                        return (
-                          <Row gutter={24}>
-                            <Col span={12}>
-                              <Form.Item
-                                name={['schedule', 'use_recipient_timezone']}
-                                valuePropName="checked"
-                                label="Send according to recipient timezone"
-                              >
-                                <Switch />
-                              </Form.Item>
-                            </Col>
-
-                            <Form.Item
-                              noStyle
-                              shouldUpdate={(prevValues, currentValues) => {
-                                return (
-                                  prevValues.schedule?.use_recipient_timezone !==
-                                  currentValues.schedule?.use_recipient_timezone
-                                )
-                              }}
-                            >
-                              {({ getFieldValue }) => {
-                                const useRecipientTimezone = getFieldValue([
-                                  'schedule',
-                                  'use_recipient_timezone'
-                                ])
-
-                                if (useRecipientTimezone) {
-                                  return (
-                                    <Col span={12}>
-                                      <Form.Item
-                                        name={['schedule', 'time_window_start']}
-                                        label="Delivery time"
-                                        rules={[{ required: true }]}
-                                      >
-                                        <Select
-                                          options={Array.from({ length: 24 }, (_, i) => ({
-                                            value: `${i}:00`,
-                                            label: `${i}:00`
-                                          }))}
-                                        />
-                                      </Form.Item>
-                                    </Col>
-                                  )
-                                }
-
-                                return <Col span={12}></Col>
-                              }}
-                            </Form.Item>
-                          </Row>
-                        )
-                      }
-
-                      return null
                     }}
                   </Form.Item>
                 </Col>

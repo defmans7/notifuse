@@ -66,8 +66,8 @@ func (t *Template) Validate() error {
 	if t.Name == "" {
 		return fmt.Errorf("invalid template: name is required")
 	}
-	if len(t.Name) > 255 {
-		return fmt.Errorf("invalid template: name length must be between 1 and 255")
+	if len(t.Name) > 32 {
+		return fmt.Errorf("invalid template: name length must be between 1 and 32")
 	}
 
 	if t.Version <= 0 {
@@ -170,14 +170,14 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	if e.FromName == "" {
 		return fmt.Errorf("invalid email template: from_name is required")
 	}
-	if len(e.FromName) > 255 {
-		return fmt.Errorf("invalid email template: from_name length must be between 1 and 255")
+	if len(e.FromName) > 32 {
+		return fmt.Errorf("invalid email template: from_name length must be between 1 and 32")
 	}
 	if e.Subject == "" {
 		return fmt.Errorf("invalid email template: subject is required")
 	}
-	if len(e.Subject) > 255 {
-		return fmt.Errorf("invalid email template: subject length must be between 1 and 255")
+	if len(e.Subject) > 32 {
+		return fmt.Errorf("invalid email template: subject length must be between 1 and 32")
 	}
 	if e.VisualEditorTree.Kind != "root" {
 		return fmt.Errorf("invalid email template: visual_editor_tree must have kind 'root'")
@@ -218,8 +218,8 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	if e.ReplyTo != nil && !govalidator.IsEmail(*e.ReplyTo) {
 		return fmt.Errorf("invalid email template: reply_to is not a valid email")
 	}
-	if e.SubjectPreview != nil && len(*e.SubjectPreview) > 255 {
-		return fmt.Errorf("invalid email template: subject_preview length must be between 1 and 255")
+	if e.SubjectPreview != nil && len(*e.SubjectPreview) > 32 {
+		return fmt.Errorf("invalid email template: subject_preview length must be between 1 and 32")
 	}
 
 	return nil
@@ -279,8 +279,8 @@ func (r *CreateTemplateRequest) Validate() (template *Template, workspaceID stri
 	if r.Name == "" {
 		return nil, "", fmt.Errorf("invalid create template request: name is required")
 	}
-	if len(r.Name) > 255 {
-		return nil, "", fmt.Errorf("invalid create template request: name length must be between 1 and 255")
+	if len(r.Name) > 32 {
+		return nil, "", fmt.Errorf("invalid create template request: name length must be between 1 and 32")
 	}
 
 	if r.Channel == "" {
@@ -408,8 +408,8 @@ func (r *UpdateTemplateRequest) Validate() (template *Template, workspaceID stri
 	if r.Name == "" {
 		return nil, "", fmt.Errorf("invalid update template request: name is required")
 	}
-	if len(r.Name) > 255 {
-		return nil, "", fmt.Errorf("invalid update template request: name length must be between 1 and 255")
+	if len(r.Name) > 32 {
+		return nil, "", fmt.Errorf("invalid update template request: name length must be between 1 and 32")
 	}
 
 	if r.Channel == "" {

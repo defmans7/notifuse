@@ -21,7 +21,6 @@ export interface BroadcastVariation {
   id: string
   name: string
   template_id: string
-  template_version: number
   subject: string
   preview_text?: string
   from_name: string
@@ -48,11 +47,11 @@ export interface AudienceSettings {
 }
 
 export interface ScheduleSettings {
-  send_immediately: boolean
-  scheduled_time?: string
+  is_scheduled: boolean
+  scheduled_date?: string // Format: YYYY-MM-dd
+  scheduled_time?: string // Format: HH:mm
+  timezone?: string // IANA timezone format, e.g. "America/New_York"
   use_recipient_timezone: boolean
-  time_window_start?: string
-  time_window_end?: string
 }
 
 export type BroadcastStatus =
@@ -166,6 +165,11 @@ export interface SendToIndividualRequest {
   variation_id?: string
 }
 
+export interface DeleteBroadcastRequest {
+  workspace_id: string
+  id: string
+}
+
 export const broadcastApi = {
   list: async (params: ListBroadcastsRequest): Promise<ListBroadcastsResponse> => {
     const searchParams = new URLSearchParams()
@@ -211,5 +215,9 @@ export const broadcastApi = {
 
   sendToIndividual: async (params: SendToIndividualRequest): Promise<{ success: boolean }> => {
     return api.post<{ success: boolean }>('/api/broadcasts.sendToIndividual', params)
+  },
+
+  delete: async (params: DeleteBroadcastRequest): Promise<{ success: boolean }> => {
+    return api.post<{ success: boolean }>('/api/broadcasts.delete', params)
   }
 }
