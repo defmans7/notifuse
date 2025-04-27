@@ -200,7 +200,6 @@ export function UpsertBroadcastDrawer({
         name: broadcast.name,
         audience: broadcast.audience,
         test_settings: broadcast.test_settings,
-        goal_id: broadcast.goal_id || undefined,
         tracking_enabled: broadcast.tracking_enabled,
         utm_parameters: broadcast.utm_parameters || undefined,
         metadata: broadcast.metadata || undefined

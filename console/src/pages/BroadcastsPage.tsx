@@ -17,7 +17,12 @@ import {
   Descriptions
 } from 'antd'
 import { useParams } from '@tanstack/react-router'
-import { broadcastApi, Broadcast, BroadcastStatus } from '../services/api/broadcast'
+import {
+  broadcastApi,
+  Broadcast,
+  BroadcastStatus,
+  BroadcastVariation
+} from '../services/api/broadcast'
 import { listsApi } from '../services/api/list'
 import {
   CalendarOutlined,
@@ -36,12 +41,13 @@ import {
   FrownOutlined,
   StopOutlined as UnsubscribeOutlined
 } from '@ant-design/icons'
-import { SquareMousePointer } from 'lucide-react'
-import { useState } from 'react'
+import { SquareMousePointer, CircleCheck, CircleX, ChevronDown, ChevronUp } from 'lucide-react'
+import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
 import { UpsertBroadcastDrawer } from '../components/broadcasts/UpsertBroadcastDrawer'
 import { SendOrScheduleModal } from '../components/broadcasts/SendOrScheduleModal'
 import { useAuth } from '../contexts/AuthContext'
+import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -65,6 +71,522 @@ const getStatusBadge = (status: BroadcastStatus) => {
     default:
       return <Badge status="default" text={status} />
   }
+}
+
+// Component for rendering a single A/B test variation card
+interface VariationCardProps {
+  variation: BroadcastVariation
+  workspaceId: string
+  colSpan: number
+  index: number
+}
+
+const VariationCard: React.FC<VariationCardProps> = ({
+  variation,
+  workspaceId,
+  colSpan,
+  index
+}) => {
+  return (
+    <Col span={colSpan} key={index}>
+      <Card
+        size="small"
+        title={variation.name || variation.template?.name || `Variation ${index + 1}`}
+        type="inner"
+        extra={
+          variation.template ? (
+            <TemplatePreviewDrawer record={variation.template as any} workspaceId={workspaceId}>
+              <Button size="small" type="primary" ghost>
+                Preview
+              </Button>
+            </TemplatePreviewDrawer>
+          ) : (
+            <Button size="small" type="primary" ghost disabled>
+              Preview
+            </Button>
+          )
+        }
+      >
+        <Space direction="vertical" size="small">
+          <Space>
+            <Text strong>From:</Text>
+            {variation.from_name || variation.template?.email?.from_name || 'N/A'}
+            <span>
+              &lt;
+              {variation.from_email || variation.template?.email?.from_address || 'N/A'}
+              &gt;
+            </span>
+          </Space>
+          <Space>
+            <Text strong>Subject:</Text>
+            {variation.subject || variation.template?.email?.subject || 'N/A'}
+          </Space>
+          {variation.template?.email.subject_preview && (
+            <Space>
+              <Text strong>Subject Preview:</Text>
+              {variation.template?.email?.subject_preview}
+            </Space>
+          )}
+          {(variation.reply_to || variation.template?.email?.reply_to) && (
+            <Text>Reply-to: {variation.reply_to || variation.template?.email?.reply_to}</Text>
+          )}
+
+          {variation.metrics && (
+            <>
+              <Divider style={{ margin: '8px 0' }} />
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                <div>
+                  <div className="font-medium text-purple-500 flex items-center">
+                    <EyeOutlined className="mr-1" /> Opens
+                  </div>
+                  <div>
+                    {variation.metrics.opens} ({(variation.metrics.open_rate * 100).toFixed(1)}%)
+                  </div>
+                </div>
+                <div>
+                  <div className="font-medium text-cyan-500 flex items-center">
+                    <SquareMousePointer size={14} className="mr-1" /> Clicks
+                  </div>
+                  <div>
+                    {variation.metrics.clicks} ({(variation.metrics.click_rate * 100).toFixed(1)}%)
+                  </div>
+                </div>
+                <div>
+                  <div className="font-medium text-green-500 flex items-center">
+                    <CheckCircleOutlined className="mr-1" /> Delivered
+                  </div>
+                  <div>
+                    {variation.metrics.delivered} of {variation.metrics.recipients}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </Space>
+      </Card>
+    </Col>
+  )
+}
+
+// Component for rendering a single broadcast card
+interface BroadcastCardProps {
+  broadcast: Broadcast
+  lists: any[]
+  workspaceId: string
+  onDelete: (broadcast: Broadcast) => void
+  onPause: (broadcast: Broadcast) => void
+  onResume: (broadcast: Broadcast) => void
+  onCancel: (broadcast: Broadcast) => void
+  onSchedule: (broadcast: Broadcast) => void
+  currentWorkspace: any
+  isFirst?: boolean
+}
+
+const BroadcastCard: React.FC<BroadcastCardProps> = ({
+  broadcast,
+  lists,
+  workspaceId,
+  onDelete,
+  onPause,
+  onResume,
+  onCancel,
+  onSchedule,
+  currentWorkspace,
+  isFirst = false
+}) => {
+  const [showDetails, setShowDetails] = useState(isFirst)
+
+  return (
+    <Card
+      title={
+        <Space size="large">
+          <div>{broadcast.name}</div>
+          <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
+        </Space>
+      }
+      extra={
+        <Space>
+          {(broadcast.status === 'draft' || broadcast.status === 'scheduled') && (
+            <Tooltip title="Edit Broadcast">
+              <UpsertBroadcastDrawer
+                workspace={currentWorkspace!}
+                broadcast={broadcast}
+                lists={lists}
+                buttonContent={<EditOutlined />}
+                buttonProps={{ size: 'small', type: 'text' }}
+              />
+            </Tooltip>
+          )}
+          {broadcast.status === 'sending' && (
+            <Button type="text" size="small" onClick={() => onPause(broadcast)}>
+              <Tooltip title="Pause Broadcast">
+                <PauseCircleOutlined />
+              </Tooltip>
+            </Button>
+          )}
+          {broadcast.status === 'paused' && (
+            <Button type="text" size="small" onClick={() => onResume(broadcast)}>
+              <Tooltip title="Resume Broadcast">
+                <PlayCircleOutlined />
+              </Tooltip>
+            </Button>
+          )}
+          {broadcast.status === 'scheduled' && (
+            <Button type="text" size="small" onClick={() => onCancel(broadcast)}>
+              <Tooltip title="Cancel Broadcast">
+                <StopOutlined />
+              </Tooltip>
+            </Button>
+          )}
+          {broadcast.status === 'draft' && (
+            <>
+              <Button type="text" size="small" onClick={() => onDelete(broadcast)}>
+                <Tooltip title="Delete Broadcast">
+                  <DeleteOutlined />
+                </Tooltip>
+              </Button>
+              <Button type="primary" size="small" ghost onClick={() => onSchedule(broadcast)}>
+                Send or Schedule
+              </Button>
+            </>
+          )}
+        </Space>
+      }
+      variant="borderless"
+      key={broadcast.id}
+      className="!mb-6"
+    >
+      <Row gutter={[16, 16]} wrap className="flex-nowrap overflow-x-auto">
+        <Col span={3}>
+          <Tooltip title={`${broadcast.sent_count} total emails sent`}>
+            <Statistic
+              title={
+                <Space className="text-blue-500 font-medium">
+                  <SendOutlined /> Sent
+                </Space>
+              }
+              value={broadcast.sent_count || '-'}
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip title={`${broadcast.delivered_count} emails successfully delivered`}>
+            <Statistic
+              title={
+                <Space className="text-green-500 font-medium">
+                  <CheckCircleOutlined /> Delivered
+                </Space>
+              }
+              value={
+                broadcast.sent_count > 0
+                  ? `${((broadcast.delivered_count / broadcast.sent_count) * 100).toFixed(1)}%`
+                  : '-'
+              }
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip title={`${broadcast.total_opens ?? 0} total opens`}>
+            <Statistic
+              title={
+                <Space className="text-purple-500 font-medium">
+                  <EyeOutlined /> Opens
+                </Space>
+              }
+              value={
+                broadcast.sent_count > 0
+                  ? `${(((broadcast.total_opens ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
+                  : '-'
+              }
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip title={`${broadcast.total_clicks ?? 0} total clicks`}>
+            <Statistic
+              title={
+                <Space className="text-cyan-500 font-medium">
+                  <SquareMousePointer size={16} /> Clicks
+                </Space>
+              }
+              value={
+                broadcast.sent_count > 0
+                  ? `${(((broadcast.total_clicks ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
+                  : '-'
+              }
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip title={`${broadcast.failed_count ?? 0} emails failed to send`}>
+            <Statistic
+              title={
+                <Space className="text-orange-500 font-medium">
+                  <CloseCircleOutlined /> Failed
+                </Space>
+              }
+              value={
+                broadcast.sent_count > 0
+                  ? `${(((broadcast.failed_count ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
+                  : '-'
+              }
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip title={`${broadcast.total_bounced ?? 0} emails bounced back`}>
+            <Statistic
+              title={
+                <Space className="text-orange-500 font-medium">
+                  <WarningOutlined /> Bounced
+                </Space>
+              }
+              value={
+                broadcast.sent_count > 0
+                  ? `${(((broadcast.total_bounced ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
+                  : '-'
+              }
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip title={`${broadcast.total_complained ?? 0} total complaints`}>
+            <Statistic
+              title={
+                <Space className="text-orange-500 font-medium">
+                  <FrownOutlined /> Complaints
+                </Space>
+              }
+              value={
+                broadcast.sent_count > 0
+                  ? `${(((broadcast.total_complained ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
+                  : '-'
+              }
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip title={`${broadcast.total_unsubscribed ?? 0} total unsubscribes`}>
+            <Statistic
+              title={
+                <Space className="text-orange-500 font-medium">
+                  <UnsubscribeOutlined /> Unsub.
+                </Space>
+              }
+              value={
+                broadcast.sent_count > 0
+                  ? `${(((broadcast.total_unsubscribed ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
+                  : '-'
+              }
+              valueStyle={{ fontSize: '16px' }}
+            />
+          </Tooltip>
+        </Col>
+      </Row>
+
+      <div className="mt-2 text-center">
+        <Button type="link" onClick={() => setShowDetails(!showDetails)}>
+          {showDetails ? (
+            <Space size="small">
+              <ChevronUp size={16} className="mr-1" /> Hide Details
+            </Space>
+          ) : (
+            <Space size="small">
+              <ChevronDown size={16} className="mr-1" /> Show Details
+            </Space>
+          )}
+        </Button>
+      </div>
+
+      {showDetails && (
+        <>
+          <Divider />
+
+          <Descriptions
+            bordered={false}
+            size="small"
+            column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
+          >
+            {/* Schedule Information */}
+            {broadcast.schedule.is_scheduled &&
+              broadcast.schedule.scheduled_date &&
+              broadcast.schedule.scheduled_time && (
+                <Descriptions.Item label="Scheduled">
+                  {dayjs(
+                    `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
+                  ).fromNow()}
+                  {broadcast.schedule.timezone && ` (${broadcast.schedule.timezone})`}
+                  {broadcast.schedule.use_recipient_timezone && (
+                    <Tag className="ml-2" color="blue">
+                      Uses recipient timezone
+                    </Tag>
+                  )}
+                </Descriptions.Item>
+              )}
+
+            {broadcast.started_at && (
+              <Descriptions.Item label="Started">
+                {dayjs(broadcast.started_at).fromNow()}
+              </Descriptions.Item>
+            )}
+
+            {broadcast.completed_at && (
+              <Descriptions.Item label="Completed">
+                {dayjs(broadcast.completed_at).fromNow()}
+              </Descriptions.Item>
+            )}
+
+            {broadcast.paused_at && (
+              <Descriptions.Item label="Paused">
+                {dayjs(broadcast.paused_at).fromNow()}
+              </Descriptions.Item>
+            )}
+
+            {broadcast.cancelled_at && (
+              <Descriptions.Item label="Cancelled">
+                {dayjs(broadcast.cancelled_at).fromNow()}
+              </Descriptions.Item>
+            )}
+
+            {/* Audience Information */}
+            {broadcast.audience.segments && broadcast.audience.segments.length > 0 && (
+              <Descriptions.Item label="Segments">
+                {broadcast.audience.segments.length} segments
+              </Descriptions.Item>
+            )}
+
+            {broadcast.audience.lists && broadcast.audience.lists.length > 0 && (
+              <Descriptions.Item label="Lists">
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {broadcast.audience.lists.map((listId) => {
+                    const list = lists.find((l) => l.id === listId)
+                    return list ? (
+                      <div key={list.id}>
+                        {list.name} ({list.total_active.toLocaleString()} subscribers)
+                      </div>
+                    ) : (
+                      <div key={listId}>Unknown list ({listId})</div>
+                    )
+                  })}
+                </Space>
+              </Descriptions.Item>
+            )}
+
+            <Descriptions.Item label="Skip Duplicates">
+              {broadcast.audience.skip_duplicate_emails ? (
+                <CircleCheck className="text-green-500" size={16} />
+              ) : (
+                <CircleX className="text-orange-500" size={16} />
+              )}
+            </Descriptions.Item>
+
+            <Descriptions.Item label="Exclude Unsubscribed">
+              {broadcast.audience.exclude_unsubscribed ? (
+                <CircleCheck className="text-green-500" size={16} />
+              ) : (
+                <CircleX className="text-orange-500" size={16} />
+              )}
+            </Descriptions.Item>
+
+            {broadcast.audience.rate_limit_per_minute && (
+              <Descriptions.Item label="Rate Limit">
+                {broadcast.audience.rate_limit_per_minute}/min
+              </Descriptions.Item>
+            )}
+
+            {/* Tracking Information */}
+            <Descriptions.Item label="Open & Click Tracking">
+              {broadcast.tracking_enabled ? (
+                <CircleCheck className="text-green-500" size={16} />
+              ) : (
+                <CircleX className="text-orange-500" size={16} />
+              )}
+            </Descriptions.Item>
+
+            {broadcast.utm_parameters && Object.values(broadcast.utm_parameters).some((v) => v) && (
+              <Descriptions.Item label="UTM Parameters">
+                <Tooltip title="utm_source / utm_medium / utm_campaign">
+                  <div>
+                    {broadcast.utm_parameters.source &&
+                      broadcast.utm_parameters.medium &&
+                      broadcast.utm_parameters.campaign && (
+                        <Text>
+                          {broadcast.utm_parameters.source} / {broadcast.utm_parameters.medium} /{' '}
+                          {broadcast.utm_parameters.campaign}
+                        </Text>
+                      )}
+                  </div>
+                </Tooltip>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+
+          {broadcast.test_settings.enabled && (
+            <div className="my-8">
+              <Divider orientation="left">
+                <Space>
+                  <CalendarOutlined className="text-purple-500" />
+                  <Text strong>A/B Test</Text>
+                </Space>
+              </Divider>
+              <Descriptions
+                bordered={false}
+                size="small"
+                column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
+                className="mb-4"
+              >
+                <Descriptions.Item label="Test Sample">
+                  {broadcast.test_settings.sample_percentage}%
+                </Descriptions.Item>
+
+                {broadcast.test_settings.auto_send_winner &&
+                  broadcast.test_settings.auto_send_winner_metric &&
+                  broadcast.test_settings.test_duration_hours && (
+                    <Descriptions.Item label="Auto-send Winner">
+                      <div className="flex items-center">
+                        <CircleCheck className="text-green-500 mr-2" size={16} />
+                        <span>
+                          After {broadcast.test_settings.test_duration_hours} hours based on highest{' '}
+                          {broadcast.test_settings.auto_send_winner_metric === 'open_rate'
+                            ? 'opens'
+                            : 'clicks'}
+                        </span>
+                      </div>
+                    </Descriptions.Item>
+                  )}
+              </Descriptions>
+
+              <Row gutter={[16, 16]} className="mt-4">
+                {broadcast.test_settings.variations.map((variation, index) => {
+                  // Calculate column width based on number of variations
+                  // Ensure columns are at least 6 units wide (4 per row maximum)
+                  const variationsCount = broadcast.test_settings.variations.length
+                  const colSpan = Math.max(6, Math.floor(24 / variationsCount))
+
+                  return (
+                    <VariationCard
+                      key={index}
+                      variation={variation}
+                      workspaceId={workspaceId}
+                      colSpan={colSpan}
+                      index={index}
+                    />
+                  )
+                })}
+              </Row>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
 }
 
 export function BroadcastsPage() {
@@ -217,421 +739,20 @@ export function BroadcastsPage() {
         </Row>
       ) : hasBroadcasts ? (
         <div>
-          {data.broadcasts.map((broadcast: Broadcast) => (
-            <Card
-              title={
-                <Space size="large">
-                  <div>{broadcast.name}</div>
-                  <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
-                </Space>
-              }
-              extra={
-                <Space>
-                  {(broadcast.status === 'draft' || broadcast.status === 'scheduled') && (
-                    <Tooltip title="Edit Broadcast">
-                      <UpsertBroadcastDrawer
-                        workspace={currentWorkspace!}
-                        broadcast={broadcast}
-                        lists={lists}
-                        buttonContent={<EditOutlined />}
-                        buttonProps={{ size: 'small', type: 'text' }}
-                      />
-                    </Tooltip>
-                  )}
-                  {broadcast.status === 'sending' && (
-                    <Button
-                      type="text"
-                      size="small"
-                      onClick={() => handlePauseBroadcast(broadcast)}
-                    >
-                      <Tooltip title="Pause Broadcast">
-                        <PauseCircleOutlined />
-                      </Tooltip>
-                    </Button>
-                  )}
-                  {broadcast.status === 'paused' && (
-                    <Button
-                      type="text"
-                      size="small"
-                      onClick={() => handleResumeBroadcast(broadcast)}
-                    >
-                      <Tooltip title="Resume Broadcast">
-                        <PlayCircleOutlined />
-                      </Tooltip>
-                    </Button>
-                  )}
-                  {broadcast.status === 'scheduled' && (
-                    <Button
-                      type="text"
-                      size="small"
-                      onClick={() => handleCancelBroadcast(broadcast)}
-                    >
-                      <Tooltip title="Cancel Broadcast">
-                        <StopOutlined />
-                      </Tooltip>
-                    </Button>
-                  )}
-                  {broadcast.status === 'draft' && (
-                    <>
-                      <Button type="text" size="small" onClick={() => openDeleteModal(broadcast)}>
-                        <Tooltip title="Delete Broadcast">
-                          <DeleteOutlined />
-                        </Tooltip>
-                      </Button>
-                      <Button
-                        type="primary"
-                        size="small"
-                        ghost
-                        onClick={() => handleScheduleBroadcast(broadcast)}
-                      >
-                        Send or Schedule
-                      </Button>
-                    </>
-                  )}
-                </Space>
-              }
-              variant="borderless"
+          {data.broadcasts.map((broadcast: Broadcast, index) => (
+            <BroadcastCard
               key={broadcast.id}
-              className="!mb-6"
-            >
-              <Row gutter={[16, 16]} wrap className="flex-nowrap overflow-x-auto">
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.sent_count} total emails sent`}>
-                    <Statistic
-                      title={
-                        <Space className="text-blue-500 font-medium">
-                          <SendOutlined /> Sent
-                        </Space>
-                      }
-                      value={broadcast.sent_count || '-'}
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.delivered_count} emails successfully delivered`}>
-                    <Statistic
-                      title={
-                        <Space className="text-green-500 font-medium">
-                          <CheckCircleOutlined /> Delivered
-                        </Space>
-                      }
-                      value={
-                        broadcast.sent_count > 0
-                          ? `${((broadcast.delivered_count / broadcast.sent_count) * 100).toFixed(1)}%`
-                          : '-'
-                      }
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.total_opens ?? 0} total opens`}>
-                    <Statistic
-                      title={
-                        <Space className="text-purple-500 font-medium">
-                          <EyeOutlined /> Opens
-                        </Space>
-                      }
-                      value={
-                        broadcast.sent_count > 0
-                          ? `${(((broadcast.total_opens ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                          : '-'
-                      }
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.total_clicks ?? 0} total clicks`}>
-                    <Statistic
-                      title={
-                        <Space className="text-cyan-500 font-medium">
-                          <SquareMousePointer size={16} /> Clicks
-                        </Space>
-                      }
-                      value={
-                        broadcast.sent_count > 0
-                          ? `${(((broadcast.total_clicks ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                          : '-'
-                      }
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.failed_count ?? 0} emails failed to send`}>
-                    <Statistic
-                      title={
-                        <Space className="text-orange-500 font-medium">
-                          <CloseCircleOutlined /> Failed
-                        </Space>
-                      }
-                      value={
-                        broadcast.sent_count > 0
-                          ? `${(((broadcast.failed_count ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                          : '-'
-                      }
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.total_bounced ?? 0} emails bounced back`}>
-                    <Statistic
-                      title={
-                        <Space className="text-orange-500 font-medium">
-                          <WarningOutlined /> Bounced
-                        </Space>
-                      }
-                      value={
-                        broadcast.sent_count > 0
-                          ? `${(((broadcast.total_bounced ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                          : '-'
-                      }
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.total_complained ?? 0} total complaints`}>
-                    <Statistic
-                      title={
-                        <Space className="text-orange-500 font-medium">
-                          <FrownOutlined /> Complaints
-                        </Space>
-                      }
-                      value={
-                        broadcast.sent_count > 0
-                          ? `${(((broadcast.total_complained ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                          : '-'
-                      }
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-                <Col span={3}>
-                  <Tooltip title={`${broadcast.total_unsubscribed ?? 0} total unsubscribes`}>
-                    <Statistic
-                      title={
-                        <Space className="text-orange-500 font-medium">
-                          <UnsubscribeOutlined /> Unsub.
-                        </Space>
-                      }
-                      value={
-                        broadcast.sent_count > 0
-                          ? `${(((broadcast.total_unsubscribed ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                          : '-'
-                      }
-                      valueStyle={{ fontSize: '16px' }}
-                    />
-                  </Tooltip>
-                </Col>
-              </Row>
-
-              <Divider />
-
-              <Descriptions
-                bordered={false}
-                size="small"
-                column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
-              >
-                <Descriptions.Item label="Status">
-                  {getStatusBadge(broadcast.status)}
-                </Descriptions.Item>
-
-                {/* Schedule Information */}
-                {broadcast.schedule.is_scheduled &&
-                  broadcast.schedule.scheduled_date &&
-                  broadcast.schedule.scheduled_time && (
-                    <Descriptions.Item label="Scheduled">
-                      {dayjs(
-                        `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
-                      ).fromNow()}
-                      {broadcast.schedule.timezone && ` (${broadcast.schedule.timezone})`}
-                      {broadcast.schedule.use_recipient_timezone && (
-                        <Tag className="ml-2" color="blue">
-                          Uses recipient timezone
-                        </Tag>
-                      )}
-                    </Descriptions.Item>
-                  )}
-
-                {broadcast.started_at && (
-                  <Descriptions.Item label="Started">
-                    {dayjs(broadcast.started_at).fromNow()}
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.completed_at && (
-                  <Descriptions.Item label="Completed">
-                    {dayjs(broadcast.completed_at).fromNow()}
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.paused_at && (
-                  <Descriptions.Item label="Paused">
-                    {dayjs(broadcast.paused_at).fromNow()}
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.cancelled_at && (
-                  <Descriptions.Item label="Cancelled">
-                    {dayjs(broadcast.cancelled_at).fromNow()}
-                  </Descriptions.Item>
-                )}
-
-                {/* Audience Information */}
-                {broadcast.audience.segments && broadcast.audience.segments.length > 0 && (
-                  <Descriptions.Item label="Segments">
-                    {broadcast.audience.segments.length} segments
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.audience.lists && broadcast.audience.lists.length > 0 && (
-                  <Descriptions.Item label="Lists">
-                    {broadcast.audience.lists.length} lists
-                    {broadcast.audience.skip_duplicate_emails && (
-                      <Tag className="ml-2" color="blue">
-                        Skip duplicates
-                      </Tag>
-                    )}
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.audience.exclude_unsubscribed && (
-                  <Descriptions.Item label="Unsubscribes">
-                    <Tag color="orange">Excluded</Tag>
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.audience.rate_limit_per_minute && (
-                  <Descriptions.Item label="Rate Limit">
-                    <Tag color="purple">{broadcast.audience.rate_limit_per_minute}/min</Tag>
-                  </Descriptions.Item>
-                )}
-
-                {/* Tracking Information */}
-                <Descriptions.Item label="Tracking">
-                  {broadcast.tracking_enabled ? <Tag color="green">On</Tag> : <Tag>Off</Tag>}
-                </Descriptions.Item>
-
-                {broadcast.utm_parameters &&
-                  Object.values(broadcast.utm_parameters).some((v) => v) && (
-                    <Descriptions.Item label="UTM Parameters">
-                      <Tag color="cyan">Configured</Tag>
-                    </Descriptions.Item>
-                  )}
-
-                {/* Test Information */}
-                {broadcast.winning_variation && (
-                  <Descriptions.Item label="Winning Variation">
-                    <Tag color="green">{broadcast.winning_variation}</Tag>
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.goal_id && (
-                  <Descriptions.Item label="Goal ID">
-                    <Tag color="blue">{broadcast.goal_id}</Tag>
-                  </Descriptions.Item>
-                )}
-              </Descriptions>
-
-              {broadcast.test_settings.enabled && (
-                <>
-                  <Divider orientation="left">
-                    <Space>
-                      <CalendarOutlined className="text-purple-500" />
-                      <Text strong>A/B Test Settings</Text>
-                    </Space>
-                  </Divider>
-                  <Descriptions
-                    bordered={false}
-                    size="small"
-                    column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
-                    className="mb-4"
-                  >
-                    <Descriptions.Item label="Test Sample">
-                      <Tag color="blue">{broadcast.test_settings.sample_percentage}%</Tag>
-                    </Descriptions.Item>
-
-                    {broadcast.test_settings.auto_send_winner && (
-                      <Descriptions.Item label="Auto-send Winner">
-                        <Tag color="green">Yes</Tag>
-                      </Descriptions.Item>
-                    )}
-
-                    {broadcast.test_settings.auto_send_winner_metric && (
-                      <Descriptions.Item label="Winner Metric">
-                        <Tag color="purple">
-                          {broadcast.test_settings.auto_send_winner_metric === 'open_rate'
-                            ? 'Opens'
-                            : 'Clicks'}
-                        </Tag>
-                      </Descriptions.Item>
-                    )}
-
-                    {broadcast.test_settings.test_duration_hours && (
-                      <Descriptions.Item label="Test Duration">
-                        <Tag color="cyan">{broadcast.test_settings.test_duration_hours} hours</Tag>
-                      </Descriptions.Item>
-                    )}
-
-                    <Descriptions.Item label="Variations">
-                      <Tag color="magenta">{broadcast.test_settings.variations.length}</Tag>
-                    </Descriptions.Item>
-                  </Descriptions>
-
-                  <Row gutter={[16, 16]}>
-                    {broadcast.test_settings.variations.map((variation, index) => (
-                      <Col span={8} key={index}>
-                        <Card
-                          size="small"
-                          title={variation.name || `Variation ${index + 1}`}
-                          type="inner"
-                        >
-                          <Space direction="vertical" size="small">
-                            <Text strong>Subject:</Text>
-                            <Text>
-                              {variation.subject || variation.template?.email?.subject || 'N/A'}
-                            </Text>
-                            {(variation.preview_text || variation.template?.email?.previewText) && (
-                              <>
-                                <Text strong>Preview:</Text>
-                                <Text>
-                                  {variation.preview_text || variation.template?.email?.previewText}
-                                </Text>
-                              </>
-                            )}
-                            <Text strong>From:</Text>
-                            <Text>
-                              {variation.from_name || variation.template?.email?.from_name || 'N/A'}
-                              (
-                              {variation.from_email ||
-                                variation.template?.email?.from_address ||
-                                'N/A'}
-                              )
-                            </Text>
-                            {(variation.reply_to || variation.template?.email?.reply_to) && (
-                              <Text>
-                                Reply-to:{' '}
-                                {variation.reply_to || variation.template?.email?.reply_to}
-                              </Text>
-                            )}
-                            {variation.template && (
-                              <Text type="secondary">Template: {variation.template.name}</Text>
-                            )}
-                            <Button size="small" type="primary" ghost>
-                              Preview
-                            </Button>
-                          </Space>
-                        </Card>
-                      </Col>
-                    ))}
-                  </Row>
-                </>
-              )}
-            </Card>
+              broadcast={broadcast}
+              lists={lists}
+              workspaceId={workspaceId}
+              onDelete={openDeleteModal}
+              onPause={handlePauseBroadcast}
+              onResume={handleResumeBroadcast}
+              onCancel={handleCancelBroadcast}
+              onSchedule={handleScheduleBroadcast}
+              currentWorkspace={currentWorkspace}
+              isFirst={index === 0}
+            />
           ))}
         </div>
       ) : (

@@ -251,19 +251,32 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		now := time.Now().UTC()
 		broadcast.StartedAt = &now
 	} else {
-		// Update the schedule settings with the requested date/time
-		// Use Schedule.SetScheduledDateTime method
-		timezone := request.ScheduledAt.Location().String()
-		if err := broadcast.Schedule.SetScheduledDateTime(request.ScheduledAt, timezone); err != nil {
+		// Update the schedule settings with the requested settings
+		broadcast.Schedule.IsScheduled = request.IsScheduled
+		broadcast.Schedule.ScheduledDate = request.ScheduledDate
+		broadcast.Schedule.ScheduledTime = request.ScheduledTime
+		broadcast.Schedule.Timezone = request.Timezone
+		broadcast.Schedule.UseRecipientTimezone = request.UseRecipientTimezone
+
+		// Validate that we can parse the scheduled date/time
+		scheduledDateTime, err := broadcast.Schedule.ParseScheduledDateTime()
+		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"error":        err,
 				"workspace_id": request.WorkspaceID,
 				"broadcast_id": request.ID,
-			}).Error("Failed to set scheduled date/time")
+			}).Error("Failed to parse scheduled date/time")
 			return err
 		}
 
-		broadcast.Schedule.IsScheduled = true
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id":   request.WorkspaceID,
+			"broadcast_id":   request.ID,
+			"scheduled_date": request.ScheduledDate,
+			"scheduled_time": request.ScheduledTime,
+			"timezone":       request.Timezone,
+			"scheduled_at":   scheduledDateTime,
+		}).Info("Broadcast scheduled successfully")
 	}
 
 	// Persist the changes
@@ -277,16 +290,14 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		return err
 	}
 
-	action := "scheduled"
 	if request.SendNow {
-		action = "started sending"
+		s.logger.WithFields(map[string]interface{}{
+			"broadcast_id": broadcast.ID,
+			"workspace_id": broadcast.WorkspaceID,
+			"send_now":     request.SendNow,
+			"started_at":   broadcast.StartedAt,
+		}).Info("Broadcast started sending successfully")
 	}
-
-	s.logger.WithFields(map[string]interface{}{
-		"broadcast_id": broadcast.ID,
-		"workspace_id": broadcast.WorkspaceID,
-		"send_now":     request.SendNow,
-	}).Info(fmt.Sprintf("Broadcast %s successfully", action))
 
 	// TODO: If SendNow is true, trigger the actual sending process
 	// This would typically involve adding the broadcast to a queue for processing

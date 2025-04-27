@@ -406,10 +406,14 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 		scheduledTime := time.Now().Add(24 * time.Hour).UTC()
 
 		request := &domain.ScheduleBroadcastRequest{
-			WorkspaceID: workspaceID,
-			ID:          broadcastID,
-			ScheduledAt: scheduledTime,
-			SendNow:     false,
+			WorkspaceID:          workspaceID,
+			ID:                   broadcastID,
+			IsScheduled:          true,
+			ScheduledDate:        scheduledTime.Format("2006-01-02"),
+			ScheduledTime:        scheduledTime.Format("15:04"),
+			Timezone:             "UTC",
+			UseRecipientTimezone: false,
+			SendNow:              false,
 		}
 
 		// Create a draft broadcast
@@ -458,9 +462,14 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 		broadcastID := "bcast123"
 
 		request := &domain.ScheduleBroadcastRequest{
-			WorkspaceID: workspaceID,
-			ID:          broadcastID,
-			SendNow:     true,
+			WorkspaceID:          workspaceID,
+			ID:                   broadcastID,
+			IsScheduled:          false,
+			ScheduledDate:        "",
+			ScheduledTime:        "",
+			Timezone:             "",
+			UseRecipientTimezone: false,
+			SendNow:              true,
 		}
 
 		// Create a draft broadcast
@@ -507,10 +516,14 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 		broadcastID := "bcast123"
 
 		request := &domain.ScheduleBroadcastRequest{
-			WorkspaceID: workspaceID,
-			ID:          broadcastID,
-			ScheduledAt: time.Now().Add(time.Hour),
-			SendNow:     false,
+			WorkspaceID:          workspaceID,
+			ID:                   broadcastID,
+			IsScheduled:          true,
+			ScheduledDate:        time.Now().Add(time.Hour).Format("2006-01-02"),
+			ScheduledTime:        time.Now().Add(time.Hour).Format("15:04"),
+			Timezone:             "UTC",
+			UseRecipientTimezone: false,
+			SendNow:              false,
 		}
 
 		// Create a broadcast with non-draft status

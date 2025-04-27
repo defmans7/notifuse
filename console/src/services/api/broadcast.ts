@@ -30,7 +30,6 @@ export interface EmailTemplate {
   compiled_preview: string
   visual_editor_tree: any
   text?: string
-  previewText?: string
 }
 
 // Define the Template interface
@@ -107,7 +106,6 @@ export interface Broadcast {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
-  goal_id?: string
   tracking_enabled: boolean
   utm_parameters?: UTMParameters
   metadata?: Record<string, any>
@@ -136,7 +134,6 @@ export interface CreateBroadcastRequest {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
-  goal_id?: string
   tracking_enabled: boolean
   utm_parameters?: UTMParameters
   metadata?: Record<string, any>
@@ -149,7 +146,6 @@ export interface UpdateBroadcastRequest {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
-  goal_id?: string
   tracking_enabled: boolean
   utm_parameters?: UTMParameters
   metadata?: Record<string, any>
