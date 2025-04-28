@@ -15,94 +15,10 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	http_handler "github.com/Notifuse/notifuse/internal/http"
-	"github.com/Notifuse/notifuse/pkg/logger"
+	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
-
-// MockBroadcastService implements domain.BroadcastService for testing
-type MockBroadcastService struct {
-	mock.Mock
-}
-
-func (m *MockBroadcastService) CreateBroadcast(ctx context.Context, request *domain.CreateBroadcastRequest) (*domain.Broadcast, error) {
-	args := m.Called(ctx, request)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Broadcast), args.Error(1)
-}
-
-func (m *MockBroadcastService) GetBroadcast(ctx context.Context, workspaceID, id string) (*domain.Broadcast, error) {
-	args := m.Called(ctx, workspaceID, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Broadcast), args.Error(1)
-}
-
-func (m *MockBroadcastService) UpdateBroadcast(ctx context.Context, request *domain.UpdateBroadcastRequest) (*domain.Broadcast, error) {
-	args := m.Called(ctx, request)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Broadcast), args.Error(1)
-}
-
-func (m *MockBroadcastService) ListBroadcasts(ctx context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
-	args := m.Called(ctx, params)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.BroadcastListResponse), args.Error(1)
-}
-
-func (m *MockBroadcastService) ScheduleBroadcast(ctx context.Context, request *domain.ScheduleBroadcastRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-func (m *MockBroadcastService) PauseBroadcast(ctx context.Context, request *domain.PauseBroadcastRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-func (m *MockBroadcastService) ResumeBroadcast(ctx context.Context, request *domain.ResumeBroadcastRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-func (m *MockBroadcastService) CancelBroadcast(ctx context.Context, request *domain.CancelBroadcastRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-func (m *MockBroadcastService) DeleteBroadcast(ctx context.Context, request *domain.DeleteBroadcastRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-func (m *MockBroadcastService) SendToIndividual(ctx context.Context, request *domain.SendToIndividualRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-func (m *MockBroadcastService) SendWinningVariation(ctx context.Context, request *domain.SendWinningVariationRequest) error {
-	args := m.Called(ctx, request)
-	return args.Error(0)
-}
-
-// MockLogger implements the logger.Logger interface for testing
-type MockLogger struct{}
-
-func (m *MockLogger) Info(msg string)                                        {}
-func (m *MockLogger) Debug(msg string)                                       {}
-func (m *MockLogger) Warn(msg string)                                        {}
-func (m *MockLogger) Error(msg string)                                       {}
-func (m *MockLogger) Fatal(msg string)                                       {}
-func (m *MockLogger) WithField(key string, value interface{}) logger.Logger  { return m }
-func (m *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return m }
-func (m *MockLogger) WithError(err error) logger.Logger                      { return m }
 
 // Helper function to create a test broadcast
 func createTestBroadcast() *domain.Broadcast {
@@ -131,25 +47,39 @@ func createTestBroadcast() *domain.Broadcast {
 	}
 }
 
-// setupHandler creates a test handler and mock service
-func setupHandler() (*http_handler.BroadcastHandler, *MockBroadcastService) {
-	mockService := new(MockBroadcastService)
-	mockTemplateService := new(mocks.MockTemplateService)
-	mockLogger := &MockLogger{}
+// setupBroadcastHandler sets up a broadcast handler with mocks for testing
+func setupBroadcastHandler(t *testing.T) (
+	*http_handler.BroadcastHandler,
+	*mocks.MockBroadcastService,
+	*mocks.MockTemplateService,
+	*mocks.MockLogger,
+	*gomock.Controller,
+) {
+	ctrl := gomock.NewController(t)
 
-	// Create a mock public key for the handler
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
+	// Create mocks
+	mockBroadcastService := mocks.NewMockBroadcastService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockLogger := mocks.NewMockLogger(ctrl)
 
-	// Create the handler with a mock public key
-	handler := http_handler.NewBroadcastHandler(mockService, mockTemplateService, publicKey, mockLogger)
+	// Create a public key for authentication
+	publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
 
-	return handler, mockService
+	// Create the handler with mocks
+	handler := http_handler.NewBroadcastHandler(
+		mockBroadcastService,
+		mockTemplateService,
+		publicKey,
+		mockLogger,
+	)
+
+	return handler, mockBroadcastService, mockTemplateService, mockLogger, ctrl
 }
 
 // TestHandleList tests the handleList function
 func TestHandleList(t *testing.T) {
-	handler, mockService := setupHandler()
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
 	broadcasts := []*domain.Broadcast{createTestBroadcast()}
 
 	// Create a response with broadcasts and a total count
@@ -160,9 +90,13 @@ func TestHandleList(t *testing.T) {
 
 	// Test successful list
 	t.Run("Success", func(t *testing.T) {
-		mockService.On("ListBroadcasts", mock.Anything, mock.MatchedBy(func(params domain.ListBroadcastsParams) bool {
-			return params.WorkspaceID == "workspace123" && params.Status == ""
-		})).Return(responseWithTotal, nil).Once()
+		mockService.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				assert.Equal(t, "workspace123", params.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatus(""), params.Status)
+				return responseWithTotal, nil
+			})
 
 		// Create a test request with query parameters
 		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.list?workspace_id=workspace123", nil)
@@ -180,18 +114,19 @@ func TestHandleList(t *testing.T) {
 		assert.Contains(t, response, "broadcasts")
 		assert.Contains(t, response, "total_count")
 		assert.Equal(t, float64(1), response["total_count"]) // JSON unmarshals numbers as float64
-
-		mockService.AssertExpectations(t)
 	})
 
 	// Test with pagination parameters
 	t.Run("WithPagination", func(t *testing.T) {
-		mockService.On("ListBroadcasts", mock.Anything, mock.MatchedBy(func(params domain.ListBroadcastsParams) bool {
-			return params.WorkspaceID == "workspace123" &&
-				params.Status == "draft" &&
-				params.Limit == 10 &&
-				params.Offset == 20
-		})).Return(responseWithTotal, nil).Once()
+		mockService.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				assert.Equal(t, "workspace123", params.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatus("draft"), params.Status)
+				assert.Equal(t, 10, params.Limit)
+				assert.Equal(t, 20, params.Offset)
+				return responseWithTotal, nil
+			})
 
 		// Create a test request with query parameters including pagination
 		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.list?workspace_id=workspace123&status=draft&limit=10&offset=20", nil)
@@ -208,8 +143,6 @@ func TestHandleList(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Contains(t, response, "broadcasts")
 		assert.Contains(t, response, "total_count")
-
-		mockService.AssertExpectations(t)
 	})
 
 	// Test invalid pagination parameters
@@ -238,9 +171,18 @@ func TestHandleList(t *testing.T) {
 
 	// Test service error
 	t.Run("ServiceError", func(t *testing.T) {
-		mockService.On("ListBroadcasts", mock.Anything, mock.MatchedBy(func(params domain.ListBroadcastsParams) bool {
-			return params.WorkspaceID == "workspace123" && params.Status == ""
-		})).Return(nil, errors.New("service error")).Once()
+		// Set up expectations for logger
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "service error").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to list broadcasts")
+
+		mockService.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				assert.Equal(t, "workspace123", params.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatus(""), params.Status)
+				return nil, errors.New("service error")
+			})
 
 		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.list?workspace_id=workspace123", nil)
 		w := httptest.NewRecorder()
@@ -249,7 +191,6 @@ func TestHandleList(t *testing.T) {
 		handler.HandleList(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		mockService.AssertExpectations(t)
 	})
 
 	// Test method not allowed
@@ -266,13 +207,26 @@ func TestHandleList(t *testing.T) {
 
 // TestHandleGet tests the handleGet function
 func TestHandleGet(t *testing.T) {
-	handler, mockService := setupHandler()
+	handler, mockService, mockTemplateService, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
 	broadcast := createTestBroadcast()
+
+	// Extend test broadcast to include test settings with variations
+	broadcast.TestSettings = domain.BroadcastTestSettings{
+		Enabled: true,
+		Variations: []domain.BroadcastVariation{
+			{
+				ID:         "variation1",
+				TemplateID: "template123",
+			},
+		},
+	}
 
 	// Test successful get
 	t.Run("Success", func(t *testing.T) {
-		mockService.On("GetBroadcast", mock.Anything, "workspace123", "broadcast123").
-			Return(broadcast, nil).Once()
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), "workspace123", "broadcast123").
+			Return(broadcast, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.get?workspace_id=workspace123&id=broadcast123", nil)
 		w := httptest.NewRecorder()
@@ -285,14 +239,117 @@ func TestHandleGet(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.Contains(t, response, "broadcast")
+	})
 
-		mockService.AssertExpectations(t)
+	// Test successful get with template fetching
+	t.Run("SuccessWithTemplates", func(t *testing.T) {
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), "workspace123", "broadcast123").
+			Return(broadcast, nil)
+
+		// Setup mock template service to return a template when requested
+		template := &domain.Template{
+			ID:      "template123",
+			Name:    "Test Template",
+			Channel: "email",
+			Email: &domain.EmailTemplate{
+				FromAddress:     "sender@example.com",
+				FromName:        "Sender Name",
+				Subject:         "Test Subject",
+				CompiledPreview: "<p>Test HTML content</p>",
+				VisualEditorTree: notifusemjml.EmailBlock{
+					ID:       "root",
+					Kind:     "root",
+					Path:     "",
+					Children: []notifusemjml.EmailBlock{},
+					Data: map[string]interface{}{
+						"styles": map[string]interface{}{},
+					},
+				},
+			},
+			Category:  "marketing",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), "workspace123", "template123", gomock.Any()).
+			Return(template, nil)
+
+		// Create request with WithTemplates=true
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.get?workspace_id=workspace123&id=broadcast123&with_templates=true", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleGet(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response, "broadcast")
+
+		// Access the broadcast data to verify the template was attached
+		broadcastData, ok := response["broadcast"].(map[string]interface{})
+		assert.True(t, ok)
+
+		testSettings, ok := broadcastData["test_settings"].(map[string]interface{})
+		assert.True(t, ok)
+
+		variations, ok := testSettings["variations"].([]interface{})
+		assert.True(t, ok)
+		assert.Len(t, variations, 1)
+
+		// The template should be attached to the variation
+		variation, ok := variations[0].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Contains(t, variation, "template")
+	})
+
+	// Test template fetch error (should continue without failing)
+	t.Run("TemplateError", func(t *testing.T) {
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), "workspace123", "broadcast123").
+			Return(broadcast, nil)
+
+		// Setup mock template service to return an error
+		templateError := errors.New("template error")
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), "workspace123", "template123", gomock.Any()).
+			Return(nil, templateError)
+
+		// Setup mock for logger.WithFields and the warning
+		mockLoggerWithFields := mocks.NewMockLogger(ctrl)
+		expectedFields := map[string]interface{}{
+			"error":        templateError,
+			"workspace_id": "workspace123",
+			"broadcast_id": "broadcast123",
+			"template_id":  "template123",
+		}
+		mockLogger.EXPECT().
+			WithFields(expectedFields).
+			Return(mockLoggerWithFields)
+		mockLoggerWithFields.EXPECT().
+			Warn("Failed to fetch template for broadcast variation")
+
+		// Create request with WithTemplates=true
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.get?workspace_id=workspace123&id=broadcast123&with_templates=true", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleGet(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response, "broadcast")
 	})
 
 	// Test broadcast not found
 	t.Run("BroadcastNotFound", func(t *testing.T) {
-		mockService.On("GetBroadcast", mock.Anything, "workspace123", "nonexistent").
-			Return(nil, &domain.ErrBroadcastNotFound{ID: "nonexistent"}).Once()
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), "workspace123", "nonexistent").
+			Return(nil, &domain.ErrBroadcastNotFound{ID: "nonexistent"})
 
 		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.get?workspace_id=workspace123&id=nonexistent", nil)
 		w := httptest.NewRecorder()
@@ -300,13 +357,33 @@ func TestHandleGet(t *testing.T) {
 		handler.HandleGet(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
-		mockService.AssertExpectations(t)
+	})
+
+	// Test method not allowed
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.get?workspace_id=workspace123&id=broadcast123", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleGet(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	// Test missing required parameters
+	t.Run("MissingParams", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.get?workspace_id=workspace123", nil) // missing id
+		w := httptest.NewRecorder()
+
+		handler.HandleGet(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 
 // TestHandleCreate tests the handleCreate function
 func TestHandleCreate(t *testing.T) {
-	handler, mockService := setupHandler()
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
 	broadcast := createTestBroadcast()
 
 	// Test successful create
@@ -322,9 +399,13 @@ func TestHandleCreate(t *testing.T) {
 			},
 		}
 
-		mockService.On("CreateBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.CreateBroadcastRequest) bool {
-			return req.WorkspaceID == createRequest.WorkspaceID && req.Name == createRequest.Name
-		})).Return(broadcast, nil).Once()
+		mockService.EXPECT().
+			CreateBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.CreateBroadcastRequest) (*domain.Broadcast, error) {
+				assert.Equal(t, createRequest.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, createRequest.Name, req.Name)
+				return broadcast, nil
+			})
 
 		requestBody, _ := json.Marshal(createRequest)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.create", bytes.NewBuffer(requestBody))
@@ -339,14 +420,65 @@ func TestHandleCreate(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.Contains(t, response, "broadcast")
+	})
 
-		mockService.AssertExpectations(t)
+	// Test service error
+	t.Run("CreateError", func(t *testing.T) {
+		createRequest := &domain.CreateBroadcastRequest{
+			WorkspaceID: "workspace123",
+			Name:        "Test Broadcast",
+			Audience: domain.AudienceSettings{
+				Segments: []string{"segment123"},
+			},
+			Schedule: domain.ScheduleSettings{
+				IsScheduled: false,
+			},
+		}
+
+		// Set up expectations for the logger using gomock
+		errorLogger := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to create broadcast")
+
+		mockService.EXPECT().
+			CreateBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.CreateBroadcastRequest) (*domain.Broadcast, error) {
+				assert.Equal(t, createRequest.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, createRequest.Name, req.Name)
+				return nil, errors.New("service error")
+			})
+
+		requestBody, _ := json.Marshal(createRequest)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.create", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleCreate(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	// Test invalid JSON
+	t.Run("InvalidJSON", func(t *testing.T) {
+		// Set up logger expectations using gomock
+		errorLogger := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to decode request body")
+
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.create", bytes.NewBufferString("{invalid json"))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleCreate(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 
 // TestHandleSchedule tests the handleSchedule function
 func TestHandleSchedule(t *testing.T) {
-	handler, mockService := setupHandler()
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
 
 	// Test successful scheduling for later
 	t.Run("ScheduleForLater", func(t *testing.T) {
@@ -364,14 +496,17 @@ func TestHandleSchedule(t *testing.T) {
 			UseRecipientTimezone: false,
 		}
 
-		mockService.On("ScheduleBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.ScheduleBroadcastRequest) bool {
-			return req.WorkspaceID == request.WorkspaceID &&
-				req.ID == request.ID &&
-				!req.SendNow &&
-				req.ScheduledDate == scheduledDate &&
-				req.ScheduledTime == scheduledTimeStr &&
-				req.Timezone == "UTC"
-		})).Return(nil).Once()
+		mockService.EXPECT().
+			ScheduleBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.ScheduleBroadcastRequest) error {
+				assert.Equal(t, request.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, request.ID, req.ID)
+				assert.Equal(t, request.SendNow, req.SendNow)
+				assert.Equal(t, scheduledDate, req.ScheduledDate)
+				assert.Equal(t, scheduledTimeStr, req.ScheduledTime)
+				assert.Equal(t, "UTC", req.Timezone)
+				return nil
+			})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.schedule", bytes.NewBuffer(requestBody))
@@ -386,8 +521,6 @@ func TestHandleSchedule(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.True(t, response["success"].(bool))
-
-		mockService.AssertExpectations(t)
 	})
 
 	// Test successful send now
@@ -398,11 +531,14 @@ func TestHandleSchedule(t *testing.T) {
 			SendNow:     true,
 		}
 
-		mockService.On("ScheduleBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.ScheduleBroadcastRequest) bool {
-			return req.WorkspaceID == request.WorkspaceID &&
-				req.ID == request.ID &&
-				req.SendNow
-		})).Return(nil).Once()
+		mockService.EXPECT().
+			ScheduleBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.ScheduleBroadcastRequest) error {
+				assert.Equal(t, request.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, request.ID, req.ID)
+				assert.Equal(t, request.SendNow, req.SendNow)
+				return nil
+			})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.schedule", bytes.NewBuffer(requestBody))
@@ -417,8 +553,6 @@ func TestHandleSchedule(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.True(t, response["success"].(bool))
-
-		mockService.AssertExpectations(t)
 	})
 
 	// Test validation error
@@ -449,12 +583,27 @@ func TestHandleSchedule(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customController := gomock.NewController(t)
+		defer customController.Finish()
+		customMock := mocks.NewMockBroadcastService(customController)
+		customTemplateService := mocks.NewMockTemplateService(customController)
+		customLogger := mocks.NewMockLogger(customController)
+
+		// Create a public key for authentication
+		publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
+
+		// Create the handler with mocks
+		customHandler := http_handler.NewBroadcastHandler(
+			customMock,
+			customTemplateService,
+			publicKey,
+			customLogger,
+		)
 
 		// Setup mock to return a broadcast not found error
-		customMock.On("ScheduleBroadcast", mock.Anything, mock.Anything).Return(
-			&domain.ErrBroadcastNotFound{ID: "nonexistent"},
-		).Once()
+		customMock.EXPECT().
+			ScheduleBroadcast(gomock.Any(), gomock.Any()).
+			Return(&domain.ErrBroadcastNotFound{ID: "nonexistent"})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.schedule", bytes.NewBuffer(requestBody))
@@ -464,7 +613,6 @@ func TestHandleSchedule(t *testing.T) {
 		customHandler.HandleSchedule(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test invalid status (not draft)
@@ -476,12 +624,32 @@ func TestHandleSchedule(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customController := gomock.NewController(t)
+		defer customController.Finish()
+		customMock := mocks.NewMockBroadcastService(customController)
+		customTemplateService := mocks.NewMockTemplateService(customController)
+		customLogger := mocks.NewMockLogger(customController)
+
+		// Create a public key for authentication
+		publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
+
+		// Create the handler with mocks
+		customHandler := http_handler.NewBroadcastHandler(
+			customMock,
+			customTemplateService,
+			publicKey,
+			customLogger,
+		)
+
+		// Set up expectations differently - this is more direct and explicit
+		errorLogger := mocks.NewMockLogger(customController)
+		customLogger.EXPECT().WithField("error", "only broadcasts with draft status can be scheduled, current status: sending").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to schedule broadcast")
 
 		// Setup mock to return a status error
-		customMock.On("ScheduleBroadcast", mock.Anything, mock.Anything).Return(
-			fmt.Errorf("only broadcasts with draft status can be scheduled, current status: sending"),
-		).Once()
+		customMock.EXPECT().
+			ScheduleBroadcast(gomock.Any(), gomock.Any()).
+			Return(fmt.Errorf("only broadcasts with draft status can be scheduled, current status: sending"))
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.schedule", bytes.NewBuffer(requestBody))
@@ -491,7 +659,6 @@ func TestHandleSchedule(t *testing.T) {
 		customHandler.HandleSchedule(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test service error
@@ -503,12 +670,32 @@ func TestHandleSchedule(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customController := gomock.NewController(t)
+		defer customController.Finish()
+		customMock := mocks.NewMockBroadcastService(customController)
+		customTemplateService := mocks.NewMockTemplateService(customController)
+		customLogger := mocks.NewMockLogger(customController)
+
+		// Create a public key for authentication
+		publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
+
+		// Create the handler with mocks
+		customHandler := http_handler.NewBroadcastHandler(
+			customMock,
+			customTemplateService,
+			publicKey,
+			customLogger,
+		)
+
+		// Set up expectations differently - this is more direct and explicit
+		errorLogger := mocks.NewMockLogger(customController)
+		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to schedule broadcast")
 
 		// Setup mock to return a generic error
-		customMock.On("ScheduleBroadcast", mock.Anything, mock.Anything).Return(
-			errors.New("service error"),
-		).Once()
+		customMock.EXPECT().
+			ScheduleBroadcast(gomock.Any(), gomock.Any()).
+			Return(errors.New("service error"))
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.schedule", bytes.NewBuffer(requestBody))
@@ -518,7 +705,6 @@ func TestHandleSchedule(t *testing.T) {
 		customHandler.HandleSchedule(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test method not allowed
@@ -533,6 +719,11 @@ func TestHandleSchedule(t *testing.T) {
 
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
+		// Set up logger expectations
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
+
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.schedule", bytes.NewBufferString("{invalid json"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -545,7 +736,8 @@ func TestHandleSchedule(t *testing.T) {
 
 // TestHandleCancel tests the handleCancel function
 func TestHandleCancel(t *testing.T) {
-	handler, mockService := setupHandler()
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
 
 	// Test successful cancel
 	t.Run("Success", func(t *testing.T) {
@@ -554,10 +746,13 @@ func TestHandleCancel(t *testing.T) {
 			ID:          "broadcast123",
 		}
 
-		mockService.On("CancelBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.CancelBroadcastRequest) bool {
-			return req.WorkspaceID == request.WorkspaceID &&
-				req.ID == request.ID
-		})).Return(nil).Once()
+		mockService.EXPECT().
+			CancelBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.CancelBroadcastRequest) error {
+				assert.Equal(t, request.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, request.ID, req.ID)
+				return nil
+			})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.cancel", bytes.NewBuffer(requestBody))
@@ -573,8 +768,6 @@ func TestHandleCancel(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.True(t, response["success"].(bool))
-
-		mockService.AssertExpectations(t)
 	})
 
 	// Test validation error
@@ -601,12 +794,13 @@ func TestHandleCancel(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, _, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
 
 		// Setup mock to return a broadcast not found error
-		customMock.On("CancelBroadcast", mock.Anything, mock.Anything).Return(
-			&domain.ErrBroadcastNotFound{ID: "nonexistent"},
-		).Once()
+		customMock.EXPECT().
+			CancelBroadcast(gomock.Any(), gomock.Any()).
+			Return(&domain.ErrBroadcastNotFound{ID: "nonexistent"})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.cancel", bytes.NewBuffer(requestBody))
@@ -616,7 +810,6 @@ func TestHandleCancel(t *testing.T) {
 		customHandler.HandleCancel(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test invalid status
@@ -627,12 +820,18 @@ func TestHandleCancel(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, customLogger, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
+
+		// Set up expectations differently - this is more direct and explicit
+		errorLogger := mocks.NewMockLogger(customCtrl)
+		customLogger.EXPECT().WithField("error", "only broadcasts with scheduled or paused status can be cancelled, current status: draft").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to cancel broadcast")
 
 		// Setup mock to return a status error
-		customMock.On("CancelBroadcast", mock.Anything, mock.Anything).Return(
-			fmt.Errorf("only broadcasts with scheduled or paused status can be cancelled, current status: draft"),
-		).Once()
+		customMock.EXPECT().
+			CancelBroadcast(gomock.Any(), gomock.Any()).
+			Return(fmt.Errorf("only broadcasts with scheduled or paused status can be cancelled, current status: draft"))
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.cancel", bytes.NewBuffer(requestBody))
@@ -642,7 +841,6 @@ func TestHandleCancel(t *testing.T) {
 		customHandler.HandleCancel(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test service error
@@ -653,12 +851,18 @@ func TestHandleCancel(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, customLogger, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
+
+		// Set up expectations differently - this is more direct and explicit
+		errorLogger := mocks.NewMockLogger(customCtrl)
+		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to cancel broadcast")
 
 		// Setup mock to return a generic error
-		customMock.On("CancelBroadcast", mock.Anything, mock.Anything).Return(
-			errors.New("service error"),
-		).Once()
+		customMock.EXPECT().
+			CancelBroadcast(gomock.Any(), gomock.Any()).
+			Return(errors.New("service error"))
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.cancel", bytes.NewBuffer(requestBody))
@@ -668,7 +872,6 @@ func TestHandleCancel(t *testing.T) {
 		customHandler.HandleCancel(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test method not allowed
@@ -683,6 +886,11 @@ func TestHandleCancel(t *testing.T) {
 
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
+		// Set up logger expectations
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
+
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.cancel", bytes.NewBufferString("{invalid json"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -695,7 +903,8 @@ func TestHandleCancel(t *testing.T) {
 
 // TestHandlePause tests the handlePause function
 func TestHandlePause(t *testing.T) {
-	handler, mockService := setupHandler()
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
 
 	// Test successful pause
 	t.Run("Success", func(t *testing.T) {
@@ -704,10 +913,13 @@ func TestHandlePause(t *testing.T) {
 			ID:          "broadcast123",
 		}
 
-		mockService.On("PauseBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.PauseBroadcastRequest) bool {
-			return req.WorkspaceID == request.WorkspaceID &&
-				req.ID == request.ID
-		})).Return(nil).Once()
+		mockService.EXPECT().
+			PauseBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.PauseBroadcastRequest) error {
+				assert.Equal(t, request.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, request.ID, req.ID)
+				return nil
+			})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.pause", bytes.NewBuffer(requestBody))
@@ -723,8 +935,6 @@ func TestHandlePause(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.True(t, response["success"].(bool))
-
-		mockService.AssertExpectations(t)
 	})
 
 	// Test validation error
@@ -751,12 +961,13 @@ func TestHandlePause(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, _, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
 
 		// Setup mock to return a broadcast not found error
-		customMock.On("PauseBroadcast", mock.Anything, mock.Anything).Return(
-			&domain.ErrBroadcastNotFound{ID: "nonexistent"},
-		).Once()
+		customMock.EXPECT().
+			PauseBroadcast(gomock.Any(), gomock.Any()).
+			Return(&domain.ErrBroadcastNotFound{ID: "nonexistent"})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.pause", bytes.NewBuffer(requestBody))
@@ -766,7 +977,6 @@ func TestHandlePause(t *testing.T) {
 		customHandler.HandlePause(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test invalid status
@@ -777,12 +987,18 @@ func TestHandlePause(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, customLogger, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
+
+		// Set up expectations differently - this is more direct and explicit
+		errorLogger := mocks.NewMockLogger(customCtrl)
+		customLogger.EXPECT().WithField("error", "only broadcasts with sending status can be paused, current status: draft").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to pause broadcast")
 
 		// Setup mock to return a status error
-		customMock.On("PauseBroadcast", mock.Anything, mock.Anything).Return(
-			fmt.Errorf("only broadcasts with sending status can be paused, current status: draft"),
-		).Once()
+		customMock.EXPECT().
+			PauseBroadcast(gomock.Any(), gomock.Any()).
+			Return(fmt.Errorf("only broadcasts with sending status can be paused, current status: draft"))
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.pause", bytes.NewBuffer(requestBody))
@@ -792,7 +1008,6 @@ func TestHandlePause(t *testing.T) {
 		customHandler.HandlePause(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test service error
@@ -803,12 +1018,18 @@ func TestHandlePause(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, customLogger, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
+
+		// Set up expectations differently - this is more direct and explicit
+		errorLogger := mocks.NewMockLogger(customCtrl)
+		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to pause broadcast")
 
 		// Setup mock to return a generic error
-		customMock.On("PauseBroadcast", mock.Anything, mock.Anything).Return(
-			errors.New("service error"),
-		).Once()
+		customMock.EXPECT().
+			PauseBroadcast(gomock.Any(), gomock.Any()).
+			Return(errors.New("service error"))
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.pause", bytes.NewBuffer(requestBody))
@@ -818,7 +1039,6 @@ func TestHandlePause(t *testing.T) {
 		customHandler.HandlePause(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test method not allowed
@@ -833,6 +1053,11 @@ func TestHandlePause(t *testing.T) {
 
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
+		// Set up logger expectations
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
+
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.pause", bytes.NewBufferString("{invalid json"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -845,7 +1070,8 @@ func TestHandlePause(t *testing.T) {
 
 // TestHandleDelete tests the handleDelete function
 func TestHandleDelete(t *testing.T) {
-	handler, mockService := setupHandler()
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
 
 	// Test successful delete
 	t.Run("Success", func(t *testing.T) {
@@ -854,10 +1080,13 @@ func TestHandleDelete(t *testing.T) {
 			ID:          "broadcast123",
 		}
 
-		mockService.On("DeleteBroadcast", mock.Anything, mock.MatchedBy(func(req *domain.DeleteBroadcastRequest) bool {
-			return req.WorkspaceID == request.WorkspaceID &&
-				req.ID == request.ID
-		})).Return(nil).Once()
+		mockService.EXPECT().
+			DeleteBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.DeleteBroadcastRequest) error {
+				assert.Equal(t, request.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, request.ID, req.ID)
+				return nil
+			})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBuffer(requestBody))
@@ -873,8 +1102,6 @@ func TestHandleDelete(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.True(t, response["success"].(bool))
-
-		mockService.AssertExpectations(t)
 	})
 
 	// Test validation error
@@ -901,12 +1128,13 @@ func TestHandleDelete(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, _, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
 
 		// Setup mock to return a broadcast not found error
-		customMock.On("DeleteBroadcast", mock.Anything, mock.Anything).Return(
-			&domain.ErrBroadcastNotFound{ID: "nonexistent"},
-		).Once()
+		customMock.EXPECT().
+			DeleteBroadcast(gomock.Any(), gomock.Any()).
+			Return(&domain.ErrBroadcastNotFound{ID: "nonexistent"})
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBuffer(requestBody))
@@ -916,7 +1144,6 @@ func TestHandleDelete(t *testing.T) {
 		customHandler.HandleDelete(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test service error
@@ -927,12 +1154,18 @@ func TestHandleDelete(t *testing.T) {
 		}
 
 		// Create a custom handler just for this test
-		customHandler, customMock := setupHandler()
+		customHandler, customMock, _, customLogger, customCtrl := setupBroadcastHandler(t)
+		defer customCtrl.Finish()
+
+		// Set up expectations differently - this is more direct and explicit
+		errorLogger := mocks.NewMockLogger(customCtrl)
+		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to delete broadcast")
 
 		// Setup mock to return a generic error
-		customMock.On("DeleteBroadcast", mock.Anything, mock.Anything).Return(
-			errors.New("service error"),
-		).Once()
+		customMock.EXPECT().
+			DeleteBroadcast(gomock.Any(), gomock.Any()).
+			Return(errors.New("service error"))
 
 		requestBody, _ := json.Marshal(request)
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBuffer(requestBody))
@@ -942,7 +1175,6 @@ func TestHandleDelete(t *testing.T) {
 		customHandler.HandleDelete(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		customMock.AssertExpectations(t)
 	})
 
 	// Test method not allowed
@@ -957,6 +1189,11 @@ func TestHandleDelete(t *testing.T) {
 
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
+		// Set up logger expectations
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
+
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.delete", bytes.NewBufferString("{invalid json"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -964,5 +1201,205 @@ func TestHandleDelete(t *testing.T) {
 		handler.HandleDelete(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}
+
+// TestHandleUpdate tests the handleUpdate function
+func TestHandleUpdate(t *testing.T) {
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
+	broadcast := createTestBroadcast()
+	updatedBroadcast := &domain.Broadcast{
+		ID:          broadcast.ID,
+		WorkspaceID: broadcast.WorkspaceID,
+		Name:        "Updated Broadcast",
+		Status:      broadcast.Status,
+		Audience:    broadcast.Audience,
+		Schedule:    broadcast.Schedule,
+		CreatedAt:   broadcast.CreatedAt,
+		UpdatedAt:   time.Now(),
+	}
+
+	// Test successful update
+	t.Run("Success", func(t *testing.T) {
+		updateRequest := &domain.UpdateBroadcastRequest{
+			ID:          broadcast.ID,
+			WorkspaceID: broadcast.WorkspaceID,
+			Name:        "Updated Broadcast",
+			Audience: domain.AudienceSettings{
+				Segments: []string{"segment123"},
+			},
+		}
+
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), broadcast.WorkspaceID, broadcast.ID).
+			Return(broadcast, nil)
+
+		mockService.EXPECT().
+			UpdateBroadcast(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *domain.UpdateBroadcastRequest) (*domain.Broadcast, error) {
+				assert.Equal(t, updateRequest.ID, req.ID)
+				assert.Equal(t, updateRequest.WorkspaceID, req.WorkspaceID)
+				assert.Equal(t, updateRequest.Name, req.Name)
+				return updatedBroadcast, nil
+			})
+
+		requestBody, _ := json.Marshal(updateRequest)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.update", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Use the exported handler method
+		handler.HandleUpdate(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response, "broadcast")
+	})
+
+	// Test broadcast not found
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		updateRequest := &domain.UpdateBroadcastRequest{
+			ID:          "nonexistent",
+			WorkspaceID: broadcast.WorkspaceID,
+			Name:        "Updated Broadcast",
+			Audience: domain.AudienceSettings{
+				Segments: []string{"segment123"},
+			},
+		}
+
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), broadcast.WorkspaceID, "nonexistent").
+			Return(nil, &domain.ErrBroadcastNotFound{ID: "nonexistent"})
+
+		requestBody, _ := json.Marshal(updateRequest)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.update", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Use the exported handler method
+		handler.HandleUpdate(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	// Test validation error
+	t.Run("ValidationError", func(t *testing.T) {
+		updateRequest := &domain.UpdateBroadcastRequest{
+			ID:          broadcast.ID,
+			WorkspaceID: broadcast.WorkspaceID,
+			// Missing required fields like Name and no audience
+		}
+
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), broadcast.WorkspaceID, broadcast.ID).
+			Return(broadcast, nil)
+
+		requestBody, _ := json.Marshal(updateRequest)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.update", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Use the exported handler method
+		handler.HandleUpdate(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Test service GetBroadcast error
+	t.Run("GetBroadcastError", func(t *testing.T) {
+		updateRequest := &domain.UpdateBroadcastRequest{
+			ID:          broadcast.ID,
+			WorkspaceID: broadcast.WorkspaceID,
+			Name:        "Updated Broadcast",
+			Audience: domain.AudienceSettings{
+				Segments: []string{"segment123"},
+			},
+		}
+
+		// Set up expectations for logger using gomock
+		errorLogger := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to get existing broadcast")
+
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), broadcast.WorkspaceID, broadcast.ID).
+			Return(nil, errors.New("service error"))
+
+		requestBody, _ := json.Marshal(updateRequest)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.update", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Use the exported handler method
+		handler.HandleUpdate(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	// Test service UpdateBroadcast error
+	t.Run("UpdateBroadcastError", func(t *testing.T) {
+		updateRequest := &domain.UpdateBroadcastRequest{
+			ID:          broadcast.ID,
+			WorkspaceID: broadcast.WorkspaceID,
+			Name:        "Updated Broadcast",
+			Audience: domain.AudienceSettings{
+				Segments: []string{"segment123"},
+			},
+		}
+
+		mockService.EXPECT().
+			GetBroadcast(gomock.Any(), broadcast.WorkspaceID, broadcast.ID).
+			Return(broadcast, nil)
+
+		// Set up expectations for logger using gomock
+		errorLogger := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to update broadcast")
+
+		mockService.EXPECT().
+			UpdateBroadcast(gomock.Any(), gomock.Any()).
+			Return(nil, errors.New("service error"))
+
+		requestBody, _ := json.Marshal(updateRequest)
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.update", bytes.NewBuffer(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Use the exported handler method
+		handler.HandleUpdate(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	// Test invalid JSON
+	t.Run("InvalidJSON", func(t *testing.T) {
+		// Set up expectations for logger using gomock
+		errorLogger := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(errorLogger)
+		errorLogger.EXPECT().Error("Failed to decode request body")
+
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.update", bytes.NewBufferString("{invalid json"))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Use the exported handler method
+		handler.HandleUpdate(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Test method not allowed
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.update", nil)
+		w := httptest.NewRecorder()
+
+		// Use the exported handler method
+		handler.HandleUpdate(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 	})
 }

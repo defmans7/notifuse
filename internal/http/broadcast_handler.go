@@ -43,19 +43,20 @@ func (h *BroadcastHandler) RegisterRoutes(mux *http.ServeMux) {
 	requireAuth := authMiddleware.RequireAuth()
 
 	// Register RPC-style endpoints with dot notation
-	mux.Handle("/api/broadcasts.list", requireAuth(http.HandlerFunc(h.handleList)))
-	mux.Handle("/api/broadcasts.get", requireAuth(http.HandlerFunc(h.handleGet)))
-	mux.Handle("/api/broadcasts.create", requireAuth(http.HandlerFunc(h.handleCreate)))
-	mux.Handle("/api/broadcasts.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
-	mux.Handle("/api/broadcasts.schedule", requireAuth(http.HandlerFunc(h.handleSchedule)))
-	mux.Handle("/api/broadcasts.pause", requireAuth(http.HandlerFunc(h.handlePause)))
-	mux.Handle("/api/broadcasts.resume", requireAuth(http.HandlerFunc(h.handleResume)))
-	mux.Handle("/api/broadcasts.cancel", requireAuth(http.HandlerFunc(h.handleCancel)))
-	mux.Handle("/api/broadcasts.sendToIndividual", requireAuth(http.HandlerFunc(h.handleSendToIndividual)))
-	mux.Handle("/api/broadcasts.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
+	mux.Handle("/api/broadcasts.list", requireAuth(http.HandlerFunc(h.HandleList)))
+	mux.Handle("/api/broadcasts.get", requireAuth(http.HandlerFunc(h.HandleGet)))
+	mux.Handle("/api/broadcasts.create", requireAuth(http.HandlerFunc(h.HandleCreate)))
+	mux.Handle("/api/broadcasts.update", requireAuth(http.HandlerFunc(h.HandleUpdate)))
+	mux.Handle("/api/broadcasts.schedule", requireAuth(http.HandlerFunc(h.HandleSchedule)))
+	mux.Handle("/api/broadcasts.pause", requireAuth(http.HandlerFunc(h.HandlePause)))
+	mux.Handle("/api/broadcasts.resume", requireAuth(http.HandlerFunc(h.HandleResume)))
+	mux.Handle("/api/broadcasts.cancel", requireAuth(http.HandlerFunc(h.HandleCancel)))
+	mux.Handle("/api/broadcasts.sendToIndividual", requireAuth(http.HandlerFunc(h.HandleSendToIndividual)))
+	mux.Handle("/api/broadcasts.delete", requireAuth(http.HandlerFunc(h.HandleDelete)))
 }
 
-func (h *BroadcastHandler) handleList(w http.ResponseWriter, r *http.Request) {
+// HandleList handles the broadcast list request
+func (h *BroadcastHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -88,17 +89,8 @@ func (h *BroadcastHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleList is an exported version of handleList for testing purposes
-func (h *BroadcastHandler) HandleList(w http.ResponseWriter, r *http.Request) {
-	h.handleList(w, r)
-}
-
-// HandleGet is an exported version of handleGet for testing purposes
+// HandleGet handles the broadcast get request
 func (h *BroadcastHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
-	h.handleGet(w, r)
-}
-
-func (h *BroadcastHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -150,12 +142,8 @@ func (h *BroadcastHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleCreate is an exported version of handleCreate for testing purposes
+// HandleCreate handles the broadcast create request
 func (h *BroadcastHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
-	h.handleCreate(w, r)
-}
-
-func (h *BroadcastHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -186,7 +174,8 @@ func (h *BroadcastHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (h *BroadcastHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
+// HandleUpdate handles the broadcast update request
+func (h *BroadcastHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -229,12 +218,8 @@ func (h *BroadcastHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// HandleSchedule is an exported version of handleSchedule for testing purposes
+// HandleSchedule handles the broadcast schedule request
 func (h *BroadcastHandler) HandleSchedule(w http.ResponseWriter, r *http.Request) {
-	h.handleSchedule(w, r)
-}
-
-func (h *BroadcastHandler) handleSchedule(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -268,12 +253,8 @@ func (h *BroadcastHandler) handleSchedule(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// HandlePause is an exported version of handlePause for testing purposes
+// HandlePause handles the broadcast pause request
 func (h *BroadcastHandler) HandlePause(w http.ResponseWriter, r *http.Request) {
-	h.handlePause(w, r)
-}
-
-func (h *BroadcastHandler) handlePause(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -307,7 +288,8 @@ func (h *BroadcastHandler) handlePause(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *BroadcastHandler) handleResume(w http.ResponseWriter, r *http.Request) {
+// HandleResume handles the broadcast resume request
+func (h *BroadcastHandler) HandleResume(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -341,12 +323,8 @@ func (h *BroadcastHandler) handleResume(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// HandleCancel is an exported version of handleCancel for testing purposes
+// HandleCancel handles the broadcast cancel request
 func (h *BroadcastHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
-	h.handleCancel(w, r)
-}
-
-func (h *BroadcastHandler) handleCancel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -380,7 +358,8 @@ func (h *BroadcastHandler) handleCancel(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (h *BroadcastHandler) handleSendToIndividual(w http.ResponseWriter, r *http.Request) {
+// HandleSendToIndividual handles the broadcast send to individual request
+func (h *BroadcastHandler) HandleSendToIndividual(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -414,12 +393,8 @@ func (h *BroadcastHandler) handleSendToIndividual(w http.ResponseWriter, r *http
 	})
 }
 
-// HandleDelete is an exported version of handleDelete for testing purposes
+// HandleDelete handles the broadcast delete request
 func (h *BroadcastHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
-	h.handleDelete(w, r)
-}
-
-func (h *BroadcastHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
