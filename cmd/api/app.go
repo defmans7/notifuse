@@ -217,28 +217,22 @@ func (a *App) InitServices() error {
 	a.templateService = service.NewTemplateService(a.templateRepo, a.authService, a.logger)
 	a.emailService = service.NewEmailService(a.logger, a.authService, a.config.Security.SecretKey, a.workspaceRepo, a.templateRepo, a.templateService)
 
-	// Create BroadcastService with all dependencies
-	broadcastServiceConfig := service.BroadcastServiceConfig{
-		Logger:            a.logger,
-		Repository:        a.broadcastRepo,
-		EmailService:      a.emailService,
-		ContactRepository: a.contactRepo,
-		TemplateService:   a.templateService,
-	}
-	a.broadcastService, err = service.NewBroadcastService(broadcastServiceConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create broadcast service: %w", err)
-	}
+	// Initialize TaskService first
+	a.taskService = service.NewTaskService(a.taskRepo, a.logger, a.authService, a.config.APIEndpoint)
 
-	// Initialize task service
-	a.taskService, err = service.NewTaskService(service.TaskServiceConfig{
-		Repository:  a.taskRepo,
-		Logger:      a.logger,
-		AuthService: a.authService,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create task service: %w", err)
-	}
+	// Initialize BroadcastService without TaskService
+	a.broadcastService = service.NewBroadcastService(
+		a.logger,
+		a.broadcastRepo,
+		a.emailService,
+		a.contactRepo,
+		a.templateService,
+		nil, // No taskService yet
+		a.authService,
+	)
+
+	// Now register the broadcast processor with the task service
+	a.taskService.RegisterDefaultProcessors(a.broadcastService)
 
 	// Create workspace service last since it depends on other services
 	a.workspaceService = service.NewWorkspaceService(

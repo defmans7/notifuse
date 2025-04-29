@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+//go:generate mockgen -destination mocks/mock_task_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TaskService
+//go:generate mockgen -destination mocks/mock_task_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain TaskRepository
+
 // TaskStatus represents the current state of a task
 type TaskStatus string
 
@@ -48,8 +51,7 @@ type TaskState struct {
 	Message  string  `json:"message,omitempty"`
 
 	// Specialized states for different task types - only one will be used based on task type
-	SendBroadcast  *SendBroadcastState  `json:"send_broadcast,omitempty"`
-	ImportContacts *ImportContactsState `json:"import_contacts,omitempty"`
+	SendBroadcast *SendBroadcastState `json:"send_broadcast,omitempty"`
 }
 
 // Value implements the driver.Valuer interface for TaskState
@@ -82,18 +84,6 @@ type SendBroadcastState struct {
 	BatchSize       int    `json:"batch_size"`
 	CurrentBatch    int    `json:"current_batch"`
 	TotalBatches    int    `json:"total_batches"`
-}
-
-// ImportContactsState contains state specific to contact import tasks
-type ImportContactsState struct {
-	TotalContacts  int        `json:"total_contacts"`
-	ProcessedCount int        `json:"processed_count"`
-	FailedCount    int        `json:"failed_count"`
-	CurrentPage    int        `json:"current_page"`
-	TotalPages     int        `json:"total_pages"`
-	PageSize       int        `json:"page_size"`
-	StartedAt      time.Time  `json:"started_at"`
-	CompletedAt    *time.Time `json:"completed_at,omitempty"`
 }
 
 // Subtask represents a portion of work that can be executed in parallel
@@ -139,6 +129,20 @@ type Task struct {
 	SubtaskCount      int  `json:"subtask_count"`
 	CompletedSubtasks int  `json:"completed_subtasks"`
 	FailedSubtasks    int  `json:"failed_subtasks"`
+}
+
+type TaskService interface {
+	RegisterProcessor(processor TaskProcessor)
+	GetProcessor(taskType string) (TaskProcessor, error)
+	CreateTask(ctx context.Context, workspace string, task *Task) error
+	GetTask(ctx context.Context, workspace, id string) (*Task, error)
+	ListTasks(ctx context.Context, workspace string, filter TaskFilter) (*TaskListResponse, error)
+	DeleteTask(ctx context.Context, workspace, id string) error
+	ExecuteTasks(ctx context.Context, maxTasks int) error
+	ExecuteTask(ctx context.Context, workspace, taskID string) error
+	SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state *TaskState) error
+	ExecuteSubtask(ctx context.Context, subtaskID string) error
+	RegisterDefaultProcessors(broadcastService interface{})
 }
 
 // TaskRepository defines methods for task persistence
