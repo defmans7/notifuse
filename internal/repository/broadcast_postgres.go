@@ -7,17 +7,51 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
+// broadcastRepository implements domain.BroadcastRepository for PostgreSQL
 type broadcastRepository struct {
 	workspaceRepo domain.WorkspaceRepository
+	logger        logger.Logger
 }
 
 // NewBroadcastRepository creates a new PostgreSQL broadcast repository
-func NewBroadcastRepository(workspaceRepo domain.WorkspaceRepository) domain.BroadcastRepository {
+func NewBroadcastRepository(workspaceRepo domain.WorkspaceRepository, logger logger.Logger) domain.BroadcastRepository {
 	return &broadcastRepository{
 		workspaceRepo: workspaceRepo,
+		logger:        logger,
 	}
+}
+
+// WithTransaction executes a function within a transaction
+func (r *broadcastRepository) WithTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// Begin a transaction
+	tx, err := workspaceDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Defer rollback - this will be a no-op if we successfully commit
+	defer tx.Rollback()
+
+	// Execute the provided function with the transaction
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 // CreateBroadcast persists a new broadcast

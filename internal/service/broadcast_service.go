@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"time"
@@ -19,6 +20,7 @@ type BroadcastService struct {
 	templateSvc domain.TemplateService
 	taskService domain.TaskService
 	authService domain.AuthService
+	eventBus    domain.EventBus
 }
 
 // NewBroadcastService creates a new broadcast service
@@ -30,6 +32,7 @@ func NewBroadcastService(
 	templateService domain.TemplateService,
 	taskService domain.TaskService,
 	authService domain.AuthService,
+	eventBus domain.EventBus,
 ) *BroadcastService {
 	return &BroadcastService{
 		logger:      logger,
@@ -39,6 +42,7 @@ func NewBroadcastService(
 		templateSvc: templateService,
 		taskService: taskService,
 		authService: authService,
+		eventBus:    eventBus,
 	}
 }
 
@@ -120,6 +124,53 @@ func (s *BroadcastService) GetRecipientCount(ctx context.Context, workspaceID, b
 	return 1000, nil
 }
 
+// publishBroadcastFailedEvent publishes an event when a broadcast fails
+func (s *BroadcastService) publishBroadcastFailedEvent(ctx context.Context, workspaceID, broadcastID, reason string) error {
+	eventPayload := domain.EventPayload{
+		Type:        domain.EventBroadcastFailed,
+		WorkspaceID: workspaceID,
+		EntityID:    broadcastID,
+		Data: map[string]interface{}{
+			"broadcast_id": broadcastID,
+			"reason":       reason,
+		},
+	}
+
+	// Using a channel to wait for the callback
+	done := make(chan error, 1)
+
+	// Publish the event with callback
+	s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
+		if err != nil {
+			// Event processing failed, log the error
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"workspace_id": workspaceID,
+				"error":        err.Error(),
+				"reason":       reason,
+			}).Error("Failed to process broadcast failed event")
+
+			done <- fmt.Errorf("failed to process broadcast failed event: %w", err)
+		} else {
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"workspace_id": workspaceID,
+				"reason":       reason,
+			}).Info("Broadcast failed event processed successfully")
+
+			done <- nil
+		}
+	})
+
+	// Wait for the event processing to complete
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // SendBatch sends a batch of messages for a broadcast
 func (s *BroadcastService) SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error) {
 	// In a real implementation, this would send actual messages through email/SMS/etc providers
@@ -136,6 +187,204 @@ func (s *BroadcastService) SendBatch(ctx context.Context, workspaceID, broadcast
 		"successes":    successCount,
 		"failures":     failureCount,
 	}).Info("Sent broadcast batch")
+
+	// If this is the last batch or if all messages have been sent,
+	// we should check if we need to update the broadcast status
+	shouldUpdateBroadcast := false
+
+	// For simplicity, let's assume a broadcast is complete when batchNumber reaches 10
+	// In a real implementation, this would be based on the total recipient count
+	if batchNumber >= 10 {
+		shouldUpdateBroadcast = true
+	}
+
+	// If we need to update the broadcast status
+	if shouldUpdateBroadcast {
+		// Get the current broadcast state
+		broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"error":        err.Error(),
+			}).Error("Failed to get broadcast for status update")
+			return successCount, failureCount, nil
+		}
+
+		// Check if there were significant failures
+		totalFailed := broadcast.TotalFailed + failureCount
+		totalSent := broadcast.TotalSent + successCount
+
+		// If more than 20% of messages failed, consider the broadcast failed
+		failureRatio := float64(totalFailed) / float64(totalSent+totalFailed)
+		if failureRatio > 0.2 && totalFailed > 10 {
+			// Create a failure reason for the event
+			failureReason := fmt.Sprintf("Too many failures (%d of %d messages failed)",
+				totalFailed, totalSent+totalFailed)
+
+			// Using a channel to wait for the event processing
+			doneCh := make(chan error, 1)
+
+			// Begin a transaction that will only be committed when the event is processed
+			err := s.repo.WithTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
+				// Update the broadcast status to failed within the transaction
+				broadcast.Status = domain.BroadcastStatusFailed
+				now := time.Now().UTC()
+				broadcast.UpdatedAt = now
+
+				// Use the transaction to update the broadcast
+				// Note: This is a simplified example and would need to be adapted to your actual repository implementation
+				// The repository would need methods that accept a transaction
+				updateQuery := `
+					UPDATE broadcasts 
+					SET status = $1, updated_at = $2 
+					WHERE id = $3 AND workspace_id = $4
+				`
+				_, err := tx.ExecContext(ctx, updateQuery,
+					string(broadcast.Status),
+					broadcast.UpdatedAt,
+					broadcast.ID,
+					workspaceID)
+				if err != nil {
+					return fmt.Errorf("failed to update broadcast status: %w", err)
+				}
+
+				// Publish broadcast failed event with acknowledgment
+				eventPayload := domain.EventPayload{
+					Type:        domain.EventBroadcastFailed,
+					WorkspaceID: workspaceID,
+					EntityID:    broadcastID,
+					Data: map[string]interface{}{
+						"broadcast_id": broadcastID,
+						"reason":       failureReason,
+					},
+				}
+
+				// Publish the event with callback
+				s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
+					if err != nil {
+						// Event processing failed
+						s.logger.WithFields(map[string]interface{}{
+							"broadcast_id": broadcastID,
+							"workspace_id": workspaceID,
+							"error":        err.Error(),
+							"reason":       failureReason,
+						}).Error("Failed to process broadcast failed event")
+
+						doneCh <- fmt.Errorf("failed to process broadcast failed event: %w", err)
+					} else {
+						s.logger.WithFields(map[string]interface{}{
+							"broadcast_id": broadcastID,
+							"workspace_id": workspaceID,
+							"reason":       failureReason,
+						}).Info("Broadcast failed event processed successfully")
+
+						doneCh <- nil
+					}
+				})
+
+				// Wait for the event processing to complete before committing or rolling back the transaction
+				select {
+				case err := <-doneCh:
+					return err // Return nil to commit, or error to rollback
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			})
+
+			if err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"workspace_id": workspaceID,
+					"broadcast_id": broadcastID,
+					"error":        err.Error(),
+				}).Error("Failed to update broadcast status or process event")
+			}
+		} else {
+			// Using a channel to wait for the event processing
+			doneCh := make(chan error, 1)
+
+			// Begin a transaction that will only be committed when the event is processed
+			err := s.repo.WithTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
+				// Update the broadcast status to sent within the transaction
+				broadcast.Status = domain.BroadcastStatusSent
+				now := time.Now().UTC()
+				broadcast.CompletedAt = &now
+				broadcast.UpdatedAt = now
+
+				// Use the transaction to update the broadcast
+				updateQuery := `
+					UPDATE broadcasts 
+					SET status = $1, updated_at = $2, completed_at = $3 
+					WHERE id = $4 AND workspace_id = $5
+				`
+				_, err := tx.ExecContext(ctx, updateQuery,
+					string(broadcast.Status),
+					broadcast.UpdatedAt,
+					broadcast.CompletedAt,
+					broadcast.ID,
+					workspaceID)
+				if err != nil {
+					return fmt.Errorf("failed to update broadcast status: %w", err)
+				}
+
+				// Create an event with acknowledgment callback
+				eventPayload := domain.EventPayload{
+					Type:        domain.EventBroadcastSent,
+					WorkspaceID: workspaceID,
+					EntityID:    broadcastID,
+					Data: map[string]interface{}{
+						"broadcast_id": broadcastID,
+					},
+				}
+
+				// Publish the event with callback
+				s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
+					if err != nil {
+						// Event processing failed
+						s.logger.WithFields(map[string]interface{}{
+							"broadcast_id": broadcastID,
+							"workspace_id": workspaceID,
+							"error":        err.Error(),
+						}).Error("Failed to process broadcast sent event")
+
+						doneCh <- fmt.Errorf("failed to process broadcast sent event: %w", err)
+					} else {
+						s.logger.WithFields(map[string]interface{}{
+							"broadcast_id": broadcastID,
+							"workspace_id": workspaceID,
+						}).Info("Broadcast sent event processed successfully")
+
+						doneCh <- nil
+					}
+				})
+
+				// Wait for the event processing to complete with a timeout
+				// Use a shorter timeout since SendBatch is often called in a loop
+				timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+				defer cancel()
+
+				select {
+				case err := <-doneCh:
+					return err // Return nil to commit, or error to rollback
+				case <-timeoutCtx.Done():
+					// Timeout occurred, log it but still commit the transaction
+					s.logger.WithFields(map[string]interface{}{
+						"broadcast_id": broadcastID,
+						"workspace_id": workspaceID,
+					}).Warn("Timeout waiting for broadcast sent event processing, but continuing")
+					return nil
+				}
+			})
+
+			if err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"workspace_id": workspaceID,
+					"broadcast_id": broadcastID,
+					"error":        err.Error(),
+				}).Error("Failed to update broadcast status or process event")
+			}
+		}
+	}
 
 	return successCount, failureCount, nil
 }
@@ -261,6 +510,12 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		return err
 	}
 
+	// Store original values for potential rollback
+	originalStatus := broadcast.Status
+	originalUpdatedAt := broadcast.UpdatedAt
+	originalStartedAt := broadcast.StartedAt
+	originalSchedule := broadcast.Schedule
+
 	// Update broadcast status and scheduling info
 	broadcast.Status = domain.BroadcastStatusScheduled
 	broadcast.UpdatedAt = time.Now().UTC()
@@ -286,7 +541,62 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		return err
 	}
 
-	return nil
+	// Create an event with acknowledgment callback
+	eventPayload := domain.EventPayload{
+		Type:        domain.EventBroadcastScheduled,
+		WorkspaceID: request.WorkspaceID,
+		EntityID:    request.ID,
+		Data: map[string]interface{}{
+			"broadcast_id": request.ID,
+			"send_now":     request.SendNow,
+			"status":       string(broadcast.Status),
+		},
+	}
+
+	// Using a channel to wait for the callback
+	done := make(chan error, 1)
+
+	// Publish the event with callback
+	s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
+		if err != nil {
+			// Event processing failed, log the error
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": request.ID,
+				"workspace_id": request.WorkspaceID,
+				"error":        err.Error(),
+			}).Error("Failed to process schedule broadcast event")
+
+			// Attempt to roll back the broadcast status
+			broadcast.Status = originalStatus
+			broadcast.UpdatedAt = originalUpdatedAt
+			broadcast.StartedAt = originalStartedAt
+			broadcast.Schedule = originalSchedule
+
+			rollbackErr := s.repo.UpdateBroadcast(ctx, broadcast)
+			if rollbackErr != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": request.ID,
+					"workspace_id": request.WorkspaceID,
+					"error":        rollbackErr.Error(),
+				}).Error("Failed to roll back broadcast status after event failure")
+			} else {
+				s.logger.WithField("broadcast_id", request.ID).Info("Successfully rolled back broadcast status after event failure")
+			}
+
+			done <- fmt.Errorf("failed to process schedule event: %w", err)
+		} else {
+			s.logger.WithField("broadcast_id", request.ID).Info("Schedule broadcast event processed successfully")
+			done <- nil
+		}
+	})
+
+	// Wait for the event processing to complete
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // PauseBroadcast pauses a sending broadcast
@@ -319,6 +629,11 @@ func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.P
 		return err
 	}
 
+	// Store the original status in case we need to roll back
+	originalStatus := broadcast.Status
+	originalUpdatedAt := broadcast.UpdatedAt
+	originalPausedAt := broadcast.PausedAt
+
 	// Update broadcast status and pause info
 	broadcast.Status = domain.BroadcastStatusPaused
 	now := time.Now().UTC()
@@ -334,7 +649,59 @@ func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.P
 
 	s.logger.Info("Broadcast paused successfully")
 
-	return nil
+	// Create an event with acknowledgment callback
+	eventPayload := domain.EventPayload{
+		Type:        domain.EventBroadcastPaused,
+		WorkspaceID: request.WorkspaceID,
+		EntityID:    request.ID,
+		Data: map[string]interface{}{
+			"broadcast_id": request.ID,
+		},
+	}
+
+	// Using a channel to wait for the callback
+	done := make(chan error, 1)
+
+	// Publish the event with callback
+	s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
+		if err != nil {
+			// Event processing failed, log the error
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": request.ID,
+				"workspace_id": request.WorkspaceID,
+				"error":        err.Error(),
+			}).Error("Failed to process pause broadcast event")
+
+			// Attempt to roll back the broadcast status
+			broadcast.Status = originalStatus
+			broadcast.UpdatedAt = originalUpdatedAt
+			broadcast.PausedAt = originalPausedAt
+
+			rollbackErr := s.repo.UpdateBroadcast(ctx, broadcast)
+			if rollbackErr != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": request.ID,
+					"workspace_id": request.WorkspaceID,
+					"error":        rollbackErr.Error(),
+				}).Error("Failed to roll back broadcast status after event failure")
+			} else {
+				s.logger.WithField("broadcast_id", request.ID).Info("Successfully rolled back broadcast status after event failure")
+			}
+
+			done <- fmt.Errorf("failed to process pause event: %w", err)
+		} else {
+			s.logger.WithField("broadcast_id", request.ID).Info("Pause broadcast event processed successfully")
+			done <- nil
+		}
+	})
+
+	// Wait for the event processing to complete
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // ResumeBroadcast resumes a paused broadcast
@@ -367,9 +734,18 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 		return err
 	}
 
+	// Store the original values in case we need to roll back
+	originalStatus := broadcast.Status
+	originalUpdatedAt := broadcast.UpdatedAt
+	originalPausedAt := broadcast.PausedAt
+	originalStartedAt := broadcast.StartedAt
+
 	// Update broadcast status
 	now := time.Now().UTC()
 	broadcast.UpdatedAt = now
+
+	// Determine the new status based on scheduling
+	startNow := false
 
 	// If broadcast was originally scheduled and scheduled time is in the future
 	if broadcast.Schedule.IsScheduled {
@@ -382,6 +758,7 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 		} else {
 			// If scheduled time has passed or there was an error parsing it
 			broadcast.Status = domain.BroadcastStatusSending
+			startNow = true
 			if broadcast.StartedAt == nil {
 				broadcast.StartedAt = &now
 			}
@@ -390,6 +767,7 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 	} else {
 		// If broadcast wasn't scheduled, resume sending
 		broadcast.Status = domain.BroadcastStatusSending
+		startNow = true
 		if broadcast.StartedAt == nil {
 			broadcast.StartedAt = &now
 		}
@@ -408,7 +786,61 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 
 	s.logger.Info("Broadcast resumed successfully")
 
-	return nil
+	// Create an event with acknowledgment callback
+	eventPayload := domain.EventPayload{
+		Type:        domain.EventBroadcastResumed,
+		WorkspaceID: request.WorkspaceID,
+		EntityID:    request.ID,
+		Data: map[string]interface{}{
+			"broadcast_id": request.ID,
+			"start_now":    startNow,
+		},
+	}
+
+	// Using a channel to wait for the callback
+	done := make(chan error, 1)
+
+	// Publish the event with callback
+	s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
+		if err != nil {
+			// Event processing failed, log the error
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": request.ID,
+				"workspace_id": request.WorkspaceID,
+				"error":        err.Error(),
+			}).Error("Failed to process resume broadcast event")
+
+			// Attempt to roll back the broadcast status
+			broadcast.Status = originalStatus
+			broadcast.UpdatedAt = originalUpdatedAt
+			broadcast.PausedAt = originalPausedAt
+			broadcast.StartedAt = originalStartedAt
+
+			rollbackErr := s.repo.UpdateBroadcast(ctx, broadcast)
+			if rollbackErr != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": request.ID,
+					"workspace_id": request.WorkspaceID,
+					"error":        rollbackErr.Error(),
+				}).Error("Failed to roll back broadcast status after event failure")
+			} else {
+				s.logger.WithField("broadcast_id", request.ID).Info("Successfully rolled back broadcast status after event failure")
+			}
+
+			done <- fmt.Errorf("failed to process resume event: %w", err)
+		} else {
+			s.logger.WithField("broadcast_id", request.ID).Info("Resume broadcast event processed successfully")
+			done <- nil
+		}
+	})
+
+	// Wait for the event processing to complete
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // CancelBroadcast cancels a scheduled broadcast
@@ -441,6 +873,11 @@ func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.
 		return err
 	}
 
+	// Store the original values in case we need to roll back
+	originalStatus := broadcast.Status
+	originalUpdatedAt := broadcast.UpdatedAt
+	originalCancelledAt := broadcast.CancelledAt
+
 	// Update broadcast status and cancellation info
 	broadcast.Status = domain.BroadcastStatusCancelled
 	now := time.Now().UTC()
@@ -456,7 +893,59 @@ func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.
 
 	s.logger.Info("Broadcast cancelled successfully")
 
-	return nil
+	// Create an event with acknowledgment callback
+	eventPayload := domain.EventPayload{
+		Type:        domain.EventBroadcastCancelled,
+		WorkspaceID: request.WorkspaceID,
+		EntityID:    request.ID,
+		Data: map[string]interface{}{
+			"broadcast_id": request.ID,
+		},
+	}
+
+	// Using a channel to wait for the callback
+	done := make(chan error, 1)
+
+	// Publish the event with callback
+	s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
+		if err != nil {
+			// Event processing failed, log the error
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": request.ID,
+				"workspace_id": request.WorkspaceID,
+				"error":        err.Error(),
+			}).Error("Failed to process cancel broadcast event")
+
+			// Attempt to roll back the broadcast status
+			broadcast.Status = originalStatus
+			broadcast.UpdatedAt = originalUpdatedAt
+			broadcast.CancelledAt = originalCancelledAt
+
+			rollbackErr := s.repo.UpdateBroadcast(ctx, broadcast)
+			if rollbackErr != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": request.ID,
+					"workspace_id": request.WorkspaceID,
+					"error":        rollbackErr.Error(),
+				}).Error("Failed to roll back broadcast status after event failure")
+			} else {
+				s.logger.WithField("broadcast_id", request.ID).Info("Successfully rolled back broadcast status after event failure")
+			}
+
+			done <- fmt.Errorf("failed to process cancel event: %w", err)
+		} else {
+			s.logger.WithField("broadcast_id", request.ID).Info("Cancel broadcast event processed successfully")
+			done <- nil
+		}
+	})
+
+	// Wait for the event processing to complete
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // DeleteBroadcast deletes a broadcast

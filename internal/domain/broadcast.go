@@ -3,6 +3,7 @@ package domain
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -826,22 +827,16 @@ type BroadcastSender interface {
 	SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error)
 }
 
-// BroadcastRepository defines the interface for broadcast persistence
+// BroadcastRepository defines the data access layer for broadcasts
 type BroadcastRepository interface {
-	// CreateBroadcast persists a new broadcast
 	CreateBroadcast(ctx context.Context, broadcast *Broadcast) error
-
-	// GetBroadcast retrieves a broadcast by ID
-	GetBroadcast(ctx context.Context, workspaceID, id string) (*Broadcast, error)
-
-	// UpdateBroadcast updates an existing broadcast
+	GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*Broadcast, error)
 	UpdateBroadcast(ctx context.Context, broadcast *Broadcast) error
-
-	// ListBroadcasts retrieves a list of broadcasts with pagination
+	DeleteBroadcast(ctx context.Context, workspaceID, broadcastID string) error
 	ListBroadcasts(ctx context.Context, params ListBroadcastsParams) (*BroadcastListResponse, error)
 
-	// DeleteBroadcast deletes a broadcast
-	DeleteBroadcast(ctx context.Context, workspaceID, id string) error
+	// Transaction management
+	WithTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error
 }
 
 // ErrBroadcastNotFound is an error type for when a broadcast is not found

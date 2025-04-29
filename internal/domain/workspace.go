@@ -322,6 +322,9 @@ type WorkspaceRepository interface {
 	GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error)
 	CreateDatabase(ctx context.Context, workspaceID string) error
 	DeleteDatabase(ctx context.Context, workspaceID string) error
+
+	// Transaction management
+	WithWorkspaceTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error
 }
 
 // ErrUnauthorized is returned when a user is not authorized to perform an action

@@ -214,6 +214,7 @@ func (r *workspaceRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// GetConnection returns a connection to the workspace database
 func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error) {
 	// Check if we already have a connection
 	if conn, ok := r.connectionPools.Load(workspaceID); ok {
@@ -235,6 +236,36 @@ func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID str
 	// Store the connection
 	r.connectionPools.Store(workspaceID, db)
 	return db, nil
+}
+
+// WithWorkspaceTransaction executes a function within a database transaction
+func (r *workspaceRepository) WithWorkspaceTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// Begin a transaction
+	tx, err := workspaceDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Defer rollback - this will be a no-op if we successfully commit
+	defer tx.Rollback()
+
+	// Execute the provided function with the transaction
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 func (r *workspaceRepository) CreateDatabase(ctx context.Context, workspaceID string) error {
