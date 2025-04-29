@@ -242,12 +242,13 @@ func (s *ScheduleSettings) SetScheduledDateTime(t time.Time, timezone string) er
 	return nil
 }
 
-// Broadcast represents a one-time communication to multiple recipients (newsletter)
+// Broadcast represents a broadcast message campaign
 type Broadcast struct {
 	ID                string                `json:"id"`
 	WorkspaceID       string                `json:"workspace_id"`
 	Name              string                `json:"name"`
-	Status            BroadcastStatus       `json:"status"`
+	ChannelType       string                `json:"channel_type"` // email, sms, push, etc.
+	Status            BroadcastStatus       `json:"status"`       // pending, sending, completed, failed
 	Audience          AudienceSettings      `json:"audience"`
 	Schedule          ScheduleSettings      `json:"schedule"`
 	TestSettings      BroadcastTestSettings `json:"test_settings"`
@@ -271,6 +272,7 @@ type Broadcast struct {
 	CompletedAt       *time.Time            `json:"completed_at,omitempty"`
 	CancelledAt       *time.Time            `json:"cancelled_at,omitempty"`
 	PausedAt          *time.Time            `json:"paused_at,omitempty"`
+	SentAt            *time.Time            `json:"sent_at,omitempty"`
 }
 
 // UTMParameters contains UTM tracking parameters for the broadcast

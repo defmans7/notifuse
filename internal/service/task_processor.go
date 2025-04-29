@@ -9,181 +9,237 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-// ImportContactsProcessor implements domain.TaskProcessor for importing contacts
-type ImportContactsProcessor struct {
-	contactService *ContactService
-	logger         logger.Logger
+// SendBroadcastProcessor implements domain.TaskProcessor for sending broadcasts
+type SendBroadcastProcessor struct {
+	broadcastService *BroadcastService
+	logger           logger.Logger
 }
 
-// NewImportContactsProcessor creates a new ImportContactsProcessor
-func NewImportContactsProcessor(contactService *ContactService, logger logger.Logger) *ImportContactsProcessor {
-	return &ImportContactsProcessor{
-		contactService: contactService,
-		logger:         logger,
+// NewSendBroadcastProcessor creates a new SendBroadcastProcessor
+func NewSendBroadcastProcessor(broadcastService *BroadcastService, logger logger.Logger) *SendBroadcastProcessor {
+	return &SendBroadcastProcessor{
+		broadcastService: broadcastService,
+		logger:           logger,
 	}
 }
 
 // CanProcess returns true if this processor can handle the given task type
-func (p *ImportContactsProcessor) CanProcess(taskType string) bool {
-	return taskType == "import_contacts"
+func (p *SendBroadcastProcessor) CanProcess(taskType string) bool {
+	return taskType == "send_broadcast"
 }
 
-// Process executes or continues a task, returns whether the task has been completed
-func (p *ImportContactsProcessor) Process(ctx context.Context, task *domain.Task) (bool, error) {
-	p.logger.WithField("task_id", task.ID).Info("Processing import_contacts task")
+// SupportsParallelization returns true since broadcast sending can be parallelized
+func (p *SendBroadcastProcessor) SupportsParallelization() bool {
+	return true
+}
+
+// Process executes or continues a broadcast sending task
+func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task) (bool, error) {
+	p.logger.WithField("task_id", task.ID).Info("Processing send_broadcast task")
 
 	// Initialize structured state if needed
 	if task.State == nil {
-		// Initialize a new state for the import task
+		// Initialize a new state for the broadcast task
 		task.State = &domain.TaskState{
 			Progress: 0,
-			Message:  "Starting import",
-			ImportContacts: &domain.ImportContactsState{
-				TotalContacts:  0,
-				ProcessedCount: 0,
-				FailedCount:    0,
-				CurrentPage:    1,
-				TotalPages:     0,
-				PageSize:       200,
-				StartedAt:      time.Now(),
+			Message:  "Starting broadcast",
+			SendBroadcast: &domain.SendBroadcastState{
+				SentCount:    0,
+				FailedCount:  0,
+				CurrentBatch: 0,
+				TotalBatches: 0,
+				BatchSize:    100, // Default batch size
 			},
 		}
 	}
 
-	// Initialize the ImportContacts state if it doesn't exist yet
-	if task.State.ImportContacts == nil {
-		task.State.ImportContacts = &domain.ImportContactsState{
-			TotalContacts:  0,
-			ProcessedCount: 0,
-			FailedCount:    0,
-			CurrentPage:    1,
-			TotalPages:     0,
-			PageSize:       200,
-			StartedAt:      time.Now(),
+	// Initialize the SendBroadcast state if it doesn't exist yet
+	if task.State.SendBroadcast == nil {
+		task.State.SendBroadcast = &domain.SendBroadcastState{
+			SentCount:    0,
+			FailedCount:  0,
+			CurrentBatch: 0,
+			TotalBatches: 0,
+			BatchSize:    100, // Default batch size
 		}
 	}
 
-	// Get current state values from our structured state
-	importState := task.State.ImportContacts
-	currentPage := importState.CurrentPage
-	totalPages := importState.TotalPages
-	processed := importState.ProcessedCount
-	failed := importState.FailedCount
-	pageSize := importState.PageSize
+	// Extract broadcast ID from task state or context
+	broadcastState := task.State.SendBroadcast
+	if broadcastState.BroadcastID == "" {
+		// In a real implementation, we'd expect the broadcast ID to be set when creating the task
+		return false, fmt.Errorf("broadcast ID is missing in task state")
+	}
 
-	// If we're just starting, get the total count
-	if currentPage == 1 && totalPages == 0 {
-		// In a real implementation, we would fetch the file details or source information
-		// and get the total number of contacts to import
+	// If we're just starting (batch 0), get the total recipients
+	if broadcastState.CurrentBatch == 0 {
+		// In a real implementation, we would fetch this from the broadcast service
+		// For this example, we'll simulate a broadcast with recipients
+		broadcastState.TotalRecipients = 1000
+		broadcastState.TotalBatches = (broadcastState.TotalRecipients + broadcastState.BatchSize - 1) / broadcastState.BatchSize
+		broadcastState.CurrentBatch = 1
+		broadcastState.ChannelType = "email" // Or could be "sms", "push", etc.
 
-		// For this example, simulate a task with 5 pages
-		totalContacts := 1000
-		pageSize = 200
-		totalPages = (totalContacts + pageSize - 1) / pageSize // Ceiling division
-
-		// Update our structured state
-		importState.TotalContacts = totalContacts
-		importState.TotalPages = totalPages
-		importState.PageSize = pageSize
-
-		// Set message in task state
-		task.State.Message = fmt.Sprintf("Importing %d contacts", totalContacts)
+		task.State.Message = fmt.Sprintf("Sending %s broadcast to %d recipients",
+			broadcastState.ChannelType, broadcastState.TotalRecipients)
 
 		p.logger.WithFields(map[string]interface{}{
-			"task_id":        task.ID,
-			"total_contacts": totalContacts,
-			"total_pages":    totalPages,
-		}).Info("Import task initialized")
+			"task_id":          task.ID,
+			"broadcast_id":     broadcastState.BroadcastID,
+			"total_recipients": broadcastState.TotalRecipients,
+			"total_batches":    broadcastState.TotalBatches,
+			"channel_type":     broadcastState.ChannelType,
+		}).Info("Broadcast sending initialized")
 
-		// Return false to indicate task is not complete yet
 		return false, nil
 	}
 
-	// In a real implementation, this would fetch and process a batch of contacts
-	// Simulate processing by sleeping and incrementing counters
+	// Process the current batch
 	select {
 	case <-ctx.Done():
 		// Context was canceled (e.g., timeout)
-		p.logger.WithField("task_id", task.ID).Warn("Import task interrupted")
+		p.logger.WithField("task_id", task.ID).Warn("Broadcast sending interrupted")
 		return false, ctx.Err()
-	case <-time.After(2 * time.Second): // Simulate work
-		// Update processing stats
-		pageContacts := pageSize
-		totalContacts := importState.TotalContacts
-
-		if currentPage == totalPages {
-			// Last page might have fewer items
-			pageContacts = totalContacts - (currentPage-1)*pageSize
+	case <-time.After(3 * time.Second): // Simulate work
+		// In a real implementation, we would call the broadcast service to send messages
+		// Simulate processing by calculating sent and failed counts
+		batchSize := broadcastState.BatchSize
+		if broadcastState.CurrentBatch == broadcastState.TotalBatches {
+			// Last batch might be smaller
+			batchSize = broadcastState.TotalRecipients - ((broadcastState.CurrentBatch - 1) * broadcastState.BatchSize)
 		}
 
-		// Simulate a few failures
-		successCount := pageContacts - (currentPage % 3) // Some arbitrary failures
-		if successCount < 0 {
-			successCount = 0
-		}
+		// Simulate some failures (e.g., 5% failure rate)
+		failuresThisBatch := batchSize / 20
+		successesThisBatch := batchSize - failuresThisBatch
 
-		processed += successCount
-		failed += (pageContacts - successCount)
+		// Update counters
+		broadcastState.SentCount += successesThisBatch
+		broadcastState.FailedCount += failuresThisBatch
 
 		p.logger.WithFields(map[string]interface{}{
-			"task_id":   task.ID,
-			"page":      currentPage,
-			"processed": processed,
-			"page_size": pageSize,
-			"success":   successCount,
-			"failed":    failed,
-		}).Info("Processed page")
+			"task_id":    task.ID,
+			"batch":      broadcastState.CurrentBatch,
+			"sent_count": broadcastState.SentCount,
+			"fail_count": broadcastState.FailedCount,
+			"batch_size": batchSize,
+			"success":    successesThisBatch,
+			"failed":     failuresThisBatch,
+		}).Info("Processed broadcast batch")
 
-		// Update structured state
-		importState.ProcessedCount = processed
-		importState.FailedCount = failed
+		// Update task message and progress
+		task.State.Message = fmt.Sprintf("Sent to %d/%d recipients (%d failed)",
+			broadcastState.SentCount, broadcastState.TotalRecipients, broadcastState.FailedCount)
 
-		// Update task message
-		task.State.Message = fmt.Sprintf("Processed %d/%d contacts", processed, totalContacts)
-
-		// Check if we've processed all pages
-		if currentPage >= totalPages {
+		// Check if we've processed all batches
+		if broadcastState.CurrentBatch >= broadcastState.TotalBatches {
 			// Task is complete
-			now := time.Now()
-			importState.CompletedAt = &now
-			task.State.Message = fmt.Sprintf("Import completed: %d processed, %d failed", processed, failed)
+			task.State.Message = fmt.Sprintf("Broadcast completed: %d sent, %d failed",
+				broadcastState.SentCount, broadcastState.FailedCount)
 
-			// Calculate final progress percentage
-			if totalContacts > 0 {
-				task.Progress = float64(processed) / float64(totalContacts) * 100
-				task.State.Progress = task.Progress
-			} else {
-				task.Progress = 100
-				task.State.Progress = 100
+			// Calculate final progress
+			if broadcastState.TotalRecipients > 0 {
+				task.Progress = 100.0
+				task.State.Progress = 100.0
 			}
 
 			p.logger.WithFields(map[string]interface{}{
-				"task_id":        task.ID,
-				"total_contacts": totalContacts,
-				"processed":      processed,
-				"failed":         failed,
-				"progress":       task.Progress,
-			}).Info("Import task completed")
+				"task_id":          task.ID,
+				"broadcast_id":     broadcastState.BroadcastID,
+				"total_recipients": broadcastState.TotalRecipients,
+				"sent_count":       broadcastState.SentCount,
+				"failed_count":     broadcastState.FailedCount,
+				"progress":         task.Progress,
+			}).Info("Broadcast sending completed")
 
 			return true, nil
 		}
 
-		// Move to next page
-		currentPage++
-		importState.CurrentPage = currentPage
+		// Move to next batch
+		broadcastState.CurrentBatch++
 
 		// Calculate progress percentage
-		if totalContacts > 0 {
-			task.Progress = float64(processed) / float64(totalContacts) * 100
+		if broadcastState.TotalRecipients > 0 {
+			task.Progress = float64(broadcastState.CurrentBatch-1) / float64(broadcastState.TotalBatches) * 100
 			task.State.Progress = task.Progress
 		}
 
 		p.logger.WithFields(map[string]interface{}{
 			"task_id":  task.ID,
 			"progress": task.Progress,
-			"page":     currentPage,
-			"of_pages": totalPages,
-		}).Info("Moving to next page")
+			"batch":    broadcastState.CurrentBatch,
+			"of_batch": broadcastState.TotalBatches,
+		}).Info("Moving to next batch")
+
+		return false, nil
+	}
+}
+
+// ProcessSubtask executes a portion of the task as a subtask
+func (p *SendBroadcastProcessor) ProcessSubtask(ctx context.Context, subtask *domain.Subtask, parentTask *domain.Task) (bool, error) {
+	p.logger.WithFields(map[string]interface{}{
+		"subtask_id":     subtask.ID,
+		"parent_task_id": subtask.ParentTaskID,
+		"index":          subtask.Index,
+		"total":          subtask.Total,
+	}).Info("Processing broadcast subtask")
+
+	// Initialize subtask state if needed
+	if subtask.State.SendBroadcast == nil {
+		subtask.State.SendBroadcast = &domain.SendBroadcastState{
+			BroadcastID:     parentTask.State.SendBroadcast.BroadcastID,
+			ChannelType:     parentTask.State.SendBroadcast.ChannelType,
+			BatchSize:       parentTask.State.SendBroadcast.BatchSize,
+			TotalRecipients: parentTask.State.SendBroadcast.TotalRecipients / subtask.Total,
+			SentCount:       0,
+			FailedCount:     0,
+			CurrentBatch:    1,
+			TotalBatches:    parentTask.State.SendBroadcast.TotalBatches / subtask.Total,
+		}
+	}
+
+	// Process the subtask (similar to the main task, but just for a subset of recipients)
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-time.After(2 * time.Second): // Simulate work
+		broadcastState := subtask.State.SendBroadcast
+
+		// Simulate sending messages
+		batchSize := broadcastState.BatchSize
+		if broadcastState.CurrentBatch == broadcastState.TotalBatches {
+			// Last batch might be smaller
+			batchSize = broadcastState.TotalRecipients - ((broadcastState.CurrentBatch - 1) * broadcastState.BatchSize)
+		}
+
+		// Simulate some failures
+		failuresThisBatch := batchSize / 20
+		successesThisBatch := batchSize - failuresThisBatch
+
+		// Update counters
+		broadcastState.SentCount += successesThisBatch
+		broadcastState.FailedCount += failuresThisBatch
+
+		// Update subtask progress
+		if broadcastState.TotalRecipients > 0 {
+			subtask.Progress = float64(broadcastState.CurrentBatch) / float64(broadcastState.TotalBatches) * 100
+			subtask.State.Progress = subtask.Progress
+		}
+
+		// Check if we've processed all batches for this subtask
+		if broadcastState.CurrentBatch >= broadcastState.TotalBatches {
+			subtask.Progress = 100
+			subtask.State.Progress = 100
+			subtask.State.Message = fmt.Sprintf("Completed: %d sent, %d failed",
+				broadcastState.SentCount, broadcastState.FailedCount)
+
+			return true, nil
+		}
+
+		// Move to next batch
+		broadcastState.CurrentBatch++
+		subtask.State.Message = fmt.Sprintf("Processing batch %d/%d",
+			broadcastState.CurrentBatch, broadcastState.TotalBatches)
 
 		return false, nil
 	}

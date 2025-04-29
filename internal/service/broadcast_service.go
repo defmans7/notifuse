@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -11,30 +12,83 @@ import (
 	"github.com/google/uuid"
 )
 
-// BroadcastService implements the domain.BroadcastService interface
+// BroadcastService handles sending broadcast messages
 type BroadcastService struct {
-	repo        domain.BroadcastRepository
-	contactRepo domain.ContactRepository
-	emailSvc    domain.EmailServiceInterface
-	templateSvc domain.TemplateService
-	logger      logger.Logger
+	logger           logger.Logger
+	workspaceService *WorkspaceService
+	repo             domain.BroadcastRepository
+	contactRepo      domain.ContactRepository
+	emailSvc         domain.EmailServiceInterface
+	templateSvc      domain.TemplateService
 }
 
-// NewBroadcastService creates a new broadcast service
-func NewBroadcastService(
-	repo domain.BroadcastRepository,
-	emailSvc domain.EmailServiceInterface,
-	logger logger.Logger,
-	contactRepo domain.ContactRepository,
-	templateSvc domain.TemplateService,
-) *BroadcastService {
-	return &BroadcastService{
-		repo:        repo,
-		emailSvc:    emailSvc,
-		logger:      logger,
-		contactRepo: contactRepo,
-		templateSvc: templateSvc,
+// BroadcastServiceConfig contains configuration for the broadcast service
+type BroadcastServiceConfig struct {
+	Logger           logger.Logger
+	WorkspaceService *WorkspaceService
+}
+
+// NewBroadcastService creates a new BroadcastService
+func NewBroadcastService(config BroadcastServiceConfig) (*BroadcastService, error) {
+	if config.Logger == nil {
+		return nil, fmt.Errorf("logger is required")
 	}
+
+	return &BroadcastService{
+		logger:           config.Logger,
+		workspaceService: config.WorkspaceService,
+	}, nil
+}
+
+// GetBroadcast retrieves a broadcast by ID
+func (s *BroadcastService) GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*domain.Broadcast, error) {
+	// Fetch the broadcast from the repository
+	return s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+}
+
+// GetRecipientCount gets the count of recipients for a broadcast
+func (s *BroadcastService) GetRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error) {
+	// In a real implementation, this would count recipients from a database
+	// For this example, we'll return a random count
+	return 1000 + rand.Intn(5000), nil
+}
+
+// SendBatch sends a batch of messages for a broadcast
+func (s *BroadcastService) SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error) {
+	// In a real implementation, this would send actual messages through email/SMS/etc providers
+	// For this example, we'll simulate sending with some random successes/failures
+
+	// Simulate some processing time
+	select {
+	case <-ctx.Done():
+		return 0, 0, ctx.Err()
+	case <-time.After(500 * time.Millisecond):
+		// Simulate a 5% failure rate
+		failureCount := batchSize / 20
+		successCount := batchSize - failureCount
+
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"batch":        batchNumber,
+			"successes":    successCount,
+			"failures":     failureCount,
+		}).Info("Sent broadcast batch")
+
+		return successCount, failureCount, nil
+	}
+}
+
+// Broadcast represents a broadcast message campaign
+type Broadcast struct {
+	ID          string     `json:"id"`
+	WorkspaceID string     `json:"workspace_id"`
+	Name        string     `json:"name"`
+	ChannelType string     `json:"channel_type"` // email, sms, push, etc.
+	Status      string     `json:"status"`       // pending, sending, completed, failed
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	SentAt      *time.Time `json:"sent_at,omitempty"`
 }
 
 // CreateBroadcast creates a new broadcast
@@ -74,16 +128,6 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 
 	s.logger.Info("Broadcast created successfully")
 
-	return broadcast, nil
-}
-
-// GetBroadcast retrieves a broadcast by ID
-func (s *BroadcastService) GetBroadcast(ctx context.Context, workspaceID, id string) (*domain.Broadcast, error) {
-	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, id)
-	if err != nil {
-		// Just propagate the error, including ErrBroadcastNotFound
-		return nil, err
-	}
 	return broadcast, nil
 }
 

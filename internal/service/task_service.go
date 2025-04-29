@@ -567,3 +567,10 @@ func (s *TaskService) ExecuteSubtask(ctx context.Context, subtaskID string) erro
 
 	return nil
 }
+
+// RegisterDefaultProcessors registers the default set of task processors
+func (s *TaskService) RegisterDefaultProcessors(broadcastService *BroadcastService) {
+	// Register send broadcast processor
+	broadcastProcessor := NewSendBroadcastProcessor(broadcastService, s.logger)
+	s.RegisterProcessor(broadcastProcessor)
+}

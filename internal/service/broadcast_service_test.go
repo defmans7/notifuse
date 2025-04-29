@@ -36,7 +36,16 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -163,7 +172,16 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -196,7 +214,7 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 		workspaceID := "ws123"
 		broadcastID := "nonexistent"
 
-		notFoundErr := errors.New("broadcast not found")
+		notFoundErr := &domain.ErrBroadcastNotFound{ID: broadcastID}
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
 			Return(nil, notFoundErr)
@@ -233,7 +251,16 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -422,7 +449,16 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("ScheduleForLater", func(t *testing.T) {
 		ctx := context.Background()
@@ -593,7 +629,16 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("CancelScheduledBroadcast", func(t *testing.T) {
 		ctx := context.Background()
@@ -715,7 +760,16 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -1029,7 +1083,16 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -1215,7 +1278,16 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -1537,7 +1609,16 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockRepo, mockEmailSvc, mockLogger, mockContactRepo, mockTemplateSvc)
+	service, err := NewBroadcastService(BroadcastServiceConfig{
+		Logger: mockLogger,
+	})
+	require.NoError(t, err)
+
+	// Then manually set the repositories needed for testing
+	service.repo = mockRepo
+	service.emailSvc = mockEmailSvc
+	service.contactRepo = mockContactRepo
+	service.templateSvc = mockTemplateSvc
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
