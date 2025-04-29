@@ -42,16 +42,16 @@ func (r *TaskRepository) Create(ctx context.Context, workspace string, task *dom
 		task.Status = domain.TaskStatusPending
 	}
 
-	// Convert state data to JSON
-	stateJSON, err := json.Marshal(task.StateData)
+	// Convert state to JSON
+	stateJSON, err := json.Marshal(task.State)
 	if err != nil {
-		return fmt.Errorf("failed to marshal state data: %w", err)
+		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
 	// Insert the task
 	query := `
 		INSERT INTO tasks (
-			id, workspace_id, type, status, progress, state_data,
+			id, workspace_id, type, status, progress, state,
 			error_message, created_at, updated_at, last_run_at,
 			completed_at, next_run_after, timeout_after,
 			max_runtime, max_retries, retry_count, retry_interval
@@ -93,7 +93,7 @@ func (r *TaskRepository) Create(ctx context.Context, workspace string, task *dom
 func (r *TaskRepository) Get(ctx context.Context, workspace, id string) (*domain.Task, error) {
 	query := `
 		SELECT
-			id, workspace_id, type, status, progress, state_data,
+			id, workspace_id, type, status, progress, state,
 			error_message, created_at, updated_at, last_run_at,
 			completed_at, next_run_after, timeout_after,
 			max_runtime, max_retries, retry_count, retry_interval
@@ -146,10 +146,11 @@ func (r *TaskRepository) Get(ctx context.Context, workspace, id string) (*domain
 		task.TimeoutAfter = &timeoutAfter.Time
 	}
 
-	// Unmarshal state data
+	// Unmarshal state
 	if stateJSON != nil {
-		if err := json.Unmarshal(stateJSON, &task.StateData); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal state data: %w", err)
+		task.State = &domain.TaskState{}
+		if err := json.Unmarshal(stateJSON, task.State); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 		}
 	}
 
@@ -161,10 +162,10 @@ func (r *TaskRepository) Update(ctx context.Context, workspace string, task *dom
 	// Update timestamp
 	task.UpdatedAt = time.Now().UTC()
 
-	// Convert state data to JSON
-	stateJSON, err := json.Marshal(task.StateData)
+	// Convert state to JSON
+	stateJSON, err := json.Marshal(task.State)
 	if err != nil {
-		return fmt.Errorf("failed to marshal state data: %w", err)
+		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
 	// Update the task
@@ -174,7 +175,7 @@ func (r *TaskRepository) Update(ctx context.Context, workspace string, task *dom
 			type = $3,
 			status = $4,
 			progress = $5,
-			state_data = $6,
+			state = $6,
 			error_message = $7,
 			updated_at = $8,
 			last_run_at = $9,
@@ -291,7 +292,7 @@ func (r *TaskRepository) List(ctx context.Context, workspace string, filter doma
 
 	// Build the data query
 	dataQuery := psql.Select(
-		"id", "workspace_id", "type", "status", "progress", "state_data",
+		"id", "workspace_id", "type", "status", "progress", "state",
 		"error_message", "created_at", "updated_at", "last_run_at",
 		"completed_at", "next_run_after", "timeout_after",
 		"max_runtime", "max_retries", "retry_count", "retry_interval",
@@ -384,10 +385,11 @@ func (r *TaskRepository) List(ctx context.Context, workspace string, filter doma
 			task.TimeoutAfter = &timeoutAfter.Time
 		}
 
-		// Unmarshal state data
+		// Unmarshal state
 		if stateJSON != nil {
-			if err := json.Unmarshal(stateJSON, &task.StateData); err != nil {
-				return nil, 0, fmt.Errorf("failed to unmarshal state data: %w", err)
+			task.State = &domain.TaskState{}
+			if err := json.Unmarshal(stateJSON, task.State); err != nil {
+				return nil, 0, fmt.Errorf("failed to unmarshal state: %w", err)
 			}
 		}
 
@@ -411,7 +413,7 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 	// 2. Paused but ready to resume (next_run_after in the past)
 	// 3. Running but have timed out (timeout_after in the past)
 	query := psql.Select(
-		"id", "workspace_id", "type", "status", "progress", "state_data",
+		"id", "workspace_id", "type", "status", "progress", "state",
 		"error_message", "created_at", "updated_at", "last_run_at",
 		"completed_at", "next_run_after", "timeout_after",
 		"max_runtime", "max_retries", "retry_count", "retry_interval",
@@ -492,10 +494,11 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 			task.TimeoutAfter = &timeoutAfter.Time
 		}
 
-		// Unmarshal state data
+		// Unmarshal state
 		if stateJSON != nil {
-			if err := json.Unmarshal(stateJSON, &task.StateData); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal state data: %w", err)
+			task.State = &domain.TaskState{}
+			if err := json.Unmarshal(stateJSON, task.State); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 			}
 		}
 
@@ -507,6 +510,51 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 	}
 
 	return tasks, nil
+}
+
+// SaveState saves the current state of a running task
+func (r *TaskRepository) SaveState(ctx context.Context, workspace, id string, progress float64, state *domain.TaskState) error {
+	// Convert state to JSON
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("failed to marshal state: %w", err)
+	}
+
+	now := time.Now().UTC()
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	query := psql.Update("tasks").
+		Set("progress", progress).
+		Set("state", stateJSON).
+		Set("updated_at", now).
+		Where(sq.And{
+			sq.Eq{
+				"id":           id,
+				"workspace_id": workspace,
+				"status":       domain.TaskStatusRunning,
+			},
+		})
+
+	sqlQuery, args, err := query.ToSql()
+	if err != nil {
+		return fmt.Errorf("failed to build update query: %w", err)
+	}
+
+	result, err := r.systemDB.ExecContext(ctx, sqlQuery, args...)
+	if err != nil {
+		return fmt.Errorf("failed to save task state: %w", err)
+	}
+
+	// Check if the task was found and is running
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("task not found or not in running state")
+	}
+
+	return nil
 }
 
 // MarkAsRunning marks a task as running and sets timeout
@@ -541,51 +589,6 @@ func (r *TaskRepository) MarkAsRunning(ctx context.Context, workspace, id string
 	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("task not found")
-	}
-
-	return nil
-}
-
-// SaveState saves the current state of a running task
-func (r *TaskRepository) SaveState(ctx context.Context, workspace, id string, progress float64, state map[string]interface{}) error {
-	// Convert state data to JSON
-	stateJSON, err := json.Marshal(state)
-	if err != nil {
-		return fmt.Errorf("failed to marshal state data: %w", err)
-	}
-
-	now := time.Now().UTC()
-	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-
-	query := psql.Update("tasks").
-		Set("progress", progress).
-		Set("state_data", stateJSON).
-		Set("updated_at", now).
-		Where(sq.And{
-			sq.Eq{
-				"id":           id,
-				"workspace_id": workspace,
-				"status":       domain.TaskStatusRunning,
-			},
-		})
-
-	sqlQuery, args, err := query.ToSql()
-	if err != nil {
-		return fmt.Errorf("failed to build update query: %w", err)
-	}
-
-	result, err := r.systemDB.ExecContext(ctx, sqlQuery, args...)
-	if err != nil {
-		return fmt.Errorf("failed to save task state: %w", err)
-	}
-
-	// Check if the task was found and is running
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("task not found or not in running state")
 	}
 
 	return nil
@@ -759,7 +762,7 @@ func (r *TaskRepository) CreateSubtasks(ctx context.Context, workspace string, t
 	// Insert query
 	query := `
 		INSERT INTO task_subtasks (
-			id, parent_task_id, status, progress, state_data,
+			id, parent_task_id, status, progress, state,
 			error_message, created_at, updated_at, started_at,
 			completed_at, timeout_after, index, total
 		) VALUES (
@@ -777,7 +780,7 @@ func (r *TaskRepository) CreateSubtasks(ctx context.Context, workspace string, t
 			ParentTaskID: taskID,
 			Status:       domain.SubtaskStatusPending,
 			Progress:     0,
-			StateData:    map[string]interface{}{},
+			State:        domain.TaskState{},
 			ErrorMessage: "",
 			CreatedAt:    now,
 			UpdatedAt:    now,
@@ -785,10 +788,10 @@ func (r *TaskRepository) CreateSubtasks(ctx context.Context, workspace string, t
 			Total:        count,
 		}
 
-		// Convert state data to JSON
-		stateJSON, err := json.Marshal(subtask.StateData)
+		// Convert state to JSON
+		stateJSON, err := json.Marshal(subtask.State)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal state data: %w", err)
+			return nil, fmt.Errorf("failed to marshal state: %w", err)
 		}
 
 		// Execute insert
@@ -829,7 +832,7 @@ func (r *TaskRepository) CreateSubtasks(ctx context.Context, workspace string, t
 func (r *TaskRepository) GetSubtask(ctx context.Context, subtaskID string) (*domain.Subtask, error) {
 	query := `
 		SELECT
-			id, parent_task_id, status, progress, state_data,
+			id, parent_task_id, status, progress, state,
 			error_message, created_at, updated_at, started_at,
 			completed_at, timeout_after, index, total
 		FROM task_subtasks
@@ -874,10 +877,10 @@ func (r *TaskRepository) GetSubtask(ctx context.Context, subtaskID string) (*dom
 		subtask.TimeoutAfter = &timeoutAfter.Time
 	}
 
-	// Unmarshal state data
+	// Unmarshal state
 	if stateJSON != nil {
-		if err := json.Unmarshal(stateJSON, &subtask.StateData); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal state data: %w", err)
+		if err := json.Unmarshal(stateJSON, &subtask.State); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 		}
 	}
 
@@ -888,7 +891,7 @@ func (r *TaskRepository) GetSubtask(ctx context.Context, subtaskID string) (*dom
 func (r *TaskRepository) GetSubtasks(ctx context.Context, taskID string) ([]*domain.Subtask, error) {
 	query := `
 		SELECT
-			id, parent_task_id, status, progress, state_data,
+			id, parent_task_id, status, progress, state,
 			error_message, created_at, updated_at, started_at,
 			completed_at, timeout_after, index, total
 		FROM task_subtasks
@@ -939,10 +942,10 @@ func (r *TaskRepository) GetSubtasks(ctx context.Context, taskID string) ([]*dom
 			subtask.TimeoutAfter = &timeoutAfter.Time
 		}
 
-		// Unmarshal state data
+		// Unmarshal state
 		if stateJSON != nil {
-			if err := json.Unmarshal(stateJSON, &subtask.StateData); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal state data: %w", err)
+			if err := json.Unmarshal(stateJSON, &subtask.State); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 			}
 		}
 
@@ -957,11 +960,11 @@ func (r *TaskRepository) GetSubtasks(ctx context.Context, taskID string) ([]*dom
 }
 
 // UpdateSubtaskProgress updates the progress and state of a subtask
-func (r *TaskRepository) UpdateSubtaskProgress(ctx context.Context, subtaskID string, progress float64, state map[string]interface{}) error {
-	// Convert state data to JSON
+func (r *TaskRepository) UpdateSubtaskProgress(ctx context.Context, subtaskID string, progress float64, state domain.TaskState) error {
+	// Convert state to JSON
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
-		return fmt.Errorf("failed to marshal state data: %w", err)
+		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -969,7 +972,7 @@ func (r *TaskRepository) UpdateSubtaskProgress(ctx context.Context, subtaskID st
 		UPDATE task_subtasks
 		SET
 			progress = $2,
-			state_data = $3,
+			state = $3,
 			updated_at = $4
 		WHERE id = $1 AND status = $5
 	`

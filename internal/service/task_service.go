@@ -210,9 +210,10 @@ func (s *TaskService) createSubtasksAndTriggerHTTP(ctx context.Context, task *do
 
 	// Determine how many subtasks to create - this could be dynamic based on the task or processor
 	subtaskCount := 5 // Default value, could be determined by the processor or task data
-	if task.StateData != nil {
-		if count, ok := task.StateData["subtask_count"].(float64); ok {
-			subtaskCount = int(count)
+	if task.State != nil && task.State.Progress > 0 {
+		// Use the subtask count from the task itself
+		if task.SubtaskCount > 0 {
+			subtaskCount = task.SubtaskCount
 		}
 	}
 
@@ -319,7 +320,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	}
 
 	// Check if this task should use parallel processing with subtasks
-	if task.ParallelSubtasks || (processor.SupportsParallelization() && task.StateData != nil && task.StateData["use_parallel"] == true) {
+	if task.ParallelSubtasks || (processor.SupportsParallelization() && task.State != nil && task.State.Progress > 0) {
 		// If we already have subtasks, check their status
 		if task.SubtaskCount > 0 {
 			// Just update progress from existing subtasks
@@ -498,7 +499,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 }
 
 // SaveTaskProgress updates the progress and state of a running task
-func (s *TaskService) SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state map[string]interface{}) error {
+func (s *TaskService) SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state *domain.TaskState) error {
 	return s.repo.SaveState(ctx, workspace, taskID, progress, state)
 }
 
@@ -552,7 +553,7 @@ func (s *TaskService) ExecuteSubtask(ctx context.Context, subtaskID string) erro
 		}
 	} else {
 		// Just update progress
-		if err := s.repo.UpdateSubtaskProgress(ctx, subtaskID, subtask.Progress, subtask.StateData); err != nil {
+		if err := s.repo.UpdateSubtaskProgress(ctx, subtaskID, subtask.Progress, subtask.State); err != nil {
 			return fmt.Errorf("failed to update subtask progress: %w", err)
 		}
 	}

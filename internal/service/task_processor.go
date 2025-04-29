@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -31,25 +32,44 @@ func (p *ImportContactsProcessor) CanProcess(taskType string) bool {
 func (p *ImportContactsProcessor) Process(ctx context.Context, task *domain.Task) (bool, error) {
 	p.logger.WithField("task_id", task.ID).Info("Processing import_contacts task")
 
-	// Extract task state
-	state := task.StateData
-	if state == nil {
-		// Initialize state for a new task
-		state = map[string]interface{}{
-			"total_contacts": 0,
-			"processed":      0,
-			"failed":         0,
-			"current_page":   1,
-			"total_pages":    0,
-			"started_at":     time.Now().Format(time.RFC3339),
+	// Initialize structured state if needed
+	if task.State == nil {
+		// Initialize a new state for the import task
+		task.State = &domain.TaskState{
+			Progress: 0,
+			Message:  "Starting import",
+			ImportContacts: &domain.ImportContactsState{
+				TotalContacts:  0,
+				ProcessedCount: 0,
+				FailedCount:    0,
+				CurrentPage:    1,
+				TotalPages:     0,
+				PageSize:       200,
+				StartedAt:      time.Now(),
+			},
 		}
 	}
 
-	// Get current progress info
-	currentPage := int(state["current_page"].(float64))
-	totalPages := int(state["total_pages"].(float64))
-	processed := int(state["processed"].(float64))
-	failed := int(state["failed"].(float64))
+	// Initialize the ImportContacts state if it doesn't exist yet
+	if task.State.ImportContacts == nil {
+		task.State.ImportContacts = &domain.ImportContactsState{
+			TotalContacts:  0,
+			ProcessedCount: 0,
+			FailedCount:    0,
+			CurrentPage:    1,
+			TotalPages:     0,
+			PageSize:       200,
+			StartedAt:      time.Now(),
+		}
+	}
+
+	// Get current state values from our structured state
+	importState := task.State.ImportContacts
+	currentPage := importState.CurrentPage
+	totalPages := importState.TotalPages
+	processed := importState.ProcessedCount
+	failed := importState.FailedCount
+	pageSize := importState.PageSize
 
 	// If we're just starting, get the total count
 	if currentPage == 1 && totalPages == 0 {
@@ -58,12 +78,16 @@ func (p *ImportContactsProcessor) Process(ctx context.Context, task *domain.Task
 
 		// For this example, simulate a task with 5 pages
 		totalContacts := 1000
-		pageSize := 200
+		pageSize = 200
 		totalPages = (totalContacts + pageSize - 1) / pageSize // Ceiling division
 
-		state["total_contacts"] = totalContacts
-		state["total_pages"] = totalPages
-		state["page_size"] = pageSize
+		// Update our structured state
+		importState.TotalContacts = totalContacts
+		importState.TotalPages = totalPages
+		importState.PageSize = pageSize
+
+		// Set message in task state
+		task.State.Message = fmt.Sprintf("Importing %d contacts", totalContacts)
 
 		p.logger.WithFields(map[string]interface{}{
 			"task_id":        task.ID,
@@ -71,13 +95,9 @@ func (p *ImportContactsProcessor) Process(ctx context.Context, task *domain.Task
 			"total_pages":    totalPages,
 		}).Info("Import task initialized")
 
-		// Update task state before processing the first batch
-		task.StateData = state
+		// Return false to indicate task is not complete yet
 		return false, nil
 	}
-
-	// Process the current page
-	pageSize := int(state["page_size"].(float64))
 
 	// In a real implementation, this would fetch and process a batch of contacts
 	// Simulate processing by sleeping and incrementing counters
@@ -89,9 +109,11 @@ func (p *ImportContactsProcessor) Process(ctx context.Context, task *domain.Task
 	case <-time.After(2 * time.Second): // Simulate work
 		// Update processing stats
 		pageContacts := pageSize
+		totalContacts := importState.TotalContacts
+
 		if currentPage == totalPages {
 			// Last page might have fewer items
-			pageContacts = int(state["total_contacts"].(float64)) - (currentPage-1)*pageSize
+			pageContacts = totalContacts - (currentPage-1)*pageSize
 		}
 
 		// Simulate a few failures
@@ -112,22 +134,27 @@ func (p *ImportContactsProcessor) Process(ctx context.Context, task *domain.Task
 			"failed":    failed,
 		}).Info("Processed page")
 
-		// Update state
-		state["processed"] = processed
-		state["failed"] = failed
+		// Update structured state
+		importState.ProcessedCount = processed
+		importState.FailedCount = failed
+
+		// Update task message
+		task.State.Message = fmt.Sprintf("Processed %d/%d contacts", processed, totalContacts)
 
 		// Check if we've processed all pages
 		if currentPage >= totalPages {
 			// Task is complete
-			state["completed_at"] = time.Now().Format(time.RFC3339)
-			task.StateData = state
+			now := time.Now()
+			importState.CompletedAt = &now
+			task.State.Message = fmt.Sprintf("Import completed: %d processed, %d failed", processed, failed)
 
 			// Calculate final progress percentage
-			totalContacts := int(state["total_contacts"].(float64))
 			if totalContacts > 0 {
 				task.Progress = float64(processed) / float64(totalContacts) * 100
+				task.State.Progress = task.Progress
 			} else {
 				task.Progress = 100
+				task.State.Progress = 100
 			}
 
 			p.logger.WithFields(map[string]interface{}{
@@ -143,15 +170,13 @@ func (p *ImportContactsProcessor) Process(ctx context.Context, task *domain.Task
 
 		// Move to next page
 		currentPage++
-		state["current_page"] = currentPage
+		importState.CurrentPage = currentPage
 
 		// Calculate progress percentage
-		totalContacts := int(state["total_contacts"].(float64))
 		if totalContacts > 0 {
 			task.Progress = float64(processed) / float64(totalContacts) * 100
+			task.State.Progress = task.Progress
 		}
-
-		task.StateData = state
 
 		p.logger.WithFields(map[string]interface{}{
 			"task_id":  task.ID,

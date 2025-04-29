@@ -2,6 +2,8 @@ package domain
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -39,43 +41,98 @@ const (
 	SubtaskStatusFailed SubtaskStatus = "failed"
 )
 
+// TaskState represents the state of a task, with specialized fields for different task types
+type TaskState struct {
+	// Common fields for all task types
+	Progress float64 `json:"progress,omitempty"`
+	Message  string  `json:"message,omitempty"`
+
+	// Specialized states for different task types - only one will be used based on task type
+	SendBroadcast  *SendBroadcastState  `json:"send_broadcast,omitempty"`
+	ImportContacts *ImportContactsState `json:"import_contacts,omitempty"`
+}
+
+// Value implements the driver.Valuer interface for TaskState
+func (s TaskState) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+// Scan implements the sql.Scanner interface for TaskState
+func (s *TaskState) Scan(value interface{}) error {
+	if value == nil {
+		*s = TaskState{}
+		return nil
+	}
+
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("expected []byte, got %T", value)
+	}
+
+	return json.Unmarshal(bytes, &s)
+}
+
+// SendBroadcastState contains state specific to broadcast sending tasks
+type SendBroadcastState struct {
+	BroadcastID     string `json:"broadcast_id"`
+	TotalRecipients int    `json:"total_recipients"`
+	SentCount       int    `json:"sent_count"`
+	FailedCount     int    `json:"failed_count"`
+	ChannelType     string `json:"channel_type"`
+	BatchSize       int    `json:"batch_size"`
+	CurrentBatch    int    `json:"current_batch"`
+	TotalBatches    int    `json:"total_batches"`
+}
+
+// ImportContactsState contains state specific to contact import tasks
+type ImportContactsState struct {
+	TotalContacts  int        `json:"total_contacts"`
+	ProcessedCount int        `json:"processed_count"`
+	FailedCount    int        `json:"failed_count"`
+	CurrentPage    int        `json:"current_page"`
+	TotalPages     int        `json:"total_pages"`
+	PageSize       int        `json:"page_size"`
+	StartedAt      time.Time  `json:"started_at"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+}
+
 // Subtask represents a portion of work that can be executed in parallel
 type Subtask struct {
-	ID           string                 `json:"id"`
-	ParentTaskID string                 `json:"parent_task_id"`
-	Status       SubtaskStatus          `json:"status"`
-	Progress     float64                `json:"progress"`
-	StateData    map[string]interface{} `json:"state_data"`
-	ErrorMessage string                 `json:"error_message,omitempty"`
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
-	StartedAt    *time.Time             `json:"started_at,omitempty"`
-	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
-	TimeoutAfter *time.Time             `json:"timeout_after,omitempty"`
-	Index        int                    `json:"index"`
-	Total        int                    `json:"total"`
+	ID           string        `json:"id"`
+	ParentTaskID string        `json:"parent_task_id"`
+	Status       SubtaskStatus `json:"status"`
+	Progress     float64       `json:"progress"`
+	State        TaskState     `json:"state"`
+	ErrorMessage string        `json:"error_message,omitempty"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	StartedAt    *time.Time    `json:"started_at,omitempty"`
+	CompletedAt  *time.Time    `json:"completed_at,omitempty"`
+	TimeoutAfter *time.Time    `json:"timeout_after,omitempty"`
+	Index        int           `json:"index"`
+	Total        int           `json:"total"`
 }
 
 // Task represents a background task that can be executed in multiple steps
 type Task struct {
-	ID            string                 `json:"id"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	Type          string                 `json:"type"`
-	Status        TaskStatus             `json:"status"`
-	Progress      float64                `json:"progress"`
-	StateData     map[string]interface{} `json:"state_data"`
-	ErrorMessage  string                 `json:"error_message,omitempty"`
-	CreatedAt     time.Time              `json:"created_at"`
-	UpdatedAt     time.Time              `json:"updated_at"`
-	LastRunAt     *time.Time             `json:"last_run_at,omitempty"`
-	CompletedAt   *time.Time             `json:"completed_at,omitempty"`
-	NextRunAfter  *time.Time             `json:"next_run_after,omitempty"`
-	TimeoutAfter  *time.Time             `json:"timeout_after,omitempty"`
-	MaxRuntime    int                    `json:"max_runtime"` // Maximum runtime in seconds
-	MaxRetries    int                    `json:"max_retries"`
-	RetryCount    int                    `json:"retry_count"`
-	RetryInterval int                    `json:"retry_interval"` // Retry interval in seconds
-	Subtasks      []*Subtask             `json:"subtasks,omitempty"`
+	ID            string     `json:"id"`
+	WorkspaceID   string     `json:"workspace_id"`
+	Type          string     `json:"type"`
+	Status        TaskStatus `json:"status"`
+	Progress      float64    `json:"progress"`
+	State         *TaskState `json:"state,omitempty"` // Typed state struct
+	ErrorMessage  string     `json:"error_message,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	LastRunAt     *time.Time `json:"last_run_at,omitempty"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	NextRunAfter  *time.Time `json:"next_run_after,omitempty"`
+	TimeoutAfter  *time.Time `json:"timeout_after,omitempty"`
+	MaxRuntime    int        `json:"max_runtime"` // Maximum runtime in seconds
+	MaxRetries    int        `json:"max_retries"`
+	RetryCount    int        `json:"retry_count"`
+	RetryInterval int        `json:"retry_interval"` // Retry interval in seconds
+	Subtasks      []*Subtask `json:"subtasks,omitempty"`
 	// New fields for parallel subtask processing
 	ParallelSubtasks  bool `json:"parallel_subtasks"`
 	UseHTTPExecutor   bool `json:"use_http_executor"`
@@ -108,7 +165,7 @@ type TaskRepository interface {
 	MarkAsRunning(ctx context.Context, workspace, id string, timeoutAfter time.Time) error
 
 	// SaveState saves the current state of a running task
-	SaveState(ctx context.Context, workspace, id string, progress float64, state map[string]interface{}) error
+	SaveState(ctx context.Context, workspace, id string, progress float64, state *TaskState) error
 
 	// MarkAsCompleted marks a task as completed
 	MarkAsCompleted(ctx context.Context, workspace, id string) error
@@ -123,7 +180,7 @@ type TaskRepository interface {
 	CreateSubtasks(ctx context.Context, workspace string, taskID string, count int) ([]*Subtask, error)
 	GetSubtask(ctx context.Context, subtaskID string) (*Subtask, error)
 	GetSubtasks(ctx context.Context, taskID string) ([]*Subtask, error)
-	UpdateSubtaskProgress(ctx context.Context, subtaskID string, progress float64, state map[string]interface{}) error
+	UpdateSubtaskProgress(ctx context.Context, subtaskID string, progress float64, state TaskState) error
 	CompleteSubtask(ctx context.Context, subtaskID string) error
 	FailSubtask(ctx context.Context, subtaskID string, errorMessage string) error
 	UpdateTaskProgressFromSubtasks(ctx context.Context, workspace, taskID string) error
@@ -184,16 +241,16 @@ type SubtaskResponse struct {
 
 // CreateTaskRequest defines the request to create a new task
 type CreateTaskRequest struct {
-	WorkspaceID      string                 `json:"workspace_id"`
-	Type             string                 `json:"type"`
-	StateData        map[string]interface{} `json:"state_data"`
-	MaxRuntime       int                    `json:"max_runtime"`
-	MaxRetries       int                    `json:"max_retries"`
-	RetryInterval    int                    `json:"retry_interval"`
-	ParallelSubtasks bool                   `json:"parallel_subtasks"`
-	UseHTTPExecutor  bool                   `json:"use_http_executor"`
-	SubtaskCount     int                    `json:"subtask_count"`
-	NextRunAfter     *time.Time             `json:"next_run_after,omitempty"`
+	WorkspaceID      string     `json:"workspace_id"`
+	Type             string     `json:"type"`
+	State            *TaskState `json:"state,omitempty"` // New typed state struct
+	MaxRuntime       int        `json:"max_runtime"`
+	MaxRetries       int        `json:"max_retries"`
+	RetryInterval    int        `json:"retry_interval"`
+	ParallelSubtasks bool       `json:"parallel_subtasks"`
+	UseHTTPExecutor  bool       `json:"use_http_executor"`
+	SubtaskCount     int        `json:"subtask_count"`
+	NextRunAfter     *time.Time `json:"next_run_after,omitempty"`
 }
 
 // Validate validates the create task request
@@ -210,7 +267,7 @@ func (r *CreateTaskRequest) Validate() (*Task, error) {
 		WorkspaceID:      r.WorkspaceID,
 		Type:             r.Type,
 		Status:           TaskStatusPending,
-		StateData:        r.StateData,
+		State:            r.State,
 		MaxRuntime:       r.MaxRuntime,
 		MaxRetries:       r.MaxRetries,
 		RetryInterval:    r.RetryInterval,
