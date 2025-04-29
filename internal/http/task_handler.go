@@ -21,7 +21,7 @@ type TaskService interface {
 	ExecuteTasks(ctx context.Context, maxTasks int) error
 	ExecuteTask(ctx context.Context, workspace, taskID string) error
 	ExecuteSubtask(ctx context.Context, subtaskID string) error
-	SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state map[string]interface{}) error
+	SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state *domain.TaskState) error
 }
 
 // TaskHandler handles HTTP requests related to tasks

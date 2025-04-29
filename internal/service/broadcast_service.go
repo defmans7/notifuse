@@ -24,8 +24,12 @@ type BroadcastService struct {
 
 // BroadcastServiceConfig contains configuration for the broadcast service
 type BroadcastServiceConfig struct {
-	Logger           logger.Logger
-	WorkspaceService *WorkspaceService
+	Logger            logger.Logger
+	Repository        domain.BroadcastRepository
+	EmailService      domain.EmailServiceInterface
+	ContactRepository domain.ContactRepository
+	TemplateService   domain.TemplateService
+	WorkspaceService  *WorkspaceService
 }
 
 // NewBroadcastService creates a new BroadcastService
@@ -36,6 +40,10 @@ func NewBroadcastService(config BroadcastServiceConfig) (*BroadcastService, erro
 
 	return &BroadcastService{
 		logger:           config.Logger,
+		repo:             config.Repository,
+		emailSvc:         config.EmailService,
+		contactRepo:      config.ContactRepository,
+		templateSvc:      config.TemplateService,
 		workspaceService: config.WorkspaceService,
 	}, nil
 }
@@ -644,4 +652,24 @@ func (s *BroadcastService) SendWinningVariation(ctx context.Context, request *do
 	// and sending them the winning variation email
 
 	return nil
+}
+
+// SetRepository sets the repository for the broadcast service
+func (s *BroadcastService) SetRepository(repo domain.BroadcastRepository) {
+	s.repo = repo
+}
+
+// SetEmailService sets the email service for the broadcast service
+func (s *BroadcastService) SetEmailService(emailSvc domain.EmailServiceInterface) {
+	s.emailSvc = emailSvc
+}
+
+// SetContactRepository sets the contact repository for the broadcast service
+func (s *BroadcastService) SetContactRepository(contactRepo domain.ContactRepository) {
+	s.contactRepo = contactRepo
+}
+
+// SetTemplateService sets the template service for the broadcast service
+func (s *BroadcastService) SetTemplateService(templateSvc domain.TemplateService) {
+	s.templateSvc = templateSvc
 }
