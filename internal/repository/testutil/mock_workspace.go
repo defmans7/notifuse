@@ -101,3 +101,24 @@ func (m *MockWorkspaceRepository) IsUserWorkspaceMember(ctx context.Context, use
 func (m *MockWorkspaceRepository) GetWorkspaceUsersWithEmail(ctx context.Context, workspaceID string) ([]*domain.UserWorkspaceWithEmail, error) {
 	return nil, nil
 }
+
+// WithWorkspaceTransaction executes a function within a transaction on the workspace database
+func (m *MockWorkspaceRepository) WithWorkspaceTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+	db, err := m.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}

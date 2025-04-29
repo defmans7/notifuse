@@ -1,3 +1,6 @@
+- subtask repo with transactions + task service with transactions for subtask execution
+- tests
+
 # Features
 
 - integrer https://www.npmjs.com/package/disposable-email-domains

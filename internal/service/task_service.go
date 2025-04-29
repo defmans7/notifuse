@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +26,19 @@ type TaskService struct {
 	processors  map[string]domain.TaskProcessor
 	lock        sync.RWMutex
 	apiEndpoint string
+}
+
+// WithTransaction executes a function within a transaction
+func (s *TaskService) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
+	// The repository should handle the transaction
+	repo, ok := s.repo.(interface {
+		WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error
+	})
+	if !ok {
+		return fmt.Errorf("repository does not support transactions")
+	}
+
+	return repo.WithTransaction(ctx, fn)
 }
 
 // NewTaskService creates a new task service instance
@@ -197,19 +211,53 @@ func (s *TaskService) createSubtasksAndTriggerHTTP(ctx context.Context, task *do
 		}
 	}
 
-	// Create the subtasks
-	subtasks, err := s.repo.CreateSubtasks(ctx, task.WorkspaceID, task.ID, subtaskCount)
+	// Create the subtasks and update the task in a single transaction
+	var subtasks []*domain.Subtask
+
+	err = s.WithTransaction(ctx, func(tx *sql.Tx) error {
+		// Try to use transactional method if available
+		createSubtasksRepo, hasCreateSubtasksTx := s.repo.(interface {
+			CreateSubtasksTx(ctx context.Context, tx *sql.Tx, workspace string, taskID string, count int) ([]*domain.Subtask, error)
+		})
+
+		var subtasksErr error
+		if hasCreateSubtasksTx {
+			subtasks, subtasksErr = createSubtasksRepo.CreateSubtasksTx(ctx, tx, task.WorkspaceID, task.ID, subtaskCount)
+		} else {
+			// Fall back to non-transactional method
+			subtasks, subtasksErr = s.repo.CreateSubtasks(ctx, task.WorkspaceID, task.ID, subtaskCount)
+		}
+
+		if subtasksErr != nil {
+			return fmt.Errorf("failed to create subtasks: %w", subtasksErr)
+		}
+
+		task.ParallelSubtasks = true
+		task.SubtaskCount = len(subtasks)
+		task.Subtasks = subtasks
+
+		// Update the task to indicate it has subtasks
+		updateRepo, hasUpdateTx := s.repo.(interface {
+			UpdateTx(ctx context.Context, tx *sql.Tx, workspace string, task *domain.Task) error
+		})
+
+		var updateErr error
+		if hasUpdateTx {
+			updateErr = updateRepo.UpdateTx(ctx, tx, task.WorkspaceID, task)
+		} else {
+			// Fall back to non-transactional method
+			updateErr = s.repo.Update(ctx, task.WorkspaceID, task)
+		}
+
+		if updateErr != nil {
+			return fmt.Errorf("failed to update task with subtasks: %w", updateErr)
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return fmt.Errorf("failed to create subtasks: %w", err)
-	}
-
-	task.ParallelSubtasks = true
-	task.SubtaskCount = len(subtasks)
-	task.Subtasks = subtasks
-
-	// Update the task to indicate it has subtasks
-	if err := s.repo.Update(ctx, task.WorkspaceID, task); err != nil {
-		return fmt.Errorf("failed to update task with subtasks: %w", err)
+		return err
 	}
 
 	// Trigger HTTP execution of each subtask asynchronously
@@ -280,23 +328,53 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	}
 
 	// Get the task
-	task, err := s.repo.Get(ctx, workspace, taskID)
+	var task *domain.Task
+	var processor domain.TaskProcessor
+	var err error
+
+	// Wrap the initial setup operations in a transaction
+	err = s.WithTransaction(ctx, func(tx *sql.Tx) error {
+		// Get task inside the transaction
+		taskRepo, ok := s.repo.(interface {
+			GetTx(ctx context.Context, tx *sql.Tx, workspace, id string) (*domain.Task, error)
+		})
+		if !ok {
+			// Fall back to non-transactional method
+			var taskErr error
+			task, taskErr = s.repo.Get(ctx, workspace, taskID)
+			return taskErr
+		}
+
+		var taskErr error
+		task, taskErr = taskRepo.GetTx(ctx, tx, workspace, taskID)
+		if taskErr != nil {
+			return fmt.Errorf("failed to get task: %w", taskErr)
+		}
+
+		// Get the processor for this task type
+		var procErr error
+		processor, procErr = s.GetProcessor(task.Type)
+		if procErr != nil {
+			return fmt.Errorf("failed to get processor: %w", procErr)
+		}
+
+		// Set timeout
+		timeoutAt := time.Now().Add(time.Duration(task.MaxRuntime) * time.Second)
+
+		// Mark task as running within the same transaction
+		markRepo, ok := s.repo.(interface {
+			MarkAsRunningTx(ctx context.Context, tx *sql.Tx, workspace, id string, timeoutAfter time.Time) error
+		})
+		if !ok {
+			// Fall back to non-transactional method
+			return s.repo.MarkAsRunning(ctx, workspace, taskID, timeoutAt)
+		}
+
+		return markRepo.MarkAsRunningTx(ctx, tx, workspace, taskID, timeoutAt)
+	})
+
 	if err != nil {
-		return fmt.Errorf("failed to get task: %w", err)
-	}
-
-	// Get the processor for this task type
-	processor, err := s.GetProcessor(task.Type)
-	if err != nil {
-		return fmt.Errorf("failed to get processor: %w", err)
-	}
-
-	// Set timeout
-	timeoutAt := time.Now().Add(time.Duration(task.MaxRuntime) * time.Second)
-
-	// Mark task as running
-	if err := s.repo.MarkAsRunning(ctx, workspace, taskID, timeoutAt); err != nil {
-		return fmt.Errorf("failed to mark task as running: %w", err)
+		return fmt.Errorf("failed to prepare task execution: %w", err)
 	}
 
 	// Check if this task should use parallel processing with subtasks
@@ -485,20 +563,80 @@ func (s *TaskService) SaveTaskProgress(ctx context.Context, workspace, taskID st
 
 // ExecuteSubtask executes a specific subtask
 func (s *TaskService) ExecuteSubtask(ctx context.Context, subtaskID string) error {
-	// Get the subtask details
-	subtask, err := s.repo.GetSubtask(ctx, subtaskID)
-	if err != nil {
-		return fmt.Errorf("failed to get subtask: %w", err)
-	}
+	// Get the subtask details and parent task in a single transaction
+	var subtask *domain.Subtask
+	var parentTask *domain.Task
+	var processor domain.TaskProcessor
+	var err error
 
-	// Get the parent task
-	parentTask, err := s.repo.Get(ctx, "", subtask.ParentTaskID)
+	// Use a transaction for retrieving related data and updating status
+	err = s.WithTransaction(ctx, func(tx *sql.Tx) error {
+		// Get subtask inside transaction
+		subtaskRepo, ok := s.repo.(interface {
+			GetSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string) (*domain.Subtask, error)
+		})
+
+		if !ok {
+			// Fall back to non-transactional method
+			var subtaskErr error
+			subtask, subtaskErr = s.repo.GetSubtask(ctx, subtaskID)
+			if subtaskErr != nil {
+				return fmt.Errorf("failed to get subtask: %w", subtaskErr)
+			}
+		} else {
+			var subtaskErr error
+			subtask, subtaskErr = subtaskRepo.GetSubtaskTx(ctx, tx, subtaskID)
+			if subtaskErr != nil {
+				return fmt.Errorf("failed to get subtask: %w", subtaskErr)
+			}
+		}
+
+		// Get the parent task
+		taskRepo, ok := s.repo.(interface {
+			GetTx(ctx context.Context, tx *sql.Tx, workspace, id string) (*domain.Task, error)
+		})
+
+		if !ok {
+			// Fall back to non-transactional method
+			var taskErr error
+			parentTask, taskErr = s.repo.Get(ctx, "", subtask.ParentTaskID)
+			if taskErr != nil {
+				return fmt.Errorf("failed to get parent task: %w", taskErr)
+			}
+		} else {
+			var taskErr error
+			parentTask, taskErr = taskRepo.GetTx(ctx, tx, "", subtask.ParentTaskID)
+			if taskErr != nil {
+				return fmt.Errorf("failed to get parent task: %w", taskErr)
+			}
+		}
+
+		// Mark subtask as running while in transaction
+		now := time.Now()
+		subtask.Status = domain.SubtaskStatusRunning
+		subtask.StartedAt = &now
+		subtask.UpdatedAt = now
+
+		// Update subtask status in database
+		updateRepo, ok := s.repo.(interface {
+			UpdateSubtaskProgressTx(ctx context.Context, tx *sql.Tx, subtaskID string, progress float64, state domain.TaskState) error
+		})
+
+		if ok {
+			if updateErr := updateRepo.UpdateSubtaskProgressTx(ctx, tx, subtaskID, subtask.Progress, subtask.State); updateErr != nil {
+				return fmt.Errorf("failed to update subtask status: %w", updateErr)
+			}
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return fmt.Errorf("failed to get parent task: %w", err)
+		return err
 	}
 
 	// Get the appropriate processor
-	processor, err := s.GetProcessor(parentTask.Type)
+	processor, err = s.GetProcessor(parentTask.Type)
 	if err != nil {
 		return fmt.Errorf("failed to get processor: %w", err)
 	}
@@ -507,12 +645,6 @@ func (s *TaskService) ExecuteSubtask(ctx context.Context, subtaskID string) erro
 	if !processor.SupportsParallelization() {
 		return fmt.Errorf("processor does not support parallelization")
 	}
-
-	// Mark subtask as running
-	now := time.Now()
-	subtask.Status = domain.SubtaskStatusRunning
-	subtask.StartedAt = &now
-	subtask.UpdatedAt = now
 
 	// Process the subtask
 	completed, err := processor.ProcessSubtask(ctx, subtask, parentTask)
@@ -553,4 +685,389 @@ func (s *TaskService) RegisterDefaultProcessors(broadcastService domain.Broadcas
 	// Register send broadcast processor
 	broadcastProcessor := NewSendBroadcastProcessor(broadcastService, s.logger)
 	s.RegisterProcessor(broadcastProcessor)
+}
+
+// SubscribeToBroadcastEvents registers handlers for broadcast-related events
+func (s *TaskService) SubscribeToBroadcastEvents(eventBus domain.EventBus) {
+	// Subscribe to broadcast events
+	eventBus.Subscribe(domain.EventBroadcastScheduled, s.handleBroadcastScheduled)
+	eventBus.Subscribe(domain.EventBroadcastPaused, s.handleBroadcastPaused)
+	eventBus.Subscribe(domain.EventBroadcastResumed, s.handleBroadcastResumed)
+	eventBus.Subscribe(domain.EventBroadcastSent, s.handleBroadcastSent)
+	eventBus.Subscribe(domain.EventBroadcastFailed, s.handleBroadcastFailed)
+	eventBus.Subscribe(domain.EventBroadcastCancelled, s.handleBroadcastCancelled)
+
+	s.logger.Info("TaskService subscribed to broadcast events")
+}
+
+// Event handlers for broadcast events
+func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload domain.EventPayload) {
+	broadcastID, ok := payload.Data["broadcast_id"].(string)
+	if !ok || broadcastID == "" {
+		s.logger.Error("Failed to handle broadcast scheduled event: missing or invalid broadcast_id")
+		return
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"workspace_id": payload.WorkspaceID,
+	}).Info("Handling broadcast scheduled event")
+
+	// Use a transaction for listing and potentially updating tasks
+	err := s.WithTransaction(ctx, func(tx *sql.Tx) error {
+		// Check if task already exists for this broadcast
+		filter := domain.TaskFilter{
+			Type: []string{"send_broadcast"},
+		}
+
+		// Try to use transactional listing if available
+		listRepo, hasListTx := s.repo.(interface {
+			ListTx(ctx context.Context, tx *sql.Tx, workspace string, filter domain.TaskFilter) ([]*domain.Task, int, error)
+		})
+
+		var tasks []*domain.Task
+		var listErr error
+
+		if hasListTx {
+			tasks, _, listErr = listRepo.ListTx(ctx, tx, payload.WorkspaceID, filter)
+		} else {
+			// Fall back to non-transactional method
+			tasks, _, listErr = s.repo.List(ctx, payload.WorkspaceID, filter)
+		}
+
+		if listErr != nil {
+			s.logger.WithField("error", listErr.Error()).Error("Failed to list tasks for scheduled broadcast")
+			return listErr
+		}
+
+		// Check if a task already exists for this broadcast
+		for _, task := range tasks {
+			if task.State != nil && task.State.SendBroadcast != nil && task.State.SendBroadcast.BroadcastID == broadcastID {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+				}).Info("Task already exists for broadcast, updating status")
+
+				// Update task state if needed
+				sendNow, _ := payload.Data["send_now"].(bool)
+				status, _ := payload.Data["status"].(string)
+
+				if sendNow && status == string(domain.BroadcastStatusSending) {
+					// If broadcast is being sent immediately, mark task as pending and set next run to now
+					nextRunAfter := time.Now()
+					task.NextRunAfter = &nextRunAfter
+					task.Status = domain.TaskStatusPending
+
+					// Try to use transactional update if available
+					updateRepo, hasUpdateTx := s.repo.(interface {
+						UpdateTx(ctx context.Context, tx *sql.Tx, workspace string, task *domain.Task) error
+					})
+
+					var updateErr error
+					if hasUpdateTx {
+						updateErr = updateRepo.UpdateTx(ctx, tx, payload.WorkspaceID, task)
+					} else {
+						// Fall back to non-transactional method
+						updateErr = s.repo.Update(ctx, payload.WorkspaceID, task)
+					}
+
+					if updateErr != nil {
+						s.logger.WithFields(map[string]interface{}{
+							"broadcast_id": broadcastID,
+							"task_id":      task.ID,
+							"error":        updateErr.Error(),
+						}).Error("Failed to update task for scheduled broadcast")
+						return updateErr
+					}
+				}
+
+				return nil
+			}
+		}
+
+		// If no task exists, create one
+		s.logger.WithField("broadcast_id", broadcastID).Info("Creating new task for scheduled broadcast")
+
+		// Set up task state
+		sendNow, _ := payload.Data["send_now"].(bool)
+		status, _ := payload.Data["status"].(string)
+
+		task := &domain.Task{
+			WorkspaceID: payload.WorkspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusPending,
+			State: &domain.TaskState{
+				SendBroadcast: &domain.SendBroadcastState{
+					BroadcastID: broadcastID,
+					BatchSize:   100, // Default batch size
+				},
+			},
+			MaxRuntime:       600, // 10 minutes
+			MaxRetries:       3,
+			RetryInterval:    300, // 5 minutes
+			ParallelSubtasks: true,
+			SubtaskCount:     5, // Default number of subtasks
+		}
+
+		// If the broadcast is set to send immediately, we don't need to set NextRunAfter
+		// If it's scheduled for the future, we should set NextRunAfter based on the schedule
+		if !sendNow && status == string(domain.BroadcastStatusScheduled) {
+			// Schedule the task to run in 1 minute to give time for any additional setup
+			nextRunAfter := time.Now().Add(1 * time.Minute)
+			task.NextRunAfter = &nextRunAfter
+		}
+
+		// Try to use transactional create if available
+		createRepo, hasCreateTx := s.repo.(interface {
+			CreateTx(ctx context.Context, tx *sql.Tx, workspace string, task *domain.Task) error
+		})
+
+		var createErr error
+		if hasCreateTx {
+			createErr = createRepo.CreateTx(ctx, tx, payload.WorkspaceID, task)
+		} else {
+			// Fall back to non-transactional method
+			createErr = s.CreateTask(ctx, payload.WorkspaceID, task)
+		}
+
+		if createErr != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"error":        createErr.Error(),
+			}).Error("Failed to create task for scheduled broadcast")
+			return createErr
+		}
+
+		s.logger.WithFields(map[string]interface{}{
+			"broadcast_id": broadcastID,
+			"workspace_id": payload.WorkspaceID,
+		}).Info("Successfully created task for scheduled broadcast")
+
+		return nil
+	})
+
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"broadcast_id": broadcastID,
+			"workspace_id": payload.WorkspaceID,
+			"error":        err.Error(),
+		}).Error("Failed to handle broadcast scheduled event")
+	}
+}
+
+func (s *TaskService) handleBroadcastPaused(ctx context.Context, payload domain.EventPayload) {
+	broadcastID, ok := payload.Data["broadcast_id"].(string)
+	if !ok || broadcastID == "" {
+		s.logger.Error("Failed to handle broadcast paused event: missing or invalid broadcast_id")
+		return
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"workspace_id": payload.WorkspaceID,
+	}).Info("Handling broadcast paused event")
+
+	// Find associated tasks and pause them
+	filter := domain.TaskFilter{
+		Type: []string{"send_broadcast"},
+	}
+
+	tasks, _, err := s.repo.List(ctx, payload.WorkspaceID, filter)
+	if err != nil {
+		s.logger.WithField("error", err.Error()).Error("Failed to list tasks for paused broadcast")
+		return
+	}
+
+	for _, task := range tasks {
+		if task.State != nil && task.State.SendBroadcast != nil && task.State.SendBroadcast.BroadcastID == broadcastID {
+			nextRunAfter := time.Now().Add(24 * time.Hour) // Pause for 24 hours
+			if err := s.repo.MarkAsPaused(ctx, payload.WorkspaceID, task.ID, nextRunAfter); err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+					"error":        err.Error(),
+				}).Error("Failed to pause task for paused broadcast")
+			} else {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+				}).Info("Successfully paused task for paused broadcast")
+			}
+		}
+	}
+}
+
+func (s *TaskService) handleBroadcastResumed(ctx context.Context, payload domain.EventPayload) {
+	broadcastID, ok := payload.Data["broadcast_id"].(string)
+	if !ok || broadcastID == "" {
+		s.logger.Error("Failed to handle broadcast resumed event: missing or invalid broadcast_id")
+		return
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"workspace_id": payload.WorkspaceID,
+	}).Info("Handling broadcast resumed event")
+
+	// Find associated tasks and resume them
+	filter := domain.TaskFilter{
+		Type:   []string{"send_broadcast"},
+		Status: []domain.TaskStatus{domain.TaskStatusPaused},
+	}
+
+	tasks, _, err := s.repo.List(ctx, payload.WorkspaceID, filter)
+	if err != nil {
+		s.logger.WithField("error", err.Error()).Error("Failed to list tasks for resumed broadcast")
+		return
+	}
+
+	for _, task := range tasks {
+		if task.State != nil && task.State.SendBroadcast != nil && task.State.SendBroadcast.BroadcastID == broadcastID {
+			// Set next run time to now
+			nextRunAfter := time.Now()
+			task.NextRunAfter = &nextRunAfter
+			task.Status = domain.TaskStatusPending
+			if err := s.repo.Update(ctx, payload.WorkspaceID, task); err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+					"error":        err.Error(),
+				}).Error("Failed to resume task for resumed broadcast")
+			} else {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+				}).Info("Successfully resumed task for resumed broadcast")
+			}
+		}
+	}
+}
+
+func (s *TaskService) handleBroadcastSent(ctx context.Context, payload domain.EventPayload) {
+	broadcastID, ok := payload.Data["broadcast_id"].(string)
+	if !ok || broadcastID == "" {
+		s.logger.Error("Failed to handle broadcast sent event: missing or invalid broadcast_id")
+		return
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"workspace_id": payload.WorkspaceID,
+	}).Info("Handling broadcast sent event")
+
+	// Find associated tasks and mark them as completed
+	filter := domain.TaskFilter{
+		Type: []string{"send_broadcast"},
+	}
+
+	tasks, _, err := s.repo.List(ctx, payload.WorkspaceID, filter)
+	if err != nil {
+		s.logger.WithField("error", err.Error()).Error("Failed to list tasks for sent broadcast")
+		return
+	}
+
+	for _, task := range tasks {
+		if task.State != nil && task.State.SendBroadcast != nil && task.State.SendBroadcast.BroadcastID == broadcastID {
+			if err := s.repo.MarkAsCompleted(ctx, payload.WorkspaceID, task.ID); err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+					"error":        err.Error(),
+				}).Error("Failed to complete task for sent broadcast")
+			} else {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+				}).Info("Successfully completed task for sent broadcast")
+			}
+		}
+	}
+}
+
+func (s *TaskService) handleBroadcastFailed(ctx context.Context, payload domain.EventPayload) {
+	broadcastID, ok := payload.Data["broadcast_id"].(string)
+	if !ok || broadcastID == "" {
+		s.logger.Error("Failed to handle broadcast failed event: missing or invalid broadcast_id")
+		return
+	}
+
+	reason, _ := payload.Data["reason"].(string)
+	if reason == "" {
+		reason = "Broadcast failed"
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"workspace_id": payload.WorkspaceID,
+		"reason":       reason,
+	}).Info("Handling broadcast failed event")
+
+	// Find associated tasks and mark them as failed
+	filter := domain.TaskFilter{
+		Type: []string{"send_broadcast"},
+	}
+
+	tasks, _, err := s.repo.List(ctx, payload.WorkspaceID, filter)
+	if err != nil {
+		s.logger.WithField("error", err.Error()).Error("Failed to list tasks for failed broadcast")
+		return
+	}
+
+	for _, task := range tasks {
+		if task.State != nil && task.State.SendBroadcast != nil && task.State.SendBroadcast.BroadcastID == broadcastID {
+			if err := s.repo.MarkAsFailed(ctx, payload.WorkspaceID, task.ID, reason); err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+					"error":        err.Error(),
+				}).Error("Failed to mark task as failed for failed broadcast")
+			} else {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+				}).Info("Successfully marked task as failed for failed broadcast")
+			}
+		}
+	}
+}
+
+func (s *TaskService) handleBroadcastCancelled(ctx context.Context, payload domain.EventPayload) {
+	broadcastID, ok := payload.Data["broadcast_id"].(string)
+	if !ok || broadcastID == "" {
+		s.logger.Error("Failed to handle broadcast cancelled event: missing or invalid broadcast_id")
+		return
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"workspace_id": payload.WorkspaceID,
+	}).Info("Handling broadcast cancelled event")
+
+	// Find associated tasks and mark them as failed with cancellation reason
+	filter := domain.TaskFilter{
+		Type: []string{"send_broadcast"},
+	}
+
+	tasks, _, err := s.repo.List(ctx, payload.WorkspaceID, filter)
+	if err != nil {
+		s.logger.WithField("error", err.Error()).Error("Failed to list tasks for cancelled broadcast")
+		return
+	}
+
+	for _, task := range tasks {
+		if task.State != nil && task.State.SendBroadcast != nil && task.State.SendBroadcast.BroadcastID == broadcastID {
+			if err := s.repo.MarkAsFailed(ctx, payload.WorkspaceID, task.ID, "Broadcast was cancelled"); err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+					"error":        err.Error(),
+				}).Error("Failed to mark task as failed for cancelled broadcast")
+			} else {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+				}).Info("Successfully marked task as failed for cancelled broadcast")
+			}
+		}
+	}
 }

@@ -17,6 +17,7 @@ type Config struct {
 	Security    SecurityConfig
 	RootEmail   string
 	Environment string
+	APIEndpoint string
 }
 
 type ServerConfig struct {
@@ -168,6 +169,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		},
 		RootEmail:   v.GetString("ROOT_EMAIL"),
 		Environment: v.GetString("ENVIRONMENT"),
+		APIEndpoint: v.GetString("API_ENDPOINT"),
 	}
 
 	return config, nil

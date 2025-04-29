@@ -25,8 +25,39 @@ func NewTaskRepository(db *sql.DB) domain.TaskRepository {
 	}
 }
 
+// WithTransaction executes a function within a transaction
+func (r *TaskRepository) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
+	// Begin a transaction
+	tx, err := r.systemDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Defer rollback - this will be a no-op if we successfully commit
+	defer tx.Rollback()
+
+	// Execute the provided function with the transaction
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
 // Create adds a new task
 func (r *TaskRepository) Create(ctx context.Context, workspace string, task *domain.Task) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.CreateTx(ctx, tx, workspace, task)
+	})
+}
+
+// CreateTx adds a new task within a transaction
+func (r *TaskRepository) CreateTx(ctx context.Context, tx *sql.Tx, workspace string, task *domain.Task) error {
 	// Generate ID if not provided
 	if task.ID == "" {
 		task.ID = uuid.New().String()
@@ -60,7 +91,7 @@ func (r *TaskRepository) Create(ctx context.Context, workspace string, task *dom
 		)
 	`
 
-	_, err = r.systemDB.ExecContext(
+	_, err = tx.ExecContext(
 		ctx,
 		query,
 		task.ID,
@@ -91,6 +122,19 @@ func (r *TaskRepository) Create(ctx context.Context, workspace string, task *dom
 
 // Get retrieves a task by ID
 func (r *TaskRepository) Get(ctx context.Context, workspace, id string) (*domain.Task, error) {
+	var task *domain.Task
+	var err error
+
+	err = r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		task, err = r.GetTx(ctx, tx, workspace, id)
+		return err
+	})
+
+	return task, err
+}
+
+// GetTx retrieves a task by ID within a transaction
+func (r *TaskRepository) GetTx(ctx context.Context, tx *sql.Tx, workspace, id string) (*domain.Task, error) {
 	query := `
 		SELECT
 			id, workspace_id, type, status, progress, state,
@@ -105,7 +149,7 @@ func (r *TaskRepository) Get(ctx context.Context, workspace, id string) (*domain
 	var stateJSON []byte
 	var lastRunAt, completedAt, nextRunAfter, timeoutAfter sql.NullTime
 
-	err := r.systemDB.QueryRowContext(ctx, query, id, workspace).Scan(
+	err := tx.QueryRowContext(ctx, query, id, workspace).Scan(
 		&task.ID,
 		&task.WorkspaceID,
 		&task.Type,
@@ -159,6 +203,13 @@ func (r *TaskRepository) Get(ctx context.Context, workspace, id string) (*domain
 
 // Update updates an existing task
 func (r *TaskRepository) Update(ctx context.Context, workspace string, task *domain.Task) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.UpdateTx(ctx, tx, workspace, task)
+	})
+}
+
+// UpdateTx updates an existing task within a transaction
+func (r *TaskRepository) UpdateTx(ctx context.Context, tx *sql.Tx, workspace string, task *domain.Task) error {
 	// Update timestamp
 	task.UpdatedAt = time.Now().UTC()
 
@@ -189,7 +240,7 @@ func (r *TaskRepository) Update(ctx context.Context, workspace string, task *dom
 		WHERE id = $1 AND workspace_id = $2
 	`
 
-	result, err := r.systemDB.ExecContext(
+	result, err := tx.ExecContext(
 		ctx,
 		query,
 		task.ID,
@@ -514,6 +565,13 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 
 // SaveState saves the current state of a running task
 func (r *TaskRepository) SaveState(ctx context.Context, workspace, id string, progress float64, state *domain.TaskState) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.SaveStateTx(ctx, tx, workspace, id, progress, state)
+	})
+}
+
+// SaveStateTx saves the current state of a running task within a transaction
+func (r *TaskRepository) SaveStateTx(ctx context.Context, tx *sql.Tx, workspace, id string, progress float64, state *domain.TaskState) error {
 	// Convert state to JSON
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
@@ -540,7 +598,7 @@ func (r *TaskRepository) SaveState(ctx context.Context, workspace, id string, pr
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
 
-	result, err := r.systemDB.ExecContext(ctx, sqlQuery, args...)
+	result, err := tx.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to save task state: %w", err)
 	}
@@ -559,6 +617,13 @@ func (r *TaskRepository) SaveState(ctx context.Context, workspace, id string, pr
 
 // MarkAsRunning marks a task as running and sets timeout
 func (r *TaskRepository) MarkAsRunning(ctx context.Context, workspace, id string, timeoutAfter time.Time) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.MarkAsRunningTx(ctx, tx, workspace, id, timeoutAfter)
+	})
+}
+
+// MarkAsRunningTx marks a task as running and sets timeout within a transaction
+func (r *TaskRepository) MarkAsRunningTx(ctx context.Context, tx *sql.Tx, workspace, id string, timeoutAfter time.Time) error {
 	now := time.Now().UTC()
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
@@ -577,7 +642,7 @@ func (r *TaskRepository) MarkAsRunning(ctx context.Context, workspace, id string
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
 
-	result, err := r.systemDB.ExecContext(ctx, sqlQuery, args...)
+	result, err := tx.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to mark task as running: %w", err)
 	}
@@ -596,6 +661,13 @@ func (r *TaskRepository) MarkAsRunning(ctx context.Context, workspace, id string
 
 // MarkAsCompleted marks a task as completed
 func (r *TaskRepository) MarkAsCompleted(ctx context.Context, workspace, id string) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.MarkAsCompletedTx(ctx, tx, workspace, id)
+	})
+}
+
+// MarkAsCompletedTx marks a task as completed within a transaction
+func (r *TaskRepository) MarkAsCompletedTx(ctx context.Context, tx *sql.Tx, workspace, id string) error {
 	now := time.Now().UTC()
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
@@ -615,7 +687,7 @@ func (r *TaskRepository) MarkAsCompleted(ctx context.Context, workspace, id stri
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
 
-	result, err := r.systemDB.ExecContext(ctx, sqlQuery, args...)
+	result, err := tx.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to mark task as completed: %w", err)
 	}
@@ -634,8 +706,15 @@ func (r *TaskRepository) MarkAsCompleted(ctx context.Context, workspace, id stri
 
 // MarkAsFailed marks a task as failed
 func (r *TaskRepository) MarkAsFailed(ctx context.Context, workspace, id string, errorMsg string) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.MarkAsFailedTx(ctx, tx, workspace, id, errorMsg)
+	})
+}
+
+// MarkAsFailedTx marks a task as failed within a transaction
+func (r *TaskRepository) MarkAsFailedTx(ctx context.Context, tx *sql.Tx, workspace, id string, errorMsg string) error {
 	// Get current task to check retry counts
-	task, err := r.Get(ctx, workspace, id)
+	task, err := r.GetTx(ctx, tx, workspace, id)
 	if err != nil {
 		return fmt.Errorf("failed to get task for retry check: %w", err)
 	}
@@ -670,7 +749,7 @@ func (r *TaskRepository) MarkAsFailed(ctx context.Context, workspace, id string,
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
 
-	result, err := r.systemDB.ExecContext(ctx, sqlQuery, args...)
+	result, err := tx.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to mark task as failed: %w", err)
 	}
@@ -687,8 +766,15 @@ func (r *TaskRepository) MarkAsFailed(ctx context.Context, workspace, id string,
 	return nil
 }
 
-// MarkAsPaused marks a task as paused (e.g., due to timeout)
+// MarkAsPaused marks a task as paused and sets the next run time
 func (r *TaskRepository) MarkAsPaused(ctx context.Context, workspace, id string, nextRunAfter time.Time) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.MarkAsPausedTx(ctx, tx, workspace, id, nextRunAfter)
+	})
+}
+
+// MarkAsPausedTx marks a task as paused and sets the next run time within a transaction
+func (r *TaskRepository) MarkAsPausedTx(ctx context.Context, tx *sql.Tx, workspace, id string, nextRunAfter time.Time) error {
 	now := time.Now().UTC()
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
@@ -707,7 +793,7 @@ func (r *TaskRepository) MarkAsPaused(ctx context.Context, workspace, id string,
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
 
-	result, err := r.systemDB.ExecContext(ctx, sqlQuery, args...)
+	result, err := tx.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to mark task as paused: %w", err)
 	}
@@ -724,126 +810,114 @@ func (r *TaskRepository) MarkAsPaused(ctx context.Context, workspace, id string,
 	return nil
 }
 
-// CreateSubtasks creates the specified number of subtasks for a parent task
+// CreateSubtasks creates multiple subtasks for a parent task
 func (r *TaskRepository) CreateSubtasks(ctx context.Context, workspace string, taskID string, count int) ([]*domain.Subtask, error) {
-	// First, check that the parent task exists and update its subtask count
-	task, err := r.Get(ctx, workspace, taskID)
+	var subtasks []*domain.Subtask
+	var err error
+
+	err = r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		subtasks, err = r.CreateSubtasksTx(ctx, tx, workspace, taskID, count)
+		return err
+	})
+
+	return subtasks, err
+}
+
+// CreateSubtasksTx creates multiple subtasks for a parent task within a transaction
+func (r *TaskRepository) CreateSubtasksTx(ctx context.Context, tx *sql.Tx, workspace string, taskID string, count int) ([]*domain.Subtask, error) {
+	if count <= 0 {
+		return nil, fmt.Errorf("count must be greater than 0")
+	}
+
+	// Verify the parent task exists
+	_, err := r.GetTx(ctx, tx, workspace, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get parent task: %w", err)
 	}
 
-	// Update the task to indicate it has parallel subtasks
-	task.ParallelSubtasks = true
-	task.SubtaskCount = count
-	task.CompletedSubtasks = 0
-	task.FailedSubtasks = 0
-
-	// Update the parent task
-	if err := r.Update(ctx, workspace, task); err != nil {
-		return nil, fmt.Errorf("failed to update parent task: %w", err)
-	}
-
 	// Create subtasks
-	now := time.Now().UTC()
 	subtasks := make([]*domain.Subtask, count)
+	now := time.Now().UTC()
 
-	// Begin transaction to ensure all subtasks are created
-	tx, err := r.systemDB.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Insert query
-	query := `
-		INSERT INTO task_subtasks (
-			id, parent_task_id, status, progress, state,
-			error_message, created_at, updated_at, started_at,
-			completed_at, timeout_after, index, total
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-		)
-	`
-
-	// Create each subtask
 	for i := 0; i < count; i++ {
 		subtaskID := uuid.New().String()
-
-		// Initialize subtask
-		subtask := &domain.Subtask{
+		subtasks[i] = &domain.Subtask{
 			ID:           subtaskID,
 			ParentTaskID: taskID,
 			Status:       domain.SubtaskStatusPending,
 			Progress:     0,
-			State:        domain.TaskState{},
-			ErrorMessage: "",
 			CreatedAt:    now,
 			UpdatedAt:    now,
-			Index:        i,
-			Total:        count,
+			State:        domain.TaskState{}, // Initialize empty state
 		}
 
-		// Convert state to JSON
-		stateJSON, err := json.Marshal(subtask.State)
+		// Insert the subtask
+		query := `
+			INSERT INTO task_subtasks (
+				id, parent_task_id, status, progress, state,
+				error_message, created_at, updated_at, started_at, completed_at
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			)
+		`
+
+		// Marshal the state to JSON
+		stateJSON, err := json.Marshal(subtasks[i].State)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal state: %w", err)
 		}
 
-		// Execute insert
 		_, err = tx.ExecContext(
 			ctx,
 			query,
-			subtask.ID,
-			subtask.ParentTaskID,
-			subtask.Status,
-			subtask.Progress,
+			subtasks[i].ID,
+			subtasks[i].ParentTaskID,
+			subtasks[i].Status,
+			subtasks[i].Progress,
 			stateJSON,
-			subtask.ErrorMessage,
-			subtask.CreatedAt,
-			subtask.UpdatedAt,
-			subtask.StartedAt,
-			subtask.CompletedAt,
-			subtask.TimeoutAfter,
-			subtask.Index,
-			subtask.Total,
+			subtasks[i].ErrorMessage,
+			subtasks[i].CreatedAt,
+			subtasks[i].UpdatedAt,
+			nil, // started_at (null)
+			nil, // completed_at (null)
 		)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to insert subtask: %w", err)
 		}
-
-		subtasks[i] = subtask
-	}
-
-	// Commit transaction
-	if err = tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return subtasks, nil
 }
 
-// GetSubtask retrieves a specific subtask by ID
+// GetSubtask retrieves a subtask by ID
 func (r *TaskRepository) GetSubtask(ctx context.Context, subtaskID string) (*domain.Subtask, error) {
+	var subtask *domain.Subtask
+	var err error
+
+	err = r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		subtask, err = r.GetSubtaskTx(ctx, tx, subtaskID)
+		return err
+	})
+
+	return subtask, err
+}
+
+// GetSubtaskTx retrieves a subtask by ID within a transaction
+func (r *TaskRepository) GetSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string) (*domain.Subtask, error) {
 	query := `
 		SELECT
 			id, parent_task_id, status, progress, state,
-			error_message, created_at, updated_at, started_at,
-			completed_at, timeout_after, index, total
+			error_message, created_at, updated_at, started_at, completed_at
 		FROM task_subtasks
 		WHERE id = $1
 	`
 
 	var subtask domain.Subtask
 	var stateJSON []byte
-	var startedAt, completedAt, timeoutAfter sql.NullTime
+	var startedAt, completedAt sql.NullTime
 
-	err := r.systemDB.QueryRowContext(ctx, query, subtaskID).Scan(
+	err := tx.QueryRowContext(ctx, query, subtaskID).Scan(
 		&subtask.ID,
 		&subtask.ParentTaskID,
 		&subtask.Status,
@@ -854,9 +928,6 @@ func (r *TaskRepository) GetSubtask(ctx context.Context, subtaskID string) (*dom
 		&subtask.UpdatedAt,
 		&startedAt,
 		&completedAt,
-		&timeoutAfter,
-		&subtask.Index,
-		&subtask.Total,
 	)
 
 	if err != nil {
@@ -873,9 +944,6 @@ func (r *TaskRepository) GetSubtask(ctx context.Context, subtaskID string) (*dom
 	if completedAt.Valid {
 		subtask.CompletedAt = &completedAt.Time
 	}
-	if timeoutAfter.Valid {
-		subtask.TimeoutAfter = &timeoutAfter.Time
-	}
 
 	// Unmarshal state
 	if stateJSON != nil {
@@ -887,31 +955,44 @@ func (r *TaskRepository) GetSubtask(ctx context.Context, subtaskID string) (*dom
 	return &subtask, nil
 }
 
-// GetSubtasks retrieves all subtasks for a parent task
+// GetSubtasks retrieves all subtasks for a task
 func (r *TaskRepository) GetSubtasks(ctx context.Context, taskID string) ([]*domain.Subtask, error) {
+	var subtasks []*domain.Subtask
+	var err error
+
+	err = r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		subtasks, err = r.GetSubtasksTx(ctx, tx, taskID)
+		return err
+	})
+
+	return subtasks, err
+}
+
+// GetSubtasksTx retrieves all subtasks for a task within a transaction
+func (r *TaskRepository) GetSubtasksTx(ctx context.Context, tx *sql.Tx, taskID string) ([]*domain.Subtask, error) {
 	query := `
 		SELECT
 			id, parent_task_id, status, progress, state,
-			error_message, created_at, updated_at, started_at,
-			completed_at, timeout_after, index, total
+			error_message, created_at, updated_at, started_at, completed_at
 		FROM task_subtasks
 		WHERE parent_task_id = $1
-		ORDER BY index ASC
+		ORDER BY created_at
 	`
 
-	rows, err := r.systemDB.QueryContext(ctx, query, taskID)
+	rows, err := tx.QueryContext(ctx, query, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query subtasks: %w", err)
 	}
 	defer rows.Close()
 
 	var subtasks []*domain.Subtask
+
 	for rows.Next() {
 		var subtask domain.Subtask
 		var stateJSON []byte
-		var startedAt, completedAt, timeoutAfter sql.NullTime
+		var startedAt, completedAt sql.NullTime
 
-		err := rows.Scan(
+		if err := rows.Scan(
 			&subtask.ID,
 			&subtask.ParentTaskID,
 			&subtask.Status,
@@ -922,13 +1003,8 @@ func (r *TaskRepository) GetSubtasks(ctx context.Context, taskID string) ([]*dom
 			&subtask.UpdatedAt,
 			&startedAt,
 			&completedAt,
-			&timeoutAfter,
-			&subtask.Index,
-			&subtask.Total,
-		)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan subtask row: %w", err)
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan subtask: %w", err)
 		}
 
 		// Handle nullable times
@@ -937,9 +1013,6 @@ func (r *TaskRepository) GetSubtasks(ctx context.Context, taskID string) ([]*dom
 		}
 		if completedAt.Valid {
 			subtask.CompletedAt = &completedAt.Time
-		}
-		if timeoutAfter.Valid {
-			subtask.TimeoutAfter = &timeoutAfter.Time
 		}
 
 		// Unmarshal state
@@ -961,6 +1034,13 @@ func (r *TaskRepository) GetSubtasks(ctx context.Context, taskID string) ([]*dom
 
 // UpdateSubtaskProgress updates the progress and state of a subtask
 func (r *TaskRepository) UpdateSubtaskProgress(ctx context.Context, subtaskID string, progress float64, state domain.TaskState) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.UpdateSubtaskProgressTx(ctx, tx, subtaskID, progress, state)
+	})
+}
+
+// UpdateSubtaskProgressTx updates the progress and state of a subtask within a transaction
+func (r *TaskRepository) UpdateSubtaskProgressTx(ctx context.Context, tx *sql.Tx, subtaskID string, progress float64, state domain.TaskState) error {
 	// Convert state to JSON
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
@@ -974,78 +1054,12 @@ func (r *TaskRepository) UpdateSubtaskProgress(ctx context.Context, subtaskID st
 			progress = $2,
 			state = $3,
 			updated_at = $4
-		WHERE id = $1 AND status = $5
-	`
-
-	result, err := r.systemDB.ExecContext(
-		ctx,
-		query,
-		subtaskID,
-		progress,
-		stateJSON,
-		now,
-		domain.SubtaskStatusRunning,
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to update subtask progress: %w", err)
-	}
-
-	// Check if the subtask was found and is running
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("subtask not found or not in running state")
-	}
-
-	return nil
-}
-
-// CompleteSubtask marks a subtask as completed
-func (r *TaskRepository) CompleteSubtask(ctx context.Context, subtaskID string) error {
-	// Start transaction
-	tx, err := r.systemDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Get subtask to find parent task
-	var parentTaskID string
-	err = tx.QueryRowContext(ctx, "SELECT parent_task_id FROM task_subtasks WHERE id = $1", subtaskID).Scan(&parentTaskID)
-	if err != nil {
-		return fmt.Errorf("failed to get parent task ID: %w", err)
-	}
-
-	// Mark subtask as completed
-	now := time.Now().UTC()
-	query := `
-		UPDATE task_subtasks
-		SET
-			status = $2,
-			progress = 100,
-			updated_at = $3,
-			completed_at = $3
 		WHERE id = $1
 	`
 
-	result, err := tx.ExecContext(
-		ctx,
-		query,
-		subtaskID,
-		domain.SubtaskStatusCompleted,
-		now,
-	)
-
+	result, err := tx.ExecContext(ctx, query, subtaskID, progress, stateJSON, now)
 	if err != nil {
-		return fmt.Errorf("failed to mark subtask as completed: %w", err)
+		return fmt.Errorf("failed to update subtask progress: %w", err)
 	}
 
 	// Check if the subtask was found
@@ -1057,20 +1071,41 @@ func (r *TaskRepository) CompleteSubtask(ctx context.Context, subtaskID string) 
 		return fmt.Errorf("subtask not found")
 	}
 
-	// Update parent task completed subtasks count
-	_, err = tx.ExecContext(
-		ctx,
-		"UPDATE tasks SET completed_subtasks = completed_subtasks + 1, updated_at = $2 WHERE id = $1",
-		parentTaskID,
-		now,
-	)
+	return nil
+}
+
+// CompleteSubtask marks a subtask as completed
+func (r *TaskRepository) CompleteSubtask(ctx context.Context, subtaskID string) error {
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.CompleteSubtaskTx(ctx, tx, subtaskID)
+	})
+}
+
+// CompleteSubtaskTx marks a subtask as completed within a transaction
+func (r *TaskRepository) CompleteSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string) error {
+	now := time.Now().UTC()
+	query := `
+		UPDATE task_subtasks
+		SET
+			status = $2,
+			progress = 100,
+			updated_at = $3,
+			completed_at = $4
+		WHERE id = $1
+	`
+
+	result, err := tx.ExecContext(ctx, query, subtaskID, domain.SubtaskStatusCompleted, now, now)
 	if err != nil {
-		return fmt.Errorf("failed to update parent task: %w", err)
+		return fmt.Errorf("failed to complete subtask: %w", err)
 	}
 
-	// Commit transaction
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+	// Check if the subtask was found
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("subtask not found")
 	}
 
 	return nil
@@ -1078,26 +1113,13 @@ func (r *TaskRepository) CompleteSubtask(ctx context.Context, subtaskID string) 
 
 // FailSubtask marks a subtask as failed
 func (r *TaskRepository) FailSubtask(ctx context.Context, subtaskID string, errorMessage string) error {
-	// Start transaction
-	tx, err := r.systemDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.FailSubtaskTx(ctx, tx, subtaskID, errorMessage)
+	})
+}
 
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Get subtask to find parent task
-	var parentTaskID string
-	err = tx.QueryRowContext(ctx, "SELECT parent_task_id FROM task_subtasks WHERE id = $1", subtaskID).Scan(&parentTaskID)
-	if err != nil {
-		return fmt.Errorf("failed to get parent task ID: %w", err)
-	}
-
-	// Mark subtask as failed
+// FailSubtaskTx marks a subtask as failed within a transaction
+func (r *TaskRepository) FailSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string, errorMessage string) error {
 	now := time.Now().UTC()
 	query := `
 		UPDATE task_subtasks
@@ -1108,17 +1130,9 @@ func (r *TaskRepository) FailSubtask(ctx context.Context, subtaskID string, erro
 		WHERE id = $1
 	`
 
-	result, err := tx.ExecContext(
-		ctx,
-		query,
-		subtaskID,
-		domain.SubtaskStatusFailed,
-		errorMessage,
-		now,
-	)
-
+	result, err := tx.ExecContext(ctx, query, subtaskID, domain.SubtaskStatusFailed, errorMessage, now)
 	if err != nil {
-		return fmt.Errorf("failed to mark subtask as failed: %w", err)
+		return fmt.Errorf("failed to fail subtask: %w", err)
 	}
 
 	// Check if the subtask was found
@@ -1130,131 +1144,136 @@ func (r *TaskRepository) FailSubtask(ctx context.Context, subtaskID string, erro
 		return fmt.Errorf("subtask not found")
 	}
 
-	// Update parent task failed subtasks count
-	_, err = tx.ExecContext(
-		ctx,
-		"UPDATE tasks SET failed_subtasks = failed_subtasks + 1, updated_at = $2 WHERE id = $1",
-		parentTaskID,
-		now,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update parent task: %w", err)
-	}
-
-	// Commit transaction
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
 	return nil
 }
 
-// UpdateTaskProgressFromSubtasks updates a task's progress based on its subtasks
+// UpdateTaskProgressFromSubtasks recalculates and updates the parent task's progress based on subtask progress
 func (r *TaskRepository) UpdateTaskProgressFromSubtasks(ctx context.Context, workspace, taskID string) error {
-	// Start transaction
-	tx, err := r.systemDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
+	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		return r.UpdateTaskProgressFromSubtasksTx(ctx, tx, workspace, taskID)
+	})
+}
 
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Get the task
-	task, err := r.Get(ctx, workspace, taskID)
-	if err != nil {
-		return fmt.Errorf("failed to get task: %w", err)
-	}
-
-	// Get subtasks
-	subtasks, err := r.GetSubtasks(ctx, taskID)
+// UpdateTaskProgressFromSubtasksTx recalculates and updates the parent task's progress based on subtask progress within a transaction
+func (r *TaskRepository) UpdateTaskProgressFromSubtasksTx(ctx context.Context, tx *sql.Tx, workspace, taskID string) error {
+	// Get all subtasks for the task
+	subtasks, err := r.GetSubtasksTx(ctx, tx, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to get subtasks: %w", err)
 	}
 
-	// If no subtasks, nothing to do
 	if len(subtasks) == 0 {
-		return nil
-	}
-
-	// Calculate progress
-	var totalProgress float64
-	for _, subtask := range subtasks {
-		totalProgress += subtask.Progress
+		return nil // No subtasks, nothing to update
 	}
 
 	// Calculate average progress
+	var totalProgress float64
+	var completedCount int
+	var failedCount int
+
+	for _, subtask := range subtasks {
+		totalProgress += subtask.Progress
+		if subtask.Status == domain.SubtaskStatusCompleted {
+			completedCount++
+		} else if subtask.Status == domain.SubtaskStatusFailed {
+			failedCount++
+		}
+	}
+
 	averageProgress := totalProgress / float64(len(subtasks))
 
-	// Check if all subtasks are completed or failed
-	completedCount := task.CompletedSubtasks
-	failedCount := task.FailedSubtasks
-	totalCount := task.SubtaskCount
-
-	// Update task progress
+	// Update the parent task
 	now := time.Now().UTC()
-	query := `
-		UPDATE tasks
-		SET
-			progress = $2,
-			updated_at = $3
-		WHERE id = $1 AND workspace_id = $4
-	`
+	var status domain.TaskStatus
 
-	_, err = tx.ExecContext(
-		ctx,
-		query,
-		taskID,
-		averageProgress,
-		now,
-		workspace,
-	)
+	// Determine task status based on subtask completion
+	if completedCount == len(subtasks) {
+		// All subtasks completed, mark task as completed
+		status = domain.TaskStatusCompleted
 
-	if err != nil {
-		return fmt.Errorf("failed to update task progress: %w", err)
-	}
+		query := `
+			UPDATE tasks
+			SET
+				status = $3,
+				progress = 100,
+				updated_at = $4,
+				completed_at = $4
+			WHERE id = $1 AND workspace_id = $2
+		`
 
-	// If all subtasks are completed or failed, update task status accordingly
-	if completedCount+failedCount >= totalCount {
-		var status domain.TaskStatus
-		if failedCount > 0 {
-			// If any subtasks failed, mark the task as failed with an error message
-			status = domain.TaskStatusFailed
-			_, err = tx.ExecContext(
-				ctx,
-				`UPDATE tasks SET status = $2, error_message = $3, updated_at = $4, completed_at = $4 
-				 WHERE id = $1 AND workspace_id = $5`,
-				taskID,
-				status,
-				fmt.Sprintf("%d of %d subtasks failed", failedCount, totalCount),
-				now,
-				workspace,
-			)
-		} else {
-			// All subtasks completed successfully
-			status = domain.TaskStatusCompleted
-			_, err = tx.ExecContext(
-				ctx,
-				`UPDATE tasks SET status = $2, updated_at = $3, completed_at = $3, progress = 100
-				 WHERE id = $1 AND workspace_id = $4`,
-				taskID,
-				status,
-				now,
-				workspace,
-			)
-		}
-
+		result, err := tx.ExecContext(ctx, query, taskID, workspace, status, now)
 		if err != nil {
-			return fmt.Errorf("failed to update task status: %w", err)
+			return fmt.Errorf("failed to update task progress: %w", err)
 		}
-	}
 
-	// Commit transaction
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		// Check if the task was found
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		if rowsAffected == 0 {
+			return fmt.Errorf("task not found")
+		}
+	} else if failedCount > 0 && failedCount+completedCount == len(subtasks) {
+		// All subtasks are either completed or failed, and at least one failed
+		// Mark task as failed
+		status = domain.TaskStatusFailed
+
+		query := `
+			UPDATE tasks
+			SET
+				status = $3,
+				progress = $4,
+				updated_at = $5,
+				error_message = $6
+			WHERE id = $1 AND workspace_id = $2
+		`
+
+		result, err := tx.ExecContext(
+			ctx,
+			query,
+			taskID,
+			workspace,
+			status,
+			averageProgress,
+			now,
+			fmt.Sprintf("%d of %d subtasks failed", failedCount, len(subtasks)),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update task progress: %w", err)
+		}
+
+		// Check if the task was found
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		if rowsAffected == 0 {
+			return fmt.Errorf("task not found")
+		}
+	} else {
+		// Some subtasks still in progress
+		query := `
+			UPDATE tasks
+			SET
+				progress = $3,
+				updated_at = $4
+			WHERE id = $1 AND workspace_id = $2
+		`
+
+		result, err := tx.ExecContext(ctx, query, taskID, workspace, averageProgress, now)
+		if err != nil {
+			return fmt.Errorf("failed to update task progress: %w", err)
+		}
+
+		// Check if the task was found
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		if rowsAffected == 0 {
+			return fmt.Errorf("task not found")
+		}
 	}
 
 	return nil

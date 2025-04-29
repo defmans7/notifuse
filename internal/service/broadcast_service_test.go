@@ -24,6 +24,8 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -37,11 +39,7 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -207,7 +205,8 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
@@ -220,11 +219,7 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -298,7 +293,8 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
@@ -311,11 +307,7 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -511,14 +503,15 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 	// Set up logger mock to return itself for chaining
-	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
-	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	// Add direct logger method expectations
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
@@ -526,11 +519,7 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -592,6 +581,15 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 				return nil
 			})
 
+		// In the TestBroadcastService_ScheduleBroadcast test, find all test cases and add mockEventBus expectation before the service call
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Call the callback with success
+				callback(nil)
+			}).
+			AnyTimes()
+
 		// Call the service
 		err := service.ScheduleBroadcast(ctx, request)
 
@@ -645,6 +643,15 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 				assert.NotNil(t, broadcast.StartedAt) // Should be set when sending now
 				return nil
 			})
+
+		// In the TestBroadcastService_ScheduleBroadcast test, find all test cases and add mockEventBus expectation before the service call
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Call the callback with success
+				callback(nil)
+			}).
+			AnyTimes()
 
 		// Call the service
 		err := service.ScheduleBroadcast(ctx, request)
@@ -710,12 +717,15 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 	// Set up logger mock to return itself for chaining
-	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
-	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	// Add direct logger method expectations
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
@@ -723,11 +733,7 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -793,6 +799,15 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 				return nil
 			})
 
+		// In the TestBroadcastService_CancelBroadcast test, find all test cases and add mockEventBus expectation before the service call
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Call the callback with success
+				callback(nil)
+			}).
+			AnyTimes()
+
 		// Call the service
 		err := service.CancelBroadcast(ctx, request)
 
@@ -852,6 +867,8 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -866,11 +883,7 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -1208,7 +1221,8 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
@@ -1221,11 +1235,7 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -1435,7 +1445,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 	// Setup logger mock
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
@@ -1449,11 +1460,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -1465,6 +1472,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		ctx := context.Background()
 		workspaceID := "ws123"
 		broadcastID := "bcast123"
+
 		variationID := "var123"
 		templateID := "template123"
 		recipientEmail := "user@example.com"
@@ -1793,13 +1801,15 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
 	// Setup logger mock
-	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
-	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	// Add direct logger method expectations
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
@@ -1807,11 +1817,7 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger:      mockLogger,
-		AuthService: mockAuthSvc,
-	})
-	require.NoError(t, err)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo

@@ -138,6 +138,12 @@ func (m *MockWorkspaceRepository) CloseAllConnections() {
 	// Not needed for template repository tests
 }
 
+// WithWorkspaceTransaction executes a function within a transaction on the workspace database
+func (m *MockWorkspaceRepository) WithWorkspaceTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+	args := m.Called(ctx, workspaceID, fn)
+	return args.Error(0)
+}
+
 // Helper function to create a valid template for testing
 func createTestTemplate() *domain.Template {
 	now := time.Now().UTC().Truncate(time.Microsecond) // Truncate for DB precision

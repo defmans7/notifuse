@@ -232,6 +232,11 @@ type mockInternalRepository struct {
 	connections sync.Map
 }
 
+// Adding the missing WithWorkspaceTransaction method
+func (r *mockInternalRepository) WithWorkspaceTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+	return fmt.Errorf("not implemented in mock")
+}
+
 func (r *mockInternalRepository) checkWorkspaceIDExists(ctx context.Context, id string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`

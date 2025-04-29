@@ -10,6 +10,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,8 @@ func TestBroadcastRepository_CreateBroadcast_ConnectionError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	ctx := context.Background()
 	workspaceID := "ws123"
@@ -51,7 +53,8 @@ func TestBroadcastRepository_GetBroadcast_ConnectionError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	ctx := context.Background()
 	workspaceID := "ws123"
@@ -75,7 +78,8 @@ func TestBroadcastRepository_UpdateBroadcast_ConnectionError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	ctx := context.Background()
 	workspaceID := "ws123"
@@ -104,7 +108,8 @@ func TestBroadcastRepository_ListBroadcasts_ConnectionError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	ctx := context.Background()
 	workspaceID := "ws123"
@@ -135,7 +140,8 @@ func TestBroadcastRepository_GetBroadcast_NotFound(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -205,7 +211,8 @@ func TestBroadcastRepository_ListBroadcasts_CountQueryError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -244,7 +251,8 @@ func TestBroadcastRepository_DeleteBroadcast_ConnectionError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	ctx := context.Background()
 	workspaceID := "ws123"
@@ -266,7 +274,8 @@ func TestBroadcastRepository_DeleteBroadcast_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -297,7 +306,8 @@ func TestBroadcastRepository_DeleteBroadcast_NotFound(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -331,7 +341,8 @@ func TestBroadcastRepository_DeleteBroadcast_ExecError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -364,7 +375,8 @@ func TestBroadcastRepository_DeleteBroadcast_RowsAffectedError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -396,7 +408,8 @@ func TestBroadcastRepository_CreateBroadcast_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -464,7 +477,8 @@ func TestBroadcastRepository_CreateBroadcast_ExecError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -501,7 +515,8 @@ func TestBroadcastRepository_GetBroadcast_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -554,7 +569,8 @@ func TestBroadcastRepository_GetBroadcast_ScanError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -605,7 +621,8 @@ func TestBroadcastRepository_GetBroadcast_QueryError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -637,7 +654,8 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -703,7 +721,8 @@ func TestBroadcastRepository_UpdateBroadcast_NotFound(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -742,7 +761,8 @@ func TestBroadcastRepository_UpdateBroadcast_ExecError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -780,7 +800,8 @@ func TestBroadcastRepository_UpdateBroadcast_RowsAffectedError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -818,7 +839,8 @@ func TestBroadcastRepository_ListBroadcasts_DataError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -863,7 +885,8 @@ func TestBroadcastRepository_ListBroadcasts_RowsIterationError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -916,7 +939,8 @@ func TestBroadcastRepository_ListBroadcasts_ScanError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -977,7 +1001,8 @@ func TestBroadcastRepository_ListBroadcasts_WithStatus(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewBroadcastRepository(mockWorkspaceRepo)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	repo := NewBroadcastRepository(mockWorkspaceRepo, mockLogger)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
