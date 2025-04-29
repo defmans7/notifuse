@@ -17,46 +17,26 @@ import (
 // Maximum time a task can run before timing out
 const defaultMaxTaskRuntime = 55 // 55 seconds
 
-// TaskServiceConfig contains the configuration options for the task service
-type TaskServiceConfig struct {
-	Repository             domain.TaskRepository
-	Logger                 logger.Logger
-	AuthService            *AuthService
-	SubtaskEndpointBaseURL string // Base URL for HTTP subtask execution
-}
-
 // TaskService manages task execution and state
 type TaskService struct {
-	repo                   domain.TaskRepository
-	logger                 logger.Logger
-	authService            *AuthService
-	processors             map[string]domain.TaskProcessor
-	lock                   sync.RWMutex
-	subtaskEndpointBaseURL string
+	repo        domain.TaskRepository
+	logger      logger.Logger
+	authService *AuthService
+	processors  map[string]domain.TaskProcessor
+	lock        sync.RWMutex
+	apiEndpoint string
 }
 
 // NewTaskService creates a new task service instance
-func NewTaskService(config TaskServiceConfig) (*TaskService, error) {
-	if config.Repository == nil {
-		return nil, fmt.Errorf("task repository is required")
-	}
-	if config.Logger == nil {
-		return nil, fmt.Errorf("logger is required")
-	}
-
-	// Set default endpoint URL if not provided
-	subtaskEndpointBaseURL := config.SubtaskEndpointBaseURL
-	if subtaskEndpointBaseURL == "" {
-		subtaskEndpointBaseURL = "http://localhost:8080"
-	}
+func NewTaskService(repository domain.TaskRepository, logger logger.Logger, authService *AuthService, apiEndpoint string) *TaskService {
 
 	return &TaskService{
-		repo:                   config.Repository,
-		logger:                 config.Logger,
-		authService:            config.AuthService,
-		processors:             make(map[string]domain.TaskProcessor),
-		subtaskEndpointBaseURL: subtaskEndpointBaseURL,
-	}, nil
+		repo:        repository,
+		logger:      logger,
+		authService: authService,
+		processors:  make(map[string]domain.TaskProcessor),
+		apiEndpoint: apiEndpoint,
+	}
 }
 
 // RegisterProcessor registers a task processor for a specific task type
@@ -257,7 +237,7 @@ func (s *TaskService) triggerSubtaskExecution(subtaskID string) {
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", s.subtaskEndpointBaseURL+"/api/tasks.executeSubtask", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", s.apiEndpoint+"/api/tasks.executeSubtask", bytes.NewBuffer(requestBody))
 	if err != nil {
 		s.logger.WithField("subtask_id", subtaskID).
 			WithField("error", err.Error()).
@@ -569,7 +549,7 @@ func (s *TaskService) ExecuteSubtask(ctx context.Context, subtaskID string) erro
 }
 
 // RegisterDefaultProcessors registers the default set of task processors
-func (s *TaskService) RegisterDefaultProcessors(broadcastService *BroadcastService) {
+func (s *TaskService) RegisterDefaultProcessors(broadcastService domain.BroadcastSender) {
 	// Register send broadcast processor
 	broadcastProcessor := NewSendBroadcastProcessor(broadcastService, s.logger)
 	s.RegisterProcessor(broadcastProcessor)

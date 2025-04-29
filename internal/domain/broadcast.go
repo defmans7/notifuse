@@ -273,6 +273,7 @@ type Broadcast struct {
 	CancelledAt       *time.Time            `json:"cancelled_at,omitempty"`
 	PausedAt          *time.Time            `json:"paused_at,omitempty"`
 	SentAt            *time.Time            `json:"sent_at,omitempty"`
+	TaskID            *string               `json:"task_id,omitempty"` // ID of the associated task
 }
 
 // UTMParameters contains UTM tracking parameters for the broadcast
@@ -814,6 +815,14 @@ type BroadcastService interface {
 
 	// SendWinningVariation sends the winning variation of an A/B test to remaining recipients
 	SendWinningVariation(ctx context.Context, request *SendWinningVariationRequest) error
+}
+
+// BroadcastSender is a minimal interface needed for sending broadcasts,
+// used by task processors to avoid circular dependencies
+type BroadcastSender interface {
+	GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*Broadcast, error)
+	GetRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error)
+	SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error)
 }
 
 // BroadcastRepository defines the interface for broadcast persistence

@@ -142,7 +142,7 @@ type TaskService interface {
 	ExecuteTask(ctx context.Context, workspace, taskID string) error
 	SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state *TaskState) error
 	ExecuteSubtask(ctx context.Context, subtaskID string) error
-	RegisterDefaultProcessors(broadcastService interface{})
+	RegisterDefaultProcessors(broadcastService BroadcastSender)
 }
 
 // TaskRepository defines methods for task persistence

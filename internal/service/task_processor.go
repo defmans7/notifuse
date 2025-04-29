@@ -11,12 +11,12 @@ import (
 
 // SendBroadcastProcessor implements domain.TaskProcessor for sending broadcasts
 type SendBroadcastProcessor struct {
-	broadcastService *BroadcastService
+	broadcastService domain.BroadcastSender
 	logger           logger.Logger
 }
 
 // NewSendBroadcastProcessor creates a new SendBroadcastProcessor
-func NewSendBroadcastProcessor(broadcastService *BroadcastService, logger logger.Logger) *SendBroadcastProcessor {
+func NewSendBroadcastProcessor(broadcastService domain.BroadcastSender, logger logger.Logger) *SendBroadcastProcessor {
 	return &SendBroadcastProcessor{
 		broadcastService: broadcastService,
 		logger:           logger,

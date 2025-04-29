@@ -14,42 +14,47 @@ import (
 
 // BroadcastService handles sending broadcast messages
 type BroadcastService struct {
-	logger           logger.Logger
-	workspaceService *WorkspaceService
-	repo             domain.BroadcastRepository
-	contactRepo      domain.ContactRepository
-	emailSvc         domain.EmailServiceInterface
-	templateSvc      domain.TemplateService
-}
-
-// BroadcastServiceConfig contains configuration for the broadcast service
-type BroadcastServiceConfig struct {
-	Logger            logger.Logger
-	Repository        domain.BroadcastRepository
-	EmailService      domain.EmailServiceInterface
-	ContactRepository domain.ContactRepository
-	TemplateService   domain.TemplateService
-	WorkspaceService  *WorkspaceService
+	logger      logger.Logger
+	repo        domain.BroadcastRepository
+	contactRepo domain.ContactRepository
+	emailSvc    domain.EmailServiceInterface
+	templateSvc domain.TemplateService
+	taskService domain.TaskService
+	authService domain.AuthService
 }
 
 // NewBroadcastService creates a new BroadcastService
-func NewBroadcastService(config BroadcastServiceConfig) (*BroadcastService, error) {
-	if config.Logger == nil {
-		return nil, fmt.Errorf("logger is required")
-	}
+func NewBroadcastService(
+	logger logger.Logger,
+	repository domain.BroadcastRepository,
+	emailService domain.EmailServiceInterface,
+	contactRepository domain.ContactRepository,
+	templateService domain.TemplateService,
+	taskService domain.TaskService,
+	authService domain.AuthService,
+) *BroadcastService {
 
 	return &BroadcastService{
-		logger:           config.Logger,
-		repo:             config.Repository,
-		emailSvc:         config.EmailService,
-		contactRepo:      config.ContactRepository,
-		templateSvc:      config.TemplateService,
-		workspaceService: config.WorkspaceService,
-	}, nil
+		logger:      logger,
+		repo:        repository,
+		emailSvc:    emailService,
+		contactRepo: contactRepository,
+		templateSvc: templateService,
+		taskService: taskService,
+		authService: authService,
+	}
 }
 
 // GetBroadcast retrieves a broadcast by ID
 func (s *BroadcastService) GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*domain.Broadcast, error) {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", broadcastID).Error("Failed to authenticate user for workspace")
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Fetch the broadcast from the repository
 	return s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
 }
@@ -101,6 +106,14 @@ type Broadcast struct {
 
 // CreateBroadcast creates a new broadcast
 func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.CreateBroadcastRequest) (*domain.Broadcast, error) {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.Error("Failed to authenticate user for workspace")
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	broadcast, err := request.Validate()
 	if err != nil {
@@ -141,6 +154,14 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 
 // UpdateBroadcast updates an existing broadcast
 func (s *BroadcastService) UpdateBroadcast(ctx context.Context, request *domain.UpdateBroadcastRequest) (*domain.Broadcast, error) {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.ID).Error("Failed to authenticate user for workspace")
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// First, get the existing broadcast
 	existingBroadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.ID)
 	if err != nil {
@@ -172,6 +193,14 @@ func (s *BroadcastService) UpdateBroadcast(ctx context.Context, request *domain.
 
 // ListBroadcasts retrieves a list of broadcasts
 func (s *BroadcastService) ListBroadcasts(ctx context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, params.WorkspaceID)
+	if err != nil {
+		s.logger.Error("Failed to authenticate user for workspace")
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Apply default values for pagination if not provided
 	if params.Limit <= 0 {
 		params.Limit = 50 // Default limit
@@ -216,6 +245,14 @@ func (s *BroadcastService) ListBroadcasts(ctx context.Context, params domain.Lis
 
 // ScheduleBroadcast schedules a broadcast for sending
 func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domain.ScheduleBroadcastRequest) error {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.ID).Error("Failed to authenticate user for workspace")
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.Error("Failed to validate schedule broadcast request")
@@ -264,6 +301,50 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		s.logger.Info(fmt.Sprintf("Broadcast scheduled successfully for %v", scheduledDateTime))
 	}
 
+	// Create task for sending the broadcast
+	if s.taskService != nil {
+		// Create a task for this broadcast
+		task := &domain.Task{
+			WorkspaceID: request.WorkspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusPending,
+			MaxRuntime:  600, // 10 minutes
+			MaxRetries:  3,
+			State: &domain.TaskState{
+				Message: fmt.Sprintf("Send broadcast: %s", broadcast.Name),
+				SendBroadcast: &domain.SendBroadcastState{
+					BroadcastID: broadcast.ID,
+					ChannelType: broadcast.ChannelType,
+					BatchSize:   100,
+				},
+			},
+		}
+
+		// Set the next run time based on whether it's immediate or scheduled
+		if request.SendNow {
+			// Schedule immediately
+			task.NextRunAfter = nil
+		} else {
+			// Schedule for the future
+			scheduledTime, _ := broadcast.Schedule.ParseScheduledDateTime()
+			task.NextRunAfter = &scheduledTime
+		}
+
+		// Create the task
+		if err := s.taskService.CreateTask(ctx, request.WorkspaceID, task); err != nil {
+			s.logger.WithField("error", err.Error()).Error("Failed to create task for broadcast")
+			// Continue despite task creation failure - don't block broadcast scheduling
+		} else {
+			// Store the task ID in the broadcast
+			taskID := task.ID
+			broadcast.TaskID = &taskID
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": broadcast.ID,
+				"task_id":      task.ID,
+			}).Info("Created task for broadcast")
+		}
+	}
+
 	// Persist the changes
 	err = s.repo.UpdateBroadcast(ctx, broadcast)
 	if err != nil {
@@ -271,17 +352,19 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		return err
 	}
 
-	if request.SendNow {
-	}
-
-	// TODO: If SendNow is true, trigger the actual sending process
-	// This would typically involve adding the broadcast to a queue for processing
-
 	return nil
 }
 
 // PauseBroadcast pauses a sending broadcast
 func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.PauseBroadcastRequest) error {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.ID).Error("Failed to authenticate user for workspace")
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.Error("Failed to validate pause broadcast request")
@@ -308,6 +391,34 @@ func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.P
 	broadcast.PausedAt = &now
 	broadcast.UpdatedAt = now
 
+	// Pause the associated task if exists
+	if s.taskService != nil && broadcast.TaskID != nil {
+		// Get the task
+		task, err := s.taskService.GetTask(ctx, request.WorkspaceID, *broadcast.TaskID)
+		if err == nil && task != nil {
+			// Only update task if it's in a running or pending state
+			if task.Status == domain.TaskStatusRunning || task.Status == domain.TaskStatusPending {
+				// Pause the task by setting NextRunAfter to a future time (1 day)
+				pauseUntil := now.Add(24 * time.Hour)
+				// Update task to be paused by setting its next run time
+				if task.State == nil {
+					task.State = &domain.TaskState{}
+				}
+				task.NextRunAfter = &pauseUntil
+				err = s.taskService.SaveTaskProgress(ctx, request.WorkspaceID, *broadcast.TaskID, task.Progress, task.State)
+				if err != nil {
+					s.logger.WithField("error", err.Error()).
+						WithField("task_id", *broadcast.TaskID).
+						Warn("Failed to pause task for broadcast")
+					// Continue despite task pause failure
+				} else {
+					s.logger.WithField("task_id", *broadcast.TaskID).
+						Info("Successfully paused task for broadcast")
+				}
+			}
+		}
+	}
+
 	// Persist the changes
 	err = s.repo.UpdateBroadcast(ctx, broadcast)
 	if err != nil {
@@ -322,6 +433,14 @@ func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.P
 
 // ResumeBroadcast resumes a paused broadcast
 func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.ResumeBroadcastRequest) error {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.ID).Error("Failed to authenticate user for workspace")
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.Error("Failed to validate resume broadcast request")
@@ -374,6 +493,29 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 	// Clear the paused timestamp
 	broadcast.PausedAt = nil
 
+	// Resume the associated task if exists
+	if s.taskService != nil && broadcast.TaskID != nil {
+		// Get the task
+		task, err := s.taskService.GetTask(ctx, request.WorkspaceID, *broadcast.TaskID)
+		if err == nil && task != nil {
+			// Only update task if it's in a paused state
+			if task.Status == domain.TaskStatusPaused {
+				// Set NextRunAfter to current time to run immediately
+				task.NextRunAfter = &now
+				err = s.taskService.SaveTaskProgress(ctx, request.WorkspaceID, *broadcast.TaskID, task.Progress, task.State)
+				if err != nil {
+					s.logger.WithField("error", err.Error()).
+						WithField("task_id", *broadcast.TaskID).
+						Warn("Failed to resume task for broadcast")
+					// Continue despite task resume failure
+				} else {
+					s.logger.WithField("task_id", *broadcast.TaskID).
+						Info("Successfully resumed task for broadcast")
+				}
+			}
+		}
+	}
+
 	// Persist the changes
 	err = s.repo.UpdateBroadcast(ctx, broadcast)
 	if err != nil {
@@ -383,13 +525,19 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 
 	s.logger.Info("Broadcast resumed successfully")
 
-	// TODO: Trigger message processing if status is sending
-
 	return nil
 }
 
 // CancelBroadcast cancels a scheduled broadcast
 func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.CancelBroadcastRequest) error {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.ID).Error("Failed to authenticate user for workspace")
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.Error("Failed to validate cancel broadcast request")
@@ -416,6 +564,21 @@ func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.
 	broadcast.CancelledAt = &now
 	broadcast.UpdatedAt = now
 
+	// Cancel the associated task if exists
+	if s.taskService != nil && broadcast.TaskID != nil {
+		// Delete the task
+		err = s.taskService.DeleteTask(ctx, request.WorkspaceID, *broadcast.TaskID)
+		if err != nil {
+			s.logger.WithField("error", err.Error()).
+				WithField("task_id", *broadcast.TaskID).
+				Warn("Failed to delete task for cancelled broadcast")
+			// Continue despite task deletion failure
+		} else {
+			s.logger.WithField("task_id", *broadcast.TaskID).
+				Info("Successfully deleted task for cancelled broadcast")
+		}
+	}
+
 	// Persist the changes
 	err = s.repo.UpdateBroadcast(ctx, broadcast)
 	if err != nil {
@@ -430,6 +593,14 @@ func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.
 
 // DeleteBroadcast deletes a broadcast
 func (s *BroadcastService) DeleteBroadcast(ctx context.Context, request *domain.DeleteBroadcastRequest) error {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.ID).Error("Failed to authenticate user for workspace")
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.Error("Failed to validate delete broadcast request")
@@ -450,6 +621,17 @@ func (s *BroadcastService) DeleteBroadcast(ctx context.Context, request *domain.
 		return err
 	}
 
+	// Delete the associated task if exists
+	if s.taskService != nil && broadcast.TaskID != nil {
+		err = s.taskService.DeleteTask(ctx, request.WorkspaceID, *broadcast.TaskID)
+		if err != nil {
+			s.logger.WithField("error", err.Error()).
+				WithField("task_id", *broadcast.TaskID).
+				Warn("Failed to delete task for deleted broadcast")
+			// Continue despite task deletion failure
+		}
+	}
+
 	// Delete the broadcast
 	err = s.repo.DeleteBroadcast(ctx, request.WorkspaceID, request.ID)
 	if err != nil {
@@ -464,6 +646,14 @@ func (s *BroadcastService) DeleteBroadcast(ctx context.Context, request *domain.
 
 // SendToIndividual sends a broadcast to an individual recipient
 func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain.SendToIndividualRequest) error {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.BroadcastID).Error("Failed to authenticate user for workspace")
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.Error("Failed to validate send to individual request")
@@ -582,13 +772,19 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 
 	s.logger.Info("Email sent to individual recipient successfully")
 
-	// TODO: Record send event in analytics or message tracking system
-
 	return nil
 }
 
 // SendWinningVariation sends the winning variation of an A/B test to remaining recipients
 func (s *BroadcastService) SendWinningVariation(ctx context.Context, request *domain.SendWinningVariationRequest) error {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", request.BroadcastID).Error("Failed to authenticate user for workspace")
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		s.logger.Error("Failed to validate send winning variation request")
@@ -645,31 +841,46 @@ func (s *BroadcastService) SendWinningVariation(ctx context.Context, request *do
 		return err
 	}
 
+	// Create task for sending the winning variation if needed
+	if s.taskService != nil && broadcast.TaskID == nil {
+		// Create a task for sending the winning variation
+		task := &domain.Task{
+			WorkspaceID: request.WorkspaceID,
+			Type:        "send_broadcast_winning",
+			Status:      domain.TaskStatusPending,
+			MaxRuntime:  600, // 10 minutes
+			MaxRetries:  3,
+			State: &domain.TaskState{
+				Message: fmt.Sprintf("Send winning variation for broadcast: %s", broadcast.Name),
+				SendBroadcast: &domain.SendBroadcastState{
+					BroadcastID: broadcast.ID,
+					ChannelType: broadcast.ChannelType,
+					BatchSize:   100,
+				},
+			},
+		}
+
+		// Create the task
+		if err := s.taskService.CreateTask(ctx, request.WorkspaceID, task); err != nil {
+			s.logger.WithField("error", err.Error()).Error("Failed to create task for sending winning variation")
+			// Continue despite task creation failure
+		} else {
+			// Store the task ID in the broadcast and update again
+			taskID := task.ID
+			broadcast.TaskID = &taskID
+
+			if err := s.repo.UpdateBroadcast(ctx, broadcast); err != nil {
+				s.logger.WithField("error", err.Error()).Warn("Failed to update broadcast with task ID")
+			}
+
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": broadcast.ID,
+				"task_id":      task.ID,
+			}).Info("Created task for sending winning variation")
+		}
+	}
+
 	s.logger.Info("Broadcast updated with winning variation")
 
-	// TODO: Implement the actual sending of the winning variation to remaining recipients
-	// This would involve fetching the remaining recipients who didn't receive any test variation
-	// and sending them the winning variation email
-
 	return nil
-}
-
-// SetRepository sets the repository for the broadcast service
-func (s *BroadcastService) SetRepository(repo domain.BroadcastRepository) {
-	s.repo = repo
-}
-
-// SetEmailService sets the email service for the broadcast service
-func (s *BroadcastService) SetEmailService(emailSvc domain.EmailServiceInterface) {
-	s.emailSvc = emailSvc
-}
-
-// SetContactRepository sets the contact repository for the broadcast service
-func (s *BroadcastService) SetContactRepository(contactRepo domain.ContactRepository) {
-	s.contactRepo = contactRepo
-}
-
-// SetTemplateService sets the template service for the broadcast service
-func (s *BroadcastService) SetTemplateService(templateSvc domain.TemplateService) {
-	s.templateSvc = templateSvc
 }
