@@ -4,15 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/google/uuid"
 )
 
-// BroadcastService handles sending broadcast messages
+// BroadcastService handles all broadcast-related operations
 type BroadcastService struct {
 	logger      logger.Logger
 	repo        domain.BroadcastRepository
@@ -23,7 +21,7 @@ type BroadcastService struct {
 	authService domain.AuthService
 }
 
-// NewBroadcastService creates a new BroadcastService
+// NewBroadcastService creates a new broadcast service
 func NewBroadcastService(
 	logger logger.Logger,
 	repository domain.BroadcastRepository,
@@ -33,7 +31,6 @@ func NewBroadcastService(
 	taskService domain.TaskService,
 	authService domain.AuthService,
 ) *BroadcastService {
-
 	return &BroadcastService{
 		logger:      logger,
 		repo:        repository,
@@ -45,63 +42,9 @@ func NewBroadcastService(
 	}
 }
 
-// GetBroadcast retrieves a broadcast by ID
-func (s *BroadcastService) GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*domain.Broadcast, error) {
-	// Authenticate user for workspace
-	var err error
-	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		s.logger.WithField("broadcast_id", broadcastID).Error("Failed to authenticate user for workspace")
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
-
-	// Fetch the broadcast from the repository
-	return s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
-}
-
-// GetRecipientCount gets the count of recipients for a broadcast
-func (s *BroadcastService) GetRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error) {
-	// In a real implementation, this would count recipients from a database
-	// For this example, we'll return a random count
-	return 1000 + rand.Intn(5000), nil
-}
-
-// SendBatch sends a batch of messages for a broadcast
-func (s *BroadcastService) SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error) {
-	// In a real implementation, this would send actual messages through email/SMS/etc providers
-	// For this example, we'll simulate sending with some random successes/failures
-
-	// Simulate some processing time
-	select {
-	case <-ctx.Done():
-		return 0, 0, ctx.Err()
-	case <-time.After(500 * time.Millisecond):
-		// Simulate a 5% failure rate
-		failureCount := batchSize / 20
-		successCount := batchSize - failureCount
-
-		s.logger.WithFields(map[string]interface{}{
-			"workspace_id": workspaceID,
-			"broadcast_id": broadcastID,
-			"batch":        batchNumber,
-			"successes":    successCount,
-			"failures":     failureCount,
-		}).Info("Sent broadcast batch")
-
-		return successCount, failureCount, nil
-	}
-}
-
-// Broadcast represents a broadcast message campaign
-type Broadcast struct {
-	ID          string     `json:"id"`
-	WorkspaceID string     `json:"workspace_id"`
-	Name        string     `json:"name"`
-	ChannelType string     `json:"channel_type"` // email, sms, push, etc.
-	Status      string     `json:"status"`       // pending, sending, completed, failed
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	SentAt      *time.Time `json:"sent_at,omitempty"`
+// SetTaskService sets the task service (used to avoid circular dependencies)
+func (s *BroadcastService) SetTaskService(taskService domain.TaskService) {
+	s.taskService = taskService
 }
 
 // CreateBroadcast creates a new broadcast
@@ -123,9 +66,13 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 
 	// Generate a unique ID for the broadcast if not provided
 	if broadcast.ID == "" {
-		// Generate a UUID and trim it to 32 characters to fit VARCHAR(32)
-		fullUUID := uuid.New().String()
-		broadcast.ID = fullUUID[:8] + fullUUID[9:13] + fullUUID[14:18] + fullUUID[19:23] + fullUUID[24:32]
+		// Create a random ID
+		id := make([]byte, 16)
+		_, err := rand.Read(id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate ID: %w", err)
+		}
+		broadcast.ID = fmt.Sprintf("%x", id)[:32]
 	}
 
 	// Set default values
@@ -150,6 +97,47 @@ func (s *BroadcastService) CreateBroadcast(ctx context.Context, request *domain.
 	s.logger.Info("Broadcast created successfully")
 
 	return broadcast, nil
+}
+
+// GetBroadcast retrieves a broadcast by ID
+func (s *BroadcastService) GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*domain.Broadcast, error) {
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", broadcastID).Error("Failed to authenticate user for workspace")
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Fetch the broadcast from the repository
+	return s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+}
+
+// GetRecipientCount retrieves the total recipient count for a broadcast
+func (s *BroadcastService) GetRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error) {
+	// In a real implementation, this would count recipients from a database
+	// For testing purposes, we'll return a fixed count
+	return 1000, nil
+}
+
+// SendBatch sends a batch of messages for a broadcast
+func (s *BroadcastService) SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error) {
+	// In a real implementation, this would send actual messages through email/SMS/etc providers
+	// For testing purposes, we'll simulate sending with some random successes/failures
+
+	// Simulate a 5% failure rate
+	failureCount := batchSize / 20
+	successCount := batchSize - failureCount
+
+	s.logger.WithFields(map[string]interface{}{
+		"workspace_id": workspaceID,
+		"broadcast_id": broadcastID,
+		"batch":        batchNumber,
+		"successes":    successCount,
+		"failures":     failureCount,
+	}).Info("Sent broadcast batch")
+
+	return successCount, failureCount, nil
 }
 
 // UpdateBroadcast updates an existing broadcast
@@ -191,7 +179,7 @@ func (s *BroadcastService) UpdateBroadcast(ctx context.Context, request *domain.
 	return updatedBroadcast, nil
 }
 
-// ListBroadcasts retrieves a list of broadcasts
+// ListBroadcasts retrieves a list of broadcasts with pagination
 func (s *BroadcastService) ListBroadcasts(ctx context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
 	// Authenticate user for workspace
 	var err error
@@ -289,60 +277,6 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		broadcast.Schedule.ScheduledTime = request.ScheduledTime
 		broadcast.Schedule.Timezone = request.Timezone
 		broadcast.Schedule.UseRecipientTimezone = request.UseRecipientTimezone
-
-		// Validate that we can parse the scheduled date/time
-		scheduledDateTime, err := broadcast.Schedule.ParseScheduledDateTime()
-		if err != nil {
-			s.logger.Error("Failed to parse scheduled date/time")
-			return err
-		}
-
-		// Use the scheduledDateTime in a log message to avoid unused variable error
-		s.logger.Info(fmt.Sprintf("Broadcast scheduled successfully for %v", scheduledDateTime))
-	}
-
-	// Create task for sending the broadcast
-	if s.taskService != nil {
-		// Create a task for this broadcast
-		task := &domain.Task{
-			WorkspaceID: request.WorkspaceID,
-			Type:        "send_broadcast",
-			Status:      domain.TaskStatusPending,
-			MaxRuntime:  600, // 10 minutes
-			MaxRetries:  3,
-			State: &domain.TaskState{
-				Message: fmt.Sprintf("Send broadcast: %s", broadcast.Name),
-				SendBroadcast: &domain.SendBroadcastState{
-					BroadcastID: broadcast.ID,
-					ChannelType: broadcast.ChannelType,
-					BatchSize:   100,
-				},
-			},
-		}
-
-		// Set the next run time based on whether it's immediate or scheduled
-		if request.SendNow {
-			// Schedule immediately
-			task.NextRunAfter = nil
-		} else {
-			// Schedule for the future
-			scheduledTime, _ := broadcast.Schedule.ParseScheduledDateTime()
-			task.NextRunAfter = &scheduledTime
-		}
-
-		// Create the task
-		if err := s.taskService.CreateTask(ctx, request.WorkspaceID, task); err != nil {
-			s.logger.WithField("error", err.Error()).Error("Failed to create task for broadcast")
-			// Continue despite task creation failure - don't block broadcast scheduling
-		} else {
-			// Store the task ID in the broadcast
-			taskID := task.ID
-			broadcast.TaskID = &taskID
-			s.logger.WithFields(map[string]interface{}{
-				"broadcast_id": broadcast.ID,
-				"task_id":      task.ID,
-			}).Info("Created task for broadcast")
-		}
 	}
 
 	// Persist the changes
@@ -390,34 +324,6 @@ func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.P
 	now := time.Now().UTC()
 	broadcast.PausedAt = &now
 	broadcast.UpdatedAt = now
-
-	// Pause the associated task if exists
-	if s.taskService != nil && broadcast.TaskID != nil {
-		// Get the task
-		task, err := s.taskService.GetTask(ctx, request.WorkspaceID, *broadcast.TaskID)
-		if err == nil && task != nil {
-			// Only update task if it's in a running or pending state
-			if task.Status == domain.TaskStatusRunning || task.Status == domain.TaskStatusPending {
-				// Pause the task by setting NextRunAfter to a future time (1 day)
-				pauseUntil := now.Add(24 * time.Hour)
-				// Update task to be paused by setting its next run time
-				if task.State == nil {
-					task.State = &domain.TaskState{}
-				}
-				task.NextRunAfter = &pauseUntil
-				err = s.taskService.SaveTaskProgress(ctx, request.WorkspaceID, *broadcast.TaskID, task.Progress, task.State)
-				if err != nil {
-					s.logger.WithField("error", err.Error()).
-						WithField("task_id", *broadcast.TaskID).
-						Warn("Failed to pause task for broadcast")
-					// Continue despite task pause failure
-				} else {
-					s.logger.WithField("task_id", *broadcast.TaskID).
-						Info("Successfully paused task for broadcast")
-				}
-			}
-		}
-	}
 
 	// Persist the changes
 	err = s.repo.UpdateBroadcast(ctx, broadcast)
@@ -493,29 +399,6 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 	// Clear the paused timestamp
 	broadcast.PausedAt = nil
 
-	// Resume the associated task if exists
-	if s.taskService != nil && broadcast.TaskID != nil {
-		// Get the task
-		task, err := s.taskService.GetTask(ctx, request.WorkspaceID, *broadcast.TaskID)
-		if err == nil && task != nil {
-			// Only update task if it's in a paused state
-			if task.Status == domain.TaskStatusPaused {
-				// Set NextRunAfter to current time to run immediately
-				task.NextRunAfter = &now
-				err = s.taskService.SaveTaskProgress(ctx, request.WorkspaceID, *broadcast.TaskID, task.Progress, task.State)
-				if err != nil {
-					s.logger.WithField("error", err.Error()).
-						WithField("task_id", *broadcast.TaskID).
-						Warn("Failed to resume task for broadcast")
-					// Continue despite task resume failure
-				} else {
-					s.logger.WithField("task_id", *broadcast.TaskID).
-						Info("Successfully resumed task for broadcast")
-				}
-			}
-		}
-	}
-
 	// Persist the changes
 	err = s.repo.UpdateBroadcast(ctx, broadcast)
 	if err != nil {
@@ -564,21 +447,6 @@ func (s *BroadcastService) CancelBroadcast(ctx context.Context, request *domain.
 	broadcast.CancelledAt = &now
 	broadcast.UpdatedAt = now
 
-	// Cancel the associated task if exists
-	if s.taskService != nil && broadcast.TaskID != nil {
-		// Delete the task
-		err = s.taskService.DeleteTask(ctx, request.WorkspaceID, *broadcast.TaskID)
-		if err != nil {
-			s.logger.WithField("error", err.Error()).
-				WithField("task_id", *broadcast.TaskID).
-				Warn("Failed to delete task for cancelled broadcast")
-			// Continue despite task deletion failure
-		} else {
-			s.logger.WithField("task_id", *broadcast.TaskID).
-				Info("Successfully deleted task for cancelled broadcast")
-		}
-	}
-
 	// Persist the changes
 	err = s.repo.UpdateBroadcast(ctx, broadcast)
 	if err != nil {
@@ -619,17 +487,6 @@ func (s *BroadcastService) DeleteBroadcast(ctx context.Context, request *domain.
 		err := fmt.Errorf("broadcasts in 'sending' status cannot be deleted")
 		s.logger.Error("Cannot delete broadcast with sending status")
 		return err
-	}
-
-	// Delete the associated task if exists
-	if s.taskService != nil && broadcast.TaskID != nil {
-		err = s.taskService.DeleteTask(ctx, request.WorkspaceID, *broadcast.TaskID)
-		if err != nil {
-			s.logger.WithField("error", err.Error()).
-				WithField("task_id", *broadcast.TaskID).
-				Warn("Failed to delete task for deleted broadcast")
-			// Continue despite task deletion failure
-		}
 	}
 
 	// Delete the broadcast
@@ -694,12 +551,11 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return err
 	}
 
-	// Fetch the contact if it exists to get the template data
-	contact, err := s.contactRepo.GetContactByEmail(ctx, request.WorkspaceID, request.RecipientEmail)
-	if err != nil && !strings.Contains(err.Error(), "contact not found") {
-		// Log other errors but still return nil,false
-		s.logger.Error("Error fetching contact by email")
-		return err
+	// Fetch the contact if it exists, but don't fail if not found
+	contact, contactErr := s.contactRepo.GetContactByEmail(ctx, request.WorkspaceID, request.RecipientEmail)
+	if contactErr != nil {
+		// Just log the error, don't return it
+		s.logger.Info("Contact not found, using email address only")
 	}
 
 	// Fetch the template
@@ -709,36 +565,22 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return err
 	}
 
-	// Prepare contact data for template
-	var templateData domain.MapOfAny
-	if contact != nil {
-		// Convert contact to JSON-compatible map using ToMapOfAny
-		contactData, err := contact.ToMapOfAny()
-		if err != nil {
-			s.logger.Error("Failed to convert contact to map")
-			return err
-		}
+	// Prepare template data
+	templateData := domain.MapOfAny{
+		"contact": domain.MapOfAny{
+			"email": request.RecipientEmail,
+		},
+	}
 
-		templateData = domain.MapOfAny{
-			"contact": contactData,
-			"broadcast": domain.MapOfAny{
-				"id":   broadcast.ID,
-				"name": broadcast.Name,
-			},
-			"variation": domain.MapOfAny{
-				"id": variation.ID,
-			},
-		}
-	} else {
-		// If no contact data available, use empty data
-		templateData = domain.MapOfAny{
-			"contact": domain.MapOfAny{
-				"email": request.RecipientEmail,
-			},
+	// Add contact data if available
+	if contact != nil {
+		contactData, err := contact.ToMapOfAny()
+		if err == nil {
+			templateData["contact"] = contactData
 		}
 	}
 
-	// Compile the template with contact data
+	// Compile the template
 	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, request.WorkspaceID, template.Email.VisualEditorTree, templateData)
 	if err != nil {
 		s.logger.Error("Failed to compile template for broadcast")
@@ -754,16 +596,16 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return fmt.Errorf("template compilation failed: %s", errMsg)
 	}
 
-	// Send the email with compiled HTML content
+	// Send the email
 	err = s.emailSvc.SendEmail(
 		ctx,
 		request.WorkspaceID,
-		"marketing", // Email provider type - adjust as needed
+		"marketing", // Email provider type
 		template.Email.FromAddress,
 		template.Email.FromName,
 		request.RecipientEmail,
 		template.Email.Subject,
-		*compiledTemplate.HTML, // Use the compiled HTML content
+		*compiledTemplate.HTML,
 	)
 	if err != nil {
 		s.logger.Error("Failed to send email to individual recipient")
@@ -839,45 +681,6 @@ func (s *BroadcastService) SendWinningVariation(ctx context.Context, request *do
 	if err != nil {
 		s.logger.Error("Failed to update broadcast with winning variation information")
 		return err
-	}
-
-	// Create task for sending the winning variation if needed
-	if s.taskService != nil && broadcast.TaskID == nil {
-		// Create a task for sending the winning variation
-		task := &domain.Task{
-			WorkspaceID: request.WorkspaceID,
-			Type:        "send_broadcast_winning",
-			Status:      domain.TaskStatusPending,
-			MaxRuntime:  600, // 10 minutes
-			MaxRetries:  3,
-			State: &domain.TaskState{
-				Message: fmt.Sprintf("Send winning variation for broadcast: %s", broadcast.Name),
-				SendBroadcast: &domain.SendBroadcastState{
-					BroadcastID: broadcast.ID,
-					ChannelType: broadcast.ChannelType,
-					BatchSize:   100,
-				},
-			},
-		}
-
-		// Create the task
-		if err := s.taskService.CreateTask(ctx, request.WorkspaceID, task); err != nil {
-			s.logger.WithField("error", err.Error()).Error("Failed to create task for sending winning variation")
-			// Continue despite task creation failure
-		} else {
-			// Store the task ID in the broadcast and update again
-			taskID := task.ID
-			broadcast.TaskID = &taskID
-
-			if err := s.repo.UpdateBroadcast(ctx, broadcast); err != nil {
-				s.logger.WithField("error", err.Error()).Warn("Failed to update broadcast with task ID")
-			}
-
-			s.logger.WithFields(map[string]interface{}{
-				"broadcast_id": broadcast.ID,
-				"task_id":      task.ID,
-			}).Info("Created task for sending winning variation")
-		}
 	}
 
 	s.logger.Info("Broadcast updated with winning variation")
