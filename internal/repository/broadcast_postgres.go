@@ -56,12 +56,13 @@ func (r *broadcastRepository) WithTransaction(ctx context.Context, workspaceID s
 
 // CreateBroadcast persists a new broadcast
 func (r *broadcastRepository) CreateBroadcast(ctx context.Context, broadcast *domain.Broadcast) error {
-	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, broadcast.WorkspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to get workspace connection: %w", err)
-	}
+	return r.WithTransaction(ctx, broadcast.WorkspaceID, func(tx *sql.Tx) error {
+		return r.CreateBroadcastTx(ctx, tx, broadcast)
+	})
+}
 
+// CreateBroadcastTx persists a new broadcast within a transaction
+func (r *broadcastRepository) CreateBroadcastTx(ctx context.Context, tx *sql.Tx, broadcast *domain.Broadcast) error {
 	// Set created and updated timestamps
 	now := time.Now().UTC()
 	broadcast.CreatedAt = now
@@ -100,7 +101,7 @@ func (r *broadcastRepository) CreateBroadcast(ctx context.Context, broadcast *do
 		)
 	`
 
-	_, err = workspaceDB.ExecContext(ctx, query,
+	_, err := tx.ExecContext(ctx, query,
 		broadcast.ID,
 		broadcast.WorkspaceID,
 		broadcast.Name,
@@ -187,14 +188,61 @@ func (r *broadcastRepository) GetBroadcast(ctx context.Context, workspaceID, id 
 	return broadcast, nil
 }
 
-// UpdateBroadcast updates an existing broadcast
-func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *domain.Broadcast) error {
-	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, broadcast.WorkspaceID)
+// GetBroadcastTx retrieves a broadcast by ID within a transaction
+func (r *broadcastRepository) GetBroadcastTx(ctx context.Context, tx *sql.Tx, workspaceID, id string) (*domain.Broadcast, error) {
+	query := `
+		SELECT 
+			id, 
+			workspace_id,
+			name, 
+			status, 
+			audience, 
+			schedule, 
+			test_settings, 
+			tracking_enabled, 
+			utm_parameters, 
+			metadata, 
+			total_sent, 
+			total_delivered, 
+			total_bounced, 
+			total_complained, 
+			total_failed, 
+			total_opens,
+			total_clicks,
+			winning_variation, 
+			test_sent_at, 
+			winner_sent_at, 
+			created_at, 
+			updated_at, 
+			started_at, 
+			completed_at, 
+			cancelled_at
+		FROM broadcasts
+		WHERE id = $1 AND workspace_id = $2
+	`
+
+	row := tx.QueryRowContext(ctx, query, id, workspaceID)
+
+	broadcast, err := scanBroadcast(row)
+	if err == sql.ErrNoRows {
+		return nil, &domain.ErrBroadcastNotFound{ID: id}
+	}
 	if err != nil {
-		return fmt.Errorf("failed to get workspace connection: %w", err)
+		return nil, fmt.Errorf("failed to get broadcast: %w", err)
 	}
 
+	return broadcast, nil
+}
+
+// UpdateBroadcast updates an existing broadcast
+func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *domain.Broadcast) error {
+	return r.WithTransaction(ctx, broadcast.WorkspaceID, func(tx *sql.Tx) error {
+		return r.UpdateBroadcastTx(ctx, tx, broadcast)
+	})
+}
+
+// UpdateBroadcastTx updates an existing broadcast within a transaction
+func (r *broadcastRepository) UpdateBroadcastTx(ctx context.Context, tx *sql.Tx, broadcast *domain.Broadcast) error {
 	// Update the timestamp
 	broadcast.UpdatedAt = time.Now().UTC()
 
@@ -225,7 +273,7 @@ func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *do
 		WHERE id = $1 AND workspace_id = $2
 	`
 
-	result, err := workspaceDB.ExecContext(ctx, query,
+	result, err := tx.ExecContext(ctx, query,
 		broadcast.ID,
 		broadcast.WorkspaceID,
 		broadcast.Name,
@@ -268,14 +316,8 @@ func (r *broadcastRepository) UpdateBroadcast(ctx context.Context, broadcast *do
 	return nil
 }
 
-// ListBroadcasts retrieves a list of broadcasts
-func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
-	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, params.WorkspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
-	}
-
+// ListBroadcastsTx retrieves a list of broadcasts within a transaction
+func (r *broadcastRepository) ListBroadcastsTx(ctx context.Context, tx *sql.Tx, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
 	// First count total records that match the criteria
 	var countQuery string
 	var countArgs []interface{}
@@ -297,7 +339,7 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 	}
 
 	var totalCount int
-	err = workspaceDB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&totalCount)
+	err := tx.QueryRowContext(ctx, countQuery, countArgs...).Scan(&totalCount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count broadcasts: %w", err)
 	}
@@ -376,7 +418,7 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 		dataArgs = []interface{}{params.WorkspaceID, params.Limit, params.Offset}
 	}
 
-	rows, err := workspaceDB.QueryContext(ctx, dataQuery, dataArgs...)
+	rows, err := tx.QueryContext(ctx, dataQuery, dataArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list broadcasts: %w", err)
 	}
@@ -401,20 +443,50 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 	}, nil
 }
 
-// DeleteBroadcast deletes a broadcast from the database
-func (r *broadcastRepository) DeleteBroadcast(ctx context.Context, workspaceID, id string) error {
+// ListBroadcasts retrieves a list of broadcasts
+func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
 	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, params.WorkspaceID)
 	if err != nil {
-		return fmt.Errorf("failed to get workspace connection: %w", err)
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
+	// Begin a transaction
+	tx, err := workspaceDB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Use the transaction-aware method
+	result, err := r.ListBroadcastsTx(ctx, tx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return result, nil
+}
+
+// DeleteBroadcast deletes a broadcast from the database
+func (r *broadcastRepository) DeleteBroadcast(ctx context.Context, workspaceID, id string) error {
+	return r.WithTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
+		return r.DeleteBroadcastTx(ctx, tx, workspaceID, id)
+	})
+}
+
+// DeleteBroadcastTx deletes a broadcast from the database within a transaction
+func (r *broadcastRepository) DeleteBroadcastTx(ctx context.Context, tx *sql.Tx, workspaceID, id string) error {
 	query := `
 		DELETE FROM broadcasts
 		WHERE id = $1 AND workspace_id = $2
 	`
 
-	result, err := workspaceDB.ExecContext(ctx, query, id, workspaceID)
+	result, err := tx.ExecContext(ctx, query, id, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to delete broadcast: %w", err)
 	}

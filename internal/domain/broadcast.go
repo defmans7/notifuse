@@ -837,6 +837,13 @@ type BroadcastRepository interface {
 
 	// Transaction management
 	WithTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error
+
+	// Transaction-aware methods
+	CreateBroadcastTx(ctx context.Context, tx *sql.Tx, broadcast *Broadcast) error
+	GetBroadcastTx(ctx context.Context, tx *sql.Tx, workspaceID, broadcastID string) (*Broadcast, error)
+	UpdateBroadcastTx(ctx context.Context, tx *sql.Tx, broadcast *Broadcast) error
+	DeleteBroadcastTx(ctx context.Context, tx *sql.Tx, workspaceID, broadcastID string) error
+	ListBroadcastsTx(ctx context.Context, tx *sql.Tx, params ListBroadcastsParams) (*BroadcastListResponse, error)
 }
 
 // ErrBroadcastNotFound is an error type for when a broadcast is not found

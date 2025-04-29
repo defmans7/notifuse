@@ -6,6 +6,7 @@ package mocks
 
 import (
 	context "context"
+	sql "database/sql"
 	reflect "reflect"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
@@ -49,6 +50,20 @@ func (mr *MockBroadcastRepositoryMockRecorder) CreateBroadcast(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBroadcast", reflect.TypeOf((*MockBroadcastRepository)(nil).CreateBroadcast), arg0, arg1)
 }
 
+// CreateBroadcastTx mocks base method.
+func (m *MockBroadcastRepository) CreateBroadcastTx(arg0 context.Context, arg1 *sql.Tx, arg2 *domain.Broadcast) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBroadcastTx", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateBroadcastTx indicates an expected call of CreateBroadcastTx.
+func (mr *MockBroadcastRepositoryMockRecorder) CreateBroadcastTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBroadcastTx", reflect.TypeOf((*MockBroadcastRepository)(nil).CreateBroadcastTx), arg0, arg1, arg2)
+}
+
 // DeleteBroadcast mocks base method.
 func (m *MockBroadcastRepository) DeleteBroadcast(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -61,6 +76,20 @@ func (m *MockBroadcastRepository) DeleteBroadcast(arg0 context.Context, arg1, ar
 func (mr *MockBroadcastRepositoryMockRecorder) DeleteBroadcast(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBroadcast", reflect.TypeOf((*MockBroadcastRepository)(nil).DeleteBroadcast), arg0, arg1, arg2)
+}
+
+// DeleteBroadcastTx mocks base method.
+func (m *MockBroadcastRepository) DeleteBroadcastTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBroadcastTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBroadcastTx indicates an expected call of DeleteBroadcastTx.
+func (mr *MockBroadcastRepositoryMockRecorder) DeleteBroadcastTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBroadcastTx", reflect.TypeOf((*MockBroadcastRepository)(nil).DeleteBroadcastTx), arg0, arg1, arg2, arg3)
 }
 
 // GetBroadcast mocks base method.
@@ -78,6 +107,21 @@ func (mr *MockBroadcastRepositoryMockRecorder) GetBroadcast(arg0, arg1, arg2 int
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBroadcast", reflect.TypeOf((*MockBroadcastRepository)(nil).GetBroadcast), arg0, arg1, arg2)
 }
 
+// GetBroadcastTx mocks base method.
+func (m *MockBroadcastRepository) GetBroadcastTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) (*domain.Broadcast, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBroadcastTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*domain.Broadcast)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBroadcastTx indicates an expected call of GetBroadcastTx.
+func (mr *MockBroadcastRepositoryMockRecorder) GetBroadcastTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBroadcastTx", reflect.TypeOf((*MockBroadcastRepository)(nil).GetBroadcastTx), arg0, arg1, arg2, arg3)
+}
+
 // ListBroadcasts mocks base method.
 func (m *MockBroadcastRepository) ListBroadcasts(arg0 context.Context, arg1 domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
 	m.ctrl.T.Helper()
@@ -93,6 +137,21 @@ func (mr *MockBroadcastRepositoryMockRecorder) ListBroadcasts(arg0, arg1 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBroadcasts", reflect.TypeOf((*MockBroadcastRepository)(nil).ListBroadcasts), arg0, arg1)
 }
 
+// ListBroadcastsTx mocks base method.
+func (m *MockBroadcastRepository) ListBroadcastsTx(arg0 context.Context, arg1 *sql.Tx, arg2 domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListBroadcastsTx", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.BroadcastListResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListBroadcastsTx indicates an expected call of ListBroadcastsTx.
+func (mr *MockBroadcastRepositoryMockRecorder) ListBroadcastsTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBroadcastsTx", reflect.TypeOf((*MockBroadcastRepository)(nil).ListBroadcastsTx), arg0, arg1, arg2)
+}
+
 // UpdateBroadcast mocks base method.
 func (m *MockBroadcastRepository) UpdateBroadcast(arg0 context.Context, arg1 *domain.Broadcast) error {
 	m.ctrl.T.Helper()
@@ -105,4 +164,32 @@ func (m *MockBroadcastRepository) UpdateBroadcast(arg0 context.Context, arg1 *do
 func (mr *MockBroadcastRepositoryMockRecorder) UpdateBroadcast(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBroadcast", reflect.TypeOf((*MockBroadcastRepository)(nil).UpdateBroadcast), arg0, arg1)
+}
+
+// UpdateBroadcastTx mocks base method.
+func (m *MockBroadcastRepository) UpdateBroadcastTx(arg0 context.Context, arg1 *sql.Tx, arg2 *domain.Broadcast) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateBroadcastTx", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateBroadcastTx indicates an expected call of UpdateBroadcastTx.
+func (mr *MockBroadcastRepositoryMockRecorder) UpdateBroadcastTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBroadcastTx", reflect.TypeOf((*MockBroadcastRepository)(nil).UpdateBroadcastTx), arg0, arg1, arg2)
+}
+
+// WithTransaction mocks base method.
+func (m *MockBroadcastRepository) WithTransaction(arg0 context.Context, arg1 string, arg2 func(*sql.Tx) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTransaction", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTransaction indicates an expected call of WithTransaction.
+func (mr *MockBroadcastRepositoryMockRecorder) WithTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockBroadcastRepository)(nil).WithTransaction), arg0, arg1, arg2)
 }
