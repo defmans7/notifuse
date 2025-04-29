@@ -12,12 +12,12 @@ import (
 )
 
 type userRepository struct {
-	db *sql.DB
+	systemDB *sql.DB
 }
 
 // NewUserRepository creates a new PostgreSQL user repository
 func NewUserRepository(db *sql.DB) domain.UserRepository {
-	return &userRepository{db: db}
+	return &userRepository{systemDB: db}
 }
 
 func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) error {
@@ -32,7 +32,7 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 		INSERT INTO users (id, email, name, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := r.systemDB.ExecContext(ctx, query,
 		user.ID,
 		user.Email,
 		user.Name,
@@ -52,7 +52,7 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 		FROM users
 		WHERE email = $1
 	`
-	err := r.db.QueryRowContext(ctx, query, email).Scan(
+	err := r.systemDB.QueryRowContext(ctx, query, email).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Name,
@@ -75,7 +75,7 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 		FROM users
 		WHERE id = $1
 	`
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Name,
@@ -108,7 +108,7 @@ func (r *userRepository) CreateSession(ctx context.Context, session *domain.Sess
 		)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := r.systemDB.ExecContext(ctx, query,
 		session.ID,
 		session.UserID,
 		session.ExpiresAt,
@@ -130,7 +130,7 @@ func (r *userRepository) GetSessionByID(ctx context.Context, id string) (*domain
 		FROM user_sessions
 		WHERE id = $1
 	`
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(
 		&session.ID,
 		&session.UserID,
 		&session.ExpiresAt,
@@ -149,7 +149,7 @@ func (r *userRepository) GetSessionByID(ctx context.Context, id string) (*domain
 
 func (r *userRepository) DeleteSession(ctx context.Context, id string) error {
 	query := `DELETE FROM user_sessions WHERE id = $1`
-	result, err := r.db.ExecContext(ctx, query, id)
+	result, err := r.systemDB.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
@@ -170,7 +170,7 @@ func (r *userRepository) GetSessionsByUserID(ctx context.Context, userID string)
 		WHERE user_id = $1
 		ORDER BY created_at DESC
 	`
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.systemDB.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sessions: %w", err)
 	}
@@ -203,7 +203,7 @@ func (r *userRepository) UpdateSession(ctx context.Context, session *domain.Sess
 			magic_code_expires_at = $3
 		WHERE id = $4
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := r.systemDB.ExecContext(ctx, query,
 		session.ExpiresAt,
 		session.MagicCode,
 		session.MagicCodeExpires,

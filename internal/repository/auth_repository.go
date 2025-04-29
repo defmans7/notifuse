@@ -11,22 +11,22 @@ import (
 
 // SQLAuthRepository is a SQL implementation of the AuthRepository interface
 type SQLAuthRepository struct {
-	db     *sql.DB
-	logger logger.Logger
+	systemDB *sql.DB
+	logger   logger.Logger
 }
 
 // NewSQLAuthRepository creates a new SQLAuthRepository
 func NewSQLAuthRepository(db *sql.DB, logger logger.Logger) *SQLAuthRepository {
 	return &SQLAuthRepository{
-		db:     db,
-		logger: logger,
+		systemDB: db,
+		logger:   logger,
 	}
 }
 
 // GetSessionByID retrieves a session by ID and user ID
 func (r *SQLAuthRepository) GetSessionByID(ctx context.Context, sessionID string, userID string) (*time.Time, error) {
 	var expiresAt time.Time
-	err := r.db.QueryRowContext(ctx,
+	err := r.systemDB.QueryRowContext(ctx,
 		"SELECT expires_at FROM user_sessions WHERE id = $1 AND user_id = $2",
 		sessionID, userID,
 	).Scan(&expiresAt)
@@ -41,7 +41,7 @@ func (r *SQLAuthRepository) GetSessionByID(ctx context.Context, sessionID string
 // GetUserByID retrieves a user by ID
 func (r *SQLAuthRepository) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
 	var user domain.User
-	err := r.db.QueryRowContext(ctx,
+	err := r.systemDB.QueryRowContext(ctx,
 		"SELECT id, email, created_at FROM users WHERE id = $1",
 		userID,
 	).Scan(&user.ID, &user.Email, &user.CreatedAt)

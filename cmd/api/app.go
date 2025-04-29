@@ -36,6 +36,7 @@ type App struct {
 	contactListRepo domain.ContactListRepository
 	templateRepo    domain.TemplateRepository
 	broadcastRepo   domain.BroadcastRepository
+	taskRepo        domain.TaskRepository
 	// Services
 	authService        *service.AuthService
 	userService        *service.UserService
@@ -46,6 +47,7 @@ type App struct {
 	templateService    *service.TemplateService
 	emailService       *service.EmailService
 	broadcastService   *service.BroadcastService
+	taskService        *service.TaskService
 
 	// HTTP handlers
 	mux    *http.ServeMux
@@ -174,6 +176,7 @@ func (a *App) InitRepositories() error {
 	a.contactListRepo = repository.NewContactListRepository(a.workspaceRepo)
 	a.templateRepo = repository.NewTemplateRepository(a.workspaceRepo)
 	a.broadcastRepo = repository.NewBroadcastRepository(a.workspaceRepo)
+	a.taskRepo = repository.NewTaskRepository(a.db)
 
 	return nil
 }
@@ -214,6 +217,16 @@ func (a *App) InitServices() error {
 	a.templateService = service.NewTemplateService(a.templateRepo, a.authService, a.logger)
 	a.emailService = service.NewEmailService(a.logger, a.authService, a.config.Security.SecretKey, a.workspaceRepo, a.templateRepo, a.templateService)
 	a.broadcastService = service.NewBroadcastService(a.broadcastRepo, a.emailService, a.logger, a.contactRepo, a.templateService)
+
+	// Initialize task service
+	a.taskService, err = service.NewTaskService(service.TaskServiceConfig{
+		Repository:  a.taskRepo,
+		Logger:      a.logger,
+		AuthService: a.authService,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create task service: %w", err)
+	}
 
 	// Create workspace service last since it depends on other services
 	a.workspaceService = service.NewWorkspaceService(
@@ -257,6 +270,12 @@ func (a *App) InitHandlers() error {
 	templateHandler := httpHandler.NewTemplateHandler(a.templateService, a.config.Security.PasetoPublicKey, a.logger)
 	emailHandler := httpHandler.NewEmailHandler(a.emailService, a.config.Security.PasetoPublicKey, a.logger, a.config.Security.SecretKey)
 	broadcastHandler := httpHandler.NewBroadcastHandler(a.broadcastService, a.templateService, a.config.Security.PasetoPublicKey, a.logger)
+	taskHandler := httpHandler.NewTaskHandler(
+		a.taskService,
+		a.config.Security.PasetoPublicKey,
+		a.logger,
+		a.config.Security.SecretKey,
+	)
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
@@ -268,6 +287,7 @@ func (a *App) InitHandlers() error {
 	templateHandler.RegisterRoutes(a.mux)
 	emailHandler.RegisterRoutes(a.mux)
 	broadcastHandler.RegisterRoutes(a.mux)
+	taskHandler.RegisterRoutes(a.mux)
 	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	return nil

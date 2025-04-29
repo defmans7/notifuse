@@ -10,7 +10,6 @@ import (
 )
 
 type listRepository struct {
-	db            *sql.DB
 	workspaceRepo domain.WorkspaceRepository
 }
 
