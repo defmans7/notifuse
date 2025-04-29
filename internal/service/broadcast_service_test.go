@@ -23,6 +23,7 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -37,7 +38,8 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -67,6 +69,11 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			TrackingEnabled: true,
 		}
 
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), request.WorkspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to expect a broadcast to be created
 		mockRepo.EXPECT().
 			CreateBroadcast(gomock.Any(), gomock.Any()).
@@ -95,6 +102,36 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 		assert.Equal(t, domain.BroadcastStatusDraft, result.Status)
 	})
 
+	t.Run("AuthenticationError", func(t *testing.T) {
+		ctx := context.Background()
+		request := &domain.CreateBroadcastRequest{
+			WorkspaceID: "ws123",
+			Name:        "Test Broadcast",
+			Audience: domain.AudienceSettings{
+				Lists:               []string{"list123"},
+				ExcludeUnsubscribed: true,
+				SkipDuplicateEmails: true,
+			},
+		}
+
+		// Mock auth service to return authentication error
+		authErr := errors.New("authentication failed")
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), request.WorkspaceID).
+			Return(nil, nil, authErr)
+
+		// We expect no repository calls due to authentication failure
+		mockRepo.EXPECT().CreateBroadcast(gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		result, err := service.CreateBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
 	t.Run("ValidationError", func(t *testing.T) {
 		ctx := context.Background()
 		// Create an invalid request (missing required fields)
@@ -102,6 +139,11 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			WorkspaceID: "ws123",
 			// Missing Name and other required fields
 		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), request.WorkspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// We expect validation to fail, no repository calls
 		mockRepo.EXPECT().CreateBroadcast(gomock.Any(), gomock.Any()).Times(0)
@@ -134,6 +176,11 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			TrackingEnabled: true,
 		}
 
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), request.WorkspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return an error
 		expectedErr := errors.New("database error")
 		mockRepo.EXPECT().
@@ -159,6 +206,7 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -173,7 +221,8 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -197,6 +246,11 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 			UpdatedAt:   time.Now(),
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
 			Return(expectedBroadcast, nil)
@@ -213,6 +267,11 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 		ctx := context.Background()
 		workspaceID := "ws123"
 		broadcastID := "nonexistent"
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		notFoundErr := &domain.ErrBroadcastNotFound{ID: broadcastID}
 		mockRepo.EXPECT().
@@ -238,6 +297,7 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -252,7 +312,8 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -308,6 +369,11 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			TrackingEnabled: true,
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -344,6 +410,11 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 		ctx := context.Background()
 		workspaceID := "ws123"
 		broadcastID := "nonexistent"
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		updateRequest := &domain.UpdateBroadcastRequest{
 			WorkspaceID: workspaceID,
@@ -407,6 +478,11 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			},
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -434,6 +510,7 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -450,7 +527,8 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -485,6 +563,11 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 			CreatedAt:   time.Now().Add(-1 * time.Hour),
 			UpdatedAt:   time.Now().Add(-1 * time.Hour),
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
@@ -536,6 +619,11 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 			CreatedAt:   time.Now().Add(-1 * time.Hour),
 			UpdatedAt:   time.Now().Add(-1 * time.Hour),
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
@@ -590,6 +678,11 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 			UpdatedAt:   time.Now().Add(-1 * time.Hour),
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -616,6 +709,7 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -630,7 +724,8 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -669,6 +764,11 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 				Timezone:      "UTC",
 			},
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
@@ -720,6 +820,11 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 			UpdatedAt:   time.Now().Add(-1 * time.Hour),
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -746,6 +851,7 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -761,7 +867,8 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -807,6 +914,11 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 			Broadcasts: broadcasts,
 			TotalCount: 2,
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to return the expected broadcasts
 		mockRepo.EXPECT().
@@ -885,6 +997,11 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 			},
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the broadcasts
 		mockRepo.EXPECT().
 			ListBroadcasts(gomock.Any(), gomock.Any()).
@@ -914,6 +1031,11 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 			Limit:       10,
 			Offset:      0,
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to return an error
 		expectedErr := errors.New("database error")
@@ -945,6 +1067,11 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 			Broadcasts: []*domain.Broadcast{},
 			TotalCount: 0,
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to ensure it receives the default values
 		mockRepo.EXPECT().
@@ -980,6 +1107,11 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 			Broadcasts: []*domain.Broadcast{},
 			TotalCount: 0,
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to ensure it receives the capped limit
 		mockRepo.EXPECT().
@@ -1038,6 +1170,11 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 			TotalCount: 1,
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the broadcasts
 		mockRepo.EXPECT().
 			ListBroadcasts(gomock.Any(), gomock.Any()).
@@ -1070,6 +1207,7 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -1084,7 +1222,8 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -1114,6 +1253,11 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 			UpdatedAt:   time.Now().Add(-1 * time.Hour),
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1140,6 +1284,17 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 			ID: "bcast123",
 		}
 
+		// Set up logger mock for this test case
+		mockLogger.EXPECT().
+			WithField("broadcast_id", request.ID).
+			Return(mockLoggerWithFields).
+			AnyTimes()
+
+		// Authentication will be called with an empty workspace ID, which should fail
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), "").
+			Return(nil, nil, errors.New("workspace ID is required")).Times(1)
+
 		// No repository calls expected
 		mockRepo.EXPECT().GetBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 		mockRepo.EXPECT().DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
@@ -1149,7 +1304,7 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 
 		// Verify results
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "workspace_id is required")
+		assert.Contains(t, err.Error(), "authenticate user")
 	})
 
 	t.Run("BroadcastNotFound", func(t *testing.T) {
@@ -1161,6 +1316,11 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 			WorkspaceID: workspaceID,
 			ID:          broadcastID,
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to return not found error
 		notFoundErr := &domain.ErrBroadcastNotFound{ID: broadcastID}
@@ -1199,6 +1359,11 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 			UpdatedAt:   time.Now().Add(-1 * time.Hour),
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1235,6 +1400,11 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 			UpdatedAt:   time.Now().Add(-1 * time.Hour),
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return the existing broadcast
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1264,6 +1434,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Setup logger mock
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -1279,7 +1450,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -1349,6 +1521,11 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			HTML:    &compiledHTML,
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Set up expectations
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1397,6 +1574,11 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			BroadcastID:    broadcastID,
 			RecipientEmail: recipientEmail,
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Mock repository to return not found error
 		notFoundErr := errors.New("broadcast not found")
@@ -1465,6 +1647,11 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			HTML:    &compiledHTML,
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Set up expectations - should use first variation
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1526,6 +1713,11 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			},
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Set up expectations
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1572,6 +1764,11 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			},
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Set up expectations
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1595,6 +1792,7 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 
 	// Setup logger mock
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -1610,7 +1808,8 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	service, err := NewBroadcastService(BroadcastServiceConfig{
-		Logger: mockLogger,
+		Logger:      mockLogger,
+		AuthService: mockAuthSvc,
 	})
 	require.NoError(t, err)
 
@@ -1652,6 +1851,11 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 			TrackingEnabled: false, // Different from request
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Set up expectations
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1690,6 +1894,11 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 			TrackingEnabled: true,
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Mock repository to return not found error
 		notFoundErr := errors.New("broadcast not found")
 		mockRepo.EXPECT().
@@ -1727,6 +1936,11 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 				Enabled: false, // A/B testing disabled
 			},
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Set up expectations
 		mockRepo.EXPECT().
@@ -1773,6 +1987,11 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 			},
 		}
 
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
 		// Set up expectations
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
@@ -1816,6 +2035,11 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 				},
 			},
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Set up expectations
 		mockRepo.EXPECT().
@@ -1867,6 +2091,11 @@ func TestBroadcastService_SendWinningVariation(t *testing.T) {
 			},
 			TrackingEnabled: true, // Enabled in broadcast
 		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
 
 		// Set up expectations
 		mockRepo.EXPECT().
