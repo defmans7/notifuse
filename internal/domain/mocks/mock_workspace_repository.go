@@ -282,3 +282,17 @@ func (mr *MockWorkspaceRepositoryMockRecorder) Update(arg0, arg1 interface{}) *g
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockWorkspaceRepository)(nil).Update), arg0, arg1)
 }
+
+// WithWorkspaceTransaction mocks base method.
+func (m *MockWorkspaceRepository) WithWorkspaceTransaction(arg0 context.Context, arg1 string, arg2 func(*sql.Tx) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithWorkspaceTransaction", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithWorkspaceTransaction indicates an expected call of WithWorkspaceTransaction.
+func (mr *MockWorkspaceRepositoryMockRecorder) WithWorkspaceTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithWorkspaceTransaction", reflect.TypeOf((*MockWorkspaceRepository)(nil).WithWorkspaceTransaction), arg0, arg1, arg2)
+}
