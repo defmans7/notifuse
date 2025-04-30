@@ -9,6 +9,9 @@ test:
 test-domain:
 	go test -v ./internal/domain
 
+test-handler:
+	go test -v ./internal/http
+
 test-service:
 	go test -v ./internal/service
 

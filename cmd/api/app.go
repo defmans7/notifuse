@@ -187,13 +187,96 @@ func (a *App) InitServices() error {
 	// Initialize event bus first
 	a.eventBus = domain.NewInMemoryEventBus()
 
-	// Skip auth service initialization and other services temporarily - they have issues
-	// TODO: Fix these service initializations
+	// Initialize auth service
+	authServiceConfig := service.AuthServiceConfig{
+		Repository:          a.authRepo,
+		WorkspaceRepository: a.workspaceRepo,
+		PrivateKey:          a.config.Security.PasetoPrivateKeyBytes,
+		PublicKey:           a.config.Security.PasetoPublicKeyBytes,
+		Logger:              a.logger,
+	}
 
-	// Initialize TaskService first
+	var err error
+	a.authService, err = service.NewAuthService(authServiceConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize auth service: %w", err)
+	}
+
+	// Initialize user service
+	userServiceConfig := service.UserServiceConfig{
+		Repository:    a.userRepo,
+		AuthService:   a.authService,
+		EmailSender:   a.mailer,
+		SessionExpiry: 30 * 24 * time.Hour, // 30 days
+		Logger:        a.logger,
+		IsDevelopment: a.config.IsDevelopment(),
+	}
+
+	a.userService, err = service.NewUserService(userServiceConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize user service: %w", err)
+	}
+
+	// Initialize template service
+	a.templateService = service.NewTemplateService(
+		a.templateRepo,
+		a.authService,
+		a.logger,
+	)
+
+	// Initialize contact service
+	a.contactService = service.NewContactService(
+		a.contactRepo,
+		a.workspaceRepo,
+		a.authService,
+		a.logger,
+	)
+
+	// Initialize list service
+	a.listService = service.NewListService(
+		a.listRepo,
+		a.authService,
+		a.logger,
+	)
+
+	// Initialize contact list service
+	a.contactListService = service.NewContactListService(
+		a.contactListRepo,
+		a.authService,
+		a.contactRepo,
+		a.listRepo,
+		a.logger,
+	)
+
+	// Initialize email service
+	a.emailService = service.NewEmailService(
+		a.logger,
+		a.authService,
+		a.config.Security.SecretKey,
+		a.workspaceRepo,
+		a.templateRepo,
+		a.templateService,
+	)
+
+	// Initialize workspace service
+	a.workspaceService = service.NewWorkspaceService(
+		a.workspaceRepo,
+		a.logger,
+		a.userService,
+		a.authService,
+		a.mailer,
+		a.config,
+		a.contactService,
+		a.listService,
+		a.contactListService,
+		a.templateService,
+		a.config.Security.SecretKey,
+	)
+
+	// Initialize task service
 	a.taskService = service.NewTaskService(a.taskRepo, a.logger, a.authService, a.config.APIEndpoint)
 
-	// Initialize BroadcastService without TaskService
+	// Initialize broadcast service
 	a.broadcastService = service.NewBroadcastService(
 		a.logger,
 		a.broadcastRepo,
@@ -205,7 +288,7 @@ func (a *App) InitServices() error {
 		a.eventBus, // Pass the event bus
 	)
 
-	// Now register the broadcast processor with the task service
+	// Register the broadcast processor with the task service
 	a.taskService.RegisterDefaultProcessors(a.broadcastService)
 
 	// Register task service to listen for broadcast events
@@ -213,9 +296,6 @@ func (a *App) InitServices() error {
 
 	// Set the task service on the broadcast service
 	a.broadcastService.SetTaskService(a.taskService)
-
-	// Skip creating workspace service for now
-	// TODO: Re-enable and fix workspace service
 
 	return nil
 }

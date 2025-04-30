@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 //go:generate mockgen -destination mocks/mock_task_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TaskService
 //go:generate mockgen -destination mocks/mock_task_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain TaskRepository
+//go:generate mockgen -destination mocks/mock_task_processor.go -package mocks github.com/Notifuse/notifuse/internal/domain TaskProcessor
 
 // TaskStatus represents the current state of a task
 type TaskStatus string
@@ -101,6 +103,7 @@ type Subtask struct {
 	TimeoutAfter *time.Time    `json:"timeout_after,omitempty"`
 	Index        int           `json:"index"`
 	Total        int           `json:"total"`
+	BroadcastID  *string       `json:"broadcast_id,omitempty"` // Optional reference to a broadcast
 }
 
 // Task represents a background task that can be executed in multiple steps
@@ -123,6 +126,7 @@ type Task struct {
 	RetryCount    int        `json:"retry_count"`
 	RetryInterval int        `json:"retry_interval"` // Retry interval in seconds
 	Subtasks      []*Subtask `json:"subtasks,omitempty"`
+	BroadcastID   *string    `json:"broadcast_id,omitempty"` // Optional reference to a broadcast
 	// New fields for parallel subtask processing
 	ParallelSubtasks  bool `json:"parallel_subtasks"`
 	UseHTTPExecutor   bool `json:"use_http_executor"`
@@ -140,7 +144,6 @@ type TaskService interface {
 	DeleteTask(ctx context.Context, workspace, id string) error
 	ExecuteTasks(ctx context.Context, maxTasks int) error
 	ExecuteTask(ctx context.Context, workspace, taskID string) error
-	SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state *TaskState) error
 	ExecuteSubtask(ctx context.Context, subtaskID string) error
 	RegisterDefaultProcessors(broadcastSender BroadcastSender)
 	SubscribeToBroadcastEvents(eventBus EventBus)
@@ -148,14 +151,24 @@ type TaskService interface {
 
 // TaskRepository defines methods for task persistence
 type TaskRepository interface {
+	// Transaction support
+	WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error
+
 	// Create adds a new task
 	Create(ctx context.Context, workspace string, task *Task) error
+	CreateTx(ctx context.Context, tx *sql.Tx, workspace string, task *Task) error
 
 	// Get retrieves a task by ID
 	Get(ctx context.Context, workspace, id string) (*Task, error)
+	GetTx(ctx context.Context, tx *sql.Tx, workspace, id string) (*Task, error)
+
+	// Get a task by broadcast ID
+	GetTaskByBroadcastID(ctx context.Context, workspace, broadcastID string) (*Task, error)
+	GetTaskByBroadcastIDTx(ctx context.Context, tx *sql.Tx, workspace, broadcastID string) (*Task, error)
 
 	// Update updates an existing task
 	Update(ctx context.Context, workspace string, task *Task) error
+	UpdateTx(ctx context.Context, tx *sql.Tx, workspace string, task *Task) error
 
 	// Delete removes a task
 	Delete(ctx context.Context, workspace, id string) error
@@ -168,27 +181,39 @@ type TaskRepository interface {
 
 	// MarkAsRunning marks a task as running and sets timeout
 	MarkAsRunning(ctx context.Context, workspace, id string, timeoutAfter time.Time) error
+	MarkAsRunningTx(ctx context.Context, tx *sql.Tx, workspace, id string, timeoutAfter time.Time) error
 
 	// SaveState saves the current state of a running task
 	SaveState(ctx context.Context, workspace, id string, progress float64, state *TaskState) error
+	SaveStateTx(ctx context.Context, tx *sql.Tx, workspace, id string, progress float64, state *TaskState) error
 
 	// MarkAsCompleted marks a task as completed
 	MarkAsCompleted(ctx context.Context, workspace, id string) error
+	MarkAsCompletedTx(ctx context.Context, tx *sql.Tx, workspace, id string) error
 
 	// MarkAsFailed marks a task as failed
 	MarkAsFailed(ctx context.Context, workspace, id string, errorMsg string) error
+	MarkAsFailedTx(ctx context.Context, tx *sql.Tx, workspace, id string, errorMsg string) error
 
 	// MarkAsPaused marks a task as paused (e.g., due to timeout)
 	MarkAsPaused(ctx context.Context, workspace, id string, nextRunAfter time.Time) error
+	MarkAsPausedTx(ctx context.Context, tx *sql.Tx, workspace, id string, nextRunAfter time.Time) error
 
 	// Subtask management
 	CreateSubtasks(ctx context.Context, workspace string, taskID string, count int) ([]*Subtask, error)
+	CreateSubtasksTx(ctx context.Context, tx *sql.Tx, workspace string, taskID string, count int) ([]*Subtask, error)
 	GetSubtask(ctx context.Context, subtaskID string) (*Subtask, error)
+	GetSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string) (*Subtask, error)
 	GetSubtasks(ctx context.Context, taskID string) ([]*Subtask, error)
+	GetSubtasksTx(ctx context.Context, tx *sql.Tx, taskID string) ([]*Subtask, error)
 	UpdateSubtaskProgress(ctx context.Context, subtaskID string, progress float64, state TaskState) error
+	UpdateSubtaskProgressTx(ctx context.Context, tx *sql.Tx, subtaskID string, progress float64, state TaskState) error
 	CompleteSubtask(ctx context.Context, subtaskID string) error
+	CompleteSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string) error
 	FailSubtask(ctx context.Context, subtaskID string, errorMessage string) error
+	FailSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string, errorMessage string) error
 	UpdateTaskProgressFromSubtasks(ctx context.Context, workspace, taskID string) error
+	UpdateTaskProgressFromSubtasksTx(ctx context.Context, tx *sql.Tx, workspace, taskID string) error
 }
 
 // TaskFilter defines the filtering criteria for task listing

@@ -174,20 +174,6 @@ func (mr *MockTaskServiceMockRecorder) RegisterProcessor(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterProcessor", reflect.TypeOf((*MockTaskService)(nil).RegisterProcessor), arg0)
 }
 
-// SaveTaskProgress mocks base method.
-func (m *MockTaskService) SaveTaskProgress(arg0 context.Context, arg1, arg2 string, arg3 float64, arg4 *domain.TaskState) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveTaskProgress", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SaveTaskProgress indicates an expected call of SaveTaskProgress.
-func (mr *MockTaskServiceMockRecorder) SaveTaskProgress(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveTaskProgress", reflect.TypeOf((*MockTaskService)(nil).SaveTaskProgress), arg0, arg1, arg2, arg3, arg4)
-}
-
 // SubscribeToBroadcastEvents mocks base method.
 func (m *MockTaskService) SubscribeToBroadcastEvents(arg0 domain.EventBus) {
 	m.ctrl.T.Helper()

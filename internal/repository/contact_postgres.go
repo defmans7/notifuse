@@ -321,6 +321,11 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		// --- INSERT path ---
 		isNew = true
 
+		// Set DB timestamps
+		now := time.Now()
+		contact.DBCreatedAt = now
+		contact.DBUpdatedAt = now
+
 		// Convert domain nullable types to SQL nullable types
 		var externalIDSQL, timezoneSQL, languageSQL sql.NullString
 		var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
@@ -633,8 +638,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 				customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL,
 				customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL,
 				customJSON1SQL, customJSON2SQL, customJSON3SQL, customJSON4SQL, customJSON5SQL,
-				sq.Expr("COALESCE(?, NOW())", contact.CreatedAt), // Use squirrel expression for COALESCE
-				sq.Expr("NOW()"), // Use squirrel expression for NOW()
+				contact.DBCreatedAt, contact.DBUpdatedAt, // Use DB timestamps
 			)
 
 		insertQuery, insertArgs, err := insertBuilder.ToSql()
@@ -652,6 +656,9 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	} else {
 		// --- UPDATE path ---
 		isNew = false
+
+		// Update DB timestamps
+		existingContact.DBUpdatedAt = time.Now()
 
 		// Merge changes from the input 'contact' into the 'existingContact'
 		existingContact.Merge(contact)
@@ -916,7 +923,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 				"custom_json_3":     customJSON3SQL,
 				"custom_json_4":     customJSON4SQL,
 				"custom_json_5":     customJSON5SQL,
-				"updated_at":        sq.Expr("NOW()"),
+				"updated_at":        existingContact.DBUpdatedAt, // Use DB timestamps
 			}).
 			Where(sq.Eq{"email": existingContact.Email})
 

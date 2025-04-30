@@ -275,7 +275,6 @@ type Broadcast struct {
 	CancelledAt       *time.Time            `json:"cancelled_at,omitempty"`
 	PausedAt          *time.Time            `json:"paused_at,omitempty"`
 	SentAt            *time.Time            `json:"sent_at,omitempty"`
-	TaskID            *string               `json:"task_id,omitempty"` // ID of the associated task
 }
 
 // UTMParameters contains UTM tracking parameters for the broadcast

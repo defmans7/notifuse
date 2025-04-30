@@ -69,6 +69,10 @@ type Contact struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
+	// Database timestamps for internal tracking (not exposed via JSON)
+	DBCreatedAt time.Time `json:"-"`
+	DBUpdatedAt time.Time `json:"-"`
+
 	// Join contact_lists
 	ContactLists []*ContactList `json:"contact_lists"`
 }
@@ -190,9 +194,11 @@ func ScanContact(scanner interface {
 
 	// Convert to domain model
 	c := &Contact{
-		Email:     dbc.Email,
-		CreatedAt: dbc.CreatedAt,
-		UpdatedAt: dbc.UpdatedAt,
+		Email:       dbc.Email,
+		CreatedAt:   dbc.CreatedAt,
+		UpdatedAt:   dbc.UpdatedAt,
+		DBCreatedAt: dbc.CreatedAt,
+		DBUpdatedAt: dbc.UpdatedAt,
 	}
 
 	// Handle nullable fields
@@ -939,6 +945,14 @@ func (c *Contact) Merge(other *Contact) {
 	}
 	if !other.UpdatedAt.IsZero() {
 		c.UpdatedAt = other.UpdatedAt
+	}
+
+	// Update DB timestamps
+	if !other.DBCreatedAt.IsZero() {
+		c.DBCreatedAt = other.DBCreatedAt
+	}
+	if !other.DBUpdatedAt.IsZero() {
+		c.DBUpdatedAt = other.DBUpdatedAt
 	}
 }
 

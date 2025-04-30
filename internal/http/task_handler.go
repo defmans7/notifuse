@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -12,21 +11,9 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-// TaskService defines the interface for task-related operations
-type TaskService interface {
-	CreateTask(ctx context.Context, workspace string, task *domain.Task) error
-	GetTask(ctx context.Context, workspace, id string) (*domain.Task, error)
-	ListTasks(ctx context.Context, workspace string, filter domain.TaskFilter) (*domain.TaskListResponse, error)
-	DeleteTask(ctx context.Context, workspace, id string) error
-	ExecuteTasks(ctx context.Context, maxTasks int) error
-	ExecuteTask(ctx context.Context, workspace, taskID string) error
-	ExecuteSubtask(ctx context.Context, subtaskID string) error
-	SaveTaskProgress(ctx context.Context, workspace, taskID string, progress float64, state *domain.TaskState) error
-}
-
 // TaskHandler handles HTTP requests related to tasks
 type TaskHandler struct {
-	taskService TaskService
+	taskService domain.TaskService
 	publicKey   paseto.V4AsymmetricPublicKey
 	logger      logger.Logger
 	secretKey   string
@@ -34,7 +21,7 @@ type TaskHandler struct {
 
 // NewTaskHandler creates a new task handler
 func NewTaskHandler(
-	taskService TaskService,
+	taskService domain.TaskService,
 	publicKey paseto.V4AsymmetricPublicKey,
 	logger logger.Logger,
 	secretKey string,

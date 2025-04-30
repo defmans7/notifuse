@@ -85,9 +85,10 @@ func (r *TaskRepository) CreateTx(ctx context.Context, tx *sql.Tx, workspace str
 			id, workspace_id, type, status, progress, state,
 			error_message, created_at, updated_at, last_run_at,
 			completed_at, next_run_after, timeout_after,
-			max_runtime, max_retries, retry_count, retry_interval
+			max_runtime, max_retries, retry_count, retry_interval,
+			broadcast_id
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 		)
 	`
 
@@ -111,6 +112,7 @@ func (r *TaskRepository) CreateTx(ctx context.Context, tx *sql.Tx, workspace str
 		task.MaxRetries,
 		task.RetryCount,
 		task.RetryInterval,
+		task.BroadcastID,
 	)
 
 	if err != nil {
@@ -140,7 +142,8 @@ func (r *TaskRepository) GetTx(ctx context.Context, tx *sql.Tx, workspace, id st
 			id, workspace_id, type, status, progress, state,
 			error_message, created_at, updated_at, last_run_at,
 			completed_at, next_run_after, timeout_after,
-			max_runtime, max_retries, retry_count, retry_interval
+			max_runtime, max_retries, retry_count, retry_interval,
+			broadcast_id
 		FROM tasks
 		WHERE id = $1 AND workspace_id = $2
 	`
@@ -148,6 +151,7 @@ func (r *TaskRepository) GetTx(ctx context.Context, tx *sql.Tx, workspace, id st
 	var task domain.Task
 	var stateJSON []byte
 	var lastRunAt, completedAt, nextRunAfter, timeoutAfter sql.NullTime
+	var broadcastID sql.NullString
 
 	err := tx.QueryRowContext(ctx, query, id, workspace).Scan(
 		&task.ID,
@@ -167,6 +171,7 @@ func (r *TaskRepository) GetTx(ctx context.Context, tx *sql.Tx, workspace, id st
 		&task.MaxRetries,
 		&task.RetryCount,
 		&task.RetryInterval,
+		&broadcastID,
 	)
 
 	if err != nil {
@@ -188,6 +193,11 @@ func (r *TaskRepository) GetTx(ctx context.Context, tx *sql.Tx, workspace, id st
 	}
 	if timeoutAfter.Valid {
 		task.TimeoutAfter = &timeoutAfter.Time
+	}
+
+	// Handle optional broadcast ID
+	if broadcastID.Valid {
+		task.BroadcastID = &broadcastID.String
 	}
 
 	// Unmarshal state
@@ -236,7 +246,8 @@ func (r *TaskRepository) UpdateTx(ctx context.Context, tx *sql.Tx, workspace str
 			max_runtime = $13,
 			max_retries = $14,
 			retry_count = $15,
-			retry_interval = $16
+			retry_interval = $16,
+			broadcast_id = $17
 		WHERE id = $1 AND workspace_id = $2
 	`
 
@@ -259,6 +270,7 @@ func (r *TaskRepository) UpdateTx(ctx context.Context, tx *sql.Tx, workspace str
 		task.MaxRetries,
 		task.RetryCount,
 		task.RetryInterval,
+		task.BroadcastID,
 	)
 
 	if err != nil {
@@ -347,6 +359,7 @@ func (r *TaskRepository) List(ctx context.Context, workspace string, filter doma
 		"error_message", "created_at", "updated_at", "last_run_at",
 		"completed_at", "next_run_after", "timeout_after",
 		"max_runtime", "max_retries", "retry_count", "retry_interval",
+		"broadcast_id",
 	).
 		From("tasks").
 		Where(sq.Eq{"workspace_id": workspace})
@@ -398,6 +411,7 @@ func (r *TaskRepository) List(ctx context.Context, workspace string, filter doma
 		var task domain.Task
 		var stateJSON []byte
 		var lastRunAt, completedAt, nextRunAfter, timeoutAfter sql.NullTime
+		var broadcastID sql.NullString
 
 		err := rows.Scan(
 			&task.ID,
@@ -417,6 +431,7 @@ func (r *TaskRepository) List(ctx context.Context, workspace string, filter doma
 			&task.MaxRetries,
 			&task.RetryCount,
 			&task.RetryInterval,
+			&broadcastID,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan task row: %w", err)
@@ -434,6 +449,11 @@ func (r *TaskRepository) List(ctx context.Context, workspace string, filter doma
 		}
 		if timeoutAfter.Valid {
 			task.TimeoutAfter = &timeoutAfter.Time
+		}
+
+		// Handle optional broadcast ID
+		if broadcastID.Valid {
+			task.BroadcastID = &broadcastID.String
 		}
 
 		// Unmarshal state
@@ -468,6 +488,7 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 		"error_message", "created_at", "updated_at", "last_run_at",
 		"completed_at", "next_run_after", "timeout_after",
 		"max_runtime", "max_retries", "retry_count", "retry_interval",
+		"broadcast_id",
 	).
 		From("tasks").
 		Where(sq.Or{
@@ -507,6 +528,7 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 		var task domain.Task
 		var stateJSON []byte
 		var lastRunAt, completedAt, nextRunAfter, timeoutAfter sql.NullTime
+		var broadcastID sql.NullString
 
 		err := rows.Scan(
 			&task.ID,
@@ -526,6 +548,7 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 			&task.MaxRetries,
 			&task.RetryCount,
 			&task.RetryInterval,
+			&broadcastID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task row: %w", err)
@@ -543,6 +566,11 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 		}
 		if timeoutAfter.Valid {
 			task.TimeoutAfter = &timeoutAfter.Time
+		}
+
+		// Handle optional broadcast ID
+		if broadcastID.Valid {
+			task.BroadcastID = &broadcastID.String
 		}
 
 		// Unmarshal state
@@ -830,7 +858,7 @@ func (r *TaskRepository) CreateSubtasksTx(ctx context.Context, tx *sql.Tx, works
 	}
 
 	// Verify the parent task exists
-	_, err := r.GetTx(ctx, tx, workspace, taskID)
+	parentTask, err := r.GetTx(ctx, tx, workspace, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get parent task: %w", err)
 	}
@@ -849,15 +877,19 @@ func (r *TaskRepository) CreateSubtasksTx(ctx context.Context, tx *sql.Tx, works
 			CreatedAt:    now,
 			UpdatedAt:    now,
 			State:        domain.TaskState{}, // Initialize empty state
+			Index:        i,
+			Total:        count,
+			BroadcastID:  parentTask.BroadcastID, // Inherit broadcast ID from parent task
 		}
 
 		// Insert the subtask
 		query := `
 			INSERT INTO task_subtasks (
 				id, parent_task_id, status, progress, state,
-				error_message, created_at, updated_at, started_at, completed_at
+				error_message, created_at, updated_at, started_at, completed_at,
+				index, total, broadcast_id
 			) VALUES (
-				$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+				$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 			)
 		`
 
@@ -880,6 +912,9 @@ func (r *TaskRepository) CreateSubtasksTx(ctx context.Context, tx *sql.Tx, works
 			subtasks[i].UpdatedAt,
 			nil, // started_at (null)
 			nil, // completed_at (null)
+			subtasks[i].Index,
+			subtasks[i].Total,
+			subtasks[i].BroadcastID,
 		)
 
 		if err != nil {
@@ -908,14 +943,18 @@ func (r *TaskRepository) GetSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID
 	query := `
 		SELECT
 			id, parent_task_id, status, progress, state,
-			error_message, created_at, updated_at, started_at, completed_at
+			error_message, created_at, updated_at, started_at, completed_at,
+			index, total, broadcast_id
 		FROM task_subtasks
 		WHERE id = $1
+		FOR UPDATE
 	`
 
 	var subtask domain.Subtask
 	var stateJSON []byte
 	var startedAt, completedAt sql.NullTime
+	var index, total sql.NullInt32
+	var broadcastID sql.NullString
 
 	err := tx.QueryRowContext(ctx, query, subtaskID).Scan(
 		&subtask.ID,
@@ -928,6 +967,9 @@ func (r *TaskRepository) GetSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID
 		&subtask.UpdatedAt,
 		&startedAt,
 		&completedAt,
+		&index,
+		&total,
+		&broadcastID,
 	)
 
 	if err != nil {
@@ -943,6 +985,19 @@ func (r *TaskRepository) GetSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID
 	}
 	if completedAt.Valid {
 		subtask.CompletedAt = &completedAt.Time
+	}
+
+	// Handle nullable integers
+	if index.Valid {
+		subtask.Index = int(index.Int32)
+	}
+	if total.Valid {
+		subtask.Total = int(total.Int32)
+	}
+
+	// Handle optional broadcast ID
+	if broadcastID.Valid {
+		subtask.BroadcastID = &broadcastID.String
 	}
 
 	// Unmarshal state
@@ -973,7 +1028,8 @@ func (r *TaskRepository) GetSubtasksTx(ctx context.Context, tx *sql.Tx, taskID s
 	query := `
 		SELECT
 			id, parent_task_id, status, progress, state,
-			error_message, created_at, updated_at, started_at, completed_at
+			error_message, created_at, updated_at, started_at, completed_at,
+			index, total, broadcast_id
 		FROM task_subtasks
 		WHERE parent_task_id = $1
 		ORDER BY created_at
@@ -991,6 +1047,8 @@ func (r *TaskRepository) GetSubtasksTx(ctx context.Context, tx *sql.Tx, taskID s
 		var subtask domain.Subtask
 		var stateJSON []byte
 		var startedAt, completedAt sql.NullTime
+		var index, total sql.NullInt32
+		var broadcastID sql.NullString
 
 		if err := rows.Scan(
 			&subtask.ID,
@@ -1003,6 +1061,9 @@ func (r *TaskRepository) GetSubtasksTx(ctx context.Context, tx *sql.Tx, taskID s
 			&subtask.UpdatedAt,
 			&startedAt,
 			&completedAt,
+			&index,
+			&total,
+			&broadcastID,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan subtask: %w", err)
 		}
@@ -1013,6 +1074,19 @@ func (r *TaskRepository) GetSubtasksTx(ctx context.Context, tx *sql.Tx, taskID s
 		}
 		if completedAt.Valid {
 			subtask.CompletedAt = &completedAt.Time
+		}
+
+		// Handle nullable integers
+		if index.Valid {
+			subtask.Index = int(index.Int32)
+		}
+		if total.Valid {
+			subtask.Total = int(total.Int32)
+		}
+
+		// Handle optional broadcast ID
+		if broadcastID.Valid {
+			subtask.BroadcastID = &broadcastID.String
 		}
 
 		// Unmarshal state
@@ -1277,4 +1351,95 @@ func (r *TaskRepository) UpdateTaskProgressFromSubtasksTx(ctx context.Context, t
 	}
 
 	return nil
+}
+
+// GetTaskByBroadcastID retrieves a task associated with a specific broadcast ID
+func (r *TaskRepository) GetTaskByBroadcastID(ctx context.Context, workspace, broadcastID string) (*domain.Task, error) {
+	var task *domain.Task
+	var err error
+
+	err = r.WithTransaction(ctx, func(tx *sql.Tx) error {
+		task, err = r.GetTaskByBroadcastIDTx(ctx, tx, workspace, broadcastID)
+		return err
+	})
+
+	return task, err
+}
+
+// GetTaskByBroadcastIDTx retrieves a task by broadcast ID within a transaction
+func (r *TaskRepository) GetTaskByBroadcastIDTx(ctx context.Context, tx *sql.Tx, workspace, broadcastID string) (*domain.Task, error) {
+	query := `
+		SELECT
+			id, workspace_id, type, status, progress, state,
+			error_message, created_at, updated_at, last_run_at,
+			completed_at, next_run_after, timeout_after,
+			max_runtime, max_retries, retry_count, retry_interval,
+			broadcast_id
+		FROM tasks
+		WHERE workspace_id = $1 AND broadcast_id = $2
+		AND type = 'send_broadcast'
+		LIMIT 1
+	`
+
+	var task domain.Task
+	var stateJSON []byte
+	var lastRunAt, completedAt, nextRunAfter, timeoutAfter sql.NullTime
+	var dbBroadcastID sql.NullString
+
+	err := tx.QueryRowContext(ctx, query, workspace, broadcastID).Scan(
+		&task.ID,
+		&task.WorkspaceID,
+		&task.Type,
+		&task.Status,
+		&task.Progress,
+		&stateJSON,
+		&task.ErrorMessage,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+		&lastRunAt,
+		&completedAt,
+		&nextRunAfter,
+		&timeoutAfter,
+		&task.MaxRuntime,
+		&task.MaxRetries,
+		&task.RetryCount,
+		&task.RetryInterval,
+		&dbBroadcastID,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("task not found for broadcast ID %s", broadcastID)
+		}
+		return nil, fmt.Errorf("failed to get task by broadcast ID: %w", err)
+	}
+
+	// Handle nullable times
+	if lastRunAt.Valid {
+		task.LastRunAt = &lastRunAt.Time
+	}
+	if completedAt.Valid {
+		task.CompletedAt = &completedAt.Time
+	}
+	if nextRunAfter.Valid {
+		task.NextRunAfter = &nextRunAfter.Time
+	}
+	if timeoutAfter.Valid {
+		task.TimeoutAfter = &timeoutAfter.Time
+	}
+
+	// Handle optional broadcast ID
+	if dbBroadcastID.Valid {
+		task.BroadcastID = &dbBroadcastID.String
+	}
+
+	// Unmarshal state
+	if stateJSON != nil {
+		task.State = &domain.TaskState{}
+		if err := json.Unmarshal(stateJSON, task.State); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal state: %w", err)
+		}
+	}
+
+	return &task, nil
 }

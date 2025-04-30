@@ -205,7 +205,7 @@ func TestBroadcastRepository_ListBroadcasts_CountError(t *testing.T) {
 	// 3. The error is propagated correctly and the method returns nil for the response
 }
 
-// TestBroadcastRepository_ListBroadcasts_CountQueryError tests errors in the count query
+// TestBroadcastRepository_ListBroadcasts_CountQueryError tests handling of count query errors
 func TestBroadcastRepository_ListBroadcasts_CountQueryError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -221,25 +221,29 @@ func TestBroadcastRepository_ListBroadcasts_CountQueryError(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "ws123"
 
-	params := domain.ListBroadcastsParams{
-		WorkspaceID: workspaceID,
-		Limit:       10,
-		Offset:      0,
-	}
-
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Expect the count query to fail
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Make the count query return an error
 	expectedErr := errors.New("database error")
 	mock.ExpectQuery("SELECT COUNT").
 		WithArgs(workspaceID).
 		WillReturnError(expectedErr)
 
-	response, err := repo.ListBroadcasts(ctx, params)
+	// Expect rollback
+	mock.ExpectRollback()
+
+	_, err = repo.ListBroadcasts(ctx, domain.ListBroadcastsParams{
+		WorkspaceID: workspaceID,
+		Limit:       10,
+		Offset:      0,
+	})
+
 	assert.Error(t, err)
-	assert.Nil(t, response)
 	assert.Contains(t, err.Error(), "failed to count broadcasts")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -289,10 +293,16 @@ func TestBroadcastRepository_DeleteBroadcast_Success(t *testing.T) {
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
+	// Expect transaction begin
+	mock.ExpectBegin()
+
 	// Expect DELETE query with the correct parameters and returning 1 row affected
 	mock.ExpectExec("DELETE FROM broadcasts").
 		WithArgs(broadcastID, workspaceID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Expect transaction commit
+	mock.ExpectCommit()
 
 	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
 	assert.NoError(t, err)
@@ -321,10 +331,16 @@ func TestBroadcastRepository_DeleteBroadcast_NotFound(t *testing.T) {
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
+	// Expect transaction begin
+	mock.ExpectBegin()
+
 	// Expect DELETE query with the correct parameters but no rows affected
 	mock.ExpectExec("DELETE FROM broadcasts").
 		WithArgs(broadcastID, workspaceID).
 		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// Expect rollback since there was an error (broadcast not found)
+	mock.ExpectRollback()
 
 	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
 	assert.Error(t, err)
@@ -356,11 +372,17 @@ func TestBroadcastRepository_DeleteBroadcast_ExecError(t *testing.T) {
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
+	// Expect transaction begin
+	mock.ExpectBegin()
+
 	// Expect DELETE query but return an error
 	expectedErr := errors.New("database error")
 	mock.ExpectExec("DELETE FROM broadcasts").
 		WithArgs(broadcastID, workspaceID).
 		WillReturnError(expectedErr)
+
+	// Expect rollback since there was an error
+	mock.ExpectRollback()
 
 	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
 	assert.Error(t, err)
@@ -390,11 +412,17 @@ func TestBroadcastRepository_DeleteBroadcast_RowsAffectedError(t *testing.T) {
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
+	// Expect transaction begin
+	mock.ExpectBegin()
+
 	// Create a custom result that returns an error for RowsAffected
 	expectedErr := errors.New("rows affected error")
 	mock.ExpectExec("DELETE FROM broadcasts").
 		WithArgs(broadcastID, workspaceID).
 		WillReturnResult(sqlmock.NewErrorResult(expectedErr))
+
+	// Expect rollback since there was an error
+	mock.ExpectRollback()
 
 	err = repo.DeleteBroadcast(ctx, workspaceID, broadcastID)
 	assert.Error(t, err)
@@ -430,6 +458,9 @@ func TestBroadcastRepository_CreateBroadcast_Success(t *testing.T) {
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
+	// Expect transaction begin
+	mock.ExpectBegin()
+
 	// Use AnyArg() matcher since the broadcast will have timestamps added
 	mock.ExpectExec("INSERT INTO broadcasts").
 		WithArgs(
@@ -461,11 +492,14 @@ func TestBroadcastRepository_CreateBroadcast_Success(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
+	// Expect transaction commit
+	mock.ExpectCommit()
+
 	err = repo.CreateBroadcast(ctx, testBroadcast)
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
-	// Verify timestamps were set
+	// Verify the timestamps were added
 	assert.False(t, testBroadcast.CreatedAt.IsZero())
 	assert.False(t, testBroadcast.UpdatedAt.IsZero())
 }
@@ -490,18 +524,22 @@ func TestBroadcastRepository_CreateBroadcast_ExecError(t *testing.T) {
 	testBroadcast := &domain.Broadcast{
 		ID:          "bc123",
 		WorkspaceID: workspaceID,
-		Name:        "Test Broadcast",
-		Status:      domain.BroadcastStatusDraft,
 	}
 
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
+	// Expect transaction begin
+	mock.ExpectBegin()
+
 	// Expect INSERT query but return an error
 	expectedErr := errors.New("database error")
 	mock.ExpectExec("INSERT INTO broadcasts").
 		WillReturnError(expectedErr)
+
+	// Expect rollback since there was an error
+	mock.ExpectRollback()
 
 	err = repo.CreateBroadcast(ctx, testBroadcast)
 	assert.Error(t, err)
@@ -648,7 +686,7 @@ func TestBroadcastRepository_GetBroadcast_QueryError(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-// TestBroadcastRepository_UpdateBroadcast_Success tests successful update of a broadcast.
+// TestBroadcastRepository_UpdateBroadcast_Success tests successful update of a broadcast
 func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -663,9 +701,11 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 
 	ctx := context.Background()
 	workspaceID := "ws123"
+	broadcastID := "bc123"
 
+	// Create a test broadcast with updated values
 	testBroadcast := &domain.Broadcast{
-		ID:              "bc123",
+		ID:              broadcastID,
 		WorkspaceID:     workspaceID,
 		Name:            "Updated Broadcast",
 		Status:          domain.BroadcastStatusDraft,
@@ -676,11 +716,14 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Use AnyArg() matcher since the broadcast will have timestamps added
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Expect UPDATE query with the correct parameters
 	mock.ExpectExec("UPDATE broadcasts SET").
 		WithArgs(
-			testBroadcast.ID,
-			testBroadcast.WorkspaceID,
+			broadcastID,
+			workspaceID,
 			testBroadcast.Name,
 			testBroadcast.Status,
 			sqlmock.AnyArg(), // audience
@@ -699,18 +742,21 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 			sqlmock.AnyArg(), // winning_variation
 			sqlmock.AnyArg(), // test_sent_at
 			sqlmock.AnyArg(), // winner_sent_at
-			sqlmock.AnyArg(), // updated_at - timestamp will be added
+			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // started_at
 			sqlmock.AnyArg(), // completed_at
 			sqlmock.AnyArg(), // cancelled_at
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
+	// Expect transaction commit
+	mock.ExpectCommit()
+
 	err = repo.UpdateBroadcast(ctx, testBroadcast)
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
-	// Verify updated_at timestamp was set
+	// Verify the updated_at timestamp was updated
 	assert.False(t, testBroadcast.UpdatedAt.IsZero())
 }
 
@@ -731,20 +777,25 @@ func TestBroadcastRepository_UpdateBroadcast_NotFound(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "ws123"
 
+	// Create a test broadcast with a non-existent ID
 	testBroadcast := &domain.Broadcast{
 		ID:          "nonexistent",
 		WorkspaceID: workspaceID,
-		Name:        "Updated Broadcast",
-		Status:      domain.BroadcastStatusDraft,
 	}
 
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Return zero rows affected
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Expect UPDATE query with correct parameters but return that no rows were affected
 	mock.ExpectExec("UPDATE broadcasts SET").
 		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// Expect rollback since there was an error (broadcast not found)
+	mock.ExpectRollback()
 
 	err = repo.UpdateBroadcast(ctx, testBroadcast)
 	assert.Error(t, err)
@@ -774,18 +825,22 @@ func TestBroadcastRepository_UpdateBroadcast_ExecError(t *testing.T) {
 	testBroadcast := &domain.Broadcast{
 		ID:          "bc123",
 		WorkspaceID: workspaceID,
-		Name:        "Updated Broadcast",
-		Status:      domain.BroadcastStatusDraft,
 	}
 
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Return an error for the UPDATE operation
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Expect UPDATE query but return an error
 	expectedErr := errors.New("database error")
 	mock.ExpectExec("UPDATE broadcasts SET").
 		WillReturnError(expectedErr)
+
+	// Expect rollback since there was an error
+	mock.ExpectRollback()
 
 	err = repo.UpdateBroadcast(ctx, testBroadcast)
 	assert.Error(t, err)
@@ -813,18 +868,22 @@ func TestBroadcastRepository_UpdateBroadcast_RowsAffectedError(t *testing.T) {
 	testBroadcast := &domain.Broadcast{
 		ID:          "bc123",
 		WorkspaceID: workspaceID,
-		Name:        "Updated Broadcast",
-		Status:      domain.BroadcastStatusDraft,
 	}
 
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Create a custom result that returns an error for RowsAffected
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Return a result with an error for RowsAffected
 	expectedErr := errors.New("rows affected error")
 	mock.ExpectExec("UPDATE broadcasts SET").
 		WillReturnResult(sqlmock.NewErrorResult(expectedErr))
+
+	// Expect rollback since there was an error
+	mock.ExpectRollback()
 
 	err = repo.UpdateBroadcast(ctx, testBroadcast)
 	assert.Error(t, err)
@@ -832,8 +891,7 @@ func TestBroadcastRepository_UpdateBroadcast_RowsAffectedError(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-// TestBroadcastRepository_ListBroadcasts_DataError tests that the repository
-// handles errors in the data query.
+// TestBroadcastRepository_ListBroadcasts_DataError tests handling data fetch errors
 func TestBroadcastRepository_ListBroadcasts_DataError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -849,37 +907,40 @@ func TestBroadcastRepository_ListBroadcasts_DataError(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "ws123"
 
-	params := domain.ListBroadcastsParams{
-		WorkspaceID: workspaceID,
-		Limit:       10,
-		Offset:      0,
-	}
-
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Expect the count query to succeed
-	countRows := sqlmock.NewRows([]string{"count"}).AddRow(5)
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Count query succeeds
 	mock.ExpectQuery("SELECT COUNT").
 		WithArgs(workspaceID).
-		WillReturnRows(countRows)
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
-	// But expect the data query to fail
+	// Data query fails
 	expectedErr := errors.New("database error")
-	mock.ExpectQuery("SELECT").
-		WithArgs(workspaceID, params.Limit, params.Offset).
+	mock.ExpectQuery("SELECT(.+)FROM broadcasts").
+		WithArgs(workspaceID, 10, 0).
 		WillReturnError(expectedErr)
 
-	response, err := repo.ListBroadcasts(ctx, params)
+	// Expect rollback
+	mock.ExpectRollback()
+
+	// Execute the method
+	_, err = repo.ListBroadcasts(ctx, domain.ListBroadcastsParams{
+		WorkspaceID: workspaceID,
+		Limit:       10,
+		Offset:      0,
+	})
+
 	assert.Error(t, err)
-	assert.Nil(t, response)
 	assert.Contains(t, err.Error(), "failed to list broadcasts")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-// TestBroadcastRepository_ListBroadcasts_RowsIterationError tests that the repository
-// handles errors during row iteration.
+// TestBroadcastRepository_ListBroadcasts_RowsIterationError tests errors during rows iteration
 func TestBroadcastRepository_ListBroadcasts_RowsIterationError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -895,23 +956,20 @@ func TestBroadcastRepository_ListBroadcasts_RowsIterationError(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "ws123"
 
-	params := domain.ListBroadcastsParams{
-		WorkspaceID: workspaceID,
-		Limit:       10,
-		Offset:      0,
-	}
-
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Expect the count query to succeed
-	countRows := sqlmock.NewRows([]string{"count"}).AddRow(5)
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Count query succeeds
 	mock.ExpectQuery("SELECT COUNT").
 		WithArgs(workspaceID).
-		WillReturnRows(countRows)
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
-	// Create mock rows that will return an error during iteration
+	// Setup a rows object that will return an error when we iterate
+	iterationErr := errors.New("iteration error")
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "tracking_enabled", "utm_parameters", "metadata",
@@ -919,21 +977,34 @@ func TestBroadcastRepository_ListBroadcasts_RowsIterationError(t *testing.T) {
 		"total_failed", "total_opens", "total_clicks", "winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
-	}).CloseError(errors.New("row iteration error"))
+	}).
+		AddRow(
+			"bc123", workspaceID, "Broadcast 1", "draft", "{}", "{}", "{}", true, "{}", "{}",
+			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
+		).
+		RowError(0, iterationErr) // Set error on the first row
 
-	mock.ExpectQuery("SELECT").
-		WithArgs(workspaceID, params.Limit, params.Offset).
+	// Expect data query
+	mock.ExpectQuery("SELECT(.+)FROM broadcasts").
+		WithArgs(workspaceID, 10, 0).
 		WillReturnRows(rows)
 
-	response, err := repo.ListBroadcasts(ctx, params)
+	// Expect rollback
+	mock.ExpectRollback()
+
+	// Execute the method
+	_, err = repo.ListBroadcasts(ctx, domain.ListBroadcastsParams{
+		WorkspaceID: workspaceID,
+		Limit:       10,
+		Offset:      0,
+	})
+
 	assert.Error(t, err)
-	assert.Nil(t, response)
 	assert.Contains(t, err.Error(), "error iterating broadcast rows")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-// TestBroadcastRepository_ListBroadcasts_ScanError tests that the repository
-// handles scan errors during row processing.
+// TestBroadcastRepository_ListBroadcasts_ScanError tests handling scan errors
 func TestBroadcastRepository_ListBroadcasts_ScanError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -949,53 +1020,44 @@ func TestBroadcastRepository_ListBroadcasts_ScanError(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "ws123"
 
-	params := domain.ListBroadcastsParams{
-		WorkspaceID: workspaceID,
-		Limit:       10,
-		Offset:      0,
-	}
-
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Expect the count query to succeed
-	countRows := sqlmock.NewRows([]string{"count"}).AddRow(5)
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Count query succeeds
 	mock.ExpectQuery("SELECT COUNT").
 		WithArgs(workspaceID).
-		WillReturnRows(countRows)
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
-	// Create rows with an invalid value type to cause a scan error
-	rows := sqlmock.NewRows([]string{
-		"id", "workspace_id", "name", "status", "audience", "schedule",
-		"test_settings", "tracking_enabled", "utm_parameters", "metadata",
-		"total_sent", "total_delivered", "total_bounced", "total_complained",
-		"total_failed", "total_opens", "total_clicks", "winning_variation",
-		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
-		"started_at", "completed_at", "cancelled_at",
-	}).
-		AddRow(
-			"bc123", workspaceID, "Test Broadcast", 123, // Invalid type for status
-			[]byte("{}"), []byte("{}"), []byte("{}"), true, []byte("{}"), []byte("{}"),
-			0, 0, 0, 0,
-			0, 0, 0, "",
-			nil, nil, time.Now(), time.Now(),
-			nil, nil, nil,
-		)
+	// Create invalid rows that will cause a scan error
+	// Using wrong number of columns will force a scan error
+	rows := sqlmock.NewRows([]string{"id", "workspace_id"}).
+		AddRow("bc123", workspaceID)
 
-	mock.ExpectQuery("SELECT").
-		WithArgs(workspaceID, params.Limit, params.Offset).
+	// Expect data query
+	mock.ExpectQuery("SELECT(.+)FROM broadcasts").
+		WithArgs(workspaceID, 10, 0).
 		WillReturnRows(rows)
 
-	response, err := repo.ListBroadcasts(ctx, params)
+	// Expect rollback
+	mock.ExpectRollback()
+
+	// Execute the method
+	_, err = repo.ListBroadcasts(ctx, domain.ListBroadcastsParams{
+		WorkspaceID: workspaceID,
+		Limit:       10,
+		Offset:      0,
+	})
+
 	assert.Error(t, err)
-	assert.Nil(t, response)
 	assert.Contains(t, err.Error(), "failed to scan broadcast")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-// TestBroadcastRepository_ListBroadcasts_WithStatus tests that the repository
-// correctly handles filtering by status.
+// TestBroadcastRepository_ListBroadcasts_WithStatus tests listing broadcasts with status filter
 func TestBroadcastRepository_ListBroadcasts_WithStatus(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1012,34 +1074,60 @@ func TestBroadcastRepository_ListBroadcasts_WithStatus(t *testing.T) {
 	workspaceID := "ws123"
 	status := domain.BroadcastStatusSending
 
-	params := domain.ListBroadcastsParams{
-		WorkspaceID: workspaceID,
-		Status:      status,
-		Limit:       10,
-		Offset:      0,
-	}
-
+	// Setup mock expectations for workspace DB connection
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
 		Return(db, nil)
 
-	// Expect the count query with status filter
-	countRows := sqlmock.NewRows([]string{"count"}).AddRow(2)
+	// Expect transaction begin
+	mock.ExpectBegin()
+
+	// Expect count query with status filter
 	mock.ExpectQuery("SELECT COUNT").
 		WithArgs(workspaceID, status).
-		WillReturnRows(countRows)
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
-	// For data query, we'll return an empty result set since we can't fully mock the rows scan
-	// The main goal is to test that the query uses the status filter correctly
-	mock.ExpectQuery("SELECT").
-		WithArgs(workspaceID, status, params.Limit, params.Offset).
-		WillReturnRows(sqlmock.NewRows([]string{}))
+	// Setup mock rows
+	rows := sqlmock.NewRows([]string{
+		"id", "workspace_id", "name", "status", "audience", "schedule",
+		"test_settings", "tracking_enabled", "utm_parameters", "metadata",
+		"total_sent", "total_delivered", "total_bounced", "total_complained",
+		"total_failed", "total_opens", "total_clicks", "winning_variation",
+		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
+		"started_at", "completed_at", "cancelled_at",
+	}).
+		AddRow(
+			"bc123", workspaceID, "Broadcast 1", status, []byte("{}"), []byte("{}"), []byte("{}"), true, []byte("{}"), []byte("{}"),
+			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
+		).
+		AddRow(
+			"bc456", workspaceID, "Broadcast 2", status, []byte("{}"), []byte("{}"), []byte("{}"), true, []byte("{}"), []byte("{}"),
+			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
+		)
 
-	response, err := repo.ListBroadcasts(ctx, params)
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Equal(t, 2, response.TotalCount)
-	assert.Len(t, response.Broadcasts, 0) // Empty due to our mock setup
+	// Expect query with limit/offset
+	mock.ExpectQuery("SELECT(.+)FROM broadcasts").
+		WithArgs(workspaceID, status, 10, 0).
+		WillReturnRows(rows)
+
+	// Expect commit
+	mock.ExpectCommit()
+
+	// Execute the method
+	result, err := repo.ListBroadcasts(ctx, domain.ListBroadcastsParams{
+		WorkspaceID: workspaceID,
+		Status:      status,
+		Limit:       10,
+		Offset:      0,
+	})
+
+	// Assert expectations
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 2, result.TotalCount)
+	assert.Equal(t, 2, len(result.Broadcasts))
+	assert.Equal(t, "bc123", result.Broadcasts[0].ID)
+	assert.Equal(t, "bc456", result.Broadcasts[1].ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

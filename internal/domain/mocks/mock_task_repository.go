@@ -6,6 +6,7 @@ package mocks
 
 import (
 	context "context"
+	sql "database/sql"
 	reflect "reflect"
 	time "time"
 
@@ -50,6 +51,20 @@ func (mr *MockTaskRepositoryMockRecorder) CompleteSubtask(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteSubtask", reflect.TypeOf((*MockTaskRepository)(nil).CompleteSubtask), arg0, arg1)
 }
 
+// CompleteSubtaskTx mocks base method.
+func (m *MockTaskRepository) CompleteSubtaskTx(arg0 context.Context, arg1 *sql.Tx, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CompleteSubtaskTx", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CompleteSubtaskTx indicates an expected call of CompleteSubtaskTx.
+func (mr *MockTaskRepositoryMockRecorder) CompleteSubtaskTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteSubtaskTx", reflect.TypeOf((*MockTaskRepository)(nil).CompleteSubtaskTx), arg0, arg1, arg2)
+}
+
 // Create mocks base method.
 func (m *MockTaskRepository) Create(arg0 context.Context, arg1 string, arg2 *domain.Task) error {
 	m.ctrl.T.Helper()
@@ -79,6 +94,35 @@ func (mr *MockTaskRepositoryMockRecorder) CreateSubtasks(arg0, arg1, arg2, arg3 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSubtasks", reflect.TypeOf((*MockTaskRepository)(nil).CreateSubtasks), arg0, arg1, arg2, arg3)
 }
 
+// CreateSubtasksTx mocks base method.
+func (m *MockTaskRepository) CreateSubtasksTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string, arg4 int) ([]*domain.Subtask, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSubtasksTx", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].([]*domain.Subtask)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateSubtasksTx indicates an expected call of CreateSubtasksTx.
+func (mr *MockTaskRepositoryMockRecorder) CreateSubtasksTx(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSubtasksTx", reflect.TypeOf((*MockTaskRepository)(nil).CreateSubtasksTx), arg0, arg1, arg2, arg3, arg4)
+}
+
+// CreateTx mocks base method.
+func (m *MockTaskRepository) CreateTx(arg0 context.Context, arg1 *sql.Tx, arg2 string, arg3 *domain.Task) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateTx indicates an expected call of CreateTx.
+func (mr *MockTaskRepositoryMockRecorder) CreateTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTx", reflect.TypeOf((*MockTaskRepository)(nil).CreateTx), arg0, arg1, arg2, arg3)
+}
+
 // Delete mocks base method.
 func (m *MockTaskRepository) Delete(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -105,6 +149,20 @@ func (m *MockTaskRepository) FailSubtask(arg0 context.Context, arg1, arg2 string
 func (mr *MockTaskRepositoryMockRecorder) FailSubtask(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailSubtask", reflect.TypeOf((*MockTaskRepository)(nil).FailSubtask), arg0, arg1, arg2)
+}
+
+// FailSubtaskTx mocks base method.
+func (m *MockTaskRepository) FailSubtaskTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FailSubtaskTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// FailSubtaskTx indicates an expected call of FailSubtaskTx.
+func (mr *MockTaskRepositoryMockRecorder) FailSubtaskTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailSubtaskTx", reflect.TypeOf((*MockTaskRepository)(nil).FailSubtaskTx), arg0, arg1, arg2, arg3)
 }
 
 // Get mocks base method.
@@ -152,6 +210,21 @@ func (mr *MockTaskRepositoryMockRecorder) GetSubtask(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubtask", reflect.TypeOf((*MockTaskRepository)(nil).GetSubtask), arg0, arg1)
 }
 
+// GetSubtaskTx mocks base method.
+func (m *MockTaskRepository) GetSubtaskTx(arg0 context.Context, arg1 *sql.Tx, arg2 string) (*domain.Subtask, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSubtaskTx", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.Subtask)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSubtaskTx indicates an expected call of GetSubtaskTx.
+func (mr *MockTaskRepositoryMockRecorder) GetSubtaskTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubtaskTx", reflect.TypeOf((*MockTaskRepository)(nil).GetSubtaskTx), arg0, arg1, arg2)
+}
+
 // GetSubtasks mocks base method.
 func (m *MockTaskRepository) GetSubtasks(arg0 context.Context, arg1 string) ([]*domain.Subtask, error) {
 	m.ctrl.T.Helper()
@@ -165,6 +238,66 @@ func (m *MockTaskRepository) GetSubtasks(arg0 context.Context, arg1 string) ([]*
 func (mr *MockTaskRepositoryMockRecorder) GetSubtasks(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubtasks", reflect.TypeOf((*MockTaskRepository)(nil).GetSubtasks), arg0, arg1)
+}
+
+// GetSubtasksTx mocks base method.
+func (m *MockTaskRepository) GetSubtasksTx(arg0 context.Context, arg1 *sql.Tx, arg2 string) ([]*domain.Subtask, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSubtasksTx", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*domain.Subtask)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSubtasksTx indicates an expected call of GetSubtasksTx.
+func (mr *MockTaskRepositoryMockRecorder) GetSubtasksTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubtasksTx", reflect.TypeOf((*MockTaskRepository)(nil).GetSubtasksTx), arg0, arg1, arg2)
+}
+
+// GetTaskByBroadcastID mocks base method.
+func (m *MockTaskRepository) GetTaskByBroadcastID(arg0 context.Context, arg1, arg2 string) (*domain.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTaskByBroadcastID", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTaskByBroadcastID indicates an expected call of GetTaskByBroadcastID.
+func (mr *MockTaskRepositoryMockRecorder) GetTaskByBroadcastID(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaskByBroadcastID", reflect.TypeOf((*MockTaskRepository)(nil).GetTaskByBroadcastID), arg0, arg1, arg2)
+}
+
+// GetTaskByBroadcastIDTx mocks base method.
+func (m *MockTaskRepository) GetTaskByBroadcastIDTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) (*domain.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTaskByBroadcastIDTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*domain.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTaskByBroadcastIDTx indicates an expected call of GetTaskByBroadcastIDTx.
+func (mr *MockTaskRepositoryMockRecorder) GetTaskByBroadcastIDTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaskByBroadcastIDTx", reflect.TypeOf((*MockTaskRepository)(nil).GetTaskByBroadcastIDTx), arg0, arg1, arg2, arg3)
+}
+
+// GetTx mocks base method.
+func (m *MockTaskRepository) GetTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) (*domain.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*domain.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTx indicates an expected call of GetTx.
+func (mr *MockTaskRepositoryMockRecorder) GetTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTx", reflect.TypeOf((*MockTaskRepository)(nil).GetTx), arg0, arg1, arg2, arg3)
 }
 
 // List mocks base method.
@@ -197,6 +330,20 @@ func (mr *MockTaskRepositoryMockRecorder) MarkAsCompleted(arg0, arg1, arg2 inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsCompleted", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsCompleted), arg0, arg1, arg2)
 }
 
+// MarkAsCompletedTx mocks base method.
+func (m *MockTaskRepository) MarkAsCompletedTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkAsCompletedTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkAsCompletedTx indicates an expected call of MarkAsCompletedTx.
+func (mr *MockTaskRepositoryMockRecorder) MarkAsCompletedTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsCompletedTx", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsCompletedTx), arg0, arg1, arg2, arg3)
+}
+
 // MarkAsFailed mocks base method.
 func (m *MockTaskRepository) MarkAsFailed(arg0 context.Context, arg1, arg2, arg3 string) error {
 	m.ctrl.T.Helper()
@@ -209,6 +356,20 @@ func (m *MockTaskRepository) MarkAsFailed(arg0 context.Context, arg1, arg2, arg3
 func (mr *MockTaskRepositoryMockRecorder) MarkAsFailed(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsFailed", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsFailed), arg0, arg1, arg2, arg3)
+}
+
+// MarkAsFailedTx mocks base method.
+func (m *MockTaskRepository) MarkAsFailedTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3, arg4 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkAsFailedTx", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkAsFailedTx indicates an expected call of MarkAsFailedTx.
+func (mr *MockTaskRepositoryMockRecorder) MarkAsFailedTx(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsFailedTx", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsFailedTx), arg0, arg1, arg2, arg3, arg4)
 }
 
 // MarkAsPaused mocks base method.
@@ -225,6 +386,20 @@ func (mr *MockTaskRepositoryMockRecorder) MarkAsPaused(arg0, arg1, arg2, arg3 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsPaused", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsPaused), arg0, arg1, arg2, arg3)
 }
 
+// MarkAsPausedTx mocks base method.
+func (m *MockTaskRepository) MarkAsPausedTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string, arg4 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkAsPausedTx", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkAsPausedTx indicates an expected call of MarkAsPausedTx.
+func (mr *MockTaskRepositoryMockRecorder) MarkAsPausedTx(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsPausedTx", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsPausedTx), arg0, arg1, arg2, arg3, arg4)
+}
+
 // MarkAsRunning mocks base method.
 func (m *MockTaskRepository) MarkAsRunning(arg0 context.Context, arg1, arg2 string, arg3 time.Time) error {
 	m.ctrl.T.Helper()
@@ -239,6 +414,20 @@ func (mr *MockTaskRepositoryMockRecorder) MarkAsRunning(arg0, arg1, arg2, arg3 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsRunning", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsRunning), arg0, arg1, arg2, arg3)
 }
 
+// MarkAsRunningTx mocks base method.
+func (m *MockTaskRepository) MarkAsRunningTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string, arg4 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkAsRunningTx", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkAsRunningTx indicates an expected call of MarkAsRunningTx.
+func (mr *MockTaskRepositoryMockRecorder) MarkAsRunningTx(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAsRunningTx", reflect.TypeOf((*MockTaskRepository)(nil).MarkAsRunningTx), arg0, arg1, arg2, arg3, arg4)
+}
+
 // SaveState mocks base method.
 func (m *MockTaskRepository) SaveState(arg0 context.Context, arg1, arg2 string, arg3 float64, arg4 *domain.TaskState) error {
 	m.ctrl.T.Helper()
@@ -251,6 +440,20 @@ func (m *MockTaskRepository) SaveState(arg0 context.Context, arg1, arg2 string, 
 func (mr *MockTaskRepositoryMockRecorder) SaveState(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveState", reflect.TypeOf((*MockTaskRepository)(nil).SaveState), arg0, arg1, arg2, arg3, arg4)
+}
+
+// SaveStateTx mocks base method.
+func (m *MockTaskRepository) SaveStateTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string, arg4 float64, arg5 *domain.TaskState) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveStateTx", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveStateTx indicates an expected call of SaveStateTx.
+func (mr *MockTaskRepositoryMockRecorder) SaveStateTx(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveStateTx", reflect.TypeOf((*MockTaskRepository)(nil).SaveStateTx), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // Update mocks base method.
@@ -281,6 +484,20 @@ func (mr *MockTaskRepositoryMockRecorder) UpdateSubtaskProgress(arg0, arg1, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSubtaskProgress", reflect.TypeOf((*MockTaskRepository)(nil).UpdateSubtaskProgress), arg0, arg1, arg2, arg3)
 }
 
+// UpdateSubtaskProgressTx mocks base method.
+func (m *MockTaskRepository) UpdateSubtaskProgressTx(arg0 context.Context, arg1 *sql.Tx, arg2 string, arg3 float64, arg4 domain.TaskState) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSubtaskProgressTx", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateSubtaskProgressTx indicates an expected call of UpdateSubtaskProgressTx.
+func (mr *MockTaskRepositoryMockRecorder) UpdateSubtaskProgressTx(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSubtaskProgressTx", reflect.TypeOf((*MockTaskRepository)(nil).UpdateSubtaskProgressTx), arg0, arg1, arg2, arg3, arg4)
+}
+
 // UpdateTaskProgressFromSubtasks mocks base method.
 func (m *MockTaskRepository) UpdateTaskProgressFromSubtasks(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -293,4 +510,46 @@ func (m *MockTaskRepository) UpdateTaskProgressFromSubtasks(arg0 context.Context
 func (mr *MockTaskRepositoryMockRecorder) UpdateTaskProgressFromSubtasks(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaskProgressFromSubtasks", reflect.TypeOf((*MockTaskRepository)(nil).UpdateTaskProgressFromSubtasks), arg0, arg1, arg2)
+}
+
+// UpdateTaskProgressFromSubtasksTx mocks base method.
+func (m *MockTaskRepository) UpdateTaskProgressFromSubtasksTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTaskProgressFromSubtasksTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateTaskProgressFromSubtasksTx indicates an expected call of UpdateTaskProgressFromSubtasksTx.
+func (mr *MockTaskRepositoryMockRecorder) UpdateTaskProgressFromSubtasksTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaskProgressFromSubtasksTx", reflect.TypeOf((*MockTaskRepository)(nil).UpdateTaskProgressFromSubtasksTx), arg0, arg1, arg2, arg3)
+}
+
+// UpdateTx mocks base method.
+func (m *MockTaskRepository) UpdateTx(arg0 context.Context, arg1 *sql.Tx, arg2 string, arg3 *domain.Task) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateTx indicates an expected call of UpdateTx.
+func (mr *MockTaskRepositoryMockRecorder) UpdateTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTx", reflect.TypeOf((*MockTaskRepository)(nil).UpdateTx), arg0, arg1, arg2, arg3)
+}
+
+// WithTransaction mocks base method.
+func (m *MockTaskRepository) WithTransaction(arg0 context.Context, arg1 func(*sql.Tx) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTransaction", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTransaction indicates an expected call of WithTransaction.
+func (mr *MockTaskRepositoryMockRecorder) WithTransaction(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockTaskRepository)(nil).WithTransaction), arg0, arg1)
 }

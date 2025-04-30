@@ -12,34 +12,12 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/config"
-	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// MockLogger is a simple mock implementation of logger.Logger
-type MockLogger struct{}
-
-func (m *MockLogger) Info(msg string)                                        {}
-func (m *MockLogger) Debug(msg string)                                       {}
-func (m *MockLogger) Warn(msg string)                                        {}
-func (m *MockLogger) Error(msg string)                                       {}
-func (m *MockLogger) Fatal(msg string)                                       {}
-func (m *MockLogger) WithField(key string, value interface{}) logger.Logger  { return m }
-func (m *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return m }
-func (m *MockLogger) WithError(err error) logger.Logger                      { return m }
-
-// MockMailer is a mock implementation of mailer.Mailer
-type MockMailer struct{}
-
-func (m *MockMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, token string) error {
-	return nil
-}
-
-func (m *MockMailer) SendMagicCode(email, code string) error {
-	return nil
-}
 
 // generateRandomKeyBytes generates random bytes for testing keys
 func generateRandomKeyBytes(length int) []byte {
@@ -114,11 +92,14 @@ func TestNewApp(t *testing.T) {
 	assert.NotNil(t, app.GetMux())
 
 	// Test creating a new app with custom options
-	mockLogger := &MockLogger{}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockDB, _, err := sqlmock.New()
 	require.NoError(t, err)
 
-	mockMailer := &MockMailer{}
+	mockMailer := pkgmocks.NewMockMailer(ctrl)
 
 	app = NewApp(cfg,
 		WithLogger(mockLogger),
@@ -138,7 +119,12 @@ func TestAppInitMailer(t *testing.T) {
 	}
 
 	// Test without pre-existing mailer
-	app := NewApp(cfg, WithLogger(&MockLogger{}))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	app := NewApp(cfg, WithLogger(mockLogger))
 	err := app.InitMailer()
 	assert.NoError(t, err)
 	assert.NotNil(t, app.GetMailer())
@@ -148,8 +134,8 @@ func TestAppInitMailer(t *testing.T) {
 	assert.True(t, isConsoleMailer)
 
 	// Test with pre-existing mailer (should be skipped)
-	mockMailer := &MockMailer{}
-	app = NewApp(cfg, WithLogger(&MockLogger{}), WithMockMailer(mockMailer))
+	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	app = NewApp(cfg, WithLogger(mockLogger), WithMockMailer(mockMailer))
 	err = app.InitMailer()
 	assert.NoError(t, err)
 	assert.Equal(t, mockMailer, app.GetMailer()) // Should still be the mock mailer
@@ -160,11 +146,16 @@ func TestAppShutdown(t *testing.T) {
 	cfg := &config.Config{}
 
 	// Create mock DB
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	mockDB, _, err := sqlmock.New()
 	require.NoError(t, err)
 
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
 	// Create app with mock DB
-	app := NewApp(cfg, WithLogger(&MockLogger{}), WithMockDB(mockDB))
+	app := NewApp(cfg, WithLogger(mockLogger), WithMockDB(mockDB))
 
 	// Test shutdown - no server but should close DB
 	err = app.Shutdown(context.Background())
@@ -182,7 +173,11 @@ func TestAppInitRepositories(t *testing.T) {
 	cfg := createTestConfig()
 
 	// Create app with mock DB
-	app := NewApp(cfg, WithLogger(&MockLogger{}), WithMockDB(mockDB))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	app := NewApp(cfg, WithLogger(mockLogger), WithMockDB(mockDB))
 
 	// Test repository initialization
 	err = app.InitRepositories()
@@ -209,7 +204,14 @@ func TestAppStart(t *testing.T) {
 	cfg.Server.Port = 18080 + (time.Now().Nanosecond() % 1000)
 
 	// Create app with mocks
-	mockLogger := &MockLogger{}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	mockDB, _, err := setupTestDBMock()
 	require.NoError(t, err)
 	defer mockDB.Close()
@@ -408,7 +410,20 @@ func TestAppInitServices(t *testing.T) {
 	cfg.Security.PasetoPrivateKeyBytes = keys.PrivateKeyBytes
 	cfg.Security.PasetoPublicKeyBytes = keys.PublicKeyBytes
 
-	app := NewApp(cfg, WithLogger(&MockLogger{}), WithMockDB(mockDB))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	// Set up expectations for any logger calls
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
+
+	app := NewApp(cfg, WithLogger(mockLogger), WithMockDB(mockDB))
 
 	// Setup repositories (required for services)
 	err = app.InitRepositories()
@@ -450,7 +465,20 @@ func TestAppInitHandlers(t *testing.T) {
 	cfg.Security.PasetoPrivateKeyBytes = keys.PrivateKeyBytes
 	cfg.Security.PasetoPublicKeyBytes = keys.PublicKeyBytes
 
-	app := NewApp(cfg, WithLogger(&MockLogger{}), WithMockDB(mockDB))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	// Set up expectations for any logger calls
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
+
+	app := NewApp(cfg, WithLogger(mockLogger), WithMockDB(mockDB))
 
 	// Setup repositories (required for services)
 	err = app.InitRepositories()

@@ -60,7 +60,7 @@ func TestTaskRepository_CreateWithTransaction(t *testing.T) {
 	ctx := context.Background()
 	workspace := "test-workspace"
 	task := &domain.Task{
-		ID:          uuid.New().String(),
+		ID:          "task-123",
 		WorkspaceID: workspace,
 		Type:        "test-task",
 		Status:      domain.TaskStatusPending,
@@ -77,6 +77,7 @@ func TestTaskRepository_CreateWithTransaction(t *testing.T) {
 		MaxRetries:    3,
 		RetryCount:    0,
 		RetryInterval: 60,
+		BroadcastID:   nil,
 	}
 
 	// Setup mock expectations
@@ -87,10 +88,11 @@ func TestTaskRepository_CreateWithTransaction(t *testing.T) {
 			sqlmock.AnyArg(), // State JSON
 			task.ErrorMessage,
 			sqlmock.AnyArg(), // CreatedAt (use AnyArg to avoid timestamp precision issues)
-			sqlmock.AnyArg(), // UpdatedAt (use AnyArg to avoid timestamp precision issues)
+			sqlmock.AnyArg(), // UpdatedAt
 			task.LastRunAt,
 			task.CompletedAt, task.NextRunAfter, task.TimeoutAfter,
 			task.MaxRuntime, task.MaxRetries, task.RetryCount, task.RetryInterval,
+			task.BroadcastID,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -115,11 +117,13 @@ func TestTaskRepository_GetWithTransaction(t *testing.T) {
 		"error_message", "created_at", "updated_at", "last_run_at",
 		"completed_at", "next_run_after", "timeout_after",
 		"max_runtime", "max_retries", "retry_count", "retry_interval",
+		"broadcast_id",
 	}).AddRow(
 		taskID, workspace, "test-task", domain.TaskStatusPending, 0, "{}",
 		"", now, now, nil,
 		nil, nil, nil,
 		60, 3, 0, 60,
+		nil, // broadcast_id
 	)
 
 	// Setup mock expectations
@@ -165,6 +169,7 @@ func TestTaskRepository_UpdateWithTransaction(t *testing.T) {
 		MaxRetries:    3,
 		RetryCount:    0,
 		RetryInterval: 60,
+		BroadcastID:   nil,
 	}
 
 	// Setup mock expectations
@@ -176,6 +181,7 @@ func TestTaskRepository_UpdateWithTransaction(t *testing.T) {
 			task.ErrorMessage, sqlmock.AnyArg(), task.LastRunAt,
 			task.CompletedAt, task.NextRunAfter, task.TimeoutAfter,
 			task.MaxRuntime, task.MaxRetries, task.RetryCount, task.RetryInterval,
+			task.BroadcastID,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
