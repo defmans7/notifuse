@@ -7,7 +7,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
@@ -18,21 +18,31 @@ func setupTest(t *testing.T) (
 	*mocks.MockContactRepository,
 	*mocks.MockListRepository,
 	*ContactListService,
+	*gomock.Controller,
 ) {
 	ctrl := gomock.NewController(t)
 	mockRepo := mocks.NewMockContactListRepository(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockLogger := &MockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)
 
-	return mockRepo, mockAuthService, mockContactRepo, mockListRepo, service
+	return mockRepo, mockAuthService, mockContactRepo, mockListRepo, service, ctrl
 }
 
 func TestContactListService_AddContactToList(t *testing.T) {
-	mockRepo, mockAuthService, mockContactRepo, mockListRepo, service := setupTest(t)
+	mockRepo, mockAuthService, mockContactRepo, mockListRepo, service, ctrl := setupTest(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -169,7 +179,8 @@ func TestContactListService_AddContactToList(t *testing.T) {
 }
 
 func TestContactListService_GetContactListByIDs(t *testing.T) {
-	mockRepo, mockAuthService, _, _, service := setupTest(t)
+	mockRepo, mockAuthService, _, _, service, ctrl := setupTest(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -222,7 +233,8 @@ func TestContactListService_GetContactListByIDs(t *testing.T) {
 }
 
 func TestContactListService_GetContactsByListID(t *testing.T) {
-	mockRepo, mockAuthService, _, mockListRepo, service := setupTest(t)
+	mockRepo, mockAuthService, _, mockListRepo, service, ctrl := setupTest(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -285,7 +297,8 @@ func TestContactListService_GetContactsByListID(t *testing.T) {
 }
 
 func TestContactListService_GetListsByEmail(t *testing.T) {
-	mockRepo, mockAuthService, mockContactRepo, _, service := setupTest(t)
+	mockRepo, mockAuthService, mockContactRepo, _, service, ctrl := setupTest(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -348,7 +361,8 @@ func TestContactListService_GetListsByEmail(t *testing.T) {
 }
 
 func TestContactListService_UpdateContactListStatus(t *testing.T) {
-	mockRepo, mockAuthService, _, _, service := setupTest(t)
+	mockRepo, mockAuthService, _, _, service, ctrl := setupTest(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -422,7 +436,8 @@ func TestContactListService_UpdateContactListStatus(t *testing.T) {
 }
 
 func TestContactListService_RemoveContactFromList(t *testing.T) {
-	mockRepo, mockAuthService, _, _, service := setupTest(t)
+	mockRepo, mockAuthService, _, _, service, ctrl := setupTest(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -464,14 +479,3 @@ func TestContactListService_RemoveContactFromList(t *testing.T) {
 		require.Error(t, err)
 	})
 }
-
-// MockLogger is a mock implementation of logger.Logger
-type MockLogger struct{}
-
-func (l *MockLogger) Info(message string)                                    {}
-func (l *MockLogger) Error(message string)                                   {}
-func (l *MockLogger) Debug(message string)                                   {}
-func (l *MockLogger) Warn(message string)                                    {}
-func (l *MockLogger) Fatal(message string)                                   {}
-func (l *MockLogger) WithField(key string, value interface{}) logger.Logger  { return l }
-func (l *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }

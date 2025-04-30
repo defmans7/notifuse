@@ -7,31 +7,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
 )
 
-// MockLogger is a simple mock logger for testing
-type MockLogger struct{}
-
-func (l *MockLogger) Debug(msg string)                                       {}
-func (l *MockLogger) Info(msg string)                                        {}
-func (l *MockLogger) Warn(msg string)                                        {}
-func (l *MockLogger) Error(msg string)                                       {}
-func (l *MockLogger) Fatal(msg string)                                       {}
-func (l *MockLogger) WithField(key string, value interface{}) logger.Logger  { return l }
-func (l *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }
-
 func TestAuthRepository_GetSessionByID(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	mockLogger := &MockLogger{}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	repo := NewSQLAuthRepository(db, mockLogger)
 
 	// Test case 1: Session found
@@ -66,7 +66,17 @@ func TestAuthRepository_GetUserByID(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	mockLogger := &MockLogger{}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	repo := NewSQLAuthRepository(db, mockLogger)
 
 	// Test case 1: User found

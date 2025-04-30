@@ -11,52 +11,28 @@ import (
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// MockLoggerForEmail is a mock implementation of logger.Logger for email tests
-type MockLoggerForEmail struct {
-	LoggedMessages []string
-}
-
-func (l *MockLoggerForEmail) Info(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "INFO: "+message)
-}
-
-func (l *MockLoggerForEmail) Error(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "ERROR: "+message)
-}
-
-func (l *MockLoggerForEmail) Debug(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "DEBUG: "+message)
-}
-
-func (l *MockLoggerForEmail) Warn(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "WARN: "+message)
-}
-
-func (l *MockLoggerForEmail) WithField(key string, value interface{}) logger.Logger {
-	return l
-}
-
-func (l *MockLoggerForEmail) WithFields(fields map[string]interface{}) logger.Logger {
-	return l
-}
-
-func (l *MockLoggerForEmail) Fatal(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "FATAL: "+message)
-}
-
 // setupEmailHandlerTest prepares a test environment for email handler tests
-func setupEmailHandlerTest(t *testing.T) (*mocks.MockEmailServiceInterface, *MockLoggerForEmail, *EmailHandler, paseto.V4AsymmetricSecretKey) {
+func setupEmailHandlerTest(t *testing.T) (*mocks.MockEmailServiceInterface, *pkgmocks.MockLogger, *EmailHandler, paseto.V4AsymmetricSecretKey) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(func() { ctrl.Finish() })
 
 	mockService := mocks.NewMockEmailServiceInterface(ctrl)
-	mockLogger := &MockLoggerForEmail{LoggedMessages: []string{}}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup common logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
 
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
@@ -67,23 +43,13 @@ func setupEmailHandlerTest(t *testing.T) (*mocks.MockEmailServiceInterface, *Moc
 	return mockService, mockLogger, handler, secretKey
 }
 
-// createEmailTestToken generates a test token for authentication in email tests
-func createEmailTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userID string) string {
-	token := paseto.NewToken()
-	token.SetString(string(domain.UserIDKey), userID)
-	token.SetString(string(domain.SessionIDKey), "test-session")
-
-	signedToken := token.V4Sign(secretKey, nil)
-	return signedToken
-}
-
 func TestNewEmailHandler(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockService := mocks.NewMockEmailServiceInterface(ctrl)
-	mockLogger := &MockLoggerForEmail{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 

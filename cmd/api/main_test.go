@@ -14,6 +14,8 @@ import (
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -129,18 +131,6 @@ func createSimpleTestConfig() *config.Config {
 		},
 	}
 }
-
-// MockLoggerSimple is a simple mock implementation of logger.Logger for the runServer test
-type MockLoggerSimple struct{}
-
-func (m *MockLoggerSimple) Info(msg string)                                        {}
-func (m *MockLoggerSimple) Debug(msg string)                                       {}
-func (m *MockLoggerSimple) Warn(msg string)                                        {}
-func (m *MockLoggerSimple) Error(msg string)                                       {}
-func (m *MockLoggerSimple) Fatal(msg string)                                       {}
-func (m *MockLoggerSimple) WithField(key string, value interface{}) logger.Logger  { return m }
-func (m *MockLoggerSimple) WithFields(fields map[string]interface{}) logger.Logger { return m }
-func (m *MockLoggerSimple) WithError(err error) logger.Logger                      { return m }
 
 // MockAppSimple implements AppInterface for testing the real runServer
 type MockAppSimple struct {
@@ -299,8 +289,19 @@ func TestActualRunServer(t *testing.T) {
 			// Create test config
 			cfg := createSimpleTestConfig()
 
-			// Create mock logger
-			mockLogger := &MockLoggerSimple{}
+			// Create mock logger with controller
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+			// Set up logger expectations
+			mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+			mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+			mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
 
 			// Run the server in a goroutine
 			resultCh := make(chan error, 1)

@@ -8,28 +8,30 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/service"
-	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mjml"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
-// mockLogger is a simple mock implementation of the logger.Logger interface for testing
-type mockLogger struct{}
-
-func (l *mockLogger) Info(message string)                                    {}
-func (l *mockLogger) Error(message string)                                   {}
-func (l *mockLogger) Debug(message string)                                   {}
-func (l *mockLogger) Warn(message string)                                    {}
-func (l *mockLogger) WithField(key string, value interface{}) logger.Logger  { return l }
-func (l *mockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }
-func (l *mockLogger) Fatal(message string)                                   {}
+func setupMockLogger(ctrl *gomock.Controller) *pkgmocks.MockLogger {
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
+	return mockLogger
+}
 
 func TestEmailService_SendEmail_NoDirectProvider(t *testing.T) {
 	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -37,7 +39,7 @@ func TestEmailService_SendEmail_NoDirectProvider(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -149,6 +151,7 @@ func TestEmailService_SendEmail_DirectProvider(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -156,7 +159,7 @@ func TestEmailService_SendEmail_DirectProvider(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -198,13 +201,14 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -240,13 +244,14 @@ func TestEmailService_TestTemplate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -291,6 +296,7 @@ func TestEmailService_TestEmailProvider_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -298,7 +304,7 @@ func TestEmailService_TestEmailProvider_Success(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -343,6 +349,7 @@ func TestEmailService_TestTemplate_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -350,7 +357,7 @@ func TestEmailService_TestTemplate_Success(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -433,6 +440,7 @@ func TestEmailService_SendEmail_WithProviders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -440,7 +448,7 @@ func TestEmailService_SendEmail_WithProviders(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -582,6 +590,7 @@ func TestEmailService_SendEmail_DefaultInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -589,7 +598,7 @@ func TestEmailService_SendEmail_DefaultInfo(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -641,6 +650,7 @@ func TestEmailService_SendEmail_SMTP_EncryptedPassword(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -648,7 +658,7 @@ func TestEmailService_SendEmail_SMTP_EncryptedPassword(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -702,6 +712,7 @@ func TestEmailService_SendEmail_WithWorkspace(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -709,7 +720,7 @@ func TestEmailService_SendEmail_WithWorkspace(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,
@@ -861,6 +872,7 @@ func TestEmailService_SendEmail_NoConfiguredProvider(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockLogger := setupMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
@@ -868,7 +880,7 @@ func TestEmailService_SendEmail_NoConfiguredProvider(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
 	emailService := service.NewEmailService(
-		&mockLogger{},
+		mockLogger,
 		mockAuthService,
 		"test-secret-key",
 		mockWorkspaceRepo,

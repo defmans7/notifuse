@@ -12,16 +12,50 @@ import (
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
+
+func setupContactListHandlerTest(t *testing.T) (*mocks.MockContactListService, *pkgmocks.MockLogger, *ContactListHandler) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockContactListService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup common logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewContactListHandler(mockService, publicKey, mockLogger)
+	return mockService, mockLogger, handler
+}
 
 func TestContactListHandler_RegisterRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockService := mocks.NewMockContactListService(ctrl)
-	mockLogger := &MockLoggerForContact{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup common logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
 
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
@@ -552,20 +586,4 @@ func TestContactListHandler_HandleRemoveContact(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to create a handler with public key
-func setupContactListHandlerTest(t *testing.T) (*mocks.MockContactListService, *MockLoggerForContact, *ContactListHandler) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockService := mocks.NewMockContactListService(ctrl)
-	mockLogger := &MockLoggerForContact{}
-
-	// Create key pair for testing
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
-
-	handler := NewContactListHandler(mockService, publicKey, mockLogger)
-	return mockService, mockLogger, handler
 }

@@ -12,50 +12,27 @@ import (
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
-// MockLoggerForList is a mock implementation of logger.Logger for list tests
-type MockLoggerForList struct {
-	LoggedMessages []string
-}
-
-func (l *MockLoggerForList) Info(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "INFO: "+message)
-}
-
-func (l *MockLoggerForList) Error(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "ERROR: "+message)
-}
-
-func (l *MockLoggerForList) Debug(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "DEBUG: "+message)
-}
-
-func (l *MockLoggerForList) Warn(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "WARN: "+message)
-}
-
-func (l *MockLoggerForList) WithField(key string, value interface{}) logger.Logger {
-	return l
-}
-
-func (l *MockLoggerForList) WithFields(fields map[string]interface{}) logger.Logger {
-	return l
-}
-
-func (l *MockLoggerForList) Fatal(message string) {
-	l.LoggedMessages = append(l.LoggedMessages, "FATAL: "+message)
-}
-
 // Test setup helper
-func setupListHandlerTest(t *testing.T) (*mocks.MockListService, *MockLoggerForList, *ListHandler) {
+func setupListHandlerTest(t *testing.T) (*mocks.MockListService, *pkgmocks.MockLogger, *ListHandler) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
 	mockService := mocks.NewMockListService(ctrl)
-	mockLogger := &MockLoggerForList{LoggedMessages: []string{}}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup common logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
 
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
