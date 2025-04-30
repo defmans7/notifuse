@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -1227,7 +1228,10 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 			"email":        contact.Email,
 			"error":        err.Error(),
 		}).Error("Failed to get broadcast for sending to contact")
-		return fmt.Errorf("failed to get broadcast: %w", err)
+		return &domain.ErrNotFound{
+			Entity: "broadcast",
+			ID:     broadcastID,
+		}
 	}
 
 	// Determine which variation to use for this contact
@@ -1245,7 +1249,11 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 		variationID = broadcast.TestSettings.Variations[0].ID
 	} else {
 		// No variations available
-		return fmt.Errorf("no template variations available for broadcast")
+		return &domain.ErrBroadcastDelivery{
+			BroadcastID: broadcastID,
+			Email:       contact.Email,
+			Reason:      "no template variations available for broadcast",
+		}
 	}
 
 	// Find the specified variation
@@ -1258,7 +1266,11 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 	}
 
 	if variation == nil {
-		return fmt.Errorf("variation with ID %s not found in broadcast", variationID)
+		return &domain.ErrBroadcastDelivery{
+			BroadcastID: broadcastID,
+			Email:       contact.Email,
+			Reason:      "variation not found",
+		}
 	}
 
 	// Fetch the template
@@ -1267,14 +1279,20 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 		s.logger.WithFields(map[string]interface{}{
 			"workspace_id": workspaceID,
 			"broadcast_id": broadcastID,
-			"template_id":  variation.TemplateID,
 			"email":        contact.Email,
+			"template_id":  variation.TemplateID,
 			"error":        err.Error(),
-		}).Error("Failed to fetch template for broadcast")
-		return err
+		}).Error("Failed to get template for broadcast")
+		return &domain.ErrBroadcastDelivery{
+			BroadcastID: broadcastID,
+			Email:       contact.Email,
+			Reason:      "template not found",
+			Err:         err,
+		}
 	}
 
 	// Prepare template data
+	// Convert contact to map first
 	contactData, err := contact.ToMapOfAny()
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
@@ -1283,16 +1301,23 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 			"email":        contact.Email,
 			"error":        err.Error(),
 		}).Error("Failed to convert contact to template data")
-		return err
+		return &domain.ErrBroadcastDelivery{
+			BroadcastID: broadcastID,
+			Email:       contact.Email,
+			Reason:      "failed to prepare template data",
+			Err:         err,
+		}
 	}
 
 	templateData := domain.MapOfAny{
 		"contact": contactData,
+		"unsubscribe_url": fmt.Sprintf("%s/api/contacts/unsubscribe?workspace_id=%s&email=%s",
+			s.apiEndpoint, workspaceID, url.QueryEscape(contact.Email)),
 	}
 
 	// Add UTM parameters if tracking is enabled
 	if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
-		templateData["utm_parameters"] = broadcast.UTMParameters
+		templateData["utm"] = broadcast.UTMParameters
 	}
 
 	// Compile the template
@@ -1304,7 +1329,12 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 			"email":        contact.Email,
 			"error":        err.Error(),
 		}).Error("Failed to compile template")
-		return err
+		return &domain.ErrBroadcastDelivery{
+			BroadcastID: broadcastID,
+			Email:       contact.Email,
+			Reason:      "template compilation failed",
+			Err:         err,
+		}
 	}
 
 	if !compiledTemplate.Success || compiledTemplate.HTML == nil {
@@ -1318,7 +1348,11 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 			"email":        contact.Email,
 			"error":        errMsg,
 		}).Error("Failed to generate HTML from template")
-		return fmt.Errorf("template compilation failed: %s", errMsg)
+		return &domain.ErrBroadcastDelivery{
+			BroadcastID: broadcastID,
+			Email:       contact.Email,
+			Reason:      errMsg,
+		}
 	}
 
 	// Send the email
@@ -1340,12 +1374,49 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 			"email":        contact.Email,
 			"error":        err.Error(),
 		}).Error("Failed to send email to contact")
-		return err
+		return &domain.ErrBroadcastDelivery{
+			BroadcastID: broadcastID,
+			Email:       contact.Email,
+			Reason:      "failed to send email",
+			Err:         err,
+		}
 	}
 
-	// Update metrics for the variation (if needed, this can be done in bulk later)
-	// This operation is not performed here for performance reasons,
-	// metrics are tracked in the task processor instead
+	// Record the successful message
+	// Create a unique ID for the message
+	messageID := fmt.Sprintf("%s-%s-%s", workspaceID, broadcastID, contact.Email)
+
+	broadcastIDPtr := broadcastID
+	message := &domain.MessageHistory{
+		ID:              messageID,
+		ContactID:       contact.Email, // Using email as contact ID
+		BroadcastID:     &broadcastIDPtr,
+		TemplateID:      template.ID,
+		TemplateVersion: 1,
+		Channel:         "email",
+		Status:          domain.MessageStatusSent,
+		MessageData: domain.MessageData{
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"variation_id": variationID,
+				"email":        contact.Email,
+			},
+		},
+		SentAt:    time.Now(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Record message history - don't fail if this doesn't work
+	if err := s.RecordMessageSent(ctx, workspaceID, message); err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Warn("Failed to record message history, but email was sent")
+		// We don't return the error here since the message was already sent
+	}
 
 	s.logger.WithFields(map[string]interface{}{
 		"broadcast_id": broadcastID,

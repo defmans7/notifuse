@@ -282,29 +282,59 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 
 	// Wrap the initial setup operations in a transaction
 	err = s.WithTransaction(ctx, func(tx *sql.Tx) error {
-
 		var taskErr error
 		task, taskErr = s.repo.GetTx(ctx, tx, workspace, taskID)
 		if taskErr != nil {
-			return fmt.Errorf("failed to get task: %w", taskErr)
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+				"error":        taskErr.Error(),
+			}).Error("Failed to get task for execution")
+			return &domain.ErrNotFound{
+				Entity: "task",
+				ID:     taskID,
+			}
 		}
 
 		// Get the processor for this task type
 		var procErr error
 		processor, procErr = s.GetProcessor(task.Type)
 		if procErr != nil {
-			return fmt.Errorf("failed to get processor: %w", procErr)
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+				"task_type":    task.Type,
+				"error":        procErr.Error(),
+			}).Error("Failed to get processor for task type")
+			return &domain.ErrTaskExecution{
+				TaskID: taskID,
+				Reason: "no processor registered for task type",
+				Err:    procErr,
+			}
 		}
 
 		// Set timeout
 		timeoutAt := time.Now().Add(time.Duration(task.MaxRuntime) * time.Second)
 
 		// Mark task as running within the same transaction
-		return s.repo.MarkAsRunningTx(ctx, tx, workspace, taskID, timeoutAt)
+		if markErr := s.repo.MarkAsRunningTx(ctx, tx, workspace, taskID, timeoutAt); markErr != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+				"error":        markErr.Error(),
+			}).Error("Failed to mark task as running")
+			return &domain.ErrTaskExecution{
+				TaskID: taskID,
+				Reason: "failed to mark task as running",
+				Err:    markErr,
+			}
+		}
+
+		return nil
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to prepare task execution: %w", err)
+		return err
 	}
 
 	// For non-parallel tasks, use the standard execution flow
@@ -330,11 +360,17 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 		elapsed := time.Since(startTime)
 
 		if err != nil {
-			s.logger.WithField("task_id", taskID).
-				WithField("elapsed_time", elapsed).
-				WithField("error", err.Error()).
-				Error("Task processing failed")
-			processErr <- err
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+				"elapsed_time": elapsed,
+				"error":        err.Error(),
+			}).Error("Task processing failed")
+			processErr <- &domain.ErrTaskExecution{
+				TaskID: taskID,
+				Reason: "processing failed",
+				Err:    err,
+			}
 			return
 		}
 
@@ -347,60 +383,141 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 		if completed {
 			// Task was completed successfully
 			if err := s.repo.MarkAsCompleted(ctx, workspace, taskID); err != nil {
-				return fmt.Errorf("failed to mark task as completed: %w", err)
+				s.logger.WithFields(map[string]interface{}{
+					"task_id":      taskID,
+					"workspace_id": workspace,
+					"error":        err.Error(),
+				}).Error("Failed to mark task as completed")
+				return &domain.ErrTaskExecution{
+					TaskID: taskID,
+					Reason: "failed to mark task as completed",
+					Err:    err,
+				}
 			}
-			s.logger.WithField("task_id", taskID).Info("Task completed successfully")
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+			}).Info("Task completed successfully")
 		} else {
 			// Mark task as paused for next run
-			// MarkAsPaused now includes state and progress parameters
 			nextRun := time.Now().Add(1 * time.Minute)
 			if err := s.repo.MarkAsPaused(ctx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
-				return fmt.Errorf("failed to mark task as paused: %w", err)
+				s.logger.WithFields(map[string]interface{}{
+					"task_id":      taskID,
+					"workspace_id": workspace,
+					"error":        err.Error(),
+				}).Error("Failed to mark task as paused")
+				return &domain.ErrTaskExecution{
+					TaskID: taskID,
+					Reason: "failed to mark task as paused",
+					Err:    err,
+				}
 			}
-			s.logger.WithField("task_id", taskID).Info("Task paused and will continue in next run")
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+				"next_run":     nextRun,
+			}).Info("Task paused and will continue in next run")
 		}
 	case err := <-processErr:
 		// Task failed with an error
-		if err := s.repo.MarkAsFailed(ctx, workspace, taskID, err.Error()); err != nil {
-			return fmt.Errorf("failed to mark task as failed: %w", err)
+		if markErr := s.repo.MarkAsFailed(ctx, workspace, taskID, err.Error()); markErr != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+				"error":        markErr.Error(),
+				"process_err":  err.Error(),
+			}).Error("Failed to mark task as failed")
+			return fmt.Errorf("failed to mark task as failed: %w", markErr)
 		}
-		return fmt.Errorf("task processing error: %w", err)
+		return err
 	case <-ctx.Done():
 		// Task timed out or context was cancelled
 		if ctx.Err() == context.DeadlineExceeded {
 			// This is a timeout
-			errorMsg := fmt.Sprintf("Task execution timed out after %d seconds", task.MaxRuntime)
-			s.logger.WithField("task_id", taskID).Warn(errorMsg)
+			timeoutErr := &domain.ErrTaskTimeout{
+				TaskID:     taskID,
+				MaxRuntime: task.MaxRuntime,
+			}
+
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+				"max_runtime":  task.MaxRuntime,
+			}).Warn(timeoutErr.Error())
 
 			// Try to reschedule if retries are available
 			if task.RetryCount < task.MaxRetries {
 				// MarkAsPaused now includes state and progress parameters
 				nextRun := time.Now().Add(time.Duration(task.RetryInterval) * time.Second)
 				if err := s.repo.MarkAsPaused(ctx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
-					return fmt.Errorf("failed to mark task as paused after timeout: %w", err)
+					s.logger.WithFields(map[string]interface{}{
+						"task_id":      taskID,
+						"workspace_id": workspace,
+						"error":        err.Error(),
+					}).Error("Failed to mark task as paused after timeout")
+					return &domain.ErrTaskExecution{
+						TaskID: taskID,
+						Reason: "failed to mark task as paused after timeout",
+						Err:    err,
+					}
 				}
-				s.logger.WithField("task_id", taskID).
-					WithField("retry_count", task.RetryCount+1).
-					WithField("max_retries", task.MaxRetries).
-					Warn("Task timed out and will retry")
+				s.logger.WithFields(map[string]interface{}{
+					"task_id":        taskID,
+					"workspace_id":   workspace,
+					"retry_count":    task.RetryCount + 1,
+					"max_retries":    task.MaxRetries,
+					"next_run":       nextRun,
+					"retry_interval": task.RetryInterval,
+				}).Warn("Task timed out and will retry")
 			} else {
 				// No retries left, mark as failed
-				if err := s.repo.MarkAsFailed(ctx, workspace, taskID, errorMsg); err != nil {
-					return fmt.Errorf("failed to mark task as failed after timeout: %w", err)
+				if err := s.repo.MarkAsFailed(ctx, workspace, taskID, timeoutErr.Error()); err != nil {
+					s.logger.WithFields(map[string]interface{}{
+						"task_id":      taskID,
+						"workspace_id": workspace,
+						"error":        err.Error(),
+					}).Error("Failed to mark task as failed after timeout")
+					return &domain.ErrTaskExecution{
+						TaskID: taskID,
+						Reason: "failed to mark task as failed after timeout",
+						Err:    err,
+					}
 				}
-				s.logger.WithField("task_id", taskID).
-					WithField("max_retries", task.MaxRetries).
-					Warn("Task timed out and has no retries left")
+				s.logger.WithFields(map[string]interface{}{
+					"task_id":      taskID,
+					"workspace_id": workspace,
+					"max_retries":  task.MaxRetries,
+				}).Warn("Task timed out and has no retries left")
 			}
+
+			return timeoutErr
 		} else {
 			// This is a cancellation
-			if err := s.repo.MarkAsFailed(ctx, workspace, taskID, "Task execution was cancelled"); err != nil {
-				return fmt.Errorf("failed to mark task as failed after cancellation: %w", err)
+			cancelErr := &domain.ErrTaskExecution{
+				TaskID: taskID,
+				Reason: "task execution was cancelled",
 			}
-			s.logger.WithField("task_id", taskID).Warn("Task execution was cancelled")
-		}
 
-		return ctx.Err()
+			if err := s.repo.MarkAsFailed(ctx, workspace, taskID, cancelErr.Error()); err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"task_id":      taskID,
+					"workspace_id": workspace,
+					"error":        err.Error(),
+				}).Error("Failed to mark task as failed after cancellation")
+				return &domain.ErrTaskExecution{
+					TaskID: taskID,
+					Reason: "failed to mark task as failed after cancellation",
+					Err:    err,
+				}
+			}
+			s.logger.WithFields(map[string]interface{}{
+				"task_id":      taskID,
+				"workspace_id": workspace,
+			}).Warn("Task execution was cancelled")
+
+			return cancelErr
+		}
 	}
 
 	return nil

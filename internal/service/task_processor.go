@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,7 +12,6 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/google/uuid"
 )
 
 // Helper function to safely get string value from NullableString
@@ -73,9 +74,17 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 
 	// Extract broadcast ID from task state or context
 	broadcastState := task.State.SendBroadcast
+	if broadcastState.BroadcastID == "" && task.BroadcastID != nil {
+		// If state doesn't have broadcast ID but task does, use it
+		broadcastState.BroadcastID = *task.BroadcastID
+	}
+
 	if broadcastState.BroadcastID == "" {
 		// In a real implementation, we'd expect the broadcast ID to be set when creating the task
-		return false, fmt.Errorf("broadcast ID is missing in task state")
+		return false, &domain.ErrTaskExecution{
+			TaskID: task.ID,
+			Reason: "broadcast ID is missing in task state",
+		}
 	}
 
 	// If we're just starting (first run), get the total recipients
@@ -88,7 +97,21 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 				"broadcast_id": broadcastState.BroadcastID,
 				"error":        err.Error(),
 			}).Error("Failed to get recipient count for broadcast")
-			return false, fmt.Errorf("failed to get recipient count: %w", err)
+
+			// Check if this is a not found error
+			if _, ok := err.(*domain.ErrNotFound); ok {
+				return false, &domain.ErrTaskExecution{
+					TaskID: task.ID,
+					Reason: "broadcast not found",
+					Err:    err,
+				}
+			}
+
+			return false, &domain.ErrTaskExecution{
+				TaskID: task.ID,
+				Reason: "failed to get recipient count",
+				Err:    err,
+			}
 		}
 
 		broadcastState.TotalRecipients = recipientCount
@@ -103,6 +126,20 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 			"total_recipients": broadcastState.TotalRecipients,
 			"channel_type":     broadcastState.ChannelType,
 		}).Info("Broadcast sending initialized")
+
+		// If there are no recipients, we can mark as completed immediately
+		if broadcastState.TotalRecipients == 0 {
+			task.State.Message = "Broadcast completed: No recipients found"
+			task.Progress = 100.0
+			task.State.Progress = 100.0
+
+			p.logger.WithFields(map[string]interface{}{
+				"task_id":      task.ID,
+				"broadcast_id": broadcastState.BroadcastID,
+			}).Info("Broadcast completed with no recipients")
+
+			return true, nil
+		}
 
 		// Early return after initialization to save state
 		return false, nil
@@ -177,18 +214,37 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 			"broadcast_id": broadcastState.BroadcastID,
 			"error":        err.Error(),
 		}).Error("Failed to get broadcast for templates")
-		return false, fmt.Errorf("failed to get broadcast: %w", err)
+
+		// Check if this is a not found error
+		if _, ok := err.(*domain.ErrNotFound); ok {
+			return false, &domain.ErrTaskExecution{
+				TaskID: task.ID,
+				Reason: "broadcast not found",
+				Err:    err,
+			}
+		}
+
+		return false, &domain.ErrTaskExecution{
+			TaskID: task.ID,
+			Reason: "failed to get broadcast",
+			Err:    err,
+		}
 	}
 
 	// Pre-load all templates used by variations
 	variationTemplates := make(map[string]*domain.Template)
-	for _, variation := range broadcast.TestSettings.Variations {
-		// Skip if we already loaded this template
-		if _, exists := variationTemplates[variation.TemplateID]; exists {
-			continue
-		}
+	templateData := make(map[string]interface{})
 
-		// Load the template
+	// Populate base template data that doesn't change per recipient
+	templateData["broadcast"] = broadcast
+
+	// Add UTM parameters if tracking is enabled
+	if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
+		templateData["utm"] = broadcast.UTMParameters
+	}
+
+	// Pre-load all templates
+	for _, variation := range broadcast.TestSettings.Variations {
 		template, err := p.broadcastService.GetTemplateByID(ctx, task.WorkspaceID, variation.TemplateID)
 		if err != nil {
 			p.logger.WithFields(map[string]interface{}{
@@ -196,25 +252,29 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 				"broadcast_id": broadcastState.BroadcastID,
 				"template_id":  variation.TemplateID,
 				"error":        err.Error(),
-			}).Error("Failed to load template for variation, will load on demand")
-			// Continue without this template, it will be loaded on demand
+			}).Error("Failed to load template for variation")
+			// Log the error but continue - we'll skip this variation when sending
+			// We don't want to fail the entire broadcast if one template is missing
 			continue
 		}
-
-		// Store the template
 		variationTemplates[variation.TemplateID] = template
 	}
 
-	p.logger.WithFields(map[string]interface{}{
-		"task_id":          task.ID,
-		"broadcast_id":     broadcastState.BroadcastID,
-		"templates_loaded": len(variationTemplates),
-	}).Info("Pre-loaded templates for broadcast")
+	// Check if we need to bail out before processing recipients
+	if len(variationTemplates) == 0 {
+		p.logger.WithFields(map[string]interface{}{
+			"task_id":      task.ID,
+			"broadcast_id": broadcastState.BroadcastID,
+		}).Error("No valid templates found for broadcast")
+		return false, &domain.ErrTaskExecution{
+			TaskID: task.ID,
+			Reason: "no valid templates found for broadcast",
+		}
+	}
 
-	// Use a batch size of 50 for each fetch operation
-	fetchBatchSize := 50
+	// Batch size for fetching contacts
+	fetchBatchSize := 100
 
-	// Process recipients until we hit a stopping condition
 	for {
 		select {
 		case <-processCtx.Done():
@@ -242,8 +302,26 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 				"offset":       int(broadcastState.RecipientOffset) + processedCount,
 				"error":        err.Error(),
 			}).Error("Failed to get broadcast recipients")
-			// Try to continue with next batch rather than failing the task
-			continue
+
+			// Don't fail the task for temporary errors - retry on next cycle
+			if strings.Contains(err.Error(), "context deadline exceeded") ||
+				strings.Contains(err.Error(), "connection refused") {
+				p.logger.Info("Temporary error retrieving recipients, will retry on next run")
+				break
+			}
+
+			// Continue with next batch for retriable errors
+			if strings.Contains(err.Error(), "no such host") ||
+				strings.Contains(err.Error(), "i/o timeout") {
+				continue
+			}
+
+			// Fatal errors should stop the task
+			return false, &domain.ErrTaskExecution{
+				TaskID: task.ID,
+				Reason: "failed to get broadcast recipients",
+				Err:    err,
+			}
 		}
 
 		// If we got no recipients, we're done
@@ -255,245 +333,130 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 
 		// Process each recipient in parallel with semaphore to limit concurrency
 		for _, contact := range recipients {
-			// Check if we should stop processing
+			// Check context cancellation
 			select {
 			case <-processCtx.Done():
-				// We've hit the time limit, break out of the loop
-				p.logger.WithField("task_id", task.ID).Info("Processing time limit reached during recipient processing")
+				p.logger.WithField("task_id", task.ID).Info("Processing time limit reached during contact iteration")
 				allDone = false
 				goto CLEANUP // Use goto to break out of nested loop
 			default:
 				// Continue processing
 			}
 
-			// Acquire semaphore slot (blocks if we're at max parallelism)
+			// Acquire a slot from the semaphore (will block if we're at max parallelism)
 			if err := sem.Acquire(ctx, 1); err != nil {
 				p.logger.WithFields(map[string]interface{}{
 					"task_id": task.ID,
 					"error":   err.Error(),
 				}).Error("Failed to acquire semaphore")
+				// Continue with next recipient
 				continue
 			}
 
-			// Increment processed count under lock
+			// Increment counter for this batch
 			mu.Lock()
 			processedCount++
 			mu.Unlock()
 
-			// Launch goroutine to process this recipient
+			// Process this recipient in a goroutine
 			wg.Add(1)
 			go func(contact *domain.Contact) {
 				defer wg.Done()
 				defer sem.Release(1)
 
-				// Generate a unique message ID for tracking
-				messageID := uuid.New().String()
-
-				// Create a message history record before sending
-				now := time.Now()
-				broadcastIDCopy := broadcastState.BroadcastID // Make a copy to use in the pointer
-
-				// Determine which template will be used for this contact
-				var templateID string
-				var templateVersion int
-
-				// In a real implementation, this would be determined by the variation assignment logic
-				// For now, we'll just use the first variation
-				if len(broadcast.TestSettings.Variations) > 0 {
-					templateID = broadcast.TestSettings.Variations[0].TemplateID
-
-					// Find the template in our pre-loaded templates
-					if template, ok := variationTemplates[templateID]; ok && template != nil {
-						templateVersion = int(template.Version)
-					} else {
-						// Default to version 1 if not found
-						templateVersion = 1
-					}
+				// Create a copy of template data for this recipient
+				recipientData := make(map[string]interface{})
+				for k, v := range templateData {
+					recipientData[k] = v
 				}
 
-				// Get the contact list for unsubscribe link if available
-				var contactList *domain.List
-				// If this broadcast is targeting specific lists
-				if len(broadcast.Audience.Lists) > 0 && len(broadcast.Audience.Lists[0]) > 0 {
-					// Try to find the list in the contact's lists
-					primaryListID := broadcast.Audience.Lists[0]
-					for _, cl := range contact.ContactLists {
-						if cl != nil && cl.ListID == primaryListID {
-							// Found the list, create a simplified List object
-							contactList = &domain.List{
-								ID:   cl.ListID,
-								Name: primaryListID, // Use ID as name if we don't have the actual name
-							}
-							break
-						}
-					}
-				}
-
-				// Compute list ID for metadata
-				var listID string
-				if contactList != nil {
-					listID = contactList.ID
-				}
-
-				messageData := domain.MessageData{
-					Data: map[string]interface{}{
-						"contact": contact,
-						// Other data used for template rendering
-					},
-					Metadata: map[string]interface{}{
-						"broadcast_id": broadcastState.BroadcastID,
-						"variation_id": broadcast.TestSettings.Variations[0].ID,
-						"list_id":      listID,
-					},
-				}
-
-				// Create the message history record
-				messageHistory := &domain.MessageHistory{
-					ID:              messageID,
-					ContactID:       contact.Email,
-					BroadcastID:     &broadcastIDCopy,
-					TemplateID:      templateID,
-					TemplateVersion: templateVersion,
-					Channel:         "email",
-					Status:          domain.MessageStatusSent,
-					MessageData:     messageData,
-					SentAt:          now,
-					CreatedAt:       now,
-					UpdatedAt:       now,
-				}
-
-				// Record the message in the message history
-				if err := p.broadcastService.RecordMessageSent(ctx, task.WorkspaceID, messageHistory); err != nil {
-					p.logger.WithFields(map[string]interface{}{
-						"task_id":      task.ID,
-						"broadcast_id": broadcastState.BroadcastID,
-						"email":        contact.Email,
-						"error":        err.Error(),
-					}).Error("Failed to record message history")
-					// Continue with sending even if recording fails
-				}
-
-				// Build template data using the utility method
-				templateData, err := domain.BuildTemplateDataWithOptions(domain.TemplateDataOptions{
-					Contact:     contact,
-					Broadcast:   broadcast,
-					List:        contactList,
-					MessageID:   messageID,
-					IncludeNow:  true,
-					APIEndpoint: p.broadcastService.GetAPIEndpoint(),
-					WorkspaceID: task.WorkspaceID,
-				})
+				// Add contact-specific data
+				contactData, err := contact.ToMapOfAny()
 				if err != nil {
+					mu.Lock()
+					failureCount++
+					mu.Unlock()
 					p.logger.WithFields(map[string]interface{}{
-						"task_id":      task.ID,
-						"broadcast_id": broadcastState.BroadcastID,
-						"email":        contact.Email,
-						"error":        err.Error(),
-					}).Error("Failed to build template data")
-
-					// Fall back to basic template data if building fails
-					templateData = map[string]interface{}{
-						"contact": map[string]interface{}{
-							"email": contact.Email,
-						},
-						"message_id": messageID,
-					}
+						"task_id": task.ID,
+						"email":   contact.Email,
+						"error":   err.Error(),
+					}).Error("Failed to convert contact to template data")
+					return
 				}
+				recipientData["contact"] = contactData
 
-				// Send the email with template data
+				// Add unsubscribe URL
+				apiEndpoint := p.broadcastService.GetAPIEndpoint()
+				recipientData["unsubscribe_url"] = fmt.Sprintf("%s/api/contacts/unsubscribe?workspace_id=%s&email=%s",
+					apiEndpoint, task.WorkspaceID, url.QueryEscape(contact.Email))
+
+				// Send the email using the more efficient method with pre-loaded templates
 				err = p.broadcastService.SendToContactWithTemplates(
 					ctx,
 					task.WorkspaceID,
 					broadcastState.BroadcastID,
 					contact,
 					variationTemplates,
-					templateData,
+					recipientData,
 				)
 
-				// Update counters and message status based on result
+				// Update counters based on result
 				mu.Lock()
 				if err != nil {
 					failureCount++
 					p.logger.WithFields(map[string]interface{}{
-						"task_id":      task.ID,
-						"broadcast_id": broadcastState.BroadcastID,
-						"email":        contact.Email,
-						"error":        err.Error(),
-					}).Error("Failed to send broadcast to contact")
-
-					// Update message status to failed
-					updateErr := p.broadcastService.UpdateMessageStatus(
-						ctx,
-						task.WorkspaceID,
-						messageID,
-						domain.MessageStatusFailed,
-						time.Now(),
-					)
-					if updateErr != nil {
-						p.logger.WithFields(map[string]interface{}{
-							"task_id":      task.ID,
-							"broadcast_id": broadcastState.BroadcastID,
-							"email":        contact.Email,
-							"message_id":   messageID,
-							"error":        updateErr.Error(),
-						}).Error("Failed to update message status to failed")
-					}
+						"task_id": task.ID,
+						"email":   contact.Email,
+						"error":   err.Error(),
+					}).Error("Failed to send email to contact")
 				} else {
 					successCount++
-
-					// Update message status to delivered (this would normally happen via webhooks)
-					// For demo purposes, we're marking it as delivered right away
-					updateErr := p.broadcastService.UpdateMessageStatus(
-						ctx,
-						task.WorkspaceID,
-						messageID,
-						domain.MessageStatusDelivered,
-						time.Now(),
-					)
-					if updateErr != nil {
-						p.logger.WithFields(map[string]interface{}{
-							"task_id":      task.ID,
-							"broadcast_id": broadcastState.BroadcastID,
-							"email":        contact.Email,
-							"message_id":   messageID,
-							"error":        updateErr.Error(),
-						}).Error("Failed to update message status to delivered")
-					}
 				}
 				mu.Unlock()
 			}(contact)
 		}
 
-		// If we got fewer recipients than batch size, we're done
-		if len(recipients) < fetchBatchSize {
-			// Make sure to wait for all goroutines to finish
-			wg.Wait()
-			allDone = true
-			break
+		// Wait for the current batch to finish before fetching the next batch
+		wg.Wait()
+
+		// Calculate progress after each batch
+		currentProgress := float64(broadcastState.RecipientOffset+int64(processedCount)) / float64(broadcastState.TotalRecipients) * 100.0
+		if currentProgress > 100.0 {
+			currentProgress = 100.0
 		}
+		task.Progress = currentProgress
+		task.State.Progress = currentProgress
+		task.State.Message = fmt.Sprintf("Processed %d/%d recipients (%.1f%%)",
+			broadcastState.RecipientOffset+int64(processedCount),
+			broadcastState.TotalRecipients,
+			currentProgress)
 	}
 
 CLEANUP:
 	// Signal the progress logger to stop
 	close(done)
 
-	// Wait for all goroutines to finish
+	// Wait for any remaining goroutines
 	wg.Wait()
 
-	// Update state with results from this processing run
+	// Update the task state with the new counters
 	broadcastState.SentCount += successCount
 	broadcastState.FailedCount += failureCount
 	broadcastState.RecipientOffset += int64(processedCount)
 
-	// Calculate progress percentage
-	if broadcastState.TotalRecipients > 0 {
-		task.Progress = float64(broadcastState.RecipientOffset) / float64(broadcastState.TotalRecipients) * 100
-		task.State.Progress = task.Progress
+	// Update the progress based on the number of recipients processed
+	currentProgress := float64(broadcastState.RecipientOffset) / float64(broadcastState.TotalRecipients) * 100.0
+	if currentProgress > 100.0 {
+		currentProgress = 100.0
 	}
+	task.Progress = currentProgress
+	task.State.Progress = currentProgress
 
-	// Update task message
-	task.State.Message = fmt.Sprintf("Sent to %d/%d recipients (%d failed)",
-		broadcastState.SentCount, broadcastState.TotalRecipients, broadcastState.FailedCount)
+	// Update the task message
+	task.State.Message = fmt.Sprintf("Processed %d/%d recipients (%.1f%%)",
+		broadcastState.RecipientOffset,
+		broadcastState.TotalRecipients,
+		currentProgress)
 
 	p.logger.WithFields(map[string]interface{}{
 		"task_id":          task.ID,

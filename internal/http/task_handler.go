@@ -207,8 +207,35 @@ func (h *TaskHandler) ExecuteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.taskService.ExecuteTask(r.Context(), executeRequest.WorkspaceID, executeRequest.ID); err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to execute task")
-		WriteJSONError(w, "Failed to execute task", http.StatusInternalServerError)
+		// Handle different error types with appropriate status codes
+		switch e := err.(type) {
+		case *domain.ErrNotFound:
+			WriteJSONError(w, e.Error(), http.StatusNotFound)
+		case *domain.ErrTaskExecution:
+			// Log detailed error for debugging
+			h.logger.WithFields(map[string]interface{}{
+				"task_id":      executeRequest.ID,
+				"workspace_id": executeRequest.WorkspaceID,
+				"reason":       e.Reason,
+				"error":        err.Error(),
+			}).Error("Task execution failed")
+
+			// 400 series for client-related errors
+			if e.Reason == "no processor registered for task type" {
+				WriteJSONError(w, "Unsupported task type", http.StatusBadRequest)
+			} else {
+				WriteJSONError(w, "Task execution failed: "+e.Reason, http.StatusInternalServerError)
+			}
+		case *domain.ErrTaskTimeout:
+			WriteJSONError(w, e.Error(), http.StatusGatewayTimeout)
+		default:
+			h.logger.WithFields(map[string]interface{}{
+				"task_id":      executeRequest.ID,
+				"workspace_id": executeRequest.WorkspaceID,
+				"error":        err.Error(),
+			}).Error("Failed to execute task")
+			WriteJSONError(w, "Failed to execute task", http.StatusInternalServerError)
+		}
 		return
 	}
 
