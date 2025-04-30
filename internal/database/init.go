@@ -177,6 +177,32 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			paused_at TIMESTAMP,
 			PRIMARY KEY (id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS message_history (
+			id VARCHAR(255) NOT NULL PRIMARY KEY,
+			contact_id VARCHAR(255) NOT NULL,
+			broadcast_id VARCHAR(255),
+			template_id VARCHAR(32) NOT NULL,
+			template_version INTEGER NOT NULL,
+			channel VARCHAR(20) NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			message_data JSONB NOT NULL,
+			sent_at TIMESTAMP NOT NULL,
+			delivered_at TIMESTAMP,
+			failed_at TIMESTAMP,
+			opened_at TIMESTAMP,
+			clicked_at TIMESTAMP,
+			bounced_at TIMESTAMP,
+			complained_at TIMESTAMP,
+			unsubscribed_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (contact_id) REFERENCES contacts(email) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_id ON message_history(contact_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id ON message_history(broadcast_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_template_id ON message_history(template_id, template_version)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_status ON message_history(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_sent_at ON message_history(sent_at)`,
 	}
 
 	// Run all table creation queries

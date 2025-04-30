@@ -495,7 +495,7 @@ export function ContactsPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Contacts</h2>
+        <div className="text-2xl font-medium">Contacts</div>
         <Space>
           <ImportContactsButton lists={listsData?.lists || []} workspaceId={workspaceId} />
           <ContactUpsertDrawer

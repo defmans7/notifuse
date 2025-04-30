@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
 	gomock "github.com/golang/mock/gomock"
@@ -33,6 +34,20 @@ func NewMockBroadcastSender(ctrl *gomock.Controller) *MockBroadcastSender {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBroadcastSender) EXPECT() *MockBroadcastSenderMockRecorder {
 	return m.recorder
+}
+
+// GetAPIEndpoint mocks base method.
+func (m *MockBroadcastSender) GetAPIEndpoint() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAPIEndpoint")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetAPIEndpoint indicates an expected call of GetAPIEndpoint.
+func (mr *MockBroadcastSenderMockRecorder) GetAPIEndpoint() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAPIEndpoint", reflect.TypeOf((*MockBroadcastSender)(nil).GetAPIEndpoint))
 }
 
 // GetBroadcast mocks base method.
@@ -111,6 +126,20 @@ func (mr *MockBroadcastSenderMockRecorder) ProcessRecipients(arg0, arg1, arg2, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessRecipients", reflect.TypeOf((*MockBroadcastSender)(nil).ProcessRecipients), arg0, arg1, arg2, arg3, arg4)
 }
 
+// RecordMessageSent mocks base method.
+func (m *MockBroadcastSender) RecordMessageSent(arg0 context.Context, arg1 string, arg2 *domain.MessageHistory) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordMessageSent", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RecordMessageSent indicates an expected call of RecordMessageSent.
+func (mr *MockBroadcastSenderMockRecorder) RecordMessageSent(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordMessageSent", reflect.TypeOf((*MockBroadcastSender)(nil).RecordMessageSent), arg0, arg1, arg2)
+}
+
 // SendToContact mocks base method.
 func (m *MockBroadcastSender) SendToContact(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact) error {
 	m.ctrl.T.Helper()
@@ -126,15 +155,29 @@ func (mr *MockBroadcastSenderMockRecorder) SendToContact(arg0, arg1, arg2, arg3 
 }
 
 // SendToContactWithTemplates mocks base method.
-func (m *MockBroadcastSender) SendToContactWithTemplates(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 map[string]*domain.Template) error {
+func (m *MockBroadcastSender) SendToContactWithTemplates(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 map[string]*domain.Template, arg5 map[string]interface{}) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendToContactWithTemplates", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "SendToContactWithTemplates", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendToContactWithTemplates indicates an expected call of SendToContactWithTemplates.
-func (mr *MockBroadcastSenderMockRecorder) SendToContactWithTemplates(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockBroadcastSenderMockRecorder) SendToContactWithTemplates(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToContactWithTemplates", reflect.TypeOf((*MockBroadcastSender)(nil).SendToContactWithTemplates), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToContactWithTemplates", reflect.TypeOf((*MockBroadcastSender)(nil).SendToContactWithTemplates), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
+// UpdateMessageStatus mocks base method.
+func (m *MockBroadcastSender) UpdateMessageStatus(arg0 context.Context, arg1, arg2 string, arg3 domain.MessageStatus, arg4 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMessageStatus", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateMessageStatus indicates an expected call of UpdateMessageStatus.
+func (mr *MockBroadcastSenderMockRecorder) UpdateMessageStatus(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMessageStatus", reflect.TypeOf((*MockBroadcastSender)(nil).UpdateMessageStatus), arg0, arg1, arg2, arg3, arg4)
 }

@@ -1,9 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"sync"
 	"time"
 
@@ -133,8 +137,8 @@ func (s *TaskService) DeleteTask(ctx context.Context, workspace, id string) erro
 	return s.repo.Delete(ctx, workspace, id)
 }
 
-// ExecuteTasks processes a batch of pending tasks
-func (s *TaskService) ExecuteTasks(ctx context.Context, maxTasks int) error {
+// ExecutePendingTasks processes a batch of pending tasks
+func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) error {
 	// Get the next batch of tasks
 	if maxTasks <= 0 {
 		maxTasks = 10 // Default value
@@ -147,6 +151,84 @@ func (s *TaskService) ExecuteTasks(ctx context.Context, maxTasks int) error {
 
 	s.logger.WithField("task_count", len(tasks)).Info("Retrieved batch of tasks to process")
 
+	if s.apiEndpoint == "" {
+		s.logger.Warn("API endpoint not configured, falling back to direct execution")
+		return s.executeTasksDirectly(ctx, tasks)
+	}
+
+	// Execute tasks using HTTP roundtrips
+	for _, task := range tasks {
+		go func(t *domain.Task) {
+			s.logger.WithField("task_id", t.ID).
+				WithField("workspace_id", t.WorkspaceID).
+				Info("Dispatching task execution via HTTP")
+
+			// Create request payload
+			reqBody, err := json.Marshal(domain.ExecuteTaskRequest{
+				WorkspaceID: t.WorkspaceID,
+				ID:          t.ID,
+			})
+			if err != nil {
+				s.logger.WithField("task_id", t.ID).
+					WithField("workspace_id", t.WorkspaceID).
+					WithField("error", err.Error()).
+					Error("Failed to marshal task execution request")
+				return
+			}
+
+			// Create HTTP client with timeout
+			httpClient := &http.Client{
+				Timeout: 53 * time.Second, // 53 seconds timeout as requested
+			}
+
+			// Create request
+			endpoint := fmt.Sprintf("%s/api/tasks.execute", s.apiEndpoint)
+			req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(reqBody))
+			if err != nil {
+				s.logger.WithField("task_id", t.ID).
+					WithField("workspace_id", t.WorkspaceID).
+					WithField("error", err.Error()).
+					Error("Failed to create HTTP request for task execution")
+				return
+			}
+
+			// Set content type
+			req.Header.Set("Content-Type", "application/json")
+
+			// Execute request
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				s.logger.WithField("task_id", t.ID).
+					WithField("workspace_id", t.WorkspaceID).
+					WithField("error", err.Error()).
+					Error("HTTP request for task execution failed")
+				return
+			}
+			defer resp.Body.Close()
+
+			// Check response
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				s.logger.WithField("task_id", t.ID).
+					WithField("workspace_id", t.WorkspaceID).
+					WithField("status_code", resp.StatusCode).
+					WithField("response", string(body)).
+					Error("HTTP request for task execution returned non-OK status")
+				return
+			}
+
+			s.logger.WithField("task_id", t.ID).
+				WithField("workspace_id", t.WorkspaceID).
+				Info("Task execution request dispatched successfully")
+		}(task)
+	}
+
+	return nil
+}
+
+// executeTasksDirectly processes tasks directly without HTTP roundtrips
+// This is used as a fallback when API endpoint is not configured
+func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.Task) error {
 	for _, task := range tasks {
 		// Create a separate context for each task with a timeout
 		taskCtx, cancel := context.WithTimeout(ctx, time.Duration(task.MaxRuntime)*time.Second)
@@ -269,9 +351,10 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			}
 			s.logger.WithField("task_id", taskID).Info("Task completed successfully")
 		} else {
-			// Task needs more time, schedule it to run again
+			// Mark task as paused for next run
+			// MarkAsPaused now includes state and progress parameters
 			nextRun := time.Now().Add(1 * time.Minute)
-			if err := s.repo.MarkAsPaused(ctx, workspace, taskID, nextRun); err != nil {
+			if err := s.repo.MarkAsPaused(ctx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
 				return fmt.Errorf("failed to mark task as paused: %w", err)
 			}
 			s.logger.WithField("task_id", taskID).Info("Task paused and will continue in next run")
@@ -291,8 +374,9 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 
 			// Try to reschedule if retries are available
 			if task.RetryCount < task.MaxRetries {
+				// MarkAsPaused now includes state and progress parameters
 				nextRun := time.Now().Add(time.Duration(task.RetryInterval) * time.Second)
-				if err := s.repo.MarkAsPaused(ctx, workspace, taskID, nextRun); err != nil {
+				if err := s.repo.MarkAsPaused(ctx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
 					return fmt.Errorf("failed to mark task as paused after timeout: %w", err)
 				}
 				s.logger.WithField("task_id", taskID).
@@ -483,7 +567,7 @@ func (s *TaskService) handleBroadcastPaused(ctx context.Context, payload domain.
 
 	// Pause the task
 	nextRunAfter := time.Now().Add(24 * time.Hour) // Pause for 24 hours
-	if err := s.repo.MarkAsPaused(ctx, payload.WorkspaceID, task.ID, nextRunAfter); err != nil {
+	if err := s.repo.MarkAsPaused(ctx, payload.WorkspaceID, task.ID, nextRunAfter, task.Progress, task.State); err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"task_id":      task.ID,

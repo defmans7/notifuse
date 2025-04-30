@@ -355,7 +355,7 @@ export function TemplatesPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <Title level={2}>Templates</Title>
+        <div className="text-2xl font-medium">Templates</div>
         {workspace && data?.templates && data.templates.length > 0 && (
           <CreateTemplateDrawer workspace={workspace} />
         )}

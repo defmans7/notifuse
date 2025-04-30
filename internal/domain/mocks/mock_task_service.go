@@ -63,6 +63,20 @@ func (mr *MockTaskServiceMockRecorder) DeleteTask(arg0, arg1, arg2 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTask", reflect.TypeOf((*MockTaskService)(nil).DeleteTask), arg0, arg1, arg2)
 }
 
+// ExecutePendingTasks mocks base method.
+func (m *MockTaskService) ExecutePendingTasks(arg0 context.Context, arg1 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecutePendingTasks", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecutePendingTasks indicates an expected call of ExecutePendingTasks.
+func (mr *MockTaskServiceMockRecorder) ExecutePendingTasks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutePendingTasks", reflect.TypeOf((*MockTaskService)(nil).ExecutePendingTasks), arg0, arg1)
+}
+
 // ExecuteTask mocks base method.
 func (m *MockTaskService) ExecuteTask(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -75,20 +89,6 @@ func (m *MockTaskService) ExecuteTask(arg0 context.Context, arg1, arg2 string) e
 func (mr *MockTaskServiceMockRecorder) ExecuteTask(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTask", reflect.TypeOf((*MockTaskService)(nil).ExecuteTask), arg0, arg1, arg2)
-}
-
-// ExecuteTasks mocks base method.
-func (m *MockTaskService) ExecuteTasks(arg0 context.Context, arg1 int) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExecuteTasks", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ExecuteTasks indicates an expected call of ExecuteTasks.
-func (mr *MockTaskServiceMockRecorder) ExecuteTasks(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTasks", reflect.TypeOf((*MockTaskService)(nil).ExecuteTasks), arg0, arg1)
 }
 
 // GetProcessor mocks base method.

@@ -585,3 +585,211 @@ type ErrTemplateNotFound struct {
 func (e *ErrTemplateNotFound) Error() string {
 	return e.Message
 }
+
+// BuildTemplateData creates a template data map from a contact and optional broadcast
+func BuildTemplateData(contact *Contact, broadcast *Broadcast, messageID string) (MapOfAny, error) {
+	templateData := MapOfAny{}
+
+	// Add contact data
+	if contact != nil {
+		contactData, err := contact.ToMapOfAny()
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert contact to template data: %w", err)
+		}
+		templateData["contact"] = contactData
+	} else {
+		// Create empty contact object if none provided
+		templateData["contact"] = MapOfAny{}
+	}
+
+	// Add broadcast data if available
+	if broadcast != nil {
+		broadcastData := MapOfAny{
+			"id":   broadcast.ID,
+			"name": broadcast.Name,
+		}
+
+		// Add other useful broadcast fields
+		if broadcast.Metadata != nil {
+			broadcastData["metadata"] = broadcast.Metadata
+		}
+
+		templateData["broadcast"] = broadcastData
+
+		// Add UTM parameters if tracking is enabled
+		if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
+			templateData["utm"] = MapOfAny{
+				"source":   broadcast.UTMParameters.Source,
+				"medium":   broadcast.UTMParameters.Medium,
+				"campaign": broadcast.UTMParameters.Campaign,
+				"term":     broadcast.UTMParameters.Term,
+				"content":  broadcast.UTMParameters.Content,
+			}
+		}
+	}
+
+	// Add tracking data
+	if messageID != "" {
+		templateData["message_id"] = messageID
+	}
+
+	// Add timestamp for tracking purposes
+	templateData["timestamp"] = time.Now().Unix()
+
+	return templateData, nil
+}
+
+// TemplateDataOptions defines options for building template data
+type TemplateDataOptions struct {
+	Contact       *Contact   // Optional contact data
+	Broadcast     *Broadcast // Optional broadcast data
+	List          *List      // Optional contact list data for unsubscribe links
+	MessageID     string     // Optional message ID for tracking
+	CustomData    MapOfAny   // Additional custom data to include
+	IncludeNow    bool       // Whether to include current timestamp
+	ContactFields []string   // Specific contact fields to include (if empty, includes all)
+	APIEndpoint   string     // Base API endpoint for unsubscribe and tracking links
+	WorkspaceID   string     // Workspace ID for constructing proper links
+}
+
+// BuildTemplateDataWithOptions creates a template data map with flexible options
+func BuildTemplateDataWithOptions(options TemplateDataOptions) (MapOfAny, error) {
+	templateData := MapOfAny{}
+
+	// Add contact data if available
+	if options.Contact != nil {
+		// If specific fields are requested, build a filtered contact data map
+		if len(options.ContactFields) > 0 {
+			// Convert contact to full map first
+			fullContactData, err := options.Contact.ToMapOfAny()
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert contact to template data: %w", err)
+			}
+
+			// Create filtered map with only requested fields
+			filteredContactData := MapOfAny{}
+			for _, field := range options.ContactFields {
+				if value, exists := fullContactData[field]; exists {
+					filteredContactData[field] = value
+				}
+			}
+
+			// Always include email if available
+			if _, hasEmail := filteredContactData["email"]; !hasEmail {
+				filteredContactData["email"] = options.Contact.Email
+			}
+
+			templateData["contact"] = filteredContactData
+		} else {
+			// Use all contact data
+			contactData, err := options.Contact.ToMapOfAny()
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert contact to template data: %w", err)
+			}
+			templateData["contact"] = contactData
+		}
+	} else {
+		// Create empty contact object if none provided
+		templateData["contact"] = MapOfAny{}
+	}
+
+	// Add broadcast data if available
+	if options.Broadcast != nil {
+		broadcastData := MapOfAny{
+			"id":   options.Broadcast.ID,
+			"name": options.Broadcast.Name,
+		}
+
+		// Add other useful broadcast fields
+		if options.Broadcast.Metadata != nil {
+			broadcastData["metadata"] = options.Broadcast.Metadata
+		}
+
+		templateData["broadcast"] = broadcastData
+
+		// Add UTM parameters if tracking is enabled
+		if options.Broadcast.TrackingEnabled && options.Broadcast.UTMParameters != nil {
+			templateData["utm"] = MapOfAny{
+				"source":   options.Broadcast.UTMParameters.Source,
+				"medium":   options.Broadcast.UTMParameters.Medium,
+				"campaign": options.Broadcast.UTMParameters.Campaign,
+				"term":     options.Broadcast.UTMParameters.Term,
+				"content":  options.Broadcast.UTMParameters.Content,
+			}
+		}
+	}
+
+	// Add list data and unsubscribe link if available
+	if options.List != nil && options.Contact != nil && options.APIEndpoint != "" && options.WorkspaceID != "" {
+		listData := MapOfAny{
+			"id":   options.List.ID,
+			"name": options.List.Name,
+		}
+
+		if options.List.Description != "" {
+			listData["description"] = options.List.Description
+		}
+
+		templateData["list"] = listData
+
+		// Create unsubscribe link
+		// Format: {apiEndpoint}/api/unsubscribe?email={encodedEmail}&list={listID}&workspace={workspaceID}&token={signature}
+		email := url.QueryEscape(options.Contact.Email)
+		listID := url.QueryEscape(options.List.ID)
+		workspaceID := url.QueryEscape(options.WorkspaceID)
+
+		// Note: In a real implementation, you would add a signature token for security
+		// This is a simplified version
+		unsubscribeURL := fmt.Sprintf("%s/api/unsubscribe?email=%s&list=%s&workspace=%s",
+			options.APIEndpoint, email, listID, workspaceID)
+
+		// Add message ID if available for tracking the unsubscribe event
+		if options.MessageID != "" {
+			unsubscribeURL = fmt.Sprintf("%s&message=%s", unsubscribeURL, url.QueryEscape(options.MessageID))
+		}
+
+		templateData["unsubscribe_url"] = unsubscribeURL
+	}
+
+	// Add tracking data
+	if options.MessageID != "" {
+		templateData["message_id"] = options.MessageID
+
+		// Add tracking pixel if API endpoint is provided
+		if options.APIEndpoint != "" && options.WorkspaceID != "" {
+			// Format: {apiEndpoint}/api/pixel?id={messageID}&t=o&w={workspaceID}
+			messageID := url.QueryEscape(options.MessageID)
+			workspaceID := url.QueryEscape(options.WorkspaceID)
+
+			// Tracking pixel for opens
+			trackingPixelURL := fmt.Sprintf("%s/api/pixel?id=%s&t=o&w=%s",
+				options.APIEndpoint, messageID, workspaceID)
+
+			templateData["tracking_pixel"] = trackingPixelURL
+
+			// Base URL for click tracking
+			// Usage in templates: {{tracking_base}}&url={{encoded_destination_url}}
+			trackingBaseURL := fmt.Sprintf("%s/api/click?id=%s&w=%s",
+				options.APIEndpoint, messageID, workspaceID)
+
+			templateData["tracking_base"] = trackingBaseURL
+		}
+	}
+
+	// Add timestamp for tracking purposes
+	if options.IncludeNow {
+		templateData["timestamp"] = time.Now().Unix()
+	}
+
+	// Merge any custom data
+	if options.CustomData != nil {
+		for key, value := range options.CustomData {
+			// Don't overwrite existing keys to prevent accidentally corrupting core data
+			if _, exists := templateData[key]; !exists {
+				templateData[key] = value
+			}
+		}
+	}
+
+	return templateData, nil
+}

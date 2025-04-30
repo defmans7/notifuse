@@ -830,9 +830,16 @@ type BroadcastSender interface {
 	SendToContact(ctx context.Context, workspaceID, broadcastID string, contact *Contact) error
 	// More efficient method that accepts pre-loaded templates
 	SendToContactWithTemplates(ctx context.Context, workspaceID, broadcastID string,
-		contact *Contact, templates map[string]*Template) error
+		contact *Contact, templates map[string]*Template, templateData map[string]interface{}) error
 	// Get template by ID
 	GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*Template, error)
+
+	// Message history tracking methods
+	RecordMessageSent(ctx context.Context, workspaceID string, message *MessageHistory) error
+	UpdateMessageStatus(ctx context.Context, workspaceID string, messageID string, status MessageStatus, timestamp time.Time) error
+
+	// Configuration method
+	GetAPIEndpoint() string
 }
 
 // BroadcastRepository defines the data access layer for broadcasts

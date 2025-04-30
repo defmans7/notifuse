@@ -21,6 +21,7 @@ type BroadcastService struct {
 	taskService domain.TaskService
 	authService domain.AuthService
 	eventBus    domain.EventBus
+	apiEndpoint string
 }
 
 // NewBroadcastService creates a new broadcast service
@@ -33,6 +34,7 @@ func NewBroadcastService(
 	taskService domain.TaskService,
 	authService domain.AuthService,
 	eventBus domain.EventBus,
+	apiEndpoint string,
 ) *BroadcastService {
 	return &BroadcastService{
 		logger:      logger,
@@ -43,6 +45,7 @@ func NewBroadcastService(
 		taskService: taskService,
 		authService: authService,
 		eventBus:    eventBus,
+		apiEndpoint: apiEndpoint,
 	}
 }
 
@@ -1355,7 +1358,7 @@ func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broad
 
 // SendToContactWithTemplates sends a broadcast message to a single contact with pre-loaded templates
 func (s *BroadcastService) SendToContactWithTemplates(ctx context.Context, workspaceID, broadcastID string,
-	contact *domain.Contact, templates map[string]*domain.Template) error {
+	contact *domain.Contact, templates map[string]*domain.Template, templateData map[string]interface{}) error {
 
 	// Get the broadcast
 	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
@@ -1425,29 +1428,38 @@ func (s *BroadcastService) SendToContactWithTemplates(ctx context.Context, works
 		}
 	}
 
-	// Prepare template data
-	contactData, err := contact.ToMapOfAny()
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"workspace_id": workspaceID,
-			"broadcast_id": broadcastID,
-			"email":        contact.Email,
-			"error":        err.Error(),
-		}).Error("Failed to convert contact to template data")
-		return err
+	// Use provided template data if available, otherwise generate it
+	var finalTemplateData domain.MapOfAny
+	if templateData != nil {
+		// Use provided template data
+		finalTemplateData = templateData
+	} else {
+		// Generate template data from contact
+		contactData, err := contact.ToMapOfAny()
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"email":        contact.Email,
+				"error":        err.Error(),
+			}).Error("Failed to convert contact to template data")
+			return err
+		}
+
+		finalTemplateData = domain.MapOfAny{
+			"contact": contactData,
+		}
 	}
 
-	templateData := domain.MapOfAny{
-		"contact": contactData,
-	}
-
-	// Add UTM parameters if tracking is enabled
+	// Add UTM parameters if tracking is enabled and not already in template data
 	if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
-		templateData["utm_parameters"] = broadcast.UTMParameters
+		if _, exists := finalTemplateData["utm_parameters"]; !exists {
+			finalTemplateData["utm_parameters"] = broadcast.UTMParameters
+		}
 	}
 
 	// Compile the template
-	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, workspaceID, template.Email.VisualEditorTree, templateData)
+	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, workspaceID, template.Email.VisualEditorTree, finalTemplateData)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"workspace_id": workspaceID,
@@ -1511,4 +1523,41 @@ func (s *BroadcastService) SendToContactWithTemplates(ctx context.Context, works
 func (s *BroadcastService) GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*domain.Template, error) {
 	// Simply delegate to the template service, but only requesting version 1
 	return s.templateSvc.GetTemplateByID(ctx, workspaceID, templateID, 1)
+}
+
+// RecordMessageSent records a message sent event in the message history
+func (s *BroadcastService) RecordMessageSent(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
+	// Check if message history repository is available
+	messageHistoryRepo, ok := s.repo.(interface {
+		CreateMessageHistory(ctx context.Context, workspaceID string, message *domain.MessageHistory) error
+	})
+
+	if !ok {
+		s.logger.Error("Repository does not support message history")
+		// Don't fail the broadcast if message history tracking is not available
+		return nil
+	}
+
+	return messageHistoryRepo.CreateMessageHistory(ctx, workspaceID, message)
+}
+
+// UpdateMessageStatus updates the status of a message in the message history
+func (s *BroadcastService) UpdateMessageStatus(ctx context.Context, workspaceID string, messageID string, status domain.MessageStatus, timestamp time.Time) error {
+	// Check if message history repository is available
+	messageHistoryRepo, ok := s.repo.(interface {
+		UpdateMessageStatus(ctx context.Context, workspaceID string, messageID string, status domain.MessageStatus, timestamp time.Time) error
+	})
+
+	if !ok {
+		s.logger.Error("Repository does not support message history")
+		// Don't fail the broadcast if message history tracking is not available
+		return nil
+	}
+
+	return messageHistoryRepo.UpdateMessageStatus(ctx, workspaceID, messageID, status, timestamp)
+}
+
+// GetAPIEndpoint returns the API endpoint for the broadcast service
+func (s *BroadcastService) GetAPIEndpoint() string {
+	return s.apiEndpoint
 }

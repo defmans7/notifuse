@@ -40,7 +40,7 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -220,7 +220,7 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -308,7 +308,7 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -520,7 +520,7 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -754,7 +754,7 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus)
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo

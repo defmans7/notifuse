@@ -45,7 +45,8 @@ func (h *TaskHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/tasks.list", requireAuth(http.HandlerFunc(h.ListTasks)))
 	mux.Handle("/api/tasks.get", requireAuth(http.HandlerFunc(h.GetTask)))
 	mux.Handle("/api/tasks.delete", requireAuth(http.HandlerFunc(h.DeleteTask)))
-	mux.Handle("/api/tasks.execute", http.HandlerFunc(h.ExecuteTasks))
+	mux.Handle("/api/tasks.executePending", http.HandlerFunc(h.ExecutePendingTasks))
+	mux.Handle("/api/tasks.execute", http.HandlerFunc(h.ExecuteTask))
 }
 
 // CreateTask handles creation of a new task
@@ -160,21 +161,21 @@ func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ExecuteTasks handles the cron-triggered task execution
-func (h *TaskHandler) ExecuteTasks(w http.ResponseWriter, r *http.Request) {
+// ExecutePendingTasks handles the cron-triggered task execution
+func (h *TaskHandler) ExecutePendingTasks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var executeRequest domain.ExecuteTasksRequest
+	var executeRequest domain.ExecutePendingTasksRequest
 	if err := executeRequest.FromURLParams(r.URL.Query()); err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Execute tasks
-	if err := h.taskService.ExecuteTasks(r.Context(), executeRequest.MaxTasks); err != nil {
+	if err := h.taskService.ExecutePendingTasks(r.Context(), executeRequest.MaxTasks); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to execute tasks")
 		WriteJSONError(w, "Failed to execute tasks", http.StatusInternalServerError)
 		return
@@ -184,5 +185,35 @@ func (h *TaskHandler) ExecuteTasks(w http.ResponseWriter, r *http.Request) {
 		"success":   true,
 		"message":   "Task execution initiated",
 		"max_tasks": executeRequest.MaxTasks,
+	})
+}
+
+// ExecuteTask handles execution of a single task
+func (h *TaskHandler) ExecuteTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var executeRequest domain.ExecuteTaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&executeRequest); err != nil {
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := executeRequest.Validate(); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.taskService.ExecuteTask(r.Context(), executeRequest.WorkspaceID, executeRequest.ID); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to execute task")
+		WriteJSONError(w, "Failed to execute task", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Task execution initiated",
 	})
 }

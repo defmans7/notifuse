@@ -285,7 +285,8 @@ func (a *App) InitServices() error {
 		a.templateService,
 		nil, // No taskService yet
 		a.authService,
-		a.eventBus, // Pass the event bus
+		a.eventBus,           // Pass the event bus
+		a.config.APIEndpoint, // API endpoint for tracking URLs
 	)
 
 	// Register the broadcast processor with the task service

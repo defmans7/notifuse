@@ -26,6 +26,12 @@ func NewTaskRepository(db *sql.DB) domain.TaskRepository {
 }
 
 // WithTransaction executes a function within a transaction
+// This is used to ensure database operations are atomic and properly locked
+// All task processing follows this pattern:
+// 1. Get the task with FOR UPDATE to acquire a row-level lock
+// 2. Perform operations on the task
+// 3. Update or mark the task with a new status
+// This prevents multiple workers from processing the same task simultaneously
 func (r *TaskRepository) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
 	// Begin a transaction
 	tx, err := r.systemDB.BeginTx(ctx, nil)
@@ -146,6 +152,7 @@ func (r *TaskRepository) GetTx(ctx context.Context, tx *sql.Tx, workspace, id st
 			broadcast_id
 		FROM tasks
 		WHERE id = $1 AND workspace_id = $2
+		FOR UPDATE
 	`
 
 	var task domain.Task
@@ -795,22 +802,33 @@ func (r *TaskRepository) MarkAsFailedTx(ctx context.Context, tx *sql.Tx, workspa
 }
 
 // MarkAsPaused marks a task as paused and sets the next run time
-func (r *TaskRepository) MarkAsPaused(ctx context.Context, workspace, id string, nextRunAfter time.Time) error {
+func (r *TaskRepository) MarkAsPaused(ctx context.Context, workspace, id string, nextRunAfter time.Time, progress float64, state *domain.TaskState) error {
 	return r.WithTransaction(ctx, func(tx *sql.Tx) error {
-		return r.MarkAsPausedTx(ctx, tx, workspace, id, nextRunAfter)
+		return r.MarkAsPausedTx(ctx, tx, workspace, id, nextRunAfter, progress, state)
 	})
 }
 
 // MarkAsPausedTx marks a task as paused and sets the next run time within a transaction
-func (r *TaskRepository) MarkAsPausedTx(ctx context.Context, tx *sql.Tx, workspace, id string, nextRunAfter time.Time) error {
+func (r *TaskRepository) MarkAsPausedTx(ctx context.Context, tx *sql.Tx, workspace, id string, nextRunAfter time.Time, progress float64, state *domain.TaskState) error {
 	now := time.Now().UTC()
+
+	// Convert state to JSON
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("failed to marshal state: %w", err)
+	}
+
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
+	// Update task with the provided progress and state
 	query := psql.Update("tasks").
 		Set("status", domain.TaskStatusPaused).
+		Set("progress", progress). // Use the provided progress
+		Set("state", stateJSON).   // Use the provided state
 		Set("updated_at", now).
 		Set("next_run_after", nextRunAfter).
 		Set("timeout_after", nil).
+		Set("retry_count", sq.Expr("retry_count + 1")). // Increment retry count
 		Where(sq.Eq{
 			"id":           id,
 			"workspace_id": workspace,
@@ -864,6 +882,7 @@ func (r *TaskRepository) GetTaskByBroadcastIDTx(ctx context.Context, tx *sql.Tx,
 		WHERE workspace_id = $1 AND broadcast_id = $2
 		AND type = 'send_broadcast'
 		LIMIT 1
+		FOR UPDATE
 	`
 
 	var task domain.Task

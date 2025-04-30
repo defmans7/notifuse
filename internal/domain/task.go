@@ -103,7 +103,7 @@ type TaskService interface {
 	GetTask(ctx context.Context, workspace, id string) (*Task, error)
 	ListTasks(ctx context.Context, workspace string, filter TaskFilter) (*TaskListResponse, error)
 	DeleteTask(ctx context.Context, workspace, id string) error
-	ExecuteTasks(ctx context.Context, maxTasks int) error
+	ExecutePendingTasks(ctx context.Context, maxTasks int) error
 	ExecuteTask(ctx context.Context, workspace, taskID string) error
 	RegisterDefaultProcessors(broadcastSender BroadcastSender)
 	SubscribeToBroadcastEvents(eventBus EventBus)
@@ -156,8 +156,8 @@ type TaskRepository interface {
 	MarkAsFailedTx(ctx context.Context, tx *sql.Tx, workspace, id string, errorMsg string) error
 
 	// MarkAsPaused marks a task as paused (e.g., due to timeout)
-	MarkAsPaused(ctx context.Context, workspace, id string, nextRunAfter time.Time) error
-	MarkAsPausedTx(ctx context.Context, tx *sql.Tx, workspace, id string, nextRunAfter time.Time) error
+	MarkAsPaused(ctx context.Context, workspace, id string, nextRunAfter time.Time, progress float64, state *TaskState) error
+	MarkAsPausedTx(ctx context.Context, tx *sql.Tx, workspace, id string, nextRunAfter time.Time, progress float64, state *TaskState) error
 }
 
 // TaskFilter defines the filtering criteria for task listing
@@ -181,8 +181,8 @@ type TaskProcessor interface {
 
 // TaskExecutor is responsible for executing tasks
 type TaskExecutor interface {
-	// ExecuteTasks finds and executes pending tasks
-	ExecuteTasks(ctx context.Context, maxTasks int) error
+	// ExecutePendingTasks finds and executes pending tasks
+	ExecutePendingTasks(ctx context.Context, maxTasks int) error
 
 	// ExecuteTask executes a specific task
 	ExecuteTask(ctx context.Context, workspaceID, taskID string) error
@@ -394,13 +394,13 @@ func splitAndTrim(s string) []string {
 	return parts
 }
 
-// ExecuteTasksRequest defines the request to execute tasks
-type ExecuteTasksRequest struct {
+// ExecutePendingTasksRequest defines the request to execute pending tasks
+type ExecutePendingTasksRequest struct {
 	MaxTasks int `json:"max_tasks,omitempty"`
 }
 
 // FromURLParams parses URL query parameters into the request
-func (r *ExecuteTasksRequest) FromURLParams(values url.Values) error {
+func (r *ExecutePendingTasksRequest) FromURLParams(values url.Values) error {
 	if maxTasksStr := values.Get("max_tasks"); maxTasksStr != "" {
 		maxTasks, err := strconv.Atoi(maxTasksStr)
 		if err != nil {
@@ -409,6 +409,25 @@ func (r *ExecuteTasksRequest) FromURLParams(values url.Values) error {
 		r.MaxTasks = maxTasks
 	} else {
 		r.MaxTasks = 10 // default value
+	}
+
+	return nil
+}
+
+// ExecuteTaskRequest defines the request to execute a specific task
+type ExecuteTaskRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+}
+
+// Validate validates the execute task request
+func (r *ExecuteTaskRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if r.ID == "" {
+		return fmt.Errorf("task id is required")
 	}
 
 	return nil

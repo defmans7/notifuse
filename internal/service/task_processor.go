@@ -10,7 +10,16 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/google/uuid"
 )
+
+// Helper function to safely get string value from NullableString
+func getStringValue(nullable *domain.NullableString, defaultValue string) string {
+	if nullable == nil || nullable.IsNull {
+		return defaultValue
+	}
+	return nullable.String
+}
 
 // SendBroadcastProcessor implements domain.TaskProcessor for sending broadcasts
 type SendBroadcastProcessor struct {
@@ -277,16 +286,131 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 				defer wg.Done()
 				defer sem.Release(1)
 
-				// Send the email
-				err := p.broadcastService.SendToContactWithTemplates(
+				// Generate a unique message ID for tracking
+				messageID := uuid.New().String()
+
+				// Create a message history record before sending
+				now := time.Now()
+				broadcastIDCopy := broadcastState.BroadcastID // Make a copy to use in the pointer
+
+				// Determine which template will be used for this contact
+				var templateID string
+				var templateVersion int
+
+				// In a real implementation, this would be determined by the variation assignment logic
+				// For now, we'll just use the first variation
+				if len(broadcast.TestSettings.Variations) > 0 {
+					templateID = broadcast.TestSettings.Variations[0].TemplateID
+
+					// Find the template in our pre-loaded templates
+					if template, ok := variationTemplates[templateID]; ok && template != nil {
+						templateVersion = int(template.Version)
+					} else {
+						// Default to version 1 if not found
+						templateVersion = 1
+					}
+				}
+
+				// Get the contact list for unsubscribe link if available
+				var contactList *domain.List
+				// If this broadcast is targeting specific lists
+				if len(broadcast.Audience.Lists) > 0 && len(broadcast.Audience.Lists[0]) > 0 {
+					// Try to find the list in the contact's lists
+					primaryListID := broadcast.Audience.Lists[0]
+					for _, cl := range contact.ContactLists {
+						if cl != nil && cl.ListID == primaryListID {
+							// Found the list, create a simplified List object
+							contactList = &domain.List{
+								ID:   cl.ListID,
+								Name: primaryListID, // Use ID as name if we don't have the actual name
+							}
+							break
+						}
+					}
+				}
+
+				// Compute list ID for metadata
+				var listID string
+				if contactList != nil {
+					listID = contactList.ID
+				}
+
+				messageData := domain.MessageData{
+					Data: map[string]interface{}{
+						"contact": contact,
+						// Other data used for template rendering
+					},
+					Metadata: map[string]interface{}{
+						"broadcast_id": broadcastState.BroadcastID,
+						"variation_id": broadcast.TestSettings.Variations[0].ID,
+						"list_id":      listID,
+					},
+				}
+
+				// Create the message history record
+				messageHistory := &domain.MessageHistory{
+					ID:              messageID,
+					ContactID:       contact.Email,
+					BroadcastID:     &broadcastIDCopy,
+					TemplateID:      templateID,
+					TemplateVersion: templateVersion,
+					Channel:         "email",
+					Status:          domain.MessageStatusSent,
+					MessageData:     messageData,
+					SentAt:          now,
+					CreatedAt:       now,
+					UpdatedAt:       now,
+				}
+
+				// Record the message in the message history
+				if err := p.broadcastService.RecordMessageSent(ctx, task.WorkspaceID, messageHistory); err != nil {
+					p.logger.WithFields(map[string]interface{}{
+						"task_id":      task.ID,
+						"broadcast_id": broadcastState.BroadcastID,
+						"email":        contact.Email,
+						"error":        err.Error(),
+					}).Error("Failed to record message history")
+					// Continue with sending even if recording fails
+				}
+
+				// Build template data using the utility method
+				templateData, err := domain.BuildTemplateDataWithOptions(domain.TemplateDataOptions{
+					Contact:     contact,
+					Broadcast:   broadcast,
+					List:        contactList,
+					MessageID:   messageID,
+					IncludeNow:  true,
+					APIEndpoint: p.broadcastService.GetAPIEndpoint(),
+					WorkspaceID: task.WorkspaceID,
+				})
+				if err != nil {
+					p.logger.WithFields(map[string]interface{}{
+						"task_id":      task.ID,
+						"broadcast_id": broadcastState.BroadcastID,
+						"email":        contact.Email,
+						"error":        err.Error(),
+					}).Error("Failed to build template data")
+
+					// Fall back to basic template data if building fails
+					templateData = map[string]interface{}{
+						"contact": map[string]interface{}{
+							"email": contact.Email,
+						},
+						"message_id": messageID,
+					}
+				}
+
+				// Send the email with template data
+				err = p.broadcastService.SendToContactWithTemplates(
 					ctx,
 					task.WorkspaceID,
 					broadcastState.BroadcastID,
 					contact,
 					variationTemplates,
+					templateData,
 				)
 
-				// Update counters based on result
+				// Update counters and message status based on result
 				mu.Lock()
 				if err != nil {
 					failureCount++
@@ -296,8 +420,45 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 						"email":        contact.Email,
 						"error":        err.Error(),
 					}).Error("Failed to send broadcast to contact")
+
+					// Update message status to failed
+					updateErr := p.broadcastService.UpdateMessageStatus(
+						ctx,
+						task.WorkspaceID,
+						messageID,
+						domain.MessageStatusFailed,
+						time.Now(),
+					)
+					if updateErr != nil {
+						p.logger.WithFields(map[string]interface{}{
+							"task_id":      task.ID,
+							"broadcast_id": broadcastState.BroadcastID,
+							"email":        contact.Email,
+							"message_id":   messageID,
+							"error":        updateErr.Error(),
+						}).Error("Failed to update message status to failed")
+					}
 				} else {
 					successCount++
+
+					// Update message status to delivered (this would normally happen via webhooks)
+					// For demo purposes, we're marking it as delivered right away
+					updateErr := p.broadcastService.UpdateMessageStatus(
+						ctx,
+						task.WorkspaceID,
+						messageID,
+						domain.MessageStatusDelivered,
+						time.Now(),
+					)
+					if updateErr != nil {
+						p.logger.WithFields(map[string]interface{}{
+							"task_id":      task.ID,
+							"broadcast_id": broadcastState.BroadcastID,
+							"email":        contact.Email,
+							"message_id":   messageID,
+							"error":        updateErr.Error(),
+						}).Error("Failed to update message status to delivered")
+					}
 				}
 				mu.Unlock()
 			}(contact)
