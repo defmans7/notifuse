@@ -570,21 +570,28 @@ type ContactService interface {
 	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) UpsertContactOperation
 }
 
+// ContactRepository is the interface for contact operations
 type ContactRepository interface {
-	// GetContactByEmail retrieves a contact by its email
-	GetContactByEmail(ctx context.Context, workspaceID string, email string) (*Contact, error)
+	// GetContactByEmail retrieves a contact by email
+	GetContactByEmail(ctx context.Context, workspaceID, email string) (*Contact, error)
 
-	// GetContactByExternalID retrieves a contact by its external ID
-	GetContactByExternalID(ctx context.Context, workspaceID string, externalID string) (*Contact, error)
+	// GetContactByExternalID retrieves a contact by external ID
+	GetContactByExternalID(ctx context.Context, externalID, workspaceID string) (*Contact, error)
 
-	// GetContacts retrieves contacts with filters and pagination
+	// GetContacts retrieves contacts with filtering and pagination
 	GetContacts(ctx context.Context, req *GetContactsRequest) (*GetContactsResponse, error)
 
 	// DeleteContact deletes a contact
-	DeleteContact(ctx context.Context, workspaceID string, email string) error
+	DeleteContact(ctx context.Context, email string, workspaceID string) error
 
-	// UpsertContact creates a new contact or updates an existing one
-	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (isNew bool, err error)
+	// UpsertContact creates or updates a contact
+	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (bool, error)
+
+	// GetContactsForBroadcast retrieves contacts based on broadcast audience settings
+	GetContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings, limit int, offset int) ([]*Contact, error)
+
+	// CountContactsForBroadcast counts contacts based on broadcast audience settings
+	CountContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings) (int, error)
 }
 
 // FromJSON parses JSON data into a Contact struct

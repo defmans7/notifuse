@@ -119,207 +119,304 @@ func (s *BroadcastService) GetBroadcast(ctx context.Context, workspaceID, broadc
 
 // GetRecipientCount retrieves the total recipient count for a broadcast
 func (s *BroadcastService) GetRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error) {
-	// In a real implementation, this would count recipients from a database
-	// For testing purposes, we'll return a fixed count
-	return 1000, nil
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("broadcast_id", broadcastID).Error("Failed to authenticate user for workspace")
+		return 0, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Get the broadcast to retrieve audience settings
+	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"error":        err.Error(),
+		}).Error("Failed to get broadcast for recipient count")
+		return 0, fmt.Errorf("failed to get broadcast: %w", err)
+	}
+
+	// Use the more efficient count method
+	count, err := s.contactRepo.CountContactsForBroadcast(ctx, workspaceID, broadcast.Audience)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"error":        err.Error(),
+		}).Error("Failed to count recipients for broadcast")
+		return 0, fmt.Errorf("failed to count recipients: %w", err)
+	}
+
+	return count, nil
 }
 
 // SendBatch sends a batch of messages for a broadcast
-func (s *BroadcastService) SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error) {
-	// In a real implementation, this would send actual messages through email/SMS/etc providers
-	// For testing purposes, we'll simulate sending with some random successes/failures
+func (s *BroadcastService) ProcessRecipients(ctx context.Context, workspaceID, broadcastID string, startOffset, limit int) (int, int, error) {
+	// Get the broadcast details
+	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"error":        err.Error(),
+		}).Error("Failed to get broadcast details for processing recipients")
+		return 0, 0, fmt.Errorf("failed to get broadcast: %w", err)
+	}
 
-	// Simulate a 5% failure rate
-	failureCount := batchSize / 20
-	successCount := batchSize - failureCount
+	// Ensure the broadcast is in sending status
+	if broadcast.Status != domain.BroadcastStatusSending {
+		err := fmt.Errorf("broadcast is not in sending status, current status: %s", broadcast.Status)
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"status":       broadcast.Status,
+		}).Error("Cannot process recipients for broadcast with non-sending status")
+		return 0, 0, err
+	}
+
+	// Fetch contacts for this batch
+	contacts, err := s.contactRepo.GetContactsForBroadcast(
+		ctx,
+		workspaceID,
+		broadcast.Audience,
+		limit,
+		startOffset,
+	)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"offset":       startOffset,
+			"limit":        limit,
+			"error":        err.Error(),
+		}).Error("Failed to fetch contacts for broadcast recipients")
+		return 0, 0, fmt.Errorf("failed to fetch contacts: %w", err)
+	}
+
+	// If no contacts for this batch, we're done
+	if len(contacts) == 0 {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"offset":       startOffset,
+			"limit":        limit,
+		}).Info("No contacts found for this request")
+		return 0, 0, nil
+	}
+
+	// Track success and failure counts
+	successCount := 0
+	failureCount := 0
+
+	// Load templates for all variations
+	variationTemplates := make(map[string]*domain.Template)
+	for _, variation := range broadcast.TestSettings.Variations {
+		template, err := s.templateSvc.GetTemplateByID(ctx, workspaceID, variation.TemplateID, 1)
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"template_id":  variation.TemplateID,
+				"error":        err.Error(),
+			}).Error("Failed to load template for variation")
+			return 0, 0, fmt.Errorf("failed to load template: %w", err)
+		}
+		variationTemplates[variation.ID] = template
+	}
+
+	// Process each contact
+	for _, contact := range contacts {
+		// Determine which variation to use for this contact
+		var variationID string
+		if broadcast.WinningVariation != "" {
+			// If there's a winning variation, use it
+			variationID = broadcast.WinningVariation
+		} else if broadcast.TestSettings.Enabled {
+			// A/B testing is enabled but no winner yet, assign a variation
+			// Use a deterministic approach based on contact's email
+			hashValue := int(contact.Email[0]) % len(broadcast.TestSettings.Variations)
+			variationID = broadcast.TestSettings.Variations[hashValue].ID
+		} else if len(broadcast.TestSettings.Variations) > 0 {
+			// Not A/B testing, use the first variation
+			variationID = broadcast.TestSettings.Variations[0].ID
+		} else {
+			// No variations available, log error and skip
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"email":        contact.Email,
+			}).Error("No variations available for contact")
+			failureCount++
+			continue
+		}
+
+		// Get the template for this variation
+		template, ok := variationTemplates[variationID]
+		if !ok {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"variation_id": variationID,
+				"email":        contact.Email,
+			}).Error("Template not found for variation")
+			failureCount++
+			continue
+		}
+
+		// Prepare template data
+		contactData, err := contact.ToMapOfAny()
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"email":        contact.Email,
+				"error":        err.Error(),
+			}).Error("Failed to convert contact to template data")
+			failureCount++
+			continue
+		}
+
+		templateData := domain.MapOfAny{
+			"contact": contactData,
+		}
+
+		// Add UTM parameters if tracking is enabled
+		if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
+			templateData["utm_parameters"] = broadcast.UTMParameters
+		}
+
+		// Compile the template
+		compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, workspaceID, template.Email.VisualEditorTree, templateData)
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"email":        contact.Email,
+				"error":        err.Error(),
+			}).Error("Failed to compile template")
+			failureCount++
+			continue
+		}
+
+		if !compiledTemplate.Success || compiledTemplate.HTML == nil {
+			errMsg := "Template compilation failed"
+			if compiledTemplate.Error != nil {
+				errMsg = compiledTemplate.Error.Message
+			}
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"email":        contact.Email,
+				"error":        errMsg,
+			}).Error("Failed to generate HTML from template")
+			failureCount++
+			continue
+		}
+
+		// Apply rate limiting if configured
+		if broadcast.Audience.RateLimitPerMinute > 0 {
+			// Simple implementation: sleep for (60 / rate_limit) seconds
+			sleepTime := time.Duration(60/broadcast.Audience.RateLimitPerMinute) * time.Second
+			time.Sleep(sleepTime)
+		}
+
+		// Send the email
+		err = s.emailSvc.SendEmail(
+			ctx,
+			workspaceID,
+			"marketing", // Email provider type
+			template.Email.FromAddress,
+			template.Email.FromName,
+			contact.Email,
+			template.Email.Subject,
+			*compiledTemplate.HTML,
+		)
+
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"email":        contact.Email,
+				"error":        err.Error(),
+			}).Error("Failed to send email")
+			failureCount++
+		} else {
+			successCount++
+
+			// Update metrics for the variation
+			for i, v := range broadcast.TestSettings.Variations {
+				if v.ID == variationID {
+					if v.Metrics == nil {
+						broadcast.TestSettings.Variations[i].Metrics = &domain.VariationMetrics{}
+					}
+					broadcast.TestSettings.Variations[i].Metrics.Recipients++
+					broadcast.TestSettings.Variations[i].Metrics.Delivered++
+					break
+				}
+			}
+		}
+	}
+
+	// Update the broadcast with the new totals
+	broadcast.TotalSent += successCount
+	broadcast.TotalFailed += failureCount
+	broadcast.UpdatedAt = time.Now().UTC()
+
+	// Persist the updated metrics
+	err = s.repo.UpdateBroadcast(ctx, broadcast)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"error":        err.Error(),
+		}).Error("Failed to update broadcast metrics")
+		// Continue anyway - we've already sent the emails
+	}
 
 	s.logger.WithFields(map[string]interface{}{
 		"workspace_id": workspaceID,
 		"broadcast_id": broadcastID,
-		"batch":        batchNumber,
+		"offset":       startOffset,
+		"limit":        limit,
 		"successes":    successCount,
 		"failures":     failureCount,
 	}).Info("Sent broadcast batch")
 
 	// If this is the last batch or if all messages have been sent,
 	// we should check if we need to update the broadcast status
-	shouldUpdateBroadcast := false
+	if len(contacts) < limit {
+		// This was the last batch, mark broadcast as sent
+		broadcast.Status = domain.BroadcastStatusSent
+		now := time.Now().UTC()
+		broadcast.CompletedAt = &now
+		broadcast.UpdatedAt = now
+		broadcast.SentAt = &now
 
-	// For simplicity, let's assume a broadcast is complete when batchNumber reaches 10
-	// In a real implementation, this would be based on the total recipient count
-	if batchNumber >= 10 {
-		shouldUpdateBroadcast = true
-	}
-
-	// If we need to update the broadcast status
-	if shouldUpdateBroadcast {
-		// Get the current broadcast state
-		broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+		err = s.repo.UpdateBroadcast(ctx, broadcast)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"workspace_id": workspaceID,
 				"broadcast_id": broadcastID,
 				"error":        err.Error(),
-			}).Error("Failed to get broadcast for status update")
-			return successCount, failureCount, nil
+			}).Error("Failed to update broadcast status to sent")
+			// Continue anyway - we've already sent the emails
 		}
 
-		// Check if there were significant failures
-		totalFailed := broadcast.TotalFailed + failureCount
-		totalSent := broadcast.TotalSent + successCount
-
-		// If more than 20% of messages failed, consider the broadcast failed
-		failureRatio := float64(totalFailed) / float64(totalSent+totalFailed)
-		if failureRatio > 0.2 && totalFailed > 10 {
-			// Create a failure reason for the event
-			failureReason := fmt.Sprintf("Too many failures (%d of %d messages failed)",
-				totalFailed, totalSent+totalFailed)
-
-			// Using a channel to wait for the event processing
-			doneCh := make(chan error, 1)
-
-			// Begin a transaction that will only be committed when the event is processed
-			err := s.repo.WithTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
-				// Update the broadcast status to failed within the transaction
-				broadcast.Status = domain.BroadcastStatusFailed
-				now := time.Now().UTC()
-				broadcast.UpdatedAt = now
-				broadcast.TotalFailed = totalFailed
-				broadcast.TotalSent = totalSent
-
-				// Use the repository's transaction-aware method
-				err := s.repo.UpdateBroadcastTx(ctx, tx, broadcast)
-				if err != nil {
-					return fmt.Errorf("failed to update broadcast status: %w", err)
-				}
-
-				// Publish broadcast failed event with acknowledgment
-				eventPayload := domain.EventPayload{
-					Type:        domain.EventBroadcastFailed,
-					WorkspaceID: workspaceID,
-					EntityID:    broadcastID,
-					Data: map[string]interface{}{
-						"broadcast_id": broadcastID,
-						"reason":       failureReason,
-					},
-				}
-
-				// Publish the event with callback
-				s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
-					if err != nil {
-						// Event processing failed
-						s.logger.WithFields(map[string]interface{}{
-							"broadcast_id": broadcastID,
-							"workspace_id": workspaceID,
-							"error":        err.Error(),
-							"reason":       failureReason,
-						}).Error("Failed to process broadcast failed event")
-
-						doneCh <- fmt.Errorf("failed to process broadcast failed event: %w", err)
-					} else {
-						s.logger.WithFields(map[string]interface{}{
-							"broadcast_id": broadcastID,
-							"workspace_id": workspaceID,
-							"reason":       failureReason,
-						}).Info("Broadcast failed event processed successfully")
-
-						doneCh <- nil
-					}
-				})
-
-				// Wait for the event processing to complete before committing or rolling back the transaction
-				select {
-				case err := <-doneCh:
-					return err // Return nil to commit, or error to rollback
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			})
-
-			if err != nil {
-				s.logger.WithFields(map[string]interface{}{
-					"workspace_id": workspaceID,
-					"broadcast_id": broadcastID,
-					"error":        err.Error(),
-				}).Error("Failed to update broadcast status or process event")
-			}
-		} else {
-			// Using a channel to wait for the event processing
-			doneCh := make(chan error, 1)
-
-			// Begin a transaction that will only be committed when the event is processed
-			err := s.repo.WithTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
-				// Update the broadcast status to sent within the transaction
-				broadcast.Status = domain.BroadcastStatusSent
-				now := time.Now().UTC()
-				broadcast.CompletedAt = &now
-				broadcast.UpdatedAt = now
-				broadcast.TotalFailed = totalFailed
-				broadcast.TotalSent = totalSent
-
-				// Use the repository's transaction-aware method
-				err := s.repo.UpdateBroadcastTx(ctx, tx, broadcast)
-				if err != nil {
-					return fmt.Errorf("failed to update broadcast status: %w", err)
-				}
-
-				// Create an event with acknowledgment callback
-				eventPayload := domain.EventPayload{
-					Type:        domain.EventBroadcastSent,
-					WorkspaceID: workspaceID,
-					EntityID:    broadcastID,
-					Data: map[string]interface{}{
-						"broadcast_id": broadcastID,
-					},
-				}
-
-				// Publish the event with callback
-				s.eventBus.PublishWithAck(ctx, eventPayload, func(err error) {
-					if err != nil {
-						// Event processing failed
-						s.logger.WithFields(map[string]interface{}{
-							"broadcast_id": broadcastID,
-							"workspace_id": workspaceID,
-							"error":        err.Error(),
-						}).Error("Failed to process broadcast sent event")
-
-						doneCh <- fmt.Errorf("failed to process broadcast sent event: %w", err)
-					} else {
-						s.logger.WithFields(map[string]interface{}{
-							"broadcast_id": broadcastID,
-							"workspace_id": workspaceID,
-						}).Info("Broadcast sent event processed successfully")
-
-						doneCh <- nil
-					}
-				})
-
-				// Wait for the event processing to complete with a timeout
-				// Use a shorter timeout since SendBatch is often called in a loop
-				timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-				defer cancel()
-
-				select {
-				case err := <-doneCh:
-					return err // Return nil to commit, or error to rollback
-				case <-timeoutCtx.Done():
-					// Timeout occurred, log it but still commit the transaction
-					s.logger.WithFields(map[string]interface{}{
-						"broadcast_id": broadcastID,
-						"workspace_id": workspaceID,
-					}).Warn("Timeout waiting for broadcast sent event processing, but continuing")
-					return nil
-				}
-			})
-
-			if err != nil {
-				s.logger.WithFields(map[string]interface{}{
-					"workspace_id": workspaceID,
-					"broadcast_id": broadcastID,
-					"error":        err.Error(),
-				}).Error("Failed to update broadcast status or process event")
-			}
+		// Publish broadcast sent event
+		eventPayload := domain.EventPayload{
+			Type:        domain.EventBroadcastSent,
+			WorkspaceID: workspaceID,
+			EntityID:    broadcastID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"total_sent":   broadcast.TotalSent,
+				"total_failed": broadcast.TotalFailed,
+			},
 		}
+
+		s.eventBus.Publish(ctx, eventPayload)
 	}
 
 	return successCount, failureCount, nil
@@ -1079,4 +1176,339 @@ func (s *BroadcastService) SendWinningVariation(ctx context.Context, request *do
 	s.logger.Info("Broadcast updated with winning variation")
 
 	return nil
+}
+
+// GetBroadcastRecipients gets recipients for a broadcast with pagination
+func (s *BroadcastService) GetBroadcastRecipients(ctx context.Context, workspaceID, broadcastID string, limit, offset int) ([]*domain.Contact, error) {
+	// Get the broadcast to retrieve audience settings
+	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"error":        err.Error(),
+		}).Error("Failed to get broadcast for recipients")
+		return nil, fmt.Errorf("failed to get broadcast: %w", err)
+	}
+
+	// Fetch contacts using the repository
+	contacts, err := s.contactRepo.GetContactsForBroadcast(
+		ctx,
+		workspaceID,
+		broadcast.Audience,
+		limit,
+		offset,
+	)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"limit":        limit,
+			"offset":       offset,
+			"error":        err.Error(),
+		}).Error("Failed to get contacts for broadcast")
+		return nil, fmt.Errorf("failed to get contacts: %w", err)
+	}
+
+	return contacts, nil
+}
+
+// SendToContact sends a broadcast message to a single contact
+func (s *BroadcastService) SendToContact(ctx context.Context, workspaceID, broadcastID string, contact *domain.Contact) error {
+	// Get the broadcast
+	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to get broadcast for sending to contact")
+		return fmt.Errorf("failed to get broadcast: %w", err)
+	}
+
+	// Determine which variation to use for this contact
+	var variationID string
+	if broadcast.WinningVariation != "" {
+		// If there's a winning variation, use it
+		variationID = broadcast.WinningVariation
+	} else if broadcast.TestSettings.Enabled {
+		// A/B testing is enabled but no winner yet, assign a variation
+		// Use a deterministic approach based on contact's email
+		hashValue := int(contact.Email[0]) % len(broadcast.TestSettings.Variations)
+		variationID = broadcast.TestSettings.Variations[hashValue].ID
+	} else if len(broadcast.TestSettings.Variations) > 0 {
+		// Not A/B testing, use the first variation
+		variationID = broadcast.TestSettings.Variations[0].ID
+	} else {
+		// No variations available
+		return fmt.Errorf("no template variations available for broadcast")
+	}
+
+	// Find the specified variation
+	var variation *domain.BroadcastVariation
+	for _, v := range broadcast.TestSettings.Variations {
+		if v.ID == variationID {
+			variation = &v
+			break
+		}
+	}
+
+	if variation == nil {
+		return fmt.Errorf("variation with ID %s not found in broadcast", variationID)
+	}
+
+	// Fetch the template
+	template, err := s.templateSvc.GetTemplateByID(ctx, workspaceID, variation.TemplateID, 1)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"template_id":  variation.TemplateID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to fetch template for broadcast")
+		return err
+	}
+
+	// Prepare template data
+	contactData, err := contact.ToMapOfAny()
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to convert contact to template data")
+		return err
+	}
+
+	templateData := domain.MapOfAny{
+		"contact": contactData,
+	}
+
+	// Add UTM parameters if tracking is enabled
+	if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
+		templateData["utm_parameters"] = broadcast.UTMParameters
+	}
+
+	// Compile the template
+	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, workspaceID, template.Email.VisualEditorTree, templateData)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to compile template")
+		return err
+	}
+
+	if !compiledTemplate.Success || compiledTemplate.HTML == nil {
+		errMsg := "Template compilation failed"
+		if compiledTemplate.Error != nil {
+			errMsg = compiledTemplate.Error.Message
+		}
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        errMsg,
+		}).Error("Failed to generate HTML from template")
+		return fmt.Errorf("template compilation failed: %s", errMsg)
+	}
+
+	// Send the email
+	err = s.emailSvc.SendEmail(
+		ctx,
+		workspaceID,
+		"marketing", // Email provider type
+		template.Email.FromAddress,
+		template.Email.FromName,
+		contact.Email,
+		template.Email.Subject,
+		*compiledTemplate.HTML,
+	)
+
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to send email to contact")
+		return err
+	}
+
+	// Update metrics for the variation (if needed, this can be done in bulk later)
+	// This operation is not performed here for performance reasons,
+	// metrics are tracked in the task processor instead
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"email":        contact.Email,
+		"variation_id": variationID,
+	}).Debug("Email sent to contact successfully")
+
+	return nil
+}
+
+// SendToContactWithTemplates sends a broadcast message to a single contact with pre-loaded templates
+func (s *BroadcastService) SendToContactWithTemplates(ctx context.Context, workspaceID, broadcastID string,
+	contact *domain.Contact, templates map[string]*domain.Template) error {
+
+	// Get the broadcast
+	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to get broadcast for sending to contact")
+		return fmt.Errorf("failed to get broadcast: %w", err)
+	}
+
+	// Determine which variation to use for this contact
+	var variationID string
+	if broadcast.WinningVariation != "" {
+		// If there's a winning variation, use it
+		variationID = broadcast.WinningVariation
+	} else if broadcast.TestSettings.Enabled {
+		// A/B testing is enabled but no winner yet, assign a variation
+		// Use a deterministic approach based on contact's email
+		hashValue := int(contact.Email[0]) % len(broadcast.TestSettings.Variations)
+		variationID = broadcast.TestSettings.Variations[hashValue].ID
+	} else if len(broadcast.TestSettings.Variations) > 0 {
+		// Not A/B testing, use the first variation
+		variationID = broadcast.TestSettings.Variations[0].ID
+	} else {
+		// No variations available
+		return fmt.Errorf("no template variations available for broadcast")
+	}
+
+	// Find the specified variation
+	var variation *domain.BroadcastVariation
+	for _, v := range broadcast.TestSettings.Variations {
+		if v.ID == variationID {
+			variation = &v
+			break
+		}
+	}
+
+	if variation == nil {
+		return fmt.Errorf("variation with ID %s not found in broadcast", variationID)
+	}
+
+	// Get the template from the pre-loaded templates map
+	template, exists := templates[variation.TemplateID]
+	if !exists {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"template_id":  variation.TemplateID,
+			"email":        contact.Email,
+		}).Error("Template not found in pre-loaded templates")
+
+		// Fall back to loading the template directly
+		var err error
+		template, err = s.templateSvc.GetTemplateByID(ctx, workspaceID, variation.TemplateID, 1)
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"broadcast_id": broadcastID,
+				"template_id":  variation.TemplateID,
+				"email":        contact.Email,
+				"error":        err.Error(),
+			}).Error("Failed to fetch template for broadcast")
+			return err
+		}
+	}
+
+	// Prepare template data
+	contactData, err := contact.ToMapOfAny()
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to convert contact to template data")
+		return err
+	}
+
+	templateData := domain.MapOfAny{
+		"contact": contactData,
+	}
+
+	// Add UTM parameters if tracking is enabled
+	if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
+		templateData["utm_parameters"] = broadcast.UTMParameters
+	}
+
+	// Compile the template
+	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, workspaceID, template.Email.VisualEditorTree, templateData)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to compile template")
+		return err
+	}
+
+	if !compiledTemplate.Success || compiledTemplate.HTML == nil {
+		errMsg := "Template compilation failed"
+		if compiledTemplate.Error != nil {
+			errMsg = compiledTemplate.Error.Message
+		}
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        errMsg,
+		}).Error("Failed to generate HTML from template")
+		return fmt.Errorf("template compilation failed: %s", errMsg)
+	}
+
+	// Send the email
+	err = s.emailSvc.SendEmail(
+		ctx,
+		workspaceID,
+		"marketing", // Email provider type
+		template.Email.FromAddress,
+		template.Email.FromName,
+		contact.Email,
+		template.Email.Subject,
+		*compiledTemplate.HTML,
+	)
+
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"broadcast_id": broadcastID,
+			"email":        contact.Email,
+			"error":        err.Error(),
+		}).Error("Failed to send email to contact")
+		return err
+	}
+
+	// Update metrics for the variation (if needed, this can be done in bulk later)
+	// This operation is not performed here for performance reasons,
+	// metrics are tracked in the task processor instead
+
+	s.logger.WithFields(map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"email":        contact.Email,
+		"variation_id": variationID,
+	}).Debug("Email sent to contact successfully")
+
+	return nil
+}
+
+// GetTemplateByID gets a template by ID for use with broadcasts
+func (s *BroadcastService) GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*domain.Template, error) {
+	// Simply delegate to the template service, but only requesting version 1
+	return s.templateSvc.GetTemplateByID(ctx, workspaceID, templateID, 1)
 }

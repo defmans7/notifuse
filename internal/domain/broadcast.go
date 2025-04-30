@@ -823,7 +823,16 @@ type BroadcastService interface {
 type BroadcastSender interface {
 	GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*Broadcast, error)
 	GetRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error)
-	SendBatch(ctx context.Context, workspaceID, broadcastID string, batchNumber, batchSize int) (int, int, error)
+	// Replace old batch method with new one that aligns with semaphore approach
+	ProcessRecipients(ctx context.Context, workspaceID, broadcastID string, startOffset, limit int) (int, int, error)
+	// New methods for semaphore approach
+	GetBroadcastRecipients(ctx context.Context, workspaceID, broadcastID string, limit, offset int) ([]*Contact, error)
+	SendToContact(ctx context.Context, workspaceID, broadcastID string, contact *Contact) error
+	// More efficient method that accepts pre-loaded templates
+	SendToContactWithTemplates(ctx context.Context, workspaceID, broadcastID string,
+		contact *Contact, templates map[string]*Template) error
+	// Get template by ID
+	GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*Template, error)
 }
 
 // BroadcastRepository defines the data access layer for broadcasts

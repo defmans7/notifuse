@@ -712,7 +712,7 @@ export function BroadcastsPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <Title level={2}>Broadcasts</Title>
+        <Title level={3}>Broadcasts</Title>
         {currentWorkspace && hasBroadcasts && (
           <UpsertBroadcastDrawer
             workspace={currentWorkspace}

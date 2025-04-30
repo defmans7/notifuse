@@ -46,7 +46,6 @@ func (h *TaskHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/tasks.get", requireAuth(http.HandlerFunc(h.GetTask)))
 	mux.Handle("/api/tasks.delete", requireAuth(http.HandlerFunc(h.DeleteTask)))
 	mux.Handle("/api/tasks.execute", http.HandlerFunc(h.ExecuteTasks))
-	mux.Handle("/api/tasks.executeSubtask", http.HandlerFunc(h.ExecuteSubtask))
 }
 
 // CreateTask handles creation of a new task
@@ -185,48 +184,5 @@ func (h *TaskHandler) ExecuteTasks(w http.ResponseWriter, r *http.Request) {
 		"success":   true,
 		"message":   "Task execution initiated",
 		"max_tasks": executeRequest.MaxTasks,
-	})
-}
-
-// ExecuteSubtask handles the execution of a specific subtask
-func (h *TaskHandler) ExecuteSubtask(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Parse request body
-	var subtaskRequest domain.SubtaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&subtaskRequest); err != nil {
-		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate subtask ID
-	if subtaskRequest.SubtaskID == "" {
-		WriteJSONError(w, "Subtask ID is required", http.StatusBadRequest)
-		return
-	}
-
-	// Execute the subtask
-	err := h.taskService.ExecuteSubtask(r.Context(), subtaskRequest.SubtaskID)
-	if err != nil {
-		h.logger.WithField("subtask_id", subtaskRequest.SubtaskID).
-			WithField("error", err.Error()).
-			Error("Failed to execute subtask")
-
-		// Return appropriate status based on error
-		if strings.Contains(err.Error(), "not found") {
-			WriteJSONError(w, "Subtask not found", http.StatusNotFound)
-		} else {
-			WriteJSONError(w, "Failed to execute subtask", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Return success response
-	writeJSON(w, http.StatusOK, domain.SubtaskResponse{
-		Success:   true,
-		Completed: true,
 	})
 }

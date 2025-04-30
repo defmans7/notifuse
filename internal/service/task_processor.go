@@ -3,6 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
+	"golang.org/x/sync/semaphore"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -12,6 +16,8 @@ import (
 type SendBroadcastProcessor struct {
 	broadcastService domain.BroadcastSender
 	logger           logger.Logger
+	maxParallelism   int64         // Maximum number of concurrent email sends
+	maxProcessTime   time.Duration // Maximum time to process before saving state
 }
 
 // NewSendBroadcastProcessor creates a new SendBroadcastProcessor
@@ -19,17 +25,14 @@ func NewSendBroadcastProcessor(broadcastService domain.BroadcastSender, logger l
 	return &SendBroadcastProcessor{
 		broadcastService: broadcastService,
 		logger:           logger,
+		maxParallelism:   10,               // Process 10 emails in parallel
+		maxProcessTime:   50 * time.Second, // Run for 50 seconds before saving state
 	}
 }
 
 // CanProcess returns true if this processor can handle the given task type
 func (p *SendBroadcastProcessor) CanProcess(taskType string) bool {
 	return taskType == "send_broadcast"
-}
-
-// SupportsParallelization returns true since broadcast sending can be parallelized
-func (p *SendBroadcastProcessor) SupportsParallelization() bool {
-	return true
 }
 
 // Process executes or continues a broadcast sending task
@@ -43,11 +46,9 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 			Progress: 0,
 			Message:  "Starting broadcast",
 			SendBroadcast: &domain.SendBroadcastState{
-				SentCount:    0,
-				FailedCount:  0,
-				CurrentBatch: 0,
-				TotalBatches: 0,
-				BatchSize:    100, // Default batch size
+				SentCount:       0,
+				FailedCount:     0,
+				RecipientOffset: 0, // Track how many recipients we've processed
 			},
 		}
 	}
@@ -55,11 +56,9 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 	// Initialize the SendBroadcast state if it doesn't exist yet
 	if task.State.SendBroadcast == nil {
 		task.State.SendBroadcast = &domain.SendBroadcastState{
-			SentCount:    0,
-			FailedCount:  0,
-			CurrentBatch: 0,
-			TotalBatches: 0,
-			BatchSize:    100, // Default batch size
+			SentCount:       0,
+			FailedCount:     0,
+			RecipientOffset: 0, // Track how many recipients we've processed
 		}
 	}
 
@@ -70,8 +69,8 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 		return false, fmt.Errorf("broadcast ID is missing in task state")
 	}
 
-	// If we're just starting (batch 0), get the total recipients
-	if broadcastState.CurrentBatch == 0 {
+	// If we're just starting (first run), get the total recipients
+	if broadcastState.TotalRecipients == 0 {
 		// Get actual recipient count from the broadcast service
 		recipientCount, err := p.broadcastService.GetRecipientCount(ctx, task.WorkspaceID, broadcastState.BroadcastID)
 		if err != nil {
@@ -84,8 +83,6 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 		}
 
 		broadcastState.TotalRecipients = recipientCount
-		broadcastState.TotalBatches = (broadcastState.TotalRecipients + broadcastState.BatchSize - 1) / broadcastState.BatchSize
-		broadcastState.CurrentBatch = 1
 		broadcastState.ChannelType = "email" // Or could be "sms", "push", etc.
 
 		task.State.Message = fmt.Sprintf("Sending %s broadcast to %d recipients",
@@ -95,246 +92,259 @@ func (p *SendBroadcastProcessor) Process(ctx context.Context, task *domain.Task)
 			"task_id":          task.ID,
 			"broadcast_id":     broadcastState.BroadcastID,
 			"total_recipients": broadcastState.TotalRecipients,
-			"total_batches":    broadcastState.TotalBatches,
 			"channel_type":     broadcastState.ChannelType,
 		}).Info("Broadcast sending initialized")
 
+		// Early return after initialization to save state
 		return false, nil
 	}
 
-	// Process the current batch
-	select {
-	case <-ctx.Done():
-		// Context was canceled (e.g., timeout)
-		p.logger.WithField("task_id", task.ID).Warn("Broadcast sending interrupted")
-		return false, ctx.Err()
-	default:
-		// Calculate the current batch size
-		batchSize := broadcastState.BatchSize
-		if broadcastState.CurrentBatch == broadcastState.TotalBatches {
-			// Last batch might be smaller
-			remainingRecipients := broadcastState.TotalRecipients - ((broadcastState.CurrentBatch - 1) * broadcastState.BatchSize)
-			if remainingRecipients < batchSize {
-				batchSize = remainingRecipients
+	// Check if we've already sent to all recipients
+	if broadcastState.RecipientOffset >= int64(broadcastState.TotalRecipients) {
+		task.State.Message = fmt.Sprintf("Broadcast completed: %d sent, %d failed",
+			broadcastState.SentCount, broadcastState.FailedCount)
+		task.Progress = 100.0
+		task.State.Progress = 100.0
+
+		p.logger.WithFields(map[string]interface{}{
+			"task_id":      task.ID,
+			"broadcast_id": broadcastState.BroadcastID,
+			"sent_count":   broadcastState.SentCount,
+			"failed_count": broadcastState.FailedCount,
+		}).Info("Broadcast sending completed")
+
+		return true, nil
+	}
+
+	// Create a semaphore to limit concurrent operations
+	sem := semaphore.NewWeighted(p.maxParallelism)
+
+	// Create a context with timeout to limit processing time
+	processCtx, cancel := context.WithTimeout(ctx, p.maxProcessTime)
+	defer cancel()
+
+	// Track newly processed recipients in this run
+	var mu sync.Mutex // Mutex to protect counters
+	successCount := 0
+	failureCount := 0
+	processedCount := 0
+	allDone := false
+
+	// Use a wait group to track all goroutines
+	var wg sync.WaitGroup
+
+	// Create a ticker to periodically log progress
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	// Start a goroutine to log progress
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				mu.Lock()
+				p.logger.WithFields(map[string]interface{}{
+					"task_id":      task.ID,
+					"broadcast_id": broadcastState.BroadcastID,
+					"processed":    processedCount,
+					"success":      successCount,
+					"failed":       failureCount,
+					"total_sent":   broadcastState.SentCount + successCount,
+					"total_failed": broadcastState.FailedCount + failureCount,
+				}).Info("Broadcast processing progress")
+				mu.Unlock()
+			case <-done:
+				return
 			}
 		}
+	}()
 
-		// Use real broadcast service to send the batch
-		successesThisBatch, failuresThisBatch, err := p.broadcastService.SendBatch(
+	// Get the broadcast to access its template variations
+	broadcast, err := p.broadcastService.GetBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
+	if err != nil {
+		p.logger.WithFields(map[string]interface{}{
+			"task_id":      task.ID,
+			"broadcast_id": broadcastState.BroadcastID,
+			"error":        err.Error(),
+		}).Error("Failed to get broadcast for templates")
+		return false, fmt.Errorf("failed to get broadcast: %w", err)
+	}
+
+	// Pre-load all templates used by variations
+	variationTemplates := make(map[string]*domain.Template)
+	for _, variation := range broadcast.TestSettings.Variations {
+		// Skip if we already loaded this template
+		if _, exists := variationTemplates[variation.TemplateID]; exists {
+			continue
+		}
+
+		// Load the template
+		template, err := p.broadcastService.GetTemplateByID(ctx, task.WorkspaceID, variation.TemplateID)
+		if err != nil {
+			p.logger.WithFields(map[string]interface{}{
+				"task_id":      task.ID,
+				"broadcast_id": broadcastState.BroadcastID,
+				"template_id":  variation.TemplateID,
+				"error":        err.Error(),
+			}).Error("Failed to load template for variation, will load on demand")
+			// Continue without this template, it will be loaded on demand
+			continue
+		}
+
+		// Store the template
+		variationTemplates[variation.TemplateID] = template
+	}
+
+	p.logger.WithFields(map[string]interface{}{
+		"task_id":          task.ID,
+		"broadcast_id":     broadcastState.BroadcastID,
+		"templates_loaded": len(variationTemplates),
+	}).Info("Pre-loaded templates for broadcast")
+
+	// Use a batch size of 50 for each fetch operation
+	fetchBatchSize := 50
+
+	// Process recipients until we hit a stopping condition
+	for {
+		select {
+		case <-processCtx.Done():
+			// We've hit the time limit, break out of the loop
+			p.logger.WithField("task_id", task.ID).Info("Processing time limit reached")
+			allDone = false
+			goto CLEANUP // Use goto to break out of nested loop
+		default:
+			// Continue processing
+		}
+
+		// Get next batch of recipients
+		recipients, err := p.broadcastService.GetBroadcastRecipients(
 			ctx,
 			task.WorkspaceID,
 			broadcastState.BroadcastID,
-			broadcastState.CurrentBatch-1, // Use zero-based indexing for batch number
-			batchSize,
+			fetchBatchSize,
+			int(broadcastState.RecipientOffset)+processedCount,
 		)
 
 		if err != nil {
 			p.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
-				"batch":        broadcastState.CurrentBatch,
+				"offset":       int(broadcastState.RecipientOffset) + processedCount,
 				"error":        err.Error(),
-			}).Error("Failed to send broadcast batch")
-			return false, fmt.Errorf("failed to send batch %d: %w", broadcastState.CurrentBatch, err)
+			}).Error("Failed to get broadcast recipients")
+			// Try to continue with next batch rather than failing the task
+			continue
 		}
 
-		// Update counters with real results
-		broadcastState.SentCount += successesThisBatch
-		broadcastState.FailedCount += failuresThisBatch
+		// If we got no recipients, we're done
+		if len(recipients) == 0 {
+			p.logger.WithField("task_id", task.ID).Info("No more recipients to process")
+			allDone = true
+			break
+		}
 
-		p.logger.WithFields(map[string]interface{}{
-			"task_id":    task.ID,
-			"batch":      broadcastState.CurrentBatch,
-			"sent_count": broadcastState.SentCount,
-			"fail_count": broadcastState.FailedCount,
-			"batch_size": batchSize,
-			"success":    successesThisBatch,
-			"failed":     failuresThisBatch,
-		}).Info("Processed broadcast batch")
-
-		// Update task message and progress
-		task.State.Message = fmt.Sprintf("Sent to %d/%d recipients (%d failed)",
-			broadcastState.SentCount, broadcastState.TotalRecipients, broadcastState.FailedCount)
-
-		// Check if we've processed all batches
-		if broadcastState.CurrentBatch >= broadcastState.TotalBatches {
-			// Task is complete
-			task.State.Message = fmt.Sprintf("Broadcast completed: %d sent, %d failed",
-				broadcastState.SentCount, broadcastState.FailedCount)
-
-			// Calculate final progress
-			if broadcastState.TotalRecipients > 0 {
-				task.Progress = 100.0
-				task.State.Progress = 100.0
+		// Process each recipient in parallel with semaphore to limit concurrency
+		for _, contact := range recipients {
+			// Check if we should stop processing
+			select {
+			case <-processCtx.Done():
+				// We've hit the time limit, break out of the loop
+				p.logger.WithField("task_id", task.ID).Info("Processing time limit reached during recipient processing")
+				allDone = false
+				goto CLEANUP // Use goto to break out of nested loop
+			default:
+				// Continue processing
 			}
 
-			p.logger.WithFields(map[string]interface{}{
-				"task_id":          task.ID,
-				"broadcast_id":     broadcastState.BroadcastID,
-				"total_recipients": broadcastState.TotalRecipients,
-				"sent_count":       broadcastState.SentCount,
-				"failed_count":     broadcastState.FailedCount,
-				"progress":         task.Progress,
-			}).Info("Broadcast sending completed")
+			// Acquire semaphore slot (blocks if we're at max parallelism)
+			if err := sem.Acquire(ctx, 1); err != nil {
+				p.logger.WithFields(map[string]interface{}{
+					"task_id": task.ID,
+					"error":   err.Error(),
+				}).Error("Failed to acquire semaphore")
+				continue
+			}
 
-			return true, nil
+			// Increment processed count under lock
+			mu.Lock()
+			processedCount++
+			mu.Unlock()
+
+			// Launch goroutine to process this recipient
+			wg.Add(1)
+			go func(contact *domain.Contact) {
+				defer wg.Done()
+				defer sem.Release(1)
+
+				// Send the email
+				err := p.broadcastService.SendToContactWithTemplates(
+					ctx,
+					task.WorkspaceID,
+					broadcastState.BroadcastID,
+					contact,
+					variationTemplates,
+				)
+
+				// Update counters based on result
+				mu.Lock()
+				if err != nil {
+					failureCount++
+					p.logger.WithFields(map[string]interface{}{
+						"task_id":      task.ID,
+						"broadcast_id": broadcastState.BroadcastID,
+						"email":        contact.Email,
+						"error":        err.Error(),
+					}).Error("Failed to send broadcast to contact")
+				} else {
+					successCount++
+				}
+				mu.Unlock()
+			}(contact)
 		}
 
-		// Move to next batch
-		broadcastState.CurrentBatch++
-
-		// Calculate progress percentage
-		if broadcastState.TotalRecipients > 0 {
-			task.Progress = float64(broadcastState.CurrentBatch-1) / float64(broadcastState.TotalBatches) * 100
-			task.State.Progress = task.Progress
+		// If we got fewer recipients than batch size, we're done
+		if len(recipients) < fetchBatchSize {
+			// Make sure to wait for all goroutines to finish
+			wg.Wait()
+			allDone = true
+			break
 		}
-
-		p.logger.WithFields(map[string]interface{}{
-			"task_id":  task.ID,
-			"progress": task.Progress,
-			"batch":    broadcastState.CurrentBatch,
-			"of_batch": broadcastState.TotalBatches,
-		}).Info("Moving to next batch")
-
-		return false, nil
 	}
-}
 
-// ProcessSubtask executes a portion of the task as a subtask
-func (p *SendBroadcastProcessor) ProcessSubtask(ctx context.Context, subtask *domain.Subtask, parentTask *domain.Task) (bool, error) {
+CLEANUP:
+	// Signal the progress logger to stop
+	close(done)
+
+	// Wait for all goroutines to finish
+	wg.Wait()
+
+	// Update state with results from this processing run
+	broadcastState.SentCount += successCount
+	broadcastState.FailedCount += failureCount
+	broadcastState.RecipientOffset += int64(processedCount)
+
+	// Calculate progress percentage
+	if broadcastState.TotalRecipients > 0 {
+		task.Progress = float64(broadcastState.RecipientOffset) / float64(broadcastState.TotalRecipients) * 100
+		task.State.Progress = task.Progress
+	}
+
+	// Update task message
+	task.State.Message = fmt.Sprintf("Sent to %d/%d recipients (%d failed)",
+		broadcastState.SentCount, broadcastState.TotalRecipients, broadcastState.FailedCount)
+
 	p.logger.WithFields(map[string]interface{}{
-		"subtask_id":     subtask.ID,
-		"parent_task_id": subtask.ParentTaskID,
-		"index":          subtask.Index,
-		"total":          subtask.Total,
-	}).Info("Processing broadcast subtask")
+		"task_id":          task.ID,
+		"broadcast_id":     broadcastState.BroadcastID,
+		"sent_total":       broadcastState.SentCount,
+		"failed_total":     broadcastState.FailedCount,
+		"processed":        processedCount,
+		"offset":           broadcastState.RecipientOffset,
+		"total_recipients": broadcastState.TotalRecipients,
+		"progress":         task.Progress,
+		"all_done":         allDone,
+	}).Info("Broadcast processing cycle completed")
 
-	// Initialize subtask state if needed
-	if subtask.State.SendBroadcast == nil {
-		// Make sure parent task has SendBroadcast state
-		if parentTask.State == nil || parentTask.State.SendBroadcast == nil {
-			return false, fmt.Errorf("parent task missing SendBroadcast state")
-		}
-
-		// Calculate which batches this subtask should process
-		totalSubtasks := subtask.Total
-		if totalSubtasks <= 0 {
-			totalSubtasks = 1
-		}
-
-		subtaskIndex := subtask.Index
-		if subtaskIndex < 0 {
-			subtaskIndex = 0
-		}
-
-		// Calculate batch range for this subtask
-		parentState := parentTask.State.SendBroadcast
-		totalBatches := parentState.TotalBatches
-		batchesPerSubtask := (totalBatches + totalSubtasks - 1) / totalSubtasks
-		startBatch := subtaskIndex * batchesPerSubtask
-		endBatch := startBatch + batchesPerSubtask
-		if endBatch > totalBatches {
-			endBatch = totalBatches
-		}
-
-		// Initialize the subtask state
-		subtask.State.SendBroadcast = &domain.SendBroadcastState{
-			BroadcastID:     parentState.BroadcastID,
-			ChannelType:     parentState.ChannelType,
-			BatchSize:       parentState.BatchSize,
-			TotalRecipients: parentState.TotalRecipients,
-			SentCount:       0,
-			FailedCount:     0,
-			CurrentBatch:    startBatch, // Start at the first batch for this subtask
-			TotalBatches:    endBatch,   // End at the last batch for this subtask
-		}
-
-		p.logger.WithFields(map[string]interface{}{
-			"subtask_id":   subtask.ID,
-			"broadcast_id": parentState.BroadcastID,
-			"start_batch":  startBatch,
-			"end_batch":    endBatch,
-		}).Info("Initialized broadcast subtask")
-	}
-
-	// Process the subtask
-	select {
-	case <-ctx.Done():
-		p.logger.WithField("subtask_id", subtask.ID).Warn("Broadcast subtask interrupted")
-		return false, ctx.Err()
-	default:
-		broadcastState := subtask.State.SendBroadcast
-
-		// Check if we've already finished all our batches
-		if broadcastState.CurrentBatch >= broadcastState.TotalBatches {
-			subtask.Progress = 100
-			subtask.State.Progress = 100
-			subtask.State.Message = fmt.Sprintf("Completed: %d sent, %d failed",
-				broadcastState.SentCount, broadcastState.FailedCount)
-
-			p.logger.WithFields(map[string]interface{}{
-				"subtask_id":   subtask.ID,
-				"broadcast_id": broadcastState.BroadcastID,
-				"sent_count":   broadcastState.SentCount,
-				"fail_count":   broadcastState.FailedCount,
-			}).Info("Broadcast subtask completed")
-
-			return true, nil
-		}
-
-		// Calculate this batch size
-		batchSize := broadcastState.BatchSize
-
-		// Use real broadcast service to send the batch
-		successesThisBatch, failuresThisBatch, err := p.broadcastService.SendBatch(
-			ctx,
-			parentTask.WorkspaceID,
-			broadcastState.BroadcastID,
-			broadcastState.CurrentBatch, // Use the current batch number
-			batchSize,
-		)
-
-		if err != nil {
-			p.logger.WithFields(map[string]interface{}{
-				"subtask_id":   subtask.ID,
-				"broadcast_id": broadcastState.BroadcastID,
-				"batch":        broadcastState.CurrentBatch,
-				"error":        err.Error(),
-			}).Error("Failed to send broadcast batch in subtask")
-			return false, fmt.Errorf("failed to send batch %d: %w", broadcastState.CurrentBatch, err)
-		}
-
-		// Update counters with real results
-		broadcastState.SentCount += successesThisBatch
-		broadcastState.FailedCount += failuresThisBatch
-
-		// Update subtask progress
-		batchesDone := broadcastState.CurrentBatch - (subtask.Index * ((parentTask.State.SendBroadcast.TotalBatches + subtask.Total - 1) / subtask.Total)) + 1
-		totalBatchesForSubtask := broadcastState.TotalBatches - broadcastState.CurrentBatch
-
-		if totalBatchesForSubtask > 0 {
-			subtask.Progress = float64(batchesDone) / float64(totalBatchesForSubtask+batchesDone) * 100
-		} else {
-			subtask.Progress = 100
-		}
-		subtask.State.Progress = subtask.Progress
-
-		// Update subtask message
-		subtask.State.Message = fmt.Sprintf("Sent batch %d, %d messages sent, %d failed",
-			broadcastState.CurrentBatch, broadcastState.SentCount, broadcastState.FailedCount)
-
-		p.logger.WithFields(map[string]interface{}{
-			"subtask_id":   subtask.ID,
-			"broadcast_id": broadcastState.BroadcastID,
-			"batch":        broadcastState.CurrentBatch,
-			"success":      successesThisBatch,
-			"failed":       failuresThisBatch,
-			"progress":     subtask.Progress,
-		}).Info("Processed broadcast batch in subtask")
-
-		// Move to next batch
-		broadcastState.CurrentBatch++
-
-		return false, nil
-	}
+	return allDone, nil
 }

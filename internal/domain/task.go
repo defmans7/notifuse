@@ -32,20 +32,6 @@ const (
 	TaskStatusPaused TaskStatus = "paused"
 )
 
-// SubtaskStatus represents the current state of a subtask
-type SubtaskStatus string
-
-const (
-	// SubtaskStatusPending is for subtasks that haven't started yet
-	SubtaskStatusPending SubtaskStatus = "pending"
-	// SubtaskStatusRunning is for subtasks that are currently running
-	SubtaskStatusRunning SubtaskStatus = "running"
-	// SubtaskStatusCompleted is for subtasks that have completed successfully
-	SubtaskStatusCompleted SubtaskStatus = "completed"
-	// SubtaskStatusFailed is for subtasks that have failed
-	SubtaskStatusFailed SubtaskStatus = "failed"
-)
-
 // TaskState represents the state of a task, with specialized fields for different task types
 type TaskState struct {
 	// Common fields for all task types
@@ -83,27 +69,9 @@ type SendBroadcastState struct {
 	SentCount       int    `json:"sent_count"`
 	FailedCount     int    `json:"failed_count"`
 	ChannelType     string `json:"channel_type"`
-	BatchSize       int    `json:"batch_size"`
-	CurrentBatch    int    `json:"current_batch"`
-	TotalBatches    int    `json:"total_batches"`
-}
-
-// Subtask represents a portion of work that can be executed in parallel
-type Subtask struct {
-	ID           string        `json:"id"`
-	ParentTaskID string        `json:"parent_task_id"`
-	Status       SubtaskStatus `json:"status"`
-	Progress     float64       `json:"progress"`
-	State        TaskState     `json:"state"`
-	ErrorMessage string        `json:"error_message,omitempty"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-	StartedAt    *time.Time    `json:"started_at,omitempty"`
-	CompletedAt  *time.Time    `json:"completed_at,omitempty"`
-	TimeoutAfter *time.Time    `json:"timeout_after,omitempty"`
-	Index        int           `json:"index"`
-	Total        int           `json:"total"`
-	BroadcastID  *string       `json:"broadcast_id,omitempty"` // Optional reference to a broadcast
+	// Fields for semaphore approach
+	RecipientOffset int64 `json:"recipient_offset"`
+	EndOffset       int64 `json:"end_offset"`
 }
 
 // Task represents a background task that can be executed in multiple steps
@@ -124,15 +92,8 @@ type Task struct {
 	MaxRuntime    int        `json:"max_runtime"` // Maximum runtime in seconds
 	MaxRetries    int        `json:"max_retries"`
 	RetryCount    int        `json:"retry_count"`
-	RetryInterval int        `json:"retry_interval"` // Retry interval in seconds
-	Subtasks      []*Subtask `json:"subtasks,omitempty"`
+	RetryInterval int        `json:"retry_interval"`         // Retry interval in seconds
 	BroadcastID   *string    `json:"broadcast_id,omitempty"` // Optional reference to a broadcast
-	// New fields for parallel subtask processing
-	ParallelSubtasks  bool `json:"parallel_subtasks"`
-	UseHTTPExecutor   bool `json:"use_http_executor"`
-	SubtaskCount      int  `json:"subtask_count"`
-	CompletedSubtasks int  `json:"completed_subtasks"`
-	FailedSubtasks    int  `json:"failed_subtasks"`
 }
 
 type TaskService interface {
@@ -144,7 +105,6 @@ type TaskService interface {
 	DeleteTask(ctx context.Context, workspace, id string) error
 	ExecuteTasks(ctx context.Context, maxTasks int) error
 	ExecuteTask(ctx context.Context, workspace, taskID string) error
-	ExecuteSubtask(ctx context.Context, subtaskID string) error
 	RegisterDefaultProcessors(broadcastSender BroadcastSender)
 	SubscribeToBroadcastEvents(eventBus EventBus)
 }
@@ -198,22 +158,6 @@ type TaskRepository interface {
 	// MarkAsPaused marks a task as paused (e.g., due to timeout)
 	MarkAsPaused(ctx context.Context, workspace, id string, nextRunAfter time.Time) error
 	MarkAsPausedTx(ctx context.Context, tx *sql.Tx, workspace, id string, nextRunAfter time.Time) error
-
-	// Subtask management
-	CreateSubtasks(ctx context.Context, workspace string, taskID string, count int) ([]*Subtask, error)
-	CreateSubtasksTx(ctx context.Context, tx *sql.Tx, workspace string, taskID string, count int) ([]*Subtask, error)
-	GetSubtask(ctx context.Context, subtaskID string) (*Subtask, error)
-	GetSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string) (*Subtask, error)
-	GetSubtasks(ctx context.Context, taskID string) ([]*Subtask, error)
-	GetSubtasksTx(ctx context.Context, tx *sql.Tx, taskID string) ([]*Subtask, error)
-	UpdateSubtaskProgress(ctx context.Context, subtaskID string, progress float64, state TaskState) error
-	UpdateSubtaskProgressTx(ctx context.Context, tx *sql.Tx, subtaskID string, progress float64, state TaskState) error
-	CompleteSubtask(ctx context.Context, subtaskID string) error
-	CompleteSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string) error
-	FailSubtask(ctx context.Context, subtaskID string, errorMessage string) error
-	FailSubtaskTx(ctx context.Context, tx *sql.Tx, subtaskID string, errorMessage string) error
-	UpdateTaskProgressFromSubtasks(ctx context.Context, workspace, taskID string) error
-	UpdateTaskProgressFromSubtasksTx(ctx context.Context, tx *sql.Tx, workspace, taskID string) error
 }
 
 // TaskFilter defines the filtering criteria for task listing
@@ -231,14 +175,8 @@ type TaskProcessor interface {
 	// Process executes or continues a task, returns whether the task has been completed
 	Process(ctx context.Context, task *Task) (completed bool, err error)
 
-	// ProcessSubtask executes a portion of the task as a subtask
-	ProcessSubtask(ctx context.Context, subtask *Subtask, parentTask *Task) (completed bool, err error)
-
 	// CanProcess returns whether this processor can handle the given task type
 	CanProcess(taskType string) bool
-
-	// SupportsParallelization returns whether this processor supports parallel subtasks
-	SupportsParallelization() bool
 }
 
 // TaskExecutor is responsible for executing tasks
@@ -249,38 +187,19 @@ type TaskExecutor interface {
 	// ExecuteTask executes a specific task
 	ExecuteTask(ctx context.Context, workspaceID, taskID string) error
 
-	// ExecuteSubtask executes a specific subtask
-	ExecuteSubtask(ctx context.Context, subtaskID string) error
-
 	// RegisterProcessor registers a task processor for a specific task type
 	RegisterProcessor(processor TaskProcessor)
 }
 
-// SubtaskRequest represents a request to process a subtask
-type SubtaskRequest struct {
-	SubtaskID string `json:"subtask_id"`
-}
-
-// SubtaskResponse represents a response from processing a subtask
-type SubtaskResponse struct {
-	Success      bool    `json:"success"`
-	Completed    bool    `json:"completed"`
-	Progress     float64 `json:"progress"`
-	ErrorMessage string  `json:"error_message,omitempty"`
-}
-
 // CreateTaskRequest defines the request to create a new task
 type CreateTaskRequest struct {
-	WorkspaceID      string     `json:"workspace_id"`
-	Type             string     `json:"type"`
-	State            *TaskState `json:"state,omitempty"` // New typed state struct
-	MaxRuntime       int        `json:"max_runtime"`
-	MaxRetries       int        `json:"max_retries"`
-	RetryInterval    int        `json:"retry_interval"`
-	ParallelSubtasks bool       `json:"parallel_subtasks"`
-	UseHTTPExecutor  bool       `json:"use_http_executor"`
-	SubtaskCount     int        `json:"subtask_count"`
-	NextRunAfter     *time.Time `json:"next_run_after,omitempty"`
+	WorkspaceID   string     `json:"workspace_id"`
+	Type          string     `json:"type"`
+	State         *TaskState `json:"state,omitempty"` // New typed state struct
+	MaxRuntime    int        `json:"max_runtime"`
+	MaxRetries    int        `json:"max_retries"`
+	RetryInterval int        `json:"retry_interval"`
+	NextRunAfter  *time.Time `json:"next_run_after,omitempty"`
 }
 
 // Validate validates the create task request
@@ -294,19 +213,16 @@ func (r *CreateTaskRequest) Validate() (*Task, error) {
 	}
 
 	task := &Task{
-		WorkspaceID:      r.WorkspaceID,
-		Type:             r.Type,
-		Status:           TaskStatusPending,
-		State:            r.State,
-		MaxRuntime:       r.MaxRuntime,
-		MaxRetries:       r.MaxRetries,
-		RetryInterval:    r.RetryInterval,
-		ParallelSubtasks: r.ParallelSubtasks,
-		UseHTTPExecutor:  r.UseHTTPExecutor,
-		SubtaskCount:     r.SubtaskCount,
-		NextRunAfter:     r.NextRunAfter,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		WorkspaceID:   r.WorkspaceID,
+		Type:          r.Type,
+		Status:        TaskStatusPending,
+		State:         r.State,
+		MaxRuntime:    r.MaxRuntime,
+		MaxRetries:    r.MaxRetries,
+		RetryInterval: r.RetryInterval,
+		NextRunAfter:  r.NextRunAfter,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	// Set defaults if not provided

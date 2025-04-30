@@ -63,32 +63,3 @@ func (mr *MockTaskProcessorMockRecorder) Process(arg0, arg1 interface{}) *gomock
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockTaskProcessor)(nil).Process), arg0, arg1)
 }
-
-// ProcessSubtask mocks base method.
-func (m *MockTaskProcessor) ProcessSubtask(arg0 context.Context, arg1 *domain.Subtask, arg2 *domain.Task) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessSubtask", arg0, arg1, arg2)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ProcessSubtask indicates an expected call of ProcessSubtask.
-func (mr *MockTaskProcessorMockRecorder) ProcessSubtask(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessSubtask", reflect.TypeOf((*MockTaskProcessor)(nil).ProcessSubtask), arg0, arg1, arg2)
-}
-
-// SupportsParallelization mocks base method.
-func (m *MockTaskProcessor) SupportsParallelization() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SupportsParallelization")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// SupportsParallelization indicates an expected call of SupportsParallelization.
-func (mr *MockTaskProcessorMockRecorder) SupportsParallelization() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SupportsParallelization", reflect.TypeOf((*MockTaskProcessor)(nil).SupportsParallelization))
-}

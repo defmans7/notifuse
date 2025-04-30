@@ -67,8 +67,8 @@ func TestTaskRepository_CreateWithTransaction(t *testing.T) {
 		Progress:    0,
 		State: &domain.TaskState{
 			SendBroadcast: &domain.SendBroadcastState{
-				BroadcastID: "test-broadcast",
-				BatchSize:   100,
+				BroadcastID:     "test-broadcast",
+				RecipientOffset: 0,
 			},
 		},
 		CreatedAt:     time.Now().UTC(),
@@ -159,8 +159,8 @@ func TestTaskRepository_UpdateWithTransaction(t *testing.T) {
 		Progress:    50,
 		State: &domain.TaskState{
 			SendBroadcast: &domain.SendBroadcastState{
-				BroadcastID: "test-broadcast",
-				BatchSize:   100,
+				BroadcastID:     "test-broadcast",
+				RecipientOffset: 100,
 			},
 		},
 		CreatedAt:     now.Add(-1 * time.Hour),

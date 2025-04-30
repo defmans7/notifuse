@@ -35,6 +35,21 @@ func (m *MockContactRepository) EXPECT() *MockContactRepositoryMockRecorder {
 	return m.recorder
 }
 
+// CountContactsForBroadcast mocks base method.
+func (m *MockContactRepository) CountContactsForBroadcast(arg0 context.Context, arg1 string, arg2 domain.AudienceSettings) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountContactsForBroadcast", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountContactsForBroadcast indicates an expected call of CountContactsForBroadcast.
+func (mr *MockContactRepositoryMockRecorder) CountContactsForBroadcast(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountContactsForBroadcast", reflect.TypeOf((*MockContactRepository)(nil).CountContactsForBroadcast), arg0, arg1, arg2)
+}
+
 // DeleteContact mocks base method.
 func (m *MockContactRepository) DeleteContact(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -92,6 +107,21 @@ func (m *MockContactRepository) GetContacts(arg0 context.Context, arg1 *domain.G
 func (mr *MockContactRepositoryMockRecorder) GetContacts(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContacts", reflect.TypeOf((*MockContactRepository)(nil).GetContacts), arg0, arg1)
+}
+
+// GetContactsForBroadcast mocks base method.
+func (m *MockContactRepository) GetContactsForBroadcast(arg0 context.Context, arg1 string, arg2 domain.AudienceSettings, arg3, arg4 int) ([]*domain.Contact, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetContactsForBroadcast", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].([]*domain.Contact)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetContactsForBroadcast indicates an expected call of GetContactsForBroadcast.
+func (mr *MockContactRepositoryMockRecorder) GetContactsForBroadcast(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContactsForBroadcast", reflect.TypeOf((*MockContactRepository)(nil).GetContactsForBroadcast), arg0, arg1, arg2, arg3, arg4)
 }
 
 // UpsertContact mocks base method.

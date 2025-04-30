@@ -102,21 +102,6 @@ var TableDefinitions = []string{
 		retry_interval INTEGER NOT NULL DEFAULT 300,
 		broadcast_id VARCHAR(36)
 	)`,
-	`CREATE TABLE IF NOT EXISTS task_subtasks (
-		id UUID PRIMARY KEY,
-		parent_task_id UUID NOT NULL,
-		status VARCHAR(20) NOT NULL,
-		progress FLOAT NOT NULL DEFAULT 0,
-		state JSONB,
-		error_message TEXT,
-		created_at TIMESTAMP NOT NULL,
-		updated_at TIMESTAMP NOT NULL,
-		started_at TIMESTAMP,
-		completed_at TIMESTAMP,
-		index INTEGER,
-		total INTEGER,
-		broadcast_id VARCHAR(36)
-	)`,
 	`CREATE TABLE IF NOT EXISTS contact_lists (
 		email VARCHAR(255) NOT NULL,
 		list_id VARCHAR(50) NOT NULL,
@@ -132,9 +117,6 @@ var TableDefinitions = []string{
 	`CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks (created_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_tasks_broadcast_id ON tasks (broadcast_id)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_workspace_broadcast_id ON tasks (workspace_id, broadcast_id) WHERE broadcast_id IS NOT NULL`,
-	`CREATE INDEX IF NOT EXISTS idx_task_subtasks_parent_task_id ON task_subtasks (parent_task_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_task_subtasks_status ON task_subtasks (status)`,
-	`CREATE INDEX IF NOT EXISTS idx_task_subtasks_broadcast_id ON task_subtasks (broadcast_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_contacts_external_id ON contacts (external_id)`,
 }
 
@@ -149,5 +131,4 @@ var TableNames = []string{
 	"contact_lists",
 	"broadcasts",
 	"tasks",
-	"task_subtasks",
 }

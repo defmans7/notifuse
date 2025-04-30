@@ -946,3 +946,143 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 
 	return isNew, nil
 }
+
+// GetContactsForBroadcast retrieves contacts based on broadcast audience settings
+// It supports filtering by lists, handling unsubscribed contacts, and deduplication
+func (r *contactRepository) GetContactsForBroadcast(
+	ctx context.Context,
+	workspaceID string,
+	audience domain.AudienceSettings,
+	limit int,
+	offset int,
+) ([]*domain.Contact, error) {
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	// Start building the main query
+	query := psql.Select("c.*").
+		From("contacts c").
+		OrderBy("c.created_at ASC"). // Order by created_at to ensure deterministic ordering
+		Limit(uint64(limit)).
+		Offset(uint64(offset))
+
+	// Handle lists filtering
+	if len(audience.Lists) > 0 {
+		// Join with contact_lists table to filter by list membership and status
+		query = query.Join("contact_lists cl ON c.email = cl.email")
+
+		// Filter by the specified lists
+		query = query.Where(sq.Eq{"cl.list_id": audience.Lists})
+
+		// Exclude unsubscribed contacts if required
+		if audience.ExcludeUnsubscribed {
+			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusUnsubscribed})
+			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusBounced})
+			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusComplained})
+		}
+	}
+
+	// Handle segments filtering (if implemented)
+	if len(audience.Segments) > 0 {
+		// This would involve joining with segments tables or applying segment conditions
+		// Implementation depends on how segments are structured in the database
+		// For now, we'll just return an error
+		return nil, fmt.Errorf("segments filtering not implemented")
+	}
+
+	// Handle deduplication if required
+	if audience.SkipDuplicateEmails {
+		// Use DISTINCT ON to ensure unique emails
+		// Note: This requires careful handling with the ordering
+		query = query.Prefix("SELECT DISTINCT ON (c.email)")
+	}
+
+	// Build the final query
+	sqlQuery, args, err := query.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	// Execute the query
+	rows, err := db.QueryContext(ctx, sqlQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	// Process the results
+	var contacts []*domain.Contact
+	for rows.Next() {
+		contact, err := domain.ScanContact(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan contact: %w", err)
+		}
+		contacts = append(contacts, contact)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over contact rows: %w", err)
+	}
+
+	return contacts, nil
+}
+
+// CountContactsForBroadcast counts how many contacts match broadcast audience settings
+// without retrieving all contact records
+func (r *contactRepository) CountContactsForBroadcast(
+	ctx context.Context,
+	workspaceID string,
+	audience domain.AudienceSettings,
+) (int, error) {
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	// Start building the count query
+	query := psql.Select("COUNT(DISTINCT c.email)").
+		From("contacts c")
+
+	// Handle lists filtering
+	if len(audience.Lists) > 0 {
+		// Join with contact_lists table to filter by list membership and status
+		query = query.Join("contact_lists cl ON c.email = cl.email")
+
+		// Filter by the specified lists
+		query = query.Where(sq.Eq{"cl.list_id": audience.Lists})
+
+		// Exclude unsubscribed contacts if required
+		if audience.ExcludeUnsubscribed {
+			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusUnsubscribed})
+			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusBounced})
+			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusComplained})
+		}
+	}
+
+	// Handle segments filtering (if implemented)
+	if len(audience.Segments) > 0 {
+		// This would involve joining with segments tables or applying segment conditions
+		// Implementation depends on how segments are structured in the database
+		return 0, fmt.Errorf("segments filtering not implemented")
+	}
+
+	// Build and execute the query
+	sqlQuery, args, err := query.ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("failed to build count query: %w", err)
+	}
+
+	var count int
+	err = db.QueryRowContext(ctx, sqlQuery, args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute count query: %w", err)
+	}
+
+	return count, nil
+}
