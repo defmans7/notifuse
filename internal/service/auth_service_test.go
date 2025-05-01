@@ -47,7 +47,7 @@ func TestAuthService_AuthenticateUserFromContext(t *testing.T) {
 	userID := "user123"
 	sessionID := "session123"
 
-	t.Run("successful authentication", func(t *testing.T) {
+	t.Run("successful authentication with user type", func(t *testing.T) {
 		user := &domain.User{
 			ID:    userID,
 			Email: "test@example.com",
@@ -55,7 +55,19 @@ func TestAuthService_AuthenticateUserFromContext(t *testing.T) {
 
 		expiresAt := time.Now().Add(1 * time.Hour)
 
-		ctx := context.WithValue(context.WithValue(context.Background(), domain.UserIDKey, userID), domain.SessionIDKey, sessionID)
+		ctx := context.WithValue(
+			context.WithValue(
+				context.WithValue(
+					context.Background(),
+					domain.UserIDKey,
+					userID,
+				),
+				domain.SessionIDKey,
+				sessionID,
+			),
+			domain.UserTypeKey,
+			string(domain.UserTypeUser),
+		)
 
 		mockAuthRepo.EXPECT().
 			GetSessionByID(ctx, sessionID, userID).
@@ -72,8 +84,43 @@ func TestAuthService_AuthenticateUserFromContext(t *testing.T) {
 		require.Equal(t, userID, result.ID)
 	})
 
+	t.Run("successful authentication with API key type", func(t *testing.T) {
+		user := &domain.User{
+			ID:    userID,
+			Email: "test@example.com",
+		}
+
+		ctx := context.WithValue(
+			context.WithValue(
+				context.Background(),
+				domain.UserIDKey,
+				userID,
+			),
+			domain.UserTypeKey,
+			string(domain.UserTypeAPIKey),
+		)
+
+		mockAuthRepo.EXPECT().
+			GetUserByID(ctx, userID).
+			Return(user, nil)
+
+		result, err := service.AuthenticateUserFromContext(ctx)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Equal(t, userID, result.ID)
+	})
+
 	t.Run("missing user_id in context", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), domain.SessionIDKey, sessionID)
+		ctx := context.WithValue(
+			context.WithValue(
+				context.Background(),
+				domain.SessionIDKey,
+				sessionID,
+			),
+			domain.UserTypeKey,
+			string(domain.UserTypeUser),
+		)
 
 		result, err := service.AuthenticateUserFromContext(ctx)
 
@@ -82,8 +129,48 @@ func TestAuthService_AuthenticateUserFromContext(t *testing.T) {
 		require.Nil(t, result)
 	})
 
-	t.Run("missing session_id in context", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), domain.UserIDKey, userID)
+	t.Run("missing user type in context", func(t *testing.T) {
+		ctx := context.WithValue(
+			context.Background(),
+			domain.UserIDKey,
+			userID,
+		)
+
+		result, err := service.AuthenticateUserFromContext(ctx)
+
+		require.Error(t, err)
+		require.Equal(t, ErrUserNotFound, err)
+		require.Nil(t, result)
+	})
+
+	t.Run("missing session_id in context for user type", func(t *testing.T) {
+		ctx := context.WithValue(
+			context.WithValue(
+				context.Background(),
+				domain.UserIDKey,
+				userID,
+			),
+			domain.UserTypeKey,
+			string(domain.UserTypeUser),
+		)
+
+		result, err := service.AuthenticateUserFromContext(ctx)
+
+		require.Error(t, err)
+		require.Equal(t, ErrUserNotFound, err)
+		require.Nil(t, result)
+	})
+
+	t.Run("invalid user type in context", func(t *testing.T) {
+		ctx := context.WithValue(
+			context.WithValue(
+				context.Background(),
+				domain.UserIDKey,
+				userID,
+			),
+			domain.UserTypeKey,
+			"invalid_type",
+		)
 
 		result, err := service.AuthenticateUserFromContext(ctx)
 
@@ -108,11 +195,65 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 
 		expiresAt := time.Now().Add(1 * time.Hour)
 
-		ctx := context.WithValue(context.WithValue(context.Background(), domain.UserIDKey, userID), domain.SessionIDKey, sessionID)
+		ctx := context.WithValue(
+			context.WithValue(
+				context.WithValue(
+					context.Background(),
+					domain.UserIDKey,
+					userID,
+				),
+				domain.SessionIDKey,
+				sessionID,
+			),
+			domain.UserTypeKey,
+			string(domain.UserTypeUser),
+		)
 
 		mockAuthRepo.EXPECT().
 			GetSessionByID(ctx, sessionID, userID).
 			Return(&expiresAt, nil)
+
+		mockAuthRepo.EXPECT().
+			GetUserByID(ctx, userID).
+			Return(user, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetUserWorkspace(ctx, userID, workspaceID).
+			Return(&domain.UserWorkspace{
+				UserID:      userID,
+				WorkspaceID: workspaceID,
+				Role:        "member",
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+			}, nil)
+
+		newCtx, result, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Equal(t, userID, result.ID)
+
+		// Verify that the user is stored in the context
+		storedUser, ok := newCtx.Value(domain.WorkspaceUserKey(workspaceID)).(*domain.User)
+		require.True(t, ok)
+		require.Equal(t, userID, storedUser.ID)
+	})
+
+	t.Run("successful authentication with API key", func(t *testing.T) {
+		user := &domain.User{
+			ID:    userID,
+			Email: "test@example.com",
+		}
+
+		ctx := context.WithValue(
+			context.WithValue(
+				context.Background(),
+				domain.UserIDKey,
+				userID,
+			),
+			domain.UserTypeKey,
+			string(domain.UserTypeAPIKey),
+		)
 
 		mockAuthRepo.EXPECT().
 			GetUserByID(ctx, userID).
@@ -167,7 +308,19 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 
 		expiresAt := time.Now().Add(1 * time.Hour)
 
-		ctx := context.WithValue(context.WithValue(context.Background(), domain.UserIDKey, userID), domain.SessionIDKey, sessionID)
+		ctx := context.WithValue(
+			context.WithValue(
+				context.WithValue(
+					context.Background(),
+					domain.UserIDKey,
+					userID,
+				),
+				domain.SessionIDKey,
+				sessionID,
+			),
+			domain.UserTypeKey,
+			string(domain.UserTypeUser),
+		)
 
 		mockAuthRepo.EXPECT().
 			GetSessionByID(ctx, sessionID, userID).

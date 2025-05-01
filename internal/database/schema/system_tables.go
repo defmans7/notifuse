@@ -5,6 +5,7 @@ package schema
 var TableDefinitions = []string{
 	`CREATE TABLE IF NOT EXISTS users (
 		id UUID PRIMARY KEY,
+		type VARCHAR(20) NOT NULL,
 		email VARCHAR(255) UNIQUE NOT NULL,
 		name VARCHAR(255),
 		created_at TIMESTAMP NOT NULL,

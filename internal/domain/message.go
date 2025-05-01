@@ -59,6 +59,7 @@ type MessageHistory struct {
 	TemplateVersion int           `json:"template_version"`
 	Channel         string        `json:"channel"` // email, sms, push, etc.
 	Status          MessageStatus `json:"status"`
+	Error           *string       `json:"error,omitempty"`
 	MessageData     MessageData   `json:"message_data"`
 
 	// Event timestamps

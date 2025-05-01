@@ -13,6 +13,14 @@ type contextKey string
 const (
 	UserIDKey    contextKey = "user_id"
 	SessionIDKey contextKey = "session_id"
+	UserTypeKey  contextKey = "user_type"
+)
+
+type UserType string
+
+const (
+	UserTypeUser   UserType = "user"
+	UserTypeAPIKey UserType = "api_key"
 )
 
 // WorkspaceUserKey creates a context key for storing a workspace-specific user
@@ -23,6 +31,7 @@ func WorkspaceUserKey(workspaceID string) contextKey {
 // User represents a user in the system
 type User struct {
 	ID        string    `json:"id" db:"id"`
+	Type      UserType  `json:"type" db:"type"`
 	Email     string    `json:"email" db:"email"`
 	Name      string    `json:"name,omitempty" db:"name"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`

@@ -391,11 +391,57 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID 
 		}
 
 		// Send to the recipient
-		if err := s.SendToRecipient(ctx, workspaceID, broadcastID, contact, templates[templateID], recipientData); err != nil {
+		err = s.SendToRecipient(ctx, workspaceID, broadcastID, contact, templates[templateID], recipientData)
+		if err != nil {
 			// SendToRecipient already logs errors
 			failed++
 		} else {
 			sent++
+		}
+
+		message := &domain.MessageHistory{
+			ID:              messageID,
+			ContactID:       contact.Email,
+			BroadcastID:     &broadcastID,
+			TemplateID:      templateID,
+			TemplateVersion: int(templates[templateID].Version),
+			Channel:         "email",
+			Status:          domain.MessageStatusSent,
+			MessageData: domain.MessageData{
+				Data: map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"email":        contact.Email,
+					"template_id":  templateID,
+				},
+			},
+			SentAt:    time.Now(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		if err != nil {
+			message.Status = domain.MessageStatusFailed
+			errStr := fmt.Sprintf("%.255s", err.Error())
+			message.Error = &errStr
+		}
+
+		// Record the message
+		if err := s.broadcastService.RecordMessageSent(ctx, workspaceID, message); err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"workspace_id": workspaceID,
+				"recipient":    contact.Email,
+				"message_id":   messageID,
+				"error":        err.Error(),
+			}).Warn("Failed to record message history, but email was sent")
+			// Don't return an error here since the message was already sent successfully
+		} else {
+			s.logger.WithFields(map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"workspace_id": workspaceID,
+				"recipient":    contact.Email,
+				"message_id":   messageID,
+			}).Debug("Message history recorded successfully")
 		}
 	}
 

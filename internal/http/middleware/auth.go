@@ -60,17 +60,29 @@ func (ac *AuthConfig) RequireAuth() func(http.Handler) http.Handler {
 				return
 			}
 
-			// Get session ID from claims
-			sessionID, err := verified.GetString(string(domain.SessionIDKey))
+			// Get user type from claims
+			userType, err := verified.GetString(string(domain.UserTypeKey))
 			if err != nil {
-				http.Error(w, "Session ID not found in token", http.StatusUnauthorized)
+				http.Error(w, "User type not found in token", http.StatusUnauthorized)
 				return
+			}
+
+			// only users have session IDs
+			var sessionID string
+			if userType == string(domain.UserTypeUser) {
+				sessionID, err = verified.GetString(string(domain.SessionIDKey))
+				if err != nil {
+					http.Error(w, "Session ID not found in token", http.StatusUnauthorized)
+					return
+				}
 			}
 
 			// put userId and sessionId in the context
 			ctx := context.WithValue(r.Context(), domain.UserIDKey, userID)
-			ctx = context.WithValue(ctx, domain.SessionIDKey, sessionID)
-
+			ctx = context.WithValue(ctx, domain.UserTypeKey, userType)
+			if userType == string(domain.UserTypeUser) {
+				ctx = context.WithValue(ctx, domain.SessionIDKey, sessionID)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

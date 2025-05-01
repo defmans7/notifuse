@@ -4,20 +4,9 @@
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
 
-## broadcast
-
-- test template with transactional email provider
-- start campaign
-- stop campaign
-- schedule campaign
-- pause campaign
-- resume campaign
-- get campaign
-
 ## API access
 
-- create service account for API access
-- delete service account
+- create an api key endpoint, that generates a paseto token without expiration and type "api_key"
 
 ## transactional email
 

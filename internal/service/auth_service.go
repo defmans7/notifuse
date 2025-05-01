@@ -64,11 +64,20 @@ func (s *AuthService) AuthenticateUserFromContext(ctx context.Context) (*domain.
 	if !ok || userID == "" {
 		return nil, ErrUserNotFound
 	}
-	sessionID, ok := ctx.Value(domain.SessionIDKey).(string)
-	if !ok || sessionID == "" {
+	userType, ok := ctx.Value(domain.UserTypeKey).(string)
+	if !ok || userType == "" {
 		return nil, ErrUserNotFound
 	}
-	return s.VerifyUserSession(ctx, userID, sessionID)
+	if userType == string(domain.UserTypeUser) {
+		sessionID, ok := ctx.Value(domain.SessionIDKey).(string)
+		if !ok || sessionID == "" {
+			return nil, ErrUserNotFound
+		}
+		return s.VerifyUserSession(ctx, userID, sessionID)
+	} else if userType == string(domain.UserTypeAPIKey) {
+		return s.GetUserByID(ctx, userID)
+	}
+	return nil, ErrUserNotFound
 }
 
 // AuthenticateUserForWorkspace checks if the user exists and the session is valid for a specific workspace
