@@ -82,7 +82,7 @@ func (f *Factory) CreateProgressTracker() ProgressTracker {
 }
 
 // CreateOrchestrator creates a new broadcast orchestrator
-func (f *Factory) CreateOrchestrator() *BroadcastOrchestrator {
+func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 	templateLoader := f.CreateTemplateLoader()
 	recipientFetcher := f.CreateRecipientFetcher()
 	messageSender := f.CreateMessageSender()

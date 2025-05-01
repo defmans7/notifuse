@@ -12,7 +12,8 @@ import (
 
 // ProgressTracker is the interface for tracking progress of broadcast sending
 //
-//go:generate mockgen -destination=../../mocks/progress_tracker.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast ProgressTracker
+//go:generate mockgen -destination=./mocks/mock_progress_tracker.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast ProgressTracker
+
 type ProgressTracker interface {
 	// Initialize sets up the tracker with initial state
 	Initialize(ctx context.Context, workspaceID, taskID, broadcastID string, totalRecipients int) error

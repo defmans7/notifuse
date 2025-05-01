@@ -7,7 +7,16 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-//go:generate mockgen -destination=../../mocks/broadcast_orchestrator.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast BroadcastOrchestrator
+//go:generate mockgen -destination=./mocks/mock_broadcast_orchestrator.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast BroadcastOrchestratorInterface
+
+// BroadcastOrchestratorInterface defines the interface for broadcast orchestration
+type BroadcastOrchestratorInterface interface {
+	// CanProcess returns true if this processor can handle the given task type
+	CanProcess(taskType string) bool
+
+	// Process executes or continues a broadcast sending task
+	Process(ctx context.Context, task *domain.Task) (bool, error)
+}
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
 type BroadcastOrchestrator struct {
@@ -27,7 +36,7 @@ func NewBroadcastOrchestrator(
 	progressTracker ProgressTracker,
 	logger logger.Logger,
 	config *Config,
-) *BroadcastOrchestrator {
+) BroadcastOrchestratorInterface {
 	if config == nil {
 		config = DefaultConfig()
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-//go:generate mockgen -destination=../../mocks/template_loader.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast TemplateLoader
+//go:generate mockgen -destination=./mocks/mock_template_loader.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast TemplateLoader
 
 // TemplateLoader is the interface for loading templates for broadcasts
 type TemplateLoader interface {

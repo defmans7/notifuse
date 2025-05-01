@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-//go:generate mockgen -destination=./mocks/message_sender.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast MessageSender
+//go:generate mockgen -destination=./mocks/mock_message_sender.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast MessageSender
 
 // MessageSender is the interface for sending messages to recipients
 type MessageSender interface {

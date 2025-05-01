@@ -8,7 +8,7 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-//go:generate mockgen -destination=../../mocks/recipient_fetcher.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast RecipientFetcher
+//go:generate mockgen -destination=./mocks/mock_recipient_fetcher.go -package=mocks github.com/Notifuse/notifuse/internal/service/broadcast RecipientFetcher
 
 // RecipientFetcher is the interface for fetching recipients for broadcasts
 type RecipientFetcher interface {
