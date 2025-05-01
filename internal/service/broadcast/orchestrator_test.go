@@ -38,6 +38,7 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
 	testLogger := &testLoggerAdapter{}
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -47,6 +48,7 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 		mockTaskRepo,
 		testLogger,
 		nil, // Use default config
+		mockTimeProvider,
 	)
 
 	// Test cases
@@ -78,6 +80,7 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
 	testLogger := &testLoggerAdapter{}
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -87,6 +90,7 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 		mockTaskRepo,
 		testLogger,
 		nil, // Use default config
+		mockTimeProvider,
 	)
 
 	ctx := context.Background()
@@ -165,6 +169,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
 	testLogger := &testLoggerAdapter{}
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -174,6 +179,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 		mockTaskRepo,
 		testLogger,
 		nil, // Use default config
+		mockTimeProvider,
 	)
 
 	// Test cases
@@ -281,6 +287,7 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
 	testLogger := &testLoggerAdapter{}
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -290,6 +297,7 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 		mockTaskRepo,
 		testLogger,
 		nil, // Use default config
+		mockTimeProvider,
 	)
 
 	ctx := context.Background()
@@ -333,6 +341,7 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
 	testLogger := &testLoggerAdapter{}
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
 	config := &broadcast.Config{
 		FetchBatchSize: 50,
@@ -346,6 +355,7 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 		mockTaskRepo,
 		testLogger,
 		config,
+		mockTimeProvider,
 	)
 
 	ctx := context.Background()
@@ -404,6 +414,14 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
 	testLogger := &testLoggerAdapter{}
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Set fixed times for testing
+	testStartTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	// Mock the timeProvider calls
+	mockTimeProvider.EXPECT().Now().Return(testStartTime).AnyTimes()
+	mockTimeProvider.EXPECT().Since(gomock.Any()).Return(10 * time.Second).AnyTimes()
 
 	config := &broadcast.Config{
 		FetchBatchSize:      50,
@@ -419,6 +437,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 		mockTaskRepo,
 		testLogger,
 		config,
+		mockTimeProvider,
 	)
 
 	ctx := context.Background()
@@ -523,4 +542,138 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 	assert.True(t, completed)
 	// More specific assertions depend on the implementation
 	// so we'll just verify that no error occurred and the task completed
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		expected string
+	}{
+		{
+			name:     "seconds",
+			duration: 30 * time.Second,
+			expected: "30s",
+		},
+		{
+			name:     "minutes and seconds",
+			duration: 2*time.Minute + 45*time.Second,
+			expected: "2m 45s",
+		},
+		{
+			name:     "hours and minutes",
+			duration: 3*time.Hour + 25*time.Minute,
+			expected: "3h 25m",
+		},
+		{
+			name:     "zero duration",
+			duration: 0,
+			expected: "0s",
+		},
+		{
+			name:     "large duration",
+			duration: 24*time.Hour + 30*time.Minute + 15*time.Second,
+			expected: "24h 30m",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := broadcast.FormatDuration(tc.duration)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestCalculateProgress(t *testing.T) {
+	tests := []struct {
+		name      string
+		processed int
+		total     int
+		expected  float64
+	}{
+		{
+			name:      "zero total",
+			processed: 10,
+			total:     0,
+			expected:  100.0, // Avoid division by zero
+		},
+		{
+			name:      "zero processed",
+			processed: 0,
+			total:     100,
+			expected:  0.0,
+		},
+		{
+			name:      "half processed",
+			processed: 50,
+			total:     100,
+			expected:  50.0,
+		},
+		{
+			name:      "fully processed",
+			processed: 100,
+			total:     100,
+			expected:  100.0,
+		},
+		{
+			name:      "more than total processed",
+			processed: 110,
+			total:     100,
+			expected:  100.0, // Cap at 100%
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := broadcast.CalculateProgress(tc.processed, tc.total)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestFormatProgressMessage(t *testing.T) {
+	tests := []struct {
+		name      string
+		processed int
+		total     int
+		elapsed   time.Duration
+		contains  string // We test for contains rather than exact match due to ETA variations
+	}{
+		{
+			name:      "initial progress no ETA",
+			processed: 5,
+			total:     100,
+			elapsed:   10 * time.Second,
+			contains:  "Processed 5/100 recipients (5.0%)",
+		},
+		{
+			name:      "progress with ETA",
+			processed: 10,
+			total:     100,
+			elapsed:   20 * time.Second,
+			contains:  "Processed 10/100 recipients (10.0%), ETA:", // ETA will vary
+		},
+		{
+			name:      "completed",
+			processed: 100,
+			total:     100,
+			elapsed:   2 * time.Minute,
+			contains:  "Processed 100/100 recipients (100.0%)",
+		},
+		{
+			name:      "zero total",
+			processed: 0,
+			total:     0,
+			elapsed:   5 * time.Second,
+			contains:  "Processed 0/0 recipients (100.0%)", // Avoid division by zero
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := broadcast.FormatProgressMessage(tc.processed, tc.total, tc.elapsed)
+			assert.Contains(t, result, tc.contains)
+		})
+	}
 }

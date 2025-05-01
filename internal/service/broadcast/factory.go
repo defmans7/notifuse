@@ -55,6 +55,7 @@ func (f *Factory) CreateMessageSender() MessageSender {
 // CreateOrchestrator creates a new broadcast orchestrator
 func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 	messageSender := f.CreateMessageSender()
+	timeProvider := NewRealTimeProvider()
 
 	return NewBroadcastOrchestrator(
 		messageSender,
@@ -64,6 +65,7 @@ func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 		f.taskRepo,
 		f.logger,
 		f.config,
+		timeProvider,
 	)
 }
 

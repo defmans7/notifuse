@@ -28,6 +28,7 @@ func createTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userI
 	token.SetExpiration(time.Now().Add(24 * time.Hour))
 	token.SetString(string(domain.UserIDKey), userID)
 	token.SetString(string(domain.SessionIDKey), "test-session")
+	token.SetString(string(domain.UserTypeKey), string(domain.UserTypeUser))
 
 	signed := token.V4Sign(secretKey, nil)
 	return signed

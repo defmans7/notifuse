@@ -13,7 +13,6 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/service"
-	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
@@ -1213,37 +1212,606 @@ func TestEmailService_SendEmail_WithMailjet(t *testing.T) {
 	})
 }
 
-// testLogger is a simple logger that implements the logger.Logger interface
-type testLogger struct {
-	t *testing.T
+// TestEmailService_SendEmail_SMTP_ConnectionErrors tests the SendEmail method with SMTP errors
+func TestEmailService_SendEmail_SMTP_ConnectionErrors(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := setupMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		"test-secret-key",
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHTTPClient)
+
+	// Test data
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	from := "sender@example.com"
+	fromName := "Test Sender"
+	// Intentionally using an invalid email below instead of this valid one
+	subject := "Test Subject"
+	content := "<p>Test Content</p>"
+
+	// Test cases for SMTP provider with different errors
+	testCases := []struct {
+		name           string
+		provider       domain.EmailProvider
+		expectedErrMsg string
+	}{
+		{
+			name: "SMTP Provider - Invalid Sender Format",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSMTP,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				SMTP: &domain.SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "user",
+					Password: "password",
+				},
+			},
+			expectedErrMsg: "invalid sender", // go-mail will validate the email sender format
+		},
+		{
+			name: "SMTP Provider - Encrypted Password",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSMTP,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				SMTP: &domain.SMTPSettings{
+					Host:              "smtp.example.com",
+					Port:              587,
+					Username:          "user",
+					EncryptedPassword: "encrypted-password", // This will trigger decryption
+				},
+			},
+			expectedErrMsg: "failed to decrypt SMTP password", // Decryption error is expected
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Use an invalid email to trigger a validation error
+			invalidTo := "not-an-email"
+
+			// Call the method
+			err := emailService.SendEmail(
+				ctx,
+				workspaceID,
+				"", // providerType not used with direct provider
+				from,
+				fromName,
+				invalidTo,
+				subject,
+				content,
+				&tc.provider,
+			)
+
+			// Assert
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedErrMsg)
+		})
+	}
 }
 
-func (l *testLogger) Debug(msg string) {
-	l.t.Log(msg)
+// TestEmailService_SendEmail_HTTP_Errors tests HTTP errors in providers using HTTP APIs
+func TestEmailService_SendEmail_HTTP_Errors(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := setupMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		"test-secret-key",
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHTTPClient)
+
+	// Test data
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	from := "sender@example.com"
+	fromName := "Test Sender"
+	to := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Content</p>"
+
+	// Test cases for HTTP-based providers with different errors
+	testCases := []struct {
+		name           string
+		provider       domain.EmailProvider
+		httpSetup      func()
+		expectedErrMsg string
+	}{
+		{
+			name: "SparkPost Provider - HTTP Error",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSparkPost,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				SparkPost: &domain.SparkPostSettings{
+					Endpoint:    "https://api.sparkpost.com",
+					APIKey:      "test-api-key",
+					SandboxMode: false,
+				},
+			},
+			httpSetup: func() {
+				mockHTTPClient.EXPECT().
+					Do(gomock.Any()).
+					Return(nil, errors.New("connection error"))
+			},
+			expectedErrMsg: "failed to send request to SparkPost API",
+		},
+		{
+			name: "Postmark Provider - HTTP Response Error",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindPostmark,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				Postmark: &domain.PostmarkSettings{
+					ServerToken: "test-server-token",
+				},
+			},
+			httpSetup: func() {
+				// Return a 400 error response
+				mockHTTPClient.EXPECT().
+					Do(gomock.Any()).
+					Return(&http.Response{
+						StatusCode: http.StatusBadRequest,
+						Body:       io.NopCloser(strings.NewReader(`{"ErrorCode": 400, "Message": "Bad request"}`)),
+					}, nil)
+			},
+			expectedErrMsg: "Postmark API error (400)",
+		},
+		{
+			name: "SparkPost Provider - Encrypted Key",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSparkPost,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				SparkPost: &domain.SparkPostSettings{
+					Endpoint:        "https://api.sparkpost.com",
+					EncryptedAPIKey: "encrypted-api-key", // This will trigger decryption
+					SandboxMode:     false,
+				},
+			},
+			httpSetup: func() {
+				// No need to expect HTTP call since decryption will fail first
+			},
+			expectedErrMsg: "failed to decrypt SparkPost API key",
+		},
+		{
+			name: "Mailgun Provider - EU Region",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindMailgun,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				Mailgun: &domain.MailgunSettings{
+					Domain: "test-domain.com",
+					APIKey: "test-api-key",
+					Region: "EU", // Test EU region specifically
+				},
+			},
+			httpSetup: func() {
+				// Verify that EU endpoint is used
+				mockHTTPClient.EXPECT().
+					Do(gomock.Any()).
+					DoAndReturn(func(req *http.Request) (*http.Response, error) {
+						// Check that the EU endpoint is used
+						assert.Contains(t, req.URL.String(), "api.eu.mailgun.net")
+						return nil, errors.New("connection error")
+					})
+			},
+			expectedErrMsg: "failed to send request to Mailgun API",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup HTTP expectations
+			tc.httpSetup()
+
+			// Call the method
+			err := emailService.SendEmail(
+				ctx,
+				workspaceID,
+				"", // providerType not used with direct provider
+				from,
+				fromName,
+				to,
+				subject,
+				content,
+				&tc.provider,
+			)
+
+			// Assert
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedErrMsg)
+		})
+	}
 }
 
-func (l *testLogger) Info(msg string) {
-	l.t.Log(msg)
+// TestEmailService_SendEmail_UnsupportedProvider tests sending with an unsupported provider
+func TestEmailService_SendEmail_UnsupportedProvider(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := setupMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		"test-secret-key",
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHTTPClient)
+
+	// Test data
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	from := "sender@example.com"
+	fromName := "Test Sender"
+	to := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Content</p>"
+
+	// Create a provider with an unknown kind
+	unknownProvider := domain.EmailProvider{
+		Kind:               "unknown-provider", // Unsupported provider kind
+		DefaultSenderEmail: from,
+		DefaultSenderName:  fromName,
+	}
+
+	// Call the method
+	err := emailService.SendEmail(
+		ctx,
+		workspaceID,
+		"", // providerType not used with direct provider
+		from,
+		fromName,
+		to,
+		subject,
+		content,
+		&unknownProvider,
+	)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported provider kind")
 }
 
-func (l *testLogger) Warn(msg string) {
-	l.t.Log(msg)
+// TestEmailService_SendEmail_HTTP_ReadResponseError tests HTTP response reading errors
+func TestEmailService_SendEmail_HTTP_ReadResponseError(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := setupMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		"test-secret-key",
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHTTPClient)
+
+	// Test data
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	from := "sender@example.com"
+	fromName := "Test Sender"
+	to := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Content</p>"
+
+	// Create an errorReader that always returns an error
+	errorReader := &errorReadCloser{err: errors.New("read error")}
+
+	// Test with Postmark provider
+	postmarkProvider := domain.EmailProvider{
+		Kind:               domain.EmailProviderKindPostmark,
+		DefaultSenderEmail: from,
+		DefaultSenderName:  fromName,
+		Postmark: &domain.PostmarkSettings{
+			ServerToken: "test-server-token",
+		},
+	}
+
+	// Setup HTTP expectations with response that has an error reader
+	mockHTTPClient.EXPECT().
+		Do(gomock.Any()).
+		Return(&http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       errorReader,
+		}, nil)
+
+	// Call the method
+	err := emailService.SendEmail(
+		ctx,
+		workspaceID,
+		"", // providerType not used with direct provider
+		from,
+		fromName,
+		to,
+		subject,
+		content,
+		&postmarkProvider,
+	)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read Postmark API response")
 }
 
-func (l *testLogger) Error(msg string) {
-	l.t.Error(msg)
+// errorReadCloser is a mock io.ReadCloser that always returns an error
+type errorReadCloser struct {
+	err error
 }
 
-func (l *testLogger) Fatal(msg string) {
-	l.t.Fatal(msg)
+func (e *errorReadCloser) Read(p []byte) (n int, err error) {
+	return 0, e.err
 }
 
-func (l *testLogger) WithField(key string, value interface{}) logger.Logger {
-	// For testing, we just return the same logger
-	return l
+func (e *errorReadCloser) Close() error {
+	return nil
 }
 
-func (l *testLogger) WithFields(fields map[string]interface{}) logger.Logger {
-	// For testing, we just return the same logger
-	return l
+// TestEmailService_SES_WithEncryptedKey tests SES with encrypted secret key
+func TestEmailService_SES_WithEncryptedKey(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := setupMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		"test-secret-key",
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHTTPClient)
+
+	// Test data
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	from := "sender@example.com"
+	fromName := "Test Sender"
+	validRecipient := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Content</p>"
+
+	// Create SES provider with encrypted secret key
+	sesProvider := domain.EmailProvider{
+		Kind:               domain.EmailProviderKindSES,
+		DefaultSenderEmail: from,
+		DefaultSenderName:  fromName,
+		SES: &domain.AmazonSES{
+			Region:             "us-east-1",
+			AccessKey:          "test-access-key",
+			EncryptedSecretKey: "encrypted-secret-key", // This will trigger decryption
+		},
+	}
+
+	// Call the method - it will try to use AWS SDK and fail
+	err := emailService.SendEmail(
+		ctx,
+		workspaceID,
+		"", // providerType not used with direct provider
+		from,
+		fromName,
+		validRecipient,
+		subject,
+		content,
+		&sesProvider,
+	)
+
+	// Assert
+	assert.Error(t, err)
+	// Error message will vary based on AWS SDK behavior, just verify there is an error
+	assert.NotNil(t, err)
+}
+
+// TestEmailService_DecryptionErrors tests decryption errors in the email service
+func TestEmailService_DecryptionErrors(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := setupMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+
+	// Use an intentionally invalid secret key to cause decryption errors
+	invalidSecretKey := "invalid-secret-key-that-will-cause-decryption-errors"
+
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		invalidSecretKey,
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHTTPClient)
+
+	// Test data
+	ctx := context.Background()
+	workspaceID := "workspace123"
+	from := "sender@example.com"
+	fromName := "Test Sender"
+	recipient := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Content</p>"
+
+	// Test cases for different provider types with encrypted credentials
+	testCases := []struct {
+		name           string
+		provider       domain.EmailProvider
+		expectedErrMsg string
+	}{
+		{
+			name: "SMTP Provider - Decryption Error",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSMTP,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				SMTP: &domain.SMTPSettings{
+					Host:              "smtp.example.com",
+					Port:              587,
+					Username:          "user",
+					EncryptedPassword: "encrypted-password-that-wont-decrypt", // Will cause decryption error
+				},
+			},
+			expectedErrMsg: "failed to decrypt",
+		},
+		{
+			name: "SES Provider - Decryption Error",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSES,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				SES: &domain.AmazonSES{
+					Region:             "us-east-1",
+					AccessKey:          "access-key",
+					EncryptedSecretKey: "encrypted-secret-key-that-wont-decrypt", // Will cause decryption error
+				},
+			},
+			expectedErrMsg: "failed to decrypt",
+		},
+		{
+			name: "SparkPost Provider - Decryption Error",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSparkPost,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				SparkPost: &domain.SparkPostSettings{
+					Endpoint:        "https://api.sparkpost.com",
+					EncryptedAPIKey: "encrypted-api-key-that-wont-decrypt", // Will cause decryption error
+				},
+			},
+			expectedErrMsg: "failed to decrypt",
+		},
+		{
+			name: "Postmark Provider - Decryption Error",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindPostmark,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				Postmark: &domain.PostmarkSettings{
+					EncryptedServerToken: "encrypted-server-token-that-wont-decrypt", // Will cause decryption error
+				},
+			},
+			expectedErrMsg: "failed to decrypt",
+		},
+		{
+			name: "Mailgun Provider - Decryption Error",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindMailgun,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				Mailgun: &domain.MailgunSettings{
+					Domain:          "test-domain.com",
+					EncryptedAPIKey: "encrypted-api-key-that-wont-decrypt", // Will cause decryption error
+				},
+			},
+			expectedErrMsg: "failed to decrypt",
+		},
+		{
+			name: "Mailjet Provider - Decryption Error for API Key",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindMailjet,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				Mailjet: &domain.MailjetSettings{
+					EncryptedAPIKey: "encrypted-api-key-that-wont-decrypt", // Will cause decryption error
+					SecretKey:       "valid-secret-key",
+				},
+			},
+			expectedErrMsg: "failed to decrypt",
+		},
+		{
+			name: "Mailjet Provider - Decryption Error for Secret Key",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindMailjet,
+				DefaultSenderEmail: from,
+				DefaultSenderName:  fromName,
+				Mailjet: &domain.MailjetSettings{
+					APIKey:             "valid-api-key",
+					EncryptedSecretKey: "encrypted-secret-key-that-wont-decrypt", // Will cause decryption error
+				},
+			},
+			expectedErrMsg: "failed to decrypt",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Call the method
+			err := emailService.SendEmail(
+				ctx,
+				workspaceID,
+				"", // providerType not used with direct provider
+				from,
+				fromName,
+				recipient,
+				subject,
+				content,
+				&tc.provider,
+			)
+
+			// Assert
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedErrMsg)
+		})
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -890,4 +891,660 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "only broadcasts with scheduled or paused status can be cancelled")
 	})
+}
+
+func TestBroadcastService_RecordMessageSent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+	// Test when repository supports CreateMessageHistory
+	t.Run("RepositorySupportsMessageHistory", func(t *testing.T) {
+		// Create a mock repository that implements CreateMessageHistory
+		mockMessageHistoryRepo := &mockRepositoryWithMessageHistory{
+			MockBroadcastRepository: mockRepo,
+			ctrl:                    ctrl,
+		}
+
+		// Set the repository in the service
+		service.repo = mockMessageHistoryRepo
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		message := &domain.MessageHistory{
+			ID:              "msg123",
+			ContactID:       "contact123",
+			BroadcastID:     stringPtr("bcast123"),
+			TemplateID:      "template123",
+			TemplateVersion: 1,
+			Channel:         "email",
+			Status:          domain.MessageStatusSent,
+			SentAt:          time.Now(),
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		// Expect CreateMessageHistory to be called
+		mockMessageHistoryRepo.EXPECT().
+			CreateMessageHistory(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
+			DoAndReturn(func(_ context.Context, wsID string, msg *domain.MessageHistory) error {
+				assert.Equal(t, workspaceID, wsID)
+				assert.Equal(t, message.ID, msg.ID)
+				assert.Equal(t, message.ContactID, msg.ContactID)
+				assert.Equal(t, message.Channel, msg.Channel)
+				assert.Equal(t, message.Status, msg.Status)
+				return nil
+			})
+
+		// Call the service
+		err := service.RecordMessageSent(ctx, workspaceID, message)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	// Test when repository does not support CreateMessageHistory
+	t.Run("RepositoryDoesNotSupportMessageHistory", func(t *testing.T) {
+		// Set the repository back to the standard mock
+		service.repo = mockRepo
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		message := &domain.MessageHistory{
+			ID:              "msg123",
+			ContactID:       "contact123",
+			BroadcastID:     stringPtr("bcast123"),
+			TemplateID:      "template123",
+			TemplateVersion: 1,
+			Channel:         "email",
+			Status:          domain.MessageStatusSent,
+			SentAt:          time.Now(),
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		// Call the service
+		err := service.RecordMessageSent(ctx, workspaceID, message)
+
+		// Verify results - should not error even though the repository doesn't support message history
+		require.NoError(t, err)
+	})
+
+	// Test when repository returns an error
+	t.Run("RepositoryReturnsError", func(t *testing.T) {
+		// Create a mock repository that implements CreateMessageHistory and returns an error
+		mockMessageHistoryRepo := &mockRepositoryWithMessageHistory{
+			MockBroadcastRepository: mockRepo,
+			ctrl:                    ctrl,
+		}
+
+		// Set the repository in the service
+		service.repo = mockMessageHistoryRepo
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		message := &domain.MessageHistory{
+			ID:              "msg123",
+			ContactID:       "contact123",
+			BroadcastID:     stringPtr("bcast123"),
+			TemplateID:      "template123",
+			TemplateVersion: 1,
+			Channel:         "email",
+			Status:          domain.MessageStatusSent,
+			SentAt:          time.Now(),
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		// Expect CreateMessageHistory to be called and return an error
+		expectedErr := errors.New("database error")
+		mockMessageHistoryRepo.EXPECT().
+			CreateMessageHistory(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
+			Return(expectedErr)
+
+		// Call the service
+		err := service.RecordMessageSent(ctx, workspaceID, message)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+	})
+}
+
+func TestBroadcastService_UpdateMessageStatus(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+	// Test when repository supports UpdateMessageStatus
+	t.Run("RepositorySupportsMessageHistoryUpdate", func(t *testing.T) {
+		// Create a mock repository that implements UpdateMessageStatus
+		mockMessageHistoryRepo := &mockRepositoryWithMessageHistory{
+			MockBroadcastRepository: mockRepo,
+			ctrl:                    ctrl,
+		}
+
+		// Set the repository in the service
+		service.repo = mockMessageHistoryRepo
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		messageID := "msg123"
+		status := domain.MessageStatusDelivered
+		timestamp := time.Now()
+
+		// Expect UpdateMessageStatus to be called
+		mockMessageHistoryRepo.EXPECT().
+			UpdateMessageStatus(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(messageID), gomock.Eq(status), gomock.Any()).
+			DoAndReturn(func(_ context.Context, wsID string, msgID string, sts domain.MessageStatus, ts time.Time) error {
+				assert.Equal(t, workspaceID, wsID)
+				assert.Equal(t, messageID, msgID)
+				assert.Equal(t, status, sts)
+				assert.WithinDuration(t, timestamp, ts, time.Second)
+				return nil
+			})
+
+		// Call the service
+		err := service.UpdateMessageStatus(ctx, workspaceID, messageID, status, timestamp)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	// Test when repository does not support UpdateMessageStatus
+	t.Run("RepositoryDoesNotSupportMessageHistoryUpdate", func(t *testing.T) {
+		// Set the repository back to the standard mock
+		service.repo = mockRepo
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		messageID := "msg123"
+		status := domain.MessageStatusDelivered
+		timestamp := time.Now()
+
+		// Call the service
+		err := service.UpdateMessageStatus(ctx, workspaceID, messageID, status, timestamp)
+
+		// Verify results - should not error even though the repository doesn't support message history
+		require.NoError(t, err)
+	})
+
+	// Test when repository returns an error
+	t.Run("RepositoryReturnsError", func(t *testing.T) {
+		// Create a mock repository that implements UpdateMessageStatus and returns an error
+		mockMessageHistoryRepo := &mockRepositoryWithMessageHistory{
+			MockBroadcastRepository: mockRepo,
+			ctrl:                    ctrl,
+		}
+
+		// Set the repository in the service
+		service.repo = mockMessageHistoryRepo
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		messageID := "msg123"
+		status := domain.MessageStatusDelivered
+		timestamp := time.Now()
+
+		// Expect UpdateMessageStatus to be called and return an error
+		expectedErr := errors.New("database error")
+		mockMessageHistoryRepo.EXPECT().
+			UpdateMessageStatus(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(messageID), gomock.Eq(status), gomock.Any()).
+			Return(expectedErr)
+
+		// Call the service
+		err := service.UpdateMessageStatus(ctx, workspaceID, messageID, status, timestamp)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+	})
+}
+
+func TestBroadcastService_GetAPIEndpoint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+
+	expectedEndpoint := "https://api.example.com"
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, expectedEndpoint)
+
+	// Test GetAPIEndpoint
+	t.Run("ReturnsConfiguredEndpoint", func(t *testing.T) {
+		endpoint := service.GetAPIEndpoint()
+		assert.Equal(t, expectedEndpoint, endpoint)
+	})
+}
+
+func TestBroadcastService_GetTemplateByID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		templateID := "template123"
+
+		expectedTemplate := &domain.Template{
+			ID:      templateID,
+			Name:    "Test Template",
+			Version: 1,
+			Email: &domain.EmailTemplate{
+				Subject:     "Test Subject",
+				FromName:    "Test Sender",
+				FromAddress: "test@example.com",
+			},
+		}
+
+		// Expect GetTemplateByID to be called on the template service
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(templateID), gomock.Eq(int64(1))).
+			Return(expectedTemplate, nil)
+
+		// Call the service
+		template, err := service.GetTemplateByID(ctx, workspaceID, templateID)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.Equal(t, expectedTemplate, template)
+	})
+
+	t.Run("TemplateNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		templateID := "nonexistent"
+
+		expectedErr := errors.New("template not found")
+
+		// Expect GetTemplateByID to be called on the template service and return an error
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(templateID), gomock.Eq(int64(1))).
+			Return(nil, expectedErr)
+
+		// Call the service
+		template, err := service.GetTemplateByID(ctx, workspaceID, templateID)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Nil(t, template)
+		assert.Equal(t, expectedErr, err)
+	})
+}
+
+func TestBroadcastService_SetTaskService(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+
+	// Create a new task service to set
+	newTaskService := mocks.NewMockTaskService(ctrl)
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+	// Verify that the task service is initially what we set
+	assert.Equal(t, mockTaskService, service.taskService)
+
+	// Set the new task service
+	service.SetTaskService(newTaskService)
+
+	// Verify that the task service has been updated
+	assert.Equal(t, newTaskService, service.taskService)
+}
+
+func TestBroadcastService_DeleteBroadcast(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast with an allowed status (not 'sending')
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			CreatedAt:   time.Now().Add(-24 * time.Hour),
+			UpdatedAt:   time.Now().Add(-24 * time.Hour),
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock getting the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock the delete operation
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("AuthError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Mock authentication failure
+		expectedErr := errors.New("authentication failed")
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, nil, expectedErr)
+
+		// No other calls should be made
+		mockRepo.EXPECT().GetBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockRepo.EXPECT().DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("InvalidStatus", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast with an invalid status (sending)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			CreatedAt:   time.Now().Add(-24 * time.Hour),
+			UpdatedAt:   time.Now().Add(-24 * time.Hour),
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock getting the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// No delete should be called
+		mockRepo.EXPECT().DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcasts in 'sending' status cannot be deleted")
+	})
+
+	t.Run("RepositoryError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a broadcast with an allowed status
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			CreatedAt:   time.Now().Add(-24 * time.Hour),
+			UpdatedAt:   time.Now().Add(-24 * time.Hour),
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock getting the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository error
+		expectedErr := errors.New("database error")
+		mockRepo.EXPECT().
+			DeleteBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(expectedErr)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+	})
+
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "nonexistent"
+
+		request := &domain.DeleteBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock broadcast not found
+		expectedErr := errors.New("broadcast not found")
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, expectedErr)
+
+		// No delete should be called
+		mockRepo.EXPECT().DeleteBroadcast(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.DeleteBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+	})
+}
+
+// Helper types for testing
+type mockRepositoryWithMessageHistory struct {
+	*mocks.MockBroadcastRepository
+	ctrl *gomock.Controller
+}
+
+func (m *mockRepositoryWithMessageHistory) CreateMessageHistory(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateMessageHistory", ctx, workspaceID, message)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (m *mockRepositoryWithMessageHistory) EXPECT() *mockRepositoryWithMessageHistoryRecorder {
+	return &mockRepositoryWithMessageHistoryRecorder{m}
+}
+
+type mockRepositoryWithMessageHistoryRecorder struct {
+	mock *mockRepositoryWithMessageHistory
+}
+
+func (mr *mockRepositoryWithMessageHistoryRecorder) CreateMessageHistory(ctx, workspaceID, message interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(
+		mr.mock,
+		"CreateMessageHistory",
+		reflect.TypeOf((*mockRepositoryWithMessageHistory)(nil).CreateMessageHistory),
+		ctx, workspaceID, message,
+	)
+}
+
+func (m *mockRepositoryWithMessageHistory) UpdateMessageStatus(ctx context.Context, workspaceID string, messageID string, status domain.MessageStatus, timestamp time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMessageStatus", ctx, workspaceID, messageID, status, timestamp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (mr *mockRepositoryWithMessageHistoryRecorder) UpdateMessageStatus(ctx, workspaceID, messageID, status, timestamp interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(
+		mr.mock,
+		"UpdateMessageStatus",
+		reflect.TypeOf((*mockRepositoryWithMessageHistory)(nil).UpdateMessageStatus),
+		ctx, workspaceID, messageID, status, timestamp,
+	)
+}
+
+// Helper function to get a string pointer
+func stringPtr(s string) *string {
+	return &s
 }

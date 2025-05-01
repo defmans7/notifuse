@@ -41,6 +41,7 @@ type BroadcastOrchestrator struct {
 	taskRepo         domain.TaskRepository
 	logger           logger.Logger
 	config           *Config
+	timeProvider     TimeProvider
 }
 
 // NewBroadcastOrchestrator creates a new broadcast orchestrator
@@ -52,9 +53,14 @@ func NewBroadcastOrchestrator(
 	taskRepo domain.TaskRepository,
 	logger logger.Logger,
 	config *Config,
+	timeProvider TimeProvider,
 ) BroadcastOrchestratorInterface {
 	if config == nil {
 		config = DefaultConfig()
+	}
+
+	if timeProvider == nil {
+		timeProvider = NewRealTimeProvider()
 	}
 
 	return &BroadcastOrchestrator{
@@ -65,6 +71,7 @@ func NewBroadcastOrchestrator(
 		taskRepo:         taskRepo,
 		logger:           logger,
 		config:           config,
+		timeProvider:     timeProvider,
 	}
 }
 
@@ -279,8 +286,8 @@ func (o *BroadcastOrchestrator) FetchBatch(ctx context.Context, workspaceID, bro
 	return contactsWithList, nil
 }
 
-// formatDuration formats a duration in a human-readable form
-func (o *BroadcastOrchestrator) formatDuration(d time.Duration) string {
+// FormatDuration formats a duration in a human-readable form
+func FormatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
 	} else if d < time.Hour {
@@ -294,8 +301,8 @@ func (o *BroadcastOrchestrator) formatDuration(d time.Duration) string {
 	}
 }
 
-// calculateProgress calculates the progress percentage (0-100)
-func (o *BroadcastOrchestrator) calculateProgress(processed, total int) float64 {
+// CalculateProgress calculates the progress percentage (0-100)
+func CalculateProgress(processed, total int) float64 {
 	if total <= 0 {
 		return 100.0 // Avoid division by zero
 	}
@@ -307,19 +314,18 @@ func (o *BroadcastOrchestrator) calculateProgress(processed, total int) float64 
 	return progress
 }
 
-// formatProgressMessage creates a human-readable progress message
-func (o *BroadcastOrchestrator) formatProgressMessage(processed, total int, startTime time.Time) string {
-	progress := o.calculateProgress(processed, total)
+// FormatProgressMessage creates a human-readable progress message
+func FormatProgressMessage(processed, total int, elapsed time.Duration) string {
+	progress := CalculateProgress(processed, total)
 
 	// Calculate remaining time if we have processed more than 5%
 	var eta string
 	if progress > 5.0 && processed > 0 {
-		elapsed := time.Since(startTime)
 		estimatedTotal := elapsed.Seconds() * float64(total) / float64(processed)
 		remaining := estimatedTotal - elapsed.Seconds()
 
 		if remaining > 0 {
-			eta = fmt.Sprintf(", ETA: %s", o.formatDuration(time.Duration(remaining)*time.Second))
+			eta = fmt.Sprintf(", ETA: %s", FormatDuration(time.Duration(remaining)*time.Second))
 		}
 	}
 
@@ -335,14 +341,18 @@ func (o *BroadcastOrchestrator) saveProgressState(
 	lastSaveTime time.Time,
 	startTime time.Time,
 ) (time.Time, error) {
+	currentTime := o.timeProvider.Now()
+
 	// Skip saving if not enough time has passed
-	if time.Since(lastSaveTime) < 5*time.Second {
+	elapsed := currentTime.Sub(lastSaveTime)
+	if elapsed < 5*time.Second {
 		return lastSaveTime, nil
 	}
 
 	// Calculate progress
-	progress := o.calculateProgress(processedCount, totalRecipients)
-	message := o.formatProgressMessage(processedCount, totalRecipients, startTime)
+	elapsedSinceStart := currentTime.Sub(startTime)
+	progress := CalculateProgress(processedCount, totalRecipients)
+	message := FormatProgressMessage(processedCount, totalRecipients, elapsedSinceStart)
 
 	// Create state
 	state := &domain.TaskState{
@@ -369,8 +379,6 @@ func (o *BroadcastOrchestrator) saveProgressState(
 		return lastSaveTime, NewBroadcastError(ErrCodeTaskStateInvalid, "failed to save task state", true, err)
 	}
 
-	newLastSaveTime := time.Now()
-
 	// Log progress
 	o.logger.WithFields(map[string]interface{}{
 		"task_id":      taskID,
@@ -380,7 +388,7 @@ func (o *BroadcastOrchestrator) saveProgressState(
 		"failed":       failedCount,
 	}).Debug("Saved progress state")
 
-	return newLastSaveTime, nil
+	return currentTime, nil
 }
 
 // Process executes or continues a broadcast sending task
@@ -432,9 +440,9 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	sentCount := broadcastState.SentCount
 	failedCount := broadcastState.FailedCount
 	processedCount := int(broadcastState.RecipientOffset)
-	startTime := time.Now()
-	lastSaveTime := time.Now()
-	lastLogTime := time.Now()
+	startTime := o.timeProvider.Now()
+	lastSaveTime := o.timeProvider.Now()
+	lastLogTime := o.timeProvider.Now()
 
 	// Phase 1: Get recipient count if not already set
 	if broadcastState.TotalRecipients == 0 {
@@ -576,7 +584,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		processedCount += sent + failed
 
 		// Log progress at regular intervals
-		if time.Since(lastLogTime) >= o.config.ProgressLogInterval {
+		if o.timeProvider.Since(lastLogTime) >= o.config.ProgressLogInterval {
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":         task.ID,
 				"broadcast_id":    broadcastState.BroadcastID,
@@ -584,11 +592,11 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				"failed_count":    failedCount,
 				"processed_count": processedCount,
 				"total_count":     broadcastState.TotalRecipients,
-				"progress":        o.calculateProgress(processedCount, broadcastState.TotalRecipients),
-				"elapsed":         time.Since(startTime).String(),
+				"progress":        CalculateProgress(processedCount, broadcastState.TotalRecipients),
+				"elapsed":         o.timeProvider.Since(startTime).String(),
 			}).Info("Broadcast progress update")
 
-			lastLogTime = time.Now()
+			lastLogTime = o.timeProvider.Now()
 		}
 
 		// Save progress to the task
@@ -633,8 +641,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	}
 
 	// Update task state with the latest progress data
-	progress := o.calculateProgress(processedCount, broadcastState.TotalRecipients)
-	message := o.formatProgressMessage(processedCount, broadcastState.TotalRecipients, startTime)
+	progress := CalculateProgress(processedCount, broadcastState.TotalRecipients)
+	message := FormatProgressMessage(processedCount, broadcastState.TotalRecipients, time.Since(startTime))
 
 	task.State.Progress = progress
 	task.State.Message = message

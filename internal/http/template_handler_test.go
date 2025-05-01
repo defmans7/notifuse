@@ -77,8 +77,9 @@ func createTestToken(secretKey paseto.V4AsymmetricSecretKey) string {
 	token.SetIssuedAt(time.Now())
 	token.SetNotBefore(time.Now())
 	token.SetExpiration(time.Now().Add(1 * time.Hour)) // Ensure token is valid
-	token.SetString("user_id", "test-user")
-	token.SetString("session_id", "test-session")
+	token.SetString(string(domain.UserIDKey), "test-user")
+	token.SetString(string(domain.SessionIDKey), "test-session")
+	token.SetString(string(domain.UserTypeKey), string(domain.UserTypeUser))
 
 	signedToken := token.V4Sign(secretKey, nil) // Sign with the provided secret key
 	return signedToken
