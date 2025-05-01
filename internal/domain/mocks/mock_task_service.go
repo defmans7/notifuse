@@ -136,18 +136,6 @@ func (mr *MockTaskServiceMockRecorder) ListTasks(arg0, arg1, arg2 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTasks", reflect.TypeOf((*MockTaskService)(nil).ListTasks), arg0, arg1, arg2)
 }
 
-// RegisterDefaultProcessors mocks base method.
-func (m *MockTaskService) RegisterDefaultProcessors(arg0 domain.BroadcastSender) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RegisterDefaultProcessors", arg0)
-}
-
-// RegisterDefaultProcessors indicates an expected call of RegisterDefaultProcessors.
-func (mr *MockTaskServiceMockRecorder) RegisterDefaultProcessors(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterDefaultProcessors", reflect.TypeOf((*MockTaskService)(nil).RegisterDefaultProcessors), arg0)
-}
-
 // RegisterProcessor mocks base method.
 func (m *MockTaskService) RegisterProcessor(arg0 domain.TaskProcessor) {
 	m.ctrl.T.Helper()

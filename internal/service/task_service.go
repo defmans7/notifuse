@@ -523,13 +523,6 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	return nil
 }
 
-// RegisterDefaultProcessors registers the default set of task processors
-func (s *TaskService) RegisterDefaultProcessors(broadcastService domain.BroadcastSender) {
-	// Register send broadcast processor
-	broadcastProcessor := NewSendBroadcastProcessor(broadcastService, s.logger)
-	s.RegisterProcessor(broadcastProcessor)
-}
-
 // SubscribeToBroadcastEvents registers handlers for broadcast-related events
 func (s *TaskService) SubscribeToBroadcastEvents(eventBus domain.EventBus) {
 	// Subscribe to broadcast events

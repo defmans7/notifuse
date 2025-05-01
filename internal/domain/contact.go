@@ -588,7 +588,7 @@ type ContactRepository interface {
 	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) (bool, error)
 
 	// GetContactsForBroadcast retrieves contacts based on broadcast audience settings
-	GetContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings, limit int, offset int) ([]*Contact, error)
+	GetContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings, limit int, offset int) ([]*ContactWithList, error)
 
 	// CountContactsForBroadcast counts contacts based on broadcast audience settings
 	CountContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings) (int, error)
@@ -1000,4 +1000,11 @@ func (c *Contact) ToMapOfAny() (MapOfAny, error) {
 	}
 
 	return result, nil
+}
+
+// ContactWithList represents a contact with information about which list it belongs to
+type ContactWithList struct {
+	Contact  *Contact `json:"contact"`   // The contact
+	ListID   string   `json:"list_id"`   // ID of the list that the contact belongs to
+	ListName string   `json:"list_name"` // Name of the list that the contact belongs to
 }

@@ -1,0 +1,84 @@
+package broadcast
+
+import "fmt"
+
+// ErrorCode represents specific error conditions in the broadcast system
+type ErrorCode string
+
+const (
+	// Template related errors
+	ErrCodeTemplateMissing ErrorCode = "TEMPLATE_MISSING"
+	ErrCodeTemplateInvalid ErrorCode = "TEMPLATE_INVALID"
+	ErrCodeTemplateCompile ErrorCode = "TEMPLATE_COMPILE_FAILED"
+
+	// Recipient related errors
+	ErrCodeRecipientFetch ErrorCode = "RECIPIENT_FETCH_FAILED"
+	ErrCodeNoRecipients   ErrorCode = "NO_RECIPIENTS"
+
+	// Broadcast related errors
+	ErrCodeBroadcastNotFound ErrorCode = "BROADCAST_NOT_FOUND"
+	ErrCodeBroadcastInvalid  ErrorCode = "BROADCAST_INVALID"
+
+	// Sending related errors
+	ErrCodeSendFailed        ErrorCode = "SEND_FAILED"
+	ErrCodeRateLimitExceeded ErrorCode = "RATE_LIMIT_EXCEEDED"
+	ErrCodeCircuitOpen       ErrorCode = "CIRCUIT_OPEN"
+
+	// Task related errors
+	ErrCodeTaskStateInvalid ErrorCode = "TASK_STATE_INVALID"
+	ErrCodeTaskTimeout      ErrorCode = "TASK_TIMEOUT"
+)
+
+// BroadcastError represents an error in the broadcast system with context
+type BroadcastError struct {
+	Code      ErrorCode
+	Message   string
+	TaskID    string
+	Retryable bool
+	Err       error
+}
+
+// Error implements the error interface
+func (e *BroadcastError) Error() string {
+	if e.TaskID != "" {
+		return fmt.Sprintf("[%s] %s (task: %s): %v", e.Code, e.Message, e.TaskID, e.Err)
+	}
+	return fmt.Sprintf("[%s] %s: %v", e.Code, e.Message, e.Err)
+}
+
+// Unwrap returns the underlying error
+func (e *BroadcastError) Unwrap() error {
+	return e.Err
+}
+
+// NewBroadcastError creates a new broadcast error
+func NewBroadcastError(code ErrorCode, message string, retryable bool, err error) *BroadcastError {
+	return &BroadcastError{
+		Code:      code,
+		Message:   message,
+		Retryable: retryable,
+		Err:       err,
+	}
+}
+
+// NewBroadcastErrorWithTask creates a new broadcast error with task ID
+func NewBroadcastErrorWithTask(code ErrorCode, message string, taskID string, retryable bool, err error) *BroadcastError {
+	return &BroadcastError{
+		Code:      code,
+		Message:   message,
+		TaskID:    taskID,
+		Retryable: retryable,
+		Err:       err,
+	}
+}
+
+// IsRetryable returns whether the error is retryable
+func IsRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if e, ok := err.(*BroadcastError); ok {
+		return e.Retryable
+	}
+	return false
+}

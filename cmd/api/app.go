@@ -16,6 +16,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/internal/service/broadcast"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
 )
@@ -289,8 +290,20 @@ func (a *App) InitServices() error {
 		a.config.APIEndpoint, // API endpoint for tracking URLs
 	)
 
-	// Register the broadcast processor with the task service
-	a.taskService.RegisterDefaultProcessors(a.broadcastService)
+	// Create broadcast factory with refactored components
+	broadcastConfig := broadcast.DefaultConfig()
+	broadcastFactory := broadcast.NewFactory(
+		a.broadcastService,
+		a.templateService,
+		a.emailService,
+		a.contactRepo,
+		a.taskRepo,
+		a.logger,
+		broadcastConfig,
+	)
+
+	// Register the broadcast factory with the task service
+	broadcastFactory.RegisterWithTaskService(a.taskService)
 
 	// Register task service to listen for broadcast events
 	a.taskService.SubscribeToBroadcastEvents(a.eventBus)
@@ -458,6 +471,8 @@ func (a *App) Initialize() error {
 	if err := a.InitHandlers(); err != nil {
 		return err
 	}
+
+	a.logger.Info("Application successfully initialized with refactored broadcast system")
 
 	return nil
 }

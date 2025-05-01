@@ -110,10 +110,10 @@ func (mr *MockContactRepositoryMockRecorder) GetContacts(arg0, arg1 interface{})
 }
 
 // GetContactsForBroadcast mocks base method.
-func (m *MockContactRepository) GetContactsForBroadcast(arg0 context.Context, arg1 string, arg2 domain.AudienceSettings, arg3, arg4 int) ([]*domain.Contact, error) {
+func (m *MockContactRepository) GetContactsForBroadcast(arg0 context.Context, arg1 string, arg2 domain.AudienceSettings, arg3, arg4 int) ([]*domain.ContactWithList, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetContactsForBroadcast", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].([]*domain.Contact)
+	ret0, _ := ret[0].([]*domain.ContactWithList)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

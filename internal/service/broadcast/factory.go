@@ -1,0 +1,107 @@
+package broadcast
+
+import (
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
+)
+
+// Factory creates and wires together all the broadcast components
+type Factory struct {
+	broadcastService domain.BroadcastSender
+	templateService  domain.TemplateService
+	emailService     domain.EmailServiceInterface
+	contactRepo      domain.ContactRepository
+	taskRepo         domain.TaskRepository
+	logger           logger.Logger
+	config           *Config
+}
+
+// NewFactory creates a new factory for broadcast components
+func NewFactory(
+	broadcastService domain.BroadcastSender,
+	templateService domain.TemplateService,
+	emailService domain.EmailServiceInterface,
+	contactRepo domain.ContactRepository,
+	taskRepo domain.TaskRepository,
+	logger logger.Logger,
+	config *Config,
+) *Factory {
+	if config == nil {
+		config = DefaultConfig()
+	}
+
+	return &Factory{
+		broadcastService: broadcastService,
+		templateService:  templateService,
+		emailService:     emailService,
+		contactRepo:      contactRepo,
+		taskRepo:         taskRepo,
+		logger:           logger,
+		config:           config,
+	}
+}
+
+// CreateTemplateLoader creates a new template loader
+func (f *Factory) CreateTemplateLoader() TemplateLoader {
+	return NewTemplateLoader(
+		f.broadcastService,
+		f.templateService,
+		f.logger,
+		f.config,
+	)
+}
+
+// CreateRecipientFetcher creates a new recipient fetcher
+func (f *Factory) CreateRecipientFetcher() RecipientFetcher {
+	return NewRecipientFetcher(
+		f.broadcastService,
+		f.contactRepo,
+		f.logger,
+		f.config,
+	)
+}
+
+// CreateMessageSender creates a new message sender
+func (f *Factory) CreateMessageSender() MessageSender {
+	return NewMessageSender(
+		f.broadcastService,
+		f.templateService,
+		f.emailService,
+		f.logger,
+		f.config,
+	)
+}
+
+// CreateProgressTracker creates a new progress tracker
+func (f *Factory) CreateProgressTracker() ProgressTracker {
+	return NewProgressTracker(
+		f.logger,
+		f.taskRepo,
+		f.config,
+	)
+}
+
+// CreateOrchestrator creates a new broadcast orchestrator
+func (f *Factory) CreateOrchestrator() *BroadcastOrchestrator {
+	templateLoader := f.CreateTemplateLoader()
+	recipientFetcher := f.CreateRecipientFetcher()
+	messageSender := f.CreateMessageSender()
+	progressTracker := f.CreateProgressTracker()
+
+	return NewBroadcastOrchestrator(
+		templateLoader,
+		recipientFetcher,
+		messageSender,
+		progressTracker,
+		f.logger,
+		f.config,
+	)
+}
+
+// RegisterWithTaskService registers the orchestrator with the task service
+func (f *Factory) RegisterWithTaskService(taskService domain.TaskService) {
+	orchestrator := f.CreateOrchestrator()
+	taskService.RegisterProcessor(orchestrator)
+
+	f.logger.Info("Broadcast orchestrator registered with task service")
+}

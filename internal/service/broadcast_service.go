@@ -181,7 +181,7 @@ func (s *BroadcastService) ProcessRecipients(ctx context.Context, workspaceID, b
 	}
 
 	// Fetch contacts for this batch
-	contacts, err := s.contactRepo.GetContactsForBroadcast(
+	contactsWithList, err := s.contactRepo.GetContactsForBroadcast(
 		ctx,
 		workspaceID,
 		broadcast.Audience,
@@ -200,7 +200,7 @@ func (s *BroadcastService) ProcessRecipients(ctx context.Context, workspaceID, b
 	}
 
 	// If no contacts for this batch, we're done
-	if len(contacts) == 0 {
+	if len(contactsWithList) == 0 {
 		s.logger.WithFields(map[string]interface{}{
 			"workspace_id": workspaceID,
 			"broadcast_id": broadcastID,
@@ -231,7 +231,15 @@ func (s *BroadcastService) ProcessRecipients(ctx context.Context, workspaceID, b
 	}
 
 	// Process each contact
-	for _, contact := range contacts {
+	for _, contactWithList := range contactsWithList {
+		// Skip if contact is nil
+		if contactWithList.Contact == nil {
+			failureCount++
+			continue
+		}
+
+		contact := contactWithList.Contact
+
 		// Determine which variation to use for this contact
 		var variationID string
 		if broadcast.WinningVariation != "" {
@@ -390,7 +398,7 @@ func (s *BroadcastService) ProcessRecipients(ctx context.Context, workspaceID, b
 
 	// If this is the last batch or if all messages have been sent,
 	// we should check if we need to update the broadcast status
-	if len(contacts) < limit {
+	if len(contactsWithList) < limit {
 		// This was the last batch, mark broadcast as sent
 		broadcast.Status = domain.BroadcastStatusSent
 		now := time.Now().UTC()
@@ -1196,7 +1204,7 @@ func (s *BroadcastService) GetBroadcastRecipients(ctx context.Context, workspace
 	}
 
 	// Fetch contacts using the repository
-	contacts, err := s.contactRepo.GetContactsForBroadcast(
+	contactsWithList, err := s.contactRepo.GetContactsForBroadcast(
 		ctx,
 		workspaceID,
 		broadcast.Audience,
@@ -1212,6 +1220,14 @@ func (s *BroadcastService) GetBroadcastRecipients(ctx context.Context, workspace
 			"error":        err.Error(),
 		}).Error("Failed to get contacts for broadcast")
 		return nil, fmt.Errorf("failed to get contacts: %w", err)
+	}
+
+	// Extract Contact objects from ContactWithList objects
+	contacts := make([]*domain.Contact, 0, len(contactsWithList))
+	for _, contactWithList := range contactsWithList {
+		if contactWithList.Contact != nil {
+			contacts = append(contacts, contactWithList.Contact)
+		}
 	}
 
 	return contacts, nil

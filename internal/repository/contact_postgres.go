@@ -955,7 +955,7 @@ func (r *contactRepository) GetContactsForBroadcast(
 	audience domain.AudienceSettings,
 	limit int,
 	offset int,
-) ([]*domain.Contact, error) {
+) ([]*domain.ContactWithList, error) {
 	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
@@ -964,19 +964,20 @@ func (r *contactRepository) GetContactsForBroadcast(
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 	// Start building the main query
-	query := psql.Select("c.*").
-		From("contacts c").
-		OrderBy("c.created_at ASC"). // Order by created_at to ensure deterministic ordering
-		Limit(uint64(limit)).
-		Offset(uint64(offset))
+	var query sq.SelectBuilder
+	var includeListID bool
 
-	// Handle lists filtering
+	// If we're filtering by lists, include list_id in the result
 	if len(audience.Lists) > 0 {
-		// Join with contact_lists table to filter by list membership and status
-		query = query.Join("contact_lists cl ON c.email = cl.email")
-
-		// Filter by the specified lists
-		query = query.Where(sq.Eq{"cl.list_id": audience.Lists})
+		includeListID = true
+		query = psql.Select("c.*", "cl.list_id", "l.name as list_name").
+			From("contacts c").
+			Join("contact_lists cl ON c.email = cl.email").
+			Join("lists l ON cl.list_id = l.id"). // Join with lists table to get the name
+			Where(sq.Eq{"cl.list_id": audience.Lists}).
+			OrderBy("c.created_at ASC"). // Order by created_at to ensure deterministic ordering
+			Limit(uint64(limit)).
+			Offset(uint64(offset))
 
 		// Exclude unsubscribed contacts if required
 		if audience.ExcludeUnsubscribed {
@@ -984,6 +985,14 @@ func (r *contactRepository) GetContactsForBroadcast(
 			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusBounced})
 			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusComplained})
 		}
+	} else {
+		// For non-list based audiences (e.g., segments in the future)
+		includeListID = false
+		query = psql.Select("c.*").
+			From("contacts c").
+			OrderBy("c.created_at ASC").
+			Limit(uint64(limit)).
+			Offset(uint64(offset))
 	}
 
 	// Handle segments filtering (if implemented)
@@ -1015,20 +1024,48 @@ func (r *contactRepository) GetContactsForBroadcast(
 	defer rows.Close()
 
 	// Process the results
-	var contacts []*domain.Contact
+	var contactsWithList []*domain.ContactWithList
+
 	for rows.Next() {
-		contact, err := domain.ScanContact(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan contact: %w", err)
+		var listID sql.NullString
+		var listName sql.NullString
+		var scanErr error
+		var contact *domain.Contact
+
+		if includeListID {
+			// Scan all contact fields first
+			contact, scanErr = domain.ScanContact(rows)
+			if scanErr != nil {
+				return nil, fmt.Errorf("failed to scan contact: %w", scanErr)
+			}
+
+			// Try to scan the list_id and list_name separately
+			if err := rows.Scan(&listID, &listName); err == nil {
+				// This is a best-effort scan
+				// If it fails, we continue with a nil listID and listName
+			}
+		} else {
+			// No list ID to scan, just get the contact
+			contact, scanErr = domain.ScanContact(rows)
+			if scanErr != nil {
+				return nil, fmt.Errorf("failed to scan contact: %w", scanErr)
+			}
 		}
-		contacts = append(contacts, contact)
+
+		// Create ContactWithList object
+		contactWithList := &domain.ContactWithList{
+			Contact:  contact,
+			ListID:   listID.String,   // Will be empty string if NULL or if not in a list-filtered query
+			ListName: listName.String, // Will be empty string if NULL or if not in a list-filtered query
+		}
+		contactsWithList = append(contactsWithList, contactWithList)
 	}
 
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating over contact rows: %w", err)
 	}
 
-	return contacts, nil
+	return contactsWithList, nil
 }
 
 // CountContactsForBroadcast counts how many contacts match broadcast audience settings
