@@ -21,6 +21,31 @@ import (
 	"github.com/Notifuse/notifuse/pkg/mailer"
 )
 
+// AppInterface defines the interface for the App
+type AppInterface interface {
+	Initialize() error
+	Start() error
+	Shutdown(ctx context.Context) error
+
+	// Getters for app components accessed in tests
+	GetConfig() *config.Config
+	GetLogger() logger.Logger
+	GetMux() *http.ServeMux
+	GetDB() *sql.DB
+	GetMailer() mailer.Mailer
+
+	// Server status methods
+	IsServerCreated() bool
+	WaitForServerStart(ctx context.Context) bool
+
+	// Methods for initialization steps
+	InitDB() error
+	InitMailer() error
+	InitRepositories() error
+	InitServices() error
+	InitHandlers() error
+}
+
 // App encapsulates the application dependencies and configuration
 type App struct {
 	config *config.Config

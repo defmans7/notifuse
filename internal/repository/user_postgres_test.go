@@ -27,10 +27,11 @@ func TestCreateUser(t *testing.T) {
 		ID:    uuid.New().String(),
 		Email: "test@example.com",
 		Name:  "Test User",
+		Type:  domain.UserTypeUser,
 	}
 
-	mock.ExpectExec(`INSERT INTO users \(id, email, name, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
-		WithArgs(user.ID, user.Email, user.Name, sqlmock.AnyArg(), sqlmock.AnyArg()).
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)`).
+		WithArgs(user.ID, user.Email, user.Name, user.Type, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err := repo.CreateUser(context.Background(), user)
@@ -41,10 +42,11 @@ func TestCreateUser(t *testing.T) {
 		ID:    uuid.New().String(),
 		Email: "error@example.com",
 		Name:  "Error User",
+		Type:  domain.UserTypeUser,
 	}
 
-	mock.ExpectExec(`INSERT INTO users \(id, email, name, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
-		WithArgs(userWithError.ID, userWithError.Email, userWithError.Name, sqlmock.AnyArg(), sqlmock.AnyArg()).
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)`).
+		WithArgs(userWithError.ID, userWithError.Email, userWithError.Name, userWithError.Type, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnError(errors.New("database error"))
 
 	err = repo.CreateUser(context.Background(), userWithError)
@@ -64,14 +66,15 @@ func TestGetUserByEmail(t *testing.T) {
 		ID:        "user-id-1",
 		Email:     email,
 		Name:      "Test User",
+		Type:      domain.UserTypeUser,
 		CreatedAt: time.Now().UTC().Truncate(time.Second),
 		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "email", "name", "created_at", "updated_at"}).
-		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.CreatedAt, expectedUser.UpdatedAt)
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "created_at", "updated_at"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.CreatedAt, expectedUser.UpdatedAt)
 
-	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE email = \$1`).
 		WithArgs(email).
 		WillReturnRows(rows)
 
@@ -80,9 +83,10 @@ func TestGetUserByEmail(t *testing.T) {
 	assert.Equal(t, expectedUser.ID, user.ID)
 	assert.Equal(t, expectedUser.Email, user.Email)
 	assert.Equal(t, expectedUser.Name, user.Name)
+	assert.Equal(t, expectedUser.Type, user.Type)
 
 	// Test case 2: User not found
-	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE email = \$1`).
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
@@ -92,7 +96,7 @@ func TestGetUserByEmail(t *testing.T) {
 	assert.IsType(t, &domain.ErrUserNotFound{}, err)
 
 	// Test case 3: Database error
-	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE email = \$1`).
 		WithArgs("error@example.com").
 		WillReturnError(errors.New("database error"))
 
@@ -114,14 +118,15 @@ func TestGetUserByID(t *testing.T) {
 		ID:        userID,
 		Email:     "test@example.com",
 		Name:      "Test User",
+		Type:      domain.UserTypeUser,
 		CreatedAt: time.Now().UTC().Truncate(time.Second),
 		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "email", "name", "created_at", "updated_at"}).
-		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.CreatedAt, expectedUser.UpdatedAt)
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "created_at", "updated_at"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.CreatedAt, expectedUser.UpdatedAt)
 
-	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE id = \$1`).
 		WithArgs(userID).
 		WillReturnRows(rows)
 
@@ -130,9 +135,10 @@ func TestGetUserByID(t *testing.T) {
 	assert.Equal(t, expectedUser.ID, user.ID)
 	assert.Equal(t, expectedUser.Email, user.Email)
 	assert.Equal(t, expectedUser.Name, user.Name)
+	assert.Equal(t, expectedUser.Type, user.Type)
 
 	// Test case 2: User not found
-	mock.ExpectQuery(`SELECT id, email, name, created_at, updated_at FROM users WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE id = \$1`).
 		WithArgs("nonexistent-id").
 		WillReturnError(sql.ErrNoRows)
 

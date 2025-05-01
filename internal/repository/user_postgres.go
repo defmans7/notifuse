@@ -24,18 +24,22 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 	if user.ID == "" {
 		user.ID = uuid.New().String()
 	}
+	if user.Type == "" {
+		user.Type = domain.UserTypeUser
+	}
 	now := time.Now().UTC()
 	user.CreatedAt = now
 	user.UpdatedAt = now
 
 	query := `
-		INSERT INTO users (id, email, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO users (id, email, name, type, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	_, err := r.systemDB.ExecContext(ctx, query,
 		user.ID,
 		user.Email,
 		user.Name,
+		user.Type,
 		user.CreatedAt,
 		user.UpdatedAt,
 	)
@@ -48,7 +52,7 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT id, email, name, created_at, updated_at
+		SELECT id, email, name, type, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -56,6 +60,7 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 		&user.ID,
 		&user.Email,
 		&user.Name,
+		&user.Type,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -71,7 +76,7 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT id, email, name, created_at, updated_at
+		SELECT id, email, name, type, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -79,6 +84,7 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 		&user.ID,
 		&user.Email,
 		&user.Name,
+		&user.Type,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)

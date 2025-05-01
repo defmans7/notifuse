@@ -35,18 +35,20 @@ func InitializeDatabase(db *sql.DB, rootEmail string) error {
 				ID:        uuid.New().String(),
 				Email:     rootEmail,
 				Name:      "Root User",
+				Type:      domain.UserTypeUser,
 				CreatedAt: time.Now().UTC(),
 				UpdatedAt: time.Now().UTC(),
 			}
 
 			query := `
-				INSERT INTO users (id, email, name, created_at, updated_at)
-				VALUES ($1, $2, $3, $4, $5)
+				INSERT INTO users (id, email, name, type, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6)
 			`
 			_, err = db.Exec(query,
 				rootUser.ID,
 				rootUser.Email,
 				rootUser.Name,
+				rootUser.Type,
 				rootUser.CreatedAt,
 				rootUser.UpdatedAt,
 			)
