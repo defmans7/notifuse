@@ -2,12 +2,18 @@ package service_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
@@ -263,7 +269,6 @@ func TestEmailService_TestTemplate(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "workspace123"
 	templateID := "template123"
-	providerType := "marketing"
 	recipientEmail := "test@example.com"
 
 	// Test case for authentication error
@@ -276,7 +281,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		ctx,
 		workspaceID,
 		templateID,
-		providerType,
+		"marketing",
 		recipientEmail,
 	)
 
@@ -370,7 +375,6 @@ func TestEmailService_TestTemplate_Success(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "workspace123"
 	templateID := "template123"
-	user := &domain.User{ID: "user123"}
 	recipientEmail := "test@example.com"
 
 	// Create test workspace with SMTP provider
@@ -414,7 +418,7 @@ func TestEmailService_TestTemplate_Success(t *testing.T) {
 	// Setup mocks
 	mockAuthService.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
-		Return(ctx, user, nil)
+		Return(ctx, &domain.User{}, nil)
 
 	mockWorkspaceRepo.EXPECT().
 		GetByID(gomock.Any(), workspaceID).
@@ -557,6 +561,34 @@ func TestEmailService_SendEmail_WithProviders(t *testing.T) {
 				// Expect decryption error
 			},
 			expectedErrMsg: "failed to decrypt Postmark server token",
+		},
+		{
+			name: "Mailjet Provider - Missing Config",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindMailjet,
+				DefaultSenderEmail: fromAddress,
+				DefaultSenderName:  fromName,
+				// Mailjet is nil
+			},
+			setupMocks:     func() {},
+			expectedErrMsg: "Mailjet provider is not configured",
+		},
+		{
+			name: "Mailjet Provider - With Config and Encrypted Keys",
+			provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindMailjet,
+				DefaultSenderEmail: fromAddress,
+				DefaultSenderName:  fromName,
+				Mailjet: &domain.MailjetSettings{
+					EncryptedAPIKey:    "encrypted-api-key",
+					EncryptedSecretKey: "encrypted-secret-key",
+					SandboxMode:        true,
+				},
+			},
+			setupMocks: func() {
+				// Expect decryption error
+			},
+			expectedErrMsg: "failed to decrypt Mailjet API key",
 		},
 	}
 
@@ -929,4 +961,289 @@ func TestEmailService_SendEmail_NoConfiguredProvider(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no email provider configured for type")
+}
+
+func TestEmailService_SendEmail_WithMailgun(t *testing.T) {
+	// Create mocks
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockLogger := setupMockLogger(mockCtrl)
+	mockAuthService := mocks.NewMockAuthService(mockCtrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(mockCtrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(mockCtrl)
+	mockTemplateService := mocks.NewMockTemplateService(mockCtrl)
+	mockHttpClient := mocks.NewMockHTTPClient(mockCtrl)
+
+	// Create email service with mocked dependencies
+	secretKey := "test-secret-key"
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		secretKey,
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHttpClient)
+
+	// Test case: Using Mailgun provider for transactional email
+	t.Run("SendEmail with Mailgun provider", func(t *testing.T) {
+		// Setup test data
+		ctx := context.Background()
+		workspaceID := "test-workspace-id"
+		providerType := "transactional"
+		fromAddress := "test@example.com"
+		fromName := "Test Sender"
+		toAddress := "recipient@example.com"
+		subject := "Test Subject"
+		content := "<p>Test Content</p>"
+
+		// Create a workspace with a Mailgun provider
+		workspace := domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				EmailTransactionalProvider: domain.EmailProvider{
+					Kind:               domain.EmailProviderKindMailgun,
+					DefaultSenderEmail: fromAddress,
+					DefaultSenderName:  fromName,
+					Mailgun: &domain.MailgunSettings{
+						Domain:          "test-domain.com",
+						EncryptedAPIKey: "encrypted-api-key",
+						Region:          "US",
+					},
+				},
+			},
+		}
+
+		// Setup expected HTTP response
+		expectedResponse := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"id": "test-message-id", "message": "Queued"}`)),
+		}
+
+		// Expect auth service call
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user-id"}, nil)
+
+		// Expect workspace repository call
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(&workspace, nil)
+
+		// Expect decryption of the API key
+		// This would normally happen internally, but we need to ensure the decrypted key is available
+		// for the HTTP request, so we'll manually set it for this test
+		decryptedAPIKey := "test-api-key"
+		workspace.Settings.EmailTransactionalProvider.Mailgun.APIKey = decryptedAPIKey
+
+		// Expect HTTP client call with proper request to Mailgun API
+		mockHttpClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "POST", req.Method)
+				assert.Equal(t, "https://api.mailgun.net/v3/test-domain.com/messages", req.URL.String())
+				assert.Equal(t, "application/x-www-form-urlencoded", req.Header.Get("Content-Type"))
+
+				// Verify auth header (Basic auth with username "api" and the API key)
+				username, password, ok := req.BasicAuth()
+				assert.True(t, ok, "Request should have basic auth")
+				assert.Equal(t, "api", username)
+				assert.Equal(t, decryptedAPIKey, password)
+
+				// Parse and verify form data
+				err := req.ParseForm()
+				assert.NoError(t, err)
+				assert.Equal(t, fmt.Sprintf("%s <%s>", fromName, fromAddress), req.Form.Get("from"))
+				assert.Equal(t, toAddress, req.Form.Get("to"))
+				assert.Equal(t, subject, req.Form.Get("subject"))
+				assert.Equal(t, content, req.Form.Get("html"))
+
+				return expectedResponse, nil
+			})
+
+		// Call the method
+		err := emailService.SendEmail(ctx, workspaceID, providerType, fromAddress, fromName, toAddress, subject, content)
+
+		// Assertions
+		assert.NoError(t, err)
+	})
+}
+
+func TestEmailService_SendEmail_WithMailjet(t *testing.T) {
+	// Create mocks
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockLogger := setupMockLogger(mockCtrl)
+	mockAuthService := mocks.NewMockAuthService(mockCtrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(mockCtrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(mockCtrl)
+	mockTemplateService := mocks.NewMockTemplateService(mockCtrl)
+	mockHttpClient := mocks.NewMockHTTPClient(mockCtrl)
+
+	// Create email service with mocked dependencies
+	secretKey := "test-secret-key"
+	emailService := service.NewEmailService(
+		mockLogger,
+		mockAuthService,
+		secretKey,
+		mockWorkspaceRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+	)
+	emailService.SetHTTPClient(mockHttpClient)
+
+	// Test case: Using Mailjet provider for transactional email
+	t.Run("SendEmail with Mailjet provider", func(t *testing.T) {
+		// Setup test data
+		ctx := context.Background()
+		workspaceID := "test-workspace-id"
+		providerType := "transactional"
+		fromAddress := "test@example.com"
+		fromName := "Test Sender"
+		toAddress := "recipient@example.com"
+		subject := "Test Subject"
+		content := "<p>Test Content</p>"
+
+		// Create a workspace with a Mailjet provider
+		workspace := domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				EmailTransactionalProvider: domain.EmailProvider{
+					Kind:               domain.EmailProviderKindMailjet,
+					DefaultSenderEmail: fromAddress,
+					DefaultSenderName:  fromName,
+					Mailjet: &domain.MailjetSettings{
+						EncryptedAPIKey:    "encrypted-api-key",
+						EncryptedSecretKey: "encrypted-secret-key",
+						SandboxMode:        true,
+					},
+				},
+			},
+		}
+
+		// Setup expected HTTP response
+		expectedResponse := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"Messages":[{"Status":"success"}]}`)),
+		}
+
+		// Expect auth service call
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user-id"}, nil)
+
+		// Expect workspace repository call
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(&workspace, nil)
+
+		// Expect decryption of the API key and Secret key
+		// This would normally happen internally, but we need to ensure the decrypted keys are available
+		// for the HTTP request, so we'll manually set them for this test
+		decryptedAPIKey := "test-api-key"
+		decryptedSecretKey := "test-secret-key"
+		workspace.Settings.EmailTransactionalProvider.Mailjet.APIKey = decryptedAPIKey
+		workspace.Settings.EmailTransactionalProvider.Mailjet.SecretKey = decryptedSecretKey
+
+		// Expect HTTP client call with proper request to Mailjet API
+		mockHttpClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "POST", req.Method)
+				assert.Equal(t, "https://api.mailjet.com/v3.1/send", req.URL.String())
+				assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+
+				// Verify auth header (Basic auth with API key and Secret key)
+				username, password, ok := req.BasicAuth()
+				assert.True(t, ok, "Request should have basic auth")
+				assert.Equal(t, decryptedAPIKey, username)
+				assert.Equal(t, decryptedSecretKey, password)
+
+				// Verify request body
+				body, err := io.ReadAll(req.Body)
+				assert.NoError(t, err)
+
+				var payload map[string]interface{}
+				err = json.Unmarshal(body, &payload)
+				assert.NoError(t, err)
+
+				// Check sandbox mode
+				assert.Equal(t, true, payload["SandboxMode"])
+
+				// Check message details
+				messages, ok := payload["Messages"].([]interface{})
+				assert.True(t, ok, "Messages should be an array")
+				assert.Equal(t, 1, len(messages), "Should have one message")
+
+				message := messages[0].(map[string]interface{})
+
+				// Check From
+				from, ok := message["From"].(map[string]interface{})
+				assert.True(t, ok, "From should be an object")
+				assert.Equal(t, fromAddress, from["Email"])
+				assert.Equal(t, fromName, from["Name"])
+
+				// Check To
+				recipients, ok := message["To"].([]interface{})
+				assert.True(t, ok, "To should be an array")
+				assert.Equal(t, 1, len(recipients), "Should have one recipient")
+
+				recipient := recipients[0].(map[string]interface{})
+				assert.Equal(t, toAddress, recipient["Email"])
+
+				// Check other fields
+				assert.Equal(t, subject, message["Subject"])
+				assert.Equal(t, content, message["HTMLPart"])
+
+				return expectedResponse, nil
+			})
+
+		// Call the method
+		err := emailService.SendEmail(ctx, workspaceID, providerType, fromAddress, fromName, toAddress, subject, content)
+
+		// Assertions
+		assert.NoError(t, err)
+	})
+}
+
+// testLogger is a simple logger that implements the logger.Logger interface
+type testLogger struct {
+	t *testing.T
+}
+
+func (l *testLogger) Debug(msg string) {
+	l.t.Log(msg)
+}
+
+func (l *testLogger) Info(msg string) {
+	l.t.Log(msg)
+}
+
+func (l *testLogger) Warn(msg string) {
+	l.t.Log(msg)
+}
+
+func (l *testLogger) Error(msg string) {
+	l.t.Error(msg)
+}
+
+func (l *testLogger) Fatal(msg string) {
+	l.t.Fatal(msg)
+}
+
+func (l *testLogger) WithField(key string, value interface{}) logger.Logger {
+	// For testing, we just return the same logger
+	return l
+}
+
+func (l *testLogger) WithFields(fields map[string]interface{}) logger.Logger {
+	// For testing, we just return the same logger
+	return l
 }

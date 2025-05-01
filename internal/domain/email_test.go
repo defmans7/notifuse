@@ -478,3 +478,219 @@ func TestEmailProviderEncryptDecryptSecretKeys(t *testing.T) {
 		assert.Equal(t, "test-api-key", provider.SparkPost.APIKey)
 	})
 }
+
+func TestMailgunSettings_Validate(t *testing.T) {
+	tests := []struct {
+		name          string
+		settings      MailgunSettings
+		passphrase    string
+		expectedError bool
+	}{
+		{
+			name: "valid settings with API key",
+			settings: MailgunSettings{
+				Domain: "example.com",
+				APIKey: "test-api-key",
+				Region: "US",
+			},
+			passphrase:    "test-passphrase",
+			expectedError: false,
+		},
+		{
+			name: "valid settings without API key",
+			settings: MailgunSettings{
+				Domain: "example.com",
+				Region: "EU",
+			},
+			passphrase:    "test-passphrase",
+			expectedError: false,
+		},
+		{
+			name: "missing domain",
+			settings: MailgunSettings{
+				APIKey: "test-api-key",
+				Region: "US",
+			},
+			passphrase:    "test-passphrase",
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.settings.Validate(tt.passphrase)
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.settings.APIKey != "" {
+					assert.NotEmpty(t, tt.settings.EncryptedAPIKey)
+					assert.Empty(t, tt.settings.APIKey) // API key should be cleared after encryption
+				}
+			}
+		})
+	}
+}
+
+func TestMailgunSettings_EncryptDecryptAPIKey(t *testing.T) {
+	settings := MailgunSettings{
+		Domain: "example.com",
+		APIKey: "test-api-key",
+		Region: "US",
+	}
+	passphrase := "test-passphrase"
+
+	// Test encryption
+	err := settings.EncryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedAPIKey)
+	assert.NotEqual(t, "test-api-key", settings.EncryptedAPIKey)
+
+	// Clear original API key
+	originalAPIKey := settings.APIKey
+	settings.APIKey = ""
+
+	// Test decryption
+	err = settings.DecryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, originalAPIKey, settings.APIKey)
+}
+
+func TestEmailProvider_ValidateWithMailgun(t *testing.T) {
+	provider := EmailProvider{
+		Kind:               EmailProviderKindMailgun,
+		DefaultSenderEmail: "sender@example.com",
+		DefaultSenderName:  "Test Sender",
+		Mailgun: &MailgunSettings{
+			Domain: "example.com",
+			APIKey: "test-api-key",
+			Region: "US",
+		},
+	}
+
+	err := provider.Validate("test-passphrase")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, provider.Mailgun.EncryptedAPIKey)
+	assert.Empty(t, provider.Mailgun.APIKey) // API key should be cleared after encryption
+}
+
+func TestMailjetSettings_Validate(t *testing.T) {
+	tests := []struct {
+		name          string
+		settings      MailjetSettings
+		passphrase    string
+		expectedError bool
+	}{
+		{
+			name: "valid settings with API key and Secret key",
+			settings: MailjetSettings{
+				APIKey:      "test-api-key",
+				SecretKey:   "test-secret-key",
+				SandboxMode: true,
+			},
+			passphrase:    "test-passphrase",
+			expectedError: false,
+		},
+		{
+			name: "valid settings with empty API key",
+			settings: MailjetSettings{
+				SandboxMode: true,
+			},
+			passphrase:    "test-passphrase",
+			expectedError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.settings.Validate(tt.passphrase)
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// If API key was provided, it should be encrypted
+			if tt.settings.APIKey != "" {
+				assert.NotEmpty(t, tt.settings.EncryptedAPIKey)
+				assert.Empty(t, tt.settings.APIKey)
+			}
+
+			// If Secret key was provided, it should be encrypted
+			if tt.settings.SecretKey != "" {
+				assert.NotEmpty(t, tt.settings.EncryptedSecretKey)
+				assert.Empty(t, tt.settings.SecretKey)
+			}
+		})
+	}
+}
+
+func TestMailjetSettings_EncryptDecryptAPIKey(t *testing.T) {
+	// Setup
+	settings := MailjetSettings{
+		APIKey: "test-api-key",
+	}
+	passphrase := "test-passphrase"
+
+	// Test encryption
+	err := settings.EncryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedAPIKey)
+	assert.NotEqual(t, "test-api-key", settings.EncryptedAPIKey)
+
+	// Clear the API key and test decryption
+	settings.APIKey = ""
+	err = settings.DecryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-api-key", settings.APIKey)
+}
+
+func TestMailjetSettings_EncryptDecryptSecretKey(t *testing.T) {
+	// Setup
+	settings := MailjetSettings{
+		SecretKey: "test-secret-key",
+	}
+	passphrase := "test-passphrase"
+
+	// Test encryption
+	err := settings.EncryptSecretKey(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedSecretKey)
+	assert.NotEqual(t, "test-secret-key", settings.EncryptedSecretKey)
+
+	// Clear the Secret key and test decryption
+	settings.SecretKey = ""
+	err = settings.DecryptSecretKey(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-secret-key", settings.SecretKey)
+}
+
+func TestEmailProvider_ValidateWithMailjet(t *testing.T) {
+	// Valid provider with Mailjet
+	provider := EmailProvider{
+		Kind:               EmailProviderKindMailjet,
+		DefaultSenderEmail: "from@example.com",
+		DefaultSenderName:  "Test Sender",
+		Mailjet: &MailjetSettings{
+			APIKey:      "test-api-key",
+			SecretKey:   "test-secret-key",
+			SandboxMode: true,
+		},
+	}
+
+	// Should validate without error
+	err := provider.Validate("test-passphrase")
+	assert.NoError(t, err)
+
+	// Provider with missing Mailjet settings
+	invalidProvider := EmailProvider{
+		Kind:               EmailProviderKindMailjet,
+		DefaultSenderEmail: "from@example.com",
+		DefaultSenderName:  "Test Sender",
+	}
+
+	// Should fail validation
+	err = invalidProvider.Validate("test-passphrase")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Mailjet settings required")
+}

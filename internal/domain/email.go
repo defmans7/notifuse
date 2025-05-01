@@ -90,6 +90,8 @@ const (
 	EmailProviderKindSES       EmailProviderKind = "ses"
 	EmailProviderKindSparkPost EmailProviderKind = "sparkpost"
 	EmailProviderKindPostmark  EmailProviderKind = "postmark"
+	EmailProviderKindMailgun   EmailProviderKind = "mailgun"
+	EmailProviderKindMailjet   EmailProviderKind = "mailjet"
 )
 
 // EmailProvider contains configuration for an email service provider
@@ -99,6 +101,8 @@ type EmailProvider struct {
 	SMTP               *SMTPSettings      `json:"smtp,omitempty"`
 	SparkPost          *SparkPostSettings `json:"sparkpost,omitempty"`
 	Postmark           *PostmarkSettings  `json:"postmark,omitempty"`
+	Mailgun            *MailgunSettings   `json:"mailgun,omitempty"`
+	Mailjet            *MailjetSettings   `json:"mailjet,omitempty"`
 	DefaultSenderEmail string             `json:"default_sender_email"`
 	DefaultSenderName  string             `json:"default_sender_name"`
 }
@@ -143,6 +147,16 @@ func (e *EmailProvider) Validate(passphrase string) error {
 			return fmt.Errorf("Postmark settings required when email provider kind is postmark")
 		}
 		return e.Postmark.Validate(passphrase)
+	case EmailProviderKindMailgun:
+		if e.Mailgun == nil {
+			return fmt.Errorf("Mailgun settings required when email provider kind is mailgun")
+		}
+		return e.Mailgun.Validate(passphrase)
+	case EmailProviderKindMailjet:
+		if e.Mailjet == nil {
+			return fmt.Errorf("Mailjet settings required when email provider kind is mailjet")
+		}
+		return e.Mailjet.Validate(passphrase)
 	default:
 		return fmt.Errorf("invalid email provider kind: %s", e.Kind)
 	}
@@ -178,6 +192,29 @@ func (e *EmailProvider) EncryptSecretKeys(passphrase string) error {
 		e.Postmark.ServerToken = ""
 	}
 
+	if e.Kind == EmailProviderKindMailgun && e.Mailgun != nil && e.Mailgun.APIKey != "" {
+		if err := e.Mailgun.EncryptAPIKey(passphrase); err != nil {
+			return err
+		}
+		e.Mailgun.APIKey = ""
+	}
+
+	if e.Kind == EmailProviderKindMailjet && e.Mailjet != nil {
+		if e.Mailjet.APIKey != "" {
+			if err := e.Mailjet.EncryptAPIKey(passphrase); err != nil {
+				return err
+			}
+			e.Mailjet.APIKey = ""
+		}
+
+		if e.Mailjet.SecretKey != "" {
+			if err := e.Mailjet.EncryptSecretKey(passphrase); err != nil {
+				return err
+			}
+			e.Mailjet.SecretKey = ""
+		}
+	}
+
 	return nil
 }
 
@@ -204,6 +241,26 @@ func (e *EmailProvider) DecryptSecretKeys(passphrase string) error {
 	if e.Kind == EmailProviderKindPostmark && e.Postmark != nil && e.Postmark.EncryptedServerToken != "" {
 		if err := e.Postmark.DecryptServerToken(passphrase); err != nil {
 			return err
+		}
+	}
+
+	if e.Kind == EmailProviderKindMailgun && e.Mailgun != nil && e.Mailgun.EncryptedAPIKey != "" {
+		if err := e.Mailgun.DecryptAPIKey(passphrase); err != nil {
+			return err
+		}
+	}
+
+	if e.Kind == EmailProviderKindMailjet && e.Mailjet != nil {
+		if e.Mailjet.EncryptedAPIKey != "" {
+			if err := e.Mailjet.DecryptAPIKey(passphrase); err != nil {
+				return err
+			}
+		}
+
+		if e.Mailjet.EncryptedSecretKey != "" {
+			if err := e.Mailjet.DecryptSecretKey(passphrase); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -336,6 +393,116 @@ func (p *PostmarkSettings) Validate(passphrase string) error {
 		if err := p.EncryptServerToken(passphrase); err != nil {
 			return fmt.Errorf("failed to encrypt Postmark server token: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// MailgunSettings contains configuration for Mailgun
+type MailgunSettings struct {
+	EncryptedAPIKey string `json:"encrypted_api_key,omitempty"`
+	Domain          string `json:"domain"`
+	Region          string `json:"region,omitempty"` // "US" or "EU"
+
+	// decoded API key, not stored in the database
+	APIKey string `json:"api_key,omitempty"`
+}
+
+func (m *MailgunSettings) DecryptAPIKey(passphrase string) error {
+	apiKey, err := crypto.DecryptFromHexString(m.EncryptedAPIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt Mailgun API key: %w", err)
+	}
+	m.APIKey = apiKey
+	return nil
+}
+
+func (m *MailgunSettings) EncryptAPIKey(passphrase string) error {
+	encryptedAPIKey, err := crypto.EncryptString(m.APIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt Mailgun API key: %w", err)
+	}
+	m.EncryptedAPIKey = encryptedAPIKey
+	return nil
+}
+
+func (m *MailgunSettings) Validate(passphrase string) error {
+	if m.Domain == "" {
+		return fmt.Errorf("domain is required for Mailgun configuration")
+	}
+
+	// Encrypt API key if it's not empty
+	if m.APIKey != "" {
+		if err := m.EncryptAPIKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt Mailgun API key: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// MailjetSettings contains configuration for Mailjet
+type MailjetSettings struct {
+	EncryptedAPIKey    string `json:"encrypted_api_key,omitempty"`
+	EncryptedSecretKey string `json:"encrypted_secret_key,omitempty"`
+	SandboxMode        bool   `json:"sandbox_mode"`
+
+	// decoded keys, not stored in the database
+	APIKey    string `json:"api_key,omitempty"`
+	SecretKey string `json:"secret_key,omitempty"`
+}
+
+func (m *MailjetSettings) DecryptAPIKey(passphrase string) error {
+	apiKey, err := crypto.DecryptFromHexString(m.EncryptedAPIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt Mailjet API key: %w", err)
+	}
+	m.APIKey = apiKey
+	return nil
+}
+
+func (m *MailjetSettings) EncryptAPIKey(passphrase string) error {
+	encryptedAPIKey, err := crypto.EncryptString(m.APIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt Mailjet API key: %w", err)
+	}
+	m.EncryptedAPIKey = encryptedAPIKey
+	return nil
+}
+
+func (m *MailjetSettings) DecryptSecretKey(passphrase string) error {
+	secretKey, err := crypto.DecryptFromHexString(m.EncryptedSecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt Mailjet Secret key: %w", err)
+	}
+	m.SecretKey = secretKey
+	return nil
+}
+
+func (m *MailjetSettings) EncryptSecretKey(passphrase string) error {
+	encryptedSecretKey, err := crypto.EncryptString(m.SecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt Mailjet Secret key: %w", err)
+	}
+	m.EncryptedSecretKey = encryptedSecretKey
+	return nil
+}
+
+func (m *MailjetSettings) Validate(passphrase string) error {
+	// API Key is required for Mailjet
+	if m.APIKey != "" {
+		if err := m.EncryptAPIKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt Mailjet API key: %w", err)
+		}
+		m.APIKey = "" // Clear the API key after encryption
+	}
+
+	// Secret Key is required for Mailjet
+	if m.SecretKey != "" {
+		if err := m.EncryptSecretKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt Mailjet Secret key: %w", err)
+		}
+		m.SecretKey = "" // Clear the Secret key after encryption
 	}
 
 	return nil

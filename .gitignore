@@ -10,3 +10,4 @@ tmp/
 bin/
 coverage.html
 coverage.out
+api

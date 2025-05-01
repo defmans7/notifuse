@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -431,6 +433,138 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 		// Check response status
 		if resp.StatusCode >= 400 {
 			return fmt.Errorf("Postmark API error (%d): %s", resp.StatusCode, string(body))
+		}
+
+	case domain.EmailProviderKindMailgun:
+		if emailProvider.Mailgun == nil {
+			return fmt.Errorf("Mailgun provider is not configured")
+		}
+
+		// Decrypt API key if needed
+		if emailProvider.Mailgun.EncryptedAPIKey != "" && emailProvider.Mailgun.APIKey == "" {
+			if err := emailProvider.Mailgun.DecryptAPIKey(s.secretKey); err != nil {
+				return fmt.Errorf("failed to decrypt Mailgun API key: %w", err)
+			}
+		}
+
+		// Determine API region
+		baseURL := "https://api.mailgun.net/v3"
+		if emailProvider.Mailgun.Region == "EU" {
+			baseURL = "https://api.eu.mailgun.net/v3"
+		}
+
+		// Create the API URL with the domain
+		apiURL := fmt.Sprintf("%s/%s/messages", baseURL, emailProvider.Mailgun.Domain)
+
+		// Create form data
+		formData := url.Values{}
+		formData.Set("from", fmt.Sprintf("%s <%s>", fromName, fromAddress))
+		formData.Set("to", to)
+		formData.Set("subject", subject)
+		formData.Set("html", content)
+
+		// Create the HTTP request
+		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, strings.NewReader(formData.Encode()))
+		if err != nil {
+			return fmt.Errorf("failed to create HTTP request: %w", err)
+		}
+
+		// Set headers
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.SetBasicAuth("api", emailProvider.Mailgun.APIKey)
+
+		// Use the injected HTTP client
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send request to Mailgun API: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Read the response body
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read Mailgun API response: %w", err)
+		}
+
+		// Check response status
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("Mailgun API error (%d): %s", resp.StatusCode, string(body))
+		}
+
+	case domain.EmailProviderKindMailjet:
+		if emailProvider.Mailjet == nil {
+			return fmt.Errorf("Mailjet provider is not configured")
+		}
+
+		// Decrypt API key and Secret Key if needed
+		if emailProvider.Mailjet.EncryptedAPIKey != "" && emailProvider.Mailjet.APIKey == "" {
+			if err := emailProvider.Mailjet.DecryptAPIKey(s.secretKey); err != nil {
+				return fmt.Errorf("failed to decrypt Mailjet API key: %w", err)
+			}
+		}
+
+		if emailProvider.Mailjet.EncryptedSecretKey != "" && emailProvider.Mailjet.SecretKey == "" {
+			if err := emailProvider.Mailjet.DecryptSecretKey(s.secretKey); err != nil {
+				return fmt.Errorf("failed to decrypt Mailjet Secret key: %w", err)
+			}
+		}
+
+		// Create the HTTP request to Mailjet API
+		apiURL := "https://api.mailjet.com/v3.1/send"
+
+		// Create the request payload
+		payload := map[string]interface{}{
+			"SandboxMode": emailProvider.Mailjet.SandboxMode,
+			"Messages": []map[string]interface{}{
+				{
+					"From": map[string]string{
+						"Email": fromAddress,
+						"Name":  fromName,
+					},
+					"To": []map[string]string{
+						{
+							"Email": to,
+						},
+					},
+					"Subject":  subject,
+					"HTMLPart": content,
+				},
+			},
+		}
+
+		// Convert payload to JSON
+		jsonPayload, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal Mailjet request: %w", err)
+		}
+
+		// Create the HTTP request
+		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			return fmt.Errorf("failed to create HTTP request: %w", err)
+		}
+
+		// Set headers
+		req.Header.Set("Content-Type", "application/json")
+		// Use basic auth with API key as username and Secret key as password
+		req.SetBasicAuth(emailProvider.Mailjet.APIKey, emailProvider.Mailjet.SecretKey)
+
+		// Use the injected HTTP client
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send request to Mailjet API: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Read the response body
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read Mailjet API response: %w", err)
+		}
+
+		// Check response status
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("Mailjet API error (%d): %s", resp.StatusCode, string(body))
 		}
 
 	default:

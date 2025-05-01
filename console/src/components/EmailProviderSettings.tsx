@@ -40,6 +40,8 @@ interface EmailProviderFormValues {
   smtp?: EmailProvider['smtp']
   sparkpost?: EmailProvider['sparkpost']
   postmark?: EmailProvider['postmark']
+  mailgun?: EmailProvider['mailgun']
+  mailjet?: EmailProvider['mailjet']
   default_sender_email: string
   default_sender_name: string
 }
@@ -63,6 +65,10 @@ const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailPr
     provider.sparkpost = formValues.sparkpost
   } else if (formValues.kind === 'postmark' && formValues.postmark) {
     provider.postmark = formValues.postmark
+  } else if (formValues.kind === 'mailgun' && formValues.mailgun) {
+    provider.mailgun = formValues.mailgun
+  } else if (formValues.kind === 'mailjet' && formValues.mailjet) {
+    provider.mailjet = formValues.mailjet
   }
 
   return provider
@@ -102,7 +108,11 @@ const ProviderCard = ({ provider, icon, description, onClick }: ProviderCardProp
             ? 'SparkPost'
             : provider === 'postmark'
               ? 'Postmark'
-              : provider}
+              : provider === 'mailgun'
+                ? 'Mailgun'
+                : provider === 'mailjet'
+                  ? 'Mailjet'
+                  : provider}
     </div>
   </Card>
 )
@@ -145,17 +155,37 @@ const ProviderGrid = ({ onSelect, isTransactional = false }: ProviderGridProps) 
           onClick={onSelect}
         />
       </Col>
+      <Col span={colSpan}>
+        <ProviderCard
+          provider="mailjet"
+          icon={<img src="/mailjet.png" alt="Mailjet" style={{ height: 24, marginBottom: 8 }} />}
+          description="Use Mailjet email delivery service"
+          onClick={onSelect}
+        />
+      </Col>
       {isTransactional && (
-        <Col span={colSpan}>
-          <ProviderCard
-            provider="postmark"
-            icon={
-              <img src="/postmark.png" alt="Postmark" style={{ height: 24, marginBottom: 8 }} />
-            }
-            description="Use Postmark email delivery service"
-            onClick={onSelect}
-          />
-        </Col>
+        <>
+          <Col span={colSpan}>
+            <ProviderCard
+              provider="postmark"
+              icon={
+                <img src="/postmark.png" alt="Postmark" style={{ height: 24, marginBottom: 8 }} />
+              }
+              description="Use Postmark email delivery service"
+              onClick={onSelect}
+            />
+          </Col>
+          <Col span={colSpan}>
+            <ProviderCard
+              provider="mailgun"
+              icon={
+                <img src="/mailgun.png" alt="Mailgun" style={{ height: 24, marginBottom: 8 }} />
+              }
+              description="Use Mailgun email delivery service"
+              onClick={onSelect}
+            />
+          </Col>
+        </>
       )}
     </Row>
   )
@@ -301,6 +331,49 @@ const PostmarkFormFields = ({ isOwner }: PostmarkFormFieldsProps) => (
   </Form.Item>
 )
 
+interface MailgunFormFieldsProps {
+  isOwner: boolean
+}
+
+const MailgunFormFields = ({ isOwner }: MailgunFormFieldsProps) => (
+  <>
+    <Form.Item name={['mailgun', 'domain']} label="Domain" rules={[{ required: true }]}>
+      <Input placeholder="mail.yourdomain.com" disabled={!isOwner} />
+    </Form.Item>
+    <Form.Item name={['mailgun', 'api_key']} label="API Key" rules={[{ required: true }]}>
+      <Input.Password placeholder="API Key" disabled={!isOwner} />
+    </Form.Item>
+    <Form.Item name={['mailgun', 'region']} label="Region" initialValue="US">
+      <Select
+        placeholder="Select Mailgun Region"
+        disabled={!isOwner}
+        options={[
+          { label: 'US', value: 'US' },
+          { label: 'EU', value: 'EU' }
+        ]}
+      />
+    </Form.Item>
+  </>
+)
+
+interface MailjetFormFieldsProps {
+  isOwner: boolean
+}
+
+const MailjetFormFields = ({ isOwner }: MailjetFormFieldsProps) => (
+  <>
+    <Form.Item name={['mailjet', 'api_key']} label="API Key" rules={[{ required: true }]}>
+      <Input.Password placeholder="API Key" disabled={!isOwner} />
+    </Form.Item>
+    <Form.Item name={['mailjet', 'secret_key']} label="Secret Key" rules={[{ required: true }]}>
+      <Input.Password placeholder="Secret Key" disabled={!isOwner} />
+    </Form.Item>
+    <Form.Item name={['mailjet', 'sandbox_mode']} valuePropName="checked" label="Sandbox Mode">
+      <Switch disabled={!isOwner} />
+    </Form.Item>
+  </>
+)
+
 interface ProviderFormProps {
   providerType: EmailProviderKind
   formType: ProviderType
@@ -319,6 +392,10 @@ const ProviderForm = ({ providerType, formType, workspace, form, isOwner }: Prov
     return null // Postmark is only for transactional emails
   }
 
+  if (providerType === 'mailgun' && formType === 'marketing') {
+    return null // Mailgun is only for transactional emails
+  }
+
   return (
     <>
       <CommonFormFields initialValues={initialValues} isOwner={isOwner} />
@@ -327,6 +404,8 @@ const ProviderForm = ({ providerType, formType, workspace, form, isOwner }: Prov
       {providerType === 'smtp' && <SmtpFormFields isOwner={isOwner} />}
       {providerType === 'sparkpost' && <SparkpostFormFields isOwner={isOwner} form={form} />}
       {providerType === 'postmark' && <PostmarkFormFields isOwner={isOwner} />}
+      {providerType === 'mailgun' && <MailgunFormFields isOwner={isOwner} />}
+      {providerType === 'mailjet' && <MailjetFormFields isOwner={isOwner} />}
     </>
   )
 }
@@ -345,6 +424,10 @@ const getProviderLogo = (providerKind: EmailProviderKind) => {
     return <img src="/sparkpost.png" alt="SparkPost" style={{ height: 16, marginRight: 8 }} />
   } else if (providerKind === 'postmark') {
     return <img src="/postmark.png" alt="Postmark" style={{ height: 16, marginRight: 8 }} />
+  } else if (providerKind === 'mailgun') {
+    return <img src="/mailgun.png" alt="Mailgun" style={{ height: 16, marginRight: 8 }} />
+  } else if (providerKind === 'mailjet') {
+    return <img src="/mailjet.png" alt="Mailjet" style={{ height: 16, marginRight: 8 }} />
   }
   return null
 }
@@ -433,6 +516,32 @@ const ProviderDescription = ({ providerType, workspace }: ProviderDescriptionPro
       label: 'Integration',
       children: 'Postmark API Connected'
     })
+  } else if (provider.kind === 'mailgun' && provider.mailgun) {
+    items.push(
+      {
+        key: 'domain',
+        label: 'Domain',
+        children: provider.mailgun.domain
+      },
+      {
+        key: 'region',
+        label: 'Region',
+        children: provider.mailgun.region || 'US'
+      }
+    )
+  } else if (provider.kind === 'mailjet' && provider.mailjet) {
+    items.push(
+      {
+        key: 'mailjet',
+        label: 'Integration',
+        children: 'Mailjet API Connected'
+      },
+      {
+        key: 'sandbox',
+        label: 'Sandbox Mode',
+        children: provider.mailjet.sandbox_mode ? 'Enabled' : 'Disabled'
+      }
+    )
   }
 
   return (

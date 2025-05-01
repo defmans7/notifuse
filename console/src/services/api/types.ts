@@ -48,7 +48,7 @@ export interface FileManagerSettings {
   cdn_endpoint?: string
 }
 
-export type EmailProviderKind = 'smtp' | 'ses' | 'sparkpost' | 'postmark'
+export type EmailProviderKind = 'smtp' | 'ses' | 'sparkpost' | 'postmark' | 'mailgun' | 'mailjet'
 
 export interface EmailProvider {
   kind: EmailProviderKind
@@ -56,6 +56,8 @@ export interface EmailProvider {
   smtp?: SMTPSettings
   sparkpost?: SparkPostSettings
   postmark?: PostmarkSettings
+  mailgun?: MailgunSettings
+  mailjet?: MailjetSettings
   default_sender_email: string
   default_sender_name: string
 }
@@ -87,6 +89,21 @@ export interface SparkPostSettings {
 export interface PostmarkSettings {
   server_token?: string
   encrypted_server_token?: string
+}
+
+export interface MailgunSettings {
+  api_key?: string
+  encrypted_api_key?: string
+  domain: string
+  region?: 'US' | 'EU'
+}
+
+export interface MailjetSettings {
+  api_key?: string
+  encrypted_api_key?: string
+  secret_key?: string
+  encrypted_secret_key?: string
+  sandbox_mode: boolean
 }
 
 export interface CreateWorkspaceRequest {
