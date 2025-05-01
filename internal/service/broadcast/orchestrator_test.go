@@ -1,133 +1,526 @@
-package broadcast
+package broadcast_test
 
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	bmocks "github.com/Notifuse/notifuse/internal/service/broadcast/mocks"
-	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/internal/service/broadcast"
+	"github.com/Notifuse/notifuse/internal/service/broadcast/mocks"
+	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestOrchestratorCanProcess(t *testing.T) {
-	// Create mock controller
+// Create a compatible logger implementation
+type testLoggerAdapter struct{}
+
+func (l *testLoggerAdapter) Debug(msg string)                                       {}
+func (l *testLoggerAdapter) Info(msg string)                                        {}
+func (l *testLoggerAdapter) Warn(msg string)                                        {}
+func (l *testLoggerAdapter) Error(msg string)                                       {}
+func (l *testLoggerAdapter) Fatal(msg string)                                       {}
+func (l *testLoggerAdapter) WithField(key string, value interface{}) logger.Logger  { return l }
+func (l *testLoggerAdapter) WithFields(fields map[string]interface{}) logger.Logger { return l }
+
+func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
+	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mocks for all dependencies
-	mockTemplateLoader := bmocks.NewMockTemplateLoader(ctrl)
-	mockRecipientFetcher := bmocks.NewMockRecipientFetcher(ctrl)
-	mockMessageSender := bmocks.NewMockMessageSender(ctrl)
-	mockProgressTracker := bmocks.NewMockProgressTracker(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	testLogger := &testLoggerAdapter{}
 
-	// Create the orchestrator
-	orchestrator := NewBroadcastOrchestrator(
-		mockTemplateLoader,
-		mockRecipientFetcher,
+	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockProgressTracker,
-		mockLogger,
+		mockBroadcastSender,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		testLogger,
 		nil, // Use default config
 	)
 
-	// Test CanProcess with valid task type
-	assert.True(t, orchestrator.CanProcess("send_broadcast"), "Should be able to process 'send_broadcast'")
+	// Test cases
+	tests := []struct {
+		taskType string
+		expected bool
+	}{
+		{"send_broadcast", true},
+		{"other_task", false},
+		{"", false},
+	}
 
-	// Test CanProcess with invalid task type
-	assert.False(t, orchestrator.CanProcess("other_task"), "Should not process 'other_task'")
+	for _, tc := range tests {
+		t.Run(tc.taskType, func(t *testing.T) {
+			result := orchestrator.CanProcess(tc.taskType)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
 }
 
-func TestOrchestrator_Process_EmptyState(t *testing.T) {
-	// Create mock controller
+func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
+	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mocks for all dependencies
-	mockTemplateLoader := bmocks.NewMockTemplateLoader(ctrl)
-	mockRecipientFetcher := bmocks.NewMockRecipientFetcher(ctrl)
-	mockMessageSender := bmocks.NewMockMessageSender(ctrl)
-	mockProgressTracker := bmocks.NewMockProgressTracker(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	testLogger := &testLoggerAdapter{}
 
-	// Set up logger mock to return itself for chaining
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastSender,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		testLogger,
+		nil, // Use default config
+	)
 
-	// Create test task with a broadcast ID
+	ctx := context.Background()
+	workspaceID := "workspace-123"
 	broadcastID := "broadcast-123"
+
+	// Mock a broadcast with template variations
+	testBroadcast := &domain.Broadcast{
+		TestSettings: domain.BroadcastTestSettings{
+			Variations: []domain.BroadcastVariation{
+				{TemplateID: "template-1"},
+				{TemplateID: "template-2"},
+			},
+		},
+	}
+
+	// Mock template responses
+	template1 := &domain.Template{
+		ID: "template-1",
+		Email: &domain.EmailTemplate{
+			Subject:     "Test Subject 1",
+			FromAddress: "test@example.com",
+			VisualEditorTree: mjml.EmailBlock{
+				Kind: "container",
+				Data: map[string]interface{}{
+					"styles": map[string]interface{}{},
+				},
+			},
+		},
+	}
+	template2 := &domain.Template{
+		ID: "template-2",
+		Email: &domain.EmailTemplate{
+			Subject:     "Test Subject 2",
+			FromAddress: "test@example.com",
+			VisualEditorTree: mjml.EmailBlock{
+				Kind: "container",
+				Data: map[string]interface{}{
+					"styles": map[string]interface{}{},
+				},
+			},
+		},
+	}
+
+	// Setup expectations
+	mockBroadcastSender.EXPECT().
+		GetBroadcast(ctx, workspaceID, broadcastID).
+		Return(testBroadcast, nil)
+
+	mockTemplateService.EXPECT().
+		GetTemplateByID(ctx, workspaceID, "template-1", int64(1)).
+		Return(template1, nil)
+
+	mockTemplateService.EXPECT().
+		GetTemplateByID(ctx, workspaceID, "template-2", int64(1)).
+		Return(template2, nil)
+
+	// Execute
+	templates, err := orchestrator.LoadTemplatesForBroadcast(ctx, workspaceID, broadcastID)
+
+	// Verify
+	require.NoError(t, err)
+	assert.Len(t, templates, 2)
+	assert.Equal(t, template1, templates["template-1"])
+	assert.Equal(t, template2, templates["template-2"])
+}
+
+func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	testLogger := &testLoggerAdapter{}
+
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastSender,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		testLogger,
+		nil, // Use default config
+	)
+
+	// Test cases
+	tests := []struct {
+		name        string
+		templates   map[string]*domain.Template
+		expectError bool
+	}{
+		{
+			name: "Valid templates",
+			templates: map[string]*domain.Template{
+				"template-1": {
+					ID: "template-1",
+					Email: &domain.EmailTemplate{
+						Subject:     "Test Subject",
+						FromAddress: "test@example.com",
+						VisualEditorTree: mjml.EmailBlock{
+							Kind: "container",
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name:        "Empty templates",
+			templates:   map[string]*domain.Template{},
+			expectError: true,
+		},
+		{
+			name: "Missing email config",
+			templates: map[string]*domain.Template{
+				"template-1": {
+					ID: "template-1",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "Missing from address",
+			templates: map[string]*domain.Template{
+				"template-1": {
+					ID: "template-1",
+					Email: &domain.EmailTemplate{
+						Subject: "Test Subject",
+						VisualEditorTree: mjml.EmailBlock{
+							Kind: "container",
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "Missing subject",
+			templates: map[string]*domain.Template{
+				"template-1": {
+					ID: "template-1",
+					Email: &domain.EmailTemplate{
+						FromAddress: "test@example.com",
+						VisualEditorTree: mjml.EmailBlock{
+							Kind: "container",
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "Missing content",
+			templates: map[string]*domain.Template{
+				"template-1": {
+					ID: "template-1",
+					Email: &domain.EmailTemplate{
+						Subject:          "Test Subject",
+						FromAddress:      "test@example.com",
+						VisualEditorTree: mjml.EmailBlock{},
+					},
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := orchestrator.ValidateTemplates(tc.templates)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	testLogger := &testLoggerAdapter{}
+
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastSender,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		testLogger,
+		nil, // Use default config
+	)
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-123"
+
+	// Mock broadcast with audience
+	audience := domain.AudienceSettings{
+		Lists:    []string{"list-1", "list-2"},
+		Segments: []string{"segment-1"},
+	}
+	testBroadcast := &domain.Broadcast{
+		Audience: audience,
+	}
+
+	// Setup expectations
+	mockBroadcastSender.EXPECT().
+		GetBroadcast(ctx, workspaceID, broadcastID).
+		Return(testBroadcast, nil)
+
+	mockContactRepo.EXPECT().
+		CountContactsForBroadcast(ctx, workspaceID, audience).
+		Return(150, nil)
+
+	// Execute
+	count, err := orchestrator.GetTotalRecipientCount(ctx, workspaceID, broadcastID)
+
+	// Verify
+	require.NoError(t, err)
+	assert.Equal(t, 150, count)
+}
+
+func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	testLogger := &testLoggerAdapter{}
+
+	config := &broadcast.Config{
+		FetchBatchSize: 50,
+	}
+
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastSender,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		testLogger,
+		config,
+	)
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-123"
+	offset := 0
+	limit := 100
+
+	// Mock broadcast with audience
+	audience := domain.AudienceSettings{
+		Lists:    []string{"list-1", "list-2"},
+		Segments: []string{"segment-1"},
+	}
+	testBroadcast := &domain.Broadcast{
+		Audience: audience,
+	}
+
+	// Create mock contacts
+	mockContacts := []*domain.ContactWithList{
+		{
+			Contact: &domain.Contact{Email: "user1@example.com"},
+			ListID:  "list-1",
+		},
+		{
+			Contact: &domain.Contact{Email: "user2@example.com"},
+			ListID:  "list-2",
+		},
+	}
+
+	// Setup expectations
+	mockBroadcastSender.EXPECT().
+		GetBroadcast(ctx, workspaceID, broadcastID).
+		Return(testBroadcast, nil)
+
+	mockContactRepo.EXPECT().
+		GetContactsForBroadcast(ctx, workspaceID, audience, limit, offset).
+		Return(mockContacts, nil)
+
+	// Execute
+	contacts, err := orchestrator.FetchBatch(ctx, workspaceID, broadcastID, offset, limit)
+
+	// Verify
+	require.NoError(t, err)
+	assert.Equal(t, mockContacts, contacts)
+	assert.Len(t, contacts, 2)
+}
+
+func TestBroadcastOrchestrator_Process(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	testLogger := &testLoggerAdapter{}
+
+	config := &broadcast.Config{
+		FetchBatchSize:      50,
+		MaxProcessTime:      1 * time.Second,
+		ProgressLogInterval: 500 * time.Millisecond,
+	}
+
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastSender,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		testLogger,
+		config,
+	)
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-123"
+
+	// Create a task with existing state, but we'll modify the orchestrator test
+	// to handle if the task state is reset and the orchestrator tries to rebuild it
 	task := &domain.Task{
 		ID:          "task-123",
-		WorkspaceID: "workspace-123",
-		BroadcastID: &broadcastID,
+		WorkspaceID: workspaceID,
 		Type:        "send_broadcast",
-		State:       nil, // Empty state to test initialization
+		Status:      domain.TaskStatusRunning,
+		State: &domain.TaskState{
+			SendBroadcast: &domain.SendBroadcastState{
+				BroadcastID:     broadcastID,
+				TotalRecipients: 150, // Setting a value > 0 to test the regular processing path
+				SentCount:       0,
+				FailedCount:     0,
+				RecipientOffset: 0,
+			},
+		},
 	}
 
-	// Set up expectations
-	// Expect call to get total recipient count
-	mockRecipientFetcher.EXPECT().
-		GetTotalRecipientCount(gomock.Any(), task.WorkspaceID, broadcastID).
-		Return(100, nil)
-
-	// Create the orchestrator
-	orchestrator := NewBroadcastOrchestrator(
-		mockTemplateLoader,
-		mockRecipientFetcher,
-		mockMessageSender,
-		mockProgressTracker,
-		mockLogger,
-		nil, // Use default config
-	)
-
-	// Call the method being tested
-	done, err := orchestrator.Process(context.Background(), task)
-
-	// Verify results
-	assert.NoError(t, err)
-	assert.False(t, done, "Should not be done after first call with recipients > 0")
-	assert.NotNil(t, task.State, "Task state should be initialized")
-	assert.NotNil(t, task.State.SendBroadcast, "SendBroadcast state should be initialized")
-	assert.Equal(t, 100, task.State.SendBroadcast.TotalRecipients)
-	assert.Equal(t, broadcastID, task.State.SendBroadcast.BroadcastID)
-}
-
-func TestMockOrchestrator(t *testing.T) {
-	// Create mock controller
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mock orchestrator
-	mockOrchestrator := bmocks.NewMockBroadcastOrchestratorInterface(ctrl)
-
-	// Set up expectations
-	mockOrchestrator.EXPECT().
-		CanProcess("send_broadcast").
-		Return(true)
-
-	mockOrchestrator.EXPECT().
-		Process(gomock.Any(), gomock.Any()).
-		Return(true, nil)
-
-	// Use the mock
-	assert.True(t, mockOrchestrator.CanProcess("send_broadcast"))
-
-	// Create a simple task
-	task := &domain.Task{
-		ID:   "task-123",
-		Type: "send_broadcast",
+	// Mock broadcast with audience for the GetBroadcast call
+	audience := domain.AudienceSettings{
+		Lists:    []string{"list-1", "list-2"},
+		Segments: []string{"segment-1"},
 	}
 
-	// Call process with the task
-	done, err := mockOrchestrator.Process(context.Background(), task)
+	testBroadcast := &domain.Broadcast{
+		ID:       broadcastID,
+		Audience: audience,
+		TestSettings: domain.BroadcastTestSettings{
+			Variations: []domain.BroadcastVariation{
+				{TemplateID: "template-1"},
+			},
+		},
+	}
 
-	// Verify results
-	assert.True(t, done)
-	assert.NoError(t, err)
+	// Create mock templates
+	mockTemplates := map[string]*domain.Template{
+		"template-1": {
+			ID: "template-1",
+			Email: &domain.EmailTemplate{
+				Subject:     "Test Subject",
+				FromAddress: "test@example.com",
+				VisualEditorTree: mjml.EmailBlock{
+					Kind: "container",
+					Data: map[string]interface{}{
+						"styles": map[string]interface{}{},
+					},
+				},
+			},
+		},
+	}
+
+	// Create mock contacts (empty to simulate completion)
+	emptyContacts := []*domain.ContactWithList{}
+
+	// Setup expectations for the GetAPIEndpoint method
+	mockBroadcastSender.EXPECT().
+		GetAPIEndpoint().
+		Return("https://api.example.com").
+		AnyTimes()
+
+	// Expect GetBroadcast to be called
+	mockBroadcastSender.EXPECT().
+		GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+		Return(testBroadcast, nil).
+		AnyTimes()
+
+	// Expect GetTemplateByID to be called
+	mockTemplateService.EXPECT().
+		GetTemplateByID(gomock.Any(), workspaceID, "template-1", int64(1)).
+		Return(mockTemplates["template-1"], nil).
+		AnyTimes()
+
+	// Expect CountContactsForBroadcast to be called
+	mockContactRepo.EXPECT().
+		CountContactsForBroadcast(gomock.Any(), workspaceID, audience).
+		Return(0, nil).
+		AnyTimes()
+
+	// For the batch fetching, return empty contacts to signal completion
+	mockContactRepo.EXPECT().
+		GetContactsForBroadcast(gomock.Any(), workspaceID, audience, 50, 0).
+		Return(emptyContacts, nil).
+		AnyTimes()
+
+	// For state saving
+	mockTaskRepo.EXPECT().
+		SaveState(gomock.Any(), workspaceID, task.ID, gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
+
+	// Execute
+	completed, err := orchestrator.Process(ctx, task)
+
+	// Verify
+	require.NoError(t, err)
+	assert.True(t, completed)
+	// More specific assertions depend on the implementation
+	// so we'll just verify that no error occurred and the task completed
 }

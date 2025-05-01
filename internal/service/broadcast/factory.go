@@ -41,26 +41,6 @@ func NewFactory(
 	}
 }
 
-// CreateTemplateLoader creates a new template loader
-func (f *Factory) CreateTemplateLoader() TemplateLoader {
-	return NewTemplateLoader(
-		f.broadcastService,
-		f.templateService,
-		f.logger,
-		f.config,
-	)
-}
-
-// CreateRecipientFetcher creates a new recipient fetcher
-func (f *Factory) CreateRecipientFetcher() RecipientFetcher {
-	return NewRecipientFetcher(
-		f.broadcastService,
-		f.contactRepo,
-		f.logger,
-		f.config,
-	)
-}
-
 // CreateMessageSender creates a new message sender
 func (f *Factory) CreateMessageSender() MessageSender {
 	return NewMessageSender(
@@ -72,27 +52,16 @@ func (f *Factory) CreateMessageSender() MessageSender {
 	)
 }
 
-// CreateProgressTracker creates a new progress tracker
-func (f *Factory) CreateProgressTracker() ProgressTracker {
-	return NewProgressTracker(
-		f.logger,
-		f.taskRepo,
-		f.config,
-	)
-}
-
 // CreateOrchestrator creates a new broadcast orchestrator
 func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
-	templateLoader := f.CreateTemplateLoader()
-	recipientFetcher := f.CreateRecipientFetcher()
 	messageSender := f.CreateMessageSender()
-	progressTracker := f.CreateProgressTracker()
 
 	return NewBroadcastOrchestrator(
-		templateLoader,
-		recipientFetcher,
 		messageSender,
-		progressTracker,
+		f.broadcastService,
+		f.templateService,
+		f.contactRepo,
+		f.taskRepo,
 		f.logger,
 		f.config,
 	)

@@ -93,7 +93,17 @@ const ProviderCard = ({ provider, icon, description, onClick }: ProviderCardProp
     size="small"
   >
     {icon}
-    <div style={{ fontSize: '12px' }}>{description}</div>
+    <div style={{ fontWeight: 'bold', marginTop: '8px' }}>
+      {provider === 'smtp'
+        ? 'SMTP'
+        : provider === 'ses'
+          ? 'Amazon SES'
+          : provider === 'sparkpost'
+            ? 'SparkPost'
+            : provider === 'postmark'
+              ? 'Postmark'
+              : provider}
+    </div>
   </Card>
 )
 
@@ -110,7 +120,7 @@ const ProviderGrid = ({ onSelect, isTransactional = false }: ProviderGridProps) 
       <Col span={colSpan}>
         <ProviderCard
           provider="smtp"
-          icon={<MailOutlined style={{ fontSize: 40, marginBottom: 12 }} />}
+          icon={<MailOutlined style={{ fontSize: 24, marginBottom: 8 }} />}
           description="Configure with your own SMTP server"
           onClick={onSelect}
         />
@@ -119,7 +129,7 @@ const ProviderGrid = ({ onSelect, isTransactional = false }: ProviderGridProps) 
         <ProviderCard
           provider="ses"
           icon={
-            <img src="/amazonses.png" alt="Amazon SES" style={{ height: 40, marginBottom: 12 }} />
+            <img src="/amazonses.png" alt="Amazon SES" style={{ height: 24, marginBottom: 8 }} />
           }
           description="Use Amazon Simple Email Service"
           onClick={onSelect}
@@ -129,7 +139,7 @@ const ProviderGrid = ({ onSelect, isTransactional = false }: ProviderGridProps) 
         <ProviderCard
           provider="sparkpost"
           icon={
-            <img src="/sparkpost.png" alt="SparkPost" style={{ height: 40, marginBottom: 12 }} />
+            <img src="/sparkpost.png" alt="SparkPost" style={{ height: 24, marginBottom: 8 }} />
           }
           description="Use SparkPost email delivery service"
           onClick={onSelect}
@@ -140,7 +150,7 @@ const ProviderGrid = ({ onSelect, isTransactional = false }: ProviderGridProps) 
           <ProviderCard
             provider="postmark"
             icon={
-              <img src="/postmark.png" alt="Postmark" style={{ height: 40, marginBottom: 12 }} />
+              <img src="/postmark.png" alt="Postmark" style={{ height: 24, marginBottom: 8 }} />
             }
             description="Use Postmark email delivery service"
             onClick={onSelect}
@@ -325,16 +335,16 @@ const getProviderLogo = (providerKind: EmailProviderKind) => {
   if (providerKind === 'smtp') {
     return (
       <Space>
-        <MailOutlined style={{ fontSize: 24, marginRight: 8 }} />
-        {providerKind.toUpperCase()}
+        <MailOutlined style={{ fontSize: 16, marginRight: 8 }} />
+        SMTP
       </Space>
     )
   } else if (providerKind === 'ses') {
-    return <img src="/amazonses.png" alt="Amazon SES" style={{ height: 24, marginRight: 8 }} />
+    return <img src="/amazonses.png" alt="Amazon SES" style={{ height: 16, marginRight: 8 }} />
   } else if (providerKind === 'sparkpost') {
-    return <img src="/sparkpost.png" alt="SparkPost" style={{ height: 24, marginRight: 8 }} />
+    return <img src="/sparkpost.png" alt="SparkPost" style={{ height: 16, marginRight: 8 }} />
   } else if (providerKind === 'postmark') {
-    return <img src="/postmark.png" alt="Postmark" style={{ height: 24, marginRight: 8 }} />
+    return <img src="/postmark.png" alt="Postmark" style={{ height: 16, marginRight: 8 }} />
   }
   return null
 }

@@ -49,6 +49,51 @@ func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) CanProcess(arg0 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanProcess", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).CanProcess), arg0)
 }
 
+// FetchBatch mocks base method.
+func (m *MockBroadcastOrchestratorInterface) FetchBatch(arg0 context.Context, arg1, arg2 string, arg3, arg4 int) ([]*domain.ContactWithList, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchBatch", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].([]*domain.ContactWithList)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchBatch indicates an expected call of FetchBatch.
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) FetchBatch(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchBatch", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).FetchBatch), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetTotalRecipientCount mocks base method.
+func (m *MockBroadcastOrchestratorInterface) GetTotalRecipientCount(arg0 context.Context, arg1, arg2 string) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTotalRecipientCount", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTotalRecipientCount indicates an expected call of GetTotalRecipientCount.
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) GetTotalRecipientCount(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTotalRecipientCount", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).GetTotalRecipientCount), arg0, arg1, arg2)
+}
+
+// LoadTemplatesForBroadcast mocks base method.
+func (m *MockBroadcastOrchestratorInterface) LoadTemplatesForBroadcast(arg0 context.Context, arg1, arg2 string) (map[string]*domain.Template, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadTemplatesForBroadcast", arg0, arg1, arg2)
+	ret0, _ := ret[0].(map[string]*domain.Template)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadTemplatesForBroadcast indicates an expected call of LoadTemplatesForBroadcast.
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) LoadTemplatesForBroadcast(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadTemplatesForBroadcast", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).LoadTemplatesForBroadcast), arg0, arg1, arg2)
+}
+
 // Process mocks base method.
 func (m *MockBroadcastOrchestratorInterface) Process(arg0 context.Context, arg1 *domain.Task) (bool, error) {
 	m.ctrl.T.Helper()
@@ -62,4 +107,18 @@ func (m *MockBroadcastOrchestratorInterface) Process(arg0 context.Context, arg1 
 func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) Process(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).Process), arg0, arg1)
+}
+
+// ValidateTemplates mocks base method.
+func (m *MockBroadcastOrchestratorInterface) ValidateTemplates(arg0 map[string]*domain.Template) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateTemplates", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ValidateTemplates indicates an expected call of ValidateTemplates.
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) ValidateTemplates(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateTemplates", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).ValidateTemplates), arg0)
 }
