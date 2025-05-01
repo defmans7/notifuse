@@ -1403,3 +1403,298 @@ func TestHandleUpdate(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 	})
 }
+
+// TestHandleResume tests the HandleResume function
+func TestHandleResume(t *testing.T) {
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
+
+	// Test successful resume
+	t.Run("Success", func(t *testing.T) {
+		// Prepare request
+		req := domain.ResumeBroadcastRequest{
+			WorkspaceID: "workspace123",
+			ID:          "broadcast123",
+		}
+
+		// Set expectations
+		mockService.EXPECT().
+			ResumeBroadcast(gomock.Any(), &req).
+			Return(nil)
+
+		// Create HTTP request
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.resume", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Call the handler
+		handler.HandleResume(w, httpReq)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, response["success"].(bool))
+	})
+
+	// Test invalid request (method not allowed)
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodGet, "/api/broadcasts.resume", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleResume(w, httpReq)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	// Test invalid request body
+	t.Run("InvalidRequestBody", func(t *testing.T) {
+		// Set up logger expectations for error logging
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", gomock.Any()).Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
+
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.resume", bytes.NewBuffer([]byte("invalid json")))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleResume(w, httpReq)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Test missing required fields
+	t.Run("MissingRequiredFields", func(t *testing.T) {
+		// Prepare request with missing WorkspaceID
+		req := map[string]string{
+			"id": "broadcast123", // Missing workspace_id
+		}
+
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.resume", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleResume(w, httpReq)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Test broadcast not found
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		// Prepare request
+		req := domain.ResumeBroadcastRequest{
+			WorkspaceID: "workspace123",
+			ID:          "nonexistentbroadcast",
+		}
+
+		// Set expectations - service returns not found error
+		mockService.EXPECT().
+			ResumeBroadcast(gomock.Any(), &req).
+			Return(&domain.ErrBroadcastNotFound{ID: req.ID})
+
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.resume", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleResume(w, httpReq)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	// Test service error
+	t.Run("ServiceError", func(t *testing.T) {
+		// Prepare request
+		req := domain.ResumeBroadcastRequest{
+			WorkspaceID: "workspace123",
+			ID:          "broadcast123",
+		}
+
+		// Set logger expectations
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "service error").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to resume broadcast")
+
+		// Set service expectations - returns error
+		mockService.EXPECT().
+			ResumeBroadcast(gomock.Any(), &req).
+			Return(errors.New("service error"))
+
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.resume", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleResume(w, httpReq)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+// TestHandleSendToIndividual tests the HandleSendToIndividual function
+func TestHandleSendToIndividual(t *testing.T) {
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
+
+	// Test successful send to individual
+	t.Run("Success", func(t *testing.T) {
+		// Prepare request
+		req := domain.SendToIndividualRequest{
+			WorkspaceID:    "workspace123",
+			BroadcastID:    "broadcast123",
+			RecipientEmail: "user@example.com",
+		}
+
+		// Set expectations
+		mockService.EXPECT().
+			SendToIndividual(gomock.Any(), &req).
+			Return(nil)
+
+		// Create HTTP request
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.sendToIndividual", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Call the handler
+		handler.HandleSendToIndividual(w, httpReq)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, response["success"].(bool))
+	})
+
+	// Test invalid request (method not allowed)
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodGet, "/api/broadcasts.sendToIndividual", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleSendToIndividual(w, httpReq)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	// Test invalid request body
+	t.Run("InvalidRequestBody", func(t *testing.T) {
+		// Set up logger expectations for error logging
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", gomock.Any()).Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
+
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.sendToIndividual", bytes.NewBuffer([]byte("invalid json")))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleSendToIndividual(w, httpReq)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Test missing required fields
+	t.Run("MissingRequiredFields", func(t *testing.T) {
+		// Prepare request with missing fields
+		req := map[string]string{
+			"workspace_id": "workspace123",
+			// Missing broadcast_id and recipient_email
+		}
+
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.sendToIndividual", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleSendToIndividual(w, httpReq)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Test broadcast not found
+	t.Run("BroadcastNotFound", func(t *testing.T) {
+		// Prepare request
+		req := domain.SendToIndividualRequest{
+			WorkspaceID:    "workspace123",
+			BroadcastID:    "nonexistentbroadcast",
+			RecipientEmail: "user@example.com",
+		}
+
+		// Set expectations - service returns not found error
+		mockService.EXPECT().
+			SendToIndividual(gomock.Any(), &req).
+			Return(&domain.ErrBroadcastNotFound{ID: req.BroadcastID})
+
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.sendToIndividual", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleSendToIndividual(w, httpReq)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	// Test service error
+	t.Run("ServiceError", func(t *testing.T) {
+		// Prepare request
+		req := domain.SendToIndividualRequest{
+			WorkspaceID:    "workspace123",
+			BroadcastID:    "broadcast123",
+			RecipientEmail: "user@example.com",
+		}
+
+		// Set logger expectations
+		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "service error").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to send broadcast to individual")
+
+		// Set service expectations - returns error
+		mockService.EXPECT().
+			SendToIndividual(gomock.Any(), &req).
+			Return(errors.New("service error"))
+
+		jsonData, _ := json.Marshal(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.sendToIndividual", bytes.NewBuffer(jsonData))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler.HandleSendToIndividual(w, httpReq)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+// TestRegisterRoutes tests the RegisterRoutes function
+func TestRegisterRoutes(t *testing.T) {
+	handler, _, _, _, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
+
+	// Create a new mux
+	mux := http.NewServeMux()
+
+	// Register routes
+	handler.RegisterRoutes(mux)
+
+	// Define all expected routes
+	routes := []string{
+		"/api/broadcasts.list",
+		"/api/broadcasts.get",
+		"/api/broadcasts.create",
+		"/api/broadcasts.update",
+		"/api/broadcasts.schedule",
+		"/api/broadcasts.pause",
+		"/api/broadcasts.resume",
+		"/api/broadcasts.cancel",
+		"/api/broadcasts.sendToIndividual",
+		"/api/broadcasts.delete",
+	}
+
+	// Verify all routes are registered
+	for _, route := range routes {
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		match, _ := mux.Handler(req)
+		assert.NotNil(t, match, "Route should be registered: "+route)
+	}
+}

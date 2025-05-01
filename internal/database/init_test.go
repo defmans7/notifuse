@@ -176,6 +176,18 @@ func TestInitializeWorkspaceDatabase(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS broadcasts").
 			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS message_history").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_contact_id").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_template_id").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_status").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_sent_at").
+			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err = InitializeWorkspaceDatabase(db)
 		assert.NoError(t, err)

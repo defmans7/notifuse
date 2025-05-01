@@ -1060,3 +1060,138 @@ func TestErrTemplateNotFound_Error(t *testing.T) {
 	err := &ErrTemplateNotFound{Message: "template not found"}
 	assert.Equal(t, "template not found", err.Error())
 }
+
+func TestBuildTemplateData(t *testing.T) {
+	t.Run("with complete data", func(t *testing.T) {
+		// Setup test data
+		workspaceID := "ws-123"
+		apiEndpoint := "https://api.example.com"
+		messageID := "msg-456"
+
+		firstName := &NullableString{String: "John", IsNull: false}
+		lastName := &NullableString{String: "Doe", IsNull: false}
+
+		contact := &Contact{
+			Email:     "test@example.com",
+			FirstName: firstName,
+			LastName:  lastName,
+			// Don't use Properties field as it doesn't exist in Contact struct
+		}
+
+		contactWithList := ContactWithList{
+			Contact:  contact,
+			ListID:   "list-789",
+			ListName: "Newsletter",
+		}
+
+		broadcast := &Broadcast{
+			ID:              "broadcast-001",
+			Name:            "Test Broadcast",
+			TrackingEnabled: true,
+			UTMParameters: &UTMParameters{
+				Source:   "newsletter",
+				Medium:   "email",
+				Campaign: "welcome",
+				Term:     "new-users",
+				Content:  "button-1",
+			},
+		}
+
+		// Call the function
+		data, err := BuildTemplateData(workspaceID, contactWithList, messageID, apiEndpoint, broadcast)
+
+		// Assertions
+		assert.NoError(t, err)
+		assert.NotNil(t, data)
+
+		// Check contact data
+		contactData, ok := data["contact"].(MapOfAny)
+		assert.True(t, ok)
+		assert.Equal(t, "test@example.com", contactData["email"])
+		assert.Equal(t, "John", contactData["first_name"])
+		assert.Equal(t, "Doe", contactData["last_name"])
+
+		// Check broadcast data
+		broadcastData, ok := data["broadcast"].(MapOfAny)
+		assert.True(t, ok)
+		assert.Equal(t, "broadcast-001", broadcastData["id"])
+		assert.Equal(t, "Test Broadcast", broadcastData["name"])
+
+		// Check UTM parameters
+		assert.Equal(t, "newsletter", data["utm_source"])
+		assert.Equal(t, "email", data["utm_medium"])
+		assert.Equal(t, "welcome", data["utm_campaign"])
+		assert.Equal(t, "new-users", data["utm_term"])
+		assert.Equal(t, "button-1", data["utm_content"])
+
+		// Check list data
+		listData, ok := data["list"].(MapOfAny)
+		assert.True(t, ok)
+		assert.Equal(t, "list-789", listData["id"])
+		assert.Equal(t, "Newsletter", listData["name"])
+
+		// Check unsubscribe URL
+		unsubscribeURL, ok := data["unsubscribe_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, unsubscribeURL, "https://api.example.com/public/unsubscribe")
+		assert.Contains(t, unsubscribeURL, "email=test%40example.com")
+		assert.Contains(t, unsubscribeURL, "list=list-789")
+		assert.Contains(t, unsubscribeURL, "list_name=Newsletter")
+		assert.Contains(t, unsubscribeURL, "workspace=ws-123")
+		assert.Contains(t, unsubscribeURL, "message=msg-456")
+
+		// Check tracking data
+		assert.Equal(t, messageID, data["message_id"])
+
+		// Check tracking pixel URL
+		trackingPixelURL, ok := data["tracking_opens_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, trackingPixelURL, "https://api.example.com/public/opens")
+		assert.Contains(t, trackingPixelURL, "id=msg-456")
+		assert.Contains(t, trackingPixelURL, "t=o")
+		assert.Contains(t, trackingPixelURL, "w=ws-123")
+
+		// Check click tracking URL
+		trackingClickURL, ok := data["tracking_click_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, trackingClickURL, "https://api.example.com/public/click")
+		assert.Contains(t, trackingClickURL, "id=msg-456")
+		assert.Contains(t, trackingClickURL, "w=ws-123")
+	})
+
+	t.Run("with minimal data", func(t *testing.T) {
+		// Setup minimal test data
+		workspaceID := "ws-123"
+		messageID := "msg-456"
+
+		contactWithList := ContactWithList{
+			Contact: nil,
+		}
+
+		// Call the function
+		data, err := BuildTemplateData(workspaceID, contactWithList, messageID, "", nil)
+
+		// Assertions
+		assert.NoError(t, err)
+		assert.NotNil(t, data)
+
+		// Check contact data should be empty
+		contactData, ok := data["contact"].(MapOfAny)
+		assert.True(t, ok)
+		assert.Empty(t, contactData)
+
+		// Check message ID still exists
+		assert.Equal(t, messageID, data["message_id"])
+
+		// Check tracking opens URL still exists even without API endpoint
+		trackingPixelURL, ok := data["tracking_opens_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, trackingPixelURL, "/public/opens")
+
+		// No unsubscribe URL should be present
+		_, exists := data["unsubscribe_url"]
+		assert.False(t, exists)
+	})
+
+	// We'll skip the third test case since it would require mocking
+}

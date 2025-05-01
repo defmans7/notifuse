@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestContact_Validate(t *testing.T) {
@@ -1639,4 +1640,84 @@ func TestContact_ToMapOfAny(t *testing.T) {
 			tt.validate(t, result)
 		})
 	}
+}
+
+func TestContact_MergeContactLists(t *testing.T) {
+	t.Run("merge into nil list", func(t *testing.T) {
+		// Create a contact with nil contact lists
+		contact := &Contact{
+			Email: "test@example.com",
+		}
+
+		// Create a list to merge
+		list := &ContactList{
+			ListID: "list-123",
+			Status: ContactListStatusActive,
+		}
+
+		// Merge the list
+		contact.MergeContactLists(list)
+
+		// Verify the contact now has one list
+		require.NotNil(t, contact.ContactLists)
+		require.Len(t, contact.ContactLists, 1)
+		assert.Equal(t, "list-123", contact.ContactLists[0].ListID)
+		assert.Equal(t, ContactListStatusActive, contact.ContactLists[0].Status)
+	})
+
+	t.Run("merge new list", func(t *testing.T) {
+		// Create a contact with an existing list
+		existingList := &ContactList{
+			ListID: "list-123",
+			Status: ContactListStatusActive,
+		}
+
+		contact := &Contact{
+			Email:        "test@example.com",
+			ContactLists: []*ContactList{existingList},
+		}
+
+		// Create a new list to merge
+		newList := &ContactList{
+			ListID: "list-456",
+			Status: ContactListStatusPending,
+		}
+
+		// Merge the new list
+		contact.MergeContactLists(newList)
+
+		// Verify the contact now has both lists
+		require.Len(t, contact.ContactLists, 2)
+		assert.Equal(t, "list-123", contact.ContactLists[0].ListID)
+		assert.Equal(t, ContactListStatusActive, contact.ContactLists[0].Status)
+		assert.Equal(t, "list-456", contact.ContactLists[1].ListID)
+		assert.Equal(t, ContactListStatusPending, contact.ContactLists[1].Status)
+	})
+
+	t.Run("update existing list", func(t *testing.T) {
+		// Create a contact with an existing list
+		existingList := &ContactList{
+			ListID: "list-123",
+			Status: ContactListStatusActive,
+		}
+
+		contact := &Contact{
+			Email:        "test@example.com",
+			ContactLists: []*ContactList{existingList},
+		}
+
+		// Create an updated version of the existing list
+		updatedList := &ContactList{
+			ListID: "list-123",                    // Same ID
+			Status: ContactListStatusUnsubscribed, // Updated status
+		}
+
+		// Merge the updated list
+		contact.MergeContactLists(updatedList)
+
+		// Verify the contact still has only one list with the updated status
+		require.Len(t, contact.ContactLists, 1)
+		assert.Equal(t, "list-123", contact.ContactLists[0].ListID)
+		assert.Equal(t, ContactListStatusUnsubscribed, contact.ContactLists[0].Status)
+	})
 }

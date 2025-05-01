@@ -436,6 +436,7 @@ func (m *MailgunSettings) Validate(passphrase string) error {
 		if err := m.EncryptAPIKey(passphrase); err != nil {
 			return fmt.Errorf("failed to encrypt Mailgun API key: %w", err)
 		}
+		m.APIKey = "" // Clear the API key after encryption
 	}
 
 	return nil

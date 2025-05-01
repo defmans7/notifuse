@@ -347,3 +347,255 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	assert.Equal(t, 0, sent)
 	assert.Equal(t, 0, failed)
 }
+
+// TestSendBatch tests the SendBatch method
+func TestSendBatch(t *testing.T) {
+	// Create mock controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mocks for all dependencies
+	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup logger expectations
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	// Setup test data
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-456"
+	apiEndpoint := "https://api.example.com"
+
+	// Create contacts with lists
+	recipients := []*domain.ContactWithList{
+		{
+			Contact: &domain.Contact{
+				Email: "recipient1@example.com",
+			},
+			ListID:   "list-1",
+			ListName: "Test List 1",
+		},
+		{
+			Contact: &domain.Contact{
+				Email: "recipient2@example.com",
+			},
+			ListID:   "list-2",
+			ListName: "Test List 2",
+		},
+	}
+
+	// Create templates
+	template := &domain.Template{
+		ID: "template-123",
+		Email: &domain.EmailTemplate{
+			FromAddress: "sender@example.com",
+			FromName:    "Sender",
+			Subject:     "Test Subject",
+		},
+	}
+	templates := map[string]*domain.Template{
+		"template-123": template,
+	}
+
+	// Create A/B test variations
+	variations := []domain.BroadcastVariation{
+		{
+			ID:         "var-1",
+			TemplateID: "template-123",
+		},
+	}
+
+	// Create broadcast
+	broadcast := &domain.Broadcast{
+		ID:               broadcastID,
+		WorkspaceID:      workspaceID,
+		WinningVariation: "",
+		TestSettings: domain.BroadcastTestSettings{
+			Enabled:    false,
+			Variations: variations,
+		},
+	}
+
+	// Set up expectations for GetBroadcast and GetAPIEndpoint
+	mockBroadcastService.EXPECT().
+		GetBroadcast(ctx, workspaceID, broadcastID).
+		Return(broadcast, nil)
+
+	mockBroadcastService.EXPECT().
+		GetAPIEndpoint().
+		Return(apiEndpoint)
+
+	// Setup compiled template result
+	compiledHTML := "<html><body>Hello User</body></html>"
+	compiledTemplate := &domain.CompileTemplateResponse{
+		Success: true,
+		HTML:    &compiledHTML,
+	}
+
+	// Expect template compilation and email sending for each recipient
+	for _, recipient := range recipients {
+		mockTemplateService.EXPECT().
+			CompileTemplate(ctx, workspaceID, gomock.Any(), gomock.Any()).
+			Return(compiledTemplate, nil)
+
+		mockEmailService.EXPECT().
+			SendEmail(
+				ctx,
+				workspaceID,
+				"marketing",
+				template.Email.FromAddress,
+				template.Email.FromName,
+				recipient.Contact.Email,
+				template.Email.Subject,
+				compiledHTML,
+			).
+			Return(nil)
+	}
+
+	// Create message sender
+	config := DefaultConfig()
+	config.EnableCircuitBreaker = false
+	sender := NewMessageSender(
+		mockBroadcastService,
+		mockTemplateService,
+		mockEmailService,
+		mockLogger,
+		config,
+	)
+
+	// Call the method being tested
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, recipients, templates, nil)
+
+	// Verify results
+	assert.NoError(t, err)
+	assert.Equal(t, 2, sent)
+	assert.Equal(t, 0, failed)
+}
+
+// TestSendBatch_EmptyRecipients tests SendBatch with no recipients
+func TestSendBatch_EmptyRecipients(t *testing.T) {
+	// Create mock controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mocks for all dependencies
+	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup logger expectations
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	// Setup test data
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-456"
+
+	// Create message sender
+	config := DefaultConfig()
+	sender := NewMessageSender(
+		mockBroadcastService,
+		mockTemplateService,
+		mockEmailService,
+		mockLogger,
+		config,
+	)
+
+	// Call the method being tested with empty recipients
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, []*domain.ContactWithList{},
+		map[string]*domain.Template{}, nil)
+
+	// Verify results
+	assert.NoError(t, err)
+	assert.Equal(t, 0, sent)
+	assert.Equal(t, 0, failed)
+}
+
+// TestSendBatch_CircuitBreakerOpen tests SendBatch when circuit breaker is open
+func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
+	// Create mock controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mocks for all dependencies
+	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup logger expectations
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Setup test data
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-456"
+	recipients := []*domain.ContactWithList{
+		{
+			Contact: &domain.Contact{
+				Email: "test@example.com",
+			},
+		},
+	}
+
+	// Create message sender with circuit breaker enabled
+	config := DefaultConfig()
+	config.EnableCircuitBreaker = true
+	config.CircuitBreakerThreshold = 1
+	sender := NewMessageSender(
+		mockBroadcastService,
+		mockTemplateService,
+		mockEmailService,
+		mockLogger,
+		config,
+	)
+
+	// Force circuit breaker to open
+	messageSenderImpl := sender.(*messageSender)
+	messageSenderImpl.circuitBreaker.RecordFailure()
+
+	// Call the method being tested
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, recipients,
+		map[string]*domain.Template{}, nil)
+
+	// Verify results
+	assert.Error(t, err)
+	assert.Equal(t, 0, sent)
+	assert.Equal(t, 0, failed)
+
+	// Check that we got the right error
+	broadcastErr, ok := err.(*BroadcastError)
+	assert.True(t, ok)
+	assert.Equal(t, ErrCodeCircuitOpen, broadcastErr.Code)
+}
+
+// TestGenerateMessageID tests the generateMessageID function
+func TestGenerateMessageID(t *testing.T) {
+	workspaceID := "workspace-123"
+
+	// Generate multiple message IDs
+	id1 := generateMessageID(workspaceID)
+	id2 := generateMessageID(workspaceID)
+
+	// Check that IDs have the correct format (workspace_uuid)
+	assert.Contains(t, id1, workspaceID+"_")
+	assert.Contains(t, id2, workspaceID+"_")
+
+	// Check that generated IDs are different
+	assert.NotEqual(t, id1, id2)
+
+	// Verify length is reasonable (workspace ID + "_" + UUID)
+	expectedMinLength := len(workspaceID) + 1 + 32 // UUID strings are at least 32 chars
+	assert.Greater(t, len(id1), expectedMinLength)
+}

@@ -2,11 +2,13 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -217,6 +219,545 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 
 		// Verify response has correct status code for timeout
 		assert.Equal(t, http.StatusGatewayTimeout, rec.Code)
+	})
+}
+
+func TestTaskHandler_RegisterRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	// For tests we don't need the actual key, we can use a generated one
+	privateKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := privateKey.Public()
+	mockLogger := &mockLogger{}
+	secretKey := "test-secret-key"
+
+	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
+
+	// Create a new mux
+	mux := http.NewServeMux()
+
+	// Register routes
+	handler.RegisterRoutes(mux)
+
+	// Test routes by checking if mux can match all expected patterns
+	routes := []string{
+		"/api/tasks.create",
+		"/api/tasks.list",
+		"/api/tasks.get",
+		"/api/tasks.delete",
+		"/api/tasks.executePending",
+		"/api/tasks.execute",
+	}
+
+	for _, route := range routes {
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		match, _ := mux.Handler(req)
+		assert.NotNil(t, match, "Route should be registered: "+route)
+	}
+}
+
+func TestTaskHandler_CreateTask(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	var publicKey paseto.V4AsymmetricPublicKey
+	mockLogger := &mockLogger{}
+	secretKey := "test-secret-key"
+
+	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
+
+	t.Run("Successful creation", func(t *testing.T) {
+		// Setup
+		taskRequest := domain.CreateTaskRequest{
+			WorkspaceID:   "workspace1",
+			Type:          "email_broadcast",
+			MaxRuntime:    300,
+			MaxRetries:    3,
+			RetryInterval: 300,
+		}
+
+		reqJSON, _ := json.Marshal(taskRequest)
+
+		// Configure service mock to return success
+		mockTaskService.EXPECT().
+			CreateTask(gomock.Any(), taskRequest.WorkspaceID, gomock.Any()).
+			Return(nil)
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.create", bytes.NewBuffer(reqJSON))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		handler.CreateTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusCreated, rec.Code)
+
+		var resp map[string]interface{}
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		assert.NoError(t, err)
+		assert.NotNil(t, resp["task"])
+	})
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		// Call handler with wrong method
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.create", nil)
+		rec := httptest.NewRecorder()
+
+		handler.CreateTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+
+	t.Run("Invalid request body", func(t *testing.T) {
+		// Call handler with invalid JSON
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.create", bytes.NewBuffer([]byte("invalid json")))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		handler.CreateTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("Invalid task data", func(t *testing.T) {
+		// Setup request with invalid task data
+		reqBody := map[string]string{
+			"workspace_id": "workspace1",
+			// Missing Type field which is required
+		}
+
+		reqJSON, _ := json.Marshal(reqBody)
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.create", bytes.NewBuffer(reqJSON))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		handler.CreateTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("Service error", func(t *testing.T) {
+		// Setup
+		taskRequest := domain.CreateTaskRequest{
+			WorkspaceID:   "workspace1",
+			Type:          "email_broadcast",
+			MaxRuntime:    300,
+			MaxRetries:    3,
+			RetryInterval: 300,
+		}
+
+		reqJSON, _ := json.Marshal(taskRequest)
+
+		// Configure service mock to return an error
+		mockTaskService.EXPECT().
+			CreateTask(gomock.Any(), taskRequest.WorkspaceID, gomock.Any()).
+			Return(errors.New("service error"))
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.create", bytes.NewBuffer(reqJSON))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		handler.CreateTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+}
+
+func TestTaskHandler_GetTask(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	var publicKey paseto.V4AsymmetricPublicKey
+	mockLogger := &mockLogger{}
+	secretKey := "test-secret-key"
+
+	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
+
+	t.Run("Successful retrieval", func(t *testing.T) {
+		// Setup expected task
+		now := time.Now()
+		task := &domain.Task{
+			ID:          "task123",
+			Type:        "email_broadcast",
+			Status:      domain.TaskStatusPending,
+			WorkspaceID: "workspace1",
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+
+		// Configure service mock to return the task
+		mockTaskService.EXPECT().
+			GetTask(gomock.Any(), "workspace1", "task123").
+			Return(task, nil)
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.get?workspace_id=workspace1&id=task123", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var resp map[string]interface{}
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		assert.NoError(t, err)
+		assert.NotNil(t, resp["task"])
+	})
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		// Call handler with wrong method
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.get", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+
+	t.Run("Missing parameters", func(t *testing.T) {
+		// Call handler with missing required parameters
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.get", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("Task not found", func(t *testing.T) {
+		// Configure service mock to return a not found error
+		mockTaskService.EXPECT().
+			GetTask(gomock.Any(), "workspace1", "nonexistent").
+			Return(nil, errors.New("task not found"))
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.get?workspace_id=workspace1&id=nonexistent", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+
+	t.Run("Service error (not not-found)", func(t *testing.T) {
+		// Configure service mock to return a service error
+		mockTaskService.EXPECT().
+			GetTask(gomock.Any(), "workspace1", "task123").
+			Return(nil, errors.New("database error"))
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.get?workspace_id=workspace1&id=task123", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+}
+
+func TestTaskHandler_ListTasks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	var publicKey paseto.V4AsymmetricPublicKey
+	mockLogger := &mockLogger{}
+	secretKey := "test-secret-key"
+
+	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
+
+	t.Run("Successful list", func(t *testing.T) {
+		// Setup expected response
+		now := time.Now()
+		response := &domain.TaskListResponse{
+			Tasks: []*domain.Task{
+				{
+					ID:          "task123",
+					Type:        "email_broadcast",
+					Status:      domain.TaskStatusPending,
+					WorkspaceID: "workspace1",
+					CreatedAt:   now,
+					UpdatedAt:   now,
+				},
+				{
+					ID:          "task456",
+					Type:        "sms_broadcast",
+					Status:      domain.TaskStatusCompleted,
+					WorkspaceID: "workspace1",
+					CreatedAt:   now,
+					UpdatedAt:   now,
+				},
+			},
+			TotalCount: 2,
+		}
+
+		// Configure service mock to return the response
+		mockTaskService.EXPECT().
+			ListTasks(gomock.Any(), "workspace1", gomock.Any()).
+			DoAndReturn(func(_ context.Context, workspaceID string, filter domain.TaskFilter) (*domain.TaskListResponse, error) {
+				assert.Contains(t, filter.Status, domain.TaskStatusPending)
+				assert.Contains(t, filter.Type, "email_broadcast")
+				assert.Equal(t, 10, filter.Limit)
+				assert.Equal(t, 0, filter.Offset)
+				return response, nil
+			})
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.list?workspace_id=workspace1&status=pending&type=email_broadcast&limit=10", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ListTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var resp map[string]interface{}
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, float64(2), resp["total_count"].(float64))
+		assert.Len(t, resp["tasks"].([]interface{}), 2)
+	})
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		// Call handler with wrong method
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.list", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ListTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+
+	t.Run("Missing workspace_id", func(t *testing.T) {
+		// Call handler with missing required workspace_id
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.list", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ListTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("Invalid filter parameters", func(t *testing.T) {
+		// Call handler with invalid filter parameters
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.list?workspace_id=workspace1&limit=invalid", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ListTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("Service error", func(t *testing.T) {
+		// Configure service mock to return an error
+		mockTaskService.EXPECT().
+			ListTasks(gomock.Any(), "workspace1", gomock.Any()).
+			Return(nil, errors.New("service error"))
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.list?workspace_id=workspace1", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ListTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+}
+
+func TestTaskHandler_DeleteTask(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	var publicKey paseto.V4AsymmetricPublicKey
+	mockLogger := &mockLogger{}
+	secretKey := "test-secret-key"
+
+	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
+
+	t.Run("Successful deletion", func(t *testing.T) {
+		// Configure service mock to return success
+		mockTaskService.EXPECT().
+			DeleteTask(gomock.Any(), "workspace1", "task123").
+			Return(nil)
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.delete?workspace_id=workspace1&id=task123", nil)
+		rec := httptest.NewRecorder()
+
+		handler.DeleteTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var resp map[string]interface{}
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		assert.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+	})
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		// Call handler with wrong method
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.delete", nil)
+		rec := httptest.NewRecorder()
+
+		handler.DeleteTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+
+	t.Run("Missing parameters", func(t *testing.T) {
+		// Call handler with missing required parameters
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.delete", nil)
+		rec := httptest.NewRecorder()
+
+		handler.DeleteTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("Task not found", func(t *testing.T) {
+		// Configure service mock to return a not found error
+		mockTaskService.EXPECT().
+			DeleteTask(gomock.Any(), "workspace1", "nonexistent").
+			Return(errors.New("task not found"))
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.delete?workspace_id=workspace1&id=nonexistent", nil)
+		rec := httptest.NewRecorder()
+
+		handler.DeleteTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+
+	t.Run("Service error (not not-found)", func(t *testing.T) {
+		// Configure service mock to return a service error
+		mockTaskService.EXPECT().
+			DeleteTask(gomock.Any(), "workspace1", "task123").
+			Return(errors.New("database error"))
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.delete?workspace_id=workspace1&id=task123", nil)
+		rec := httptest.NewRecorder()
+
+		handler.DeleteTask(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+}
+
+func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	var publicKey paseto.V4AsymmetricPublicKey
+	mockLogger := &mockLogger{}
+	secretKey := "test-secret-key"
+
+	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
+
+	t.Run("Successful execution", func(t *testing.T) {
+		// Configure service mock to return success
+		mockTaskService.EXPECT().
+			ExecutePendingTasks(gomock.Any(), 10).
+			Return(nil)
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending?max_tasks=10", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ExecutePendingTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var resp map[string]interface{}
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		assert.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Equal(t, float64(10), resp["max_tasks"])
+	})
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		// Call handler with wrong method
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.executePending", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ExecutePendingTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+
+	t.Run("Invalid max_tasks parameter", func(t *testing.T) {
+		// Call handler with invalid max_tasks parameter
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending?max_tasks=invalid", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ExecutePendingTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("Default max_tasks (omitted)", func(t *testing.T) {
+		// Configure service mock to return success with default max_tasks (should be 10)
+		mockTaskService.EXPECT().
+			ExecutePendingTasks(gomock.Any(), 10).
+			Return(nil)
+
+		// Call handler without max_tasks
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ExecutePendingTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("Service error", func(t *testing.T) {
+		// Configure service mock to return an error
+		mockTaskService.EXPECT().
+			ExecutePendingTasks(gomock.Any(), 10).
+			Return(errors.New("service error"))
+
+		// Call handler
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending?max_tasks=10", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ExecutePendingTasks(rec, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	})
 }
 
