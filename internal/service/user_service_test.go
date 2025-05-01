@@ -205,7 +205,7 @@ func TestUserService_VerifyCode(t *testing.T) {
 			Return(nil)
 
 		mockAuthService.EXPECT().
-			GenerateAuthToken(user, session.ID, session.ExpiresAt).
+			GenerateUserAuthToken(user, session.ID, session.ExpiresAt).
 			Return("token123")
 
 		result, err := service.VerifyCode(ctx, domain.VerifyCodeInput{

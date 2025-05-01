@@ -462,7 +462,7 @@ func TestAuthService_GenerateAuthToken(t *testing.T) {
 			Email: "test@example.com",
 		}
 
-		token := service.GenerateAuthToken(user, sessionID, expiresAt)
+		token := service.GenerateUserAuthToken(user, sessionID, expiresAt)
 
 		require.NotEmpty(t, token)
 		require.NotNil(t, token)

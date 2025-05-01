@@ -68,18 +68,18 @@ func (mr *MockAuthServiceMockRecorder) AuthenticateUserFromContext(arg0 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthenticateUserFromContext", reflect.TypeOf((*MockAuthService)(nil).AuthenticateUserFromContext), arg0)
 }
 
-// GenerateAuthToken mocks base method.
-func (m *MockAuthService) GenerateAuthToken(arg0 *domain.User, arg1 string, arg2 time.Time) string {
+// GenerateAPIAuthToken mocks base method.
+func (m *MockAuthService) GenerateAPIAuthToken(arg0 *domain.User) string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateAuthToken", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GenerateAPIAuthToken", arg0)
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
-// GenerateAuthToken indicates an expected call of GenerateAuthToken.
-func (mr *MockAuthServiceMockRecorder) GenerateAuthToken(arg0, arg1, arg2 interface{}) *gomock.Call {
+// GenerateAPIAuthToken indicates an expected call of GenerateAPIAuthToken.
+func (mr *MockAuthServiceMockRecorder) GenerateAPIAuthToken(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAuthToken", reflect.TypeOf((*MockAuthService)(nil).GenerateAuthToken), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAPIAuthToken", reflect.TypeOf((*MockAuthService)(nil).GenerateAPIAuthToken), arg0)
 }
 
 // GenerateInvitationToken mocks base method.
@@ -94,6 +94,20 @@ func (m *MockAuthService) GenerateInvitationToken(arg0 *domain.WorkspaceInvitati
 func (mr *MockAuthServiceMockRecorder) GenerateInvitationToken(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateInvitationToken", reflect.TypeOf((*MockAuthService)(nil).GenerateInvitationToken), arg0)
+}
+
+// GenerateUserAuthToken mocks base method.
+func (m *MockAuthService) GenerateUserAuthToken(arg0 *domain.User, arg1 string, arg2 time.Time) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateUserAuthToken", arg0, arg1, arg2)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GenerateUserAuthToken indicates an expected call of GenerateUserAuthToken.
+func (mr *MockAuthServiceMockRecorder) GenerateUserAuthToken(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateUserAuthToken", reflect.TypeOf((*MockAuthService)(nil).GenerateUserAuthToken), arg0, arg1, arg2)
 }
 
 // GetPrivateKey mocks base method.

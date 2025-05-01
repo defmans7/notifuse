@@ -149,7 +149,7 @@ func (s *UserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInp
 	}
 
 	// Generate authentication token
-	token := s.authService.GenerateAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
+	token := s.authService.GenerateUserAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
 
 	return &domain.AuthResponse{
 		Token:     token,

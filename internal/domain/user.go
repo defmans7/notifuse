@@ -13,7 +13,7 @@ type contextKey string
 const (
 	UserIDKey    contextKey = "user_id"
 	SessionIDKey contextKey = "session_id"
-	UserTypeKey  contextKey = "user_type"
+	UserTypeKey  contextKey = "type"
 )
 
 type UserType string

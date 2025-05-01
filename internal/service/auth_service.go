@@ -138,18 +138,36 @@ func (s *AuthService) VerifyUserSession(ctx context.Context, userID, sessionID s
 }
 
 // GenerateAuthToken generates an authentication token for a user
-func (s *AuthService) GenerateAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string {
+func (s *AuthService) GenerateUserAuthToken(user *domain.User, sessionID string, expiresAt time.Time) string {
 	token := paseto.NewToken()
 	token.SetIssuedAt(time.Now())
 	token.SetNotBefore(time.Now())
 	token.SetExpiration(expiresAt)
 	token.SetString("user_id", user.ID)
+	token.SetString("type", string(domain.UserTypeUser))
 	token.SetString("session_id", sessionID)
 	token.SetString("email", user.Email)
 
 	encrypted := token.V4Sign(s.privateKey, nil)
 	if encrypted == "" {
 		s.logger.WithField("user_id", user.ID).WithField("session_id", sessionID).Error("Failed to sign authentication token")
+	}
+
+	return encrypted
+}
+
+// GenerateAPIAuthToken generates an authentication token for an API key
+func (s *AuthService) GenerateAPIAuthToken(user *domain.User) string {
+	token := paseto.NewToken()
+	token.SetIssuedAt(time.Now())
+	token.SetNotBefore(time.Now())
+	token.SetExpiration(time.Now().Add(time.Hour * 24 * 365 * 10))
+	token.SetString("user_id", user.ID)
+	token.SetString("type", string(domain.UserTypeAPIKey))
+
+	encrypted := token.V4Sign(s.privateKey, nil)
+	if encrypted == "" {
+		s.logger.WithField("user_id", user.ID).Error("Failed to sign API authentication token")
 	}
 
 	return encrypted

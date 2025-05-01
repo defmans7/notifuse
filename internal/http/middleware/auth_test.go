@@ -127,12 +127,12 @@ func TestRequireAuth(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "User ID not found in token")
 	})
 
-	t.Run("missing user_type in token", func(t *testing.T) {
-		// Create a token with missing user_type
+	t.Run("missing type in token", func(t *testing.T) {
+		// Create a token with missing type
 		token := paseto.NewToken()
 		token.SetExpiration(time.Now().Add(time.Hour))
 		token.SetString(string(domain.UserIDKey), "test-user")
-		// Intentionally omit setting user_type
+		// Intentionally omit setting type
 		token.SetString(string(domain.SessionIDKey), "test-session")
 
 		signedToken := token.V4Sign(secretKey, nil)
