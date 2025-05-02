@@ -30,6 +30,9 @@ type BroadcastOrchestratorInterface interface {
 
 	// FetchBatch retrieves a batch of recipients for a broadcast
 	FetchBatch(ctx context.Context, workspaceID, broadcastID string, offset, limit int) ([]*domain.ContactWithList, error)
+
+	// SaveProgressState saves the current task progress to the repository
+	SaveProgressState(ctx context.Context, workspaceID, taskID, broadcastID string, totalRecipients, sentCount, failedCount, processedCount int, lastSaveTime time.Time, startTime time.Time) (time.Time, error)
 }
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
@@ -333,8 +336,8 @@ func FormatProgressMessage(processed, total int, elapsed time.Duration) string {
 		processed, total, progress, eta)
 }
 
-// saveProgressState saves the current task progress to the repository
-func (o *BroadcastOrchestrator) saveProgressState(
+// SaveProgressState saves the current task progress to the repository
+func (o *BroadcastOrchestrator) SaveProgressState(
 	ctx context.Context,
 	workspaceID, taskID, broadcastID string,
 	totalRecipients, sentCount, failedCount, processedCount int,
@@ -601,7 +604,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 		// Save progress to the task
 		var saveErr error
-		lastSaveTime, saveErr = o.saveProgressState(
+		lastSaveTime, saveErr = o.SaveProgressState(
 			ctx,
 			task.WorkspaceID,
 			task.ID,

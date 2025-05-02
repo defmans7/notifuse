@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
 	gomock "github.com/golang/mock/gomock"
@@ -107,6 +108,21 @@ func (m *MockBroadcastOrchestratorInterface) Process(arg0 context.Context, arg1 
 func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) Process(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).Process), arg0, arg1)
+}
+
+// SaveProgressState mocks base method.
+func (m *MockBroadcastOrchestratorInterface) SaveProgressState(arg0 context.Context, arg1, arg2, arg3 string, arg4, arg5, arg6, arg7 int, arg8, arg9 time.Time) (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveProgressState", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SaveProgressState indicates an expected call of SaveProgressState.
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) SaveProgressState(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveProgressState", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).SaveProgressState), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
 }
 
 // ValidateTemplates mocks base method.

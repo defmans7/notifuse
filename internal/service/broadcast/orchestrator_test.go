@@ -2,6 +2,7 @@ package broadcast_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -575,6 +576,26 @@ func TestFormatDuration(t *testing.T) {
 			duration: 24*time.Hour + 30*time.Minute + 15*time.Second,
 			expected: "24h 30m",
 		},
+		{
+			name:     "exact seconds",
+			duration: 1 * time.Second,
+			expected: "1s",
+		},
+		{
+			name:     "exact minute",
+			duration: 1 * time.Minute,
+			expected: "1m 0s",
+		},
+		{
+			name:     "exact hour",
+			duration: 1 * time.Hour,
+			expected: "1h 0m",
+		},
+		{
+			name:     "milliseconds rounded",
+			duration: 1500 * time.Millisecond,
+			expected: "1s",
+		},
 	}
 
 	for _, tc := range tests {
@@ -676,4 +697,132 @@ func TestFormatProgressMessage(t *testing.T) {
 			assert.Contains(t, result, tc.contains)
 		})
 	}
+}
+
+func TestSaveProgressState(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	testLogger := &testLoggerAdapter{}
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Set fixed times for testing
+	testStartTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+	later := testStartTime.Add(10 * time.Second)
+
+	// Setup time provider expectations
+	mockTimeProvider.EXPECT().Now().Return(later).AnyTimes()
+
+	// Use the concrete type instead of the interface
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastSender,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		testLogger,
+		nil, // Use default config
+		mockTimeProvider,
+	).(*broadcast.BroadcastOrchestrator)
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	taskID := "task-456"
+	broadcastID := "broadcast-789"
+	totalRecipients := 100
+	sentCount := 50
+	failedCount := 10
+	processedCount := 60
+	lastSaveTime := testStartTime.Add(-10 * time.Second) // Ensure enough time has passed to save
+
+	// Test case 1: Successful state save
+	mockTaskRepo.EXPECT().
+		SaveState(
+			ctx,
+			workspaceID,
+			taskID,
+			gomock.Any(), // Progress percentage
+			gomock.Any(), // State object
+		).
+		Return(nil).
+		Times(1)
+
+	// Execute
+	result, err := orchestrator.SaveProgressState(
+		ctx,
+		workspaceID,
+		taskID,
+		broadcastID,
+		totalRecipients,
+		sentCount,
+		failedCount,
+		processedCount,
+		lastSaveTime,
+		testStartTime,
+	)
+
+	// Verify
+	require.NoError(t, err)
+	assert.Equal(t, later, result)
+
+	// Test case 2: State save with error
+	lastSaveTime = testStartTime.Add(-10 * time.Second) // Reset
+
+	mockTaskRepo.EXPECT().
+		SaveState(
+			ctx,
+			workspaceID,
+			taskID,
+			gomock.Any(), // Progress percentage
+			gomock.Any(), // State object
+		).
+		Return(fmt.Errorf("database error")).
+		Times(1)
+
+	// Execute
+	result, err = orchestrator.SaveProgressState(
+		ctx,
+		workspaceID,
+		taskID,
+		broadcastID,
+		totalRecipients,
+		sentCount,
+		failedCount,
+		processedCount,
+		lastSaveTime,
+		testStartTime,
+	)
+
+	// Verify
+	require.Error(t, err)
+	assert.Equal(t, lastSaveTime, result) // Should return the original lastSaveTime on error
+
+	// Test case 3: Not enough time passed to save
+	recentSaveTime := later.Add(-2 * time.Second) // Only 2 seconds passed (< 5 required)
+
+	// Don't expect SaveState to be called
+
+	// Execute
+	result, err = orchestrator.SaveProgressState(
+		ctx,
+		workspaceID,
+		taskID,
+		broadcastID,
+		totalRecipients,
+		sentCount,
+		failedCount,
+		processedCount,
+		recentSaveTime,
+		testStartTime,
+	)
+
+	// Verify
+	require.NoError(t, err)
+	assert.Equal(t, recentSaveTime, result) // Should return the same time since no save happened
 }
