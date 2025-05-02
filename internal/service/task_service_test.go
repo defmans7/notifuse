@@ -1089,3 +1089,858 @@ func TestTaskService_ExecutePendingTasks(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestTaskService_HandleBroadcastResumed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTaskRepository(ctrl)
+	mockLogger := mocks.NewMockLogger(ctrl)
+	var mockAuthService *AuthService = nil
+	apiEndpoint := "http://localhost:8080"
+
+	// Configure logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+
+	t.Run("Successfully resumes a task for resumed broadcast", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastResumed,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusPaused,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect task to be updated with pending status and next run time
+		mockRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, updatedTask *domain.Task) error {
+				// Verify task updates
+				assert.Equal(t, domain.TaskStatusPending, updatedTask.Status)
+				assert.NotNil(t, updatedTask.NextRunAfter)
+				// The next run time should be now or in the past
+				assert.True(t, updatedTask.NextRunAfter.Before(time.Now().Add(1*time.Second)))
+				return nil
+			})
+
+		// Call the event handler
+		taskService.handleBroadcastResumed(ctx, payload)
+	})
+
+	t.Run("Handles missing broadcast ID", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+
+		// Create event payload with missing broadcast ID
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastResumed,
+			WorkspaceID: workspaceID,
+			Data:        map[string]interface{}{},
+		}
+
+		// No repository calls expected - should just log an error
+
+		// Call the event handler
+		taskService.handleBroadcastResumed(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles task not found", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastResumed,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Configure mock repository to return no task (error)
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, errors.New("task not found"))
+
+		// No other repository calls expected
+
+		// Call the event handler
+		taskService.handleBroadcastResumed(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles update error", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastResumed,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusPaused,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect task update to fail
+		mockRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(errors.New("update failed"))
+
+		// Call the event handler
+		taskService.handleBroadcastResumed(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+}
+
+func TestTaskService_HandleBroadcastSent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTaskRepository(ctrl)
+	mockLogger := mocks.NewMockLogger(ctrl)
+	var mockAuthService *AuthService = nil
+	apiEndpoint := "http://localhost:8080"
+
+	// Configure logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+
+	t.Run("Successfully completes a task for sent broadcast", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastSent,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusRunning,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect task to be marked as completed
+		mockRepo.EXPECT().
+			MarkAsCompleted(gomock.Any(), workspaceID, task.ID).
+			Return(nil)
+
+		// Call the event handler
+		taskService.handleBroadcastSent(ctx, payload)
+	})
+
+	t.Run("Handles missing broadcast ID", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+
+		// Create event payload with missing broadcast ID
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastSent,
+			WorkspaceID: workspaceID,
+			Data:        map[string]interface{}{},
+		}
+
+		// No repository calls expected - should just log an error
+
+		// Call the event handler
+		taskService.handleBroadcastSent(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles task not found", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastSent,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Configure mock repository to return no task (error)
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, errors.New("task not found"))
+
+		// No other repository calls expected
+
+		// Call the event handler
+		taskService.handleBroadcastSent(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles mark as completed error", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastSent,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusRunning,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect mark as completed to fail
+		mockRepo.EXPECT().
+			MarkAsCompleted(gomock.Any(), workspaceID, task.ID).
+			Return(errors.New("operation failed"))
+
+		// Call the event handler
+		taskService.handleBroadcastSent(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+}
+
+func TestTaskService_HandleBroadcastFailed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTaskRepository(ctrl)
+	mockLogger := mocks.NewMockLogger(ctrl)
+	var mockAuthService *AuthService = nil
+	apiEndpoint := "http://localhost:8080"
+
+	// Configure logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+
+	t.Run("Successfully marks task as failed for failed broadcast", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+		failureReason := "API error"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastFailed,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+				"reason":       failureReason,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusRunning,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect task to be marked as failed with the reason
+		mockRepo.EXPECT().
+			MarkAsFailed(gomock.Any(), workspaceID, task.ID, failureReason).
+			Return(nil)
+
+		// Call the event handler
+		taskService.handleBroadcastFailed(ctx, payload)
+	})
+
+	t.Run("Uses default reason when reason is missing", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+		defaultReason := "Broadcast failed" // Default reason in the code
+
+		// Create event payload without a reason
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastFailed,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusRunning,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect task to be marked as failed with the default reason
+		mockRepo.EXPECT().
+			MarkAsFailed(gomock.Any(), workspaceID, task.ID, defaultReason).
+			Return(nil)
+
+		// Call the event handler
+		taskService.handleBroadcastFailed(ctx, payload)
+	})
+
+	t.Run("Handles missing broadcast ID", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+
+		// Create event payload with missing broadcast ID
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastFailed,
+			WorkspaceID: workspaceID,
+			Data:        map[string]interface{}{},
+		}
+
+		// No repository calls expected - should just log an error
+
+		// Call the event handler
+		taskService.handleBroadcastFailed(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles task not found", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastFailed,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Configure mock repository to return no task (error)
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, errors.New("task not found"))
+
+		// No other repository calls expected
+
+		// Call the event handler
+		taskService.handleBroadcastFailed(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles mark as failed error", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastFailed,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusRunning,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect mark as failed to error
+		mockRepo.EXPECT().
+			MarkAsFailed(gomock.Any(), workspaceID, task.ID, gomock.Any()).
+			Return(errors.New("operation failed"))
+
+		// Call the event handler
+		taskService.handleBroadcastFailed(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+}
+
+func TestTaskService_HandleBroadcastCancelled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTaskRepository(ctrl)
+	mockLogger := mocks.NewMockLogger(ctrl)
+	var mockAuthService *AuthService = nil
+	apiEndpoint := "http://localhost:8080"
+
+	// Configure logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+
+	t.Run("Successfully marks task as failed for cancelled broadcast", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+		cancelReason := "Broadcast was cancelled" // The expected reason in the code
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastCancelled,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusRunning,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect task to be marked as failed with the cancellation reason
+		mockRepo.EXPECT().
+			MarkAsFailed(gomock.Any(), workspaceID, task.ID, cancelReason).
+			Return(nil)
+
+		// Call the event handler
+		taskService.handleBroadcastCancelled(ctx, payload)
+	})
+
+	t.Run("Handles missing broadcast ID", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+
+		// Create event payload with missing broadcast ID
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastCancelled,
+			WorkspaceID: workspaceID,
+			Data:        map[string]interface{}{},
+		}
+
+		// No repository calls expected - should just log an error
+
+		// Call the event handler
+		taskService.handleBroadcastCancelled(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles task not found", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastCancelled,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Configure mock repository to return no task (error)
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, errors.New("task not found"))
+
+		// No other repository calls expected
+
+		// Call the event handler
+		taskService.handleBroadcastCancelled(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles mark as failed error", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastCancelled,
+			WorkspaceID: workspaceID,
+			Data: map[string]interface{}{
+				"broadcast_id": broadcastID,
+			},
+		}
+
+		// Create task to be returned by mock
+		task := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusRunning,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository to return the task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(task, nil)
+
+		// Expect mark as failed to error
+		mockRepo.EXPECT().
+			MarkAsFailed(gomock.Any(), workspaceID, task.ID, gomock.Any()).
+			Return(errors.New("operation failed"))
+
+		// Call the event handler
+		taskService.handleBroadcastCancelled(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+}
+
+func TestTaskService_HandleBroadcastScheduledExtended(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTaskRepository(ctrl)
+	mockLogger := mocks.NewMockLogger(ctrl)
+	var mockAuthService *AuthService = nil
+	apiEndpoint := "http://localhost:8080"
+
+	// Configure logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+
+	t.Run("Updates existing task when found for immediate sending", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload for immediate sending
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastScheduled,
+			WorkspaceID: workspaceID,
+			EntityID:    broadcastID,
+			Data: map[string]interface{}{
+				"send_now": true,
+				"status":   string(domain.BroadcastStatusSending),
+			},
+		}
+
+		// Create existing task to be returned by mock
+		existingTask := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusPaused,
+			// BroadcastID not set initially
+		}
+
+		// Configure mock repository transaction
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fn func(*sql.Tx) error) error {
+				return fn(nil)
+			})
+
+		// Configure mock repository to return the existing task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(existingTask, nil)
+
+		// Expect task to be updated
+		mockRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, updatedTask *domain.Task) error {
+				// Verify task updates
+				assert.Equal(t, domain.TaskStatusPending, updatedTask.Status)
+				assert.NotNil(t, updatedTask.NextRunAfter)
+				assert.NotNil(t, updatedTask.BroadcastID)
+				assert.Equal(t, broadcastID, *updatedTask.BroadcastID)
+				// The next run time should be now or in the past
+				assert.True(t, updatedTask.NextRunAfter.Before(time.Now().Add(1*time.Second)))
+				return nil
+			})
+
+		// Call the event handler
+		taskService.handleBroadcastScheduled(ctx, payload)
+	})
+
+	t.Run("Creates a new task for future scheduled broadcast", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast789"
+
+		// Create event payload for scheduled (not immediate) sending
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastScheduled,
+			WorkspaceID: workspaceID,
+			EntityID:    broadcastID,
+			Data: map[string]interface{}{
+				"send_now": false,
+				"status":   string(domain.BroadcastStatusScheduled),
+			},
+		}
+
+		// Configure mock repository transaction
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fn func(*sql.Tx) error) error {
+				return fn(nil)
+			})
+
+		// Configure mock repository to return no existing task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, errors.New("not found"))
+
+		// Expect task creation
+		mockRepo.EXPECT().
+			Create(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, task *domain.Task) error {
+				// Verify task properties
+				assert.Equal(t, workspaceID, task.WorkspaceID)
+				assert.Equal(t, "send_broadcast", task.Type)
+				assert.Equal(t, domain.TaskStatusPending, task.Status)
+				assert.Equal(t, broadcastID, *task.BroadcastID)
+				assert.Equal(t, 600, task.MaxRuntime) // 10 minutes
+				assert.Equal(t, 3, task.MaxRetries)
+				assert.Equal(t, 300, task.RetryInterval) // 5 minutes
+				assert.NotNil(t, task.NextRunAfter)      // Should have a future execution time
+				return nil
+			})
+
+		// Call the event handler
+		taskService.handleBroadcastScheduled(ctx, payload)
+	})
+
+	t.Run("Handles task creation error", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast999"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastScheduled,
+			WorkspaceID: workspaceID,
+			EntityID:    broadcastID,
+			Data: map[string]interface{}{
+				"send_now": true,
+				"status":   string(domain.BroadcastStatusSending),
+			},
+		}
+
+		// Configure mock repository transaction
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fn func(*sql.Tx) error) error {
+				return fn(nil)
+			})
+
+		// Configure mock repository to return no existing task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(nil, errors.New("not found"))
+
+		// Expect task creation to fail
+		mockRepo.EXPECT().
+			Create(gomock.Any(), workspaceID, gomock.Any()).
+			Return(errors.New("database error"))
+
+		// Call the event handler
+		taskService.handleBroadcastScheduled(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles update error for existing task", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastScheduled,
+			WorkspaceID: workspaceID,
+			EntityID:    broadcastID,
+			Data: map[string]interface{}{
+				"send_now": true,
+				"status":   string(domain.BroadcastStatusSending),
+			},
+		}
+
+		// Create existing task
+		existingTask := &domain.Task{
+			ID:          "task456",
+			WorkspaceID: workspaceID,
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusPaused,
+			BroadcastID: &broadcastID,
+		}
+
+		// Configure mock repository transaction
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fn func(*sql.Tx) error) error {
+				return fn(nil)
+			})
+
+		// Configure mock repository to return the existing task
+		mockRepo.EXPECT().
+			GetTaskByBroadcastID(gomock.Any(), workspaceID, broadcastID).
+			Return(existingTask, nil)
+
+		// Expect update to fail
+		mockRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(errors.New("update failed"))
+
+		// Call the event handler
+		taskService.handleBroadcastScheduled(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+
+	t.Run("Handles transaction error", func(t *testing.T) {
+		// Setup
+		ctx := context.Background()
+		workspaceID := "workspace1"
+		broadcastID := "broadcast123"
+
+		// Create event payload
+		payload := domain.EventPayload{
+			Type:        domain.EventBroadcastScheduled,
+			WorkspaceID: workspaceID,
+			EntityID:    broadcastID,
+			Data: map[string]interface{}{
+				"send_now": true,
+				"status":   string(domain.BroadcastStatusSending),
+			},
+		}
+
+		// Configure mock repository transaction to fail
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			Return(errors.New("transaction failed"))
+
+		// Call the event handler
+		taskService.handleBroadcastScheduled(ctx, payload)
+		// No assertions needed - if no panic, the test passes
+	})
+}

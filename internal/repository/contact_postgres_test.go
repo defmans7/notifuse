@@ -1,3 +1,6 @@
+//go:build !test
+// +build !test
+
 package repository
 
 import (
@@ -12,19 +15,36 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/repository/testutil"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 )
 
+// setupMockDB creates a mock database and sqlmock for testing
+func setupMockDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, func()) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err, "Failed to create mock database")
+
+	cleanup := func() {
+		db.Close()
+	}
+
+	return db, mock, cleanup
+}
+
 func TestGetContactByEmail(t *testing.T) {
-	db, mock, cleanup := testutil.SetupMockDB(t)
+	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
 
-	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	workspaceRepo.AddWorkspaceDB("workspace123", db)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(db, nil).AnyTimes()
+
 	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "test@example.com"
@@ -72,11 +92,15 @@ func TestGetContactByEmail(t *testing.T) {
 }
 
 func TestGetContactByExternalID(t *testing.T) {
-	db, mock, cleanup := testutil.SetupMockDB(t)
+	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
 
-	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	workspaceRepo.AddWorkspaceDB("workspace123", db)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(db, nil).AnyTimes()
+
 	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	externalID := "ext123"
@@ -162,12 +186,16 @@ func TestGetContactByExternalID(t *testing.T) {
 func TestGetContacts(t *testing.T) {
 	t.Run("should get contacts with pagination", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the workspace database query
@@ -226,12 +254,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should get contacts with multiple filters", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the workspace database query
@@ -293,12 +325,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle cursor pagination with base64 encoding", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the workspace database query
@@ -420,12 +456,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle invalid base64 encoded cursor", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		req := &domain.GetContactsRequest{
@@ -443,12 +483,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle invalid cursor format after base64 decoding", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Create a cursor with invalid format (missing tilde separator)
@@ -469,12 +513,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle invalid timestamp in cursor", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Create a cursor with invalid timestamp
@@ -495,7 +543,12 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle workspace connection errors", func(t *testing.T) {
 		// Create a new mock workspace repository without a DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(nil)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(nil, errors.New("failed to get workspace connection")).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		req := &domain.GetContactsRequest{
@@ -511,12 +564,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle complex filter combinations", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the workspace database query
@@ -581,12 +638,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle database query errors", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the query to fail
@@ -608,12 +669,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle contact scan errors", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Create a row with invalid data that will cause scan to fail
@@ -657,12 +722,16 @@ func TestGetContacts(t *testing.T) {
 
 	t.Run("should handle error in rows iteration", func(t *testing.T) {
 		// Create a mock workspace database
-		mockDB, mock, cleanup := testutil.SetupMockDB(t)
+		mockDB, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
 		// Create a new repository with the mock DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(mockDB)
-		workspaceRepo.AddWorkspaceDB("workspace123", mockDB)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		// Create rows that will return an error during iteration
@@ -706,12 +775,15 @@ func TestGetContacts(t *testing.T) {
 }
 
 func TestDeleteContact(t *testing.T) {
-	db, mock, cleanup := testutil.SetupMockDB(t)
+	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
 
-	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	// Add the workspace database to the workspace repository
-	workspaceRepo.AddWorkspaceDB("workspace123", db)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(db, nil).AnyTimes()
+
 	repo := NewContactRepository(workspaceRepo)
 	email := "test@example.com"
 
@@ -760,7 +832,12 @@ func TestDeleteContact(t *testing.T) {
 
 	t.Run("should handle workspace connection errors", func(t *testing.T) {
 		// Create a new mock workspace repository without a DB
-		workspaceRepo := testutil.NewMockWorkspaceRepository(nil)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(nil, errors.New("failed to get workspace connection")).AnyTimes()
+
 		repo := NewContactRepository(workspaceRepo)
 
 		err := repo.DeleteContact(context.Background(), email, "workspace123")

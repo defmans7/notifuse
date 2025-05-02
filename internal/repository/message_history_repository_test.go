@@ -1,3 +1,6 @@
+// Tests for message_history_repository.go
+// Run with: go test -v ./internal/repository -run="^TestMessageHistory"
+
 package repository
 
 import (
@@ -266,15 +269,8 @@ func TestMessageHistoryRepository_Get(t *testing.T) {
 }
 
 func TestMessageHistoryRepository_GetByContact(t *testing.T) {
-	t.Skip("This test is temporarily skipped due to issues with mocking complex SQL queries")
-
-	// Create a new mock database
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
+	db, mock, repo := setupMessageHistoryMock(t)
 	defer db.Close()
-
-	// Create the repository with the mock db
-	repo := NewMessageHistoryRepository(db)
 
 	ctx := context.Background()
 	workspace := "testworkspace"
@@ -295,143 +291,225 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 	messageData2JSON, err := json.Marshal(message2.MessageData)
 	require.NoError(t, err)
 
-	// Test successful case
-	// 1. Expect the COUNT query with exact match
-	countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE contact_id = \\$1").
-		WithArgs(contactID).
-		WillReturnRows(countRows)
+	t.Run("successful case", func(t *testing.T) {
+		// 1. Expect the COUNT query
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
+			WithArgs(contactID).
+			WillReturnRows(countRows)
 
-	// 2. Expect the main SELECT query with exact match
-	columns := []string{
-		"id", "contact_id", "broadcast_id", "template_id", "template_version",
-		"channel", "status", "message_data", "sent_at", "delivered_at",
-		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
-		"unsubscribed_at", "created_at", "updated_at",
-	}
+		// 2. Expect the main SELECT query
+		columns := []string{
+			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"channel", "status", "message_data", "sent_at", "delivered_at",
+			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
+			"unsubscribed_at", "created_at", "updated_at",
+		}
 
-	rows := sqlmock.NewRows(columns).
-		AddRow(
-			message1.ID,
-			message1.ContactID,
-			message1.BroadcastID,
-			message1.TemplateID,
-			message1.TemplateVersion,
-			message1.Channel,
-			message1.Status,
-			messageData1JSON,
-			message1.SentAt,
-			message1.DeliveredAt,
-			message1.FailedAt,
-			message1.OpenedAt,
-			message1.ClickedAt,
-			message1.BouncedAt,
-			message1.ComplainedAt,
-			message1.UnsubscribedAt,
-			message1.CreatedAt,
-			message1.UpdatedAt,
-		).
-		AddRow(
-			message2.ID,
-			message2.ContactID,
-			message2.BroadcastID,
-			message2.TemplateID,
-			message2.TemplateVersion,
-			message2.Channel,
-			message2.Status,
-			messageData2JSON,
-			message2.SentAt,
-			message2.DeliveredAt,
-			message2.FailedAt,
-			message2.OpenedAt,
-			message2.ClickedAt,
-			message2.BouncedAt,
-			message2.ComplainedAt,
-			message2.UnsubscribedAt,
-			message2.CreatedAt,
-			message2.UpdatedAt,
-		)
+		rows := sqlmock.NewRows(columns).
+			AddRow(
+				message1.ID,
+				message1.ContactID,
+				message1.BroadcastID,
+				message1.TemplateID,
+				message1.TemplateVersion,
+				message1.Channel,
+				message1.Status,
+				messageData1JSON,
+				message1.SentAt,
+				message1.DeliveredAt,
+				message1.FailedAt,
+				message1.OpenedAt,
+				message1.ClickedAt,
+				message1.BouncedAt,
+				message1.ComplainedAt,
+				message1.UnsubscribedAt,
+				message1.CreatedAt,
+				message1.UpdatedAt,
+			).
+			AddRow(
+				message2.ID,
+				message2.ContactID,
+				message2.BroadcastID,
+				message2.TemplateID,
+				message2.TemplateVersion,
+				message2.Channel,
+				message2.Status,
+				messageData2JSON,
+				message2.SentAt,
+				message2.DeliveredAt,
+				message2.FailedAt,
+				message2.OpenedAt,
+				message2.ClickedAt,
+				message2.BouncedAt,
+				message2.ComplainedAt,
+				message2.UnsubscribedAt,
+				message2.CreatedAt,
+				message2.UpdatedAt,
+			)
 
-	// Match the exact query with all parameters
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE contact_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(contactID, limit, offset).
-		WillReturnRows(rows)
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactID, limit, offset).
+			WillReturnRows(rows)
 
-	// Call the method
-	messages, count, err := repo.GetByContact(ctx, workspace, contactID, limit, offset)
-	require.NoError(t, err)
-	assert.Equal(t, totalCount, count)
-	assert.Len(t, messages, 2)
-	assert.Equal(t, message1.ID, messages[0].ID)
-	assert.Equal(t, message2.ID, messages[1].ID)
+		// Call the method
+		messages, count, err := repo.GetByContact(ctx, workspace, contactID, limit, offset)
+		require.NoError(t, err)
+		assert.Equal(t, totalCount, count)
+		assert.Len(t, messages, 2)
+		assert.Equal(t, message1.ID, messages[0].ID)
+		assert.Equal(t, message2.ID, messages[1].ID)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-	// Test with default limit and offset
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE contact_id = \\$1").
-		WithArgs(contactID).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(totalCount))
+	t.Run("default limit and offset", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
 
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE contact_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(contactID, 50, 0). // Default values
-		WillReturnRows(rows)
+		// Test with default limit and offset
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
+			WithArgs(contactID).
+			WillReturnRows(countRows)
 
-	messages, count, err = repo.GetByContact(ctx, workspace, contactID, 0, -1)
-	require.NoError(t, err)
-	assert.Equal(t, totalCount, count)
-	assert.Len(t, messages, 2)
+		columns := []string{
+			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"channel", "status", "message_data", "sent_at", "delivered_at",
+			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
+			"unsubscribed_at", "created_at", "updated_at",
+		}
 
-	// Test count error
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE contact_id = \\$1").
-		WithArgs(contactID).
-		WillReturnError(fmt.Errorf("count error"))
+		rows := sqlmock.NewRows(columns).
+			AddRow(
+				message1.ID,
+				message1.ContactID,
+				message1.BroadcastID,
+				message1.TemplateID,
+				message1.TemplateVersion,
+				message1.Channel,
+				message1.Status,
+				messageData1JSON,
+				message1.SentAt,
+				message1.DeliveredAt,
+				message1.FailedAt,
+				message1.OpenedAt,
+				message1.ClickedAt,
+				message1.BouncedAt,
+				message1.ComplainedAt,
+				message1.UnsubscribedAt,
+				message1.CreatedAt,
+				message1.UpdatedAt,
+			).
+			AddRow(
+				message2.ID,
+				message2.ContactID,
+				message2.BroadcastID,
+				message2.TemplateID,
+				message2.TemplateVersion,
+				message2.Channel,
+				message2.Status,
+				messageData2JSON,
+				message2.SentAt,
+				message2.DeliveredAt,
+				message2.FailedAt,
+				message2.OpenedAt,
+				message2.ClickedAt,
+				message2.BouncedAt,
+				message2.ComplainedAt,
+				message2.UnsubscribedAt,
+				message2.CreatedAt,
+				message2.UpdatedAt,
+			)
 
-	messages, count, err = repo.GetByContact(ctx, workspace, contactID, limit, offset)
-	require.Error(t, err)
-	assert.Nil(t, messages)
-	assert.Zero(t, count)
-	assert.Contains(t, err.Error(), "failed to count message history")
+		newMock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactID, 50, 0). // Default values
+			WillReturnRows(rows)
 
-	// Test query error
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE contact_id = \\$1").
-		WithArgs(contactID).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(totalCount))
+		messages, count, err := newRepo.GetByContact(ctx, workspace, contactID, 0, -1)
+		require.NoError(t, err)
+		assert.Equal(t, totalCount, count)
+		assert.Len(t, messages, 2)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE contact_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(contactID, limit, offset).
-		WillReturnError(fmt.Errorf("query error"))
+	t.Run("count error", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
 
-	messages, count, err = repo.GetByContact(ctx, workspace, contactID, limit, offset)
-	require.Error(t, err)
-	assert.Nil(t, messages)
-	assert.Zero(t, count)
-	assert.Contains(t, err.Error(), "failed to query message history")
+		// Test count error
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
+			WithArgs(contactID).
+			WillReturnError(fmt.Errorf("count error"))
 
-	// Test scan error
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE contact_id = \\$1").
-		WithArgs(contactID).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(totalCount))
+		messages, count, err := newRepo.GetByContact(ctx, workspace, contactID, limit, offset)
+		require.Error(t, err)
+		assert.Nil(t, messages)
+		assert.Zero(t, count)
+		assert.Contains(t, err.Error(), "failed to count message history")
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 
-	invalidRows := sqlmock.NewRows([]string{"id"}).AddRow("invalid") // Missing columns
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE contact_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(contactID, limit, offset).
-		WillReturnRows(invalidRows)
+	t.Run("query error", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
 
-	messages, count, err = repo.GetByContact(ctx, workspace, contactID, limit, offset)
-	require.Error(t, err)
-	assert.Nil(t, messages)
-	assert.Zero(t, count)
-	assert.Contains(t, err.Error(), "failed to scan message history")
+		// Test query error
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
+			WithArgs(contactID).
+			WillReturnRows(countRows)
+
+		newMock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactID, limit, offset).
+			WillReturnError(fmt.Errorf("query error"))
+
+		messages, count, err := newRepo.GetByContact(ctx, workspace, contactID, limit, offset)
+		require.Error(t, err)
+		assert.Nil(t, messages)
+		assert.Zero(t, count)
+		assert.Contains(t, err.Error(), "failed to query message history")
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
+
+		// Test scan error
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
+			WithArgs(contactID).
+			WillReturnRows(countRows)
+
+		invalidRows := sqlmock.NewRows([]string{"id"}).AddRow("invalid") // Missing columns
+		newMock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactID, limit, offset).
+			WillReturnRows(invalidRows)
+
+		messages, count, err := newRepo.GetByContact(ctx, workspace, contactID, limit, offset)
+		require.Error(t, err)
+		assert.Nil(t, messages)
+		assert.Zero(t, count)
+		assert.Contains(t, err.Error(), "failed to scan message history")
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 }
 
 func TestMessageHistoryRepository_GetByBroadcast(t *testing.T) {
-	t.Skip("This test is temporarily skipped due to issues with mocking complex SQL queries")
-
-	// Create a new mock database
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
+	db, mock, repo := setupMessageHistoryMock(t)
 	defer db.Close()
-
-	// Create the repository with the mock db
-	repo := NewMessageHistoryRepository(db)
 
 	ctx := context.Background()
 	workspace := "testworkspace"
@@ -452,131 +530,220 @@ func TestMessageHistoryRepository_GetByBroadcast(t *testing.T) {
 	messageData2JSON, err := json.Marshal(message2.MessageData)
 	require.NoError(t, err)
 
-	// Test successful case
-	// 1. Expect the COUNT query with exact match
-	countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE broadcast_id = \\$1").
-		WithArgs(broadcastID).
-		WillReturnRows(countRows)
+	t.Run("successful case", func(t *testing.T) {
+		// 1. Expect the COUNT query
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnRows(countRows)
 
-	// 2. Expect the main SELECT query with exact match
-	columns := []string{
-		"id", "contact_id", "broadcast_id", "template_id", "template_version",
-		"channel", "status", "message_data", "sent_at", "delivered_at",
-		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
-		"unsubscribed_at", "created_at", "updated_at",
-	}
+		// 2. Expect the main SELECT query
+		columns := []string{
+			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"channel", "status", "message_data", "sent_at", "delivered_at",
+			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
+			"unsubscribed_at", "created_at", "updated_at",
+		}
 
-	rows := sqlmock.NewRows(columns).
-		AddRow(
-			message1.ID,
-			message1.ContactID,
-			message1.BroadcastID,
-			message1.TemplateID,
-			message1.TemplateVersion,
-			message1.Channel,
-			message1.Status,
-			messageData1JSON,
-			message1.SentAt,
-			message1.DeliveredAt,
-			message1.FailedAt,
-			message1.OpenedAt,
-			message1.ClickedAt,
-			message1.BouncedAt,
-			message1.ComplainedAt,
-			message1.UnsubscribedAt,
-			message1.CreatedAt,
-			message1.UpdatedAt,
-		).
-		AddRow(
-			message2.ID,
-			message2.ContactID,
-			message2.BroadcastID,
-			message2.TemplateID,
-			message2.TemplateVersion,
-			message2.Channel,
-			message2.Status,
-			messageData2JSON,
-			message2.SentAt,
-			message2.DeliveredAt,
-			message2.FailedAt,
-			message2.OpenedAt,
-			message2.ClickedAt,
-			message2.BouncedAt,
-			message2.ComplainedAt,
-			message2.UnsubscribedAt,
-			message2.CreatedAt,
-			message2.UpdatedAt,
-		)
+		rows := sqlmock.NewRows(columns).
+			AddRow(
+				message1.ID,
+				message1.ContactID,
+				message1.BroadcastID,
+				message1.TemplateID,
+				message1.TemplateVersion,
+				message1.Channel,
+				message1.Status,
+				messageData1JSON,
+				message1.SentAt,
+				message1.DeliveredAt,
+				message1.FailedAt,
+				message1.OpenedAt,
+				message1.ClickedAt,
+				message1.BouncedAt,
+				message1.ComplainedAt,
+				message1.UnsubscribedAt,
+				message1.CreatedAt,
+				message1.UpdatedAt,
+			).
+			AddRow(
+				message2.ID,
+				message2.ContactID,
+				message2.BroadcastID,
+				message2.TemplateID,
+				message2.TemplateVersion,
+				message2.Channel,
+				message2.Status,
+				messageData2JSON,
+				message2.SentAt,
+				message2.DeliveredAt,
+				message2.FailedAt,
+				message2.OpenedAt,
+				message2.ClickedAt,
+				message2.BouncedAt,
+				message2.ComplainedAt,
+				message2.UnsubscribedAt,
+				message2.CreatedAt,
+				message2.UpdatedAt,
+			)
 
-	// Match the exact query with all parameters
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE broadcast_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(broadcastID, limit, offset).
-		WillReturnRows(rows)
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(broadcastID, limit, offset).
+			WillReturnRows(rows)
 
-	// Call the method
-	messages, count, err := repo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
-	require.NoError(t, err)
-	assert.Equal(t, totalCount, count)
-	assert.Len(t, messages, 2)
-	assert.Equal(t, message1.ID, messages[0].ID)
-	assert.Equal(t, message2.ID, messages[1].ID)
+		// Call the method
+		messages, count, err := repo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
+		require.NoError(t, err)
+		assert.Equal(t, totalCount, count)
+		assert.Len(t, messages, 2)
+		assert.Equal(t, message1.ID, messages[0].ID)
+		assert.Equal(t, message2.ID, messages[1].ID)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-	// Test with default limit and offset
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE broadcast_id = \\$1").
-		WithArgs(broadcastID).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(totalCount))
+	t.Run("default limit and offset", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
 
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE broadcast_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(broadcastID, 50, 0). // Default values
-		WillReturnRows(rows)
+		// Test with default limit and offset
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnRows(countRows)
 
-	messages, count, err = repo.GetByBroadcast(ctx, workspace, broadcastID, 0, -1)
-	require.NoError(t, err)
-	assert.Equal(t, totalCount, count)
-	assert.Len(t, messages, 2)
+		columns := []string{
+			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"channel", "status", "message_data", "sent_at", "delivered_at",
+			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
+			"unsubscribed_at", "created_at", "updated_at",
+		}
 
-	// Test count error
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE broadcast_id = \\$1").
-		WithArgs(broadcastID).
-		WillReturnError(fmt.Errorf("count error"))
+		rows := sqlmock.NewRows(columns).
+			AddRow(
+				message1.ID,
+				message1.ContactID,
+				message1.BroadcastID,
+				message1.TemplateID,
+				message1.TemplateVersion,
+				message1.Channel,
+				message1.Status,
+				messageData1JSON,
+				message1.SentAt,
+				message1.DeliveredAt,
+				message1.FailedAt,
+				message1.OpenedAt,
+				message1.ClickedAt,
+				message1.BouncedAt,
+				message1.ComplainedAt,
+				message1.UnsubscribedAt,
+				message1.CreatedAt,
+				message1.UpdatedAt,
+			).
+			AddRow(
+				message2.ID,
+				message2.ContactID,
+				message2.BroadcastID,
+				message2.TemplateID,
+				message2.TemplateVersion,
+				message2.Channel,
+				message2.Status,
+				messageData2JSON,
+				message2.SentAt,
+				message2.DeliveredAt,
+				message2.FailedAt,
+				message2.OpenedAt,
+				message2.ClickedAt,
+				message2.BouncedAt,
+				message2.ComplainedAt,
+				message2.UnsubscribedAt,
+				message2.CreatedAt,
+				message2.UpdatedAt,
+			)
 
-	messages, count, err = repo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
-	require.Error(t, err)
-	assert.Nil(t, messages)
-	assert.Zero(t, count)
-	assert.Contains(t, err.Error(), "failed to count message history")
+		newMock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(broadcastID, 50, 0). // Default values
+			WillReturnRows(rows)
 
-	// Test query error
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE broadcast_id = \\$1").
-		WithArgs(broadcastID).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(totalCount))
+		messages, count, err := newRepo.GetByBroadcast(ctx, workspace, broadcastID, 0, -1)
+		require.NoError(t, err)
+		assert.Equal(t, totalCount, count)
+		assert.Len(t, messages, 2)
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE broadcast_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(broadcastID, limit, offset).
-		WillReturnError(fmt.Errorf("query error"))
+	t.Run("count error", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
 
-	messages, count, err = repo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
-	require.Error(t, err)
-	assert.Nil(t, messages)
-	assert.Zero(t, count)
-	assert.Contains(t, err.Error(), "failed to query message history")
+		// Test count error
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnError(fmt.Errorf("count error"))
 
-	// Test scan error
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM message_history WHERE broadcast_id = \\$1").
-		WithArgs(broadcastID).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(totalCount))
+		messages, count, err := newRepo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
+		require.Error(t, err)
+		assert.Nil(t, messages)
+		assert.Zero(t, count)
+		assert.Contains(t, err.Error(), "failed to count message history")
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 
-	invalidRows := sqlmock.NewRows([]string{"id"}).AddRow("invalid") // Missing columns
-	mock.ExpectQuery("SELECT .* FROM message_history WHERE broadcast_id = \\$1 ORDER BY sent_at DESC LIMIT \\$2 OFFSET \\$3").
-		WithArgs(broadcastID, limit, offset).
-		WillReturnRows(invalidRows)
+	t.Run("query error", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
 
-	messages, count, err = repo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
-	require.Error(t, err)
-	assert.Nil(t, messages)
-	assert.Zero(t, count)
-	assert.Contains(t, err.Error(), "failed to scan message history")
+		// Test query error
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnRows(countRows)
+
+		newMock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(broadcastID, limit, offset).
+			WillReturnError(fmt.Errorf("query error"))
+
+		messages, count, err := newRepo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
+		require.Error(t, err)
+		assert.Nil(t, messages)
+		assert.Zero(t, count)
+		assert.Contains(t, err.Error(), "failed to query message history")
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		// Setup new mock
+		newDb, newMock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+		require.NoError(t, err)
+		defer newDb.Close()
+		newRepo := NewMessageHistoryRepository(newDb)
+
+		// Test scan error
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+		newMock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnRows(countRows)
+
+		invalidRows := sqlmock.NewRows([]string{"id"}).AddRow("invalid") // Missing columns
+		newMock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(broadcastID, limit, offset).
+			WillReturnRows(invalidRows)
+
+		messages, count, err := newRepo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
+		require.Error(t, err)
+		assert.Nil(t, messages)
+		assert.Zero(t, count)
+		assert.Contains(t, err.Error(), "failed to scan message history")
+		assert.NoError(t, newMock.ExpectationsWereMet())
+	})
 }
 
 func TestMessageHistoryRepository_UpdateStatus(t *testing.T) {
@@ -633,4 +800,140 @@ func TestMessageHistoryRepository_UpdateStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMessageHistoryRepository_GetByContact_Simple(t *testing.T) {
+	db, mock, repo := setupMessageHistoryMock(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspace := "testworkspace"
+	contactID := "contact456"
+	limit := 10
+	offset := 0
+	totalCount := 1
+
+	// Create test data
+	message := createTestMessageHistory()
+
+	// Serialize message data to JSON for the mock
+	messageDataJSON, err := json.Marshal(message.MessageData)
+	require.NoError(t, err)
+
+	// 1. Expect the COUNT query
+	countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
+		WithArgs(contactID).
+		WillReturnRows(countRows)
+
+	// 2. Expect the main SELECT query
+	columns := []string{
+		"id", "contact_id", "broadcast_id", "template_id", "template_version",
+		"channel", "status", "message_data", "sent_at", "delivered_at",
+		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
+		"unsubscribed_at", "created_at", "updated_at",
+	}
+
+	rows := sqlmock.NewRows(columns).
+		AddRow(
+			message.ID,
+			message.ContactID,
+			message.BroadcastID,
+			message.TemplateID,
+			message.TemplateVersion,
+			message.Channel,
+			message.Status,
+			messageDataJSON,
+			message.SentAt,
+			message.DeliveredAt,
+			message.FailedAt,
+			message.OpenedAt,
+			message.ClickedAt,
+			message.BouncedAt,
+			message.ComplainedAt,
+			message.UnsubscribedAt,
+			message.CreatedAt,
+			message.UpdatedAt,
+		)
+
+	// The expected query should include ORDER BY, LIMIT, and OFFSET
+	mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+		WithArgs(contactID, limit, offset).
+		WillReturnRows(rows)
+
+	// Call the method
+	messages, count, err := repo.GetByContact(ctx, workspace, contactID, limit, offset)
+	require.NoError(t, err)
+	assert.Equal(t, totalCount, count)
+	assert.Len(t, messages, 1)
+	assert.Equal(t, message.ID, messages[0].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMessageHistoryRepository_GetByBroadcast_Simple(t *testing.T) {
+	db, mock, repo := setupMessageHistoryMock(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspace := "testworkspace"
+	broadcastID := "broadcast123"
+	limit := 10
+	offset := 0
+	totalCount := 1
+
+	// Create test data
+	message := createTestMessageHistory()
+
+	// Serialize message data to JSON for the mock
+	messageDataJSON, err := json.Marshal(message.MessageData)
+	require.NoError(t, err)
+
+	// 1. Expect the COUNT query
+	countRows := sqlmock.NewRows([]string{"count"}).AddRow(totalCount)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE broadcast_id = \$1`).
+		WithArgs(broadcastID).
+		WillReturnRows(countRows)
+
+	// 2. Expect the main SELECT query
+	columns := []string{
+		"id", "contact_id", "broadcast_id", "template_id", "template_version",
+		"channel", "status", "message_data", "sent_at", "delivered_at",
+		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
+		"unsubscribed_at", "created_at", "updated_at",
+	}
+
+	rows := sqlmock.NewRows(columns).
+		AddRow(
+			message.ID,
+			message.ContactID,
+			message.BroadcastID,
+			message.TemplateID,
+			message.TemplateVersion,
+			message.Channel,
+			message.Status,
+			messageDataJSON,
+			message.SentAt,
+			message.DeliveredAt,
+			message.FailedAt,
+			message.OpenedAt,
+			message.ClickedAt,
+			message.BouncedAt,
+			message.ComplainedAt,
+			message.UnsubscribedAt,
+			message.CreatedAt,
+			message.UpdatedAt,
+		)
+
+	// The expected query should include ORDER BY, LIMIT, and OFFSET
+	mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+		WithArgs(broadcastID, limit, offset).
+		WillReturnRows(rows)
+
+	// Call the method
+	messages, count, err := repo.GetByBroadcast(ctx, workspace, broadcastID, limit, offset)
+	require.NoError(t, err)
+	assert.Equal(t, totalCount, count)
+	assert.Len(t, messages, 1)
+	assert.Equal(t, message.ID, messages[0].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

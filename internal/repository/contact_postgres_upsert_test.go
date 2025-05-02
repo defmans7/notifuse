@@ -9,7 +9,9 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,8 +20,12 @@ func TestUpsertContact(t *testing.T) {
 	db, _, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 
-	workspaceRepo := testutil.NewMockWorkspaceRepository(db)
-	workspaceRepo.AddWorkspaceDB("workspace123", db)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(db, nil).AnyTimes()
+
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	email := "test@example.com"
 	workspaceID := "workspace123"
@@ -40,8 +46,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Expect transaction begin
@@ -73,8 +94,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create an existing contact with some fields
@@ -143,11 +179,16 @@ func TestUpsertContact(t *testing.T) {
 
 	t.Run("fails when workspace connection fails", func(t *testing.T) {
 		// Setup new mock DB for this test
-		newDb, _, newCleanup := testutil.SetupMockDB(t)
+		_, _, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
 		// Don't add the invalid workspace
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "invalid-workspace").Return(nil, errors.New("workspace not found")).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Setup new mock with error
@@ -167,8 +208,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Expect error from BeginTx
@@ -189,8 +245,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Expect transaction begin
@@ -219,8 +290,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Expect transaction begin
@@ -253,8 +339,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create a mock for existing contact
@@ -309,8 +410,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Expect transaction begin
@@ -343,8 +459,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create a contact with an unmarshalable JSON field
@@ -383,8 +514,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create an existing contact
@@ -445,8 +591,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create a contact with ALL fields populated
@@ -529,8 +690,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create a contact with only required fields and NULL values for others
@@ -577,8 +753,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create an existing contact
@@ -645,8 +836,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create existing contact with all fields populated
@@ -749,8 +955,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create existing contact with all fields populated
@@ -840,8 +1061,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create an existing contact
@@ -902,8 +1138,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create an existing contact
@@ -963,8 +1214,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create an existing contact
@@ -1024,8 +1290,23 @@ func TestUpsertContact(t *testing.T) {
 		newDb, newMock, newCleanup := testutil.SetupMockDB(t)
 		defer newCleanup()
 
-		newWorkspaceRepo := testutil.NewMockWorkspaceRepository(newDb)
-		newWorkspaceRepo.AddWorkspaceDB("workspace123", newDb)
+		newCtrl := gomock.NewController(t)
+		defer newCtrl.Finish()
+
+		newWorkspaceRepo := mocks.NewMockWorkspaceRepository(newCtrl)
+		newWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(newDb, nil).AnyTimes()
+		newWorkspaceRepo.EXPECT().WithWorkspaceTransaction(gomock.Any(), "workspace123", gomock.Any()).DoAndReturn(
+			func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				tx, _ := newDb.Begin()
+				err := fn(tx)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+				return tx.Commit()
+			},
+		).AnyTimes()
+
 		newRepo := NewContactRepository(newWorkspaceRepo)
 
 		// Create an existing contact
