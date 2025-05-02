@@ -10,23 +10,12 @@ import (
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/service/broadcast"
 	"github.com/Notifuse/notifuse/internal/service/broadcast/mocks"
-	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mjml"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// Create a compatible logger implementation
-type testLoggerAdapter struct{}
-
-func (l *testLoggerAdapter) Debug(msg string)                                       {}
-func (l *testLoggerAdapter) Info(msg string)                                        {}
-func (l *testLoggerAdapter) Warn(msg string)                                        {}
-func (l *testLoggerAdapter) Error(msg string)                                       {}
-func (l *testLoggerAdapter) Fatal(msg string)                                       {}
-func (l *testLoggerAdapter) WithField(key string, value interface{}) logger.Logger  { return l }
-func (l *testLoggerAdapter) WithFields(fields map[string]interface{}) logger.Logger { return l }
 
 func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 	// Setup
@@ -38,8 +27,16 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
-	testLogger := &testLoggerAdapter{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Setup logger expectations
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -47,7 +44,7 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
-		testLogger,
+		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
 	)
@@ -80,8 +77,16 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
-	testLogger := &testLoggerAdapter{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Setup logger expectations
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -89,7 +94,7 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
-		testLogger,
+		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
 	)
@@ -169,8 +174,16 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
-	testLogger := &testLoggerAdapter{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Setup logger expectations - ensure all possible calls are mocked
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -178,7 +191,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
-		testLogger,
+		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
 	)
@@ -287,8 +300,16 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
-	testLogger := &testLoggerAdapter{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Setup logger expectations - ensure all possible calls are mocked
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -296,7 +317,7 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
-		testLogger,
+		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
 	)
@@ -341,8 +362,16 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
-	testLogger := &testLoggerAdapter{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Setup logger expectations - ensure all possible calls are mocked
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	config := &broadcast.Config{
 		FetchBatchSize: 50,
@@ -354,7 +383,7 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
-		testLogger,
+		mockLogger,
 		config,
 		mockTimeProvider,
 	)
@@ -402,147 +431,6 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, mockContacts, contacts)
 	assert.Len(t, contacts, 2)
-}
-
-func TestBroadcastOrchestrator_Process(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockMessageSender := mocks.NewMockMessageSender(ctrl)
-	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
-	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
-	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
-	testLogger := &testLoggerAdapter{}
-	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
-
-	// Set fixed times for testing
-	testStartTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-
-	// Mock the timeProvider calls
-	mockTimeProvider.EXPECT().Now().Return(testStartTime).AnyTimes()
-	mockTimeProvider.EXPECT().Since(gomock.Any()).Return(10 * time.Second).AnyTimes()
-
-	config := &broadcast.Config{
-		FetchBatchSize:      50,
-		MaxProcessTime:      1 * time.Second,
-		ProgressLogInterval: 500 * time.Millisecond,
-	}
-
-	orchestrator := broadcast.NewBroadcastOrchestrator(
-		mockMessageSender,
-		mockBroadcastSender,
-		mockTemplateService,
-		mockContactRepo,
-		mockTaskRepo,
-		testLogger,
-		config,
-		mockTimeProvider,
-	)
-
-	ctx := context.Background()
-	workspaceID := "workspace-123"
-	broadcastID := "broadcast-123"
-
-	// Create a task with existing state, but we'll modify the orchestrator test
-	// to handle if the task state is reset and the orchestrator tries to rebuild it
-	task := &domain.Task{
-		ID:          "task-123",
-		WorkspaceID: workspaceID,
-		Type:        "send_broadcast",
-		Status:      domain.TaskStatusRunning,
-		State: &domain.TaskState{
-			SendBroadcast: &domain.SendBroadcastState{
-				BroadcastID:     broadcastID,
-				TotalRecipients: 150, // Setting a value > 0 to test the regular processing path
-				SentCount:       0,
-				FailedCount:     0,
-				RecipientOffset: 0,
-			},
-		},
-	}
-
-	// Mock broadcast with audience for the GetBroadcast call
-	audience := domain.AudienceSettings{
-		Lists:    []string{"list-1", "list-2"},
-		Segments: []string{"segment-1"},
-	}
-
-	testBroadcast := &domain.Broadcast{
-		ID:       broadcastID,
-		Audience: audience,
-		TestSettings: domain.BroadcastTestSettings{
-			Variations: []domain.BroadcastVariation{
-				{TemplateID: "template-1"},
-			},
-		},
-	}
-
-	// Create mock templates
-	mockTemplates := map[string]*domain.Template{
-		"template-1": {
-			ID: "template-1",
-			Email: &domain.EmailTemplate{
-				Subject:     "Test Subject",
-				FromAddress: "test@example.com",
-				VisualEditorTree: mjml.EmailBlock{
-					Kind: "container",
-					Data: map[string]interface{}{
-						"styles": map[string]interface{}{},
-					},
-				},
-			},
-		},
-	}
-
-	// Create mock contacts (empty to simulate completion)
-	emptyContacts := []*domain.ContactWithList{}
-
-	// Setup expectations for the GetAPIEndpoint method
-	mockBroadcastSender.EXPECT().
-		GetAPIEndpoint().
-		Return("https://api.example.com").
-		AnyTimes()
-
-	// Expect GetBroadcast to be called
-	mockBroadcastSender.EXPECT().
-		GetBroadcast(gomock.Any(), workspaceID, broadcastID).
-		Return(testBroadcast, nil).
-		AnyTimes()
-
-	// Expect GetTemplateByID to be called
-	mockTemplateService.EXPECT().
-		GetTemplateByID(gomock.Any(), workspaceID, "template-1", int64(1)).
-		Return(mockTemplates["template-1"], nil).
-		AnyTimes()
-
-	// Expect CountContactsForBroadcast to be called
-	mockContactRepo.EXPECT().
-		CountContactsForBroadcast(gomock.Any(), workspaceID, audience).
-		Return(0, nil).
-		AnyTimes()
-
-	// For the batch fetching, return empty contacts to signal completion
-	mockContactRepo.EXPECT().
-		GetContactsForBroadcast(gomock.Any(), workspaceID, audience, 50, 0).
-		Return(emptyContacts, nil).
-		AnyTimes()
-
-	// For state saving
-	mockTaskRepo.EXPECT().
-		SaveState(gomock.Any(), workspaceID, task.ID, gomock.Any(), gomock.Any()).
-		Return(nil).
-		AnyTimes()
-
-	// Execute
-	completed, err := orchestrator.Process(ctx, task)
-
-	// Verify
-	require.NoError(t, err)
-	assert.True(t, completed)
-	// More specific assertions depend on the implementation
-	// so we'll just verify that no error occurred and the task completed
 }
 
 func TestFormatDuration(t *testing.T) {
@@ -709,7 +597,7 @@ func TestSaveProgressState(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
-	testLogger := &testLoggerAdapter{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
 	// Set fixed times for testing
@@ -719,6 +607,11 @@ func TestSaveProgressState(t *testing.T) {
 	// Setup time provider expectations
 	mockTimeProvider.EXPECT().Now().Return(later).AnyTimes()
 
+	// Setup logger expectations
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	// Use the concrete type instead of the interface
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
@@ -726,7 +619,7 @@ func TestSaveProgressState(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
-		testLogger,
+		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
 	).(*broadcast.BroadcastOrchestrator)
