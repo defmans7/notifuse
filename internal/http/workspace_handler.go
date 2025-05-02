@@ -62,6 +62,7 @@ func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workspaces.members", requireAuth(http.HandlerFunc(h.handleMembers)))
 	mux.Handle("/api/workspaces.inviteMember", requireAuth(http.HandlerFunc(h.handleInviteMember)))
 	mux.Handle("/api/workspaces.createAPIKey", requireAuth(http.HandlerFunc(h.handleCreateAPIKey)))
+	mux.Handle("/api/workspaces.removeMember", requireAuth(http.HandlerFunc(h.handleRemoveMember)))
 }
 
 func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -324,5 +325,52 @@ func (h *WorkspaceHandler) handleCreateAPIKey(w http.ResponseWriter, r *http.Req
 		"status": "success",
 		"token":  token,
 		"email":  apiEmail,
+	})
+}
+
+// RemoveMemberRequest defines the request structure for removing a member
+type RemoveMemberRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	UserID      string `json:"user_id"`
+}
+
+func (h *WorkspaceHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req RemoveMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate request
+	if req.WorkspaceID == "" {
+		writeError(w, http.StatusBadRequest, "Missing workspace_id")
+		return
+	}
+	if req.UserID == "" {
+		writeError(w, http.StatusBadRequest, "Missing user_id")
+		return
+	}
+
+	// Call service to remove the member
+	err := h.workspaceService.RemoveMember(r.Context(), req.WorkspaceID, req.UserID)
+	if err != nil {
+		if _, ok := err.(*domain.ErrUnauthorized); ok {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", req.UserID).WithField("error", err.Error()).Error("Failed to remove member from workspace")
+		writeError(w, http.StatusInternalServerError, "Failed to remove member from workspace")
+		return
+	}
+
+	// Return success response
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "success",
+		"message": "Member removed successfully",
 	})
 }

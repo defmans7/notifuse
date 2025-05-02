@@ -351,6 +351,7 @@ type WorkspaceServiceInterface interface {
 	RemoveUserFromWorkspace(ctx context.Context, workspaceID string, userID string) error
 	TransferOwnership(ctx context.Context, workspaceID string, newOwnerID string, currentOwnerID string) error
 	CreateAPIKey(ctx context.Context, workspaceID string, emailPrefix string) (string, string, error)
+	RemoveMember(ctx context.Context, workspaceID string, userIDToRemove string) error
 }
 
 // Request/Response types

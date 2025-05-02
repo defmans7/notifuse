@@ -745,3 +745,57 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 
 	return token, apiEmail, nil
 }
+
+// RemoveMember removes a member from a workspace and deletes the user if it's an API key
+func (s *WorkspaceService) RemoveMember(ctx context.Context, workspaceID string, userIDToRemove string) error {
+	// Authenticate the user making the request
+	var requester *domain.User
+	var err error
+	ctx, requester, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Check if requester is an owner
+	requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, requester.ID, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userIDToRemove).WithField("requester_id", requester.ID).WithField("error", err.Error()).Error("Failed to get requester workspace")
+		return err
+	}
+
+	if requesterWorkspace.Role != "owner" {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userIDToRemove).WithField("requester_id", requester.ID).WithField("role", requesterWorkspace.Role).Error("Requester is not an owner of the workspace")
+		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	// Prevent owners from removing themselves
+	if userIDToRemove == requester.ID {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userIDToRemove).Error("Cannot remove self from workspace")
+		return fmt.Errorf("cannot remove yourself from the workspace")
+	}
+
+	// Get the complete user to check its type
+	userDetails, err := s.userService.GetUserByID(ctx, userIDToRemove)
+	if err != nil {
+		s.logger.WithField("user_id", userIDToRemove).WithField("error", err.Error()).Error("Failed to get user details")
+		return err
+	}
+
+	// Remove user from workspace
+	if err := s.repo.RemoveUserFromWorkspace(ctx, userIDToRemove, workspaceID); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userIDToRemove).WithField("error", err.Error()).Error("Failed to remove user from workspace")
+		return err
+	}
+
+	// If it's an API key, delete the user completely
+	if userDetails.Type == domain.UserTypeAPIKey {
+		if err := s.userRepo.Delete(ctx, userIDToRemove); err != nil {
+			s.logger.WithField("user_id", userIDToRemove).WithField("error", err.Error()).Error("Failed to delete API key user")
+			// Continue even if delete fails - the user is already removed from workspace
+		} else {
+			s.logger.WithField("user_id", userIDToRemove).Info("API key user deleted successfully")
+		}
+	}
+
+	return nil
+}

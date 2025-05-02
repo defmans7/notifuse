@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
 )
 
@@ -31,6 +32,7 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 		userID    string
 		email     string
 		role      string
+		userType  domain.UserType
 		createdAt time.Time
 		updatedAt time.Time
 	}{
@@ -38,6 +40,7 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 			userID:    "user-1",
 			email:     "user1@example.com",
 			role:      "admin",
+			userType:  domain.UserTypeUser,
 			createdAt: now,
 			updatedAt: now,
 		},
@@ -45,6 +48,7 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 			userID:    "user-2",
 			email:     "user2@example.com",
 			role:      "member",
+			userType:  domain.UserTypeUser,
 			createdAt: now,
 			updatedAt: now,
 		},
@@ -52,11 +56,11 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 
 	t.Run("successful retrieval", func(t *testing.T) {
 		// Set up expectations
-		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email"}).
-			AddRow(users[0].userID, workspaceID, users[0].role, users[0].createdAt, users[0].updatedAt, users[0].email).
-			AddRow(users[1].userID, workspaceID, users[1].role, users[1].createdAt, users[1].updatedAt, users[1].email)
+		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email", "type"}).
+			AddRow(users[0].userID, workspaceID, users[0].role, users[0].createdAt, users[0].updatedAt, users[0].email, users[0].userType).
+			AddRow(users[1].userID, workspaceID, users[1].role, users[1].createdAt, users[1].updatedAt, users[1].email, users[1].userType)
 
-		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
+		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email, u.type FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
 			WithArgs(workspaceID).
 			WillReturnRows(rows)
 
@@ -69,9 +73,11 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 		assert.Equal(t, users[0].userID, result[0].UserID)
 		assert.Equal(t, users[0].email, result[0].Email)
 		assert.Equal(t, users[0].role, result[0].Role)
+		assert.Equal(t, users[0].userType, result[0].Type)
 		assert.Equal(t, users[1].userID, result[1].UserID)
 		assert.Equal(t, users[1].email, result[1].Email)
 		assert.Equal(t, users[1].role, result[1].Role)
+		assert.Equal(t, users[1].userType, result[1].Type)
 
 		// Verify expectations
 		err = mock.ExpectationsWereMet()
@@ -80,8 +86,8 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 
 	t.Run("empty result", func(t *testing.T) {
 		// Set up expectations for empty result
-		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email"})
-		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
+		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email", "type"})
+		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email, u.type FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
 			WithArgs("empty-workspace").
 			WillReturnRows(rows)
 
@@ -97,7 +103,7 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 
 	t.Run("database error", func(t *testing.T) {
 		// Set up expectations for database error
-		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
+		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email, u.type FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
 			WithArgs("error-workspace").
 			WillReturnError(fmt.Errorf("database error"))
 
@@ -114,10 +120,10 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 
 	t.Run("scan error", func(t *testing.T) {
 		// Set up expectations for scan error
-		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email"}).
-			AddRow(nil, workspaceID, "admin", now, now, "user@example.com") // Invalid user_id (nil)
+		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email", "type"}).
+			AddRow(nil, workspaceID, "admin", now, now, "user@example.com", domain.UserTypeUser) // Invalid user_id (nil)
 
-		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
+		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email, u.type FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
 			WithArgs(workspaceID).
 			WillReturnRows(rows)
 
@@ -134,11 +140,11 @@ func TestWorkspaceRepository_GetWorkspaceUsersWithEmail(t *testing.T) {
 
 	t.Run("row iteration error", func(t *testing.T) {
 		// Set up expectations for row iteration error
-		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email"}).
-			AddRow(users[0].userID, workspaceID, users[0].role, users[0].createdAt, users[0].updatedAt, users[0].email).
-			AddRow(users[1].userID, workspaceID, users[1].role, users[1].createdAt, users[1].updatedAt, users[1].email)
+		rows := sqlmock.NewRows([]string{"user_id", "workspace_id", "role", "created_at", "updated_at", "email", "type"}).
+			AddRow(users[0].userID, workspaceID, users[0].role, users[0].createdAt, users[0].updatedAt, users[0].email, users[0].userType).
+			AddRow(users[1].userID, workspaceID, users[1].role, users[1].createdAt, users[1].updatedAt, users[1].email, users[1].userType)
 
-		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
+		mock.ExpectQuery(`SELECT uw.user_id, uw.workspace_id, uw.role, uw.created_at, uw.updated_at, u.email, u.type FROM user_workspaces uw JOIN users u ON uw.user_id = u.id WHERE uw.workspace_id = \$1`).
 			WithArgs(workspaceID).
 			WillReturnRows(rows).
 			WillReturnError(errors.New("row iteration error"))

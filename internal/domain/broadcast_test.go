@@ -1332,69 +1332,6 @@ func TestScheduleSettings_SetScheduledDateTime(t *testing.T) {
 	}
 }
 
-// TestSendWinningVariationRequest_Validate tests the validation of SendWinningVariationRequest
-func TestSendWinningVariationRequest_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		request domain.SendWinningVariationRequest
-		wantErr bool
-		errMsg  string
-	}{
-		{
-			name: "Valid Request",
-			request: domain.SendWinningVariationRequest{
-				WorkspaceID:     "workspace123",
-				BroadcastID:     "broadcast123",
-				VariationID:     "variation1",
-				TrackingEnabled: true,
-			},
-			wantErr: false,
-		},
-		{
-			name: "Missing WorkspaceID",
-			request: domain.SendWinningVariationRequest{
-				BroadcastID:     "broadcast123",
-				VariationID:     "variation1",
-				TrackingEnabled: true,
-			},
-			wantErr: true,
-			errMsg:  "workspace_id is required",
-		},
-		{
-			name: "Missing BroadcastID",
-			request: domain.SendWinningVariationRequest{
-				WorkspaceID:     "workspace123",
-				VariationID:     "variation1",
-				TrackingEnabled: true,
-			},
-			wantErr: true,
-			errMsg:  "broadcast_id is required",
-		},
-		{
-			name: "Missing VariationID",
-			request: domain.SendWinningVariationRequest{
-				WorkspaceID:     "workspace123",
-				BroadcastID:     "broadcast123",
-				TrackingEnabled: true,
-			},
-			wantErr: true,
-			errMsg:  "variation_id is required",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.Validate()
-			if tt.wantErr {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errMsg)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 // TestGetBroadcastsRequest_FromURLParams tests the FromURLParams method of GetBroadcastsRequest
 func TestGetBroadcastsRequest_FromURLParams(t *testing.T) {
 	tests := []struct {

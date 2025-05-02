@@ -164,20 +164,6 @@ func (mr *MockBroadcastServiceMockRecorder) SendToIndividual(arg0, arg1 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToIndividual", reflect.TypeOf((*MockBroadcastService)(nil).SendToIndividual), arg0, arg1)
 }
 
-// SendWinningVariation mocks base method.
-func (m *MockBroadcastService) SendWinningVariation(arg0 context.Context, arg1 *domain.SendWinningVariationRequest) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendWinningVariation", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SendWinningVariation indicates an expected call of SendWinningVariation.
-func (mr *MockBroadcastServiceMockRecorder) SendWinningVariation(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendWinningVariation", reflect.TypeOf((*MockBroadcastService)(nil).SendWinningVariation), arg0, arg1)
-}
-
 // UpdateBroadcast mocks base method.
 func (m *MockBroadcastService) UpdateBroadcast(arg0 context.Context, arg1 *domain.UpdateBroadcastRequest) (*domain.Broadcast, error) {
 	m.ctrl.T.Helper()

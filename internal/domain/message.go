@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+//go:generate mockgen -destination=mocks/mock_message_history_repository.go -package=mocks -source=message.go MessageHistoryRepository
+
 // MessageStatus represents the current status of a message
 type MessageStatus string
 

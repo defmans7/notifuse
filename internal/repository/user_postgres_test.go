@@ -323,3 +323,60 @@ func TestUpdateSession(t *testing.T) {
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrSessionNotFound{}, err)
 }
+
+func TestDeleteUser(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewUserRepository(db)
+	userID := "user-id-to-delete"
+
+	// Test case 1: User deleted successfully
+	// First, expect deletion of user's sessions
+	mock.ExpectExec(`DELETE FROM user_sessions WHERE user_id = \$1`).
+		WithArgs(userID).
+		WillReturnResult(sqlmock.NewResult(0, 2)) // Assuming 2 sessions were deleted
+
+	// Then, expect deletion of the user
+	mock.ExpectExec(`DELETE FROM users WHERE id = \$1`).
+		WithArgs(userID).
+		WillReturnResult(sqlmock.NewResult(0, 1)) // 1 user deleted
+
+	err := repo.Delete(context.Background(), userID)
+	require.NoError(t, err)
+
+	// Test case 2: User not found
+	mock.ExpectExec(`DELETE FROM user_sessions WHERE user_id = \$1`).
+		WithArgs("nonexistent-id").
+		WillReturnResult(sqlmock.NewResult(0, 0)) // No sessions deleted
+
+	mock.ExpectExec(`DELETE FROM users WHERE id = \$1`).
+		WithArgs("nonexistent-id").
+		WillReturnResult(sqlmock.NewResult(0, 0)) // No users deleted
+
+	err = repo.Delete(context.Background(), "nonexistent-id")
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUserNotFound{}, err)
+
+	// Test case 3: Error deleting sessions
+	mock.ExpectExec(`DELETE FROM user_sessions WHERE user_id = \$1`).
+		WithArgs("error-id").
+		WillReturnError(errors.New("database error"))
+
+	err = repo.Delete(context.Background(), "error-id")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to delete user sessions")
+
+	// Test case 4: Error deleting user
+	mock.ExpectExec(`DELETE FROM user_sessions WHERE user_id = \$1`).
+		WithArgs("user-error-id").
+		WillReturnResult(sqlmock.NewResult(0, 1)) // Sessions deleted successfully
+
+	mock.ExpectExec(`DELETE FROM users WHERE id = \$1`).
+		WithArgs("user-error-id").
+		WillReturnError(errors.New("database error"))
+
+	err = repo.Delete(context.Background(), "user-error-id")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to delete user")
+}

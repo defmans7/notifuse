@@ -12,7 +12,9 @@ import {
   InviteMemberRequest,
   InviteMemberResponse,
   CreateAPIKeyResponse,
-  CreateAPIKeyRequest
+  CreateAPIKeyRequest,
+  RemoveMemberRequest,
+  RemoveMemberResponse
 } from './types'
 
 interface DetectFaviconResponse {
@@ -43,5 +45,8 @@ export const workspaceService = {
     api.post<InviteMemberResponse>('/api/workspaces.inviteMember', data),
 
   createAPIKey: (data: CreateAPIKeyRequest) =>
-    api.post<CreateAPIKeyResponse>('/api/workspaces.createAPIKey', data)
+    api.post<CreateAPIKeyResponse>('/api/workspaces.createAPIKey', data),
+
+  removeMember: (data: RemoveMemberRequest) =>
+    api.post<RemoveMemberResponse>('/api/workspaces.removeMember', data)
 }

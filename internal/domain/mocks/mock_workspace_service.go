@@ -155,6 +155,20 @@ func (mr *MockWorkspaceServiceInterfaceMockRecorder) ListWorkspaces(arg0 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWorkspaces", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).ListWorkspaces), arg0)
 }
 
+// RemoveMember mocks base method.
+func (m *MockWorkspaceServiceInterface) RemoveMember(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveMember", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveMember indicates an expected call of RemoveMember.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) RemoveMember(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMember", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).RemoveMember), arg0, arg1, arg2)
+}
+
 // RemoveUserFromWorkspace mocks base method.
 func (m *MockWorkspaceServiceInterface) RemoveUserFromWorkspace(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()

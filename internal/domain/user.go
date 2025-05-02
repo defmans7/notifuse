@@ -96,6 +96,9 @@ type UserRepository interface {
 
 	// DeleteSession deletes a session by its ID
 	DeleteSession(ctx context.Context, id string) error
+
+	// Delete removes a user by their ID
+	Delete(ctx context.Context, id string) error
 }
 
 // ErrUserNotFound is returned when a user is not found

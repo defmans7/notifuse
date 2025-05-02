@@ -637,31 +637,6 @@ type BroadcastListResponse struct {
 	TotalCount int          `json:"total_count"`
 }
 
-// SendWinningVariationRequest defines the request to send the winning variation of an A/B test
-type SendWinningVariationRequest struct {
-	WorkspaceID     string `json:"workspace_id"`
-	BroadcastID     string `json:"broadcast_id"`
-	VariationID     string `json:"variation_id"`
-	TrackingEnabled bool   `json:"tracking_enabled"`
-}
-
-// Validate validates the send winning variation request
-func (r *SendWinningVariationRequest) Validate() error {
-	if r.WorkspaceID == "" {
-		return fmt.Errorf("workspace_id is required")
-	}
-
-	if r.BroadcastID == "" {
-		return fmt.Errorf("broadcast_id is required")
-	}
-
-	if r.VariationID == "" {
-		return fmt.Errorf("variation_id is required")
-	}
-
-	return nil
-}
-
 // SendToIndividualRequest defines the request to send a broadcast to an individual
 type SendToIndividualRequest struct {
 	WorkspaceID    string `json:"workspace_id"`
@@ -813,25 +788,12 @@ type BroadcastService interface {
 
 	// SendToIndividual sends a broadcast to an individual recipient
 	SendToIndividual(ctx context.Context, request *SendToIndividualRequest) error
-
-	// SendWinningVariation sends the winning variation of an A/B test to remaining recipients
-	SendWinningVariation(ctx context.Context, request *SendWinningVariationRequest) error
 }
 
 // BroadcastSender is a minimal interface needed for sending broadcasts,
 // used by task processors to avoid circular dependencies
 type BroadcastSender interface {
 	GetBroadcast(ctx context.Context, workspaceID, broadcastID string) (*Broadcast, error)
-	GetRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error)
-	// Replace old batch method with new one that aligns with semaphore approach
-	ProcessRecipients(ctx context.Context, workspaceID, broadcastID string, startOffset, limit int) (int, int, error)
-	// New methods for semaphore approach
-	GetBroadcastRecipients(ctx context.Context, workspaceID, broadcastID string, limit, offset int) ([]*Contact, error)
-	SendToContact(ctx context.Context, workspaceID, broadcastID string, contact *Contact) error
-	// More efficient method that accepts pre-loaded templates
-	SendToContactWithTemplates(ctx context.Context, workspaceID, broadcastID string,
-		contact *Contact, templates map[string]*Template, templateData map[string]interface{}) error
-	// Get template by ID
 	GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*Template, error)
 
 	// Message history tracking methods

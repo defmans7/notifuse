@@ -11,9 +11,11 @@ import {
   App,
   Tag,
   Alert,
-  Space
+  Space,
+  Popconfirm,
+  Tooltip
 } from 'antd'
-import { MailOutlined } from '@ant-design/icons'
+import { MailOutlined, DeleteOutlined } from '@ant-design/icons'
 import { WorkspaceMember } from '../services/api/types'
 import { workspaceService } from '../services/api/workspace'
 
@@ -44,6 +46,7 @@ export function WorkspaceMembers({
   const [apiKeyName, setApiKeyName] = useState('')
   const [creatingApiKey, setCreatingApiKey] = useState(false)
   const [apiKeyToken, setApiKeyToken] = useState('')
+  const [removingMember, setRemovingMember] = useState(false)
 
   const columns = [
     {
@@ -78,7 +81,43 @@ export function WorkspaceMembers({
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleDateString()
-    }
+    },
+    // Only add the action column if the user is an owner
+    ...(isOwner
+      ? [
+          {
+            title: '',
+            key: 'action',
+            width: 100,
+            render: (_: any, record: WorkspaceMember) => {
+              // Don't show remove button for the owner or for the current user
+              if (record.role === 'owner') {
+                return null
+              }
+
+              return (
+                <Popconfirm
+                  title="Remove member"
+                  description={`Are you sure you want to remove ${record.email}?${record.type === 'api_key' ? ' This API key will be permanently deleted.' : ''}`}
+                  onConfirm={() => handleRemoveMember(record.user_id)}
+                  okText="Yes"
+                  cancelText="No"
+                  okButtonProps={{ danger: true, loading: removingMember }}
+                >
+                  <Tooltip title="Remove member" placement="left">
+                    <Button
+                      icon={<DeleteOutlined />}
+                      size="small"
+                      type="text"
+                      loading={removingMember}
+                    />
+                  </Tooltip>
+                </Popconfirm>
+              )
+            }
+          }
+        ]
+      : [])
   ]
 
   const handleInvite = async () => {
@@ -153,6 +192,26 @@ export function WorkspaceMembers({
     import.meta.env.VITE_API_ENDPOINT?.replace(/^https?:\/\//, '').split('/')[0] ||
     'api.example.com'
   }`
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!userId) return
+
+    setRemovingMember(true)
+    try {
+      await workspaceService.removeMember({
+        workspace_id: workspaceId,
+        user_id: userId
+      })
+
+      message.success('Member removed successfully')
+      onMembersChange()
+    } catch (error) {
+      console.error('Failed to remove member', error)
+      message.error('Failed to remove member')
+    } finally {
+      setRemovingMember(false)
+    }
+  }
 
   return (
     <>

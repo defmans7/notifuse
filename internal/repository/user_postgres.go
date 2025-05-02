@@ -203,13 +203,15 @@ func (r *userRepository) GetSessionsByUserID(ctx context.Context, userID string)
 
 func (r *userRepository) UpdateSession(ctx context.Context, session *domain.Session) error {
 	query := `
-		UPDATE user_sessions
-		SET expires_at = $1,
-			magic_code = $2,
+		UPDATE user_sessions 
+		SET expires_at = $1, 
+			magic_code = $2, 
 			magic_code_expires_at = $3
 		WHERE id = $4
 	`
-	result, err := r.systemDB.ExecContext(ctx, query,
+	result, err := r.systemDB.ExecContext(
+		ctx,
+		query,
 		session.ExpiresAt,
 		session.MagicCode,
 		session.MagicCodeExpires,
@@ -226,5 +228,33 @@ func (r *userRepository) UpdateSession(ctx context.Context, session *domain.Sess
 	if rows == 0 {
 		return &domain.ErrSessionNotFound{Message: "session not found"}
 	}
+
+	return nil
+}
+
+// Delete removes a user by their ID
+func (r *userRepository) Delete(ctx context.Context, id string) error {
+	// First delete all sessions for this user
+	deleteSessionsQuery := `DELETE FROM user_sessions WHERE user_id = $1`
+	_, err := r.systemDB.ExecContext(ctx, deleteSessionsQuery, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete user sessions: %w", err)
+	}
+
+	// Then delete the user
+	deleteUserQuery := `DELETE FROM users WHERE id = $1`
+	result, err := r.systemDB.ExecContext(ctx, deleteUserQuery, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return &domain.ErrUserNotFound{Message: "user not found"}
+	}
+
 	return nil
 }

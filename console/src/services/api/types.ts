@@ -160,6 +160,16 @@ export interface CreateAPIKeyResponse {
   email: string
 }
 
+export interface RemoveMemberRequest {
+  workspace_id: string
+  user_id: string
+}
+
+export interface RemoveMemberResponse {
+  status: string
+  message: string
+}
+
 export interface DeleteWorkspaceRequest {
   id: string
 }
