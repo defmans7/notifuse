@@ -287,6 +287,7 @@ func (a *App) InitServices() error {
 	// Initialize workspace service
 	a.workspaceService = service.NewWorkspaceService(
 		a.workspaceRepo,
+		a.userRepo,
 		a.logger,
 		a.userService,
 		a.authService,
@@ -352,6 +353,7 @@ func (a *App) InitHandlers() error {
 	rootHandler := httpHandler.NewRootHandler()
 	workspaceHandler := httpHandler.NewWorkspaceHandler(
 		a.workspaceService,
+		a.authService,
 		a.config.Security.PasetoPublicKey,
 		a.logger,
 		a.config.Security.SecretKey,

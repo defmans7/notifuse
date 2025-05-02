@@ -16,6 +16,7 @@ import (
 // WorkspaceHandler handles HTTP requests for workspace operations
 type WorkspaceHandler struct {
 	workspaceService domain.WorkspaceServiceInterface
+	authService      domain.AuthService
 	publicKey        paseto.V4AsymmetricPublicKey
 	logger           logger.Logger
 	secretKey        string
@@ -24,12 +25,14 @@ type WorkspaceHandler struct {
 // NewWorkspaceHandler creates a new workspace handler
 func NewWorkspaceHandler(
 	workspaceService domain.WorkspaceServiceInterface,
+	authService domain.AuthService,
 	publicKey paseto.V4AsymmetricPublicKey,
 	logger logger.Logger,
 	secretKey string,
 ) *WorkspaceHandler {
 	return &WorkspaceHandler{
 		workspaceService: workspaceService,
+		authService:      authService,
 		publicKey:        publicKey,
 		logger:           logger,
 		secretKey:        secretKey,
@@ -58,6 +61,7 @@ func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workspaces.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 	mux.Handle("/api/workspaces.members", requireAuth(http.HandlerFunc(h.handleMembers)))
 	mux.Handle("/api/workspaces.inviteMember", requireAuth(http.HandlerFunc(h.handleInviteMember)))
+	mux.Handle("/api/workspaces.createAPIKey", requireAuth(http.HandlerFunc(h.handleCreateAPIKey)))
 }
 
 func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -279,5 +283,46 @@ func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Req
 		"message":    "Invitation sent",
 		"invitation": invitation,
 		"token":      token,
+	})
+}
+
+// handleCreateAPIKey handles the request to create an API key for a workspace
+func (h *WorkspaceHandler) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req domain.CreateAPIKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Use the workspace service to create the API key
+	token, apiEmail, err := h.workspaceService.CreateAPIKey(r.Context(), req.WorkspaceID, req.EmailPrefix)
+	if err != nil {
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to create API key")
+
+		// Check if it's an authorization error
+		if _, ok := err.(*domain.ErrUnauthorized); ok {
+			writeError(w, http.StatusForbidden, "Only workspace owners can create API keys")
+			return
+		}
+
+		writeError(w, http.StatusInternalServerError, "Failed to create API key")
+		return
+	}
+
+	// Return the token and API details
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status": "success",
+		"token":  token,
+		"email":  apiEmail,
 	})
 }

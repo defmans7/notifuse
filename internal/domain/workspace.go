@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -266,7 +267,8 @@ type UserWorkspace struct {
 // UserWorkspaceWithEmail extends UserWorkspace to include user email
 type UserWorkspaceWithEmail struct {
 	UserWorkspace
-	Email string `json:"email" db:"email"`
+	Email string   `json:"email" db:"email"`
+	Type  UserType `json:"type" db:"type"`
 }
 
 // Validate performs validation on the user workspace fields
@@ -348,9 +350,28 @@ type WorkspaceServiceInterface interface {
 	AddUserToWorkspace(ctx context.Context, workspaceID string, userID string, role string) error
 	RemoveUserFromWorkspace(ctx context.Context, workspaceID string, userID string) error
 	TransferOwnership(ctx context.Context, workspaceID string, newOwnerID string, currentOwnerID string) error
+	CreateAPIKey(ctx context.Context, workspaceID string, emailPrefix string) (string, string, error)
 }
 
 // Request/Response types
+
+// CreateAPIKeyRequest defines the request structure for creating an API key
+type CreateAPIKeyRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	EmailPrefix string `json:"email_prefix"`
+}
+
+// Validate validates the create API key request
+func (r *CreateAPIKeyRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return errors.New("workspace ID is required")
+	}
+	if r.EmailPrefix == "" {
+		return errors.New("email prefix is required")
+	}
+	return nil
+}
+
 type CreateWorkspaceRequest struct {
 	ID       string            `json:"id"`
 	Name     string            `json:"name"`

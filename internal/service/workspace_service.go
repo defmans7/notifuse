@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/config"
@@ -16,6 +17,7 @@ import (
 
 type WorkspaceService struct {
 	repo               domain.WorkspaceRepository
+	userRepo           domain.UserRepository
 	logger             logger.Logger
 	userService        domain.UserServiceInterface
 	authService        domain.AuthService
@@ -30,6 +32,7 @@ type WorkspaceService struct {
 
 func NewWorkspaceService(
 	repo domain.WorkspaceRepository,
+	userRepo domain.UserRepository,
 	logger logger.Logger,
 	userService domain.UserServiceInterface,
 	authService domain.AuthService,
@@ -43,6 +46,7 @@ func NewWorkspaceService(
 ) *WorkspaceService {
 	return &WorkspaceService{
 		repo:               repo,
+		userRepo:           userRepo,
 		logger:             logger,
 		userService:        userService,
 		authService:        authService,
@@ -671,4 +675,73 @@ func (s *WorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id 
 	}
 
 	return members, nil
+}
+
+// CreateAPIKey creates an API key for a workspace
+func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string, emailPrefix string) (string, string, error) {
+	// Validate user is a member of the workspace and has owner role
+	var user *domain.User
+	var err error
+	ctx, user, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Check if user is an owner
+	userWorkspace, err := s.repo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get user workspace")
+		return "", "", err
+	}
+
+	if userWorkspace.Role != "owner" {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
+		return "", "", &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	// Generate an API email using the prefix
+	// Extract domainName from API endpoint by removing any protocol prefix and path suffix
+	domainName := s.config.APIEndpoint
+	if strings.HasPrefix(domainName, "http://") {
+		domainName = strings.TrimPrefix(domainName, "http://")
+	} else if strings.HasPrefix(domainName, "https://") {
+		domainName = strings.TrimPrefix(domainName, "https://")
+	}
+	if idx := strings.Index(domainName, "/"); idx != -1 {
+		domainName = domainName[:idx]
+	}
+	apiEmail := emailPrefix + "@" + domainName
+
+	// Create a user object for the API key
+	apiUser := &domain.User{
+		ID:        uuid.New().String(),
+		Email:     apiEmail,
+		Type:      domain.UserTypeAPIKey,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	err = s.userRepo.CreateUser(ctx, apiUser)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiUser.ID).WithField("error", err.Error()).Error("Failed to create API user")
+		return "", "", err
+	}
+
+	newUserWorkspace := &domain.UserWorkspace{
+		UserID:      apiUser.ID,
+		WorkspaceID: workspaceID,
+		Role:        "member",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	err = s.repo.AddUserToWorkspace(ctx, newUserWorkspace)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiUser.ID).WithField("error", err.Error()).Error("Failed to add API user to workspace")
+		return "", "", err
+	}
+
+	// Generate the token using the auth service
+	token := s.authService.GenerateAPIAuthToken(apiUser)
+
+	return token, apiEmail, nil
 }

@@ -150,6 +150,16 @@ export interface UpdateWorkspaceResponse {
   workspace: Workspace
 }
 
+export interface CreateAPIKeyRequest {
+  workspace_id: string
+  email_prefix: string
+}
+
+export interface CreateAPIKeyResponse {
+  token: string
+  email: string
+}
+
 export interface DeleteWorkspaceRequest {
   id: string
 }
@@ -164,6 +174,7 @@ export interface WorkspaceMember {
   workspace_id: string
   role: string
   email: string
+  type: 'user' | 'api_key'
   created_at: string
   updated_at: string
 }

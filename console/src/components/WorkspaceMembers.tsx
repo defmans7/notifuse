@@ -1,7 +1,19 @@
 import { useState } from 'react'
-import { Card, Table, Typography, Spin, Button, Modal, Form, Input, App, Tag } from 'antd'
+import {
+  Card,
+  Table,
+  Typography,
+  Spin,
+  Button,
+  Modal,
+  Form,
+  Input,
+  App,
+  Tag,
+  Alert,
+  Space
+} from 'antd'
 import { MailOutlined } from '@ant-design/icons'
-import { Space } from 'antd'
 import { WorkspaceMember } from '../services/api/types'
 import { workspaceService } from '../services/api/workspace'
 
@@ -27,6 +39,12 @@ export function WorkspaceMembers({
   const [inviting, setInviting] = useState(false)
   const { message } = App.useApp()
 
+  // API Key Modal states
+  const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false)
+  const [apiKeyName, setApiKeyName] = useState('')
+  const [creatingApiKey, setCreatingApiKey] = useState(false)
+  const [apiKeyToken, setApiKeyToken] = useState('')
+
   const columns = [
     {
       title: 'Email',
@@ -44,11 +62,16 @@ export function WorkspaceMembers({
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
-      render: (role: string) => (
-        <Tag color={role === 'owner' ? 'gold' : 'blue'}>
-          {role.charAt(0).toUpperCase() + role.slice(1)}
-        </Tag>
-      )
+      render: (role: string, record: WorkspaceMember) => {
+        if (record.type === 'api_key') {
+          return <Tag color="purple">API Key</Tag>
+        }
+        return (
+          <Tag color={role === 'owner' ? 'gold' : 'blue'}>
+            {role.charAt(0).toUpperCase() + role.slice(1)}
+          </Tag>
+        )
+      }
     },
     {
       title: 'Since',
@@ -87,15 +110,64 @@ export function WorkspaceMembers({
     }
   }
 
+  const handleCreateApiKey = async () => {
+    if (!apiKeyName.trim()) {
+      message.error('Please enter an API key name')
+      return
+    }
+
+    // Convert to snake_case
+    const snakeCaseName = apiKeyName
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+
+    setCreatingApiKey(true)
+    try {
+      const response = await workspaceService.createAPIKey({
+        workspace_id: workspaceId,
+        email_prefix: snakeCaseName
+      })
+
+      setApiKeyToken(response.token)
+      message.success('API key created successfully')
+
+      // Refresh the members list
+      onMembersChange()
+    } catch (error) {
+      console.error('Failed to create API key', error)
+      message.error('Failed to create API key')
+    } finally {
+      setCreatingApiKey(false)
+    }
+  }
+
+  const resetApiKeyModal = () => {
+    setApiKeyModalVisible(false)
+    setApiKeyName('')
+    setApiKeyToken('')
+  }
+
+  const domainName = `${workspaceId}.${
+    import.meta.env.VITE_API_ENDPOINT?.replace(/^https?:\/\//, '').split('/')[0] ||
+    'api.example.com'
+  }`
+
   return (
     <>
       <Card
         title="Members"
         extra={
           isOwner && (
-            <Button type="primary" size="small" ghost onClick={() => setInviteModalVisible(true)}>
-              Invite Member
-            </Button>
+            <Space>
+              <Button type="primary" size="small" ghost onClick={() => setApiKeyModalVisible(true)}>
+                Create API Key
+              </Button>
+              <Button type="primary" size="small" ghost onClick={() => setInviteModalVisible(true)}>
+                Invite Member
+              </Button>
+            </Space>
           )
         }
       >
@@ -147,6 +219,75 @@ export function WorkspaceMembers({
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="Create API Key"
+        open={apiKeyModalVisible}
+        onCancel={resetApiKeyModal}
+        footer={
+          apiKeyToken
+            ? [
+                <Button key="close" type="primary" onClick={resetApiKeyModal}>
+                  Close
+                </Button>
+              ]
+            : [
+                <Button key="cancel" onClick={resetApiKeyModal}>
+                  Cancel
+                </Button>,
+                <Button
+                  key="create"
+                  type="primary"
+                  onClick={handleCreateApiKey}
+                  loading={creatingApiKey}
+                >
+                  Create API Key
+                </Button>
+              ]
+        }
+      >
+        {!apiKeyToken ? (
+          <Form layout="vertical">
+            <Form.Item
+              label="API Key Name"
+              required
+              rules={[{ required: true, message: 'Please enter an API key name' }]}
+            >
+              <Input
+                value={apiKeyName}
+                onChange={(e) => {
+                  // Convert to snake_case on change
+                  const snakeCaseName = e.target.value
+                    .toLowerCase()
+                    .replace(/\s+/g, '_')
+                    .replace(/[^a-z0-9_]/g, '')
+                  setApiKeyName(snakeCaseName)
+                }}
+                addonAfter={'@' + domainName}
+              />
+            </Form.Item>
+          </Form>
+        ) : (
+          <>
+            <Alert
+              message="API Key Created Successfully"
+              description="This token will only be displayed once. Please save it in a secure location. It cannot be retrieved again."
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            <Form layout="vertical">
+              <Form.Item label="API Token">
+                <Input.TextArea
+                  value={apiKeyToken}
+                  autoSize={{ minRows: 3, maxRows: 5 }}
+                  readOnly
+                />
+              </Form.Item>
+            </Form>
+          </>
+        )}
       </Modal>
     </>
   )

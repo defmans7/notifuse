@@ -19,13 +19,13 @@ func setupTest(t *testing.T) (*WorkspaceHandler, *mocks.MockWorkspaceServiceInte
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	workspaceSvc := mocks.NewMockWorkspaceServiceInterface(ctrl)
-
+	authSvc := mocks.NewMockAuthService(ctrl)
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 	passphrase := "test-passphrase"
 	mockLogger := new(pkgmocks.MockLogger)
-	handler := NewWorkspaceHandler(workspaceSvc, publicKey, mockLogger, passphrase)
+	handler := NewWorkspaceHandler(workspaceSvc, authSvc, publicKey, mockLogger, passphrase)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)

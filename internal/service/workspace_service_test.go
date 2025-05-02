@@ -21,6 +21,7 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
@@ -31,7 +32,7 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	ctx := context.Background()
 	user := &domain.User{ID: "test-user"}
@@ -101,6 +102,7 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
@@ -110,7 +112,7 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -186,6 +188,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
@@ -195,7 +198,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -448,6 +451,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
@@ -457,7 +461,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -593,6 +597,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
@@ -602,7 +607,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
