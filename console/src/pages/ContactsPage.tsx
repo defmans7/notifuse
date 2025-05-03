@@ -508,29 +508,6 @@ export function ContactsPage() {
     (!data?.contacts || data.contacts.length === 0) &&
     allContacts.length === 0
 
-  // Track when filters change to force the table to remount
-  const filterKey = React.useMemo(
-    () =>
-      JSON.stringify({
-        email: search.email,
-        external_id: search.external_id,
-        first_name: search.first_name,
-        last_name: search.last_name,
-        phone: search.phone,
-        country: search.country,
-        language: search.language
-      }),
-    [
-      search.email,
-      search.external_id,
-      search.first_name,
-      search.last_name,
-      search.phone,
-      search.country,
-      search.language
-    ]
-  )
-
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -558,7 +535,6 @@ export function ContactsPage() {
       </div>
 
       <Table
-        key={filterKey}
         columns={columns}
         dataSource={allContacts}
         rowKey={(record) => record.email}

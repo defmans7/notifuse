@@ -158,7 +158,7 @@ export function ListsPage() {
           ))}
         </Row>
       ) : hasLists ? (
-        <div className="space-y-4">
+        <Space direction="vertical" size="large">
           {data.lists.map((list: List) => (
             <Card
               title={
@@ -339,7 +339,7 @@ export function ListsPage() {
               </Descriptions>
             </Card>
           ))}
-        </div>
+        </Space>
       ) : (
         <div className="text-center py-12">
           <Title level={4} type="secondary">

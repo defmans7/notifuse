@@ -417,6 +417,8 @@ export function ContactsCsvUploadDrawer({
 
       const processNextBatch = async () => {
         if (processingCancelled) {
+          uploadRef.current.isPaused = false
+          setUploading(false)
           return
         }
 
@@ -530,19 +532,37 @@ export function ContactsCsvUploadDrawer({
 
         if (rowIndex < totalRows && !processingCancelled) {
           batch++
-          await processNextBatch()
+          setTimeout(processNextBatch, 0) // Continue with next batch
         } else {
-          stopProgressSaveInterval()
-          setUploading(false)
+          // Upload is complete
           setUploadComplete(true)
-          if (!processingCancelled) {
-            message.success(
-              `Upload completed with ${successCount} successful contacts and ${failureCount} failures`
-            )
-            // Clear saved progress when complete
-            clearSavedProgress()
-            onSuccess?.()
+          setUploading(false)
+          stopProgressSaveInterval()
+          clearSavedProgress() // Clear progress as it's now complete
+
+          // Call onSuccess callback if provided
+          if (onSuccess) {
+            onSuccess()
           }
+
+          // Dispatch event to notify that contacts were imported
+          document.dispatchEvent(
+            new CustomEvent('contactsImported', {
+              detail: {
+                success: successCount,
+                failures: failureCount,
+                workspaceId
+              }
+            })
+          )
+
+          message.success(
+            `Imported ${successCount.toLocaleString()} contacts${
+              failureCount > 0
+                ? ` (${failureCount.toLocaleString()} failed, see details below)`
+                : ''
+            }`
+          )
         }
       }
 
@@ -621,7 +641,26 @@ export function ContactsCsvUploadDrawer({
             </Button>
           )}
           {uploadComplete && (
-            <Button type="primary" onClick={onClose}>
+            <Button
+              type="primary"
+              onClick={() => {
+                // Dispatch event when closing after successful import
+                document.dispatchEvent(
+                  new CustomEvent('contactsImported', {
+                    detail: {
+                      success: successCount,
+                      failures: failureCount,
+                      workspaceId
+                    }
+                  })
+                )
+
+                if (onSuccess) {
+                  onSuccess()
+                }
+                onClose()
+              }}
+            >
               Close
             </Button>
           )}

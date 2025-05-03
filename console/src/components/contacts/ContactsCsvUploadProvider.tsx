@@ -3,16 +3,21 @@ import { Button } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { List } from '../../services/api/types'
 import { ContactsCsvUploadDrawer } from './ContactsCsvUploadDrawer'
+import { useQueryClient } from '@tanstack/react-query'
 
 // Create a context for the singleton
 export const CsvUploadContext = React.createContext<{
-  openDrawer: (workspaceId: string, lists?: List[]) => void
-  openDrawerWithSelectedList: (workspaceId: string, lists?: List[], selectedList?: string) => void
+  openDrawer: (workspaceId: string, lists?: List[], refreshOnClose?: boolean) => void
+  openDrawerWithSelectedList: (
+    workspaceId: string,
+    lists?: List[],
+    selectedList?: string,
+    refreshOnClose?: boolean
+  ) => void
 } | null>(null)
 
 interface ContactsCsvUploadDrawerProviderProps {
   children: React.ReactNode
-  workspaceId?: string
 }
 
 export const ContactsCsvUploadProvider: React.FC<ContactsCsvUploadDrawerProviderProps> = ({
@@ -22,22 +27,39 @@ export const ContactsCsvUploadProvider: React.FC<ContactsCsvUploadDrawerProvider
   const [contextLists, setContextLists] = useState<List[]>([])
   const [contextWorkspaceId, setContextWorkspaceId] = useState<string>('')
   const [selectedList, setSelectedList] = useState<string | undefined>(undefined)
+  const [shouldRefreshOnClose, setShouldRefreshOnClose] = useState(false)
+  const queryClient = useQueryClient()
 
-  const openDrawer = (workspaceId: string, lists: List[] = []) => {
+  // Handler for when import is successful
+  const handleImportSuccess = () => {
+    // Invalidate contacts query to trigger a refresh
+    if (shouldRefreshOnClose && contextWorkspaceId) {
+      queryClient.invalidateQueries({ queryKey: ['contacts', contextWorkspaceId] })
+    }
+  }
+
+  const handleDrawerClose = () => {
+    setDrawerVisible(false)
+  }
+
+  const openDrawer = (workspaceId: string, lists: List[] = [], refreshOnClose = true) => {
     setContextWorkspaceId(workspaceId)
     setContextLists(lists)
     setSelectedList(undefined)
+    setShouldRefreshOnClose(refreshOnClose)
     setDrawerVisible(true)
   }
 
   const openDrawerWithSelectedList = (
     workspaceId: string,
     lists: List[] = [],
-    selectedList?: string
+    selectedList?: string,
+    refreshOnClose = true
   ) => {
     setContextWorkspaceId(workspaceId)
     setContextLists(lists)
     setSelectedList(selectedList)
+    setShouldRefreshOnClose(refreshOnClose)
     setDrawerVisible(true)
   }
 
@@ -49,9 +71,9 @@ export const ContactsCsvUploadProvider: React.FC<ContactsCsvUploadDrawerProvider
           workspaceId={contextWorkspaceId}
           lists={contextLists}
           selectedList={selectedList}
-          onSuccess={() => {}}
+          onSuccess={handleImportSuccess}
           isVisible={drawerVisible}
-          onClose={() => setDrawerVisible(false)}
+          onClose={handleDrawerClose}
         />
       )}
     </CsvUploadContext.Provider>

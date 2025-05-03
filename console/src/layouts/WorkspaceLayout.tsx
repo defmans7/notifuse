@@ -129,7 +129,7 @@ export function WorkspaceLayout() {
   ]
 
   return (
-    <ContactsCsvUploadProvider workspaceId={workspaceId}>
+    <ContactsCsvUploadProvider>
       <Layout style={{ minHeight: '100vh' }}>
         <Layout>
           <Sider

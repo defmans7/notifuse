@@ -11,6 +11,7 @@ interface ImportContactsButtonProps {
   size?: 'large' | 'middle' | 'small'
   lists?: List[]
   workspaceId: string
+  refreshOnClose?: boolean
 }
 
 export function ImportContactsButton({
@@ -19,7 +20,8 @@ export function ImportContactsButton({
   type = 'primary',
   size = 'middle',
   lists = [],
-  workspaceId
+  workspaceId,
+  refreshOnClose = true
 }: ImportContactsButtonProps) {
   const { openDrawer } = useContactsCsvUpload()
 
@@ -27,7 +29,7 @@ export function ImportContactsButton({
     <Button
       type={type}
       icon={<UploadOutlined />}
-      onClick={() => openDrawer(workspaceId, lists)}
+      onClick={() => openDrawer(workspaceId, lists, refreshOnClose)}
       className={className}
       style={style}
       size={size}
