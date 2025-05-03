@@ -14,19 +14,12 @@ func TestTransactionalChannelConstants(t *testing.T) {
 	assert.Equal(t, TransactionalChannel("email"), TransactionalChannelEmail)
 }
 
-func TestTransactionalStatusConstants(t *testing.T) {
-	// Test that status constants are defined correctly
-	assert.Equal(t, TransactionalStatus("active"), TransactionalStatusActive)
-	assert.Equal(t, TransactionalStatus("inactive"), TransactionalStatusInactive)
-	assert.Equal(t, TransactionalStatus("draft"), TransactionalStatusDraft)
-}
-
 func TestChannelTemplates_Value(t *testing.T) {
 	// Create test templates
 	templates := ChannelTemplates{
 		TransactionalChannelEmail: ChannelTemplate{
 			TemplateID: "template-123",
-			Version:    1,
+
 			Settings: MapOfAny{
 				"subject": "Test Subject",
 			},
@@ -43,7 +36,6 @@ func TestChannelTemplates_Value(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, templates[TransactionalChannelEmail].TemplateID, actual[TransactionalChannelEmail].TemplateID)
-	assert.Equal(t, templates[TransactionalChannelEmail].Version, actual[TransactionalChannelEmail].Version)
 	assert.Equal(t,
 		templates[TransactionalChannelEmail].Settings["subject"],
 		actual[TransactionalChannelEmail].Settings["subject"])
@@ -54,7 +46,7 @@ func TestChannelTemplates_Scan(t *testing.T) {
 	original := ChannelTemplates{
 		TransactionalChannelEmail: ChannelTemplate{
 			TemplateID: "template-456",
-			Version:    2,
+
 			Settings: MapOfAny{
 				"from_name": "Test Sender",
 			},
@@ -72,7 +64,6 @@ func TestChannelTemplates_Scan(t *testing.T) {
 
 	// Verify scanned matches original
 	assert.Equal(t, original[TransactionalChannelEmail].TemplateID, scanned[TransactionalChannelEmail].TemplateID)
-	assert.Equal(t, original[TransactionalChannelEmail].Version, scanned[TransactionalChannelEmail].Version)
 	assert.Equal(t,
 		original[TransactionalChannelEmail].Settings["from_name"],
 		scanned[TransactionalChannelEmail].Settings["from_name"])
@@ -105,13 +96,13 @@ func TestTransactionalNotificationStructure(t *testing.T) {
 		Channels: ChannelTemplates{
 			TransactionalChannelEmail: ChannelTemplate{
 				TemplateID: "template-123",
-				Version:    1,
+
 				Settings: MapOfAny{
 					"subject": "Welcome!",
 				},
 			},
 		},
-		Status:    TransactionalStatusActive,
+
 		Metadata:  MapOfAny{"category": "onboarding"},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -122,7 +113,6 @@ func TestTransactionalNotificationStructure(t *testing.T) {
 	assert.Equal(t, "notification-123", notification.ID)
 	assert.Equal(t, "Welcome Email", notification.Name)
 	assert.Equal(t, "Sent when a user registers", notification.Description)
-	assert.Equal(t, TransactionalStatusActive, notification.Status)
 	assert.Equal(t, MapOfAny{"category": "onboarding"}, notification.Metadata)
 	assert.Equal(t, now, notification.CreatedAt)
 	assert.Equal(t, now, notification.UpdatedAt)
@@ -131,7 +121,7 @@ func TestTransactionalNotificationStructure(t *testing.T) {
 	// Verify channel template
 	template := notification.Channels[TransactionalChannelEmail]
 	assert.Equal(t, "template-123", template.TemplateID)
-	assert.Equal(t, 1, template.Version)
+
 	assert.Equal(t, "Welcome!", template.Settings["subject"])
 }
 
@@ -144,10 +134,9 @@ func TestTransactionalNotificationCreateParams(t *testing.T) {
 		Channels: ChannelTemplates{
 			TransactionalChannelEmail: ChannelTemplate{
 				TemplateID: "template-123",
-				Version:    1,
 			},
 		},
-		Status:   TransactionalStatusActive,
+
 		Metadata: MapOfAny{"category": "onboarding"},
 	}
 
@@ -155,13 +144,13 @@ func TestTransactionalNotificationCreateParams(t *testing.T) {
 	assert.Equal(t, "notification-123", params.ID)
 	assert.Equal(t, "Welcome Email", params.Name)
 	assert.Equal(t, "Sent when a user registers", params.Description)
-	assert.Equal(t, TransactionalStatusActive, params.Status)
+
 	assert.Equal(t, MapOfAny{"category": "onboarding"}, params.Metadata)
 
 	// Verify channel template
 	template := params.Channels[TransactionalChannelEmail]
 	assert.Equal(t, "template-123", template.TemplateID)
-	assert.Equal(t, 1, template.Version)
+
 }
 
 func TestTransactionalNotificationUpdateParams(t *testing.T) {
@@ -172,23 +161,22 @@ func TestTransactionalNotificationUpdateParams(t *testing.T) {
 		Channels: ChannelTemplates{
 			TransactionalChannelEmail: ChannelTemplate{
 				TemplateID: "template-456",
-				Version:    2,
 			},
 		},
-		Status:   TransactionalStatusInactive,
+
 		Metadata: MapOfAny{"category": "updated"},
 	}
 
 	// Verify field values
 	assert.Equal(t, "Updated Welcome Email", params.Name)
 	assert.Equal(t, "Updated description", params.Description)
-	assert.Equal(t, TransactionalStatusInactive, params.Status)
+
 	assert.Equal(t, MapOfAny{"category": "updated"}, params.Metadata)
 
 	// Verify channel template
 	template := params.Channels[TransactionalChannelEmail]
 	assert.Equal(t, "template-456", template.TemplateID)
-	assert.Equal(t, 2, template.Version)
+
 }
 
 func TestTransactionalNotificationSendParams(t *testing.T) {
@@ -235,18 +223,16 @@ func TestListTransactionalRequest_FromURLParams(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid request with status and search",
+			name: "valid request with  search",
 			values: map[string][]string{
 				"workspace_id": {"workspace-123"},
-				"status":       {"active"},
 				"search":       {"welcome"},
 			},
 			want: ListTransactionalRequest{
 				WorkspaceID: "workspace-123",
-				Status:      "active",
-				Search:      "welcome",
+
+				Search: "welcome",
 				Filter: map[string]interface{}{
-					"status": "active",
 					"search": "welcome",
 				},
 			},
@@ -297,7 +283,6 @@ func TestListTransactionalRequest_FromURLParams(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.want.WorkspaceID, req.WorkspaceID)
-				assert.Equal(t, tt.want.Status, req.Status)
 				assert.Equal(t, tt.want.Search, req.Search)
 				assert.Equal(t, tt.want.Limit, req.Limit)
 				assert.Equal(t, tt.want.Offset, req.Offset)
@@ -376,13 +361,12 @@ func TestCreateTransactionalRequest_Validate(t *testing.T) {
 			req: CreateTransactionalRequest{
 				WorkspaceID: "workspace-123",
 				Notification: TransactionalNotificationCreateParams{
-					ID:     "notification-456",
-					Name:   "Welcome Email",
-					Status: TransactionalStatusActive,
+					ID:   "notification-456",
+					Name: "Welcome Email",
+
 					Channels: ChannelTemplates{
 						TransactionalChannelEmail: ChannelTemplate{
 							TemplateID: "template-789",
-							Version:    1,
 						},
 					},
 				},
@@ -393,13 +377,12 @@ func TestCreateTransactionalRequest_Validate(t *testing.T) {
 			name: "missing workspace_id",
 			req: CreateTransactionalRequest{
 				Notification: TransactionalNotificationCreateParams{
-					ID:     "notification-456",
-					Name:   "Welcome Email",
-					Status: TransactionalStatusActive,
+					ID:   "notification-456",
+					Name: "Welcome Email",
+
 					Channels: ChannelTemplates{
 						TransactionalChannelEmail: ChannelTemplate{
 							TemplateID: "template-789",
-							Version:    1,
 						},
 					},
 				},
@@ -412,12 +395,11 @@ func TestCreateTransactionalRequest_Validate(t *testing.T) {
 			req: CreateTransactionalRequest{
 				WorkspaceID: "workspace-123",
 				Notification: TransactionalNotificationCreateParams{
-					Name:   "Welcome Email",
-					Status: TransactionalStatusActive,
+					Name: "Welcome Email",
+
 					Channels: ChannelTemplates{
 						TransactionalChannelEmail: ChannelTemplate{
 							TemplateID: "template-789",
-							Version:    1,
 						},
 					},
 				},
@@ -430,12 +412,11 @@ func TestCreateTransactionalRequest_Validate(t *testing.T) {
 			req: CreateTransactionalRequest{
 				WorkspaceID: "workspace-123",
 				Notification: TransactionalNotificationCreateParams{
-					ID:     "notification-456",
-					Status: TransactionalStatusActive,
+					ID: "notification-456",
+
 					Channels: ChannelTemplates{
 						TransactionalChannelEmail: ChannelTemplate{
 							TemplateID: "template-789",
-							Version:    1,
 						},
 					},
 				},
@@ -448,32 +429,14 @@ func TestCreateTransactionalRequest_Validate(t *testing.T) {
 			req: CreateTransactionalRequest{
 				WorkspaceID: "workspace-123",
 				Notification: TransactionalNotificationCreateParams{
-					ID:       "notification-456",
-					Name:     "Welcome Email",
-					Status:   TransactionalStatusActive,
+					ID:   "notification-456",
+					Name: "Welcome Email",
+
 					Channels: ChannelTemplates{},
 				},
 			},
 			wantErr: true,
 			errMsg:  "notification must have at least one channel",
-		},
-		{
-			name: "missing status",
-			req: CreateTransactionalRequest{
-				WorkspaceID: "workspace-123",
-				Notification: TransactionalNotificationCreateParams{
-					ID:   "notification-456",
-					Name: "Welcome Email",
-					Channels: ChannelTemplates{
-						TransactionalChannelEmail: ChannelTemplate{
-							TemplateID: "template-789",
-							Version:    1,
-						},
-					},
-				},
-			},
-			wantErr: true,
-			errMsg:  "notification.status is required",
 		},
 	}
 
@@ -517,7 +480,6 @@ func TestUpdateTransactionalRequest_Validate(t *testing.T) {
 				Updates: TransactionalNotificationUpdateParams{
 					Name:        "Updated Email",
 					Description: "Updated description",
-					Status:      TransactionalStatusInactive,
 				},
 			},
 			wantErr: false,
@@ -531,7 +493,6 @@ func TestUpdateTransactionalRequest_Validate(t *testing.T) {
 					Channels: ChannelTemplates{
 						TransactionalChannelEmail: ChannelTemplate{
 							TemplateID: "new-template-789",
-							Version:    2,
 						},
 					},
 				},
@@ -742,7 +703,6 @@ func TestListTransactionalRequest_FromURLParams_EdgeCases(t *testing.T) {
 	req = ListTransactionalRequest{}
 	values = map[string][]string{
 		"workspace_id": {},
-		"status":       {"active"},
 	}
 	err = req.FromURLParams(values)
 	require.Error(t, err)
@@ -752,50 +712,24 @@ func TestListTransactionalRequest_FromURLParams_EdgeCases(t *testing.T) {
 	req = ListTransactionalRequest{}
 	values = map[string][]string{
 		"workspace_id": {"workspace-123", "workspace-456"},
-		"status":       {"active", "inactive"},
 		"limit":        {"10", "20"},
 	}
 	err = req.FromURLParams(values)
 	require.NoError(t, err)
 	assert.Equal(t, "workspace-123", req.WorkspaceID)
-	assert.Equal(t, "active", req.Status)
 	assert.Equal(t, 10, req.Limit)
 }
 
 func TestListTransactionalRequest_Filter(t *testing.T) {
-	// Test filter population with status and search
+	// Test filter population with search
 	req := ListTransactionalRequest{}
 	values := map[string][]string{
 		"workspace_id": {"workspace-123"},
-		"status":       {"active"},
 		"search":       {"welcome"},
 	}
 	err := req.FromURLParams(values)
 	require.NoError(t, err)
-	assert.Equal(t, "active", req.Filter["status"])
 	assert.Equal(t, "welcome", req.Filter["search"])
-
-	// Test filter with only status
-	req = ListTransactionalRequest{}
-	values = map[string][]string{
-		"workspace_id": {"workspace-123"},
-		"status":       {"inactive"},
-	}
-	err = req.FromURLParams(values)
-	require.NoError(t, err)
-	assert.Equal(t, "inactive", req.Filter["status"])
-	assert.Nil(t, req.Filter["search"])
-
-	// Test filter with only search
-	req = ListTransactionalRequest{}
-	values = map[string][]string{
-		"workspace_id": {"workspace-123"},
-		"search":       {"notification"},
-	}
-	err = req.FromURLParams(values)
-	require.NoError(t, err)
-	assert.Equal(t, "notification", req.Filter["search"])
-	assert.Nil(t, req.Filter["status"])
 }
 
 // Test more edge cases for GetTransactionalRequest
@@ -828,9 +762,9 @@ func TestCreateTransactionalRequest_Validate_EdgeCases(t *testing.T) {
 	req := CreateTransactionalRequest{
 		WorkspaceID: "workspace-123",
 		Notification: TransactionalNotificationCreateParams{
-			ID:       "notification-456",
-			Name:     "Welcome Email",
-			Status:   TransactionalStatusActive,
+			ID:   "notification-456",
+			Name: "Welcome Email",
+
 			Channels: nil, // Nil channels
 		},
 	}
@@ -842,9 +776,8 @@ func TestCreateTransactionalRequest_Validate_EdgeCases(t *testing.T) {
 	req = CreateTransactionalRequest{
 		WorkspaceID: "",
 		Notification: TransactionalNotificationCreateParams{
-			ID:     "",
-			Name:   "",
-			Status: "",
+			ID:   "",
+			Name: "",
 		},
 	}
 	err = req.Validate()
@@ -855,13 +788,12 @@ func TestCreateTransactionalRequest_Validate_EdgeCases(t *testing.T) {
 	req = CreateTransactionalRequest{
 		WorkspaceID: "workspace-123",
 		Notification: TransactionalNotificationCreateParams{
-			ID:     "notification-456",
-			Name:   "Welcome Email",
-			Status: TransactionalStatusDraft,
+			ID:   "notification-456",
+			Name: "Welcome Email",
+
 			Channels: ChannelTemplates{
 				TransactionalChannelEmail: ChannelTemplate{
 					TemplateID: "template-789",
-					Version:    1,
 				},
 			},
 		},
@@ -876,13 +808,12 @@ func TestRequestsWithMetadata(t *testing.T) {
 	createReq := CreateTransactionalRequest{
 		WorkspaceID: "workspace-123",
 		Notification: TransactionalNotificationCreateParams{
-			ID:     "notification-456",
-			Name:   "Welcome Email",
-			Status: TransactionalStatusActive,
+			ID:   "notification-456",
+			Name: "Welcome Email",
+
 			Channels: ChannelTemplates{
 				TransactionalChannelEmail: ChannelTemplate{
 					TemplateID: "template-789",
-					Version:    1,
 				},
 			},
 			Metadata: MapOfAny{
@@ -947,17 +878,17 @@ func TestChannelTemplateSettings(t *testing.T) {
 
 	template := ChannelTemplate{
 		TemplateID: "template-123",
-		Version:    1,
-		Settings:   emailSettings,
+
+		Settings: emailSettings,
 	}
 
 	// Create notification with this template
 	req := CreateTransactionalRequest{
 		WorkspaceID: "workspace-123",
 		Notification: TransactionalNotificationCreateParams{
-			ID:     "notification-456",
-			Name:   "Welcome Email",
-			Status: TransactionalStatusActive,
+			ID:   "notification-456",
+			Name: "Welcome Email",
+
 			Channels: ChannelTemplates{
 				TransactionalChannelEmail: template,
 			},
@@ -984,7 +915,7 @@ func TestChannelTemplates_ComplexDataStructures(t *testing.T) {
 	original := ChannelTemplates{
 		TransactionalChannelEmail: ChannelTemplate{
 			TemplateID: "complex-template",
-			Version:    3,
+
 			Settings: MapOfAny{
 				"simple_string": "value",
 				"simple_number": 123,
@@ -1030,7 +961,6 @@ func TestChannelTemplates_ComplexDataStructures(t *testing.T) {
 
 	// Verify top-level properties
 	assert.Equal(t, originalTemplate.TemplateID, scannedTemplate.TemplateID)
-	assert.Equal(t, originalTemplate.Version, scannedTemplate.Version)
 
 	// Verify simple settings
 	assert.Equal(t, "value", scannedTemplate.Settings["simple_string"])
@@ -1095,98 +1025,6 @@ func TestChannelTemplates_ComplexDataStructures(t *testing.T) {
 	assert.JSONEq(t, string(originalJSON), string(scannedJSON), "JSON representations should be equal")
 }
 
-// TestTransactionalStatusHandling tests the handling of different TransactionalStatus values
-func TestTransactionalStatusHandling(t *testing.T) {
-	tests := []struct {
-		name   string
-		status TransactionalStatus
-		valid  bool
-	}{
-		{
-			name:   "Active status",
-			status: TransactionalStatusActive,
-			valid:  true,
-		},
-		{
-			name:   "Inactive status",
-			status: TransactionalStatusInactive,
-			valid:  true,
-		},
-		{
-			name:   "Draft status",
-			status: TransactionalStatusDraft,
-			valid:  true,
-		},
-		{
-			name:   "Empty status",
-			status: "",
-			valid:  false,
-		},
-		{
-			name:   "Invalid status",
-			status: TransactionalStatus("invalid"),
-			valid:  false, // This would be rejected at validation time in a real app
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a request with the status
-			req := CreateTransactionalRequest{
-				WorkspaceID: "workspace-123",
-				Notification: TransactionalNotificationCreateParams{
-					ID:     "notification-456",
-					Name:   "Test Notification",
-					Status: tt.status,
-					Channels: ChannelTemplates{
-						TransactionalChannelEmail: ChannelTemplate{
-							TemplateID: "template-789",
-							Version:    1,
-						},
-					},
-				},
-			}
-
-			// If it's a valid status, the validation should pass (unless there's another issue)
-			err := req.Validate()
-			if tt.valid {
-				assert.NoError(t, err, "Valid status should not cause validation error")
-			} else if tt.status == "" {
-				assert.Error(t, err, "Empty status should cause validation error")
-				assert.Contains(t, err.Error(), "notification.status is required")
-			}
-
-			// For valid statuses, also verify they're serialized correctly in the notification
-			if tt.valid {
-				notification := &TransactionalNotification{
-					ID:          "notification-456",
-					Name:        "Test Notification",
-					Description: "Test Description",
-					Status:      tt.status,
-					Channels: ChannelTemplates{
-						TransactionalChannelEmail: ChannelTemplate{
-							TemplateID: "template-789",
-							Version:    1,
-						},
-					},
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
-				}
-
-				// Verify status is preserved when marshaled to JSON and back
-				data, err := json.Marshal(notification)
-				require.NoError(t, err)
-
-				var unmarshaled TransactionalNotification
-				err = json.Unmarshal(data, &unmarshaled)
-				require.NoError(t, err)
-
-				assert.Equal(t, tt.status, unmarshaled.Status)
-			}
-		})
-	}
-}
-
 // TestTransactionalChannelHandling tests the handling of different TransactionalChannel values
 func TestTransactionalChannelHandling(t *testing.T) {
 	// Test email channel
@@ -1197,7 +1035,6 @@ func TestTransactionalChannelHandling(t *testing.T) {
 	templates := ChannelTemplates{
 		emailChannel: ChannelTemplate{
 			TemplateID: "template-123",
-			Version:    1,
 		},
 	}
 

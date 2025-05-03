@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+//go:generate mockgen -destination mocks/mock_transactional_notification_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TransactionalNotificationService
+//go:generate mockgen -destination mocks/mock_transactional_notification_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain TransactionalNotificationRepository
+
 // TransactionalChannel represents supported notification channels
 type TransactionalChannel string
 
@@ -19,22 +22,9 @@ const (
 	// Add other channels in the future (sms, push, etc.)
 )
 
-// TransactionalStatus represents the status of a transactional notification
-type TransactionalStatus string
-
-const (
-	// TransactionalStatusActive indicates the notification is active and can be triggered
-	TransactionalStatusActive TransactionalStatus = "active"
-	// TransactionalStatusInactive indicates the notification is inactive and cannot be triggered
-	TransactionalStatusInactive TransactionalStatus = "inactive"
-	// TransactionalStatusDraft indicates the notification is still in draft mode
-	TransactionalStatusDraft TransactionalStatus = "draft"
-)
-
 // ChannelTemplate represents template configuration for a specific channel
 type ChannelTemplate struct {
 	TemplateID string   `json:"template_id"`
-	Version    int      `json:"version"`
 	Settings   MapOfAny `json:"settings,omitempty"`
 }
 
@@ -63,13 +53,12 @@ func (ct *ChannelTemplates) Scan(value interface{}) error {
 
 // TransactionalNotification represents a transactional notification configuration
 type TransactionalNotification struct {
-	ID          string              `json:"id"` // Unique identifier for the notification, also used for API triggering
-	Name        string              `json:"name"`
-	Description string              `json:"description"`
-	Channels    ChannelTemplates    `json:"channels"`
-	Status      TransactionalStatus `json:"status"`
-	IsPublic    bool                `json:"is_public"` // Indicates if the notification is publicly accessible
-	Metadata    MapOfAny            `json:"metadata,omitempty"`
+	ID          string           `json:"id"` // Unique identifier for the notification, also used for API triggering
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Channels    ChannelTemplates `json:"channels"`
+	IsPublic    bool             `json:"is_public"` // Indicates if the notification is publicly accessible
+	Metadata    MapOfAny         `json:"metadata,omitempty"`
 
 	// System timestamps
 	CreatedAt time.Time  `json:"created_at"`
@@ -97,23 +86,21 @@ type TransactionalNotificationRepository interface {
 
 // TransactionalNotificationCreateParams contains the parameters for creating a new transactional notification
 type TransactionalNotificationCreateParams struct {
-	ID          string              `json:"id" validate:"required"` // Unique identifier for API triggering
-	Name        string              `json:"name" validate:"required"`
-	Description string              `json:"description"`
-	Channels    ChannelTemplates    `json:"channels" validate:"required,min=1"`
-	Status      TransactionalStatus `json:"status" validate:"required"`
-	IsPublic    bool                `json:"is_public"`
-	Metadata    MapOfAny            `json:"metadata,omitempty"`
+	ID          string           `json:"id" validate:"required"` // Unique identifier for API triggering
+	Name        string           `json:"name" validate:"required"`
+	Description string           `json:"description"`
+	Channels    ChannelTemplates `json:"channels" validate:"required,min=1"`
+	IsPublic    bool             `json:"is_public"`
+	Metadata    MapOfAny         `json:"metadata,omitempty"`
 }
 
 // TransactionalNotificationUpdateParams contains the parameters for updating an existing transactional notification
 type TransactionalNotificationUpdateParams struct {
-	Name        string              `json:"name,omitempty"`
-	Description string              `json:"description,omitempty"`
-	Channels    ChannelTemplates    `json:"channels,omitempty"`
-	Status      TransactionalStatus `json:"status,omitempty"`
-	IsPublic    *bool               `json:"is_public,omitempty"`
-	Metadata    MapOfAny            `json:"metadata,omitempty"`
+	Name        string           `json:"name,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Channels    ChannelTemplates `json:"channels,omitempty"`
+	IsPublic    *bool            `json:"is_public,omitempty"`
+	Metadata    MapOfAny         `json:"metadata,omitempty"`
 }
 
 // TransactionalNotificationSendParams contains the parameters for sending a transactional notification
@@ -144,6 +131,9 @@ type TransactionalNotificationService interface {
 
 	// SendNotification sends a transactional notification to a contact
 	SendNotification(ctx context.Context, workspace string, params TransactionalNotificationSendParams) (string, error)
+
+	// DoSendEmailNotification handles sending a notification through the email channel
+	DoSendEmailNotification(ctx context.Context, workspace string, messageID string, contact *Contact, templateConfig ChannelTemplate, messageData MessageData) error
 }
 
 // Request and response types for transactional notifications
@@ -151,7 +141,6 @@ type TransactionalNotificationService interface {
 // ListTransactionalRequest represents a request to list transactional notifications
 type ListTransactionalRequest struct {
 	WorkspaceID string                 `json:"workspace_id"`
-	Status      string                 `json:"status,omitempty"`
 	Search      string                 `json:"search,omitempty"`
 	Limit       int                    `json:"limit,omitempty"`
 	Offset      int                    `json:"offset,omitempty"`
@@ -165,7 +154,6 @@ func (req *ListTransactionalRequest) FromURLParams(values map[string][]string) e
 		return NewValidationError("workspace_id is required")
 	}
 
-	req.Status = getFirstValue(values, "status")
 	req.Search = getFirstValue(values, "search")
 
 	if limitStr := getFirstValue(values, "limit"); limitStr != "" {
@@ -180,12 +168,9 @@ func (req *ListTransactionalRequest) FromURLParams(values map[string][]string) e
 		}
 	}
 
-	// Convert status and search to filter if provided
+	// Convert search to filter if provided
 	if req.Filter == nil {
 		req.Filter = make(map[string]interface{})
-	}
-	if req.Status != "" {
-		req.Filter["status"] = req.Status
 	}
 	if req.Search != "" {
 		req.Filter["search"] = req.Search
@@ -239,10 +224,6 @@ func (req *CreateTransactionalRequest) Validate() error {
 		return NewValidationError("notification must have at least one channel")
 	}
 
-	if req.Notification.Status == "" {
-		return NewValidationError("notification.status is required")
-	}
-
 	return nil
 }
 
@@ -266,7 +247,6 @@ func (req *UpdateTransactionalRequest) Validate() error {
 	// At least one field must be updated
 	if req.Updates.Name == "" &&
 		req.Updates.Description == "" &&
-		req.Updates.Status == "" &&
 		req.Updates.Channels == nil &&
 		req.Updates.Metadata == nil {
 		return NewValidationError("at least one field must be updated")

@@ -192,7 +192,7 @@ func (s *BroadcastService) ListBroadcasts(ctx context.Context, params domain.Lis
 			for i, variation := range broadcast.TestSettings.Variations {
 				if variation.TemplateID != "" {
 					// Fetch the template for this variation
-					template, err := s.templateSvc.GetTemplateByID(ctx, params.WorkspaceID, variation.TemplateID, 1)
+					template, err := s.templateSvc.GetTemplateByID(ctx, params.WorkspaceID, variation.TemplateID, 0)
 					if err != nil {
 						s.logger.Error("Failed to fetch template for broadcast variation")
 						// Continue with the next variation rather than failing the whole request
@@ -746,8 +746,8 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		s.logger.Info("Contact not found, using email address only")
 	}
 
-	// Fetch the template
-	template, err := s.templateSvc.GetTemplateByID(ctx, request.WorkspaceID, variation.TemplateID, 1)
+	// Fetch the template with latest version
+	template, err := s.templateSvc.GetTemplateByID(ctx, request.WorkspaceID, variation.TemplateID, 0)
 	if err != nil {
 		s.logger.Error("Failed to fetch template for broadcast")
 		return err
@@ -807,8 +807,8 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 
 // GetTemplateByID gets a template by ID for use with broadcasts
 func (s *BroadcastService) GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*domain.Template, error) {
-	// Simply delegate to the template service, but only requesting version 1
-	return s.templateSvc.GetTemplateByID(ctx, workspaceID, templateID, 1)
+	// Simply delegate to the template service, version 0 is the latest version
+	return s.templateSvc.GetTemplateByID(ctx, workspaceID, templateID, 0)
 }
 
 // RecordMessageSent records a message sent event in the message history

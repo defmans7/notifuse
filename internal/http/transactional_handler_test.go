@@ -45,13 +45,11 @@ func createTestTransactionalNotification() *domain.TransactionalNotification {
 		Channels: domain.ChannelTemplates{
 			domain.TransactionalChannelEmail: {
 				TemplateID: "template-123",
-				Version:    1,
 				Settings: domain.MapOfAny{
 					"subject": "Test Subject",
 				},
 			},
 		},
-		Status:    domain.TransactionalStatusActive,
 		Metadata:  domain.MapOfAny{"category": "test"},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -182,7 +180,6 @@ func TestTransactionalNotificationHandler_HandleList(t *testing.T) {
 			method: http.MethodGet,
 			queryParams: url.Values{
 				"workspace_id": []string{workspaceID},
-				"status":       []string{"active"},
 				"limit":        []string{"10"},
 				"offset":       []string{"0"},
 			},
@@ -338,7 +335,6 @@ func TestTransactionalNotificationHandler_HandleGet(t *testing.T) {
 				assert.Equal(t, notificationID, notification["id"])
 				assert.Equal(t, "Test Notification", notification["name"])
 				assert.Equal(t, "Test notification description", notification["description"])
-				assert.Equal(t, "active", notification["status"])
 			},
 		},
 		{
@@ -403,13 +399,11 @@ func TestTransactionalNotificationHandler_HandleCreate(t *testing.T) {
 		Channels: domain.ChannelTemplates{
 			domain.TransactionalChannelEmail: {
 				TemplateID: "template-123",
-				Version:    1,
 				Settings: domain.MapOfAny{
 					"subject": "Test Subject",
 				},
 			},
 		},
-		Status: domain.TransactionalStatusActive,
 	}
 
 	validReqBody := domain.CreateTransactionalRequest{
@@ -565,7 +559,6 @@ func TestTransactionalNotificationHandler_HandleUpdate(t *testing.T) {
 	validUpdateParams := domain.TransactionalNotificationUpdateParams{
 		Name:        "Updated Notification",
 		Description: "Updated description",
-		Status:      domain.TransactionalStatusActive,
 	}
 
 	validReqBody := domain.UpdateTransactionalRequest{

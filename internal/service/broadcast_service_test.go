@@ -1236,7 +1236,7 @@ func TestBroadcastService_GetTemplateByID(t *testing.T) {
 
 		// Expect GetTemplateByID to be called on the template service
 		mockTemplateSvc.EXPECT().
-			GetTemplateByID(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(templateID), gomock.Eq(int64(1))).
+			GetTemplateByID(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(templateID), gomock.Eq(int64(0))).
 			Return(expectedTemplate, nil)
 
 		// Call the service
@@ -1256,7 +1256,7 @@ func TestBroadcastService_GetTemplateByID(t *testing.T) {
 
 		// Expect GetTemplateByID to be called on the template service and return an error
 		mockTemplateSvc.EXPECT().
-			GetTemplateByID(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(templateID), gomock.Eq(int64(1))).
+			GetTemplateByID(gomock.Any(), gomock.Eq(workspaceID), gomock.Eq(templateID), gomock.Eq(int64(0))).
 			Return(nil, expectedErr)
 
 		// Call the service
@@ -1662,7 +1662,7 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 
 		// Mock template service to return a template
 		mockTemplateSvc.EXPECT().
-			GetTemplateByID(gomock.Any(), workspaceID, "template1", int64(1)).
+			GetTemplateByID(gomock.Any(), workspaceID, "template1", int64(0)).
 			Return(template, nil)
 
 		// Call the service
@@ -2452,7 +2452,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			},
 		}
 		mockTemplateSvc.EXPECT().
-			GetTemplateByID(gomock.Any(), workspaceID, "template123", int64(1)).
+			GetTemplateByID(gomock.Any(), workspaceID, "template123", int64(0)).
 			Return(template, nil)
 
 		// Mock template service to compile template

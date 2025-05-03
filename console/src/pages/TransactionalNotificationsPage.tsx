@@ -1,14 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Card,
-  Row,
-  Col,
   Badge,
   Typography,
   Space,
   Tooltip,
   Button,
-  Divider,
   Modal,
   Input,
   message,
@@ -20,42 +16,21 @@ import { useParams } from '@tanstack/react-router'
 import {
   transactionalNotificationsApi,
   TransactionalNotification,
-  TransactionalStatus,
   ChannelTemplates
 } from '../services/api/transactional_notifications'
-import { templatesApi } from '../services/api/template'
 import {
   EditOutlined,
   DeleteOutlined,
   MailOutlined,
   PlusOutlined,
-  EyeOutlined,
-  CopyOutlined,
-  SendOutlined,
-  CheckCircleOutlined,
-  StopOutlined,
-  TagOutlined
+  SendOutlined
 } from '@ant-design/icons'
+import UpsertTransactionalNotificationDrawer from '../components/transactional/UpsertTransactionalNotificationDrawer'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
-import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { useAuth } from '../contexts/AuthContext'
 
 const { Title, Paragraph, Text } = Typography
-
-// Helper function to get status badge
-const getStatusBadge = (status: TransactionalStatus) => {
-  switch (status) {
-    case 'draft':
-      return <Badge status="default" text="Draft" />
-    case 'active':
-      return <Badge status="success" text="Active" />
-    case 'inactive':
-      return <Badge status="error" text="Inactive" />
-    default:
-      return <Badge status="default" text={status} />
-  }
-}
 
 // Component for rendering channels
 const ChannelsList: React.FC<{ channels: ChannelTemplates }> = ({ channels }) => {
@@ -70,13 +45,6 @@ const ChannelsList: React.FC<{ channels: ChannelTemplates }> = ({ channels }) =>
     </Space>
   )
 }
-
-// Temporary mock components until the real ones are created
-const UpsertTransactionalNotificationDrawer: React.FC<any> = ({ buttonContent, buttonProps }) => (
-  <Button {...buttonProps}>{buttonContent}</Button>
-)
-
-const TestTransactionalNotificationDrawer: React.FC<any> = () => <div></div>
 
 // Test notification modal component
 const TestNotificationModal = ({
@@ -156,21 +124,6 @@ export function TransactionalNotificationsPage() {
     enabled: !!workspaceId
   })
 
-  // Fetch templates
-  const {
-    data: templatesData,
-    isLoading: isLoadingTemplates,
-    error: templatesError
-  } = useQuery({
-    queryKey: ['templates', workspaceId],
-    queryFn: () =>
-      templatesApi.list({
-        workspace_id: workspaceId as string,
-        category: 'transactional'
-      }),
-    enabled: !!workspaceId
-  })
-
   const handleDeleteNotification = async () => {
     if (!notificationToDelete) return
 
@@ -224,19 +177,16 @@ export function TransactionalNotificationsPage() {
     }
   }
 
-  if (notificationsError || templatesError) {
+  if (notificationsError) {
     return (
       <div>
         <Title level={4}>Error loading data</Title>
-        <Text type="danger">
-          {(notificationsError as Error)?.message || (templatesError as Error)?.message}
-        </Text>
+        <Text type="danger">{(notificationsError as Error)?.message}</Text>
       </div>
     )
   }
 
   const notifications = notificationsData?.notifications || []
-  const templates = templatesData?.templates || []
   const hasNotifications = notifications.length > 0
 
   const columns = [
@@ -255,12 +205,6 @@ export function TransactionalNotificationsPage() {
       dataIndex: 'description',
       key: 'description',
       render: (text: string) => <Text ellipsis>{text}</Text>
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: TransactionalStatus) => getStatusBadge(status)
     },
     {
       title: 'Channels',
@@ -296,13 +240,14 @@ export function TransactionalNotificationsPage() {
       render: (_: any, record: TransactionalNotification) => (
         <Space>
           <Tooltip title="Edit">
-            <UpsertTransactionalNotificationDrawer
-              workspace={currentWorkspace}
-              notification={record}
-              templates={templates}
-              buttonContent={<EditOutlined />}
-              buttonProps={{ type: 'text', size: 'small' }}
-            />
+            {currentWorkspace && (
+              <UpsertTransactionalNotificationDrawer
+                workspace={currentWorkspace}
+                notification={record}
+                buttonContent={<EditOutlined />}
+                buttonProps={{ type: 'text', size: 'small' }}
+              />
+            )}
           </Tooltip>
           <Tooltip title="Test">
             <Button type="text" size="small" onClick={() => handleTestNotification(record)}>
@@ -335,7 +280,6 @@ export function TransactionalNotificationsPage() {
         {currentWorkspace && hasNotifications && (
           <UpsertTransactionalNotificationDrawer
             workspace={currentWorkspace}
-            templates={templates}
             buttonContent={
               <Space>
                 <PlusOutlined /> New Notification
@@ -346,7 +290,7 @@ export function TransactionalNotificationsPage() {
         )}
       </div>
 
-      {isLoadingNotifications || isLoadingTemplates ? (
+      {isLoadingNotifications ? (
         <Table columns={columns} dataSource={[]} loading={true} rowKey="id" />
       ) : hasNotifications ? (
         <Table
@@ -365,9 +309,8 @@ export function TransactionalNotificationsPage() {
             {currentWorkspace && (
               <UpsertTransactionalNotificationDrawer
                 workspace={currentWorkspace}
-                templates={templates}
                 buttonContent="Create Notification"
-                buttonProps={{ size: 'large' }}
+                buttonProps={{ type: 'primary' }}
               />
             )}
           </div>

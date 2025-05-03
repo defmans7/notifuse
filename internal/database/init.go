@@ -206,7 +206,6 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			name VARCHAR(255) NOT NULL,
 			description TEXT,
 			channels JSONB NOT NULL,
-			status VARCHAR(20) NOT NULL,
 			is_public BOOLEAN NOT NULL DEFAULT FALSE,
 			metadata JSONB,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -218,7 +217,6 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_message_history_template_id ON message_history(template_id, template_version)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_status ON message_history(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_sent_at ON message_history(sent_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_transactional_notifications_status ON transactional_notifications(status)`,
 	}
 
 	// Run all table creation queries

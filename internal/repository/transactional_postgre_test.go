@@ -50,13 +50,11 @@ func createTestNotification() *domain.TransactionalNotification {
 		Channels: domain.ChannelTemplates{
 			domain.TransactionalChannelEmail: domain.ChannelTemplate{
 				TemplateID: "template-123",
-				Version:    1,
 				Settings: domain.MapOfAny{
 					"subject": "Test Subject",
 				},
 			},
 		},
-		Status:    domain.TransactionalStatusActive,
 		IsPublic:  false,
 		Metadata:  domain.MapOfAny{"category": "test"},
 		CreatedAt: now,
@@ -87,7 +85,6 @@ func TestTransactionalNotificationRepository_Create(t *testing.T) {
 			notification.Name,
 			notification.Description,
 			notification.Channels,
-			notification.Status,
 			notification.IsPublic,
 			notification.Metadata,
 			sqlmock.AnyArg(), // CreatedAt
@@ -150,7 +147,6 @@ func TestTransactionalNotificationRepository_Create_QueryError(t *testing.T) {
 			notification.Name,
 			notification.Description,
 			notification.Channels,
-			notification.Status,
 			notification.IsPublic,
 			notification.Metadata,
 			sqlmock.AnyArg(), // CreatedAt
@@ -190,7 +186,6 @@ func TestTransactionalNotificationRepository_Update(t *testing.T) {
 			notification.Name,
 			notification.Description,
 			notification.Channels,
-			notification.Status,
 			notification.IsPublic,
 			notification.Metadata,
 			sqlmock.AnyArg(), // UpdatedAt
@@ -229,7 +224,6 @@ func TestTransactionalNotificationRepository_Update_NotFound(t *testing.T) {
 			notification.Name,
 			notification.Description,
 			notification.Channels,
-			notification.Status,
 			notification.IsPublic,
 			notification.Metadata,
 			sqlmock.AnyArg(), // UpdatedAt
@@ -266,14 +260,13 @@ func TestTransactionalNotificationRepository_Get(t *testing.T) {
 
 	// Expected query execution
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "channels", "status", "is_public", "metadata", "created_at", "updated_at", "deleted_at",
+		"id", "name", "description", "channels", "is_public", "metadata", "created_at", "updated_at", "deleted_at",
 	}).
 		AddRow(
 			notification.ID,
 			notification.Name,
 			notification.Description,
 			notification.Channels,
-			notification.Status,
 			notification.IsPublic,
 			notification.Metadata,
 			notification.CreatedAt,
@@ -293,7 +286,6 @@ func TestTransactionalNotificationRepository_Get(t *testing.T) {
 	assert.Equal(t, notification.ID, result.ID)
 	assert.Equal(t, notification.Name, result.Name)
 	assert.Equal(t, notification.Description, result.Description)
-	assert.Equal(t, notification.Status, result.Status)
 	require.NoError(t, mock.ExpectationsWereMet())
 	require.NoError(t, mockWorkspaceDB.ExpectationsWereMet())
 }
@@ -334,7 +326,7 @@ func TestTransactionalNotificationRepository_List(t *testing.T) {
 	defer db.Close()
 
 	workspace := "test-workspace"
-	filter := map[string]interface{}{"status": domain.TransactionalStatusActive}
+	filter := map[string]interface{}{}
 	limit := 10
 	offset := 0
 
@@ -355,19 +347,17 @@ func TestTransactionalNotificationRepository_List(t *testing.T) {
 	// Mock the count query
 	countRows := sqlmock.NewRows([]string{"count"}).AddRow(2)
 	mockWorkspaceDB.ExpectQuery("SELECT COUNT\\(\\*\\) FROM transactional_notifications").
-		WithArgs(domain.TransactionalStatusActive).
 		WillReturnRows(countRows)
 
 	// Mock the list query
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "channels", "status", "is_public", "metadata", "created_at", "updated_at", "deleted_at",
+		"id", "name", "description", "channels", "is_public", "metadata", "created_at", "updated_at", "deleted_at",
 	}).
 		AddRow(
 			notification1.ID,
 			notification1.Name,
 			notification1.Description,
 			notification1.Channels,
-			notification1.Status,
 			notification1.IsPublic,
 			notification1.Metadata,
 			notification1.CreatedAt,
@@ -379,7 +369,6 @@ func TestTransactionalNotificationRepository_List(t *testing.T) {
 			notification2.Name,
 			notification2.Description,
 			notification2.Channels,
-			notification2.Status,
 			notification2.IsPublic,
 			notification2.Metadata,
 			notification2.CreatedAt,
@@ -388,7 +377,7 @@ func TestTransactionalNotificationRepository_List(t *testing.T) {
 		)
 
 	mockWorkspaceDB.ExpectQuery("SELECT (.+) FROM transactional_notifications").
-		WithArgs(domain.TransactionalStatusActive).
+		WithArgs().
 		WillReturnRows(rows)
 
 	// Execute the method under test
@@ -412,7 +401,6 @@ func TestTransactionalNotificationRepository_List_WithSearch(t *testing.T) {
 	searchTerm := "test"
 	filter := map[string]interface{}{
 		"search": searchTerm,
-		"status": domain.TransactionalStatusActive,
 	}
 	limit := 10
 	offset := 0
@@ -431,19 +419,18 @@ func TestTransactionalNotificationRepository_List_WithSearch(t *testing.T) {
 	// Mock the count query with search pattern
 	countRows := sqlmock.NewRows([]string{"count"}).AddRow(1)
 	mockWorkspaceDB.ExpectQuery("SELECT COUNT\\(\\*\\) FROM transactional_notifications").
-		WithArgs(domain.TransactionalStatusActive, "%"+searchTerm+"%").
+		WithArgs("%" + searchTerm + "%").
 		WillReturnRows(countRows)
 
 	// Mock the list query with search pattern
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "channels", "status", "is_public", "metadata", "created_at", "updated_at", "deleted_at",
+		"id", "name", "description", "channels", "is_public", "metadata", "created_at", "updated_at", "deleted_at",
 	}).
 		AddRow(
 			notification.ID,
 			notification.Name,
 			notification.Description,
 			notification.Channels,
-			notification.Status,
 			notification.IsPublic,
 			notification.Metadata,
 			notification.CreatedAt,
@@ -452,7 +439,7 @@ func TestTransactionalNotificationRepository_List_WithSearch(t *testing.T) {
 		)
 
 	mockWorkspaceDB.ExpectQuery("SELECT (.+) FROM transactional_notifications").
-		WithArgs(domain.TransactionalStatusActive, "%"+searchTerm+"%").
+		WithArgs("%" + searchTerm + "%").
 		WillReturnRows(rows)
 
 	// Execute the method under test

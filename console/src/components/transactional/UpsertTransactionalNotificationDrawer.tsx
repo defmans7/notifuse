@@ -1,0 +1,287 @@
+import { useState, useEffect } from 'react'
+import { Button, Drawer, Form, Input, Space, App, Switch } from 'antd'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  transactionalNotificationsApi,
+  TransactionalNotification,
+  CreateTransactionalNotificationRequest,
+  UpdateTransactionalNotificationRequest
+} from '../../services/api/transactional_notifications'
+import type { Workspace } from '../../services/api/types'
+import TemplateSelectorInput from '../templates/TemplateSelectorInput'
+import React from 'react'
+
+// Helper function to generate a valid API ID from a name
+const generateApiId = (name: string): string => {
+  if (!name) return ''
+
+  // Remove special characters, replace spaces with underscores, and convert to lowercase
+  return name
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+}
+
+interface UpsertTransactionalNotificationDrawerProps {
+  workspace: Workspace
+  notification?: TransactionalNotification
+  buttonProps?: any
+  buttonContent?: React.ReactNode
+  onClose?: () => void
+}
+
+export function UpsertTransactionalNotificationDrawer({
+  workspace,
+  notification,
+  buttonProps = {},
+  buttonContent,
+  onClose
+}: UpsertTransactionalNotificationDrawerProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [form] = Form.useForm()
+  const queryClient = useQueryClient()
+  const [loading, setLoading] = useState(false)
+  const { message, modal } = App.useApp()
+  const [formTouched, setFormTouched] = useState(false)
+
+  // Watch notification name changes using Form.useWatch
+  const notificationName = Form.useWatch('name', form)
+
+  // Update API ID when name changes
+  useEffect(() => {
+    if (notificationName && isOpen && !notification) {
+      // Only auto-generate ID for new notifications
+      const apiId = generateApiId(notificationName)
+      form.setFieldValue('id', apiId)
+    }
+  }, [notificationName, form, isOpen, notification])
+
+  const upsertNotificationMutation = useMutation({
+    mutationFn: (
+      values: CreateTransactionalNotificationRequest | UpdateTransactionalNotificationRequest
+    ) => {
+      if (notification) {
+        return transactionalNotificationsApi.update(
+          values as UpdateTransactionalNotificationRequest
+        )
+      } else {
+        return transactionalNotificationsApi.create(
+          values as CreateTransactionalNotificationRequest
+        )
+      }
+    },
+    onSuccess: () => {
+      message.success(`Notification ${notification ? 'updated' : 'created'} successfully`)
+      handleClose()
+      queryClient.invalidateQueries({ queryKey: ['transactional-notifications', workspace.id] })
+      setLoading(false)
+    },
+    onError: (error) => {
+      message.error(
+        `Failed to ${notification ? 'update' : 'create'} notification: ${error.message}`
+      )
+      setLoading(false)
+    }
+  })
+
+  const showDrawer = () => {
+    if (notification) {
+      // For existing notifications, populate form with current values
+      form.setFieldsValue({
+        id: notification.id,
+        name: notification.name,
+        description: notification.description,
+        is_public: notification.is_public,
+        channels: notification.channels,
+        metadata: notification.metadata || undefined
+      })
+    } else {
+      // Set default values for a new notification
+      form.setFieldsValue({
+        id: '',
+        name: '',
+        description: '',
+        is_public: false,
+        channels: {
+          email: {
+            template_id: ''
+          }
+        }
+      })
+    }
+    setFormTouched(false)
+    setIsOpen(true)
+  }
+
+  const handleClose = () => {
+    if (formTouched && !loading && !upsertNotificationMutation.isPending) {
+      modal.confirm({
+        title: 'Unsaved changes',
+        content: 'You have unsaved changes. Are you sure you want to close this drawer?',
+        okText: 'Yes',
+        cancelText: 'No',
+        onOk: () => {
+          setIsOpen(false)
+          form.resetFields()
+          setFormTouched(false)
+          if (onClose) {
+            onClose()
+          }
+        }
+      })
+    } else {
+      setIsOpen(false)
+      form.resetFields()
+      setFormTouched(false)
+      if (onClose) {
+        onClose()
+      }
+    }
+  }
+
+  const renderDrawerFooter = () => {
+    return (
+      <div className="text-right">
+        <Space>
+          <Button type="link" loading={loading} onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button
+            loading={loading || upsertNotificationMutation.isPending}
+            onClick={() => {
+              form.submit()
+            }}
+            type="primary"
+          >
+            Save
+          </Button>
+        </Space>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <Button onClick={showDrawer} {...buttonProps}>
+        {buttonContent || (notification ? 'Edit Notification' : 'Create Notification')}
+      </Button>
+      {isOpen && (
+        <Drawer
+          title={<>{notification ? 'Edit notification' : 'Create a notification'}</>}
+          closable={true}
+          width={600}
+          keyboard={false}
+          maskClosable={false}
+          open={isOpen}
+          onClose={handleClose}
+          className="drawer-no-transition drawer-body-no-padding"
+          extra={renderDrawerFooter()}
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={(values) => {
+              setLoading(true)
+
+              if (notification) {
+                // Update notification
+                const payload: UpdateTransactionalNotificationRequest = {
+                  workspace_id: workspace.id,
+                  id: notification.id,
+                  updates: {
+                    name: values.name,
+                    description: values.description,
+                    is_public: values.is_public,
+                    channels: values.channels,
+                    metadata: values.metadata
+                  }
+                }
+                upsertNotificationMutation.mutate(payload)
+              } else {
+                // Create notification
+                const payload: CreateTransactionalNotificationRequest = {
+                  workspace_id: workspace.id,
+                  notification: {
+                    id: values.id,
+                    name: values.name,
+                    description: values.description,
+                    is_public: values.is_public,
+                    channels: values.channels,
+                    metadata: values.metadata
+                  }
+                }
+                upsertNotificationMutation.mutate(payload)
+              }
+            }}
+            onFinishFailed={(info) => {
+              if (info.errorFields) {
+                message.error(`Please check the form for errors.`)
+              }
+              setLoading(false)
+            }}
+            onValuesChange={() => {
+              setFormTouched(true)
+            }}
+          >
+            <div className="p-8">
+              <Form.Item
+                name="name"
+                label="Notification name"
+                rules={[{ required: true, message: 'Please enter a notification name' }]}
+              >
+                <Input placeholder="E.g. Password Reset Email" />
+              </Form.Item>
+
+              <Form.Item
+                name="id"
+                label="API Identifier"
+                tooltip="This ID will be used when triggering the notification via API"
+                rules={[
+                  { required: true, message: 'Please enter an API identifier' },
+                  {
+                    pattern: /^[a-z0-9_]+$/,
+                    message: 'ID can only contain lowercase letters, numbers, and underscores'
+                  }
+                ]}
+              >
+                <Input placeholder="E.g. password_reset" disabled={!!notification} />
+              </Form.Item>
+
+              <Form.Item name="description" label="Description">
+                <Input.TextArea
+                  rows={3}
+                  placeholder="A brief description of this notification's purpose"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name={['channels', 'email', 'template_id']}
+                label="Email Template"
+                rules={[{ required: true, message: 'Please select an email template' }]}
+              >
+                <TemplateSelectorInput
+                  workspaceId={workspace.id}
+                  placeholder="Select email template"
+                  category="transactional"
+                  utmDisabled={false}
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="is_public"
+                label="User Visible"
+                valuePropName="checked"
+                tooltip="When enabled, users can view and mute this notification in their notification center"
+              >
+                <Switch />
+              </Form.Item>
+            </div>
+          </Form>
+        </Drawer>
+      )}
+    </>
+  )
+}
+
+export default UpsertTransactionalNotificationDrawer

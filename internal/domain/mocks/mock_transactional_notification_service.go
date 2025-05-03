@@ -36,53 +36,67 @@ func (m *MockTransactionalNotificationService) EXPECT() *MockTransactionalNotifi
 }
 
 // CreateNotification mocks base method.
-func (m *MockTransactionalNotificationService) CreateNotification(ctx context.Context, workspace string, params domain.TransactionalNotificationCreateParams) (*domain.TransactionalNotification, error) {
+func (m *MockTransactionalNotificationService) CreateNotification(arg0 context.Context, arg1 string, arg2 domain.TransactionalNotificationCreateParams) (*domain.TransactionalNotification, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateNotification", ctx, workspace, params)
+	ret := m.ctrl.Call(m, "CreateNotification", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.TransactionalNotification)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateNotification indicates an expected call of CreateNotification.
-func (mr *MockTransactionalNotificationServiceMockRecorder) CreateNotification(ctx, workspace, params interface{}) *gomock.Call {
+func (mr *MockTransactionalNotificationServiceMockRecorder) CreateNotification(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).CreateNotification), ctx, workspace, params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).CreateNotification), arg0, arg1, arg2)
 }
 
 // DeleteNotification mocks base method.
-func (m *MockTransactionalNotificationService) DeleteNotification(ctx context.Context, workspace, id string) error {
+func (m *MockTransactionalNotificationService) DeleteNotification(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteNotification", ctx, workspace, id)
+	ret := m.ctrl.Call(m, "DeleteNotification", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteNotification indicates an expected call of DeleteNotification.
-func (mr *MockTransactionalNotificationServiceMockRecorder) DeleteNotification(ctx, workspace, id interface{}) *gomock.Call {
+func (mr *MockTransactionalNotificationServiceMockRecorder) DeleteNotification(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).DeleteNotification), ctx, workspace, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).DeleteNotification), arg0, arg1, arg2)
+}
+
+// DoSendEmailNotification mocks base method.
+func (m *MockTransactionalNotificationService) DoSendEmailNotification(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 domain.ChannelTemplate, arg5 domain.MessageData) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DoSendEmailNotification", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DoSendEmailNotification indicates an expected call of DoSendEmailNotification.
+func (mr *MockTransactionalNotificationServiceMockRecorder) DoSendEmailNotification(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoSendEmailNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).DoSendEmailNotification), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // GetNotification mocks base method.
-func (m *MockTransactionalNotificationService) GetNotification(ctx context.Context, workspace, id string) (*domain.TransactionalNotification, error) {
+func (m *MockTransactionalNotificationService) GetNotification(arg0 context.Context, arg1, arg2 string) (*domain.TransactionalNotification, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNotification", ctx, workspace, id)
+	ret := m.ctrl.Call(m, "GetNotification", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.TransactionalNotification)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetNotification indicates an expected call of GetNotification.
-func (mr *MockTransactionalNotificationServiceMockRecorder) GetNotification(ctx, workspace, id interface{}) *gomock.Call {
+func (mr *MockTransactionalNotificationServiceMockRecorder) GetNotification(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).GetNotification), ctx, workspace, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).GetNotification), arg0, arg1, arg2)
 }
 
 // ListNotifications mocks base method.
-func (m *MockTransactionalNotificationService) ListNotifications(ctx context.Context, workspace string, filter map[string]interface{}, limit, offset int) ([]*domain.TransactionalNotification, int, error) {
+func (m *MockTransactionalNotificationService) ListNotifications(arg0 context.Context, arg1 string, arg2 map[string]interface{}, arg3, arg4 int) ([]*domain.TransactionalNotification, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListNotifications", ctx, workspace, filter, limit, offset)
+	ret := m.ctrl.Call(m, "ListNotifications", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].([]*domain.TransactionalNotification)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -90,37 +104,37 @@ func (m *MockTransactionalNotificationService) ListNotifications(ctx context.Con
 }
 
 // ListNotifications indicates an expected call of ListNotifications.
-func (mr *MockTransactionalNotificationServiceMockRecorder) ListNotifications(ctx, workspace, filter, limit, offset interface{}) *gomock.Call {
+func (mr *MockTransactionalNotificationServiceMockRecorder) ListNotifications(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotifications", reflect.TypeOf((*MockTransactionalNotificationService)(nil).ListNotifications), ctx, workspace, filter, limit, offset)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotifications", reflect.TypeOf((*MockTransactionalNotificationService)(nil).ListNotifications), arg0, arg1, arg2, arg3, arg4)
 }
 
 // SendNotification mocks base method.
-func (m *MockTransactionalNotificationService) SendNotification(ctx context.Context, workspace string, params domain.TransactionalNotificationSendParams) (string, error) {
+func (m *MockTransactionalNotificationService) SendNotification(arg0 context.Context, arg1 string, arg2 domain.TransactionalNotificationSendParams) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendNotification", ctx, workspace, params)
+	ret := m.ctrl.Call(m, "SendNotification", arg0, arg1, arg2)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SendNotification indicates an expected call of SendNotification.
-func (mr *MockTransactionalNotificationServiceMockRecorder) SendNotification(ctx, workspace, params interface{}) *gomock.Call {
+func (mr *MockTransactionalNotificationServiceMockRecorder) SendNotification(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).SendNotification), ctx, workspace, params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).SendNotification), arg0, arg1, arg2)
 }
 
 // UpdateNotification mocks base method.
-func (m *MockTransactionalNotificationService) UpdateNotification(ctx context.Context, workspace, id string, params domain.TransactionalNotificationUpdateParams) (*domain.TransactionalNotification, error) {
+func (m *MockTransactionalNotificationService) UpdateNotification(arg0 context.Context, arg1, arg2 string, arg3 domain.TransactionalNotificationUpdateParams) (*domain.TransactionalNotification, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateNotification", ctx, workspace, id, params)
+	ret := m.ctrl.Call(m, "UpdateNotification", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*domain.TransactionalNotification)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateNotification indicates an expected call of UpdateNotification.
-func (mr *MockTransactionalNotificationServiceMockRecorder) UpdateNotification(ctx, workspace, id, params interface{}) *gomock.Call {
+func (mr *MockTransactionalNotificationServiceMockRecorder) UpdateNotification(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).UpdateNotification), ctx, workspace, id, params)
-} 
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).UpdateNotification), arg0, arg1, arg2, arg3)
+}

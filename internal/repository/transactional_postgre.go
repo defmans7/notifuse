@@ -39,9 +39,9 @@ func (r *TransactionalNotificationRepository) Create(ctx context.Context, worksp
 
 	query := `
 		INSERT INTO transactional_notifications (
-			id, name, description, channels, status, is_public, metadata, created_at, updated_at
+			id, name, description, channels, is_public, metadata, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9
+			$1, $2, $3, $4, $5, $6, $7, $8
 		)
 	`
 
@@ -52,7 +52,6 @@ func (r *TransactionalNotificationRepository) Create(ctx context.Context, worksp
 		notification.Name,
 		notification.Description,
 		notification.Channels,
-		notification.Status,
 		notification.IsPublic,
 		notification.Metadata,
 		notification.CreatedAt,
@@ -82,11 +81,10 @@ func (r *TransactionalNotificationRepository) Update(ctx context.Context, worksp
 		SET name = $1,
 			description = $2,
 			channels = $3,
-			status = $4,
-			is_public = $5,
-			metadata = $6,
-			updated_at = $7
-		WHERE id = $8 AND deleted_at IS NULL
+			is_public = $4,
+			metadata = $5,
+			updated_at = $6
+		WHERE id = $7 AND deleted_at IS NULL
 	`
 
 	result, err := db.ExecContext(
@@ -95,7 +93,6 @@ func (r *TransactionalNotificationRepository) Update(ctx context.Context, worksp
 		notification.Name,
 		notification.Description,
 		notification.Channels,
-		notification.Status,
 		notification.IsPublic,
 		notification.Metadata,
 		notification.UpdatedAt,
@@ -127,7 +124,7 @@ func (r *TransactionalNotificationRepository) Get(ctx context.Context, workspace
 	}
 
 	query := `
-		SELECT id, name, description, channels, status, is_public, metadata, created_at, updated_at, deleted_at
+		SELECT id, name, description, channels, is_public, metadata, created_at, updated_at, deleted_at
 		FROM transactional_notifications
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -138,7 +135,6 @@ func (r *TransactionalNotificationRepository) Get(ctx context.Context, workspace
 		&notification.Name,
 		&notification.Description,
 		&notification.Channels,
-		&notification.Status,
 		&notification.IsPublic,
 		&notification.Metadata,
 		&notification.CreatedAt,
@@ -169,13 +165,6 @@ func (r *TransactionalNotificationRepository) List(ctx context.Context, workspac
 	args := []interface{}{}
 	argIndex := 1
 
-	// Add status filter if provided
-	if status, ok := filter["status"]; ok {
-		whereClause += fmt.Sprintf(" AND status = $%d", argIndex)
-		args = append(args, status)
-		argIndex++
-	}
-
 	// Search by name if provided
 	if search, ok := filter["search"]; ok {
 		whereClause += fmt.Sprintf(" AND (name ILIKE $%d OR id ILIKE $%d)", argIndex, argIndex)
@@ -200,7 +189,7 @@ func (r *TransactionalNotificationRepository) List(ctx context.Context, workspac
 
 	// Get the actual records
 	query := `
-		SELECT id, name, description, channels, status, is_public, metadata, created_at, updated_at, deleted_at
+		SELECT id, name, description, channels, is_public, metadata, created_at, updated_at, deleted_at
 		FROM transactional_notifications
 		` + whereClause + `
 		ORDER BY created_at DESC
@@ -220,7 +209,6 @@ func (r *TransactionalNotificationRepository) List(ctx context.Context, workspac
 			&notification.Name,
 			&notification.Description,
 			&notification.Channels,
-			&notification.Status,
 			&notification.IsPublic,
 			&notification.Metadata,
 			&notification.CreatedAt,

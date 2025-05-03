@@ -147,11 +147,11 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 		Return(testBroadcast, nil)
 
 	mockTemplateService.EXPECT().
-		GetTemplateByID(ctx, workspaceID, "template-1", int64(1)).
+		GetTemplateByID(ctx, workspaceID, "template-1", int64(0)).
 		Return(template1, nil)
 
 	mockTemplateService.EXPECT().
-		GetTemplateByID(ctx, workspaceID, "template-2", int64(1)).
+		GetTemplateByID(ctx, workspaceID, "template-2", int64(0)).
 		Return(template2, nil)
 
 	// Execute

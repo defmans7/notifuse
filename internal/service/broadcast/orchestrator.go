@@ -122,7 +122,7 @@ func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, w
 	// Load all templates
 	templates := make(map[string]*domain.Template)
 	for templateID := range templateIDs {
-		template, err := o.templateService.GetTemplateByID(ctx, workspaceID, templateID, 1) // Always use version 1
+		template, err := o.templateService.GetTemplateByID(ctx, workspaceID, templateID, 0) // Always use version 0
 		if err != nil {
 			o.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,

@@ -15,6 +15,9 @@ import (
 	"github.com/asaskevich/govalidator"
 )
 
+//go:generate mockgen -destination mocks/mock_template_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TemplateService
+//go:generate mockgen -destination mocks/mock_template_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain TemplateRepository
+
 type TemplateCategory string
 
 const (

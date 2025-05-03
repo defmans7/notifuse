@@ -694,3 +694,416 @@ func TestEmailProvider_ValidateWithMailjet(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Mailjet settings required")
 }
+
+func TestPostmarkSettings_Validate(t *testing.T) {
+	tests := []struct {
+		name          string
+		settings      PostmarkSettings
+		passphrase    string
+		expectedError bool
+	}{
+		{
+			name: "valid settings with server token",
+			settings: PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+			passphrase:    "test-passphrase",
+			expectedError: false,
+		},
+		{
+			name:          "valid settings with empty server token",
+			settings:      PostmarkSettings{},
+			passphrase:    "test-passphrase",
+			expectedError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a copy of the settings to test
+			settings := tt.settings
+
+			err := settings.Validate(tt.passphrase)
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.settings.ServerToken != "" {
+					assert.NotEmpty(t, settings.EncryptedServerToken)
+					// Unlike other providers, PostmarkSettings.Validate doesn't clear ServerToken
+					// so we don't check for empty ServerToken here
+				}
+			}
+		})
+	}
+}
+
+func TestPostmarkSettings_EncryptDecryptServerToken(t *testing.T) {
+	settings := PostmarkSettings{
+		ServerToken: "test-server-token",
+	}
+	passphrase := "test-passphrase"
+
+	// Test encryption
+	err := settings.EncryptServerToken(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedServerToken)
+	assert.NotEqual(t, "test-server-token", settings.EncryptedServerToken)
+
+	// Clear original server token
+	originalServerToken := settings.ServerToken
+	settings.ServerToken = ""
+
+	// Test decryption
+	err = settings.DecryptServerToken(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, originalServerToken, settings.ServerToken)
+}
+
+// Expand the existing test to cover all providers
+func TestEmailProviderEncryptDecryptSecretKeys_AllProviders(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	// Test Postmark provider
+	t.Run("Postmark provider secret keys", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindPostmark,
+			Postmark: &PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+		}
+
+		// Encrypt all secret keys
+		err := provider.EncryptSecretKeys(passphrase)
+		require.NoError(t, err)
+		assert.Empty(t, provider.Postmark.ServerToken)
+		assert.NotEmpty(t, provider.Postmark.EncryptedServerToken)
+
+		// Decrypt all secret keys
+		err = provider.DecryptSecretKeys(passphrase)
+		require.NoError(t, err)
+		assert.Equal(t, "test-server-token", provider.Postmark.ServerToken)
+	})
+
+	// Test Mailgun provider
+	t.Run("Mailgun provider secret keys", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindMailgun,
+			Mailgun: &MailgunSettings{
+				APIKey: "test-api-key",
+				Domain: "example.com",
+			},
+		}
+
+		// Encrypt all secret keys
+		err := provider.EncryptSecretKeys(passphrase)
+		require.NoError(t, err)
+		assert.Empty(t, provider.Mailgun.APIKey)
+		assert.NotEmpty(t, provider.Mailgun.EncryptedAPIKey)
+
+		// Decrypt all secret keys
+		err = provider.DecryptSecretKeys(passphrase)
+		require.NoError(t, err)
+		assert.Equal(t, "test-api-key", provider.Mailgun.APIKey)
+	})
+
+	// Test Mailjet provider with both keys
+	t.Run("Mailjet provider both secret keys", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindMailjet,
+			Mailjet: &MailjetSettings{
+				APIKey:    "test-api-key",
+				SecretKey: "test-secret-key",
+			},
+		}
+
+		// Encrypt all secret keys
+		err := provider.EncryptSecretKeys(passphrase)
+		require.NoError(t, err)
+		assert.Empty(t, provider.Mailjet.APIKey)
+		assert.Empty(t, provider.Mailjet.SecretKey)
+		assert.NotEmpty(t, provider.Mailjet.EncryptedAPIKey)
+		assert.NotEmpty(t, provider.Mailjet.EncryptedSecretKey)
+
+		// Decrypt all secret keys
+		err = provider.DecryptSecretKeys(passphrase)
+		require.NoError(t, err)
+		assert.Equal(t, "test-api-key", provider.Mailjet.APIKey)
+		assert.Equal(t, "test-secret-key", provider.Mailjet.SecretKey)
+	})
+}
+
+func TestEmailProvider_ValidateWithPostmark(t *testing.T) {
+	// Valid provider with Postmark
+	provider := EmailProvider{
+		Kind:               EmailProviderKindPostmark,
+		DefaultSenderEmail: "from@example.com",
+		DefaultSenderName:  "Test Sender",
+		Postmark: &PostmarkSettings{
+			ServerToken: "test-server-token",
+		},
+	}
+
+	// Should validate without error
+	err := provider.Validate("test-passphrase")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, provider.Postmark.EncryptedServerToken)
+	// Unlike other providers, PostmarkSettings.Validate doesn't clear ServerToken
+	// so we don't check for empty ServerToken here
+
+	// Provider with missing Postmark settings
+	invalidProvider := EmailProvider{
+		Kind:               EmailProviderKindPostmark,
+		DefaultSenderEmail: "from@example.com",
+		DefaultSenderName:  "Test Sender",
+	}
+
+	// Should fail validation
+	err = invalidProvider.Validate("test-passphrase")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Postmark settings required")
+}
+
+// Add decryption error tests that don't rely on mocking
+func TestDecryptionErrors(t *testing.T) {
+	// Test decryption errors by using invalid encrypted values
+
+	// SES decryption error
+	t.Run("SES decryption error", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindSES,
+			SES: &AmazonSES{
+				// Set invalid encrypted data
+				EncryptedSecretKey: "invalid-encrypted-data",
+			},
+		}
+
+		err := provider.DecryptSecretKeys("any-passphrase")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt SES secret key")
+	})
+
+	// SMTP decryption error
+	t.Run("SMTP decryption error", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindSMTP,
+			SMTP: &SMTPSettings{
+				// Set invalid encrypted data
+				EncryptedPassword: "invalid-encrypted-data",
+			},
+		}
+
+		err := provider.DecryptSecretKeys("any-passphrase")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt SMTP password")
+	})
+
+	// SparkPost decryption error
+	t.Run("SparkPost decryption error", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindSparkPost,
+			SparkPost: &SparkPostSettings{
+				// Set invalid encrypted data
+				EncryptedAPIKey: "invalid-encrypted-data",
+			},
+		}
+
+		err := provider.DecryptSecretKeys("any-passphrase")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt SparkPost API key")
+	})
+
+	// Postmark decryption error
+	t.Run("Postmark decryption error", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindPostmark,
+			Postmark: &PostmarkSettings{
+				// Set invalid encrypted data
+				EncryptedServerToken: "invalid-encrypted-data",
+			},
+		}
+
+		err := provider.DecryptSecretKeys("any-passphrase")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt Postmark server token")
+	})
+
+	// Mailgun decryption error
+	t.Run("Mailgun decryption error", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindMailgun,
+			Mailgun: &MailgunSettings{
+				// Set invalid encrypted data
+				EncryptedAPIKey: "invalid-encrypted-data",
+			},
+		}
+
+		err := provider.DecryptSecretKeys("any-passphrase")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt Mailgun API key")
+	})
+
+	// Mailjet decryption errors
+	t.Run("Mailjet API key decryption error", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindMailjet,
+			Mailjet: &MailjetSettings{
+				// Set invalid encrypted data
+				EncryptedAPIKey: "invalid-encrypted-data",
+			},
+		}
+
+		err := provider.DecryptSecretKeys("any-passphrase")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt Mailjet API key")
+	})
+
+	t.Run("Mailjet Secret key decryption error", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind: EmailProviderKindMailjet,
+			Mailjet: &MailjetSettings{
+				// Set invalid encrypted data for secret key only
+				EncryptedSecretKey: "invalid-encrypted-data",
+			},
+		}
+
+		err := provider.DecryptSecretKeys("any-passphrase")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt Mailjet Secret key")
+	})
+}
+
+// Add more validations for edge cases and missing settings
+func TestEmailProvider_AdditionalValidation(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	t.Run("Invalid kind with valid settings", func(t *testing.T) {
+		provider := EmailProvider{
+			Kind:               "invalid",
+			DefaultSenderEmail: "default@example.com",
+			DefaultSenderName:  "Default Sender",
+			// Add all possible settings to ensure they don't override kind validation
+			SMTP: &SMTPSettings{
+				Host:     "smtp.example.com",
+				Port:     587,
+				Username: "user@example.com",
+				Password: "password",
+			},
+			SES: &AmazonSES{
+				Region:    "us-east-1",
+				AccessKey: "test-access-key",
+				SecretKey: "test-secret-key",
+			},
+			SparkPost: &SparkPostSettings{
+				APIKey:   "test-api-key",
+				Endpoint: "https://api.sparkpost.com",
+			},
+		}
+
+		err := provider.Validate(passphrase)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid email provider kind")
+	})
+
+	t.Run("Multiple provider errors", func(t *testing.T) {
+		// Test that validation fails even when multiple providers have valid settings
+		// if the Kind doesn't match
+		provider := EmailProvider{
+			Kind:               EmailProviderKindSMTP,
+			DefaultSenderEmail: "default@example.com",
+			DefaultSenderName:  "Default Sender",
+			// Missing SMTP settings but have SES settings
+			SES: &AmazonSES{
+				Region:    "us-east-1",
+				AccessKey: "test-access-key",
+				SecretKey: "test-secret-key",
+			},
+		}
+
+		err := provider.Validate(passphrase)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SMTP settings required")
+	})
+
+	t.Run("Empty provider", func(t *testing.T) {
+		provider := EmailProvider{}
+		err := provider.Validate(passphrase)
+		assert.NoError(t, err)
+	})
+}
+
+// Test encryption/decryption with invalid passphrase formats
+func TestEncryptDecrypt_PassphraseEdgeCases(t *testing.T) {
+	t.Run("Empty vs non-empty passphrase", func(t *testing.T) {
+		// Encrypt with empty passphrase
+		emptyPassphrase := ""
+		nonEmptyPassphrase := "test-passphrase"
+
+		smtp1 := SMTPSettings{
+			Password: "test-password",
+		}
+
+		smtp2 := SMTPSettings{
+			Password: "test-password",
+		}
+
+		// Encrypt both with different passphrases
+		err1 := smtp1.EncryptPassword(emptyPassphrase)
+		err2 := smtp2.EncryptPassword(nonEmptyPassphrase)
+
+		// Both should succeed
+		assert.NoError(t, err1)
+		assert.NoError(t, err2)
+
+		// But they should produce different encrypted values
+		assert.NotEqual(t, smtp1.EncryptedPassword, smtp2.EncryptedPassword)
+
+		// Decrypt with wrong passphrase should fail
+		smtp1.Password = ""
+		err := smtp1.DecryptPassword(nonEmptyPassphrase)
+		assert.Error(t, err)
+	})
+
+	t.Run("Very long passphrase", func(t *testing.T) {
+		// Using a valid long passphrase should still work
+		longPassphrase := string(make([]byte, 1000))
+		for i := range longPassphrase {
+			longPassphrase = longPassphrase[:i] + "a" + longPassphrase[i+1:]
+		}
+
+		smtp := SMTPSettings{
+			Password: "test-password",
+		}
+
+		// Should still work with a long passphrase
+		err := smtp.EncryptPassword(longPassphrase)
+		assert.NoError(t, err)
+
+		// Should be able to decrypt with the same long passphrase
+		originalPassword := smtp.Password
+		smtp.Password = ""
+		err = smtp.DecryptPassword(longPassphrase)
+		assert.NoError(t, err)
+		assert.Equal(t, originalPassword, smtp.Password)
+	})
+
+	t.Run("Wrong passphrase for decryption", func(t *testing.T) {
+		// First encrypt with the correct passphrase
+		correctPassphrase := "correct-passphrase"
+		wrongPassphrase := "wrong-passphrase"
+
+		sparkpost := SparkPostSettings{
+			APIKey: "test-api-key",
+		}
+
+		err := sparkpost.EncryptAPIKey(correctPassphrase)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, sparkpost.EncryptedAPIKey)
+
+		// Now try to decrypt with the wrong passphrase
+		sparkpost.APIKey = ""
+		err = sparkpost.DecryptAPIKey(wrongPassphrase)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to decrypt SparkPost API key")
+	})
+}

@@ -58,19 +58,17 @@ func (s *TransactionalNotificationService) CreateNotification(
 		Name:        params.Name,
 		Description: params.Description,
 		Channels:    params.Channels,
-		Status:      params.Status,
 		Metadata:    params.Metadata,
 	}
 
 	// Validate the notification templates exist
 	for channel, template := range notification.Channels {
-		_, err := s.templateService.GetTemplateByID(ctx, workspace, template.TemplateID, int64(template.Version))
+		_, err := s.templateService.GetTemplateByID(ctx, workspace, template.TemplateID, 0)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"error":       err.Error(),
 				"channel":     channel,
 				"template_id": template.TemplateID,
-				"version":     template.Version,
 			}).Error("Invalid template for channel")
 			return nil, fmt.Errorf("invalid template for channel %s: %w", channel, err)
 		}
@@ -126,21 +124,17 @@ func (s *TransactionalNotificationService) UpdateNotification(
 	if params.Channels != nil {
 		// Validate the updated templates exist
 		for channel, template := range params.Channels {
-			_, err := s.templateService.GetTemplateByID(ctx, workspace, template.TemplateID, int64(template.Version))
+			_, err := s.templateService.GetTemplateByID(ctx, workspace, template.TemplateID, int64(0))
 			if err != nil {
 				s.logger.WithFields(map[string]interface{}{
 					"error":       err.Error(),
 					"channel":     channel,
 					"template_id": template.TemplateID,
-					"version":     template.Version,
 				}).Error("Invalid template for channel in update")
 				return nil, fmt.Errorf("invalid template for channel %s: %w", channel, err)
 			}
 		}
 		notification.Channels = params.Channels
-	}
-	if params.Status != "" {
-		notification.Status = params.Status
 	}
 	if params.Metadata != nil {
 		notification.Metadata = params.Metadata
@@ -254,11 +248,6 @@ func (s *TransactionalNotificationService) SendNotification(
 		return "", fmt.Errorf("notification not found: %w", err)
 	}
 
-	// Check if the notification is active
-	if notification.Status != domain.TransactionalStatusActive {
-		return "", fmt.Errorf("notification is not active")
-	}
-
 	// Upsert the contact first
 	if params.Contact == nil {
 		return "", fmt.Errorf("contact is required")
@@ -324,7 +313,7 @@ func (s *TransactionalNotificationService) SendNotification(
 
 		// Send the message based on channel type
 		if channel == domain.TransactionalChannelEmail {
-			err = s.sendEmailNotification(
+			err = s.DoSendEmailNotification(
 				ctx,
 				workspace,
 				messageID,
@@ -355,8 +344,8 @@ func (s *TransactionalNotificationService) SendNotification(
 	return messageID, nil
 }
 
-// sendEmailNotification handles sending through the email channel
-func (s *TransactionalNotificationService) sendEmailNotification(
+// DoSendEmailNotification handles sending through the email channel
+func (s *TransactionalNotificationService) DoSendEmailNotification(
 	ctx context.Context,
 	workspace string,
 	messageID string,
@@ -365,20 +354,18 @@ func (s *TransactionalNotificationService) sendEmailNotification(
 	messageData domain.MessageData,
 ) error {
 	s.logger.WithFields(map[string]interface{}{
-		"workspace":    workspace,
-		"message_id":   messageID,
-		"contact":      contact.Email,
-		"template_id":  templateConfig.TemplateID,
-		"template_ver": templateConfig.Version,
+		"workspace":   workspace,
+		"message_id":  messageID,
+		"contact":     contact.Email,
+		"template_id": templateConfig.TemplateID,
 	}).Debug("Preparing to send email notification")
 
 	// Get the template
-	template, err := s.templateService.GetTemplateByID(ctx, workspace, templateConfig.TemplateID, int64(templateConfig.Version))
+	template, err := s.templateService.GetTemplateByID(ctx, workspace, templateConfig.TemplateID, int64(0))
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"error":       err.Error(),
 			"template_id": templateConfig.TemplateID,
-			"version":     templateConfig.Version,
 		}).Error("Failed to get template")
 		return fmt.Errorf("failed to get template: %w", err)
 	}
@@ -389,7 +376,6 @@ func (s *TransactionalNotificationService) sendEmailNotification(
 		s.logger.WithFields(map[string]interface{}{
 			"error":       err.Error(),
 			"template_id": templateConfig.TemplateID,
-			"version":     templateConfig.Version,
 		}).Error("Failed to compile template")
 		return fmt.Errorf("failed to compile template: %w", err)
 	}
@@ -411,16 +397,15 @@ func (s *TransactionalNotificationService) sendEmailNotification(
 
 	// Create message history record
 	messageHistory := &domain.MessageHistory{
-		ID:              messageID,
-		ContactID:       contact.Email,
-		TemplateID:      templateConfig.TemplateID,
-		TemplateVersion: templateConfig.Version,
-		Channel:         "email",
-		Status:          domain.MessageStatusSent,
-		MessageData:     messageData,
-		SentAt:          time.Now().UTC(),
-		CreatedAt:       time.Now().UTC(),
-		UpdatedAt:       time.Now().UTC(),
+		ID:          messageID,
+		ContactID:   contact.Email,
+		TemplateID:  templateConfig.TemplateID,
+		Channel:     "email",
+		Status:      domain.MessageStatusSent,
+		MessageData: messageData,
+		SentAt:      time.Now().UTC(),
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 
 	// Save to message history

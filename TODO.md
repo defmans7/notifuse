@@ -4,10 +4,6 @@
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
 
-## API access
-
-- create an api key endpoint, that generates a paseto token without expiration and type "api_key"
-
 ## transactional email
 
 - create transactional email

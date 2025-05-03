@@ -4,7 +4,6 @@ import {
   Row,
   Col,
   Statistic,
-  Tag,
   Typography,
   Space,
   Tooltip,
@@ -763,7 +762,6 @@ export function BroadcastsPage() {
             {currentWorkspace && (
               <UpsertBroadcastDrawer
                 workspace={currentWorkspace}
-                buttonProps={{ size: 'large', icon: <MailOutlined /> }}
                 lists={lists}
                 buttonContent="Create Broadcast"
               />

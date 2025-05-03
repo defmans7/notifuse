@@ -65,36 +65,6 @@ func (mr *MockBroadcastSenderMockRecorder) GetBroadcast(arg0, arg1, arg2 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBroadcast", reflect.TypeOf((*MockBroadcastSender)(nil).GetBroadcast), arg0, arg1, arg2)
 }
 
-// GetBroadcastRecipients mocks base method.
-func (m *MockBroadcastSender) GetBroadcastRecipients(arg0 context.Context, arg1, arg2 string, arg3, arg4 int) ([]*domain.Contact, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBroadcastRecipients", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].([]*domain.Contact)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBroadcastRecipients indicates an expected call of GetBroadcastRecipients.
-func (mr *MockBroadcastSenderMockRecorder) GetBroadcastRecipients(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBroadcastRecipients", reflect.TypeOf((*MockBroadcastSender)(nil).GetBroadcastRecipients), arg0, arg1, arg2, arg3, arg4)
-}
-
-// GetRecipientCount mocks base method.
-func (m *MockBroadcastSender) GetRecipientCount(arg0 context.Context, arg1, arg2 string) (int, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRecipientCount", arg0, arg1, arg2)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRecipientCount indicates an expected call of GetRecipientCount.
-func (mr *MockBroadcastSenderMockRecorder) GetRecipientCount(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRecipientCount", reflect.TypeOf((*MockBroadcastSender)(nil).GetRecipientCount), arg0, arg1, arg2)
-}
-
 // GetTemplateByID mocks base method.
 func (m *MockBroadcastSender) GetTemplateByID(arg0 context.Context, arg1, arg2 string) (*domain.Template, error) {
 	m.ctrl.T.Helper()
@@ -110,22 +80,6 @@ func (mr *MockBroadcastSenderMockRecorder) GetTemplateByID(arg0, arg1, arg2 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplateByID", reflect.TypeOf((*MockBroadcastSender)(nil).GetTemplateByID), arg0, arg1, arg2)
 }
 
-// ProcessRecipients mocks base method.
-func (m *MockBroadcastSender) ProcessRecipients(arg0 context.Context, arg1, arg2 string, arg3, arg4 int) (int, int, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessRecipients", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(int)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// ProcessRecipients indicates an expected call of ProcessRecipients.
-func (mr *MockBroadcastSenderMockRecorder) ProcessRecipients(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessRecipients", reflect.TypeOf((*MockBroadcastSender)(nil).ProcessRecipients), arg0, arg1, arg2, arg3, arg4)
-}
-
 // RecordMessageSent mocks base method.
 func (m *MockBroadcastSender) RecordMessageSent(arg0 context.Context, arg1 string, arg2 *domain.MessageHistory) error {
 	m.ctrl.T.Helper()
@@ -138,34 +92,6 @@ func (m *MockBroadcastSender) RecordMessageSent(arg0 context.Context, arg1 strin
 func (mr *MockBroadcastSenderMockRecorder) RecordMessageSent(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordMessageSent", reflect.TypeOf((*MockBroadcastSender)(nil).RecordMessageSent), arg0, arg1, arg2)
-}
-
-// SendToContact mocks base method.
-func (m *MockBroadcastSender) SendToContact(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendToContact", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SendToContact indicates an expected call of SendToContact.
-func (mr *MockBroadcastSenderMockRecorder) SendToContact(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToContact", reflect.TypeOf((*MockBroadcastSender)(nil).SendToContact), arg0, arg1, arg2, arg3)
-}
-
-// SendToContactWithTemplates mocks base method.
-func (m *MockBroadcastSender) SendToContactWithTemplates(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 map[string]*domain.Template, arg5 map[string]interface{}) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendToContactWithTemplates", arg0, arg1, arg2, arg3, arg4, arg5)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SendToContactWithTemplates indicates an expected call of SendToContactWithTemplates.
-func (mr *MockBroadcastSenderMockRecorder) SendToContactWithTemplates(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToContactWithTemplates", reflect.TypeOf((*MockBroadcastSender)(nil).SendToContactWithTemplates), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // UpdateMessageStatus mocks base method.

@@ -21,7 +21,6 @@ import {
   UpdateBroadcastRequest
 } from '../../services/api/broadcast'
 import type { Workspace } from '../../services/api/types'
-import dayjs from '../../lib/dayjs'
 import TemplateSelectorInput from '../templates/TemplateSelectorInput'
 import { DeleteOutlined } from '@ant-design/icons'
 import React from 'react'
