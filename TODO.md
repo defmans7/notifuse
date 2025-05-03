@@ -8,3 +8,6 @@
 - user notifications center
 - logo + colors in workspace settings
 - add email hmac in unsubscribe links for auth
+- message history handler
+- contact show profile
+- swagger api docs

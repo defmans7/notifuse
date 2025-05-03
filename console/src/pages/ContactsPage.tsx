@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Table, Tag, Button, Space } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
+import { useParams, useSearch } from '@tanstack/react-router'
 import { contactsApi, type Contact, type ListContactsRequest } from '../services/api/contacts'
 import { listsApi } from '../services/api/list'
 import React from 'react'
@@ -65,7 +65,6 @@ const DEFAULT_VISIBLE_COLUMNS = {
 export function ContactsPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/contacts' })
   const search = useSearch({ from: workspaceContactsRoute.id })
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const [visibleColumns, setVisibleColumns] =
@@ -481,6 +480,9 @@ export function ContactsPage() {
       key: 'actions',
       width: 50,
       fixed: 'right' as const,
+      onHeaderCell: () => ({
+        className: '!bg-white'
+      }),
       render: (_: unknown, record: Contact) => (
         <ContactUpsertDrawer
           workspaceId={workspaceId}
