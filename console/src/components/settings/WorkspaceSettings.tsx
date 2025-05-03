@@ -4,6 +4,7 @@ import { Workspace } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
 import { useNavigate } from '@tanstack/react-router'
 import { Section } from './Section'
+import { TimezonesFormOptions } from '../utils/countries_timezones'
 
 const { Option } = Select
 
@@ -84,7 +85,11 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
             <Input placeholder="Enter workspace name" />
           </Form.Item>
 
-          <Form.Item name="website_url" label="Website URL">
+          <Form.Item
+            name="website_url"
+            label="Website URL"
+            rules={[{ type: 'url', message: 'Please enter a valid URL' }]}
+          >
             <Input placeholder="https://example.com" />
           </Form.Item>
 
@@ -93,16 +98,7 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
             label="Timezone"
             rules={[{ required: true, message: 'Please select a timezone' }]}
           >
-            <Select>
-              <Option value="UTC">UTC</Option>
-              <Option value="America/New_York">Eastern Time (ET)</Option>
-              <Option value="America/Chicago">Central Time (CT)</Option>
-              <Option value="America/Denver">Mountain Time (MT)</Option>
-              <Option value="America/Los_Angeles">Pacific Time (PT)</Option>
-              <Option value="Europe/London">London</Option>
-              <Option value="Europe/Paris">Paris</Option>
-              <Option value="Asia/Tokyo">Tokyo</Option>
-            </Select>
+            <Select options={TimezonesFormOptions} showSearch optionFilterProp="label" />
           </Form.Item>
 
           <Form.Item>

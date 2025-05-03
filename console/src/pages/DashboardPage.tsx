@@ -2,9 +2,9 @@ import { Card, Row, Col, Typography, Button, Empty } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
-import { MainLayout } from '../layouts/MainLayout'
+import { MainLayout, MainLayoutSidebar } from '../layouts/MainLayout'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 export function DashboardPage() {
   const { workspaces } = useAuth()
@@ -23,56 +23,50 @@ export function DashboardPage() {
 
   return (
     <MainLayout>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <Title level={2}>Workspaces</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateWorkspace}>
-          Create Workspace
-        </Button>
-      </div>
-
-      {workspaces.length === 0 ? (
-        <Empty description="No workspaces found" style={{ margin: '48px 0' }} />
-      ) : (
-        <Row gutter={[24, 24]}>
-          {workspaces.map((workspace) => (
-            <Col xs={24} sm={12} md={8} lg={6} key={workspace.id}>
+      <MainLayoutSidebar
+        title="Select workspace"
+        extra={
+          <Button
+            type="primary"
+            ghost
+            icon={<PlusOutlined />}
+            onClick={handleCreateWorkspace}
+            style={{ padding: '4px', lineHeight: 1 }}
+          />
+        }
+      >
+        {workspaces.length === 0 ? (
+          <Empty description="No workspaces" style={{ margin: '24px 0' }} />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {workspaces.map((workspace) => (
               <Card
+                key={workspace.id}
                 hoverable
+                size="small"
                 onClick={() => handleWorkspaceClick(workspace.id)}
-                cover={
+                style={{ marginBottom: '8px' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div
                     style={{
-                      height: '140px',
-                      width: '100%',
+                      width: '32px',
+                      height: '32px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: '0',
-                      background:
-                        workspace.settings.cover_url || workspace.settings.logo_url
-                          ? '#f5f5f5'
-                          : '#e6f7ff',
+                      background: workspace.settings.logo_url ? '#f5f5f5' : '#e6f7ff',
+                      borderRadius: '4px',
                       overflow: 'hidden'
                     }}
                   >
-                    {workspace.settings.cover_url ? (
-                      <img
-                        alt={workspace.name}
-                        src={workspace.settings.cover_url}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                      />
-                    ) : workspace.settings.logo_url ? (
+                    {workspace.settings.logo_url ? (
                       <img
                         alt={workspace.name}
                         src={workspace.settings.logo_url}
                         style={{
                           maxWidth: '100%',
                           maxHeight: '100%',
-                          padding: '16px',
                           objectFit: 'contain'
                         }}
                       />
@@ -82,21 +76,18 @@ export function DashboardPage() {
                       </Typography.Text>
                     )}
                   </div>
-                }
-              >
-                <Card.Meta
-                  title={workspace.name}
-                  description={
-                    <Text type="secondary" ellipsis>
+                  <div>
+                    <div style={{ fontWeight: 500 }}>{workspace.name}</div>
+                    <Text type="secondary" style={{ fontSize: '11px' }} ellipsis>
                       ID: {workspace.id}
                     </Text>
-                  }
-                />
+                  </div>
+                </div>
               </Card>
-            </Col>
-          ))}
-        </Row>
-      )}
+            ))}
+          </div>
+        )}
+      </MainLayoutSidebar>
     </MainLayout>
   )
 }

@@ -123,13 +123,14 @@ export function TransactionalNotificationsPage() {
     enabled: !!workspaceId
   })
 
-  const handleDeleteNotification = async () => {
-    if (!notificationToDelete) return
+  const handleDeleteNotification = async (notification?: TransactionalNotification) => {
+    const notificationToRemove = notification || notificationToDelete
+    if (!notificationToRemove) return
 
     try {
       await transactionalNotificationsApi.delete({
         workspace_id: workspaceId as string,
-        id: notificationToDelete.id
+        id: notificationToRemove.id
       })
 
       message.success('Transactional notification deleted successfully')
@@ -258,7 +259,7 @@ export function TransactionalNotificationsPage() {
             <Popconfirm
               title="Delete the notification?"
               description="Are you sure you want to delete this notification? This cannot be undone."
-              onConfirm={() => handleDeleteNotification()}
+              onConfirm={() => handleDeleteNotification(record)}
               okText="Yes, Delete"
               cancelText="Cancel"
               placement="topRight"

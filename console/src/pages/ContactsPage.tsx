@@ -13,6 +13,8 @@ import { CountriesFormOptions } from '../components/utils/countries_timezones'
 import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
+import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 
 const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
@@ -164,7 +166,7 @@ export function ContactsPage() {
     }
   }, [workspaceId, queryClient])
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['contacts', workspaceId, { ...search, cursor: currentCursor }],
     queryFn: async () => {
       const request: ListContactsRequest = {
@@ -182,8 +184,8 @@ export function ContactsPage() {
       }
       return contactsApi.list(request)
     },
-    // Add staleTime to prevent unnecessary refetches
-    staleTime: 30000,
+    // Reduce staleTime to make filter changes more responsive
+    staleTime: 5000,
     refetchOnMount: true,
     refetchOnWindowFocus: false
   })
@@ -205,11 +207,19 @@ export function ContactsPage() {
     }
   }, [data, currentCursor, isLoading])
 
-  // Reset contacts and cursor when filters change
+  // Reset contacts and cursor when filters change, and trigger a refetch
   React.useEffect(() => {
     // Reset accumulated contacts and cursor when search params change
     setAllContacts([])
     setCurrentCursor(undefined)
+
+    // Reset the entire query to force a fresh fetch
+    queryClient.resetQueries({ queryKey: ['contacts', workspaceId] })
+
+    // Schedule a refetch (give time for the UI to update first)
+    setTimeout(() => {
+      refetch()
+    }, 0)
   }, [
     search.email,
     search.external_id,
@@ -218,7 +228,10 @@ export function ContactsPage() {
     search.phone,
     search.country,
     search.language,
-    search.limit
+    search.limit,
+    refetch,
+    queryClient,
+    workspaceId
   ])
 
   const columns: ColumnsType<Contact> = [
@@ -464,16 +477,17 @@ export function ContactsPage() {
       hidden: !visibleColumns.lists
     },
     {
-      title: 'Actions',
+      title: '',
       key: 'actions',
+      width: 50,
       fixed: 'right' as const,
       render: (_: unknown, record: Contact) => (
         <ContactUpsertDrawer
           workspaceId={workspaceId}
           contact={record}
           buttonProps={{
-            type: 'link',
-            buttonContent: 'Edit',
+            type: 'text',
+            buttonContent: <FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />,
             size: 'small'
           }}
         />
@@ -489,7 +503,33 @@ export function ContactsPage() {
 
   // Show empty state when there's no data and no loading
   const showEmptyState =
-    !isLoading && !isFetching && (!data || data.contacts.length === 0) && allContacts.length === 0
+    !isLoading &&
+    !isFetching &&
+    (!data?.contacts || data.contacts.length === 0) &&
+    allContacts.length === 0
+
+  // Track when filters change to force the table to remount
+  const filterKey = React.useMemo(
+    () =>
+      JSON.stringify({
+        email: search.email,
+        external_id: search.external_id,
+        first_name: search.first_name,
+        last_name: search.last_name,
+        phone: search.phone,
+        country: search.country,
+        language: search.language
+      }),
+    [
+      search.email,
+      search.external_id,
+      search.first_name,
+      search.last_name,
+      search.phone,
+      search.country,
+      search.language
+    ]
+  )
 
   return (
     <div className="p-6">
@@ -518,6 +558,7 @@ export function ContactsPage() {
       </div>
 
       <Table
+        key={filterKey}
         columns={columns}
         dataSource={allContacts}
         rowKey={(record) => record.email}

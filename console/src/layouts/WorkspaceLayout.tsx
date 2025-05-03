@@ -11,6 +11,7 @@ import {
 } from '@fortawesome/free-regular-svg-icons'
 import {
   faGear,
+  faPlus,
   faRightFromBracket,
   faTerminal,
   faUserGroup
@@ -49,6 +50,12 @@ export function WorkspaceLayout() {
   }
 
   const handleWorkspaceChange = (workspaceId: string) => {
+    if (workspaceId === 'new-workspace') {
+      // Navigate to workspace creation page or open a modal
+      navigate({ to: '/workspace/create' })
+      return
+    }
+
     navigate({
       to: '/workspace/$workspaceId/contacts',
       params: { workspaceId }
@@ -141,46 +148,55 @@ export function WorkspaceLayout() {
             trigger={null}
             className="border-r border-gray-200"
           >
-            <div className="flex items-center gap-1 p-6">
+            <div className="flex items-center gap-2 p-6">
               {!collapsed && (
                 <Select
                   value={workspaceId}
                   onChange={handleWorkspaceChange}
                   style={{ width: '100%' }}
                   placeholder="Select workspace"
-                  options={workspaces.map((workspace: Workspace) => ({
-                    label: (
-                      <Space size="small">
-                        {workspace.settings.logo_url && (
-                          <img
-                            src={workspace.settings.logo_url}
-                            alt=""
-                            style={{
-                              height: '16px',
-                              width: '16px',
-                              objectFit: 'contain',
-                              verticalAlign: 'middle'
-                            }}
-                          />
-                        )}
-                        {workspace.name}
-                      </Space>
-                    ),
-                    value: workspace.id
-                  }))}
+                  options={[
+                    ...workspaces.map((workspace: Workspace) => ({
+                      label: (
+                        <Space size="small">
+                          {workspace.settings.logo_url && (
+                            <img
+                              src={workspace.settings.logo_url}
+                              alt=""
+                              style={{
+                                height: '16px',
+                                width: '16px',
+                                objectFit: 'contain',
+                                verticalAlign: 'middle'
+                              }}
+                            />
+                          )}
+                          {workspace.name}
+                        </Space>
+                      ),
+                      value: workspace.id
+                    })),
+                    {
+                      label: (
+                        <Space className="text-indigo-500">
+                          <FontAwesomeIcon icon={faPlus} /> New workspace
+                        </Space>
+                      ),
+                      value: 'new-workspace'
+                    }
+                  ]}
                 />
               )}
               <Button
                 type="text"
                 icon={
                   collapsed ? (
-                    <FontAwesomeIcon icon={faSquareCaretRight} size="sm" />
+                    <FontAwesomeIcon icon={faSquareCaretRight} />
                   ) : (
-                    <FontAwesomeIcon icon={faSquareCaretLeft} size="sm" />
+                    <FontAwesomeIcon icon={faSquareCaretLeft} />
                   )
                 }
                 onClick={() => setCollapsed(!collapsed)}
-                style={{ fontSize: '16px' }}
               />
             </div>
             <Menu
