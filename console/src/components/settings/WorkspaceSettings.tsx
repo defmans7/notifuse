@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Card, Space, Descriptions, Button, Modal, Form, Input, Select, App, Divider } from 'antd'
+import { Button, Form, Input, Select, App } from 'antd'
 import { Workspace } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
 import { useNavigate } from '@tanstack/react-router'
-import { DeleteWorkspaceButton } from './DeleteWorkspaceButton'
 import { Section } from './Section'
 
 const { Option } = Select
@@ -16,18 +15,11 @@ interface WorkspaceSettingsProps {
   isOwner: boolean
 }
 
-export function WorkspaceSettings({
-  workspace,
-  loading,
-  onWorkspaceUpdate,
-  onWorkspaceDelete,
-  isOwner
-}: WorkspaceSettingsProps) {
+export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSettingsProps) {
   const [savingSettings, setSavingSettings] = useState(false)
   const [formTouched, setFormTouched] = useState(false)
   const [form] = Form.useForm()
   const { message } = App.useApp()
-  const navigate = useNavigate()
 
   useEffect(() => {
     // Set form values from workspace data whenever workspace changes
@@ -73,15 +65,6 @@ export function WorkspaceSettings({
 
   const handleFormChange = () => {
     setFormTouched(true)
-  }
-
-  const handleDeleteSuccess = () => {
-    if (onWorkspaceDelete) {
-      onWorkspaceDelete()
-    } else {
-      // Fallback if no callback provided
-      navigate({ to: '/' })
-    }
   }
 
   return (

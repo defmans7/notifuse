@@ -6,6 +6,7 @@ import { WorkspaceMembers } from '../components/settings/WorkspaceMembers'
 import { WorkspaceSettings } from '../components/settings/WorkspaceSettings'
 import { EmailProviderSettings } from '../components/settings/EmailProviderSettings'
 import { useAuth } from '../contexts/AuthContext'
+import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
 
 export function WorkspaceSettingsPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/settings' })
@@ -77,6 +78,10 @@ export function WorkspaceSettingsPage() {
         onMembersChange={fetchMembers}
         isOwner={isOwner}
       />
+
+      {workspace && isOwner && (
+        <DeleteWorkspaceSection workspace={workspace} onDeleteSuccess={handleWorkspaceDelete} />
+      )}
     </div>
   )
 }

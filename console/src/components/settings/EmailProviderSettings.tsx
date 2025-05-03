@@ -760,6 +760,20 @@ export function EmailProviderSettings({
     setEditingTransactional(true)
   }
 
+  const handleMarketingCancel = () => {
+    if (!workspace?.settings?.email_marketing?.kind) {
+      setMarketingProvider(null)
+    }
+    setEditingMarketing(false)
+  }
+
+  const handleTransactionalCancel = () => {
+    if (!workspace?.settings?.email_transactional?.kind) {
+      setTransactionalProvider(null)
+    }
+    setEditingTransactional(false)
+  }
+
   const handleMarketingSave = async (values: EmailProviderFormValues) => {
     if (!workspace) return
 
@@ -915,7 +929,7 @@ export function EmailProviderSettings({
           onTest={() => openTestModal('marketing')}
           onChangeProvider={() => setMarketingProvider(null)}
           onSave={handleMarketingSave}
-          onCancel={() => setEditingMarketing(false)}
+          onCancel={handleMarketingCancel}
         />
       </Section>
 
@@ -936,7 +950,7 @@ export function EmailProviderSettings({
           onTest={() => openTestModal('transactional')}
           onChangeProvider={() => setTransactionalProvider(null)}
           onSave={handleTransactionalSave}
-          onCancel={() => setEditingTransactional(false)}
+          onCancel={handleTransactionalCancel}
         />
       </Section>
 
