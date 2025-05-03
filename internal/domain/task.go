@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -54,12 +55,13 @@ func (s *TaskState) Scan(value interface{}) error {
 		return nil
 	}
 
-	bytes, ok := value.([]byte)
+	b, ok := value.([]byte)
 	if !ok {
 		return fmt.Errorf("expected []byte, got %T", value)
 	}
 
-	return json.Unmarshal(bytes, &s)
+	cloned := bytes.Clone(b)
+	return json.Unmarshal(cloned, &s)
 }
 
 // SendBroadcastState contains state specific to broadcast sending tasks

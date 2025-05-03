@@ -1,0 +1,1067 @@
+package http
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"aidanwoods.dev/go-paseto"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// Helper function to set up the test environment for transactional handler tests
+func setupTransactionalHandlerTest(t *testing.T) (*mocks.MockTransactionalNotificationService, *pkgmocks.MockLogger, *TransactionalNotificationHandler) {
+	ctrl := gomock.NewController(t)
+	mockService := mocks.NewMockTransactionalNotificationService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// For tests we don't need the actual key, we can create a new one
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger)
+
+	return mockService, mockLogger, handler
+}
+
+// Helper to create a sample transactional notification
+func createTestTransactionalNotification() *domain.TransactionalNotification {
+	now := time.Now().UTC()
+	return &domain.TransactionalNotification{
+		ID:          "test-notification",
+		Name:        "Test Notification",
+		Description: "Test notification description",
+		Channels: domain.ChannelTemplates{
+			domain.TransactionalChannelEmail: {
+				TemplateID: "template-123",
+				Version:    1,
+				Settings: domain.MapOfAny{
+					"subject": "Test Subject",
+				},
+			},
+		},
+		Status:    domain.TransactionalStatusActive,
+		Metadata:  domain.MapOfAny{"category": "test"},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func TestNewTransactionalNotificationHandler(t *testing.T) {
+	// Arrange
+	ctrl := gomock.NewController(t)
+	mockService := mocks.NewMockTransactionalNotificationService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	// Act
+	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger)
+
+	// Assert
+	assert.NotNil(t, handler)
+	assert.Equal(t, mockService, handler.service)
+	assert.Equal(t, publicKey, handler.publicKey)
+	assert.Equal(t, mockLogger, handler.logger)
+}
+
+func TestTransactionalNotificationHandler_RegisterRoutes(t *testing.T) {
+	// Arrange
+	_, _, handler := setupTransactionalHandlerTest(t)
+
+	// Create a multiplexer to register routes with
+	mux := http.NewServeMux()
+
+	// Act - Register routes with the mux
+	handler.RegisterRoutes(mux)
+
+	// Create a test server with the mux
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	// Test routes (we'll make unauthenticated requests which should return 401)
+	routesToTest := []string{
+		"/api/transactional.list",
+		"/api/transactional.get",
+		"/api/transactional.create",
+		"/api/transactional.update",
+		"/api/transactional.delete",
+		"/api/transactional.send",
+	}
+
+	// Make requests to verify routes are registered
+	for _, route := range routesToTest {
+		t.Run(route, func(t *testing.T) {
+			req, err := http.NewRequest(routeMethod(route), server.URL+route, nil)
+			require.NoError(t, err)
+
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// We expect 401 Unauthorized since we didn't authenticate
+			// The important part is that the route exists and returns a response
+			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		})
+	}
+}
+
+// Helper to determine appropriate method for testing routes
+func routeMethod(route string) string {
+	if strings.HasSuffix(route, ".list") || strings.HasSuffix(route, ".get") {
+		return http.MethodGet
+	}
+	return http.MethodPost
+}
+
+func TestTransactionalNotificationHandler_HandleList(t *testing.T) {
+	mockService, mockLogger, handler := setupTransactionalHandlerTest(t)
+
+	workspaceID := "workspace1"
+
+	testCases := []struct {
+		name           string
+		method         string
+		queryParams    url.Values
+		setupMock      func()
+		expectedStatus int
+		checkResponse  func(t *testing.T, response map[string]interface{})
+	}{
+		{
+			name:   "method not allowed",
+			method: http.MethodPost,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusMethodNotAllowed,
+			checkResponse:  nil,
+		},
+		{
+			name:           "missing workspace ID",
+			method:         http.MethodGet,
+			queryParams:    url.Values{},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:   "successful empty list",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+			},
+			setupMock: func() {
+				mockService.EXPECT().
+					ListNotifications(gomock.Any(), workspaceID, gomock.Any(), gomock.Any(), gomock.Any()).
+					Return([]*domain.TransactionalNotification{}, 0, nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				notifications, ok := response["notifications"].([]interface{})
+				assert.True(t, ok)
+				assert.Empty(t, notifications)
+				assert.Equal(t, float64(0), response["total"])
+			},
+		},
+		{
+			name:   "successful list with notifications",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+				"status":       []string{"active"},
+				"limit":        []string{"10"},
+				"offset":       []string{"0"},
+			},
+			setupMock: func() {
+				notification := createTestTransactionalNotification()
+				mockService.EXPECT().
+					ListNotifications(
+						gomock.Any(),
+						workspaceID,
+						gomock.Any(),
+						10,
+						0,
+					).
+					Return([]*domain.TransactionalNotification{notification}, 1, nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				notifications, ok := response["notifications"].([]interface{})
+				assert.True(t, ok)
+				assert.Len(t, notifications, 1)
+				assert.Equal(t, float64(1), response["total"])
+
+				notification := notifications[0].(map[string]interface{})
+				assert.Equal(t, "test-notification", notification["id"])
+				assert.Equal(t, "Test Notification", notification["name"])
+			},
+		},
+		{
+			name:   "service error",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+			},
+			setupMock: func() {
+				mockService.EXPECT().
+					ListNotifications(gomock.Any(), workspaceID, gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(nil, 0, errors.New("service error"))
+
+				mockLogger.EXPECT().
+					WithField("error", "service error").
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to list transactional notifications")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mock expectations
+			tc.setupMock()
+
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/transactional.list?"+tc.queryParams.Encode(), nil)
+			w := httptest.NewRecorder()
+
+			// Call handler method
+			handler.handleList(w, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			// If success case, check response content
+			if tc.expectedStatus == http.StatusOK && tc.checkResponse != nil {
+				var response map[string]interface{}
+				err := json.NewDecoder(w.Body).Decode(&response)
+				require.NoError(t, err)
+				tc.checkResponse(t, response)
+			}
+		})
+	}
+}
+
+func TestTransactionalNotificationHandler_HandleGet(t *testing.T) {
+	mockService, mockLogger, handler := setupTransactionalHandlerTest(t)
+
+	workspaceID := "workspace1"
+	notificationID := "test-notification"
+
+	testCases := []struct {
+		name           string
+		method         string
+		queryParams    url.Values
+		setupMock      func()
+		expectedStatus int
+		checkResponse  func(t *testing.T, response map[string]interface{})
+	}{
+		{
+			name:   "method not allowed",
+			method: http.MethodPost,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+				"id":           []string{notificationID},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusMethodNotAllowed,
+			checkResponse:  nil,
+		},
+		{
+			name:   "missing workspace ID",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"id": []string{notificationID},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:   "missing notification ID",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:   "notification not found",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+				"id":           []string{notificationID},
+			},
+			setupMock: func() {
+				mockService.EXPECT().
+					GetNotification(gomock.Any(), workspaceID, notificationID).
+					Return(nil, errors.New("notification not found"))
+			},
+			expectedStatus: http.StatusNotFound,
+			checkResponse:  nil,
+		},
+		{
+			name:   "successful get",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+				"id":           []string{notificationID},
+			},
+			setupMock: func() {
+				notification := createTestTransactionalNotification()
+				mockService.EXPECT().
+					GetNotification(gomock.Any(), workspaceID, notificationID).
+					Return(notification, nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				notification, ok := response["notification"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, notificationID, notification["id"])
+				assert.Equal(t, "Test Notification", notification["name"])
+				assert.Equal(t, "Test notification description", notification["description"])
+				assert.Equal(t, "active", notification["status"])
+			},
+		},
+		{
+			name:   "service error",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{workspaceID},
+				"id":           []string{notificationID},
+			},
+			setupMock: func() {
+				mockService.EXPECT().
+					GetNotification(gomock.Any(), workspaceID, notificationID).
+					Return(nil, errors.New("service error"))
+
+				mockLogger.EXPECT().
+					WithField(gomock.Eq("error"), gomock.Eq("service error")).
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error(gomock.Eq("Failed to get transactional notification"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mock expectations
+			tc.setupMock()
+
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/transactional.get?"+tc.queryParams.Encode(), nil)
+			w := httptest.NewRecorder()
+
+			// Call handler method
+			handler.handleGet(w, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			// If success case, check response content
+			if tc.expectedStatus == http.StatusOK && tc.checkResponse != nil {
+				var response map[string]interface{}
+				err := json.NewDecoder(w.Body).Decode(&response)
+				require.NoError(t, err)
+				tc.checkResponse(t, response)
+			}
+		})
+	}
+}
+
+func TestTransactionalNotificationHandler_HandleCreate(t *testing.T) {
+	mockService, mockLogger, handler := setupTransactionalHandlerTest(t)
+
+	workspaceID := "workspace1"
+
+	// Valid request body for creation
+	validCreateParams := domain.TransactionalNotificationCreateParams{
+		ID:          "test-notification",
+		Name:        "Test Notification",
+		Description: "Test notification description",
+		Channels: domain.ChannelTemplates{
+			domain.TransactionalChannelEmail: {
+				TemplateID: "template-123",
+				Version:    1,
+				Settings: domain.MapOfAny{
+					"subject": "Test Subject",
+				},
+			},
+		},
+		Status: domain.TransactionalStatusActive,
+	}
+
+	validReqBody := domain.CreateTransactionalRequest{
+		WorkspaceID:  workspaceID,
+		Notification: validCreateParams,
+	}
+
+	testCases := []struct {
+		name           string
+		method         string
+		requestBody    interface{}
+		setupMock      func()
+		expectedStatus int
+		checkResponse  func(t *testing.T, response map[string]interface{})
+	}{
+		{
+			name:           "method not allowed",
+			method:         http.MethodGet,
+			requestBody:    nil,
+			setupMock:      func() {},
+			expectedStatus: http.StatusMethodNotAllowed,
+			checkResponse:  nil,
+		},
+		{
+			name:        "invalid request body",
+			method:      http.MethodPost,
+			requestBody: "invalid json",
+			setupMock: func() {
+				mockLogger.EXPECT().
+					WithField("error", gomock.Any()).
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to decode request body")
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:   "missing required fields",
+			method: http.MethodPost,
+			requestBody: domain.CreateTransactionalRequest{
+				WorkspaceID:  workspaceID,
+				Notification: domain.TransactionalNotificationCreateParams{
+					// Missing required fields
+				},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "successful creation",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				notification := createTestTransactionalNotification()
+				mockService.EXPECT().
+					CreateNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return(notification, nil)
+			},
+			expectedStatus: http.StatusCreated,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				notification, ok := response["notification"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, "test-notification", notification["id"])
+				assert.Equal(t, "Test Notification", notification["name"])
+			},
+		},
+		{
+			name:        "template validation error",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					CreateNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return(nil, errors.New("invalid template: missing required field"))
+
+				mockLogger.EXPECT().
+					WithField("error", "invalid template: missing required field").
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to create transactional notification")
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "service error",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					CreateNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return(nil, errors.New("service error"))
+
+				mockLogger.EXPECT().
+					WithField("error", "service error").
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to create transactional notification")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mock expectations
+			tc.setupMock()
+
+			// Create request body
+			var reqBody []byte
+			var err error
+
+			switch body := tc.requestBody.(type) {
+			case string:
+				reqBody = []byte(body)
+			default:
+				reqBody, err = json.Marshal(body)
+				require.NoError(t, err)
+			}
+
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/transactional.create", bytes.NewBuffer(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// Call handler method
+			handler.handleCreate(w, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			// If success case, check response content
+			if tc.expectedStatus == http.StatusCreated && tc.checkResponse != nil {
+				var response map[string]interface{}
+				err := json.NewDecoder(w.Body).Decode(&response)
+				require.NoError(t, err)
+				tc.checkResponse(t, response)
+			}
+		})
+	}
+}
+
+func TestTransactionalNotificationHandler_HandleUpdate(t *testing.T) {
+	mockService, mockLogger, handler := setupTransactionalHandlerTest(t)
+
+	workspaceID := "workspace1"
+	notificationID := "test-notification"
+
+	// Valid request body for update
+	validUpdateParams := domain.TransactionalNotificationUpdateParams{
+		Name:        "Updated Notification",
+		Description: "Updated description",
+		Status:      domain.TransactionalStatusActive,
+	}
+
+	validReqBody := domain.UpdateTransactionalRequest{
+		WorkspaceID: workspaceID,
+		ID:          notificationID,
+		Updates:     validUpdateParams,
+	}
+
+	testCases := []struct {
+		name           string
+		method         string
+		requestBody    interface{}
+		setupMock      func()
+		expectedStatus int
+		checkResponse  func(t *testing.T, response map[string]interface{})
+	}{
+		{
+			name:           "method not allowed",
+			method:         http.MethodGet,
+			requestBody:    nil,
+			setupMock:      func() {},
+			expectedStatus: http.StatusMethodNotAllowed,
+			checkResponse:  nil,
+		},
+		{
+			name:        "invalid request body",
+			method:      http.MethodPost,
+			requestBody: "invalid json",
+			setupMock: func() {
+				mockLogger.EXPECT().
+					WithField(gomock.Eq("error"), gomock.Any()).
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error(gomock.Eq("Failed to decode request body"))
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "missing required fields",
+			method:      http.MethodPost,
+			requestBody: domain.UpdateTransactionalRequest{
+				// Missing required fields
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "notification not found",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					UpdateNotification(gomock.Any(), workspaceID, notificationID, gomock.Any()).
+					Return(nil, errors.New("notification not found"))
+			},
+			expectedStatus: http.StatusNotFound,
+			checkResponse:  nil,
+		},
+		{
+			name:        "successful update",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				updatedNotification := createTestTransactionalNotification()
+				updatedNotification.Name = "Updated Notification"
+				updatedNotification.Description = "Updated description"
+
+				mockService.EXPECT().
+					UpdateNotification(gomock.Any(), workspaceID, notificationID, gomock.Any()).
+					Return(updatedNotification, nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				notification, ok := response["notification"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, notificationID, notification["id"])
+				assert.Equal(t, "Updated Notification", notification["name"])
+				assert.Equal(t, "Updated description", notification["description"])
+			},
+		},
+		{
+			name:        "template validation error",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					UpdateNotification(gomock.Any(), workspaceID, notificationID, gomock.Any()).
+					Return(nil, errors.New("invalid template: missing required field"))
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "service error",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					UpdateNotification(gomock.Any(), workspaceID, notificationID, gomock.Any()).
+					Return(nil, errors.New("service error"))
+
+				mockLogger.EXPECT().
+					WithField(gomock.Eq("error"), gomock.Eq("service error")).
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error(gomock.Eq("Failed to update transactional notification"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mock expectations
+			tc.setupMock()
+
+			// Create request body
+			var reqBody []byte
+			var err error
+
+			switch body := tc.requestBody.(type) {
+			case string:
+				reqBody = []byte(body)
+			default:
+				reqBody, err = json.Marshal(body)
+				require.NoError(t, err)
+			}
+
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/transactional.update", bytes.NewBuffer(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// Call handler method
+			handler.handleUpdate(w, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			// If success case, check response content
+			if tc.expectedStatus == http.StatusOK && tc.checkResponse != nil {
+				var response map[string]interface{}
+				err := json.NewDecoder(w.Body).Decode(&response)
+				require.NoError(t, err)
+				tc.checkResponse(t, response)
+			}
+		})
+	}
+}
+
+func TestTransactionalNotificationHandler_HandleDelete(t *testing.T) {
+	mockService, mockLogger, handler := setupTransactionalHandlerTest(t)
+
+	workspaceID := "workspace1"
+	notificationID := "test-notification"
+
+	validReqBody := domain.DeleteTransactionalRequest{
+		WorkspaceID: workspaceID,
+		ID:          notificationID,
+	}
+
+	testCases := []struct {
+		name           string
+		method         string
+		requestBody    interface{}
+		setupMock      func()
+		expectedStatus int
+		checkResponse  func(t *testing.T, response map[string]interface{})
+	}{
+		{
+			name:           "method not allowed",
+			method:         http.MethodGet,
+			requestBody:    nil,
+			setupMock:      func() {},
+			expectedStatus: http.StatusMethodNotAllowed,
+			checkResponse:  nil,
+		},
+		{
+			name:        "invalid request body",
+			method:      http.MethodPost,
+			requestBody: "invalid json",
+			setupMock: func() {
+				mockLogger.EXPECT().
+					WithField(gomock.Eq("error"), gomock.Any()).
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error(gomock.Eq("Failed to decode request body"))
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "missing required fields",
+			method:      http.MethodPost,
+			requestBody: domain.DeleteTransactionalRequest{
+				// Missing required fields
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "notification not found",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					DeleteNotification(gomock.Any(), workspaceID, notificationID).
+					Return(errors.New("notification not found"))
+			},
+			expectedStatus: http.StatusNotFound,
+			checkResponse:  nil,
+		},
+		{
+			name:        "successful deletion",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					DeleteNotification(gomock.Any(), workspaceID, notificationID).
+					Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				success, ok := response["success"].(bool)
+				assert.True(t, ok)
+				assert.True(t, success)
+			},
+		},
+		{
+			name:        "service error",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					DeleteNotification(gomock.Any(), workspaceID, notificationID).
+					Return(errors.New("service error"))
+
+				mockLogger.EXPECT().
+					WithField(gomock.Eq("error"), gomock.Eq("service error")).
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error(gomock.Eq("Failed to delete transactional notification"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mock expectations
+			tc.setupMock()
+
+			// Create request body
+			var reqBody []byte
+			var err error
+
+			switch body := tc.requestBody.(type) {
+			case string:
+				reqBody = []byte(body)
+			default:
+				reqBody, err = json.Marshal(body)
+				require.NoError(t, err)
+			}
+
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/transactional.delete", bytes.NewBuffer(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// Call handler method
+			handler.handleDelete(w, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			// If success case, check response content
+			if tc.expectedStatus == http.StatusOK && tc.checkResponse != nil {
+				var response map[string]interface{}
+				err := json.NewDecoder(w.Body).Decode(&response)
+				require.NoError(t, err)
+				tc.checkResponse(t, response)
+			}
+		})
+	}
+}
+
+func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
+	mockService, mockLogger, handler := setupTransactionalHandlerTest(t)
+
+	workspaceID := "workspace1"
+	notificationID := "test-notification"
+
+	validReqBody := domain.SendTransactionalRequest{
+		WorkspaceID: workspaceID,
+		Notification: domain.TransactionalNotificationSendParams{
+			ID: notificationID,
+			Contact: &domain.Contact{
+				Email: "test@example.com",
+			},
+			Data: domain.MapOfAny{
+				"name": "Test User",
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		method         string
+		requestBody    interface{}
+		setupMock      func()
+		expectedStatus int
+		checkResponse  func(t *testing.T, response map[string]interface{})
+	}{
+		{
+			name:           "method not allowed",
+			method:         http.MethodGet,
+			requestBody:    nil,
+			setupMock:      func() {},
+			expectedStatus: http.StatusMethodNotAllowed,
+			checkResponse:  nil,
+		},
+		{
+			name:        "invalid request body",
+			method:      http.MethodPost,
+			requestBody: "invalid json",
+			setupMock: func() {
+				mockLogger.EXPECT().
+					WithField("error", gomock.Any()).
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to decode request body")
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:   "missing required fields",
+			method: http.MethodPost,
+			requestBody: domain.SendTransactionalRequest{
+				WorkspaceID:  workspaceID,
+				Notification: domain.TransactionalNotificationSendParams{
+					// Missing ID and Contact
+				},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:   "invalid contact",
+			method: http.MethodPost,
+			requestBody: domain.SendTransactionalRequest{
+				WorkspaceID: workspaceID,
+				Notification: domain.TransactionalNotificationSendParams{
+					ID:      notificationID,
+					Contact: &domain.Contact{}, // Empty contact
+				},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "notification not found",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return("", errors.New("notification not found"))
+
+				mockLogger.EXPECT().
+					WithField("error", "notification not found").
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to send transactional notification")
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "notification inactive",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return("", errors.New("notification not active"))
+
+				mockLogger.EXPECT().
+					WithField("error", "notification not active").
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to send transactional notification")
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "no valid channels",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return("", errors.New("no valid channels"))
+
+				mockLogger.EXPECT().
+					WithField("error", "no valid channels").
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to send transactional notification")
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:        "successful send",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return("msg_123", nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				success, ok := response["success"].(bool)
+				assert.True(t, ok)
+				assert.True(t, success)
+
+				messageID, ok := response["message_id"].(string)
+				assert.True(t, ok)
+				assert.Equal(t, "msg_123", messageID)
+			},
+		},
+		{
+			name:        "service error",
+			method:      http.MethodPost,
+			requestBody: validReqBody,
+			setupMock: func() {
+				mockService.EXPECT().
+					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					Return("", errors.New("service error"))
+
+				mockLogger.EXPECT().
+					WithField("error", "service error").
+					Return(mockLogger)
+				mockLogger.EXPECT().
+					Error("Failed to send transactional notification")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mock expectations
+			tc.setupMock()
+
+			// Create request body
+			var reqBody []byte
+			var err error
+
+			switch body := tc.requestBody.(type) {
+			case string:
+				reqBody = []byte(body)
+			default:
+				reqBody, err = json.Marshal(body)
+				require.NoError(t, err)
+			}
+
+			// Create request
+			req := httptest.NewRequest(tc.method, "/api/transactional.send", bytes.NewBuffer(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// Call handler method
+			handler.handleSend(w, req)
+
+			// Check status code
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			// If success case, check response content
+			if tc.expectedStatus == http.StatusOK && tc.checkResponse != nil {
+				var response map[string]interface{}
+				err := json.NewDecoder(w.Body).Decode(&response)
+				require.NoError(t, err)
+				tc.checkResponse(t, response)
+			}
+		})
+	}
+}

@@ -1,15 +1,19 @@
 import { Layout, Menu, Select, Space, Button, Dropdown } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
-import {
-  MailOutlined,
-  TeamOutlined,
-  SettingOutlined,
-  FileTextOutlined,
-  LogoutOutlined,
-  FolderOpenOutlined,
-  PictureOutlined
-} from '@ant-design/icons'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faImage,
+  faFolderOpen,
+  faObjectGroup,
+  faPaperPlane
+} from '@fortawesome/free-regular-svg-icons'
+import {
+  faGear,
+  faRightFromBracket,
+  faTerminal,
+  faUserGroup
+} from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../contexts/AuthContext'
 import { Workspace } from '../services/api/types'
 import { ContactsCsvUploadProvider } from '../components/contacts/ContactsCsvUploadProvider'
@@ -39,6 +43,8 @@ export function WorkspaceLayout() {
     selectedKey = 'contacts'
   } else if (currentPath.includes('/file-manager')) {
     selectedKey = 'file-manager'
+  } else if (currentPath.includes('/transactional-notifications')) {
+    selectedKey = 'transactional-notifications'
   }
 
   const handleWorkspaceChange = (workspaceId: string) => {
@@ -51,7 +57,7 @@ export function WorkspaceLayout() {
   const menuItems = [
     {
       key: 'contacts',
-      icon: <TeamOutlined />,
+      icon: <FontAwesomeIcon icon={faUserGroup} size="sm" />,
       label: (
         <Link to="/workspace/$workspaceId/contacts" params={{ workspaceId }}>
           Contacts
@@ -60,7 +66,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'lists',
-      icon: <FolderOpenOutlined />,
+      icon: <FontAwesomeIcon icon={faFolderOpen} size="sm" />,
       label: (
         <Link to="/workspace/$workspaceId/lists" params={{ workspaceId }}>
           Lists
@@ -69,7 +75,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'templates',
-      icon: <FileTextOutlined />,
+      icon: <FontAwesomeIcon icon={faObjectGroup} size="sm" />,
       label: (
         <Link to="/workspace/$workspaceId/templates" params={{ workspaceId }}>
           Templates
@@ -78,7 +84,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'broadcasts',
-      icon: <MailOutlined />,
+      icon: <FontAwesomeIcon icon={faPaperPlane} size="sm" />,
       label: (
         <Link to="/workspace/$workspaceId/broadcasts" params={{ workspaceId }}>
           Broadcasts
@@ -86,8 +92,17 @@ export function WorkspaceLayout() {
       )
     },
     {
+      key: 'transactional-notifications',
+      icon: <FontAwesomeIcon icon={faTerminal} size="sm" />,
+      label: (
+        <Link to="/workspace/$workspaceId/transactional-notifications" params={{ workspaceId }}>
+          Transactional
+        </Link>
+      )
+    },
+    {
       key: 'file-manager',
-      icon: <PictureOutlined />,
+      icon: <FontAwesomeIcon icon={faImage} size="sm" />,
       label: (
         <Link to="/workspace/$workspaceId/file-manager" params={{ workspaceId }}>
           File Manager
@@ -96,7 +111,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'settings',
-      icon: <SettingOutlined />,
+      icon: <FontAwesomeIcon icon={faGear} size="sm" />,
       label: (
         <Link to="/workspace/$workspaceId/settings" params={{ workspaceId }}>
           Settings
@@ -182,7 +197,7 @@ export function WorkspaceLayout() {
                         key: 'logout',
                         label: (
                           <Space>
-                            <LogoutOutlined />
+                            <FontAwesomeIcon icon={faRightFromBracket} size="sm" />
                             Logout
                           </Space>
                         ),
@@ -203,7 +218,7 @@ export function WorkspaceLayout() {
               {collapsed && (
                 <Button
                   type="text"
-                  icon={<LogoutOutlined />}
+                  icon={<FontAwesomeIcon icon={faRightFromBracket} size="sm" />}
                   onClick={() => signout()}
                   style={{ width: '100%' }}
                 />

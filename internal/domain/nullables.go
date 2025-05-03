@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -36,7 +37,7 @@ func (ns *NullableString) Scan(value interface{}) error {
 		ns.IsNull = false
 		return nil
 	case []byte:
-		ns.String = string(v)
+		ns.String = string(bytes.Clone(v))
 		ns.IsNull = false
 		return nil
 	default:
@@ -115,8 +116,9 @@ func (nf *NullableFloat64) Scan(value interface{}) error {
 		return nil
 	case []byte:
 		// Try to convert []byte to float64
+		cloned := bytes.Clone(v)
 		var f sql.NullFloat64
-		if err := f.Scan(v); err != nil {
+		if err := f.Scan(cloned); err != nil {
 			return err
 		}
 		nf.Float64 = f.Float64
@@ -191,6 +193,15 @@ func (nt *NullableTime) Scan(value interface{}) error {
 	case time.Time:
 		nt.Time = v
 		nt.IsNull = false
+		return nil
+	case []byte:
+		cloned := bytes.Clone(v)
+		var t sql.NullTime
+		if err := t.Scan(cloned); err != nil {
+			return err
+		}
+		nt.Time = t.Time
+		nt.IsNull = !t.Valid
 		return nil
 	default:
 		return fmt.Errorf("cannot scan %T into NullableTime", value)

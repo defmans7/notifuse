@@ -70,3 +70,20 @@ type ErrBroadcastInvalidState struct {
 func (e *ErrBroadcastInvalidState) Error() string {
 	return fmt.Sprintf("broadcast [%s] in invalid state: current=%s, expected=%s", e.BroadcastID, e.CurrentState, e.ExpectedState)
 }
+
+// ValidationError represents an error that occurs due to invalid input or parameters
+type ValidationError struct {
+	Message string
+}
+
+// Error implements the error interface
+func (e ValidationError) Error() string {
+	return fmt.Sprintf("validation error: %s", e.Message)
+}
+
+// NewValidationError creates a new validation error with the given message
+func NewValidationError(message string) error {
+	return ValidationError{
+		Message: message,
+	}
+}

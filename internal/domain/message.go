@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -49,7 +50,8 @@ func (d *MessageData) Scan(value interface{}) error {
 		return sql.ErrNoRows
 	}
 
-	return json.Unmarshal(b, &d)
+	cloned := bytes.Clone(b)
+	return json.Unmarshal(cloned, &d)
 }
 
 // MessageHistory represents a record of a message sent to a contact

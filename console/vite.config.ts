@@ -34,5 +34,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src')
     }
+  },
+  optimizeDeps: {
+    include: ['@fortawesome/react-fontawesome', '@fortawesome/fontawesome-svg-core']
   }
 })
