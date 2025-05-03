@@ -29,7 +29,7 @@ func NewTransactionalNotificationService(
 	contactService domain.ContactService,
 	emailService *EmailService,
 	logger logger.Logger,
-) domain.TransactionalNotificationService {
+) *TransactionalNotificationService {
 	return &TransactionalNotificationService{
 		transactionalRepo:  transactionalRepo,
 		messageHistoryRepo: messageHistoryRepo,

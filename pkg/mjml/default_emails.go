@@ -293,8 +293,8 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 	return updatedRoot
 }
 
-// DefaultWelcomeEmail returns an EmailBlock tree for a welcome email
-func DefaultWelcomeEmail() EmailBlock {
+// DefaultSubscriptionConfirmationEmail returns an EmailBlock tree for a subscription confirmation email
+func DefaultSubscriptionConfirmationEmail() EmailBlock {
 	blocks := DefaultBlocks()
 
 	// Get the template with standard structure
@@ -324,7 +324,7 @@ func DefaultWelcomeEmail() EmailBlock {
 		{
 			"type": "h2",
 			"children": []map[string]interface{}{
-				{"text": "Welcome to Our Community!"},
+				{"text": "Subscription Confirmed!"},
 			},
 		},
 	}
@@ -338,7 +338,7 @@ func DefaultWelcomeEmail() EmailBlock {
 		{
 			"type": "paragraph",
 			"children": []map[string]interface{}{
-				{"text": "Thank you for joining our newsletter! We're excited to have you as part of our community."},
+				{"text": "Thank you for subscribing to our newsletter! We're excited to have you as part of our community."},
 			},
 		},
 	}
@@ -395,6 +395,102 @@ func DefaultWelcomeEmail() EmailBlock {
 		},
 	}
 	newChildren = append(newChildren, unsubLinkBlock)
+
+	// Add back the standard blocks (divider, footer, tracking) if they exist
+	if len(standardBlocks) > 1 {
+		newChildren = append(newChildren, standardBlocks[1:]...)
+	}
+
+	// Create a new column with the children properly set
+	updatedColumn := DeepCopyBlock(contentColumn)
+	updatedColumn.Children = newChildren
+
+	// Create a new section with the updated column
+	updatedSection := DeepCopyBlock(contentSection)
+	updatedSection.Children = []EmailBlock{updatedColumn}
+
+	// Create a new root with the updated section
+	updatedRoot := DeepCopyBlock(emailTemplate)
+	updatedRoot.Children = []EmailBlock{updatedSection}
+
+	return updatedRoot
+}
+
+// DefaultTransactionalEmail returns an EmailBlock tree for a transactional notification email
+func DefaultTransactionalEmail() EmailBlock {
+	blocks := DefaultBlocks()
+
+	// Get the template with standard structure
+	emailTemplate := DefaultTemplateStructure()
+
+	// Access the content column to add our specific blocks
+	contentSection := emailTemplate.Children[0]
+	contentColumn := contentSection.Children[0]
+
+	// Store the standard blocks (logo, divider, footer, tracking)
+	standardBlocks := contentColumn.Children
+
+	// Initialize new children array
+	newChildren := []EmailBlock{}
+
+	// Add logo if standard blocks exist
+	if len(standardBlocks) > 0 {
+		newChildren = append(newChildren, standardBlocks[0]) // Add logo
+	}
+
+	// Add heading
+	headingBlock := DeepCopyBlock(blocks["heading"])
+	headingBlock.ID = "heading"
+	headingBlock.Data.(map[string]interface{})["type"] = "h2"
+	headingBlock.Data.(map[string]interface{})["align"] = "center"
+	headingBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
+		{
+			"type": "h2",
+			"children": []map[string]interface{}{
+				{"text": "{{ heading }}"},
+			},
+		},
+	}
+	newChildren = append(newChildren, headingBlock)
+
+	// Add main content
+	textBlock := DeepCopyBlock(blocks["text"])
+	textBlock.ID = "main-content"
+	textBlock.Data.(map[string]interface{})["align"] = "center"
+	textBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
+		{
+			"type": "paragraph",
+			"children": []map[string]interface{}{
+				{"text": "{{ message }}"},
+			},
+		},
+	}
+	newChildren = append(newChildren, textBlock)
+
+	// Add CTA button if needed
+	buttonBlock := DeepCopyBlock(blocks["button"])
+	buttonBlock.ID = "cta-button"
+	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["backgroundColor"] = "#4e6cff"
+	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["href"] = "{{ cta_url }}"
+	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["text"] = "{{ cta_text }}"
+	newChildren = append(newChildren, buttonBlock)
+
+	// Add additional information text
+	additionalBlock := DeepCopyBlock(blocks["text"])
+	additionalBlock.ID = "additional-info"
+	additionalBlock.Data.(map[string]interface{})["align"] = "center"
+	additionalBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
+		{
+			"type": "paragraph",
+			"children": []map[string]interface{}{
+				{
+					"text":     "{{ additional_info }}",
+					"fontSize": "14px",
+				},
+			},
+		},
+	}
+	newChildren = append(newChildren, additionalBlock)
 
 	// Add back the standard blocks (divider, footer, tracking) if they exist
 	if len(standardBlocks) > 1 {

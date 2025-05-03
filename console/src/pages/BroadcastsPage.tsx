@@ -23,23 +23,22 @@ import {
   BroadcastVariation
 } from '../services/api/broadcast'
 import { listsApi } from '../services/api/list'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  CalendarOutlined,
-  SendOutlined,
-  PauseCircleOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  MailOutlined,
-  PlayCircleOutlined,
-  StopOutlined,
-  CopyOutlined,
-  EyeOutlined,
-  WarningOutlined,
-  FrownOutlined,
-  StopOutlined as UnsubscribeOutlined
-} from '@ant-design/icons'
+  faPaperPlane,
+  faCirclePause,
+  faCircleCheck,
+  faCircleXmark,
+  faPenToSquare,
+  faTrashCan,
+  faEnvelope,
+  faCirclePlay,
+  faCopy,
+  faEye,
+  faFaceFrown,
+  faCalendarDays
+} from '@fortawesome/free-regular-svg-icons'
+import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { SquareMousePointer, CircleCheck, CircleX, ChevronDown, ChevronUp } from 'lucide-react'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
@@ -136,7 +135,7 @@ const VariationCard: React.FC<VariationCardProps> = ({
               <div className="grid grid-cols-3 gap-2 mt-2">
                 <div>
                   <div className="font-medium text-purple-500 flex items-center">
-                    <EyeOutlined className="mr-1" /> Opens
+                    <FontAwesomeIcon icon={faEye} className="mr-1" /> Opens
                   </div>
                   <div>
                     {variation.metrics.opens} ({(variation.metrics.open_rate * 100).toFixed(1)}%)
@@ -152,7 +151,7 @@ const VariationCard: React.FC<VariationCardProps> = ({
                 </div>
                 <div>
                   <div className="font-medium text-green-500 flex items-center">
-                    <CheckCircleOutlined className="mr-1" /> Delivered
+                    <FontAwesomeIcon icon={faCircleCheck} className="mr-1" /> Delivered
                   </div>
                   <div>
                     {variation.metrics.delivered} of {variation.metrics.recipients}
@@ -211,7 +210,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                 workspace={currentWorkspace!}
                 broadcast={broadcast}
                 lists={lists}
-                buttonContent={<EditOutlined />}
+                buttonContent={<FontAwesomeIcon icon={faPenToSquare} />}
                 buttonProps={{ size: 'small', type: 'text' }}
               />
             </Tooltip>
@@ -219,21 +218,21 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
           {broadcast.status === 'sending' && (
             <Button type="text" size="small" onClick={() => onPause(broadcast)}>
               <Tooltip title="Pause Broadcast">
-                <PauseCircleOutlined />
+                <FontAwesomeIcon icon={faCirclePause} />
               </Tooltip>
             </Button>
           )}
           {broadcast.status === 'paused' && (
             <Button type="text" size="small" onClick={() => onResume(broadcast)}>
               <Tooltip title="Resume Broadcast">
-                <PlayCircleOutlined />
+                <FontAwesomeIcon icon={faCirclePlay} />
               </Tooltip>
             </Button>
           )}
           {broadcast.status === 'scheduled' && (
             <Button type="text" size="small" onClick={() => onCancel(broadcast)}>
               <Tooltip title="Cancel Broadcast">
-                <StopOutlined />
+                <FontAwesomeIcon icon={faBan} />
               </Tooltip>
             </Button>
           )}
@@ -241,7 +240,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <>
               <Button type="text" size="small" onClick={() => onDelete(broadcast)}>
                 <Tooltip title="Delete Broadcast">
-                  <DeleteOutlined />
+                  <FontAwesomeIcon icon={faTrashCan} />
                 </Tooltip>
               </Button>
               <Button type="primary" size="small" ghost onClick={() => onSchedule(broadcast)}>
@@ -261,7 +260,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <Statistic
               title={
                 <Space className="text-blue-500 font-medium">
-                  <SendOutlined /> Sent
+                  <FontAwesomeIcon icon={faPaperPlane} /> Sent
                 </Space>
               }
               value={broadcast.sent_count || '-'}
@@ -274,7 +273,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <Statistic
               title={
                 <Space className="text-green-500 font-medium">
-                  <CheckCircleOutlined /> Delivered
+                  <FontAwesomeIcon icon={faCircleCheck} /> Delivered
                 </Space>
               }
               value={
@@ -291,7 +290,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <Statistic
               title={
                 <Space className="text-purple-500 font-medium">
-                  <EyeOutlined /> Opens
+                  <FontAwesomeIcon icon={faEye} /> Opens
                 </Space>
               }
               value={
@@ -325,7 +324,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <Statistic
               title={
                 <Space className="text-orange-500 font-medium">
-                  <CloseCircleOutlined /> Failed
+                  <FontAwesomeIcon icon={faCircleXmark} /> Failed
                 </Space>
               }
               value={
@@ -342,7 +341,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <Statistic
               title={
                 <Space className="text-orange-500 font-medium">
-                  <WarningOutlined /> Bounced
+                  <FontAwesomeIcon icon={faTriangleExclamation} /> Bounced
                 </Space>
               }
               value={
@@ -359,7 +358,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <Statistic
               title={
                 <Space className="text-orange-500 font-medium">
-                  <FrownOutlined /> Complaints
+                  <FontAwesomeIcon icon={faFaceFrown} /> Complaints
                 </Space>
               }
               value={
@@ -376,7 +375,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <Statistic
               title={
                 <Space className="text-orange-500 font-medium">
-                  <UnsubscribeOutlined /> Unsub.
+                  <FontAwesomeIcon icon={faBan} /> Unsub.
                 </Space>
               }
               value={
@@ -463,17 +462,17 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
 
             <Descriptions.Item label="Skip Duplicates">
               {broadcast.audience.skip_duplicate_emails ? (
-                <CircleCheck className="text-green-500" size={16} />
+                <FontAwesomeIcon icon={faCircleCheck} className="text-green-500" size="sm" />
               ) : (
-                <CircleX className="text-orange-500" size={16} />
+                <FontAwesomeIcon icon={faCircleXmark} className="text-orange-500" size="sm" />
               )}
             </Descriptions.Item>
 
             <Descriptions.Item label="Exclude Unsubscribed">
               {broadcast.audience.exclude_unsubscribed ? (
-                <CircleCheck className="text-green-500" size={16} />
+                <FontAwesomeIcon icon={faCircleCheck} className="text-green-500" size="sm" />
               ) : (
-                <CircleX className="text-orange-500" size={16} />
+                <FontAwesomeIcon icon={faCircleXmark} className="text-orange-500" size="sm" />
               )}
             </Descriptions.Item>
 
@@ -486,9 +485,9 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             {/* Tracking Information */}
             <Descriptions.Item label="Open & Click Tracking">
               {broadcast.tracking_enabled ? (
-                <CircleCheck className="text-green-500" size={16} />
+                <FontAwesomeIcon icon={faCircleCheck} className="text-green-500" size="sm" />
               ) : (
-                <CircleX className="text-orange-500" size={16} />
+                <FontAwesomeIcon icon={faCircleXmark} className="text-orange-500" size="sm" />
               )}
             </Descriptions.Item>
 
@@ -529,7 +528,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             <div className="my-8">
               <Divider orientation="left">
                 <Space>
-                  <CalendarOutlined className="text-purple-500" />
+                  <FontAwesomeIcon icon={faCalendarDays} className="text-purple-500" />
                   <Text strong>A/B Test</Text>
                 </Space>
               </Divider>
@@ -548,7 +547,11 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                   broadcast.test_settings.test_duration_hours && (
                     <Descriptions.Item label="Auto-send Winner">
                       <div className="flex items-center">
-                        <CircleCheck className="text-green-500 mr-2" size={16} />
+                        <FontAwesomeIcon
+                          icon={faCircleCheck}
+                          className="text-green-500 mr-2"
+                          size="sm"
+                        />
                         <span>
                           After {broadcast.test_settings.test_duration_hours} hours based on highest{' '}
                           {broadcast.test_settings.auto_send_winner_metric === 'open_rate'
@@ -718,7 +721,7 @@ export function BroadcastsPage() {
             lists={lists}
             buttonContent={
               <Space>
-                <MailOutlined />
+                <FontAwesomeIcon icon={faEnvelope} />
                 Create Broadcast
               </Space>
             }
@@ -809,7 +812,7 @@ export function BroadcastsPage() {
               <Tooltip title="Copy to clipboard">
                 <Button
                   type="text"
-                  icon={<CopyOutlined />}
+                  icon={<FontAwesomeIcon icon={faCopy} />}
                   size="small"
                   onClick={() => {
                     navigator.clipboard.writeText(broadcastToDelete.id)

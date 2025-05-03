@@ -48,33 +48,37 @@ type AppInterface interface {
 
 // App encapsulates the application dependencies and configuration
 type App struct {
-	config *config.Config
-	logger logger.Logger
-	db     *sql.DB
-	mailer mailer.Mailer
+	config   *config.Config
+	logger   logger.Logger
+	db       *sql.DB
+	mailer   mailer.Mailer
+	eventBus domain.EventBus
 
 	// Repositories
-	userRepo        domain.UserRepository
-	workspaceRepo   domain.WorkspaceRepository
-	authRepo        domain.AuthRepository
-	contactRepo     domain.ContactRepository
-	listRepo        domain.ListRepository
-	contactListRepo domain.ContactListRepository
-	templateRepo    domain.TemplateRepository
-	broadcastRepo   domain.BroadcastRepository
-	taskRepo        domain.TaskRepository
+	userRepo                      domain.UserRepository
+	workspaceRepo                 domain.WorkspaceRepository
+	authRepo                      domain.AuthRepository
+	contactRepo                   domain.ContactRepository
+	listRepo                      domain.ListRepository
+	contactListRepo               domain.ContactListRepository
+	templateRepo                  domain.TemplateRepository
+	broadcastRepo                 domain.BroadcastRepository
+	taskRepo                      domain.TaskRepository
+	transactionalNotificationRepo domain.TransactionalNotificationRepository
+	messageHistoryRepo            domain.MessageHistoryRepository
+
 	// Services
-	authService        *service.AuthService
-	userService        *service.UserService
-	workspaceService   *service.WorkspaceService
-	contactService     *service.ContactService
-	listService        *service.ListService
-	contactListService *service.ContactListService
-	templateService    *service.TemplateService
-	emailService       *service.EmailService
-	broadcastService   *service.BroadcastService
-	taskService        *service.TaskService
-	eventBus           domain.EventBus
+	authService                      *service.AuthService
+	userService                      *service.UserService
+	workspaceService                 *service.WorkspaceService
+	contactService                   *service.ContactService
+	listService                      *service.ListService
+	contactListService               *service.ContactListService
+	templateService                  *service.TemplateService
+	emailService                     *service.EmailService
+	broadcastService                 *service.BroadcastService
+	taskService                      *service.TaskService
+	transactionalNotificationService *service.TransactionalNotificationService
 
 	// HTTP handlers
 	mux    *http.ServeMux
@@ -204,6 +208,8 @@ func (a *App) InitRepositories() error {
 	a.templateRepo = repository.NewTemplateRepository(a.workspaceRepo)
 	a.broadcastRepo = repository.NewBroadcastRepository(a.workspaceRepo, a.logger)
 	a.taskRepo = repository.NewTaskRepository(a.db)
+	a.transactionalNotificationRepo = repository.NewTransactionalNotificationRepository(a.db, a.workspaceRepo)
+	a.messageHistoryRepo = repository.NewMessageHistoryRepository(a.db)
 
 	return nil
 }
@@ -303,6 +309,16 @@ func (a *App) InitServices() error {
 	// Initialize task service
 	a.taskService = service.NewTaskService(a.taskRepo, a.logger, a.authService, a.config.APIEndpoint)
 
+	// Initialize transactional notification service
+	a.transactionalNotificationService = service.NewTransactionalNotificationService(
+		a.transactionalNotificationRepo,
+		a.messageHistoryRepo,
+		a.templateService,
+		a.contactService,
+		a.emailService,
+		a.logger,
+	)
+
 	// Initialize broadcast service
 	a.broadcastService = service.NewBroadcastService(
 		a.logger,
@@ -371,6 +387,7 @@ func (a *App) InitHandlers() error {
 		a.logger,
 		a.config.Security.SecretKey,
 	)
+	transactionalHandler := httpHandler.NewTransactionalNotificationHandler(a.transactionalNotificationService, a.config.Security.PasetoPublicKey, a.logger)
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
@@ -383,6 +400,7 @@ func (a *App) InitHandlers() error {
 	emailHandler.RegisterRoutes(a.mux)
 	broadcastHandler.RegisterRoutes(a.mux)
 	taskHandler.RegisterRoutes(a.mux)
+	transactionalHandler.RegisterRoutes(a.mux)
 	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	return nil

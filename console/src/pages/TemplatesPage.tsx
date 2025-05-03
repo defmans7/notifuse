@@ -16,13 +16,14 @@ import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
 import { emailService } from '../services/api/email'
 import type { Template, Workspace } from '../services/api/types'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  EditOutlined,
-  EyeOutlined,
-  DeleteOutlined,
-  SendOutlined,
-  CopyOutlined
-} from '@ant-design/icons'
+  faPenToSquare,
+  faEye,
+  faTrashCan,
+  faPaperPlane,
+  faCopy
+} from '@fortawesome/free-regular-svg-icons'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
 import { renderCategoryTag } from '../components/templates'
 import { useAuth } from '../contexts/AuthContext'
@@ -303,7 +304,7 @@ export function TemplatesPage() {
                 <CreateTemplateDrawer
                   template={record}
                   workspace={workspace}
-                  buttonContent={<EditOutlined />}
+                  buttonContent={<FontAwesomeIcon icon={faPenToSquare} />}
                   buttonProps={{ type: 'text', size: 'small' }}
                 />
               </>
@@ -315,7 +316,7 @@ export function TemplatesPage() {
                 <CreateTemplateDrawer
                   fromTemplate={record}
                   workspace={workspace}
-                  buttonContent={<CopyOutlined />}
+                  buttonContent={<FontAwesomeIcon icon={faCopy} />}
                   buttonProps={{ type: 'text', size: 'small' }}
                 />
               </>
@@ -330,20 +331,24 @@ export function TemplatesPage() {
               cancelText="Cancel"
               placement="topRight"
             >
-              <Button type="text" icon={<DeleteOutlined />} loading={deleteMutation.isPending} />
+              <Button
+                type="text"
+                icon={<FontAwesomeIcon icon={faTrashCan} />}
+                loading={deleteMutation.isPending}
+              />
             </Popconfirm>
           </Tooltip>
           <Tooltip title="Send Test Email">
             <Button
               type="text"
-              icon={<SendOutlined />}
+              icon={<FontAwesomeIcon icon={faPaperPlane} />}
               onClick={() => handleTestTemplate(record)}
             />
           </Tooltip>
           <Tooltip title="Preview Template">
             <>
               <TemplatePreviewDrawer record={record} workspaceId={workspaceId!}>
-                <Button type="text" icon={<EyeOutlined />} />
+                <Button type="text" icon={<FontAwesomeIcon icon={faEye} />} />
               </TemplatePreviewDrawer>
             </>
           </Tooltip>

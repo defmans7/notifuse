@@ -241,7 +241,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
 
 		// Mock template service expectations for createDefaultTemplates
-		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(nil).Times(3)
+		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(nil).Times(4)
 
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
@@ -403,7 +403,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
 		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
 
-		// Simulate template creation error for all three templates
+		// Simulate template creation error for all four templates
 		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(errors.New("template creation failed")).AnyTimes()
 
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)

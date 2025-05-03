@@ -41,9 +41,14 @@ func TestTemplateStructure(t *testing.T) {
 			[]string{"logo", "heading", "text", "resub-text", "button", "divider", "footer", "open-tracking"},
 		},
 		{
-			"DefaultWelcomeEmail",
-			DefaultWelcomeEmail,
+			"DefaultSubscriptionConfirmationEmail",
+			DefaultSubscriptionConfirmationEmail,
 			[]string{"logo", "heading", "text", "welcome-text", "unsub-text", "unsub-link", "divider", "footer", "open-tracking"},
+		},
+		{
+			"DefaultTransactionalEmail",
+			DefaultTransactionalEmail,
+			[]string{"logo", "heading", "main-content", "cta-button", "additional-info", "divider", "footer", "open-tracking"},
 		},
 		{
 			"DefaultTemplateStructure",
@@ -228,13 +233,13 @@ func TestBlocksWithSpecificContent(t *testing.T) {
 		t.Errorf("Expected resubscribe URL placeholder, got %s", buttonHref)
 	}
 
-	// Test welcome email unsubscribe URL
-	welcomeEmail := DefaultWelcomeEmail()
-	column = welcomeEmail.Children[0].Children[0]
+	// Test subscription confirmation email unsubscribe URL
+	subscriptionEmail := DefaultSubscriptionConfirmationEmail()
+	column = subscriptionEmail.Children[0].Children[0]
 	unsubLinkBlock, found := findBlockByID(column.Children, "unsub-link")
 
 	if !found {
-		t.Fatalf("Unsubscribe link block not found in welcome email")
+		t.Fatalf("Unsubscribe link block not found in subscription email")
 	}
 
 	editorData := unsubLinkBlock.Data.(map[string]interface{})["editorData"].([]map[string]interface{})

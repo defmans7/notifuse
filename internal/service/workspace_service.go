@@ -200,8 +200,9 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 
 	// create default templates:
 	// - double optin confirmation
-	// - welcome email
+	// - subscription confirmation email
 	// - unsubscribe confirmation
+	// - transactional notification
 	if err := s.createDefaultTemplates(ctx, id, userDetails.Email); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create default templates")
 		// Continue with workspace creation even if template creation fails
@@ -217,7 +218,7 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		IsPublic:            false,
 		Description:         "This is a test list",
 		DoubleOptInTemplate: &domain.TemplateReference{ID: "double-optin-confirmation"},
-		WelcomeTemplate:     &domain.TemplateReference{ID: "welcome-email"},
+		WelcomeTemplate:     &domain.TemplateReference{ID: "subscription-confirmation-email"},
 		UnsubscribeTemplate: &domain.TemplateReference{ID: "unsubscribe-confirmation"},
 		CreatedAt:           time.Now(),
 		UpdatedAt:           time.Now(),
@@ -279,10 +280,10 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 		return fmt.Errorf("failed to create opt-in confirmation template: %w", err)
 	}
 
-	// 2. Welcome email template
-	welcomeTemplate := &domain.Template{
-		ID:        "welcome-email",
-		Name:      "Welcome Email",
+	// 2. Subscription confirmation email template
+	subscriptionTemplate := &domain.Template{
+		ID:        "subscription-confirmation-email",
+		Name:      "Subscription Confirmation Email",
 		Version:   1, // Will be set in CreateTemplate
 		Channel:   "email",
 		Category:  string(domain.TemplateCategoryWelcome),
@@ -291,9 +292,9 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 		Email: &domain.EmailTemplate{
 			FromAddress:      fromEmail,
 			FromName:         fromName,
-			Subject:          "Welcome to our community!",
-			SubjectPreview:   func() *string { s := "Welcome to our community!"; return &s }(),
-			VisualEditorTree: mjml.DefaultWelcomeEmail(),
+			Subject:          "Subscription Confirmed!",
+			SubjectPreview:   func() *string { s := "Subscription Confirmed!"; return &s }(),
+			VisualEditorTree: mjml.DefaultSubscriptionConfirmationEmail(),
 			CompiledPreview:  "", // Will be computed during validation
 		},
 		TestData: domain.MapOfAny{
@@ -302,8 +303,8 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 		},
 	}
 
-	if err := s.templateService.CreateTemplate(ctx, workspaceID, welcomeTemplate); err != nil {
-		return fmt.Errorf("failed to create welcome email template: %w", err)
+	if err := s.templateService.CreateTemplate(ctx, workspaceID, subscriptionTemplate); err != nil {
+		return fmt.Errorf("failed to create subscription confirmation email template: %w", err)
 	}
 
 	// 3. Unsubscribe confirmation template
@@ -330,6 +331,38 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 
 	if err := s.templateService.CreateTemplate(ctx, workspaceID, unsubscribeTemplate); err != nil {
 		return fmt.Errorf("failed to create unsubscribe confirmation template: %w", err)
+	}
+
+	// 4. Transactional notification template
+	transactionalTemplate := &domain.Template{
+		ID:        "transactional-notification",
+		Name:      "Transactional Notification",
+		Version:   1, // Will be set in CreateTemplate
+		Channel:   "email",
+		Category:  string(domain.TemplateCategoryTransactional),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Email: &domain.EmailTemplate{
+			FromAddress:      fromEmail,
+			FromName:         fromName,
+			Subject:          "{{ subject }}",
+			SubjectPreview:   func() *string { s := "Important notification"; return &s }(),
+			VisualEditorTree: mjml.DefaultTransactionalEmail(),
+			CompiledPreview:  "", // Will be computed during validation
+		},
+		TestData: domain.MapOfAny{
+			"subject":         "Your order has been shipped",
+			"heading":         "Order Shipped!",
+			"message":         "Your order #12345 has been shipped and will arrive in 2-3 business days.",
+			"cta_text":        "TRACK PACKAGE",
+			"cta_url":         "https://example.com/track?id=12345",
+			"additional_info": "If you have any questions, please contact our support team.",
+			"current_year":    time.Now().Year(),
+		},
+	}
+
+	if err := s.templateService.CreateTemplate(ctx, workspaceID, transactionalTemplate); err != nil {
+		return fmt.Errorf("failed to create transactional notification template: %w", err)
 	}
 
 	return nil

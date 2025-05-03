@@ -20,15 +20,14 @@ import { listsApi } from '../services/api/list'
 import { templatesApi } from '../services/api/template'
 import type { List, TemplateReference } from '../services/api/types'
 import { CreateListDrawer } from '../components/lists/ListDrawer'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  UsergroupAddOutlined,
-  CheckCircleOutlined,
-  StopOutlined,
-  WarningOutlined,
-  FrownOutlined,
-  EditOutlined,
-  DeleteOutlined
-} from '@ant-design/icons'
+  faCircleCheck,
+  faPenToSquare,
+  faTrashCan,
+  faFaceFrown
+} from '@fortawesome/free-regular-svg-icons'
+import { faUserPlus, faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { Check, X } from 'lucide-react'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
@@ -171,7 +170,7 @@ export function ListsPage() {
                 <Space>
                   <Button type="text" size="small" onClick={() => openDeleteModal(list)}>
                     <Tooltip title="Delete List">
-                      <DeleteOutlined />
+                      <FontAwesomeIcon icon={faTrashCan} />
                     </Tooltip>
                   </Button>
                   <CreateListDrawer
@@ -182,7 +181,7 @@ export function ListsPage() {
                       size: 'small',
                       buttonContent: (
                         <Tooltip title="Edit List">
-                          <EditOutlined />
+                          <FontAwesomeIcon icon={faPenToSquare} />
                         </Tooltip>
                       )
                     }}
@@ -202,7 +201,7 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <CheckCircleOutlined className="text-green-500" /> Active
+                        <FontAwesomeIcon icon={faCircleCheck} className="text-green-500" /> Active
                       </Space>
                     }
                     value={list.total_active}
@@ -213,7 +212,7 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <UsergroupAddOutlined className="text-blue-500" /> Pending
+                        <FontAwesomeIcon icon={faUserPlus} className="text-blue-500" /> Pending
                       </Space>
                     }
                     value={list.total_pending}
@@ -224,7 +223,7 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <StopOutlined className="text-gray-500" /> Unsub
+                        <FontAwesomeIcon icon={faBan} className="text-gray-500" /> Unsub
                       </Space>
                     }
                     value={list.total_unsubscribed}
@@ -235,7 +234,8 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <WarningOutlined className="text-yellow-500" /> Bounced
+                        <FontAwesomeIcon icon={faTriangleExclamation} className="text-yellow-500" />{' '}
+                        Bounced
                       </Space>
                     }
                     value={list.total_bounced}
@@ -246,7 +246,7 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <FrownOutlined className="text-red-500" /> Complaints
+                        <FontAwesomeIcon icon={faFaceFrown} className="text-red-500" /> Complaints
                       </Space>
                     }
                     value={list.total_complained}

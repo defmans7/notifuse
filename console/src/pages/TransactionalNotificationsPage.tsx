@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Badge,
   Typography,
   Space,
   Tooltip,
@@ -18,13 +17,14 @@ import {
   TransactionalNotification,
   ChannelTemplates
 } from '../services/api/transactional_notifications'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  EditOutlined,
-  DeleteOutlined,
-  MailOutlined,
-  PlusOutlined,
-  SendOutlined
-} from '@ant-design/icons'
+  faPenToSquare,
+  faTrashCan,
+  faEnvelope,
+  faSquarePlus,
+  faPaperPlane
+} from '@fortawesome/free-regular-svg-icons'
 import UpsertTransactionalNotificationDrawer from '../components/transactional/UpsertTransactionalNotificationDrawer'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
@@ -38,7 +38,7 @@ const ChannelsList: React.FC<{ channels: ChannelTemplates }> = ({ channels }) =>
     <Space direction="vertical" size="small">
       {channels.email && (
         <Tag color="blue">
-          <MailOutlined /> Email
+          <FontAwesomeIcon icon={faEnvelope} /> Email
         </Tag>
       )}
       {/* Add more channel types here as they become available */}
@@ -244,14 +244,14 @@ export function TransactionalNotificationsPage() {
               <UpsertTransactionalNotificationDrawer
                 workspace={currentWorkspace}
                 notification={record}
-                buttonContent={<EditOutlined />}
+                buttonContent={<FontAwesomeIcon icon={faPenToSquare} />}
                 buttonProps={{ type: 'text', size: 'small' }}
               />
             )}
           </Tooltip>
           <Tooltip title="Test">
             <Button type="text" size="small" onClick={() => handleTestNotification(record)}>
-              <SendOutlined />
+              <FontAwesomeIcon icon={faPaperPlane} />
             </Button>
           </Tooltip>
           <Tooltip title="Delete">
@@ -264,7 +264,7 @@ export function TransactionalNotificationsPage() {
               placement="topRight"
             >
               <Button type="text" size="small">
-                <DeleteOutlined />
+                <FontAwesomeIcon icon={faTrashCan} />
               </Button>
             </Popconfirm>
           </Tooltip>
@@ -282,7 +282,7 @@ export function TransactionalNotificationsPage() {
             workspace={currentWorkspace}
             buttonContent={
               <Space>
-                <PlusOutlined /> New Notification
+                <FontAwesomeIcon icon={faSquarePlus} /> New Notification
               </Space>
             }
             buttonProps={{ type: 'primary' }}

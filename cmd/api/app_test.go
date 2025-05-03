@@ -194,6 +194,11 @@ func TestAppInitRepositories(t *testing.T) {
 	assert.NotNil(t, appImpl.contactRepo)
 	assert.NotNil(t, appImpl.listRepo)
 	assert.NotNil(t, appImpl.contactListRepo)
+	assert.NotNil(t, appImpl.templateRepo)
+	assert.NotNil(t, appImpl.broadcastRepo)
+	assert.NotNil(t, appImpl.taskRepo)
+	assert.NotNil(t, appImpl.transactionalNotificationRepo)
+	assert.NotNil(t, appImpl.messageHistoryRepo)
 }
 
 // TestAppStart tests the Start method
@@ -444,6 +449,12 @@ func TestAppInitServices(t *testing.T) {
 	assert.NotNil(t, appImpl.contactService, "Contact service should be initialized")
 	assert.NotNil(t, appImpl.listService, "List service should be initialized")
 	assert.NotNil(t, appImpl.contactListService, "ContactList service should be initialized")
+	assert.NotNil(t, appImpl.templateService, "Template service should be initialized")
+	assert.NotNil(t, appImpl.emailService, "Email service should be initialized")
+	assert.NotNil(t, appImpl.broadcastService, "Broadcast service should be initialized")
+	assert.NotNil(t, appImpl.taskService, "Task service should be initialized")
+	assert.NotNil(t, appImpl.transactionalNotificationService, "TransactionalNotification service should be initialized")
+	assert.NotNil(t, appImpl.eventBus, "Event bus should be initialized")
 }
 
 // TestAppInitHandlers tests the InitHandlers method
