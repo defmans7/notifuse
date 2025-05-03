@@ -205,7 +205,8 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		// Query for contact lists using squirrel
 		listQueryBuilder := psql.Select("email, list_id, status, created_at, updated_at").
 			From("contact_lists").
-			Where(sq.Eq{"email": emails}) // squirrel handles IN clauses automatically
+			Where(sq.Eq{"email": emails}).  // squirrel handles IN clauses automatically
+			Where(sq.Eq{"deleted_at": nil}) // Filter out deleted contact_list entries
 
 		listQuery, listArgs, err := listQueryBuilder.ToSql()
 		if err != nil {
