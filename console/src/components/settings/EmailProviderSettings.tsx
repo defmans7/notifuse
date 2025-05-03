@@ -15,10 +15,11 @@ import {
   Space,
   Descriptions
 } from 'antd'
-import { EmailProvider, EmailProviderKind, Workspace } from '../services/api/types'
+import { EmailProvider, EmailProviderKind, Workspace } from '../../services/api/types'
 import { MailOutlined } from '@ant-design/icons'
-import { emailService } from '../services/api/email'
-import { workspaceService } from '../services/api/workspace'
+import { emailService } from '../../services/api/email'
+import { workspaceService } from '../../services/api/workspace'
+import { Section } from './Section'
 
 // Constants
 const FORM_LAYOUT = {
@@ -82,21 +83,10 @@ interface ProviderCardProps {
   onClick: (provider: EmailProviderKind) => void
 }
 
-const ProviderCard = ({ provider, icon, description, onClick }: ProviderCardProps) => (
-  <Card
-    hoverable
+const ProviderCard = ({ provider, icon, onClick }: ProviderCardProps) => (
+  <div
     onClick={() => onClick(provider)}
-    style={{ textAlign: 'center', height: '100%', padding: '12px' }}
-    styles={{
-      body: {
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }
-    }}
-    size="small"
+    className="text-center h-full p-3 cursor-pointer hover:bg-gray-50 transition-colors duration-200 flex flex-col items-center justify-center border border-gray-200 rounded-md"
   >
     {icon}
     <div style={{ fontWeight: 'bold', marginTop: '8px' }}>
@@ -114,7 +104,7 @@ const ProviderCard = ({ provider, icon, description, onClick }: ProviderCardProp
                   ? 'Mailjet'
                   : provider}
     </div>
-  </Card>
+  </div>
 )
 
 interface ProviderGridProps {
@@ -556,7 +546,6 @@ const ProviderDescription = ({ providerType, workspace }: ProviderDescriptionPro
 }
 
 interface EmailProviderCardProps {
-  title: string
   providerType: ProviderType
   workspace: Workspace
   provider: EmailProviderKind | null
@@ -573,7 +562,6 @@ interface EmailProviderCardProps {
 }
 
 const EmailProviderCard = ({
-  title,
   providerType,
   workspace,
   provider,
@@ -591,14 +579,10 @@ const EmailProviderCard = ({
   const isTransactional = providerType === 'transactional'
 
   return (
-    <Card
-      title={title}
-      className="workspace-card"
-      style={{ marginBottom: isTransactional ? 0 : 24 }}
-      extra={
-        provider &&
-        !editing && (
-          <Space>
+    <>
+      {provider && !editing && (
+        <div className="flex justify-end mb-4">
+          <Space size="middle">
             {isOwner && (
               <Button onClick={onEdit} size="small">
                 Edit
@@ -613,9 +597,8 @@ const EmailProviderCard = ({
               Change provider
             </Button>
           </Space>
-        )
-      }
-    >
+        </div>
+      )}
       {!provider ? (
         <>
           <Alert
@@ -661,7 +644,7 @@ const EmailProviderCard = ({
           )}
         </Form>
       )}
-    </Card>
+    </>
   )
 }
 
@@ -914,40 +897,48 @@ export function EmailProviderSettings({
   }
 
   return (
-    <div className="email-provider-settings">
-      <EmailProviderCard
+    <>
+      <Section
         title="Marketing Email Provider"
-        providerType="marketing"
-        workspace={workspace}
-        provider={marketingProvider}
-        editing={editingMarketing}
-        form={marketingForm}
-        isOwner={isOwner}
-        loading={loading}
-        onSelectProvider={handleMarketingProviderSelect}
-        onEdit={() => setEditingMarketing(true)}
-        onTest={() => openTestModal('marketing')}
-        onChangeProvider={() => setMarketingProvider(null)}
-        onSave={handleMarketingSave}
-        onCancel={() => setEditingMarketing(false)}
-      />
+        description="Configure your email markeing provider"
+      >
+        <EmailProviderCard
+          providerType="marketing"
+          workspace={workspace}
+          provider={marketingProvider}
+          editing={editingMarketing}
+          form={marketingForm}
+          isOwner={isOwner}
+          loading={loading}
+          onSelectProvider={handleMarketingProviderSelect}
+          onEdit={() => setEditingMarketing(true)}
+          onTest={() => openTestModal('marketing')}
+          onChangeProvider={() => setMarketingProvider(null)}
+          onSave={handleMarketingSave}
+          onCancel={() => setEditingMarketing(false)}
+        />
+      </Section>
 
-      <EmailProviderCard
+      <Section
         title="Transactional Email Provider"
-        providerType="transactional"
-        workspace={workspace}
-        provider={transactionalProvider}
-        editing={editingTransactional}
-        form={transactionalForm}
-        isOwner={isOwner}
-        loading={loading}
-        onSelectProvider={handleTransactionalProviderSelect}
-        onEdit={() => setEditingTransactional(true)}
-        onTest={() => openTestModal('transactional')}
-        onChangeProvider={() => setTransactionalProvider(null)}
-        onSave={handleTransactionalSave}
-        onCancel={() => setEditingTransactional(false)}
-      />
+        description="Configure your email transactional provider"
+      >
+        <EmailProviderCard
+          providerType="transactional"
+          workspace={workspace}
+          provider={transactionalProvider}
+          editing={editingTransactional}
+          form={transactionalForm}
+          isOwner={isOwner}
+          loading={loading}
+          onSelectProvider={handleTransactionalProviderSelect}
+          onEdit={() => setEditingTransactional(true)}
+          onTest={() => openTestModal('transactional')}
+          onChangeProvider={() => setTransactionalProvider(null)}
+          onSave={handleTransactionalSave}
+          onCancel={() => setEditingTransactional(false)}
+        />
+      </Section>
 
       <TestEmailModal
         visible={testModalVisible}
@@ -958,6 +949,6 @@ export function EmailProviderSettings({
         onEmailChange={setTestEmail}
         onSend={handleTestProvider}
       />
-    </div>
+    </>
   )
 }

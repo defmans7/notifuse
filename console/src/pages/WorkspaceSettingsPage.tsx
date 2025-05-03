@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Space } from 'antd'
 import { useParams, useNavigate } from '@tanstack/react-router'
 import { workspaceService } from '../services/api/workspace'
 import { Workspace, WorkspaceMember } from '../services/api/types'
-import { WorkspaceMembers } from '../components/WorkspaceMembers'
-import { WorkspaceSettings } from '../components/WorkspaceSettings'
-import { EmailProviderSettings } from '../components/EmailProviderSettings'
+import { WorkspaceMembers } from '../components/settings/WorkspaceMembers'
+import { WorkspaceSettings } from '../components/settings/WorkspaceSettings'
+import { EmailProviderSettings } from '../components/settings/EmailProviderSettings'
 import { useAuth } from '../contexts/AuthContext'
 
 export function WorkspaceSettingsPage() {
@@ -55,31 +54,29 @@ export function WorkspaceSettingsPage() {
   }
 
   return (
-    <div className="workspace-settings">
-      <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: '800px' }}>
-        <WorkspaceSettings
-          workspace={workspace}
-          loading={false}
-          onWorkspaceUpdate={handleWorkspaceUpdate}
-          onWorkspaceDelete={handleWorkspaceDelete}
-          isOwner={isOwner}
-        />
+    <div className="max-w-[1200px] p-6">
+      <WorkspaceSettings
+        workspace={workspace}
+        loading={false}
+        onWorkspaceUpdate={handleWorkspaceUpdate}
+        onWorkspaceDelete={handleWorkspaceDelete}
+        isOwner={isOwner}
+      />
 
-        <EmailProviderSettings
-          workspace={workspace}
-          loading={false}
-          onSave={handleWorkspaceUpdate}
-          isOwner={isOwner}
-        />
+      <EmailProviderSettings
+        workspace={workspace}
+        loading={false}
+        onSave={handleWorkspaceUpdate}
+        isOwner={isOwner}
+      />
 
-        <WorkspaceMembers
-          workspaceId={workspaceId}
-          members={members}
-          loading={loadingMembers}
-          onMembersChange={fetchMembers}
-          isOwner={isOwner}
-        />
-      </Space>
+      <WorkspaceMembers
+        workspaceId={workspaceId}
+        members={members}
+        loading={loadingMembers}
+        onMembersChange={fetchMembers}
+        isOwner={isOwner}
+      />
     </div>
   )
 }

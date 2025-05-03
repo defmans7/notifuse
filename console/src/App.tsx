@@ -20,7 +20,10 @@ const theme: ThemeConfig = {
   },
   components: {
     Layout: {
-      bodyBg: 'rgb(243, 246, 252)'
+      // bodyBg: 'rgb(243, 246, 252)'
+      bodyBg: '#ffffff',
+      lightSiderBg: '#fdfdfd',
+      siderBg: '#fdfdfd'
     },
     Button: {
       // primaryColor: '#212121',
@@ -32,7 +35,8 @@ const theme: ThemeConfig = {
       borderRadius: 4,
       borderRadiusLG: 4,
       borderRadiusSM: 4,
-      borderRadiusXS: 4
+      borderRadiusXS: 4,
+      colorBorderSecondary: 'var(--color-gray-200)'
     },
     Table: {
       headerBg: 'transparent',

@@ -1,12 +1,13 @@
 import { Layout, Menu, Select, Space, Button, Dropdown } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faImage,
   faFolderOpen,
   faObjectGroup,
-  faPaperPlane
+  faPaperPlane,
+  faSquareCaretLeft,
+  faSquareCaretRight
 } from '@fortawesome/free-regular-svg-icons'
 import {
   faGear,
@@ -125,16 +126,22 @@ export function WorkspaceLayout() {
       <Layout style={{ minHeight: '100vh' }}>
         <Layout>
           <Sider
-            width={224}
+            width={250}
             theme="light"
-            style={{ position: 'relative' }}
+            style={{
+              position: 'fixed',
+              height: '100vh',
+              left: 0,
+              top: 0,
+              overflow: 'auto',
+              zIndex: 10
+            }}
             collapsible
             collapsed={collapsed}
             trigger={null}
+            className="border-r border-gray-200"
           >
-            <div
-              style={{ padding: '24px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
+            <div className="flex items-center gap-1 p-6">
               {!collapsed && (
                 <Select
                   value={workspaceId}
@@ -165,7 +172,13 @@ export function WorkspaceLayout() {
               )}
               <Button
                 type="text"
-                icon={collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                icon={
+                  collapsed ? (
+                    <FontAwesomeIcon icon={faSquareCaretRight} size="sm" />
+                  ) : (
+                    <FontAwesomeIcon icon={faSquareCaretLeft} size="sm" />
+                  )
+                }
                 onClick={() => setCollapsed(!collapsed)}
                 style={{ fontSize: '16px' }}
               />
@@ -173,8 +186,9 @@ export function WorkspaceLayout() {
             <Menu
               mode="inline"
               selectedKeys={[selectedKey]}
-              style={{ height: 'calc(100% - 120px)', borderRight: 0 }}
+              style={{ height: 'calc(100% - 120px)', borderRight: 0, backgroundColor: '#fdfdfd' }}
               items={menuItems}
+              theme="light"
             />
             <div
               style={{
@@ -184,7 +198,6 @@ export function WorkspaceLayout() {
                 width: collapsed ? '80px' : '224px',
                 padding: '16px',
                 borderTop: '1px solid #f0f0f0',
-                background: '#fff',
                 zIndex: 1,
                 transition: 'width 0.2s'
               }}
@@ -231,7 +244,13 @@ export function WorkspaceLayout() {
               )}
             </div>
           </Sider>
-          <Layout style={{ padding: '24px' }}>
+          <Layout
+            style={{
+              marginLeft: collapsed ? '80px' : '250px',
+              padding: '24px',
+              transition: 'margin-left 0.2s'
+            }}
+          >
             <Content>
               <Outlet />
             </Content>

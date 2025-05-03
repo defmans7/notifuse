@@ -294,6 +294,7 @@ export function TransactionalNotificationsPage() {
           dataSource={notifications}
           rowKey="id"
           pagination={{ hideOnSinglePage: true }}
+          className="border border-gray-200 rounded-md"
         />
       ) : (
         <div className="text-center py-12">

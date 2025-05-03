@@ -193,7 +193,6 @@ export function ListsPage() {
                   />
                 </Space>
               }
-              variant="borderless"
               key={list.id}
             >
               <Row gutter={[16, 16]} wrap={false}>

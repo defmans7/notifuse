@@ -530,6 +530,7 @@ export function ContactsPage() {
             ? 'No contacts found. Add some contacts to get started.'
             : 'Loading...'
         }}
+        className="border border-gray-200 rounded-md"
       />
 
       {data?.next_cursor && (

@@ -345,8 +345,8 @@ func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspace
 		Email: &domain.EmailTemplate{
 			FromAddress:      fromEmail,
 			FromName:         fromName,
-			Subject:          "{{ subject }}",
-			SubjectPreview:   func() *string { s := "Important notification"; return &s }(),
+			Subject:          "Important subject",
+			SubjectPreview:   func() *string { s := "Important preview"; return &s }(),
 			VisualEditorTree: mjml.DefaultTransactionalEmail(),
 			CompiledPreview:  "", // Will be computed during validation
 		},

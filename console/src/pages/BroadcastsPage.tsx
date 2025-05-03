@@ -263,7 +263,6 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
           )}
         </Space>
       }
-      variant="borderless"
       key={broadcast.id}
       className="!mb-6"
     >

@@ -10,7 +10,8 @@ import {
   message,
   Segmented,
   Modal,
-  Input
+  Input,
+  Card
 } from 'antd'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
@@ -387,6 +388,7 @@ export function TemplatesPage() {
           dataSource={data.templates}
           rowKey="id"
           pagination={{ hideOnSinglePage: true }}
+          className="border border-gray-200 rounded-md"
         />
       ) : (
         <div className="text-center py-12">

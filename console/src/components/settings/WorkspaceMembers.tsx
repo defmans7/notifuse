@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  Card,
   Table,
   Typography,
   Spin,
@@ -15,9 +14,11 @@ import {
   Popconfirm,
   Tooltip
 } from 'antd'
-import { MailOutlined, DeleteOutlined } from '@ant-design/icons'
-import { WorkspaceMember } from '../services/api/types'
-import { workspaceService } from '../services/api/workspace'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faTrashCan } from '@fortawesome/free-regular-svg-icons'
+import { WorkspaceMember } from '../../services/api/types'
+import { workspaceService } from '../../services/api/workspace'
+import { Section } from './Section'
 
 const { Text } = Typography
 
@@ -106,7 +107,7 @@ export function WorkspaceMembers({
                 >
                   <Tooltip title="Remove member" placement="left">
                     <Button
-                      icon={<DeleteOutlined />}
+                      icon={<FontAwesomeIcon icon={faTrashCan} />}
                       size="small"
                       type="text"
                       loading={removingMember}
@@ -215,11 +216,10 @@ export function WorkspaceMembers({
 
   return (
     <>
-      <Card
-        title="Members"
-        extra={
-          isOwner && (
-            <Space>
+      <Section title="Members" description="Manage your workspace members">
+        {isOwner && (
+          <div className="flex justify-end mb-4">
+            <Space size="middle">
               <Button type="primary" size="small" ghost onClick={() => setApiKeyModalVisible(true)}>
                 Create API Key
               </Button>
@@ -227,9 +227,9 @@ export function WorkspaceMembers({
                 Invite Member
               </Button>
             </Space>
-          )
-        }
-      >
+          </div>
+        )}
+
         {loading ? (
           <div style={{ textAlign: 'center', padding: '20px' }}>
             <Spin />
@@ -241,9 +241,10 @@ export function WorkspaceMembers({
             rowKey="user_id"
             pagination={false}
             locale={{ emptyText: 'No members found' }}
+            className="border border-gray-200 rounded-md"
           />
         )}
-      </Card>
+      </Section>
 
       <Modal
         title="Invite Member"
@@ -253,13 +254,7 @@ export function WorkspaceMembers({
           <Button key="cancel" onClick={() => setInviteModalVisible(false)}>
             Cancel
           </Button>,
-          <Button
-            key="invite"
-            type="primary"
-            onClick={handleInvite}
-            loading={inviting}
-            icon={<MailOutlined />}
-          >
+          <Button key="invite" type="primary" onClick={handleInvite} loading={inviting}>
             Send Invitation
           </Button>
         ]}
@@ -274,7 +269,6 @@ export function WorkspaceMembers({
               placeholder="Enter email address"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              prefix={<MailOutlined />}
             />
           </Form.Item>
         </Form>
