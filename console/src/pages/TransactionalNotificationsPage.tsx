@@ -22,7 +22,6 @@ import {
   faPenToSquare,
   faTrashCan,
   faEnvelope,
-  faSquarePlus,
   faPaperPlane
 } from '@fortawesome/free-regular-svg-icons'
 import UpsertTransactionalNotificationDrawer from '../components/transactional/UpsertTransactionalNotificationDrawer'
@@ -38,7 +37,7 @@ const ChannelsList: React.FC<{ channels: ChannelTemplates }> = ({ channels }) =>
     <Space direction="vertical" size="small">
       {channels.email && (
         <Tag color="blue">
-          <FontAwesomeIcon icon={faEnvelope} /> Email
+          <FontAwesomeIcon icon={faEnvelope} style={{ opacity: 0.7 }} /> Email
         </Tag>
       )}
       {/* Add more channel types here as they become available */}
@@ -235,8 +234,9 @@ export function TransactionalNotificationsPage() {
       render: (isPublic: boolean) => (isPublic ? 'Yes' : 'No')
     },
     {
-      title: 'Actions',
+      title: '',
       key: 'actions',
+      width: 100,
       render: (_: any, record: TransactionalNotification) => (
         <Space>
           <Tooltip title="Edit">
@@ -244,14 +244,14 @@ export function TransactionalNotificationsPage() {
               <UpsertTransactionalNotificationDrawer
                 workspace={currentWorkspace}
                 notification={record}
-                buttonContent={<FontAwesomeIcon icon={faPenToSquare} />}
+                buttonContent={<FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />}
                 buttonProps={{ type: 'text', size: 'small' }}
               />
             )}
           </Tooltip>
           <Tooltip title="Test">
             <Button type="text" size="small" onClick={() => handleTestNotification(record)}>
-              <FontAwesomeIcon icon={faPaperPlane} />
+              <FontAwesomeIcon icon={faPaperPlane} style={{ opacity: 0.7 }} />
             </Button>
           </Tooltip>
           <Tooltip title="Delete">
@@ -264,7 +264,7 @@ export function TransactionalNotificationsPage() {
               placement="topRight"
             >
               <Button type="text" size="small">
-                <FontAwesomeIcon icon={faTrashCan} />
+                <FontAwesomeIcon icon={faTrashCan} style={{ opacity: 0.7 }} />
               </Button>
             </Popconfirm>
           </Tooltip>
@@ -280,11 +280,7 @@ export function TransactionalNotificationsPage() {
         {currentWorkspace && hasNotifications && (
           <UpsertTransactionalNotificationDrawer
             workspace={currentWorkspace}
-            buttonContent={
-              <Space>
-                <FontAwesomeIcon icon={faSquarePlus} /> New Notification
-              </Space>
-            }
+            buttonContent={'New Notification'}
             buttonProps={{ type: 'primary' }}
           />
         )}

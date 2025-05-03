@@ -13,8 +13,6 @@ import { CountriesFormOptions } from '../components/utils/countries_timezones'
 import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus } from '@fortawesome/free-solid-svg-icons'
 
 const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
@@ -502,11 +500,7 @@ export function ContactsPage() {
           <ContactUpsertDrawer
             workspaceId={workspaceId}
             buttonProps={{
-              buttonContent: (
-                <>
-                  <FontAwesomeIcon icon={faPlus} /> Add Contact
-                </>
-              )
+              buttonContent: 'Create Contact'
             }}
           />
         </Space>

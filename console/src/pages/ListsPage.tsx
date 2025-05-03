@@ -170,7 +170,7 @@ export function ListsPage() {
                 <Space>
                   <Button type="text" size="small" onClick={() => openDeleteModal(list)}>
                     <Tooltip title="Delete List">
-                      <FontAwesomeIcon icon={faTrashCan} />
+                      <FontAwesomeIcon icon={faTrashCan} style={{ opacity: 0.7 }} />
                     </Tooltip>
                   </Button>
                   <CreateListDrawer
@@ -181,7 +181,7 @@ export function ListsPage() {
                       size: 'small',
                       buttonContent: (
                         <Tooltip title="Edit List">
-                          <FontAwesomeIcon icon={faPenToSquare} />
+                          <FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />
                         </Tooltip>
                       )
                     }}
@@ -201,7 +201,12 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <FontAwesomeIcon icon={faCircleCheck} className="text-green-500" /> Active
+                        <FontAwesomeIcon
+                          icon={faCircleCheck}
+                          className="text-green-500"
+                          style={{ opacity: 0.7 }}
+                        />{' '}
+                        Active
                       </Space>
                     }
                     value={list.total_active}
@@ -212,7 +217,12 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <FontAwesomeIcon icon={faUserPlus} className="text-blue-500" /> Pending
+                        <FontAwesomeIcon
+                          icon={faUserPlus}
+                          className="text-blue-500"
+                          style={{ opacity: 0.7 }}
+                        />{' '}
+                        Pending
                       </Space>
                     }
                     value={list.total_pending}
@@ -223,7 +233,12 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <FontAwesomeIcon icon={faBan} className="text-gray-500" /> Unsub
+                        <FontAwesomeIcon
+                          icon={faBan}
+                          className="text-gray-500"
+                          style={{ opacity: 0.7 }}
+                        />{' '}
+                        Unsub
                       </Space>
                     }
                     value={list.total_unsubscribed}
@@ -234,7 +249,11 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <FontAwesomeIcon icon={faTriangleExclamation} className="text-yellow-500" />{' '}
+                        <FontAwesomeIcon
+                          icon={faTriangleExclamation}
+                          className="text-yellow-500"
+                          style={{ opacity: 0.7 }}
+                        />{' '}
                         Bounced
                       </Space>
                     }
@@ -246,7 +265,12 @@ export function ListsPage() {
                   <Statistic
                     title={
                       <Space>
-                        <FontAwesomeIcon icon={faFaceFrown} className="text-red-500" /> Complaints
+                        <FontAwesomeIcon
+                          icon={faFaceFrown}
+                          className="text-red-500"
+                          style={{ opacity: 0.7 }}
+                        />{' '}
+                        Complaints
                       </Space>
                     }
                     value={list.total_complained}

@@ -57,7 +57,7 @@ export function WorkspaceLayout() {
   const menuItems = [
     {
       key: 'contacts',
-      icon: <FontAwesomeIcon icon={faUserGroup} size="sm" />,
+      icon: <FontAwesomeIcon icon={faUserGroup} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/workspace/$workspaceId/contacts" params={{ workspaceId }}>
           Contacts
@@ -66,7 +66,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'lists',
-      icon: <FontAwesomeIcon icon={faFolderOpen} size="sm" />,
+      icon: <FontAwesomeIcon icon={faFolderOpen} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/workspace/$workspaceId/lists" params={{ workspaceId }}>
           Lists
@@ -75,7 +75,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'templates',
-      icon: <FontAwesomeIcon icon={faObjectGroup} size="sm" />,
+      icon: <FontAwesomeIcon icon={faObjectGroup} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/workspace/$workspaceId/templates" params={{ workspaceId }}>
           Templates
@@ -84,7 +84,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'broadcasts',
-      icon: <FontAwesomeIcon icon={faPaperPlane} size="sm" />,
+      icon: <FontAwesomeIcon icon={faPaperPlane} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/workspace/$workspaceId/broadcasts" params={{ workspaceId }}>
           Broadcasts
@@ -93,7 +93,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'transactional-notifications',
-      icon: <FontAwesomeIcon icon={faTerminal} size="sm" />,
+      icon: <FontAwesomeIcon icon={faTerminal} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/workspace/$workspaceId/transactional-notifications" params={{ workspaceId }}>
           Transactional
@@ -102,7 +102,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'file-manager',
-      icon: <FontAwesomeIcon icon={faImage} size="sm" />,
+      icon: <FontAwesomeIcon icon={faImage} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/workspace/$workspaceId/file-manager" params={{ workspaceId }}>
           File Manager
@@ -111,7 +111,7 @@ export function WorkspaceLayout() {
     },
     {
       key: 'settings',
-      icon: <FontAwesomeIcon icon={faGear} size="sm" />,
+      icon: <FontAwesomeIcon icon={faGear} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/workspace/$workspaceId/settings" params={{ workspaceId }}>
           Settings
@@ -197,7 +197,11 @@ export function WorkspaceLayout() {
                         key: 'logout',
                         label: (
                           <Space>
-                            <FontAwesomeIcon icon={faRightFromBracket} size="sm" />
+                            <FontAwesomeIcon
+                              icon={faRightFromBracket}
+                              size="sm"
+                              style={{ opacity: 0.7 }}
+                            />
                             Logout
                           </Space>
                         ),
@@ -218,7 +222,9 @@ export function WorkspaceLayout() {
               {collapsed && (
                 <Button
                   type="text"
-                  icon={<FontAwesomeIcon icon={faRightFromBracket} size="sm" />}
+                  icon={
+                    <FontAwesomeIcon icon={faRightFromBracket} size="sm" style={{ opacity: 0.7 }} />
+                  }
                   onClick={() => signout()}
                   style={{ width: '100%' }}
                 />

@@ -304,7 +304,7 @@ export function TemplatesPage() {
                 <CreateTemplateDrawer
                   template={record}
                   workspace={workspace}
-                  buttonContent={<FontAwesomeIcon icon={faPenToSquare} />}
+                  buttonContent={<FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />}
                   buttonProps={{ type: 'text', size: 'small' }}
                 />
               </>
@@ -316,7 +316,7 @@ export function TemplatesPage() {
                 <CreateTemplateDrawer
                   fromTemplate={record}
                   workspace={workspace}
-                  buttonContent={<FontAwesomeIcon icon={faCopy} />}
+                  buttonContent={<FontAwesomeIcon icon={faCopy} style={{ opacity: 0.7 }} />}
                   buttonProps={{ type: 'text', size: 'small' }}
                 />
               </>
@@ -333,7 +333,7 @@ export function TemplatesPage() {
             >
               <Button
                 type="text"
-                icon={<FontAwesomeIcon icon={faTrashCan} />}
+                icon={<FontAwesomeIcon icon={faTrashCan} style={{ opacity: 0.7 }} />}
                 loading={deleteMutation.isPending}
               />
             </Popconfirm>
@@ -341,14 +341,17 @@ export function TemplatesPage() {
           <Tooltip title="Send Test Email">
             <Button
               type="text"
-              icon={<FontAwesomeIcon icon={faPaperPlane} />}
+              icon={<FontAwesomeIcon icon={faPaperPlane} style={{ opacity: 0.7 }} />}
               onClick={() => handleTestTemplate(record)}
             />
           </Tooltip>
           <Tooltip title="Preview Template">
             <>
               <TemplatePreviewDrawer record={record} workspaceId={workspaceId!}>
-                <Button type="text" icon={<FontAwesomeIcon icon={faEye} />} />
+                <Button
+                  type="text"
+                  icon={<FontAwesomeIcon icon={faEye} style={{ opacity: 0.7 }} />}
+                />
               </TemplatePreviewDrawer>
             </>
           </Tooltip>
