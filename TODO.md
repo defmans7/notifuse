@@ -4,7 +4,6 @@
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
 
-- check webhooks callback url format
 - redirection handler to count the clicks and redirect to the url
 - tracking pixel handler to count the opens
 - test transactional email

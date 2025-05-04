@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 )
 
 //go:generate mockgen -destination mocks/mock_webhook_registration_service.go -package mocks github.com/Notifuse/notifuse/internal/domain WebhookRegistrationService
@@ -85,4 +86,24 @@ func (r *GetWebhookStatusRequest) Validate() error {
 		return NewValidationError("integration_id is required")
 	}
 	return nil
+}
+
+// GenerateWebhookCallbackURL generates a standardized webhook callback URL for a specific provider
+// The URL follows the format: {baseURL}/webhooks/email?provider={provider}&workspace_id={workspaceID}&integration_id={integrationID}
+// This ensures a consistent URL pattern across all email provider integrations.
+//
+// Parameters:
+//   - baseURL: The base URL of the application (e.g., "https://api.example.com")
+//   - provider: The email provider kind (e.g., domain.EmailProviderKindPostmark)
+//   - workspaceID: The workspace ID
+//   - integrationID: The integration ID
+//
+// Returns:
+//   - The fully formatted webhook callback URL
+func GenerateWebhookCallbackURL(baseURL string, provider EmailProviderKind, workspaceID string, integrationID string) string {
+	return fmt.Sprintf("%s/webhooks/email?provider=%s&workspace_id=%s&integration_id=%s",
+		baseURL,
+		provider,
+		workspaceID,
+		integrationID)
 }

@@ -193,7 +193,7 @@ func (s *WebhookRegistrationService) registerPostmarkWebhooks(
 	}
 
 	// Create webhook configuration
-	webhookURL := fmt.Sprintf("%s/webhooks/email/postmark?workspace_id=%s&integration_id=%s", baseURL, workspaceID, integrationID)
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindPostmark, workspaceID, integrationID)
 	triggers := []domain.PostmarkTriggerRule{}
 
 	// Add triggers for each event type
@@ -364,7 +364,7 @@ func (s *WebhookRegistrationService) registerMailgunWebhooks(
 	providerConfig *domain.MailgunSettings,
 ) (*domain.WebhookRegistrationStatus, error) {
 	// Webhook URL would include both workspace_id and integration_id
-	webhookURL := fmt.Sprintf("%s/webhooks/email/mailgun?workspace_id=%s&integration_id=%s", baseURL, workspaceID, integrationID)
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindMailgun, workspaceID, integrationID)
 
 	// Implementation would use s.mailgunService to register webhooks with the updated URL
 	return &domain.WebhookRegistrationStatus{
@@ -411,7 +411,7 @@ func (s *WebhookRegistrationService) registerMailjetWebhooks(
 	providerConfig *domain.MailjetSettings,
 ) (*domain.WebhookRegistrationStatus, error) {
 	// Webhook URL would include both workspace_id and integration_id
-	webhookURL := fmt.Sprintf("%s/webhooks/email/mailjet?workspace_id=%s&integration_id=%s", baseURL, workspaceID, integrationID)
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindMailjet, workspaceID, integrationID)
 
 	// Implementation would use s.mailjetService to register webhooks with the updated URL
 	return &domain.WebhookRegistrationStatus{
@@ -458,7 +458,7 @@ func (s *WebhookRegistrationService) registerSparkPostWebhooks(
 	providerConfig *domain.SparkPostSettings,
 ) (*domain.WebhookRegistrationStatus, error) {
 	// Webhook URL would include both workspace_id and integration_id
-	webhookURL := fmt.Sprintf("%s/webhooks/email/sparkpost?workspace_id=%s&integration_id=%s", baseURL, workspaceID, integrationID)
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindSparkPost, workspaceID, integrationID)
 
 	// Implementation would use s.sparkPostService to register webhooks with the updated URL
 	return &domain.WebhookRegistrationStatus{
@@ -505,7 +505,7 @@ func (s *WebhookRegistrationService) registerSESWebhooks(
 	providerConfig *domain.AmazonSES,
 ) (*domain.WebhookRegistrationStatus, error) {
 	// Webhook URL would include both workspace_id and integration_id
-	webhookURL := fmt.Sprintf("%s/webhooks/email/ses?workspace_id=%s&integration_id=%s", baseURL, workspaceID, integrationID)
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindSES, workspaceID, integrationID)
 
 	// Implementation would use s.sesService to register webhooks with the updated URL
 	return &domain.WebhookRegistrationStatus{

@@ -34,7 +34,7 @@ func (h *WebhookEventHandler) RegisterRoutes(mux *http.ServeMux) {
 	requireAuth := authMiddleware.RequireAuth()
 
 	// Public webhooks endpoint for receiving events from email providers
-	mux.Handle("/webhooks/email/", http.HandlerFunc(h.handleIncomingWebhook))
+	mux.Handle("/webhooks/email", http.HandlerFunc(h.handleIncomingWebhook))
 
 	// Authenticated endpoints for accessing webhook event data
 	mux.Handle("/api/webhookEvents.list", requireAuth(http.HandlerFunc(h.handleList)))
@@ -51,14 +51,27 @@ func (h *WebhookEventHandler) handleIncomingWebhook(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Extract integration ID from URL path
-	// TODO: check the url structure, it should contain workspace_id and integration_id
+	// Extract provider, workspace_id and integration_id from query parameters
+	// Format: /webhooks/email?provider={provider}&workspace_id={id}&integration_id={id}
+	provider := r.URL.Query().Get("provider")
 	workspaceID := r.URL.Query().Get("workspace_id")
 	integrationID := r.URL.Query().Get("integration_id")
+
+	if provider == "" {
+		WriteJSONError(w, "Provider is required", http.StatusBadRequest)
+		return
+	}
+
 	if workspaceID == "" || integrationID == "" {
 		WriteJSONError(w, "Workspace ID and integration ID are required", http.StatusBadRequest)
 		return
 	}
+
+	// Log the incoming webhook
+	h.logger.WithField("provider", provider).
+		WithField("workspace_id", workspaceID).
+		WithField("integration_id", integrationID).
+		Info("Received webhook event")
 
 	// Read and parse the request body
 	body, err := io.ReadAll(r.Body)
@@ -74,6 +87,7 @@ func (h *WebhookEventHandler) handleIncomingWebhook(w http.ResponseWriter, r *ht
 		h.logger.WithField("error", err.Error()).
 			WithField("workspace_id", workspaceID).
 			WithField("integration_id", integrationID).
+			WithField("provider", provider).
 			Error("Failed to process webhook")
 		WriteJSONError(w, "Failed to process webhook", http.StatusBadRequest)
 		return
