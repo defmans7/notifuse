@@ -6,20 +6,17 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 // SQLAuthRepository is a SQL implementation of the AuthRepository interface
 type SQLAuthRepository struct {
 	systemDB *sql.DB
-	logger   logger.Logger
 }
 
 // NewSQLAuthRepository creates a new SQLAuthRepository
-func NewSQLAuthRepository(db *sql.DB, logger logger.Logger) *SQLAuthRepository {
+func NewSQLAuthRepository(db *sql.DB) *SQLAuthRepository {
 	return &SQLAuthRepository{
 		systemDB: db,
-		logger:   logger,
 	}
 }
 

@@ -66,6 +66,7 @@ type App struct {
 	taskRepo                      domain.TaskRepository
 	transactionalNotificationRepo domain.TransactionalNotificationRepository
 	messageHistoryRepo            domain.MessageHistoryRepository
+	webhookEventRepo              domain.WebhookEventRepository
 
 	// Services
 	authService                      *service.AuthService
@@ -79,6 +80,14 @@ type App struct {
 	broadcastService                 *service.BroadcastService
 	taskService                      *service.TaskService
 	transactionalNotificationService *service.TransactionalNotificationService
+	webhookEventService              *service.WebhookEventService
+	webhookRegistrationService       *service.WebhookRegistrationService
+	// providers
+	postmarkService  *service.PostmarkService
+	mailgunService   *service.MailgunService
+	mailjetService   *service.MailjetService
+	sparkPostService *service.SparkPostService
+	sesService       *service.SESService
 
 	// HTTP handlers
 	mux    *http.ServeMux
@@ -200,16 +209,17 @@ func (a *App) InitRepositories() error {
 	}
 
 	a.userRepo = repository.NewUserRepository(a.db)
+	a.taskRepo = repository.NewTaskRepository(a.db)
+	a.authRepo = repository.NewSQLAuthRepository(a.db)
 	a.workspaceRepo = repository.NewWorkspaceRepository(a.db, &a.config.Database, a.config.Security.SecretKey)
-	a.authRepo = repository.NewSQLAuthRepository(a.db, a.logger)
 	a.contactRepo = repository.NewContactRepository(a.workspaceRepo)
 	a.listRepo = repository.NewListRepository(a.workspaceRepo)
 	a.contactListRepo = repository.NewContactListRepository(a.workspaceRepo)
 	a.templateRepo = repository.NewTemplateRepository(a.workspaceRepo)
-	a.broadcastRepo = repository.NewBroadcastRepository(a.workspaceRepo, a.logger)
-	a.taskRepo = repository.NewTaskRepository(a.db)
-	a.transactionalNotificationRepo = repository.NewTransactionalNotificationRepository(a.db, a.workspaceRepo)
-	a.messageHistoryRepo = repository.NewMessageHistoryRepository(a.db)
+	a.broadcastRepo = repository.NewBroadcastRepository(a.workspaceRepo)
+	a.transactionalNotificationRepo = repository.NewTransactionalNotificationRepository(a.workspaceRepo)
+	a.messageHistoryRepo = repository.NewMessageHistoryRepository(a.workspaceRepo)
+	a.webhookEventRepo = repository.NewWebhookEventRepository(a.workspaceRepo)
 
 	return nil
 }
@@ -225,7 +235,6 @@ func (a *App) InitServices() error {
 		WorkspaceRepository: a.workspaceRepo,
 		PrivateKey:          a.config.Security.PasetoPrivateKeyBytes,
 		PublicKey:           a.config.Security.PasetoPublicKeyBytes,
-		Logger:              a.logger,
 	}
 
 	var err error
@@ -240,7 +249,6 @@ func (a *App) InitServices() error {
 		AuthService:   a.authService,
 		EmailSender:   a.mailer,
 		SessionExpiry: 30 * 24 * time.Hour, // 30 days
-		Logger:        a.logger,
 		IsDevelopment: a.config.IsDevelopment(),
 	}
 
@@ -319,6 +327,36 @@ func (a *App) InitServices() error {
 		a.logger,
 	)
 
+	// initialize http client
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	a.postmarkService = service.NewPostmarkService(httpClient, a.authService, a.logger)
+	a.mailgunService = service.NewMailgunService(httpClient, a.authService, a.logger)
+	a.mailjetService = service.NewMailjetService(httpClient, a.authService, a.logger)
+	a.sparkPostService = service.NewSparkPostService(httpClient, a.authService, a.logger)
+	a.sesService = service.NewSESService(a.authService, a.logger)
+
+	// Initialize webhook registration service
+	a.webhookRegistrationService = service.NewWebhookRegistrationService(
+		a.workspaceRepo,
+		a.authService,
+		a.postmarkService,
+		a.mailgunService,
+		a.mailjetService,
+		a.sparkPostService,
+		a.sesService,
+		a.logger,
+	)
+
+	a.webhookEventService = service.NewWebhookEventService(
+		a.webhookEventRepo,
+		a.authService,
+		a.logger,
+		a.workspaceRepo,
+	)
+
 	// Initialize broadcast service
 	a.broadcastService = service.NewBroadcastService(
 		a.logger,
@@ -388,7 +426,8 @@ func (a *App) InitHandlers() error {
 		a.config.Security.SecretKey,
 	)
 	transactionalHandler := httpHandler.NewTransactionalNotificationHandler(a.transactionalNotificationService, a.config.Security.PasetoPublicKey, a.logger)
-
+	webhookEventHandler := httpHandler.NewWebhookEventHandler(a.webhookEventService, a.config.Security.PasetoPublicKey, a.logger)
+	webhookRegistrationHandler := httpHandler.NewWebhookRegistrationHandler(a.webhookRegistrationService, a.config.Security.PasetoPublicKey, a.logger)
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
 	workspaceHandler.RegisterRoutes(a.mux)
@@ -401,6 +440,8 @@ func (a *App) InitHandlers() error {
 	broadcastHandler.RegisterRoutes(a.mux)
 	taskHandler.RegisterRoutes(a.mux)
 	transactionalHandler.RegisterRoutes(a.mux)
+	webhookEventHandler.RegisterRoutes(a.mux)
+	webhookRegistrationHandler.RegisterRoutes(a.mux)
 	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	return nil

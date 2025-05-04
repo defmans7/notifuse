@@ -48,7 +48,6 @@ func NewWebhookRegistrationService(
 func (s *WebhookRegistrationService) RegisterWebhooks(
 	ctx context.Context,
 	workspaceID string,
-	integrationID string,
 	config *domain.WebhookRegistrationConfig,
 ) (*domain.WebhookRegistrationStatus, error) {
 	// Authenticate the user for this workspace
@@ -58,7 +57,7 @@ func (s *WebhookRegistrationService) RegisterWebhooks(
 	}
 
 	// Get email provider configuration from workspace settings
-	emailProvider, err := s.getEmailProviderConfig(ctx, workspaceID, integrationID)
+	emailProvider, err := s.getEmailProviderConfig(ctx, workspaceID, config.IntegrationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get email provider configuration: %w", err)
 	}
@@ -75,15 +74,15 @@ func (s *WebhookRegistrationService) RegisterWebhooks(
 	// Register webhooks based on provider kind
 	switch emailProvider.Kind {
 	case domain.EmailProviderKindPostmark:
-		return s.registerPostmarkWebhooks(ctx, workspaceID, integrationID, baseURL, config.EventTypes, emailProvider.Postmark)
+		return s.registerPostmarkWebhooks(ctx, workspaceID, config.IntegrationID, baseURL, config.EventTypes, emailProvider.Postmark)
 	case domain.EmailProviderKindMailgun:
-		return s.registerMailgunWebhooks(ctx, workspaceID, integrationID, baseURL, config.EventTypes, emailProvider.Mailgun)
+		return s.registerMailgunWebhooks(ctx, workspaceID, config.IntegrationID, baseURL, config.EventTypes, emailProvider.Mailgun)
 	case domain.EmailProviderKindMailjet:
-		return s.registerMailjetWebhooks(ctx, workspaceID, integrationID, baseURL, config.EventTypes, emailProvider.Mailjet)
+		return s.registerMailjetWebhooks(ctx, workspaceID, config.IntegrationID, baseURL, config.EventTypes, emailProvider.Mailjet)
 	case domain.EmailProviderKindSparkPost:
-		return s.registerSparkPostWebhooks(ctx, workspaceID, integrationID, baseURL, config.EventTypes, emailProvider.SparkPost)
+		return s.registerSparkPostWebhooks(ctx, workspaceID, config.IntegrationID, baseURL, config.EventTypes, emailProvider.SparkPost)
 	case domain.EmailProviderKindSES:
-		return s.registerSESWebhooks(ctx, workspaceID, integrationID, baseURL, config.EventTypes, emailProvider.SES)
+		return s.registerSESWebhooks(ctx, workspaceID, config.IntegrationID, baseURL, config.EventTypes, emailProvider.SES)
 	case domain.EmailProviderKindSMTP:
 		// For SMTP, we can't register webhooks automatically - it depends on the SMTP provider
 		return &domain.WebhookRegistrationStatus{

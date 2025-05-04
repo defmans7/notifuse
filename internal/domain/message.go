@@ -84,20 +84,20 @@ type MessageHistory struct {
 // MessageHistoryRepository defines methods for message history persistence
 type MessageHistoryRepository interface {
 	// Create adds a new message history record
-	Create(ctx context.Context, workspace string, message *MessageHistory) error
+	Create(ctx context.Context, workspaceID string, message *MessageHistory) error
 
 	// Update updates an existing message history record
-	Update(ctx context.Context, workspace string, message *MessageHistory) error
+	Update(ctx context.Context, workspaceID string, message *MessageHistory) error
 
 	// Get retrieves a message history by ID
-	Get(ctx context.Context, workspace, id string) (*MessageHistory, error)
+	Get(ctx context.Context, workspaceID, id string) (*MessageHistory, error)
 
 	// GetByContact retrieves message history for a specific contact
-	GetByContact(ctx context.Context, workspace, contactID string, limit, offset int) ([]*MessageHistory, int, error)
+	GetByContact(ctx context.Context, workspaceID, contactID string, limit, offset int) ([]*MessageHistory, int, error)
 
 	// GetByBroadcast retrieves message history for a specific broadcast
-	GetByBroadcast(ctx context.Context, workspace, broadcastID string, limit, offset int) ([]*MessageHistory, int, error)
+	GetByBroadcast(ctx context.Context, workspaceID, broadcastID string, limit, offset int) ([]*MessageHistory, int, error)
 
 	// UpdateStatus updates the status of a message and sets the corresponding timestamp
-	UpdateStatus(ctx context.Context, workspace, id string, status MessageStatus, timestamp time.Time) error
+	UpdateStatus(ctx context.Context, workspaceID, id string, status MessageStatus, timestamp time.Time) error
 }

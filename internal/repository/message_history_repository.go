@@ -11,18 +11,24 @@ import (
 
 // MessageHistoryRepository implements domain.MessageHistoryRepository
 type MessageHistoryRepository struct {
-	pool *sql.DB
+	workspaceRepo domain.WorkspaceRepository
 }
 
 // NewMessageHistoryRepository creates a new message history repository
-func NewMessageHistoryRepository(pool *sql.DB) *MessageHistoryRepository {
+func NewMessageHistoryRepository(workspaceRepo domain.WorkspaceRepository) *MessageHistoryRepository {
 	return &MessageHistoryRepository{
-		pool: pool,
+		workspaceRepo: workspaceRepo,
 	}
 }
 
 // Create adds a new message history record
-func (r *MessageHistoryRepository) Create(ctx context.Context, workspace string, message *domain.MessageHistory) error {
+func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	query := `
 		INSERT INTO message_history (
 			id, contact_id, broadcast_id, template_id, template_version, 
@@ -37,7 +43,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspace string,
 		)
 	`
 
-	_, err := r.pool.ExecContext(
+	_, err = workspaceDB.ExecContext(
 		ctx,
 		query,
 		message.ID,
@@ -68,7 +74,13 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspace string,
 }
 
 // Update updates an existing message history record
-func (r *MessageHistoryRepository) Update(ctx context.Context, workspace string, message *domain.MessageHistory) error {
+func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	query := `
 		UPDATE message_history SET
 			contact_id = $2,
@@ -90,7 +102,7 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspace string,
 		WHERE id = $1
 	`
 
-	_, err := r.pool.ExecContext(
+	_, err = workspaceDB.ExecContext(
 		ctx,
 		query,
 		message.ID,
@@ -120,7 +132,13 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspace string,
 }
 
 // Get retrieves a message history by ID
-func (r *MessageHistoryRepository) Get(ctx context.Context, workspace, id string) (*domain.MessageHistory, error) {
+func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id string) (*domain.MessageHistory, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	query := `
 		SELECT 
 			id, contact_id, broadcast_id, template_id, template_version, 
@@ -132,7 +150,7 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspace, id string
 	`
 
 	var message domain.MessageHistory
-	err := r.pool.QueryRowContext(ctx, query, id).Scan(
+	err = workspaceDB.QueryRowContext(ctx, query, id).Scan(
 		&message.ID,
 		&message.ContactID,
 		&message.BroadcastID,
@@ -164,11 +182,17 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspace, id string
 }
 
 // GetByContact retrieves message history for a specific contact
-func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspace, contactID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
+func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID, contactID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	// First get total count
 	countQuery := `SELECT COUNT(*) FROM message_history WHERE contact_id = $1`
 	var totalCount int
-	err := r.pool.QueryRowContext(ctx, countQuery, contactID).Scan(&totalCount)
+	err = workspaceDB.QueryRowContext(ctx, countQuery, contactID).Scan(&totalCount)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count message history: %w", err)
 	}
@@ -193,7 +217,7 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspace, 
 		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.pool.QueryContext(ctx, query, contactID, limit, offset)
+	rows, err := workspaceDB.QueryContext(ctx, query, contactID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query message history: %w", err)
 	}
@@ -236,11 +260,17 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspace, 
 }
 
 // GetByBroadcast retrieves message history for a specific broadcast
-func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace, broadcastID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
+func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspaceID, broadcastID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	// First get total count
 	countQuery := `SELECT COUNT(*) FROM message_history WHERE broadcast_id = $1`
 	var totalCount int
-	err := r.pool.QueryRowContext(ctx, countQuery, broadcastID).Scan(&totalCount)
+	err = workspaceDB.QueryRowContext(ctx, countQuery, broadcastID).Scan(&totalCount)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count message history: %w", err)
 	}
@@ -265,7 +295,7 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.pool.QueryContext(ctx, query, broadcastID, limit, offset)
+	rows, err := workspaceDB.QueryContext(ctx, query, broadcastID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query message history: %w", err)
 	}
@@ -308,7 +338,13 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 }
 
 // UpdateStatus updates the status of a message and sets the corresponding timestamp
-func (r *MessageHistoryRepository) UpdateStatus(ctx context.Context, workspace, id string, status domain.MessageStatus, timestamp time.Time) error {
+func (r *MessageHistoryRepository) UpdateStatus(ctx context.Context, workspaceID, id string, status domain.MessageStatus, timestamp time.Time) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
 	var field string
 
 	switch status {
@@ -336,7 +372,7 @@ func (r *MessageHistoryRepository) UpdateStatus(ctx context.Context, workspace, 
 		WHERE id = $4
 	`, field)
 
-	_, err := r.pool.ExecContext(ctx, query, status, timestamp, time.Now(), id)
+	_, err = workspaceDB.ExecContext(ctx, query, status, timestamp, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message status: %w", err)
 	}

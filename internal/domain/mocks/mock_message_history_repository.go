@@ -37,38 +37,38 @@ func (m *MockMessageHistoryRepository) EXPECT() *MockMessageHistoryRepositoryMoc
 }
 
 // Create mocks base method.
-func (m *MockMessageHistoryRepository) Create(ctx context.Context, workspace string, message *domain.MessageHistory) error {
+func (m *MockMessageHistoryRepository) Create(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, workspace, message)
+	ret := m.ctrl.Call(m, "Create", ctx, workspaceID, message)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockMessageHistoryRepositoryMockRecorder) Create(ctx, workspace, message interface{}) *gomock.Call {
+func (mr *MockMessageHistoryRepositoryMockRecorder) Create(ctx, workspaceID, message interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockMessageHistoryRepository)(nil).Create), ctx, workspace, message)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockMessageHistoryRepository)(nil).Create), ctx, workspaceID, message)
 }
 
 // Get mocks base method.
-func (m *MockMessageHistoryRepository) Get(ctx context.Context, workspace, id string) (*domain.MessageHistory, error) {
+func (m *MockMessageHistoryRepository) Get(ctx context.Context, workspaceID, id string) (*domain.MessageHistory, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, workspace, id)
+	ret := m.ctrl.Call(m, "Get", ctx, workspaceID, id)
 	ret0, _ := ret[0].(*domain.MessageHistory)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockMessageHistoryRepositoryMockRecorder) Get(ctx, workspace, id interface{}) *gomock.Call {
+func (mr *MockMessageHistoryRepositoryMockRecorder) Get(ctx, workspaceID, id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockMessageHistoryRepository)(nil).Get), ctx, workspace, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockMessageHistoryRepository)(nil).Get), ctx, workspaceID, id)
 }
 
 // GetByBroadcast mocks base method.
-func (m *MockMessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace, broadcastID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
+func (m *MockMessageHistoryRepository) GetByBroadcast(ctx context.Context, workspaceID, broadcastID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByBroadcast", ctx, workspace, broadcastID, limit, offset)
+	ret := m.ctrl.Call(m, "GetByBroadcast", ctx, workspaceID, broadcastID, limit, offset)
 	ret0, _ := ret[0].([]*domain.MessageHistory)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -76,15 +76,15 @@ func (m *MockMessageHistoryRepository) GetByBroadcast(ctx context.Context, works
 }
 
 // GetByBroadcast indicates an expected call of GetByBroadcast.
-func (mr *MockMessageHistoryRepositoryMockRecorder) GetByBroadcast(ctx, workspace, broadcastID, limit, offset interface{}) *gomock.Call {
+func (mr *MockMessageHistoryRepositoryMockRecorder) GetByBroadcast(ctx, workspaceID, broadcastID, limit, offset interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByBroadcast", reflect.TypeOf((*MockMessageHistoryRepository)(nil).GetByBroadcast), ctx, workspace, broadcastID, limit, offset)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByBroadcast", reflect.TypeOf((*MockMessageHistoryRepository)(nil).GetByBroadcast), ctx, workspaceID, broadcastID, limit, offset)
 }
 
 // GetByContact mocks base method.
-func (m *MockMessageHistoryRepository) GetByContact(ctx context.Context, workspace, contactID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
+func (m *MockMessageHistoryRepository) GetByContact(ctx context.Context, workspaceID, contactID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByContact", ctx, workspace, contactID, limit, offset)
+	ret := m.ctrl.Call(m, "GetByContact", ctx, workspaceID, contactID, limit, offset)
 	ret0, _ := ret[0].([]*domain.MessageHistory)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -92,35 +92,35 @@ func (m *MockMessageHistoryRepository) GetByContact(ctx context.Context, workspa
 }
 
 // GetByContact indicates an expected call of GetByContact.
-func (mr *MockMessageHistoryRepositoryMockRecorder) GetByContact(ctx, workspace, contactID, limit, offset interface{}) *gomock.Call {
+func (mr *MockMessageHistoryRepositoryMockRecorder) GetByContact(ctx, workspaceID, contactID, limit, offset interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByContact", reflect.TypeOf((*MockMessageHistoryRepository)(nil).GetByContact), ctx, workspace, contactID, limit, offset)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByContact", reflect.TypeOf((*MockMessageHistoryRepository)(nil).GetByContact), ctx, workspaceID, contactID, limit, offset)
 }
 
 // Update mocks base method.
-func (m *MockMessageHistoryRepository) Update(ctx context.Context, workspace string, message *domain.MessageHistory) error {
+func (m *MockMessageHistoryRepository) Update(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", ctx, workspace, message)
+	ret := m.ctrl.Call(m, "Update", ctx, workspaceID, message)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockMessageHistoryRepositoryMockRecorder) Update(ctx, workspace, message interface{}) *gomock.Call {
+func (mr *MockMessageHistoryRepositoryMockRecorder) Update(ctx, workspaceID, message interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockMessageHistoryRepository)(nil).Update), ctx, workspace, message)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockMessageHistoryRepository)(nil).Update), ctx, workspaceID, message)
 }
 
 // UpdateStatus mocks base method.
-func (m *MockMessageHistoryRepository) UpdateStatus(ctx context.Context, workspace, id string, status domain.MessageStatus, timestamp time.Time) error {
+func (m *MockMessageHistoryRepository) UpdateStatus(ctx context.Context, workspaceID, id string, status domain.MessageStatus, timestamp time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateStatus", ctx, workspace, id, status, timestamp)
+	ret := m.ctrl.Call(m, "UpdateStatus", ctx, workspaceID, id, status, timestamp)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateStatus indicates an expected call of UpdateStatus.
-func (mr *MockMessageHistoryRepositoryMockRecorder) UpdateStatus(ctx, workspace, id, status, timestamp interface{}) *gomock.Call {
+func (mr *MockMessageHistoryRepositoryMockRecorder) UpdateStatus(ctx, workspaceID, id, status, timestamp interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockMessageHistoryRepository)(nil).UpdateStatus), ctx, workspace, id, status, timestamp)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockMessageHistoryRepository)(nil).UpdateStatus), ctx, workspaceID, id, status, timestamp)
 }

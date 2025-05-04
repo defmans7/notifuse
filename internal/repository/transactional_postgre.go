@@ -12,22 +12,20 @@ import (
 
 // TransactionalNotificationRepository implements domain.TransactionalNotificationRepository
 type TransactionalNotificationRepository struct {
-	db            *sql.DB
 	workspaceRepo domain.WorkspaceRepository
 }
 
 // NewTransactionalNotificationRepository creates a new instance of the repository
-func NewTransactionalNotificationRepository(db *sql.DB, workspaceRepo domain.WorkspaceRepository) *TransactionalNotificationRepository {
+func NewTransactionalNotificationRepository(workspaceRepo domain.WorkspaceRepository) *TransactionalNotificationRepository {
 	return &TransactionalNotificationRepository{
-		db:            db,
 		workspaceRepo: workspaceRepo,
 	}
 }
 
 // Create adds a new transactional notification
-func (r *TransactionalNotificationRepository) Create(ctx context.Context, workspace string, notification *domain.TransactionalNotification) error {
+func (r *TransactionalNotificationRepository) Create(ctx context.Context, workspaceID string, notification *domain.TransactionalNotification) error {
 	// Get workspace database connection
-	db, err := r.workspaceRepo.GetConnection(ctx, workspace)
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace db: %w", err)
 	}
@@ -66,9 +64,9 @@ func (r *TransactionalNotificationRepository) Create(ctx context.Context, worksp
 }
 
 // Update updates an existing transactional notification
-func (r *TransactionalNotificationRepository) Update(ctx context.Context, workspace string, notification *domain.TransactionalNotification) error {
+func (r *TransactionalNotificationRepository) Update(ctx context.Context, workspaceID string, notification *domain.TransactionalNotification) error {
 	// Get workspace database connection
-	db, err := r.workspaceRepo.GetConnection(ctx, workspace)
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace db: %w", err)
 	}
@@ -116,9 +114,9 @@ func (r *TransactionalNotificationRepository) Update(ctx context.Context, worksp
 }
 
 // Get retrieves a transactional notification by ID
-func (r *TransactionalNotificationRepository) Get(ctx context.Context, workspace, id string) (*domain.TransactionalNotification, error) {
+func (r *TransactionalNotificationRepository) Get(ctx context.Context, workspaceID, id string) (*domain.TransactionalNotification, error) {
 	// Get workspace database connection
-	db, err := r.workspaceRepo.GetConnection(ctx, workspace)
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace db: %w", err)
 	}
@@ -153,9 +151,9 @@ func (r *TransactionalNotificationRepository) Get(ctx context.Context, workspace
 }
 
 // List retrieves all transactional notifications with optional filtering
-func (r *TransactionalNotificationRepository) List(ctx context.Context, workspace string, filter map[string]interface{}, limit, offset int) ([]*domain.TransactionalNotification, int, error) {
+func (r *TransactionalNotificationRepository) List(ctx context.Context, workspaceID string, filter map[string]interface{}, limit, offset int) ([]*domain.TransactionalNotification, int, error) {
 	// Get workspace database connection
-	db, err := r.workspaceRepo.GetConnection(ctx, workspace)
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get workspace db: %w", err)
 	}
@@ -229,9 +227,9 @@ func (r *TransactionalNotificationRepository) List(ctx context.Context, workspac
 }
 
 // Delete soft-deletes a transactional notification
-func (r *TransactionalNotificationRepository) Delete(ctx context.Context, workspace, id string) error {
+func (r *TransactionalNotificationRepository) Delete(ctx context.Context, workspaceID, id string) error {
 	// Get workspace database connection
-	db, err := r.workspaceRepo.GetConnection(ctx, workspace)
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace db: %w", err)
 	}

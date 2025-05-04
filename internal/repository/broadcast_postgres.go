@@ -7,20 +7,17 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 // broadcastRepository implements domain.BroadcastRepository for PostgreSQL
 type broadcastRepository struct {
 	workspaceRepo domain.WorkspaceRepository
-	logger        logger.Logger
 }
 
 // NewBroadcastRepository creates a new PostgreSQL broadcast repository
-func NewBroadcastRepository(workspaceRepo domain.WorkspaceRepository, logger logger.Logger) domain.BroadcastRepository {
+func NewBroadcastRepository(workspaceRepo domain.WorkspaceRepository) domain.BroadcastRepository {
 	return &broadcastRepository{
 		workspaceRepo: workspaceRepo,
-		logger:        logger,
 	}
 }
 

@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
-
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -24,15 +22,7 @@ func TestAuthRepository_GetSessionByID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	repo := NewSQLAuthRepository(db, mockLogger)
+	repo := NewSQLAuthRepository(db)
 
 	// Test case 1: Session found
 	sessionID := "session-id-1"
@@ -69,15 +59,7 @@ func TestAuthRepository_GetUserByID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	repo := NewSQLAuthRepository(db, mockLogger)
+	repo := NewSQLAuthRepository(db)
 
 	// Test case 1: User found
 	userID := "user-id-1"
