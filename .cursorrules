@@ -1,0 +1,66 @@
+// Go backend rules
+prefer-imports: github.com/Notifuse/notifuse
+import-alias: github.com/google/uuid -> uuid
+import-alias: github.com/rs/zerolog -> zerolog
+import-alias: github.com/stretchr/testify/assert -> assert
+import-alias: github.com/stretchr/testify/require -> require
+
+// API structure - Clean Architecture
+// Domain layer (core business logic and entities)
+prefer-domain-path: internal/domain
+domain-entities: internal/domain/workspace.go, internal/domain/user.go, internal/domain/template.go, internal/domain/contact.go, internal/domain/list.go, internal/domain/broadcast.go, internal/domain/transactional.go, internal/domain/task.go, internal/domain/webhook_event.go, internal/domain/webhook_registration.go, internal/domain/message.go, internal/domain/email_provider.go, internal/domain/auth.go
+domain-helpers: internal/domain/errors.go, internal/domain/types.go, internal/domain/nullables.go, internal/domain/timezones.go, internal/domain/event.go, internal/domain/nullable_json.go
+
+// HTTP layer (API handlers)
+prefer-http-path: internal/http
+http-handlers: internal/http/workspace_handler.go, internal/http/user_handler.go, internal/http/template_handler.go, internal/http/contact_handler.go, internal/http/list_handler.go, internal/http/broadcast_handler.go, internal/http/transactional_handler.go, internal/http/task_handler.go, internal/http/webhook_event_handler.go, internal/http/webhook_registration_handler.go, internal/http/email_handler.go, internal/http/root_handler.go, internal/http/favicon_handler.go
+
+// Repository layer (data storage)
+prefer-repository-path: internal/repository
+repository-implementations: internal/repository/workspace_postgres.go, internal/repository/user_postgres.go, internal/repository/template_postgres.go, internal/repository/contact_postgres.go, internal/repository/list_postgres.go, internal/repository/broadcast_postgres.go, internal/repository/transactional_postgre.go, internal/repository/task_postgres.go, internal/repository/webhook_event_postgres.go, internal/repository/auth_repository.go, internal/repository/contact_list_postgres.go, internal/repository/message_history_repository.go
+
+// Service layer (business logic)
+prefer-service-path: internal/service
+service-implementations: internal/service/workspace_service.go, internal/service/user_service.go, internal/service/template_service.go, internal/service/contact_service.go, internal/service/list_service.go, internal/service/broadcast_service.go, internal/service/transactional_service.go, internal/service/task_service.go, internal/service/webhook_event_service.go, internal/service/webhook_registration_service.go, internal/service/email_service.go, internal/service/auth_service.go, internal/service/contact_list_service.go
+email-provider-services: internal/service/sparkpost_service.go, internal/service/mailjet_service.go, internal/service/mailgun_service.go, internal/service/ses_service.go, internal/service/postmark_service.go
+
+// Testing conventions
+prefer-functions: assert.NoError, require.NoError, mock.Anything, mock.AnythingOfType
+prefer-test-pattern: *_test.go
+test-same-package: true
+test-file-suffix: _test.go
+minimum-test-coverage: 75%
+
+// Project structure patterns
+prefer-folder-for-domain: internal/domain
+prefer-folder-for-services: internal/service
+prefer-folder-for-repos: internal/repository
+prefer-folder-for-http: internal/http
+
+// Error handling patterns
+prefer-error-handling: if err != nil { return err }
+prefer-error-wrapping: errors.Wrap(err, "message")
+
+// Console (React) frontend rules
+frontend-folder: console
+prefer-react-imports: react, react-router-dom, @tanstack/react-query, antd
+prefer-frontend-test-pattern: *.test.tsx, *.test.ts
+prefer-frontend-component-pattern: PascalCase.tsx
+prefer-css-framework: tailwind
+prefer-ui-components: antd
+prefer-form-components: antd/Form, antd/Input, antd/Select, antd/Checkbox, antd/Radio
+prefer-feedback-components: antd/Modal, antd/Drawer, antd/Alert, antd/message, antd/notification
+prefer-layout-components: antd/Layout, antd/Space, antd/Divider, antd/Grid
+prefer-data-components: antd/Table, antd/List, antd/Pagination
+
+// Database
+prefer-query-builder: squirrel
+prefer-db-driver: lib/pq
+
+// Logging
+prefer-logger: github.com/Notifuse/notifuse/pkg/logger
+prefer-functions: logger.Debug, logger.Info, logger.Warn, logger.Error, logger.Fatal, logger.WithField, logger.WithFields
+
+// Mocks
+prefer-folder-for-pkg-mocks: pkg/mocks
+prefer-folder-for-domain-mocks: internal/domain/mocks
