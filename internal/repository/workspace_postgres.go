@@ -63,21 +63,6 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 		return err
 	}
 
-	// Marshal settings to JSON
-	settings, err := json.Marshal(workspace.Settings)
-	if err != nil {
-		return err
-	}
-
-	// Marshal integrations to JSON if any exist
-	var integrations []byte
-	if len(workspace.Integrations) > 0 {
-		integrations, err = json.Marshal(workspace.Integrations)
-		if err != nil {
-			return err
-		}
-	}
-
 	query := `
 		INSERT INTO workspaces (id, name, settings, integrations, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -85,8 +70,8 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 	_, err = r.systemDB.ExecContext(ctx, query,
 		workspace.ID,
 		workspace.Name,
-		settings,
-		integrations,
+		workspace.Settings,
+		workspace.Integrations,
 		workspace.CreatedAt,
 		workspace.UpdatedAt,
 	)
@@ -162,15 +147,6 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 		return err
 	}
 
-	// Marshal integrations to JSON if any exist
-	var integrations []byte
-	if len(workspace.Integrations) > 0 {
-		integrations, err = json.Marshal(workspace.Integrations)
-		if err != nil {
-			return err
-		}
-	}
-
 	query := `
 		UPDATE workspaces
 		SET name = $1, settings = $2, integrations = $3, updated_at = $4
@@ -179,7 +155,7 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 	result, err := r.systemDB.ExecContext(ctx, query,
 		workspace.Name,
 		settings,
-		integrations,
+		workspace.Integrations,
 		workspace.UpdatedAt,
 		workspace.ID,
 	)

@@ -71,7 +71,6 @@ var TableDefinitions = []string{
 	`CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks (created_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_tasks_broadcast_id ON tasks (broadcast_id)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_workspace_broadcast_id ON tasks (workspace_id, broadcast_id) WHERE broadcast_id IS NOT NULL`,
-	`CREATE INDEX IF NOT EXISTS idx_contacts_external_id ON contacts (external_id)`,
 }
 
 // TableNames returns a list of all table names in creation order

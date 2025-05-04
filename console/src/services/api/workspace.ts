@@ -14,7 +14,15 @@ import {
   CreateAPIKeyResponse,
   CreateAPIKeyRequest,
   RemoveMemberRequest,
-  RemoveMemberResponse
+  RemoveMemberResponse,
+  CreateIntegrationRequest,
+  CreateIntegrationResponse,
+  UpdateIntegrationRequest,
+  UpdateIntegrationResponse,
+  DeleteIntegrationRequest,
+  DeleteIntegrationResponse,
+  TestEmailProviderRequest,
+  TestEmailProviderResponse
 } from './types'
 
 interface DetectFaviconResponse {
@@ -48,5 +56,18 @@ export const workspaceService = {
     api.post<CreateAPIKeyResponse>('/api/workspaces.createAPIKey', data),
 
   removeMember: (data: RemoveMemberRequest) =>
-    api.post<RemoveMemberResponse>('/api/workspaces.removeMember', data)
+    api.post<RemoveMemberResponse>('/api/workspaces.removeMember', data),
+
+  // Integration endpoints
+  createIntegration: (data: CreateIntegrationRequest) =>
+    api.post<CreateIntegrationResponse>('/api/workspaces.createIntegration', data),
+
+  updateIntegration: (data: UpdateIntegrationRequest) =>
+    api.post<UpdateIntegrationResponse>('/api/workspaces.updateIntegration', data),
+
+  deleteIntegration: (data: DeleteIntegrationRequest) =>
+    api.post<DeleteIntegrationResponse>('/api/workspaces.deleteIntegration', data),
+
+  testEmailProvider: (data: TestEmailProviderRequest) =>
+    api.post<TestEmailProviderResponse>('/api/workspaces.testEmailProvider', data)
 }

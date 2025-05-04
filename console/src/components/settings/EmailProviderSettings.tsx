@@ -15,7 +15,15 @@ import {
   Space,
   Descriptions
 } from 'antd'
-import { EmailProvider, EmailProviderKind, Workspace } from '../../services/api/types'
+import {
+  EmailProvider,
+  EmailProviderKind,
+  Workspace,
+  Integration,
+  CreateIntegrationRequest,
+  UpdateIntegrationRequest,
+  DeleteIntegrationRequest
+} from '../../services/api/types'
 import { MailOutlined } from '@ant-design/icons'
 import { emailService } from '../../services/api/email'
 import { workspaceService } from '../../services/api/workspace'
@@ -364,19 +372,29 @@ const MailjetFormFields = ({ isOwner }: MailjetFormFieldsProps) => (
   </>
 )
 
+// Move getProviderConfig and getProviderIntegration to a higher scope as component props
 interface ProviderFormProps {
   providerType: EmailProviderKind
   formType: ProviderType
   workspace: Workspace
   form: any
   isOwner: boolean
+  getProviderConfig: (type: ProviderType) => EmailProvider | null
 }
 
-const ProviderForm = ({ providerType, formType, workspace, form, isOwner }: ProviderFormProps) => {
-  const initialValues =
-    formType === 'marketing'
-      ? workspace.settings.email_marketing
-      : workspace.settings.email_transactional
+const ProviderForm = ({
+  providerType,
+  formType,
+  workspace,
+  form,
+  isOwner,
+  getProviderConfig
+}: ProviderFormProps) => {
+  const initialValues: EmailProvider | null = useMemo(() => {
+    if (!workspace) return null
+
+    return getProviderConfig(formType)
+  }, [workspace, formType, getProviderConfig])
 
   if (providerType === 'postmark' && formType === 'marketing') {
     return null // Postmark is only for transactional emails
@@ -425,15 +443,31 @@ const getProviderLogo = (providerKind: EmailProviderKind) => {
 interface ProviderDescriptionProps {
   providerType: ProviderType
   workspace: Workspace
+  getProviderConfig: (type: ProviderType) => EmailProvider | null
 }
 
-const ProviderDescription = ({ providerType, workspace }: ProviderDescriptionProps) => {
-  const provider =
-    providerType === 'marketing'
-      ? workspace.settings.email_marketing
-      : workspace.settings.email_transactional
+const ProviderDescription = ({
+  providerType,
+  workspace,
+  getProviderConfig
+}: ProviderDescriptionProps) => {
+  const provider = getProviderConfig(providerType)
 
-  if (!provider) return null
+  if (!provider) {
+    return (
+      <Card
+        title={`${providerType === 'marketing' ? 'Marketing' : 'Transactional'} Email Provider`}
+        className="mb-8"
+      >
+        <Alert
+          message="No email provider configured"
+          description={`You have not configured a ${providerType} email provider for this workspace yet.`}
+          type="info"
+          showIcon
+        />
+      </Card>
+    )
+  }
 
   const logoElement = getProviderLogo(provider.kind)
 
@@ -559,6 +593,7 @@ interface EmailProviderCardProps {
   onChangeProvider: () => void
   onSave: (values: EmailProviderFormValues) => Promise<void>
   onCancel: () => void
+  getProviderConfig: (type: ProviderType) => EmailProvider | null
 }
 
 const EmailProviderCard = ({
@@ -574,50 +609,44 @@ const EmailProviderCard = ({
   onTest,
   onChangeProvider,
   onSave,
-  onCancel
+  onCancel,
+  getProviderConfig
 }: EmailProviderCardProps) => {
   const isTransactional = providerType === 'transactional'
+  const title = isTransactional ? 'Transactional Email Provider' : 'Marketing Email Provider'
+  const description = isTransactional
+    ? 'Used for sending transactional emails like password resets, email verification, and notifications'
+    : 'Used for sending marketing emails like newsletters, promotional content, and broadcasts'
 
   return (
-    <>
-      {provider && !editing && (
-        <div className="flex justify-end mb-4">
-          <Space size="middle">
-            {isOwner && (
-              <Button onClick={onEdit} size="small">
-                Edit
-              </Button>
-            )}
-            {isOwner && (
-              <Button size="small" onClick={onTest}>
-                Test
-              </Button>
-            )}
-            <Button type="primary" size="small" ghost onClick={onChangeProvider}>
-              Change provider
-            </Button>
-          </Space>
-        </div>
-      )}
+    <Card title={title} className="mb-8 w-full">
+      <p className="mb-4 text-gray-600">{description}</p>
+
       {!provider ? (
         <>
           <Alert
-            message={`An email provider should be connected to send ${providerType} emails`}
+            message="No Email Provider"
+            description={`Select an email provider to start sending ${providerType} emails`}
             type="info"
             showIcon
-            style={{ marginBottom: 16 }}
+            className="mb-4"
           />
-          <ProviderGrid onSelect={onSelectProvider} isTransactional={isTransactional} />
+          <div className="mt-4">
+            <ProviderGrid onSelect={onSelectProvider} isTransactional={isTransactional} />
+          </div>
         </>
       ) : !editing ? (
-        <ProviderDescription providerType={providerType} workspace={workspace} />
+        <ProviderDescription
+          providerType={providerType}
+          workspace={workspace}
+          getProviderConfig={getProviderConfig}
+        />
       ) : (
         <Form
           form={form}
-          layout="horizontal"
-          onFinish={(values) => onSave(values)}
-          initialValues={{ kind: provider }}
-          {...FORM_LAYOUT}
+          layout="vertical"
+          onFinish={onSave}
+          initialValues={getProviderConfig(providerType) || undefined}
         >
           <Form.Item name="kind" hidden>
             <Input />
@@ -629,22 +658,40 @@ const EmailProviderCard = ({
             workspace={workspace}
             form={form}
             isOwner={isOwner}
+            getProviderConfig={getProviderConfig}
           />
 
-          {isOwner && (
-            <Form.Item wrapperCol={{ offset: 8, span: 16 }}>
-              <Space>
-                <Button onClick={onCancel}>Cancel</Button>
-                <Button onClick={onTest}>Test Integration</Button>
-                <Button type="primary" htmlType="submit" loading={loading}>
-                  Save Settings
-                </Button>
-              </Space>
-            </Form.Item>
-          )}
+          <div className="mt-4 flex justify-end">
+            <Space>
+              <Button onClick={onCancel}>Cancel</Button>
+              <Button type="primary" htmlType="submit" loading={loading} disabled={!isOwner}>
+                Save
+              </Button>
+            </Space>
+          </div>
         </Form>
       )}
-    </>
+
+      {provider && !editing && (
+        <div className="mt-4 flex justify-end">
+          <Space>
+            <Button onClick={onTest} disabled={loading}>
+              Test
+            </Button>
+            {isOwner && (
+              <>
+                <Button onClick={onEdit} disabled={loading}>
+                  Edit
+                </Button>
+                <Button onClick={onChangeProvider} disabled={loading}>
+                  Change Provider
+                </Button>
+              </>
+            )}
+          </Space>
+        </div>
+      )}
+    </Card>
   )
 }
 
@@ -703,219 +750,277 @@ export function EmailProviderSettings({
   isOwner
 }: EmailProviderSettingsProps) {
   // Form instances
-  const [marketingForm] = Form.useForm<EmailProviderFormValues>()
-  const [transactionalForm] = Form.useForm<EmailProviderFormValues>()
+  const [marketingForm] = Form.useForm()
+  const [transactionalForm] = Form.useForm()
 
-  // Provider state
-  const [marketingProvider, setMarketingProvider] = useState<EmailProviderKind | null>(null)
-  const [transactionalProvider, setTransactionalProvider] = useState<EmailProviderKind | null>(null)
-
-  // Editing state
+  // States for editing mode
   const [editingMarketing, setEditingMarketing] = useState(false)
   const [editingTransactional, setEditingTransactional] = useState(false)
 
+  // States for selected provider type
+  const [marketingProvider, setMarketingProvider] = useState<EmailProviderKind | null>(null)
+  const [transactionalProvider, setTransactionalProvider] = useState<EmailProviderKind | null>(null)
+
   // Test email modal state
   const [testModalVisible, setTestModalVisible] = useState(false)
-  const [testEmail, setTestEmail] = useState('')
-  const [testLoading, setTestLoading] = useState(false)
-  const [providerToTest, setProviderToTest] = useState<ProviderType>('marketing')
+  const [testEmailAddress, setTestEmailAddress] = useState('')
+  const [testingProvider, setTestingProvider] = useState<ProviderType | null>(null)
+  const [testingEmailLoading, setTestingEmailLoading] = useState(false)
 
-  // Initialize forms from workspace settings
   useEffect(() => {
     if (workspace) {
-      // Update marketing provider
-      if (workspace.settings?.email_marketing?.kind) {
-        setMarketingProvider(workspace.settings.email_marketing.kind)
-        marketingForm.setFieldsValue({
-          ...workspace.settings.email_marketing,
-          kind: workspace.settings.email_marketing.kind
-        })
+      // Find and set configured providers
+      const marketingProviderIntegration = workspace.settings.marketing_email_provider_id
+        ? workspace.integrations?.find(
+            (i) => i.id === workspace.settings.marketing_email_provider_id
+          )
+        : null
+
+      const transactionalProviderIntegration = workspace.settings.transactional_email_provider_id
+        ? workspace.integrations?.find(
+            (i) => i.id === workspace.settings.transactional_email_provider_id
+          )
+        : null
+
+      // Set provider types based on integrations
+      if (marketingProviderIntegration) {
+        setMarketingProvider(marketingProviderIntegration.email_provider.kind)
       }
 
-      // Update transactional provider
-      if (workspace.settings?.email_transactional?.kind) {
-        setTransactionalProvider(workspace.settings.email_transactional.kind)
-        transactionalForm.setFieldsValue({
-          ...workspace.settings.email_transactional,
-          kind: workspace.settings.email_transactional.kind
-        })
+      if (transactionalProviderIntegration) {
+        setTransactionalProvider(transactionalProviderIntegration.email_provider.kind)
       }
     }
-  }, [workspace, marketingForm, transactionalForm])
+  }, [workspace])
+
+  // Get integrations by type
+  const getProviderIntegration = (providerType: ProviderType): Integration | null => {
+    if (!workspace || !workspace.integrations) return null
+
+    const integrationId =
+      providerType === 'marketing'
+        ? workspace.settings.marketing_email_provider_id
+        : workspace.settings.transactional_email_provider_id
+
+    if (!integrationId) return null
+
+    return workspace.integrations.find((i) => i.id === integrationId) || null
+  }
+
+  // Get provider config from integration
+  const getProviderConfig = (providerType: ProviderType): EmailProvider | null => {
+    const integration = getProviderIntegration(providerType)
+    return integration ? integration.email_provider : null
+  }
 
   if (!workspace) {
     return null
   }
 
-  // Handler functions
+  // Handler for selecting a marketing provider
   const handleMarketingProviderSelect = (provider: EmailProviderKind) => {
     setMarketingProvider(provider)
-    marketingForm.setFieldsValue({ kind: provider })
     setEditingMarketing(true)
   }
 
+  // Handler for selecting a transactional provider
   const handleTransactionalProviderSelect = (provider: EmailProviderKind) => {
     setTransactionalProvider(provider)
-    transactionalForm.setFieldsValue({ kind: provider })
     setEditingTransactional(true)
   }
 
+  // Handler for canceling marketing provider edit
   const handleMarketingCancel = () => {
-    if (!workspace?.settings?.email_marketing?.kind) {
+    marketingForm.resetFields()
+    setEditingMarketing(false)
+    // Reset provider if none was previously configured
+    if (!workspace?.settings.marketing_email_provider_id) {
       setMarketingProvider(null)
     }
-    setEditingMarketing(false)
   }
 
+  // Handler for canceling transactional provider edit
   const handleTransactionalCancel = () => {
-    if (!workspace?.settings?.email_transactional?.kind) {
+    transactionalForm.resetFields()
+    setEditingTransactional(false)
+    // Reset provider if none was previously configured
+    if (!workspace?.settings.transactional_email_provider_id) {
       setTransactionalProvider(null)
     }
-    setEditingTransactional(false)
   }
 
+  // Handler for saving marketing provider
   const handleMarketingSave = async (values: EmailProviderFormValues) => {
     if (!workspace) return
 
-    const emailProvider = constructProviderFromForm(values)
-
-    const updatedWorkspace = {
-      ...workspace,
-      settings: {
-        ...workspace.settings,
-        email_marketing: emailProvider
-      }
-    }
-
     try {
-      const response = await workspaceService.update(updatedWorkspace)
-      message.success('Marketing email provider updated successfully')
+      const provider = constructProviderFromForm(values)
+      const existingIntegration = getProviderIntegration('marketing')
+
+      // If there's an existing integration, update it
+      if (existingIntegration) {
+        const updateRequest: UpdateIntegrationRequest = {
+          workspace_id: workspace.id,
+          integration_id: existingIntegration.id,
+          name: `Marketing Email Provider (${provider.kind})`,
+          provider
+        }
+
+        await workspaceService.updateIntegration(updateRequest)
+      } else {
+        // Create a new integration
+        const createRequest: CreateIntegrationRequest = {
+          workspace_id: workspace.id,
+          name: `Marketing Email Provider (${provider.kind})`,
+          type: 'email',
+          provider
+        }
+
+        const response = await workspaceService.createIntegration(createRequest)
+
+        // Update workspace settings to point to the new integration
+        const updatedWorkspace = {
+          ...workspace,
+          settings: {
+            ...workspace.settings,
+            marketing_email_provider_id: response.integration_id
+          }
+        }
+
+        await workspaceService.update({
+          id: workspace.id,
+          settings: {
+            marketing_email_provider_id: response.integration_id
+          }
+        })
+
+        // Update the local workspace object
+        await onSave(updatedWorkspace)
+      }
+
+      // Get fresh workspace data with the updated integration
+      const response = await workspaceService.get(workspace.id)
       await onSave(response.workspace)
+
       setEditingMarketing(false)
+      message.success('Marketing email provider saved successfully')
     } catch (error) {
-      message.error('Failed to update marketing email provider')
-      console.error(error)
+      console.error('Error saving marketing provider', error)
+      message.error('Failed to save marketing email provider')
     }
   }
 
+  // Handler for saving transactional provider
   const handleTransactionalSave = async (values: EmailProviderFormValues) => {
     if (!workspace) return
 
-    const emailProvider = constructProviderFromForm(values)
-
-    const updatedWorkspace = {
-      ...workspace,
-      settings: {
-        ...workspace.settings,
-        email_transactional: emailProvider
-      }
-    }
-
     try {
-      const response = await workspaceService.update(updatedWorkspace)
-      message.success('Transactional email provider updated successfully')
+      const provider = constructProviderFromForm(values)
+      const existingIntegration = getProviderIntegration('transactional')
+
+      // If there's an existing integration, update it
+      if (existingIntegration) {
+        const updateRequest: UpdateIntegrationRequest = {
+          workspace_id: workspace.id,
+          integration_id: existingIntegration.id,
+          name: `Transactional Email Provider (${provider.kind})`,
+          provider
+        }
+
+        await workspaceService.updateIntegration(updateRequest)
+      } else {
+        // Create a new integration
+        const createRequest: CreateIntegrationRequest = {
+          workspace_id: workspace.id,
+          name: `Transactional Email Provider (${provider.kind})`,
+          type: 'email',
+          provider
+        }
+
+        const response = await workspaceService.createIntegration(createRequest)
+
+        // Update workspace settings to point to the new integration
+        const updatedWorkspace = {
+          ...workspace,
+          settings: {
+            ...workspace.settings,
+            transactional_email_provider_id: response.integration_id
+          }
+        }
+
+        await workspaceService.update({
+          id: workspace.id,
+          settings: {
+            transactional_email_provider_id: response.integration_id
+          }
+        })
+
+        // Update the local workspace object
+        await onSave(updatedWorkspace)
+      }
+
+      // Get fresh workspace data with the updated integration
+      const response = await workspaceService.get(workspace.id)
       await onSave(response.workspace)
+
       setEditingTransactional(false)
+      message.success('Transactional email provider saved successfully')
     } catch (error) {
-      message.error('Failed to update transactional email provider')
-      console.error(error)
+      console.error('Error saving transactional provider', error)
+      message.error('Failed to save transactional email provider')
     }
   }
 
+  // Handler for opening the test email modal
   const openTestModal = async (provider: ProviderType) => {
-    // Only validate the form if we're in editing mode
-    const isEditing = provider === 'marketing' ? editingMarketing : editingTransactional
-    const form = provider === 'marketing' ? marketingForm : transactionalForm
+    const integration = getProviderIntegration(provider)
 
-    // Check if there's a configured provider when not editing
-    if (!isEditing) {
-      const existingProvider =
-        provider === 'marketing'
-          ? workspace?.settings?.email_marketing
-          : workspace?.settings?.email_transactional
-
-      if (!existingProvider) {
-        message.error('No email provider configured')
-        return
-      }
-
-      // If not editing and provider exists, show test modal directly
-      setProviderToTest(provider)
-      setTestModalVisible(true)
+    if (!integration) {
+      message.error(`No ${provider} email provider configured`)
       return
     }
 
-    try {
-      // Validate the form when in editing mode
-      await form.validateFields()
-      setProviderToTest(provider)
-      setTestModalVisible(true)
-    } catch (error) {
-      // If validation fails, show error message
-      message.error('Please fill all required fields correctly before testing')
-    }
+    setTestEmailAddress('')
+    setTestingProvider(provider)
+    setTestModalVisible(true)
   }
 
+  // Handler for testing the email provider
   const handleTestProvider = async () => {
-    if (!workspace || !testEmail) return
+    if (!workspace || !testingProvider || !testEmailAddress) return
 
-    setTestLoading(true)
     try {
-      let provider: EmailProvider
+      setTestingEmailLoading(true)
+      const integration = getProviderIntegration(testingProvider)
 
-      if (providerToTest === 'marketing') {
-        if (editingMarketing) {
-          // Use form values when editing
-          const formValues = await marketingForm.validateFields()
-          provider = constructProviderFromForm(formValues)
-        } else {
-          // Use current workspace settings when not editing
-          if (!workspace.settings.email_marketing) {
-            throw new Error('No marketing email provider configured')
-          }
-          provider = workspace.settings.email_marketing
-        }
-      } else {
-        // transactional
-        if (editingTransactional) {
-          // Use form values when editing
-          const formValues = await transactionalForm.validateFields()
-          provider = constructProviderFromForm(formValues)
-        } else {
-          // Use current workspace settings when not editing
-          if (!workspace.settings.email_transactional) {
-            throw new Error('No transactional email provider configured')
-          }
-          provider = workspace.settings.email_transactional
-        }
+      if (!integration) {
+        message.error(`No ${testingProvider} email provider configured`)
+        return
       }
 
-      const response = await emailService.testProvider(workspace.id, provider, testEmail)
+      const response = await workspaceService.testEmailProvider({
+        provider: integration.email_provider,
+        to: testEmailAddress,
+        workspace_id: workspace.id
+      })
 
       if (response.success) {
         message.success('Test email sent successfully')
         setTestModalVisible(false)
-        setTestEmail('')
       } else {
-        message.error(`Failed to send test email: ${response.error || 'Unknown error'}`)
+        message.error(`Failed to send test email: ${response.error}`)
       }
     } catch (error) {
-      if (error instanceof Error) {
-        message.error(`Error: ${error.message}`)
-      } else {
-        message.error('Failed to validate form')
-      }
+      console.error('Error testing email provider', error)
+      message.error('Failed to test email provider')
     } finally {
-      setTestLoading(false)
+      setTestingEmailLoading(false)
     }
   }
 
   return (
-    <>
-      <Section
-        title="Marketing Email Provider"
-        description="Configure your email markeing provider"
-      >
+    <Section title="Email Providers" description="Configure email providers for sending emails">
+      <Space className="flex flex-col w-full">
         <EmailProviderCard
           providerType="marketing"
           workspace={workspace}
@@ -930,13 +1035,9 @@ export function EmailProviderSettings({
           onChangeProvider={() => setMarketingProvider(null)}
           onSave={handleMarketingSave}
           onCancel={handleMarketingCancel}
+          getProviderConfig={getProviderConfig}
         />
-      </Section>
 
-      <Section
-        title="Transactional Email Provider"
-        description="Configure your email transactional provider"
-      >
         <EmailProviderCard
           providerType="transactional"
           workspace={workspace}
@@ -951,18 +1052,19 @@ export function EmailProviderSettings({
           onChangeProvider={() => setTransactionalProvider(null)}
           onSave={handleTransactionalSave}
           onCancel={handleTransactionalCancel}
+          getProviderConfig={getProviderConfig}
         />
-      </Section>
 
-      <TestEmailModal
-        visible={testModalVisible}
-        loading={testLoading}
-        email={testEmail}
-        providerType={providerToTest}
-        onCancel={() => setTestModalVisible(false)}
-        onEmailChange={setTestEmail}
-        onSend={handleTestProvider}
-      />
-    </>
+        <TestEmailModal
+          visible={testModalVisible}
+          loading={testingEmailLoading}
+          email={testEmailAddress}
+          providerType={testingProvider || 'marketing'}
+          onCancel={() => setTestModalVisible(false)}
+          onEmailChange={setTestEmailAddress}
+          onSend={handleTestProvider}
+        />
+      </Space>
+    </Section>
   )
 }

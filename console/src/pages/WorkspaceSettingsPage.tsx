@@ -4,7 +4,7 @@ import { workspaceService } from '../services/api/workspace'
 import { Workspace, WorkspaceMember } from '../services/api/types'
 import { WorkspaceMembers } from '../components/settings/WorkspaceMembers'
 import { WorkspaceSettings } from '../components/settings/WorkspaceSettings'
-import { EmailProviderSettings } from '../components/settings/EmailProviderSettings'
+import { Integrations } from '../components/settings/Integrations'
 import { useAuth } from '../contexts/AuthContext'
 import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
 
@@ -64,7 +64,7 @@ export function WorkspaceSettingsPage() {
         isOwner={isOwner}
       />
 
-      <EmailProviderSettings
+      <Integrations
         workspace={workspace}
         loading={false}
         onSave={handleWorkspaceUpdate}

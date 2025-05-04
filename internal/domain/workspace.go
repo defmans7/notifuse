@@ -1,8 +1,10 @@
 package domain
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +23,33 @@ type IntegrationType string
 const (
 	IntegrationTypeEmail IntegrationType = "email"
 )
+
+// Integrations is a slice of Integration with database serialization methods
+type Integrations []Integration
+
+// Value implements the driver.Valuer interface for database serialization
+func (i Integrations) Value() (driver.Value, error) {
+	if len(i) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(i)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (i *Integrations) Scan(value interface{}) error {
+	if value == nil {
+		*i = []Integration{}
+		return nil
+	}
+
+	v, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(v)
+	return json.Unmarshal(cloned, i)
+}
 
 // Integration represents a third-party service integration that's embedded in workspace settings
 type Integration struct {
@@ -72,6 +101,26 @@ func (i *Integration) AfterLoad(secretkey string) error {
 	return nil
 }
 
+// Value implements the driver.Valuer interface for database serialization
+func (b Integration) Value() (driver.Value, error) {
+	return json.Marshal(b)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (b *Integration) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	v, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(v)
+	return json.Unmarshal(cloned, b)
+}
+
 // WorkspaceSettings contains configurable workspace settings
 type WorkspaceSettings struct {
 	WebsiteURL                   string              `json:"website_url,omitempty"`
@@ -113,11 +162,31 @@ func (ws *WorkspaceSettings) Validate(passphrase string) error {
 	return nil
 }
 
+// Value implements the driver.Valuer interface for database serialization
+func (b WorkspaceSettings) Value() (driver.Value, error) {
+	return json.Marshal(b)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (b *WorkspaceSettings) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	v, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(v)
+	return json.Unmarshal(cloned, b)
+}
+
 type Workspace struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
 	Settings     WorkspaceSettings `json:"settings"`
-	Integrations []Integration     `json:"integrations,omitempty"`
+	Integrations Integrations      `json:"integrations,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
@@ -146,6 +215,11 @@ func (w *Workspace) Validate(passphrase string) error {
 	// Validate Settings
 	if err := w.Settings.Validate(passphrase); err != nil {
 		return fmt.Errorf("invalid workspace settings: %w", err)
+	}
+
+	// initialize integrations if nil
+	if w.Integrations == nil {
+		w.Integrations = []Integration{}
 	}
 
 	// Validate integrations if any are defined

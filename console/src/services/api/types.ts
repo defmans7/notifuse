@@ -30,13 +30,13 @@ export interface GetCurrentUserResponse {
 
 // Workspace types
 export interface WorkspaceSettings {
-  website_url: string
-  logo_url: string | null
-  cover_url: string | null
+  website_url?: string
+  logo_url?: string | null
+  cover_url?: string | null
   timezone: string
   file_manager?: FileManagerSettings
-  email_marketing?: EmailProvider
-  email_transactional?: EmailProvider
+  transactional_email_provider_id?: string
+  marketing_email_provider_id?: string
 }
 
 export interface FileManagerSettings {
@@ -45,6 +45,7 @@ export interface FileManagerSettings {
   bucket: string
   region?: string
   secret_key?: string
+  encrypted_secret_key?: string
   cdn_endpoint?: string
 }
 
@@ -106,6 +107,17 @@ export interface MailjetSettings {
   sandbox_mode: boolean
 }
 
+export type IntegrationType = 'email'
+
+export interface Integration {
+  id: string
+  name: string
+  type: IntegrationType
+  email_provider: EmailProvider
+  created_at: string
+  updated_at: string
+}
+
 export interface CreateWorkspaceRequest {
   id: string
   name: string
@@ -116,6 +128,7 @@ export interface Workspace {
   id: string
   name: string
   settings: WorkspaceSettings
+  integrations?: Integration[]
   created_at: string
   updated_at: string
 }
@@ -135,15 +148,7 @@ export interface GetWorkspaceResponse {
 export interface UpdateWorkspaceRequest {
   id: string
   name?: string
-  settings?: {
-    website_url?: string
-    logo_url?: string | null
-    cover_url?: string | null
-    timezone?: string
-    file_manager?: FileManagerSettings
-    email_marketing?: EmailProvider
-    email_transactional?: EmailProvider
-  }
+  settings?: Partial<WorkspaceSettings>
 }
 
 export interface UpdateWorkspaceResponse {
@@ -175,6 +180,39 @@ export interface DeleteWorkspaceRequest {
 }
 
 export interface DeleteWorkspaceResponse {
+  status: string
+}
+
+// Integration related types
+export interface CreateIntegrationRequest {
+  workspace_id: string
+  name: string
+  type: IntegrationType
+  provider: EmailProvider
+}
+
+export interface UpdateIntegrationRequest {
+  workspace_id: string
+  integration_id: string
+  name: string
+  provider: EmailProvider
+}
+
+export interface DeleteIntegrationRequest {
+  workspace_id: string
+  integration_id: string
+}
+
+// Integration responses
+export interface CreateIntegrationResponse {
+  integration_id: string
+}
+
+export interface UpdateIntegrationResponse {
+  status: string
+}
+
+export interface DeleteIntegrationResponse {
   status: string
 }
 
