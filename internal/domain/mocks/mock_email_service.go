@@ -36,7 +36,7 @@ func (m *MockEmailServiceInterface) EXPECT() *MockEmailServiceInterfaceMockRecor
 }
 
 // SendEmail mocks base method.
-func (m *MockEmailServiceInterface) SendEmail(arg0 context.Context, arg1, arg2, arg3, arg4, arg5, arg6, arg7 string, arg8 ...*domain.EmailProvider) error {
+func (m *MockEmailServiceInterface) SendEmail(arg0 context.Context, arg1 string, arg2 bool, arg3, arg4, arg5, arg6, arg7 string, arg8 ...*domain.EmailProvider) error {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7}
 	for _, a := range arg8 {

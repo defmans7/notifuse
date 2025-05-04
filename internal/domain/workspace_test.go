@@ -330,12 +330,23 @@ func TestScanWorkspace(t *testing.T) {
 		Timezone:   "UTC",
 	})
 
+	integrationsJSON, _ := json.Marshal([]Integration{
+		{
+			ID:        "integration1",
+			Name:      "Test Integration",
+			Type:      IntegrationTypeEmail,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	})
+
 	t.Run("successful scan", func(t *testing.T) {
 		scanner := &mockScanner{
 			values: []interface{}{
 				"workspace123",
 				"Test Workspace",
 				settingsJSON,
+				integrationsJSON,
 				now,
 				now,
 			},
@@ -348,6 +359,10 @@ func TestScanWorkspace(t *testing.T) {
 		assert.Equal(t, "https://example.com", workspace.Settings.WebsiteURL)
 		assert.Equal(t, "https://example.com/logo.png", workspace.Settings.LogoURL)
 		assert.Equal(t, "UTC", workspace.Settings.Timezone)
+		assert.Equal(t, 1, len(workspace.Integrations))
+		assert.Equal(t, "integration1", workspace.Integrations[0].ID)
+		assert.Equal(t, "Test Integration", workspace.Integrations[0].Name)
+		assert.Equal(t, IntegrationTypeEmail, workspace.Integrations[0].Type)
 		assert.Equal(t, now, workspace.CreatedAt)
 		assert.Equal(t, now, workspace.UpdatedAt)
 	})
@@ -368,6 +383,24 @@ func TestScanWorkspace(t *testing.T) {
 			values: []interface{}{
 				"workspace123",
 				"Test Workspace",
+				[]byte("invalid json"),
+				integrationsJSON,
+				now,
+				now,
+			},
+		}
+
+		workspace, err := ScanWorkspace(scanner)
+		assert.Error(t, err)
+		assert.Nil(t, workspace)
+	})
+
+	t.Run("invalid integrations JSON", func(t *testing.T) {
+		scanner := &mockScanner{
+			values: []interface{}{
+				"workspace123",
+				"Test Workspace",
+				settingsJSON,
 				[]byte("invalid json"),
 				now,
 				now,
@@ -1630,106 +1663,44 @@ func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
 		errorCheck string
 	}{
 		{
-			name: "valid settings with both email providers",
+			name: "valid settings with provider IDs",
 			settings: WorkspaceSettings{
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
-				EmailMarketingProvider: EmailProvider{
-					Kind:               EmailProviderKindSES,
-					DefaultSenderEmail: "default-marketing@example.com",
-					DefaultSenderName:  "Default Marketing Sender",
-					SES: &AmazonSES{
-						Region:    "us-east-1",
-						AccessKey: "AKIAIOSFODNN7EXAMPLE",
-					},
-				},
-				EmailTransactionalProvider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "default-transactional@example.com",
-					DefaultSenderName:  "Default Transactional Sender",
-					SMTP: &SMTPSettings{
-						Host:     "smtp.example.com",
-						Port:     587,
-						Username: "user",
-						UseTLS:   true,
-					},
-				},
+				WebsiteURL:                   "https://example.com",
+				LogoURL:                      "https://example.com/logo.png",
+				Timezone:                     "UTC",
+				TransactionalEmailProviderID: "transactional-id",
+				MarketingEmailProviderID:     "marketing-id",
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid settings with only transactional provider",
+			name: "valid settings with only transactional provider ID",
 			settings: WorkspaceSettings{
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
-				EmailTransactionalProvider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "default-transactional@example.com",
-					DefaultSenderName:  "Default Transactional Sender",
-					SMTP: &SMTPSettings{
-						Host:     "smtp.example.com",
-						Port:     587,
-						Username: "user",
-						UseTLS:   true,
-					},
-				},
+				WebsiteURL:                   "https://example.com",
+				LogoURL:                      "https://example.com/logo.png",
+				Timezone:                     "UTC",
+				TransactionalEmailProviderID: "transactional-id",
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid settings with only marketing provider",
+			name: "valid settings with only marketing provider ID",
 			settings: WorkspaceSettings{
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
-				EmailMarketingProvider: EmailProvider{
-					Kind:               EmailProviderKindSparkPost,
-					DefaultSenderEmail: "default-marketing@example.com",
-					DefaultSenderName:  "Default Marketing Sender",
-					SparkPost: &SparkPostSettings{
-						Endpoint: "https://api.sparkpost.com",
-					},
-				},
+				WebsiteURL:               "https://example.com",
+				LogoURL:                  "https://example.com/logo.png",
+				Timezone:                 "UTC",
+				MarketingEmailProviderID: "marketing-id",
 			},
 			wantErr: false,
 		},
 		{
-			name: "invalid marketing provider",
+			name: "valid settings with empty provider IDs",
 			settings: WorkspaceSettings{
 				WebsiteURL: "https://example.com",
 				LogoURL:    "https://example.com/logo.png",
 				Timezone:   "UTC",
-				EmailMarketingProvider: EmailProvider{
-					Kind:               EmailProviderKindSES,
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
-					SES:                nil, // Missing required SES settings
-				},
 			},
-			wantErr:    true,
-			errorCheck: "invalid email marketing provider settings",
-		},
-		{
-			name: "invalid transactional provider",
-			settings: WorkspaceSettings{
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				Timezone:   "UTC",
-				EmailTransactionalProvider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
-					SMTP: &SMTPSettings{
-						Host:     "", // Missing required host
-						Port:     587,
-						Username: "user",
-					},
-				},
-			},
-			wantErr:    true,
-			errorCheck: "invalid email transactional provider settings",
+			wantErr: false,
 		},
 	}
 
@@ -1750,34 +1721,54 @@ func TestWorkspaceSettings_ValidateWithEmailProviders(t *testing.T) {
 
 func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 	passphrase := "test-passphrase"
+	now := time.Now()
+
 	workspace := &Workspace{
 		ID:   "test123",
 		Name: "Test Workspace",
 		Settings: WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			Timezone:   "UTC",
-			EmailMarketingProvider: EmailProvider{
-				Kind:               EmailProviderKindSES,
-				DefaultSenderEmail: "default-marketing@example.com",
-				DefaultSenderName:  "Default Marketing Sender",
-				SES: &AmazonSES{
-					Region:    "us-east-1",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-					SecretKey: "marketing-secret-key",
+			WebsiteURL:                   "https://example.com",
+			LogoURL:                      "https://example.com/logo.png",
+			Timezone:                     "UTC",
+			TransactionalEmailProviderID: "transactional-id",
+			MarketingEmailProviderID:     "marketing-id",
+		},
+		Integrations: []Integration{
+			{
+				ID:   "marketing-id",
+				Name: "Marketing Email",
+				Type: IntegrationTypeEmail,
+				EmailProvider: EmailProvider{
+					Kind:               EmailProviderKindSES,
+					DefaultSenderEmail: "default-marketing@example.com",
+					DefaultSenderName:  "Default Marketing Sender",
+					SES: &AmazonSES{
+						Region:    "us-east-1",
+						AccessKey: "AKIAIOSFODNN7EXAMPLE",
+						SecretKey: "marketing-secret-key",
+					},
 				},
+				CreatedAt: now,
+				UpdatedAt: now,
 			},
-			EmailTransactionalProvider: EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "default-transactional@example.com",
-				DefaultSenderName:  "Default Transactional Sender",
-				SMTP: &SMTPSettings{
-					Host:     "smtp.example.com",
-					Port:     587,
-					Username: "user",
-					Password: "transactional-password",
-					UseTLS:   true,
+			{
+				ID:   "transactional-id",
+				Name: "Transactional Email",
+				Type: IntegrationTypeEmail,
+				EmailProvider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "default-transactional@example.com",
+					DefaultSenderName:  "Default Transactional Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "transactional-password",
+						UseTLS:   true,
+					},
 				},
+				CreatedAt: now,
+				UpdatedAt: now,
 			},
 		},
 	}
@@ -1787,28 +1778,42 @@ func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check that secret keys are encrypted and cleared
-	assert.NotEmpty(t, workspace.Settings.EmailMarketingProvider.SES.EncryptedSecretKey)
-	assert.Empty(t, workspace.Settings.EmailMarketingProvider.SES.SecretKey)
-	assert.NotEmpty(t, workspace.Settings.EmailTransactionalProvider.SMTP.EncryptedPassword)
-	assert.Empty(t, workspace.Settings.EmailTransactionalProvider.SMTP.Password)
+	marketingIntegration := workspace.GetIntegrationByID("marketing-id")
+	assert.NotNil(t, marketingIntegration)
+	assert.NotEmpty(t, marketingIntegration.EmailProvider.SES.EncryptedSecretKey)
+	assert.Empty(t, marketingIntegration.EmailProvider.SES.SecretKey)
+
+	transactionalIntegration := workspace.GetIntegrationByID("transactional-id")
+	assert.NotNil(t, transactionalIntegration)
+	assert.NotEmpty(t, transactionalIntegration.EmailProvider.SMTP.EncryptedPassword)
+	assert.Empty(t, transactionalIntegration.EmailProvider.SMTP.Password)
 
 	// Save the encrypted values
-	marketingEncryptedKey := workspace.Settings.EmailMarketingProvider.SES.EncryptedSecretKey
-	transactionalEncryptedPassword := workspace.Settings.EmailTransactionalProvider.SMTP.EncryptedPassword
+	marketingEncryptedKey := marketingIntegration.EmailProvider.SES.EncryptedSecretKey
+	transactionalEncryptedPassword := transactionalIntegration.EmailProvider.SMTP.EncryptedPassword
 
 	// Test AfterLoad - decryption
 	err = workspace.AfterLoad(passphrase)
 	assert.NoError(t, err)
 
 	// Check that secret keys are decrypted
-	assert.Equal(t, "marketing-secret-key", workspace.Settings.EmailMarketingProvider.SES.SecretKey)
-	assert.Equal(t, "transactional-password", workspace.Settings.EmailTransactionalProvider.SMTP.Password)
+	marketingIntegration = workspace.GetIntegrationByID("marketing-id")
+	assert.NotNil(t, marketingIntegration)
+	assert.Equal(t, "marketing-secret-key", marketingIntegration.EmailProvider.SES.SecretKey)
+
+	transactionalIntegration = workspace.GetIntegrationByID("transactional-id")
+	assert.NotNil(t, transactionalIntegration)
+	assert.Equal(t, "transactional-password", transactionalIntegration.EmailProvider.SMTP.Password)
 
 	// Test AfterLoad with wrong passphrase
-	workspace.Settings.EmailMarketingProvider.SES.SecretKey = ""
-	workspace.Settings.EmailMarketingProvider.SES.EncryptedSecretKey = marketingEncryptedKey
-	workspace.Settings.EmailTransactionalProvider.SMTP.Password = ""
-	workspace.Settings.EmailTransactionalProvider.SMTP.EncryptedPassword = transactionalEncryptedPassword
+	// Reset the secret keys
+	marketingIntegration = workspace.GetIntegrationByID("marketing-id")
+	marketingIntegration.EmailProvider.SES.SecretKey = ""
+	marketingIntegration.EmailProvider.SES.EncryptedSecretKey = marketingEncryptedKey
+
+	transactionalIntegration = workspace.GetIntegrationByID("transactional-id")
+	transactionalIntegration.EmailProvider.SMTP.Password = ""
+	transactionalIntegration.EmailProvider.SMTP.EncryptedPassword = transactionalEncryptedPassword
 
 	err = workspace.AfterLoad("wrong-passphrase")
 	assert.Error(t, err)

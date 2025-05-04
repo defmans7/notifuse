@@ -105,6 +105,8 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email)`,
+		`CREATE INDEX IF NOT EXISTS idx_contacts_external_id ON contacts(external_id)`,
 		`CREATE TABLE IF NOT EXISTS lists (
 			id VARCHAR(32) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
@@ -201,6 +203,11 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (contact_id) REFERENCES contacts(email) ON DELETE CASCADE
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_id ON message_history(contact_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id ON message_history(broadcast_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_template_id ON message_history(template_id, template_version)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_status ON message_history(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_sent_at ON message_history(sent_at)`,
 		`CREATE TABLE IF NOT EXISTS transactional_notifications (
 			id VARCHAR(32) NOT NULL PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
@@ -212,11 +219,29 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			deleted_at TIMESTAMP
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_id ON message_history(contact_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id ON message_history(broadcast_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_message_history_template_id ON message_history(template_id, template_version)`,
-		`CREATE INDEX IF NOT EXISTS idx_message_history_status ON message_history(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_message_history_sent_at ON message_history(sent_at)`,
+		`CREATE TABLE IF NOT EXISTS webhook_events (
+			id UUID PRIMARY KEY,
+			type VARCHAR(50) NOT NULL,
+			email_provider_kind VARCHAR(50) NOT NULL,
+			integration_id VARCHAR(255) NOT NULL,
+			recipient_email VARCHAR(255) NOT NULL,
+			message_id VARCHAR(255) NOT NULL,
+			transactional_id UUID,
+			broadcast_id UUID,
+			timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+			raw_payload TEXT NOT NULL,
+			bounce_type VARCHAR(100),
+			bounce_category VARCHAR(100),
+			bounce_diagnostic TEXT,
+			complaint_feedback_type VARCHAR(100),
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS webhook_events_message_id_idx ON webhook_events (message_id)`,
+		`CREATE INDEX IF NOT EXISTS webhook_events_transactional_id_idx ON webhook_events (transactional_id)`,
+		`CREATE INDEX IF NOT EXISTS webhook_events_broadcast_id_idx ON webhook_events (broadcast_id)`,
+		`CREATE INDEX IF NOT EXISTS webhook_events_type_idx ON webhook_events (type)`,
+		`CREATE INDEX IF NOT EXISTS webhook_events_timestamp_idx ON webhook_events (timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS webhook_events_recipient_email_idx ON webhook_events (recipient_email)`,
 	}
 
 	// Run all table creation queries
@@ -238,5 +263,11 @@ func CleanDatabase(db *sql.DB) error {
 			return fmt.Errorf("failed to drop table %s: %w", schema.TableNames[i], err)
 		}
 	}
+
+	// Drop the webhook_events table
+	if _, err := db.Exec("DROP TABLE IF EXISTS webhook_events CASCADE"); err != nil {
+		return fmt.Errorf("failed to drop webhook_events table: %w", err)
+	}
+
 	return nil
 }

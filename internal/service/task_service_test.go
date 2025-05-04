@@ -10,6 +10,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,7 +23,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	// Use nil for auth service since it's not used in our tests
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
@@ -399,7 +400,7 @@ func TestTaskService_CreateTask(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -505,7 +506,7 @@ func TestTaskService_ListTasks(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -614,7 +615,7 @@ func TestTaskService_GetTask(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -678,7 +679,7 @@ func TestTaskService_DeleteTask(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -733,7 +734,7 @@ func TestTaskService_RegisterProcessor(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -801,7 +802,7 @@ func TestTaskService_BroadcastEventHandlers(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
@@ -923,7 +924,7 @@ func TestTaskService_ExecutePendingTasks(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -984,7 +985,7 @@ func TestTaskService_ExecutePendingTasks(t *testing.T) {
 		defer localCtrl.Finish()
 
 		localRepo := mocks.NewMockTaskRepository(localCtrl)
-		localLogger := mocks.NewMockLogger(localCtrl)
+		localLogger := pkgmocks.NewMockLogger(localCtrl)
 
 		// Configure logger expectations
 		localLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(localLogger).AnyTimes()
@@ -1095,7 +1096,7 @@ func TestTaskService_HandleBroadcastResumed(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -1244,7 +1245,7 @@ func TestTaskService_HandleBroadcastSent(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -1386,7 +1387,7 @@ func TestTaskService_HandleBroadcastFailed(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -1569,7 +1570,7 @@ func TestTaskService_HandleBroadcastCancelled(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 
@@ -1712,7 +1713,7 @@ func TestTaskService_HandleBroadcastScheduledExtended(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mocks.NewMockTaskRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	var mockAuthService *AuthService = nil
 	apiEndpoint := "http://localhost:8080"
 

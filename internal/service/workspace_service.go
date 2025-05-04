@@ -832,3 +832,173 @@ func (s *WorkspaceService) RemoveMember(ctx context.Context, workspaceID string,
 
 	return nil
 }
+
+// CreateIntegration creates a new integration for a workspace
+func (s *WorkspaceService) CreateIntegration(ctx context.Context, workspaceID, name string, integrationType domain.IntegrationType, provider domain.EmailProvider) (string, error) {
+	// Authenticate user and verify they are an owner of the workspace
+	ctx, user, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Check if user is an owner
+	userWorkspace, err := s.repo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get user workspace")
+		return "", err
+	}
+
+	if userWorkspace.Role != "owner" {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
+		return "", &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	// Get the workspace
+	workspace, err := s.repo.GetByID(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Error("Failed to get workspace")
+		return "", err
+	}
+
+	// Create a unique ID for the integration
+	integrationID := uuid.New().String()
+
+	// Create the integration
+	integration := domain.Integration{
+		ID:            integrationID,
+		Name:          name,
+		Type:          integrationType,
+		EmailProvider: provider,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	// Validate the integration
+	if err := integration.Validate(s.secretKey); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to validate integration")
+		return "", err
+	}
+
+	// Add the integration to the workspace
+	workspace.AddIntegration(integration)
+
+	// Save the updated workspace
+	if err := s.repo.Update(ctx, workspace); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to update workspace with new integration")
+		return "", err
+	}
+
+	return integrationID, nil
+}
+
+// UpdateIntegration updates an existing integration in a workspace
+func (s *WorkspaceService) UpdateIntegration(ctx context.Context, workspaceID, integrationID, name string, provider domain.EmailProvider) error {
+	// Authenticate user and verify they are an owner of the workspace
+	ctx, user, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Check if user is an owner
+	userWorkspace, err := s.repo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get user workspace")
+		return err
+	}
+
+	if userWorkspace.Role != "owner" {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
+		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	// Get the workspace
+	workspace, err := s.repo.GetByID(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Error("Failed to get workspace")
+		return err
+	}
+
+	// Find the existing integration
+	existingIntegration := workspace.GetIntegrationByID(integrationID)
+	if existingIntegration == nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).Error("Integration not found")
+		return fmt.Errorf("integration not found")
+	}
+
+	// Update the integration
+	updatedIntegration := domain.Integration{
+		ID:            integrationID,
+		Name:          name,
+		Type:          existingIntegration.Type, // Type cannot be changed
+		EmailProvider: provider,
+		CreatedAt:     existingIntegration.CreatedAt,
+		UpdatedAt:     time.Now(),
+	}
+
+	// Validate the updated integration
+	if err := updatedIntegration.Validate(s.secretKey); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to validate updated integration")
+		return err
+	}
+
+	// Update the integration in the workspace
+	workspace.AddIntegration(updatedIntegration) // This will replace the existing one
+
+	// Save the updated workspace
+	if err := s.repo.Update(ctx, workspace); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to update workspace with updated integration")
+		return err
+	}
+
+	return nil
+}
+
+// DeleteIntegration deletes an integration from a workspace
+func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, integrationID string) error {
+	// Authenticate user and verify they are an owner of the workspace
+	ctx, user, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Check if user is an owner
+	userWorkspace, err := s.repo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get user workspace")
+		return err
+	}
+
+	if userWorkspace.Role != "owner" {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
+		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	}
+
+	// Get the workspace
+	workspace, err := s.repo.GetByID(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Error("Failed to get workspace")
+		return err
+	}
+
+	// Attempt to remove the integration
+	if !workspace.RemoveIntegration(integrationID) {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).Error("Integration not found")
+		return fmt.Errorf("integration not found")
+	}
+
+	// Check if the integration is referenced in workspace settings
+	if workspace.Settings.TransactionalEmailProviderID == integrationID {
+		workspace.Settings.TransactionalEmailProviderID = ""
+	}
+	if workspace.Settings.MarketingEmailProviderID == integrationID {
+		workspace.Settings.MarketingEmailProviderID = ""
+	}
+
+	// Save the updated workspace
+	if err := s.repo.Update(ctx, workspace); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to update workspace after integration deletion")
+		return err
+	}
+
+	return nil
+}

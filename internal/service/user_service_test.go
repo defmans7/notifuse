@@ -8,6 +8,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
@@ -26,14 +27,14 @@ func (m *mockEmailSender) SendMagicCode(email, code string) error {
 func setupUserTest(t *testing.T) (
 	*mocks.MockUserRepository,
 	*mocks.MockAuthService,
-	*mocks.MockLogger,
+	*pkgmocks.MockLogger,
 	*UserService,
 	*mockEmailSender,
 ) {
 	ctrl := gomock.NewController(t)
 	mockRepo := mocks.NewMockUserRepository(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockSender := &mockEmailSender{}
 
 	service, err := NewUserService(UserServiceConfig{

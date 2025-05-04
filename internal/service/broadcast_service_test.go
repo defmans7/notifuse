@@ -2470,7 +2470,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			SendEmail(
 				gomock.Any(),
 				workspaceID,
-				"marketing",
+				true, // isMarketing
 				template.Email.FromAddress,
 				template.Email.FromName,
 				recipientEmail,

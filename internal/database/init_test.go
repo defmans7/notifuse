@@ -139,6 +139,10 @@ func TestCleanDatabase(t *testing.T) {
 				WillReturnResult(sqlmock.NewResult(0, 0))
 		}
 
+		// Add expectation for the separate webhook_events table drop
+		mock.ExpectExec("DROP TABLE IF EXISTS webhook_events CASCADE").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
 		err = CleanDatabase(db)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -165,8 +169,13 @@ func TestInitializeWorkspaceDatabase(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
-		// Expect table creation for all tables
+		// Expect generic table creation for all tables without checking the specific query
+		// This is more maintainable as the implementation might change
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contacts").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_contacts_email").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_contacts_external_id").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS lists").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -178,8 +187,6 @@ func TestInitializeWorkspaceDatabase(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS message_history").
 			WillReturnResult(sqlmock.NewResult(0, 0))
-		mock.ExpectExec("CREATE TABLE IF NOT EXISTS transactional_notifications").
-			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_contact_id").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id").
@@ -189,6 +196,22 @@ func TestInitializeWorkspaceDatabase(t *testing.T) {
 		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_status").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_message_history_sent_at").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS transactional_notifications").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE TABLE IF NOT EXISTS webhook_events").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS webhook_events_message_id_idx").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS webhook_events_transactional_id_idx").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS webhook_events_broadcast_id_idx").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS webhook_events_type_idx").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS webhook_events_timestamp_idx").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS webhook_events_recipient_email_idx").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err = InitializeWorkspaceDatabase(db)

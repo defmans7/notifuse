@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -291,9 +292,9 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 			name:   "Missing recipient email",
 			method: http.MethodPost,
 			reqBody: domain.TestTemplateRequest{
-				WorkspaceID:  "workspace123",
-				TemplateID:   "template123",
-				ProviderType: "marketing",
+				WorkspaceID:   "workspace123",
+				TemplateID:    "template123",
+				IntegrationID: "marketing",
 				// Missing RecipientEmail field
 			},
 			setupMock:      func(m *mocks.MockEmailServiceInterface) {},
@@ -305,7 +306,7 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 			method: http.MethodPost,
 			reqBody: domain.TestTemplateRequest{
 				TemplateID:     "template123",
-				ProviderType:   "marketing",
+				IntegrationID:  "marketing",
 				RecipientEmail: "test@example.com",
 				// Missing WorkspaceID field
 			},
@@ -319,12 +320,25 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 			reqBody: domain.TestTemplateRequest{
 				WorkspaceID:    "workspace123",
 				TemplateID:     "template123",
-				ProviderType:   "invalid",
+				IntegrationID:  "invalid",
 				RecipientEmail: "test@example.com",
 			},
-			setupMock:      func(m *mocks.MockEmailServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedResp:   nil,
+			setupMock: func(m *mocks.MockEmailServiceInterface) {
+				m.EXPECT().
+					TestTemplate(
+						gomock.Any(),
+						"workspace123",
+						"template123",
+						"invalid",
+						"test@example.com",
+					).
+					Return(fmt.Errorf("integration not found: invalid"))
+			},
+			expectedStatus: http.StatusOK,
+			expectedResp: &domain.TestTemplateResponse{
+				Success: false,
+				Error:   "integration not found: invalid",
+			},
 		},
 		{
 			name:   "Service error",
@@ -332,7 +346,7 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 			reqBody: domain.TestTemplateRequest{
 				WorkspaceID:    "workspace123",
 				TemplateID:     "template123",
-				ProviderType:   "marketing",
+				IntegrationID:  "marketing",
 				RecipientEmail: "test@example.com",
 			},
 			setupMock: func(m *mocks.MockEmailServiceInterface) {
@@ -358,7 +372,7 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 			reqBody: domain.TestTemplateRequest{
 				WorkspaceID:    "workspace123",
 				TemplateID:     "template123",
-				ProviderType:   "marketing",
+				IntegrationID:  "marketing",
 				RecipientEmail: "test@example.com",
 			},
 			setupMock: func(m *mocks.MockEmailServiceInterface) {
@@ -381,7 +395,7 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 			reqBody: domain.TestTemplateRequest{
 				WorkspaceID:    "workspace123",
 				TemplateID:     "template123",
-				ProviderType:   "marketing",
+				IntegrationID:  "marketing",
 				RecipientEmail: "test@example.com",
 			},
 			setupMock: func(m *mocks.MockEmailServiceInterface) {

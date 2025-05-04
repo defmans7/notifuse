@@ -428,7 +428,7 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 	err = s.emailService.SendEmail(
 		ctx,
 		workspace,
-		"transactional", // Use transactional provider type
+		false, // Use transactional provider type
 		fromEmail,
 		fromName,
 		contact.Email, // To address

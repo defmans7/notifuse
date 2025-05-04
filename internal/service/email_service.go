@@ -84,11 +84,11 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 	htmlContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
 
 	// Send email using SendEmail method with the direct provider
-	return s.SendEmail(ctx, workspaceID, "", provider.DefaultSenderEmail, provider.DefaultSenderName, to, subject, htmlContent, &provider)
+	return s.SendEmail(ctx, workspaceID, false, provider.DefaultSenderEmail, provider.DefaultSenderName, to, subject, htmlContent, &provider)
 }
 
 // TestTemplate tests a template by sending a test email
-func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, providerType string, recipientEmail string) error {
+func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string) error {
 	// Authenticate user for workspace
 	var err error
 	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
@@ -108,19 +108,22 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 		return fmt.Errorf("failed to get template: %w", err)
 	}
 
-	// Determine which email provider to use based on providerType
-	var emailProvider domain.EmailProvider
-	if providerType == "marketing" {
-		emailProvider = workspace.Settings.EmailMarketingProvider
-	} else if providerType == "transactional" {
-		emailProvider = workspace.Settings.EmailTransactionalProvider
-	} else {
-		return fmt.Errorf("invalid provider type: %s", providerType)
+	// Get the integration by ID
+	var integration *domain.Integration
+	for _, integration := range workspace.Integrations {
+		if integration.ID == integrationID {
+			integration = integration
+			break
+		}
+	}
+
+	if integration == nil {
+		return fmt.Errorf("integration not found: %s", integrationID)
 	}
 
 	// Validate that the provider is configured
-	if emailProvider.Kind == "" {
-		return fmt.Errorf("no email provider configured for type: %s", providerType)
+	if integration.EmailProvider.Kind == "" {
+		return fmt.Errorf("no email provider configured for type: %s", integrationID)
 	}
 
 	// Use test data from the template if available, otherwise use a default test data object
@@ -169,11 +172,11 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 	}
 
 	// Send the email using SendEmail method - we pass empty string for providerType since we're providing the provider directly
-	return s.SendEmail(ctx, workspaceID, "", emailProvider.DefaultSenderEmail, emailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &emailProvider)
+	return s.SendEmail(ctx, workspaceID, false, integration.EmailProvider.DefaultSenderEmail, integration.EmailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &integration.EmailProvider)
 }
 
 // SendEmail sends an email using the specified provider type or a direct provider
-func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, providerType string, fromAddress string, fromName string, to string, subject string, content string, optionalProvider ...*domain.EmailProvider) error {
+func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, optionalProvider ...*domain.EmailProvider) error {
 	// Direct provider takes precedence if provided
 	var emailProvider domain.EmailProvider
 	if len(optionalProvider) > 0 && optionalProvider[0] != nil {
@@ -192,19 +195,18 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 			return fmt.Errorf("failed to get workspace: %w", err)
 		}
 
-		// Determine which email provider to use based on providerType
-		if providerType == "marketing" {
-			emailProvider = workspace.Settings.EmailMarketingProvider
-		} else if providerType == "transactional" {
-			emailProvider = workspace.Settings.EmailTransactionalProvider
-		} else {
-			return fmt.Errorf("invalid provider type: %s", providerType)
+		// Get the email provider using the workspace's GetEmailProvider method
+		provider, err := workspace.GetEmailProvider(isMarketing)
+		if err != nil {
+			return err
 		}
 
 		// Validate that the provider is configured
-		if emailProvider.Kind == "" {
-			return fmt.Errorf("no email provider configured for type: %s", providerType)
+		if provider == nil || provider.Kind == "" {
+			return fmt.Errorf("no email provider configured for type: %t", isMarketing)
 		}
+
+		emailProvider = *provider
 	}
 
 	// If fromAddress is not provided, use the default sender email from the provider
@@ -377,7 +379,6 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 		if emailProvider.Postmark == nil {
 			return fmt.Errorf("Postmark provider is not configured")
 		}
-
 		// Decrypt server token if needed
 		if emailProvider.Postmark.EncryptedServerToken != "" && emailProvider.Postmark.ServerToken == "" {
 			if err := emailProvider.Postmark.DecryptServerToken(s.secretKey); err != nil {
@@ -385,34 +386,30 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, provid
 			}
 		}
 
-		// Create a simple HTTP request to the Postmark API
-		apiURL := "https://api.postmarkapp.com/email"
+		// Prepare the API endpoint
+		endpoint := "https://api.postmarkapp.com/email"
 
-		// Format the "From" header with name and email
-		fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)
-
-		// Create the request payload
-		payload := map[string]interface{}{
-			"From":          fromHeader,
-			"To":            to,
-			"Subject":       subject,
-			"HtmlBody":      content,
-			"MessageStream": "outbound",
+		// Prepare the request body
+		requestBody := map[string]interface{}{
+			"From":     fmt.Sprintf("%s <%s>", fromName, fromAddress),
+			"To":       to,
+			"Subject":  subject,
+			"HtmlBody": content,
 		}
 
-		// Convert payload to JSON
-		jsonPayload, err := json.Marshal(payload)
+		// Convert to JSON
+		jsonBody, err := json.Marshal(requestBody)
 		if err != nil {
 			return fmt.Errorf("failed to marshal Postmark request: %w", err)
 		}
 
-		// Create the HTTP request
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonPayload))
+		// Create HTTP request
+		req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return fmt.Errorf("failed to create HTTP request: %w", err)
+			return fmt.Errorf("failed to create Postmark request: %w", err)
 		}
 
-		// Set headers
+		// Add headers
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("X-Postmark-Server-Token", emailProvider.Postmark.ServerToken)

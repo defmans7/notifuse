@@ -271,11 +271,20 @@ func (r *mockInternalRepository) Create(ctx context.Context, workspace *domain.W
 		return fmt.Errorf("failed to marshal settings: %w", err)
 	}
 
+	// Marshal integrations to JSON if any exist
+	var integrations []byte
+	if len(workspace.Integrations) > 0 {
+		integrations, err = json.Marshal(workspace.Integrations)
+		if err != nil {
+			return fmt.Errorf("failed to marshal integrations: %w", err)
+		}
+	}
+
 	query := `
-		INSERT INTO workspaces (id, name, settings, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO workspaces (id, name, settings, integrations, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
-	_, err = r.systemDB.ExecContext(ctx, query, workspace.ID, workspace.Name, settings, workspace.CreatedAt, workspace.UpdatedAt)
+	_, err = r.systemDB.ExecContext(ctx, query, workspace.ID, workspace.Name, settings, integrations, workspace.CreatedAt, workspace.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create workspace: %w", err)
 	}
@@ -298,12 +307,21 @@ func (r *mockInternalRepository) Update(ctx context.Context, workspace *domain.W
 		return fmt.Errorf("failed to marshal settings: %w", err)
 	}
 
+	// Marshal integrations to JSON if any exist
+	var integrations []byte
+	if len(workspace.Integrations) > 0 {
+		integrations, err = json.Marshal(workspace.Integrations)
+		if err != nil {
+			return fmt.Errorf("failed to marshal integrations: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE workspaces
-		SET name = $1, settings = $2, updated_at = $3
-		WHERE id = $4
+		SET name = $1, settings = $2, integrations = $3, updated_at = $4
+		WHERE id = $5
 	`
-	result, err := r.systemDB.ExecContext(ctx, query, workspace.Name, settings, time.Now(), workspace.ID)
+	result, err := r.systemDB.ExecContext(ctx, query, workspace.Name, settings, integrations, time.Now(), workspace.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update workspace")
 	}

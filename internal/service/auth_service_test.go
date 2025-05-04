@@ -10,6 +10,7 @@ import (
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
@@ -17,13 +18,13 @@ import (
 func setupAuthTest(t *testing.T) (
 	*mocks.MockAuthRepository,
 	*mocks.MockWorkspaceRepository,
-	*mocks.MockLogger,
+	*pkgmocks.MockLogger,
 	*AuthService,
 ) {
 	ctrl := gomock.NewController(t)
 	mockAuthRepo := mocks.NewMockAuthRepository(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	// Generate test keys
 	privateKey := paseto.NewV4AsymmetricSecretKey()

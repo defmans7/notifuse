@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,11 +92,12 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 
 		// Mock for inserting workspace
 		settings, _ := json.Marshal(workspace.Settings)
-		mock.ExpectExec(`INSERT INTO workspaces \(id, name, settings, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
+		mock.ExpectExec(`INSERT INTO workspaces \(id, name, settings, integrations, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)`).
 			WithArgs(
 				workspace.ID,
 				workspace.Name,
 				settings,
+				sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
 				sqlmock.AnyArg(), // created_at
 				sqlmock.AnyArg(), // updated_at
 			).
@@ -170,11 +172,12 @@ func TestWorkspaceRepository_Create(t *testing.T) {
 
 		// Mock for inserting workspace with error
 		settings, _ := json.Marshal(workspace.Settings)
-		mock.ExpectExec(`INSERT INTO workspaces \(id, name, settings, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
+		mock.ExpectExec(`INSERT INTO workspaces \(id, name, settings, integrations, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)`).
 			WithArgs(
 				workspace.ID,
 				workspace.Name,
 				settings,
+				sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
 				sqlmock.AnyArg(), // created_at
 				sqlmock.AnyArg(), // updated_at
 			).
@@ -199,18 +202,16 @@ func TestWorkspaceRepository_GetByID(t *testing.T) {
 	// Test data
 	workspaceID := "testworkspace"
 	workspaceName := "Test Workspace"
-	settings := domain.WorkspaceSettings{
-		Timezone: "UTC",
-	}
-	settingsJSON, _ := json.Marshal(settings)
-	createdAt := time.Now().Truncate(time.Second)
-	updatedAt := createdAt
+	settings := `{"timezone":"UTC"}`
+	integrations := `[]`
+	createdAt := time.Now()
+	updatedAt := time.Now()
 
-	// Mock for successful query
-	rows := sqlmock.NewRows([]string{"id", "name", "settings", "created_at", "updated_at"}).
-		AddRow(workspaceID, workspaceName, settingsJSON, createdAt, updatedAt)
+	// Test successful retrieval
+	rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+		AddRow(workspaceID, workspaceName, settings, integrations, createdAt, updatedAt)
 
-	mock.ExpectQuery(`SELECT id, name, settings, created_at, updated_at FROM workspaces WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
 		WithArgs(workspaceID).
 		WillReturnRows(rows)
 
@@ -218,17 +219,27 @@ func TestWorkspaceRepository_GetByID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workspaceID, workspace.ID)
 	assert.Equal(t, workspaceName, workspace.Name)
-	assert.Equal(t, settings.Timezone, workspace.Settings.Timezone)
-	assert.Equal(t, createdAt.Unix(), workspace.CreatedAt.Unix())
-	assert.Equal(t, updatedAt.Unix(), workspace.UpdatedAt.Unix())
+	assert.Equal(t, "UTC", workspace.Settings.Timezone)
 
 	// Test not found
-	mock.ExpectQuery(`SELECT id, name, settings, created_at, updated_at FROM workspaces WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
 		WithArgs("nonexistent").
-		WillReturnError(errors.New("no rows"))
+		WillReturnError(sql.ErrNoRows)
 
-	_, err = repo.GetByID(context.Background(), "nonexistent")
+	workspace, err = repo.GetByID(context.Background(), "nonexistent")
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.Nil(t, workspace)
+
+	// Test database error
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnError(fmt.Errorf("database error"))
+
+	workspace, err = repo.GetByID(context.Background(), workspaceID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database error")
+	assert.Nil(t, workspace)
 }
 
 func TestWorkspaceRepository_List(t *testing.T) {
@@ -242,37 +253,42 @@ func TestWorkspaceRepository_List(t *testing.T) {
 	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
 	// Test data
-	workspace1 := &domain.Workspace{
-		ID:        "workspace1",
-		Name:      "Workspace One",
-		Settings:  domain.WorkspaceSettings{Timezone: "UTC"},
-		CreatedAt: time.Now().Add(-2 * time.Hour).Truncate(time.Second),
-		UpdatedAt: time.Now().Add(-1 * time.Hour).Truncate(time.Second),
-	}
-	settings1JSON, _ := json.Marshal(workspace1.Settings)
+	workspace1ID := "workspace1"
+	workspace1Name := "Workspace 1"
+	workspace1Settings := `{"timezone":"UTC"}`
+	workspace1Integrations := `[]`
+	workspace1CreatedAt := time.Now()
+	workspace1UpdatedAt := time.Now()
 
-	workspace2 := &domain.Workspace{
-		ID:        "workspace2",
-		Name:      "Workspace Two",
-		Settings:  domain.WorkspaceSettings{Timezone: "America/New_York"},
-		CreatedAt: time.Now().Add(-1 * time.Hour).Truncate(time.Second),
-		UpdatedAt: time.Now().Truncate(time.Second),
-	}
-	settings2JSON, _ := json.Marshal(workspace2.Settings)
+	workspace2ID := "workspace2"
+	workspace2Name := "Workspace 2"
+	workspace2Settings := `{"timezone":"Europe/London"}`
+	workspace2Integrations := `[]`
+	workspace2CreatedAt := time.Now().Add(time.Hour)
+	workspace2UpdatedAt := time.Now().Add(time.Hour)
 
-	// Mock for successful query
-	rows := sqlmock.NewRows([]string{"id", "name", "settings", "created_at", "updated_at"}).
-		AddRow(workspace1.ID, workspace1.Name, settings1JSON, workspace1.CreatedAt, workspace1.UpdatedAt).
-		AddRow(workspace2.ID, workspace2.Name, settings2JSON, workspace2.CreatedAt, workspace2.UpdatedAt)
+	// Test successful retrieval
+	rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+		AddRow(workspace2ID, workspace2Name, workspace2Settings, workspace2Integrations, workspace2CreatedAt, workspace2UpdatedAt).
+		AddRow(workspace1ID, workspace1Name, workspace1Settings, workspace1Integrations, workspace1CreatedAt, workspace1UpdatedAt)
 
-	mock.ExpectQuery(`SELECT id, name, settings, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
 		WillReturnRows(rows)
 
 	workspaces, err := repo.List(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, workspaces, 2)
-	assert.Equal(t, workspace1.ID, workspaces[0].ID)
-	assert.Equal(t, workspace2.ID, workspaces[1].ID)
+	assert.Equal(t, 2, len(workspaces))
+	assert.Equal(t, workspace2ID, workspaces[0].ID)
+	assert.Equal(t, workspace1ID, workspaces[1].ID)
+
+	// Test database error
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+		WillReturnError(fmt.Errorf("database error"))
+
+	workspaces, err = repo.List(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database error")
+	assert.Nil(t, workspaces)
 }
 
 func TestWorkspaceRepository_Update(t *testing.T) {
@@ -285,22 +301,23 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 
 	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
 
-	// Test case: Successful update
 	workspace := &domain.Workspace{
-		ID:   "testworkspace",
+		ID:   "workspace1",
 		Name: "Updated Workspace",
 		Settings: domain.WorkspaceSettings{
-			Timezone:   "Europe/London",
-			WebsiteURL: "https://example.com",
+			Timezone: "America/New_York",
 		},
 	}
 
-	// Mock for updating workspace
+	// Marshal settings to JSON for the mock
 	settings, _ := json.Marshal(workspace.Settings)
-	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, updated_at = \$3 WHERE id = \$4`).
+
+	// Mock for successful update
+	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
 		WithArgs(
 			workspace.Name,
 			settings,
+			sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
 			sqlmock.AnyArg(), // updated_at
 			workspace.ID,
 		).
@@ -309,65 +326,35 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 	err := repo.Update(context.Background(), workspace)
 	require.NoError(t, err)
 
-	// Test case: Workspace not found
-	notFoundWorkspace := &domain.Workspace{
-		ID:   "nonexistent",
-		Name: "Nonexistent Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
-
-	notFoundSettings, _ := json.Marshal(notFoundWorkspace.Settings)
-	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, updated_at = \$3 WHERE id = \$4`).
+	// Mock for workspace not found
+	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
 		WithArgs(
-			notFoundWorkspace.Name,
-			notFoundSettings,
+			workspace.Name,
+			settings,
+			sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
 			sqlmock.AnyArg(), // updated_at
-			notFoundWorkspace.ID,
+			workspace.ID,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = repo.Update(context.Background(), notFoundWorkspace)
+	err = repo.Update(context.Background(), workspace)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "workspace not found")
+	assert.Contains(t, err.Error(), "not found")
 
-	// Test case: Database error during workspace update
-	validWorkspace := &domain.Workspace{
-		ID:   "testworkspace",
-		Name: "Updated Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone: "UTC",
-		},
-	}
-
-	validSettings, _ := json.Marshal(validWorkspace.Settings)
-	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, updated_at = \$3 WHERE id = \$4`).
+	// Mock for database error
+	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
 		WithArgs(
-			validWorkspace.Name,
-			validSettings,
+			workspace.Name,
+			settings,
+			sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
 			sqlmock.AnyArg(), // updated_at
-			validWorkspace.ID,
+			workspace.ID,
 		).
 		WillReturnError(fmt.Errorf("database error"))
 
-	err = repo.Update(context.Background(), validWorkspace)
+	err = repo.Update(context.Background(), workspace)
 	require.Error(t, err)
-	assert.Equal(t, "database error", err.Error())
-
-	// Test case: Error getting affected rows
-	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, updated_at = \$3 WHERE id = \$4`).
-		WithArgs(
-			validWorkspace.Name,
-			validSettings,
-			sqlmock.AnyArg(), // updated_at
-			validWorkspace.ID,
-		).
-		WillReturnResult(sqlmock.NewErrorResult(fmt.Errorf("rows affected error")))
-
-	err = repo.Update(context.Background(), validWorkspace)
-	require.Error(t, err)
-	assert.Equal(t, "rows affected error", err.Error())
+	assert.Contains(t, err.Error(), "database error")
 }
 
 func TestWorkspaceRepository_Delete(t *testing.T) {

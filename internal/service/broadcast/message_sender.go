@@ -242,7 +242,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 	err = s.emailService.SendEmail(
 		ctx,
 		workspaceID,
-		"marketing", // Email provider type
+		true, // is marketing
 		template.Email.FromAddress,
 		template.Email.FromName,
 		recipient.Email,

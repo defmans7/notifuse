@@ -655,3 +655,461 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 		assert.IsType(t, &domain.ErrUnauthorized{}, err)
 	})
 }
+
+func TestWorkspaceService_CreateIntegration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockConfig := &config.Config{}
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+
+	// Setup common logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	ctx := context.Background()
+	workspaceID := "testworkspace"
+	userID := "testuser"
+	integrationName := "Test SMTP Integration"
+
+	provider := domain.EmailProvider{
+		Kind: domain.EmailProviderKindSMTP,
+		SMTP: &domain.SMTPSettings{
+			Host:     "smtp.example.com",
+			Port:     587,
+			Username: "smtp_user",
+			Password: "smtp_password",
+			UseTLS:   true,
+		},
+		DefaultSenderEmail: "test@example.com",
+		DefaultSenderName:  "Test Sender",
+	}
+
+	t.Run("successful create integration", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify the integration was added to the workspace
+			require.Equal(t, 1, len(workspace.Integrations))
+			require.Equal(t, integrationName, workspace.Integrations[0].Name)
+			require.Equal(t, domain.IntegrationTypeEmail, workspace.Integrations[0].Type)
+			require.Equal(t, domain.EmailProviderKindSMTP, workspace.Integrations[0].EmailProvider.Kind)
+			return nil
+		})
+
+		integrationID, err := service.CreateIntegration(ctx, workspaceID, integrationName, domain.IntegrationTypeEmail, provider)
+		require.NoError(t, err)
+		require.NotEmpty(t, integrationID)
+	})
+
+	t.Run("unauthorized user", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		// User is a member, not an owner
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "member",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+
+		integrationID, err := service.CreateIntegration(ctx, workspaceID, integrationName, domain.IntegrationTypeEmail, provider)
+		require.Error(t, err)
+		require.Empty(t, integrationID)
+		require.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("workspace not found", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, errors.New("workspace not found"))
+
+		integrationID, err := service.CreateIntegration(ctx, workspaceID, integrationName, domain.IntegrationTypeEmail, provider)
+		require.Error(t, err)
+		require.Empty(t, integrationID)
+		require.Contains(t, err.Error(), "workspace not found")
+	})
+
+	t.Run("update error", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(errors.New("update error"))
+
+		integrationID, err := service.CreateIntegration(ctx, workspaceID, integrationName, domain.IntegrationTypeEmail, provider)
+		require.Error(t, err)
+		require.Empty(t, integrationID)
+		require.Contains(t, err.Error(), "update error")
+	})
+}
+
+func TestWorkspaceService_UpdateIntegration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockConfig := &config.Config{}
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+
+	// Setup common logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	ctx := context.Background()
+	workspaceID := "testworkspace"
+	userID := "testuser"
+	integrationID := "integration123"
+	integrationName := "Updated SMTP Integration"
+
+	provider := domain.EmailProvider{
+		Kind: domain.EmailProviderKindSMTP,
+		SMTP: &domain.SMTPSettings{
+			Host:     "smtp.updated.com",
+			Port:     587,
+			Username: "updated_user",
+			Password: "updated_password",
+			UseTLS:   true,
+		},
+		DefaultSenderEmail: "updated@example.com",
+		DefaultSenderName:  "Updated Sender",
+	}
+
+	t.Run("successful update integration", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with an existing integration
+		existingIntegration := domain.Integration{
+			ID:   integrationID,
+			Name: "Original SMTP Integration",
+			Type: domain.IntegrationTypeEmail,
+			EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP,
+				SMTP: &domain.SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "smtp_user",
+					Password: "smtp_password",
+					UseTLS:   true,
+				},
+				DefaultSenderEmail: "test@example.com",
+				DefaultSenderName:  "Test Sender",
+			},
+			CreatedAt: time.Now().Add(-24 * time.Hour), // Created 24 hours ago
+			UpdatedAt: time.Now().Add(-24 * time.Hour),
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: []domain.Integration{existingIntegration},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify the integration was updated in the workspace
+			require.Equal(t, 1, len(workspace.Integrations))
+			require.Equal(t, integrationID, workspace.Integrations[0].ID)
+			require.Equal(t, integrationName, workspace.Integrations[0].Name)
+			require.Equal(t, domain.IntegrationTypeEmail, workspace.Integrations[0].Type)
+			require.Equal(t, domain.EmailProviderKindSMTP, workspace.Integrations[0].EmailProvider.Kind)
+			require.Equal(t, "smtp.updated.com", workspace.Integrations[0].EmailProvider.SMTP.Host)
+			require.Equal(t, "updated_user", workspace.Integrations[0].EmailProvider.SMTP.Username)
+			require.Equal(t, existingIntegration.CreatedAt, workspace.Integrations[0].CreatedAt)      // CreatedAt should remain the same
+			require.True(t, workspace.Integrations[0].UpdatedAt.After(existingIntegration.UpdatedAt)) // UpdatedAt should be updated
+			return nil
+		})
+
+		err := service.UpdateIntegration(ctx, workspaceID, integrationID, integrationName, provider)
+		require.NoError(t, err)
+	})
+
+	t.Run("unauthorized user", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		// User is a member, not an owner
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "member",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+
+		err := service.UpdateIntegration(ctx, workspaceID, integrationID, integrationName, provider)
+		require.Error(t, err)
+		require.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("integration not found", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with no integrations
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+
+		err := service.UpdateIntegration(ctx, workspaceID, integrationID, integrationName, provider)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "integration not found")
+	})
+}
+
+func TestWorkspaceService_DeleteIntegration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockConfig := &config.Config{}
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+
+	// Setup common logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	ctx := context.Background()
+	workspaceID := "testworkspace"
+	userID := "testuser"
+	integrationID := "integration123"
+
+	t.Run("successful delete integration", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with an existing integration
+		existingIntegration := domain.Integration{
+			ID:   integrationID,
+			Name: "SMTP Integration",
+			Type: domain.IntegrationTypeEmail,
+			EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP,
+				SMTP: &domain.SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "smtp_user",
+					Password: "smtp_password",
+					UseTLS:   true,
+				},
+				DefaultSenderEmail: "test@example.com",
+				DefaultSenderName:  "Test Sender",
+			},
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				TransactionalEmailProviderID: integrationID, // Reference the integration
+			},
+			Integrations: []domain.Integration{existingIntegration},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify the integration was removed from the workspace
+			require.Empty(t, workspace.Integrations)
+			// Verify the reference was removed from settings
+			require.Empty(t, workspace.Settings.TransactionalEmailProviderID)
+			return nil
+		})
+
+		err := service.DeleteIntegration(ctx, workspaceID, integrationID)
+		require.NoError(t, err)
+	})
+
+	t.Run("unauthorized user", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		// User is a member, not an owner
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "member",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+
+		err := service.DeleteIntegration(ctx, workspaceID, integrationID)
+		require.Error(t, err)
+		require.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("integration not found", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with no integrations
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+
+		err := service.DeleteIntegration(ctx, workspaceID, integrationID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "integration not found")
+	})
+
+	t.Run("removes marketing reference", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with an existing integration
+		existingIntegration := domain.Integration{
+			ID:   integrationID,
+			Name: "SMTP Integration",
+			Type: domain.IntegrationTypeEmail,
+			EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP,
+			},
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				MarketingEmailProviderID: integrationID, // Reference the integration as marketing provider
+			},
+			Integrations: []domain.Integration{existingIntegration},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify the reference was removed from settings
+			require.Empty(t, workspace.Settings.MarketingEmailProviderID)
+			return nil
+		})
+
+		err := service.DeleteIntegration(ctx, workspaceID, integrationID)
+		require.NoError(t, err)
+	})
+}

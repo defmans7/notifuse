@@ -119,7 +119,7 @@ func TestSendToRecipientSuccess(t *testing.T) {
 		SendEmail(
 			ctx,
 			workspaceID,
-			"marketing",
+			true, // isMarketing
 			template.Email.FromAddress,
 			template.Email.FromName,
 			recipient.Email,
@@ -450,7 +450,7 @@ func TestSendBatch(t *testing.T) {
 			SendEmail(
 				ctx,
 				workspaceID,
-				"marketing",
+				true, // isMarketing
 				template.Email.FromAddress,
 				template.Email.FromName,
 				recipient.Contact.Email,
@@ -726,7 +726,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		SendEmail(
 			ctx,
 			workspaceID,
-			"marketing",
+			true, // isMarketing
 			template.Email.FromAddress,
 			template.Email.FromName,
 			recipients[0].Contact.Email,
@@ -877,7 +877,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 		SendEmail(
 			ctx,
 			workspaceID,
-			"marketing",
+			true, // isMarketing
 			template.Email.FromAddress,
 			template.Email.FromName,
 			recipients[0].Contact.Email,

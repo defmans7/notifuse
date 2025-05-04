@@ -65,6 +65,21 @@ func (mr *MockWorkspaceServiceInterfaceMockRecorder) CreateAPIKey(arg0, arg1, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAPIKey", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).CreateAPIKey), arg0, arg1, arg2)
 }
 
+// CreateIntegration mocks base method.
+func (m *MockWorkspaceServiceInterface) CreateIntegration(arg0 context.Context, arg1, arg2 string, arg3 domain.IntegrationType, arg4 domain.EmailProvider) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateIntegration", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateIntegration indicates an expected call of CreateIntegration.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) CreateIntegration(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIntegration", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).CreateIntegration), arg0, arg1, arg2, arg3, arg4)
+}
+
 // CreateWorkspace mocks base method.
 func (m *MockWorkspaceServiceInterface) CreateWorkspace(arg0 context.Context, arg1, arg2, arg3, arg4, arg5, arg6 string, arg7 domain.FileManagerSettings) (*domain.Workspace, error) {
 	m.ctrl.T.Helper()
@@ -78,6 +93,20 @@ func (m *MockWorkspaceServiceInterface) CreateWorkspace(arg0 context.Context, ar
 func (mr *MockWorkspaceServiceInterfaceMockRecorder) CreateWorkspace(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWorkspace", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).CreateWorkspace), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+}
+
+// DeleteIntegration mocks base method.
+func (m *MockWorkspaceServiceInterface) DeleteIntegration(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteIntegration", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteIntegration indicates an expected call of DeleteIntegration.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) DeleteIntegration(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIntegration", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).DeleteIntegration), arg0, arg1, arg2)
 }
 
 // DeleteWorkspace mocks base method.
@@ -195,6 +224,20 @@ func (m *MockWorkspaceServiceInterface) TransferOwnership(arg0 context.Context, 
 func (mr *MockWorkspaceServiceInterfaceMockRecorder) TransferOwnership(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferOwnership", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).TransferOwnership), arg0, arg1, arg2, arg3)
+}
+
+// UpdateIntegration mocks base method.
+func (m *MockWorkspaceServiceInterface) UpdateIntegration(arg0 context.Context, arg1, arg2, arg3 string, arg4 domain.EmailProvider) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateIntegration", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateIntegration indicates an expected call of UpdateIntegration.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) UpdateIntegration(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateIntegration", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).UpdateIntegration), arg0, arg1, arg2, arg3, arg4)
 }
 
 // UpdateWorkspace mocks base method.

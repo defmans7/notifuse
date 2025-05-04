@@ -43,6 +43,7 @@ func (r *workspaceRepository) checkWorkspaceIDExists(ctx context.Context, id str
 	return exists, nil
 }
 
+// Create creates a new workspace
 func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error {
 
 	// Check if workspace ID already exists
@@ -68,14 +69,24 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 		return err
 	}
 
+	// Marshal integrations to JSON if any exist
+	var integrations []byte
+	if len(workspace.Integrations) > 0 {
+		integrations, err = json.Marshal(workspace.Integrations)
+		if err != nil {
+			return err
+		}
+	}
+
 	query := `
-		INSERT INTO workspaces (id, name, settings, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO workspaces (id, name, settings, integrations, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	_, err = r.systemDB.ExecContext(ctx, query,
 		workspace.ID,
 		workspace.Name,
 		settings,
+		integrations,
 		workspace.CreatedAt,
 		workspace.UpdatedAt,
 	)
@@ -93,7 +104,7 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 
 func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.Workspace, error) {
 	query := `
-		SELECT id, name, settings, created_at, updated_at
+		SELECT id, name, settings, integrations, created_at, updated_at
 		FROM workspaces
 		WHERE id = $1
 	`
@@ -114,7 +125,7 @@ func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.W
 
 func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, error) {
 	query := `
-		SELECT id, name, settings, created_at, updated_at
+		SELECT id, name, settings, integrations, created_at, updated_at
 		FROM workspaces
 		ORDER BY created_at DESC
 	`
@@ -151,14 +162,24 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 		return err
 	}
 
+	// Marshal integrations to JSON if any exist
+	var integrations []byte
+	if len(workspace.Integrations) > 0 {
+		integrations, err = json.Marshal(workspace.Integrations)
+		if err != nil {
+			return err
+		}
+	}
+
 	query := `
 		UPDATE workspaces
-		SET name = $1, settings = $2, updated_at = $3
-		WHERE id = $4
+		SET name = $1, settings = $2, integrations = $3, updated_at = $4
+		WHERE id = $5
 	`
 	result, err := r.systemDB.ExecContext(ctx, query,
 		workspace.Name,
 		settings,
+		integrations,
 		workspace.UpdatedAt,
 		workspace.ID,
 	)

@@ -512,6 +512,6 @@ func (m *MailjetSettings) Validate(passphrase string) error {
 // EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
-	TestTemplate(ctx context.Context, workspaceID string, templateID string, providerType string, recipientEmail string) error
-	SendEmail(ctx context.Context, workspaceID string, providerType string, fromAddress string, fromName string, to string, subject string, content string, optionalProvider ...*EmailProvider) error
+	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string) error
+	SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, optionalProvider ...*EmailProvider) error
 }

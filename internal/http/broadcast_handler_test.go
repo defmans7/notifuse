@@ -16,6 +16,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	http_handler "github.com/Notifuse/notifuse/internal/http"
 	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
@@ -52,7 +53,7 @@ func setupBroadcastHandler(t *testing.T) (
 	*http_handler.BroadcastHandler,
 	*mocks.MockBroadcastService,
 	*mocks.MockTemplateService,
-	*mocks.MockLogger,
+	*pkgmocks.MockLogger,
 	*gomock.Controller,
 ) {
 	ctrl := gomock.NewController(t)
@@ -60,7 +61,7 @@ func setupBroadcastHandler(t *testing.T) (
 	// Create mocks
 	mockBroadcastService := mocks.NewMockBroadcastService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	mockLogger := mocks.NewMockLogger(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	// Create a public key for authentication
 	publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
@@ -172,7 +173,7 @@ func TestHandleList(t *testing.T) {
 	// Test service error
 	t.Run("ServiceError", func(t *testing.T) {
 		// Set up expectations for logger
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "service error").Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to list broadcasts")
 
@@ -318,7 +319,7 @@ func TestHandleGet(t *testing.T) {
 			Return(nil, templateError)
 
 		// Setup mock for logger.WithFields and the warning
-		mockLoggerWithFields := mocks.NewMockLogger(ctrl)
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 		expectedFields := map[string]interface{}{
 			"error":        templateError,
 			"workspace_id": "workspace123",
@@ -436,7 +437,7 @@ func TestHandleCreate(t *testing.T) {
 		}
 
 		// Set up expectations for the logger using gomock
-		errorLogger := mocks.NewMockLogger(ctrl)
+		errorLogger := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to create broadcast")
 
@@ -461,7 +462,7 @@ func TestHandleCreate(t *testing.T) {
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
 		// Set up logger expectations using gomock
-		errorLogger := mocks.NewMockLogger(ctrl)
+		errorLogger := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to decode request body")
 
@@ -587,7 +588,7 @@ func TestHandleSchedule(t *testing.T) {
 		defer customController.Finish()
 		customMock := mocks.NewMockBroadcastService(customController)
 		customTemplateService := mocks.NewMockTemplateService(customController)
-		customLogger := mocks.NewMockLogger(customController)
+		customLogger := pkgmocks.NewMockLogger(customController)
 
 		// Create a public key for authentication
 		publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
@@ -628,7 +629,7 @@ func TestHandleSchedule(t *testing.T) {
 		defer customController.Finish()
 		customMock := mocks.NewMockBroadcastService(customController)
 		customTemplateService := mocks.NewMockTemplateService(customController)
-		customLogger := mocks.NewMockLogger(customController)
+		customLogger := pkgmocks.NewMockLogger(customController)
 
 		// Create a public key for authentication
 		publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
@@ -642,7 +643,7 @@ func TestHandleSchedule(t *testing.T) {
 		)
 
 		// Set up expectations differently - this is more direct and explicit
-		errorLogger := mocks.NewMockLogger(customController)
+		errorLogger := pkgmocks.NewMockLogger(customController)
 		customLogger.EXPECT().WithField("error", "only broadcasts with draft status can be scheduled, current status: sending").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to schedule broadcast")
 
@@ -674,7 +675,7 @@ func TestHandleSchedule(t *testing.T) {
 		defer customController.Finish()
 		customMock := mocks.NewMockBroadcastService(customController)
 		customTemplateService := mocks.NewMockTemplateService(customController)
-		customLogger := mocks.NewMockLogger(customController)
+		customLogger := pkgmocks.NewMockLogger(customController)
 
 		// Create a public key for authentication
 		publicKey, _ := paseto.NewV4AsymmetricPublicKeyFromHex("1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2")
@@ -688,7 +689,7 @@ func TestHandleSchedule(t *testing.T) {
 		)
 
 		// Set up expectations differently - this is more direct and explicit
-		errorLogger := mocks.NewMockLogger(customController)
+		errorLogger := pkgmocks.NewMockLogger(customController)
 		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to schedule broadcast")
 
@@ -720,7 +721,7 @@ func TestHandleSchedule(t *testing.T) {
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
 		// Set up logger expectations
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
 
@@ -824,7 +825,7 @@ func TestHandleCancel(t *testing.T) {
 		defer customCtrl.Finish()
 
 		// Set up expectations differently - this is more direct and explicit
-		errorLogger := mocks.NewMockLogger(customCtrl)
+		errorLogger := pkgmocks.NewMockLogger(customCtrl)
 		customLogger.EXPECT().WithField("error", "only broadcasts with scheduled or paused status can be cancelled, current status: draft").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to cancel broadcast")
 
@@ -855,7 +856,7 @@ func TestHandleCancel(t *testing.T) {
 		defer customCtrl.Finish()
 
 		// Set up expectations differently - this is more direct and explicit
-		errorLogger := mocks.NewMockLogger(customCtrl)
+		errorLogger := pkgmocks.NewMockLogger(customCtrl)
 		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to cancel broadcast")
 
@@ -887,7 +888,7 @@ func TestHandleCancel(t *testing.T) {
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
 		// Set up logger expectations
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
 
@@ -991,7 +992,7 @@ func TestHandlePause(t *testing.T) {
 		defer customCtrl.Finish()
 
 		// Set up expectations differently - this is more direct and explicit
-		errorLogger := mocks.NewMockLogger(customCtrl)
+		errorLogger := pkgmocks.NewMockLogger(customCtrl)
 		customLogger.EXPECT().WithField("error", "only broadcasts with sending status can be paused, current status: draft").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to pause broadcast")
 
@@ -1022,7 +1023,7 @@ func TestHandlePause(t *testing.T) {
 		defer customCtrl.Finish()
 
 		// Set up expectations differently - this is more direct and explicit
-		errorLogger := mocks.NewMockLogger(customCtrl)
+		errorLogger := pkgmocks.NewMockLogger(customCtrl)
 		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to pause broadcast")
 
@@ -1054,7 +1055,7 @@ func TestHandlePause(t *testing.T) {
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
 		// Set up logger expectations
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
 
@@ -1158,7 +1159,7 @@ func TestHandleDelete(t *testing.T) {
 		defer customCtrl.Finish()
 
 		// Set up expectations differently - this is more direct and explicit
-		errorLogger := mocks.NewMockLogger(customCtrl)
+		errorLogger := pkgmocks.NewMockLogger(customCtrl)
 		customLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to delete broadcast")
 
@@ -1190,7 +1191,7 @@ func TestHandleDelete(t *testing.T) {
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
 		// Set up logger expectations
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
 
@@ -1321,7 +1322,7 @@ func TestHandleUpdate(t *testing.T) {
 		}
 
 		// Set up expectations for logger using gomock
-		errorLogger := mocks.NewMockLogger(ctrl)
+		errorLogger := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to get existing broadcast")
 
@@ -1356,7 +1357,7 @@ func TestHandleUpdate(t *testing.T) {
 			Return(broadcast, nil)
 
 		// Set up expectations for logger using gomock
-		errorLogger := mocks.NewMockLogger(ctrl)
+		errorLogger := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "service error").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to update broadcast")
 
@@ -1378,7 +1379,7 @@ func TestHandleUpdate(t *testing.T) {
 	// Test invalid JSON
 	t.Run("InvalidJSON", func(t *testing.T) {
 		// Set up expectations for logger using gomock
-		errorLogger := mocks.NewMockLogger(ctrl)
+		errorLogger := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "invalid character 'i' looking for beginning of object key string").Return(errorLogger)
 		errorLogger.EXPECT().Error("Failed to decode request body")
 
@@ -1451,7 +1452,7 @@ func TestHandleResume(t *testing.T) {
 	// Test invalid request body
 	t.Run("InvalidRequestBody", func(t *testing.T) {
 		// Set up logger expectations for error logging
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", gomock.Any()).Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
 
@@ -1513,7 +1514,7 @@ func TestHandleResume(t *testing.T) {
 		}
 
 		// Set logger expectations
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "service error").Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to resume broadcast")
 
@@ -1581,7 +1582,7 @@ func TestHandleSendToIndividual(t *testing.T) {
 	// Test invalid request body
 	t.Run("InvalidRequestBody", func(t *testing.T) {
 		// Set up logger expectations for error logging
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", gomock.Any()).Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to decode request body")
 
@@ -1646,7 +1647,7 @@ func TestHandleSendToIndividual(t *testing.T) {
 		}
 
 		// Set logger expectations
-		mockLoggerWithField := mocks.NewMockLogger(ctrl)
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 		mockLogger.EXPECT().WithField("error", "service error").Return(mockLoggerWithField)
 		mockLoggerWithField.EXPECT().Error("Failed to send broadcast to individual")
 

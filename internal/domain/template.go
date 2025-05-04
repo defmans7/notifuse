@@ -508,7 +508,7 @@ type CompileTemplateResponse struct {
 type TestTemplateRequest struct {
 	WorkspaceID    string `json:"workspace_id"`
 	TemplateID     string `json:"template_id"`
-	ProviderType   string `json:"provider_type"` // "marketing" or "transactional"
+	IntegrationID  string `json:"integration_id"`
 	RecipientEmail string `json:"recipient_email"`
 }
 
@@ -519,8 +519,8 @@ func (r *TestTemplateRequest) Validate() (string, string, string, string, error)
 	if r.TemplateID == "" {
 		return "", "", "", "", fmt.Errorf("template_id is required")
 	}
-	if r.ProviderType != "marketing" && r.ProviderType != "transactional" {
-		return "", "", "", "", fmt.Errorf("provider_type must be either 'marketing' or 'transactional'")
+	if r.IntegrationID == "" {
+		return "", "", "", "", fmt.Errorf("integration_id is required")
 	}
 	if r.RecipientEmail == "" {
 		return "", "", "", "", fmt.Errorf("recipient_email is required")
@@ -529,7 +529,7 @@ func (r *TestTemplateRequest) Validate() (string, string, string, string, error)
 		return "", "", "", "", fmt.Errorf("invalid recipient_email format")
 	}
 
-	return r.WorkspaceID, r.TemplateID, r.ProviderType, r.RecipientEmail, nil
+	return r.WorkspaceID, r.TemplateID, r.IntegrationID, r.RecipientEmail, nil
 }
 
 // TestTemplateResponse represents the response from testing a template
