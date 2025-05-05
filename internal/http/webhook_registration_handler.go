@@ -64,7 +64,6 @@ func (h *WebhookRegistrationHandler) handleRegister(w http.ResponseWriter, r *ht
 
 	// Create webhook registration config
 	config := &domain.WebhookRegistrationConfig{
-		BaseURL:       req.BaseURL,
 		IntegrationID: req.IntegrationID,
 		EventTypes:    req.EventTypes,
 	}
@@ -100,22 +99,16 @@ func (h *WebhookRegistrationHandler) handleStatus(w http.ResponseWriter, r *http
 		return
 	}
 
-	providerKind := domain.EmailProviderKind(r.URL.Query().Get("provider"))
-	if providerKind == "" {
-		WriteJSONError(w, "provider is required", http.StatusBadRequest)
-		return
-	}
-
-	emailType := r.URL.Query().Get("email_type")
-	if emailType == "" {
-		WriteJSONError(w, "email_type is required", http.StatusBadRequest)
+	integrationID := r.URL.Query().Get("integration_id")
+	if integrationID == "" {
+		WriteJSONError(w, "integration_id is required", http.StatusBadRequest)
 		return
 	}
 
 	// Create and validate request
 	req := &domain.GetWebhookStatusRequest{
 		WorkspaceID:   workspaceID,
-		IntegrationID: emailType,
+		IntegrationID: integrationID,
 	}
 
 	if err := req.Validate(); err != nil {

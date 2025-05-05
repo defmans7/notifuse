@@ -130,7 +130,7 @@ type SESConfigurationSetEventDestination struct {
 	SNSDestination       *SESTopicConfig `json:"sns_destination,omitempty"`
 }
 
-// SESConfig represents configuration for Amazon SES API
+// SESConfig contains AWS configuration for SES service
 type SESConfig struct {
 	Region    string `json:"region"`
 	AccessKey string `json:"access_key"`

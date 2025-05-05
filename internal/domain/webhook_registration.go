@@ -12,13 +12,15 @@ type WebhookRegistrationService interface {
 	// RegisterWebhooks registers the webhook URLs with the email provider
 	RegisterWebhooks(ctx context.Context, workspaceID string, config *WebhookRegistrationConfig) (*WebhookRegistrationStatus, error)
 
+	// UnregisterWebhooks removes all webhook URLs associated with the integration
+	UnregisterWebhooks(ctx context.Context, workspaceID string, integrationID string) error
+
 	// GetWebhookStatus gets the current status of webhooks for the email provider
 	GetWebhookStatus(ctx context.Context, workspaceID string, integrationID string) (*WebhookRegistrationStatus, error)
 }
 
 // WebhookRegistrationConfig defines the configuration for registering webhooks
 type WebhookRegistrationConfig struct {
-	BaseURL       string           `json:"base_url"`
 	IntegrationID string           `json:"integration_id"`
 	EventTypes    []EmailEventType `json:"event_types"`
 }
@@ -44,7 +46,6 @@ type WebhookEndpointStatus struct {
 type RegisterWebhookRequest struct {
 	WorkspaceID   string           `json:"workspace_id"`
 	IntegrationID string           `json:"integration_id"`
-	BaseURL       string           `json:"base_url"`
 	EventTypes    []EmailEventType `json:"event_types"`
 }
 
@@ -55,9 +56,6 @@ func (r *RegisterWebhookRequest) Validate() error {
 	}
 	if r.IntegrationID == "" {
 		return NewValidationError("integration_id is required")
-	}
-	if r.BaseURL == "" {
-		return NewValidationError("base_url is required")
 	}
 	if len(r.EventTypes) == 0 {
 		// Default to all event types if not specified

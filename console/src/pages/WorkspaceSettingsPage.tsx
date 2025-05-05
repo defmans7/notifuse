@@ -56,26 +56,24 @@ export function WorkspaceSettingsPage() {
 
   return (
     <div className="max-w-[1200px] p-6">
-      <WorkspaceSettings
-        workspace={workspace}
-        loading={false}
-        onWorkspaceUpdate={handleWorkspaceUpdate}
-        onWorkspaceDelete={handleWorkspaceDelete}
+      <WorkspaceMembers
+        workspaceId={workspaceId}
+        members={members}
+        loading={loadingMembers}
+        onMembersChange={fetchMembers}
         isOwner={isOwner}
       />
-
       <Integrations
         workspace={workspace}
         loading={false}
         onSave={handleWorkspaceUpdate}
         isOwner={isOwner}
       />
-
-      <WorkspaceMembers
-        workspaceId={workspaceId}
-        members={members}
-        loading={loadingMembers}
-        onMembersChange={fetchMembers}
+      <WorkspaceSettings
+        workspace={workspace}
+        loading={false}
+        onWorkspaceUpdate={handleWorkspaceUpdate}
+        onWorkspaceDelete={handleWorkspaceDelete}
         isOwner={isOwner}
       />
 

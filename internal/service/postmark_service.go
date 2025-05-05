@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -31,14 +32,6 @@ func NewPostmarkService(httpClient domain.HTTPClient, authService domain.AuthSer
 
 // ListWebhooks retrieves all registered webhooks
 func (s *PostmarkService) ListWebhooks(ctx context.Context, config domain.PostmarkConfig) (*domain.PostmarkListWebhooksResponse, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	url := fmt.Sprintf("%s/webhooks", config.APIEndpoint)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -75,14 +68,6 @@ func (s *PostmarkService) ListWebhooks(ctx context.Context, config domain.Postma
 
 // RegisterWebhook registers a new webhook
 func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.PostmarkConfig, webhook domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	url := fmt.Sprintf("%s/webhooks", config.APIEndpoint)
 
@@ -126,14 +111,6 @@ func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.Pos
 
 // UnregisterWebhook removes a webhook by ID
 func (s *PostmarkService) UnregisterWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int) error {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
@@ -166,14 +143,6 @@ func (s *PostmarkService) UnregisterWebhook(ctx context.Context, config domain.P
 
 // GetWebhook retrieves a specific webhook by ID
 func (s *PostmarkService) GetWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int) (*domain.PostmarkWebhookResponse, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
@@ -212,14 +181,6 @@ func (s *PostmarkService) GetWebhook(ctx context.Context, config domain.Postmark
 
 // UpdateWebhook updates an existing webhook
 func (s *PostmarkService) UpdateWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int, webhook domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
@@ -266,14 +227,6 @@ func (s *PostmarkService) UpdateWebhook(ctx context.Context, config domain.Postm
 
 // TestWebhook sends a test event to the webhook
 func (s *PostmarkService) TestWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int, eventType domain.EmailEventType) error {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
@@ -324,4 +277,260 @@ func (s *PostmarkService) TestWebhook(ctx context.Context, config domain.Postmar
 	}
 
 	return nil
+}
+
+// RegisterWebhooks implements the domain.WebhookProvider interface for Postmark
+func (s *PostmarkService) RegisterWebhooks(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	baseURL string,
+	eventTypes []domain.EmailEventType,
+	providerConfig *domain.EmailProvider,
+) (*domain.WebhookRegistrationStatus, error) {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Postmark == nil || providerConfig.Postmark.ServerToken == "" {
+		return nil, fmt.Errorf("Postmark configuration is missing or invalid")
+	}
+
+	// Create Postmark API config
+	apiConfig := domain.PostmarkConfig{
+		APIEndpoint: "https://api.postmarkapp.com",
+		ServerToken: providerConfig.Postmark.ServerToken,
+	}
+
+	// Create webhook URL that includes workspace_id and integration_id
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindPostmark, workspaceID, integrationID)
+
+	// Create triggers for each event type
+	triggers := []domain.PostmarkTriggerRule{}
+
+	// Add triggers for each event type
+	for _, eventType := range eventTypes {
+		var triggerValue string
+		switch eventType {
+		case domain.EmailEventDelivered:
+			triggerValue = "Delivery"
+		case domain.EmailEventBounce:
+			triggerValue = "Bounce"
+		case domain.EmailEventComplaint:
+			triggerValue = "SpamComplaint"
+		default:
+			continue // Skip unsupported event types
+		}
+
+		triggers = append(triggers, domain.PostmarkTriggerRule{
+			Key:   "MessageStream",
+			Match: "Equals",
+			Value: "outbound",
+		})
+
+		triggers = append(triggers, domain.PostmarkTriggerRule{
+			Key:   "RecordType",
+			Match: "Equals",
+			Value: triggerValue,
+		})
+	}
+
+	// First, get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Postmark webhooks: %w", err)
+	}
+
+	// Check if we already have webhooks registered
+	notifuseWebhooks := s.filterPostmarkWebhooks(existingWebhooks.Webhooks, baseURL, workspaceID, integrationID)
+
+	// If we have existing webhooks, unregister them
+	for _, webhook := range notifuseWebhooks {
+		err := s.UnregisterWebhook(ctx, apiConfig, webhook.ID)
+		if err != nil {
+			s.logger.WithField("webhook_id", webhook.ID).
+				Error(fmt.Sprintf("Failed to unregister Postmark webhook: %v", err))
+			// Continue with other webhooks
+		}
+	}
+
+	// Register new webhook
+	webhookConfig := domain.PostmarkWebhookConfig{
+		URL:           webhookURL,
+		MessageStream: "outbound",
+		TriggerRules:  triggers,
+	}
+
+	webhookResponse, err := s.RegisterWebhook(ctx, apiConfig, webhookConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register Postmark webhook: %w", err)
+	}
+
+	// Create webhook status
+	status := &domain.WebhookRegistrationStatus{
+		EmailProviderKind: domain.EmailProviderKindPostmark,
+		IsRegistered:      true,
+		RegisteredEvents:  eventTypes,
+		Endpoints: []domain.WebhookEndpointStatus{
+			{
+				URL:    webhookURL,
+				Active: true,
+			},
+		},
+		ProviderDetails: map[string]interface{}{
+			"webhook_id":     webhookResponse.ID,
+			"integration_id": integrationID,
+			"workspace_id":   workspaceID,
+		},
+	}
+
+	return status, nil
+}
+
+// GetWebhookStatus implements the domain.WebhookProvider interface for Postmark
+func (s *PostmarkService) GetWebhookStatus(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	providerConfig *domain.EmailProvider,
+) (*domain.WebhookRegistrationStatus, error) {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Postmark == nil || providerConfig.Postmark.ServerToken == "" {
+		return nil, fmt.Errorf("Postmark configuration is missing or invalid")
+	}
+
+	// Create Postmark API config
+	apiConfig := domain.PostmarkConfig{
+		APIEndpoint: "https://api.postmarkapp.com",
+		ServerToken: providerConfig.Postmark.ServerToken,
+	}
+
+	// Get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Postmark webhooks: %w", err)
+	}
+
+	// Create webhook status
+	status := &domain.WebhookRegistrationStatus{
+		EmailProviderKind: domain.EmailProviderKindPostmark,
+		IsRegistered:      false,
+		Endpoints:         []domain.WebhookEndpointStatus{},
+		ProviderDetails: map[string]interface{}{
+			"integration_id": integrationID,
+			"workspace_id":   workspaceID,
+		},
+	}
+
+	// Filter webhooks for our integration
+	notifuseWebhooks := s.filterPostmarkWebhooks(existingWebhooks.Webhooks, "", workspaceID, integrationID)
+
+	// Check each webhook in the response
+	for _, webhook := range notifuseWebhooks {
+		status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+			URL:    webhook.URL,
+			Active: true,
+		})
+
+		// Determine registered event types
+		for _, trigger := range webhook.Triggers {
+			if trigger.Key == "RecordType" {
+				var eventType domain.EmailEventType
+				switch trigger.Value {
+				case "Delivery":
+					eventType = domain.EmailEventDelivered
+				case "Bounce":
+					eventType = domain.EmailEventBounce
+				case "SpamComplaint":
+					eventType = domain.EmailEventComplaint
+				default:
+					continue
+				}
+
+				// Add to registered events if not already there
+				found := false
+				for _, registeredEvent := range status.RegisteredEvents {
+					if registeredEvent == eventType {
+						found = true
+						break
+					}
+				}
+				if !found {
+					status.RegisteredEvents = append(status.RegisteredEvents, eventType)
+				}
+			}
+		}
+
+		// Mark as registered if we have any endpoints
+		if len(status.Endpoints) > 0 {
+			status.IsRegistered = true
+			status.ProviderDetails["webhook_id"] = webhook.ID
+		}
+	}
+
+	return status, nil
+}
+
+// UnregisterWebhooks implements the domain.WebhookProvider interface for Postmark
+func (s *PostmarkService) UnregisterWebhooks(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	providerConfig *domain.EmailProvider,
+) error {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Postmark == nil || providerConfig.Postmark.ServerToken == "" {
+		return fmt.Errorf("Postmark configuration is missing or invalid")
+	}
+
+	// Create Postmark API config
+	apiConfig := domain.PostmarkConfig{
+		APIEndpoint: "https://api.postmarkapp.com",
+		ServerToken: providerConfig.Postmark.ServerToken,
+	}
+
+	// Get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return fmt.Errorf("failed to list Postmark webhooks: %w", err)
+	}
+
+	// Find webhooks that contain this integration or workspace ID
+	notifuseWebhooks := s.filterPostmarkWebhooks(existingWebhooks.Webhooks, "", workspaceID, integrationID)
+
+	// Unregister each webhook
+	var lastError error
+	for _, webhook := range notifuseWebhooks {
+		err := s.UnregisterWebhook(ctx, apiConfig, webhook.ID)
+		if err != nil {
+			s.logger.WithField("webhook_id", webhook.ID).
+				Error(fmt.Sprintf("Failed to unregister Postmark webhook: %v", err))
+			lastError = err
+			// Continue with other webhooks even if one fails
+		} else {
+			s.logger.WithField("webhook_id", webhook.ID).
+				Info("Successfully unregistered Postmark webhook")
+		}
+	}
+
+	if lastError != nil {
+		return fmt.Errorf("failed to unregister one or more Postmark webhooks: %w", lastError)
+	}
+
+	return nil
+}
+
+// Helper function to filter Postmark webhooks by base URL and integration ID
+func (s *PostmarkService) filterPostmarkWebhooks(
+	webhooks []domain.PostmarkWebhookResponse,
+	baseURL string,
+	workspaceID string,
+	integrationID string,
+) []domain.PostmarkWebhookResponse {
+	var filtered []domain.PostmarkWebhookResponse
+	for _, webhook := range webhooks {
+		if (baseURL == "" || strings.Contains(webhook.URL, baseURL)) &&
+			strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
+			filtered = append(filtered, webhook)
+		}
+	}
+	return filtered
 }

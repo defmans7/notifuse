@@ -27,6 +27,7 @@ type WorkspaceService struct {
 	listService        domain.ListService
 	contactListService domain.ContactListService
 	templateService    domain.TemplateService
+	webhookRegService  domain.WebhookRegistrationService
 	secretKey          string
 }
 
@@ -42,6 +43,7 @@ func NewWorkspaceService(
 	listService domain.ListService,
 	contactListService domain.ContactListService,
 	templateService domain.TemplateService,
+	webhookRegService domain.WebhookRegistrationService,
 	secretKey string,
 ) *WorkspaceService {
 	return &WorkspaceService{
@@ -56,6 +58,7 @@ func NewWorkspaceService(
 		listService:        listService,
 		contactListService: contactListService,
 		templateService:    templateService,
+		webhookRegService:  webhookRegService,
 		secretKey:          secretKey,
 	}
 }
@@ -893,6 +896,31 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, workspaceID, n
 		return "", err
 	}
 
+	// If this is an email integration, register webhooks
+	if integrationType == domain.IntegrationTypeEmail && s.webhookRegService != nil {
+		// Define the events to register
+		eventTypes := []domain.EmailEventType{
+			domain.EmailEventDelivered,
+			domain.EmailEventBounce,
+			domain.EmailEventComplaint,
+		}
+
+		// Create webhook config
+		webhookConfig := &domain.WebhookRegistrationConfig{
+			IntegrationID: integrationID,
+			EventTypes:    eventTypes,
+		}
+
+		// Try to register webhooks, but don't fail the integration creation if it fails
+		_, err := s.webhookRegService.RegisterWebhooks(ctx, workspaceID, webhookConfig)
+		if err != nil {
+			s.logger.WithField("workspace_id", workspaceID).
+				WithField("integration_id", integrationID).
+				WithField("error", err.Error()).
+				Warn("Failed to register webhooks for new integration, but integration was created successfully")
+		}
+	}
+
 	return integrationID, nil
 }
 
@@ -983,6 +1011,40 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 	if err != nil {
 		s.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Error("Failed to get workspace")
 		return err
+	}
+
+	// Find the integration to get its type before removal
+	integration := workspace.GetIntegrationByID(integrationID)
+	if integration == nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).Error("Integration not found")
+		return fmt.Errorf("integration not found")
+	}
+
+	// Before removing the integration, attempt to unregister webhooks for email integrations
+	if integration.Type == domain.IntegrationTypeEmail && s.webhookRegService != nil {
+		// Try to get webhook status to check what's registered
+		status, err := s.webhookRegService.GetWebhookStatus(ctx, workspaceID, integrationID)
+		if err != nil {
+			// Just log the error, don't prevent deletion
+			s.logger.WithField("workspace_id", workspaceID).
+				WithField("integration_id", integrationID).
+				WithField("error", err.Error()).
+				Warn("Failed to get webhook status during integration deletion")
+		} else if status != nil && status.IsRegistered {
+			// Log that we're removing webhooks
+			s.logger.WithField("workspace_id", workspaceID).
+				WithField("integration_id", integrationID).
+				Info("Unregistering webhooks for integration that is being deleted")
+
+			// Use the dedicated method to unregister webhooks
+			err := s.webhookRegService.UnregisterWebhooks(ctx, workspaceID, integrationID)
+			if err != nil {
+				s.logger.WithField("workspace_id", workspaceID).
+					WithField("integration_id", integrationID).
+					WithField("error", err.Error()).
+					Warn("Failed to unregister webhooks during integration deletion, continuing with deletion anyway")
+			}
+		}
 	}
 
 	// Attempt to remove the integration

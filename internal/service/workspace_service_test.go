@@ -31,8 +31,23 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
 
 	ctx := context.Background()
 	user := &domain.User{ID: "test-user"}
@@ -112,7 +127,23 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -198,7 +229,23 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -461,7 +508,23 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -494,15 +557,27 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			},
 		}
 
+		existingWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Original Workspace Name",
+			Settings: domain.WorkspaceSettings{
+				WebsiteURL: "https://old-example.com",
+			},
+			CreatedAt: time.Now().Add(-24 * time.Hour), // Created a day ago
+			UpdatedAt: time.Now().Add(-24 * time.Hour),
+		}
+
 		expectedWorkspace := &domain.Workspace{
 			ID:        workspaceID,
 			Name:      "Updated Workspace",
 			Settings:  settings,
+			CreatedAt: existingWorkspace.CreatedAt,
 			UpdatedAt: time.Now(),
 		}
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existingWorkspace, nil)
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
 
 		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
@@ -607,7 +682,23 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -671,7 +762,23 @@ func TestWorkspaceService_CreateIntegration(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -722,6 +829,26 @@ func TestWorkspaceService_CreateIntegration(t *testing.T) {
 			require.Equal(t, domain.EmailProviderKindSMTP, workspace.Integrations[0].EmailProvider.Kind)
 			return nil
 		})
+
+		// Expect webhook registration call for email integration
+		mockConfig.APIEndpoint = "https://api.example.com"
+		// Webhook config is provided for reference only, we use gomock.Any() since ID is random
+		_ = &domain.WebhookRegistrationConfig{
+			IntegrationID: "integration123", // This will be a random UUID, so use Any matcher
+			EventTypes: []domain.EmailEventType{
+				domain.EmailEventDelivered,
+				domain.EmailEventBounce,
+				domain.EmailEventComplaint,
+			},
+		}
+		mockWebhookRegService.EXPECT().RegisterWebhooks(
+			ctx,
+			workspaceID,
+			gomock.Any(), // Use Any for the config since integrationID is random
+		).Return(&domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSMTP,
+			IsRegistered:      true,
+		}, nil)
 
 		integrationID, err := service.CreateIntegration(ctx, workspaceID, integrationName, domain.IntegrationTypeEmail, provider)
 		require.NoError(t, err)
@@ -813,7 +940,23 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -959,11 +1102,29 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockContactListService := mocks.NewMockContactListService(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	service := NewWorkspaceService(mockRepo, mockUserRepo, mockLogger, mockUserService, mockAuthService, mockMailer, mockConfig, mockContactService, mockListService, mockContactListService, mockTemplateService, "secret_key")
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 
-	// Setup common logger expectations
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
+
+	// Set up mockLogger to allow any calls
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
 	workspaceID := "testworkspace"
@@ -1012,6 +1173,23 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+
+		// Expect webhook status check
+		webhookStatus := &domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSMTP,
+			IsRegistered:      true,
+			Endpoints: []domain.WebhookEndpointStatus{
+				{
+					URL:    "https://api.example.com/webhooks",
+					Active: true,
+				},
+			},
+		}
+		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, integrationID).Return(webhookStatus, nil)
+
+		// Expect webhook unregistration
+		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, integrationID).Return(nil)
+
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
 			// Verify the integration was removed from the workspace
 			require.Empty(t, workspace.Integrations)
@@ -1070,6 +1248,70 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		require.Contains(t, err.Error(), "integration not found")
 	})
 
+	t.Run("webhook unregistration error", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with an existing integration
+		existingIntegration := domain.Integration{
+			ID:   integrationID,
+			Name: "SMTP Integration",
+			Type: domain.IntegrationTypeEmail,
+			EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP,
+				SMTP: &domain.SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "smtp_user",
+					Password: "smtp_password",
+					UseTLS:   true,
+				},
+			},
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: []domain.Integration{existingIntegration},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+
+		// Expect webhook status check
+		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, integrationID).Return(&domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSMTP,
+			IsRegistered:      true,
+			Endpoints: []domain.WebhookEndpointStatus{
+				{
+					URL:    "https://api.example.com/webhooks",
+					Active: true,
+				},
+			},
+		}, nil)
+
+		// Skip logger checks
+
+		// The unregistration fails
+		webhookError := errors.New("failed to unregister webhooks")
+		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, integrationID).Return(webhookError)
+
+		// Skip logger checks
+
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
+
+		err := service.DeleteIntegration(ctx, workspaceID, integrationID)
+		require.NoError(t, err) // Should still succeed despite webhook unregistration error
+	})
+
 	t.Run("removes marketing reference", func(t *testing.T) {
 		expectedUser := &domain.User{
 			ID: userID,
@@ -1103,6 +1345,13 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+
+		// Expect webhook status check
+		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, integrationID).Return(&domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSMTP,
+			IsRegistered:      false, // Not registered
+		}, nil)
+
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
 			// Verify the reference was removed from settings
 			require.Empty(t, workspace.Settings.MarketingEmailProviderID)

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -31,14 +32,6 @@ func NewMailjetService(httpClient domain.HTTPClient, authService domain.AuthServ
 
 // ListWebhooks retrieves all registered webhooks
 func (s *MailjetService) ListWebhooks(ctx context.Context, config domain.MailjetConfig) (*domain.MailjetWebhookResponse, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Construct the API URL
 	baseURL := config.BaseURL
@@ -82,14 +75,6 @@ func (s *MailjetService) ListWebhooks(ctx context.Context, config domain.Mailjet
 
 // CreateWebhook creates a new webhook
 func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.MailjetConfig, webhook domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Construct the API URL
 	baseURL := config.BaseURL
@@ -142,14 +127,6 @@ func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.Mailje
 
 // GetWebhook retrieves a webhook by ID
 func (s *MailjetService) GetWebhook(ctx context.Context, config domain.MailjetConfig, webhookID int64) (*domain.MailjetWebhook, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Construct the API URL
 	baseURL := config.BaseURL
@@ -199,14 +176,6 @@ func (s *MailjetService) GetWebhook(ctx context.Context, config domain.MailjetCo
 
 // UpdateWebhook updates an existing webhook
 func (s *MailjetService) UpdateWebhook(ctx context.Context, config domain.MailjetConfig, webhookID int64, webhook domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Ensure the webhook ID in the URL matches the one in the body
 	webhook.ID = webhookID
@@ -262,14 +231,6 @@ func (s *MailjetService) UpdateWebhook(ctx context.Context, config domain.Mailje
 
 // DeleteWebhook deletes a webhook by ID
 func (s *MailjetService) DeleteWebhook(ctx context.Context, config domain.MailjetConfig, webhookID int64) error {
-	// For this API functionality, we're not tied to a specific workspace
-	// But we still need to authenticate the user to ensure proper access control
-	// We'll use a placeholder workspace ID
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Log webhook ID for debugging
 	webhookIDStr := strconv.FormatInt(webhookID, 10)
@@ -303,6 +264,230 @@ func (s *MailjetService) DeleteWebhook(ctx context.Context, config domain.Mailje
 		body, _ := io.ReadAll(resp.Body)
 		s.logger.Error(fmt.Sprintf("Mailjet API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
 		return fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RegisterWebhooks implements the domain.WebhookProvider interface for Mailjet
+func (s *MailjetService) RegisterWebhooks(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	baseURL string,
+	eventTypes []domain.EmailEventType,
+	providerConfig *domain.EmailProvider,
+) (*domain.WebhookRegistrationStatus, error) {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Mailjet == nil ||
+		providerConfig.Mailjet.APIKey == "" || providerConfig.Mailjet.SecretKey == "" {
+		return nil, fmt.Errorf("Mailjet configuration is missing or invalid")
+	}
+
+	// Create Mailjet API config
+	apiConfig := domain.MailjetConfig{
+		APIKey:    providerConfig.Mailjet.APIKey,
+		SecretKey: providerConfig.Mailjet.SecretKey,
+		BaseURL:   "https://api.mailjet.com/v3",
+	}
+
+	// Create webhook URL that includes workspace_id and integration_id
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindMailjet, workspaceID, integrationID)
+
+	// Map our event types to Mailjet event types
+	var registeredEvents []domain.EmailEventType
+	var mailjetEvents []domain.MailjetWebhookEventType
+
+	for _, eventType := range eventTypes {
+		switch eventType {
+		case domain.EmailEventDelivered:
+			mailjetEvents = append(mailjetEvents, domain.MailjetEventSent)
+			registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
+		case domain.EmailEventBounce:
+			mailjetEvents = append(mailjetEvents, domain.MailjetEventBounce)
+			mailjetEvents = append(mailjetEvents, domain.MailjetEventBlocked)
+			registeredEvents = append(registeredEvents, domain.EmailEventBounce)
+		case domain.EmailEventComplaint:
+			mailjetEvents = append(mailjetEvents, domain.MailjetEventSpam)
+			registeredEvents = append(registeredEvents, domain.EmailEventComplaint)
+		}
+	}
+
+	// First, get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Mailjet webhooks: %w", err)
+	}
+
+	// Check for existing webhooks that match our criteria
+	var notifuseWebhooks []domain.MailjetWebhook
+	for _, webhook := range existingWebhooks.Data {
+		if strings.Contains(webhook.Endpoint, baseURL) &&
+			strings.Contains(webhook.Endpoint, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+			strings.Contains(webhook.Endpoint, fmt.Sprintf("integration_id=%s", integrationID)) {
+			notifuseWebhooks = append(notifuseWebhooks, webhook)
+		}
+	}
+
+	// Delete existing webhooks
+	for _, webhook := range notifuseWebhooks {
+		err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+		if err != nil {
+			s.logger.WithField("webhook_id", webhook.ID).
+				Error(fmt.Sprintf("Failed to delete Mailjet webhook: %v", err))
+			// Continue with other webhooks even if one fails
+		}
+	}
+
+	// Create a new webhook
+	// Mailjet allows us to create a single webhook for multiple event types
+	webhookConfig := domain.MailjetWebhook{
+		Endpoint:  webhookURL,
+		EventType: string(mailjetEvents[0]), // The primary event type
+		Status:    "active",
+	}
+
+	webhook, err := s.CreateWebhook(ctx, apiConfig, webhookConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Mailjet webhook: %w", err)
+	}
+
+	// Create webhook registration status
+	status := &domain.WebhookRegistrationStatus{
+		EmailProviderKind: domain.EmailProviderKindMailjet,
+		IsRegistered:      true,
+		RegisteredEvents:  registeredEvents,
+		Endpoints: []domain.WebhookEndpointStatus{
+			{
+				URL:    webhookURL,
+				Active: webhook.Status == "active",
+			},
+		},
+		ProviderDetails: map[string]interface{}{
+			"webhook_id":     webhook.ID,
+			"integration_id": integrationID,
+			"workspace_id":   workspaceID,
+		},
+	}
+
+	return status, nil
+}
+
+// GetWebhookStatus implements the domain.WebhookProvider interface for Mailjet
+func (s *MailjetService) GetWebhookStatus(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	providerConfig *domain.EmailProvider,
+) (*domain.WebhookRegistrationStatus, error) {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Mailjet == nil ||
+		providerConfig.Mailjet.APIKey == "" || providerConfig.Mailjet.SecretKey == "" {
+		return nil, fmt.Errorf("Mailjet configuration is missing or invalid")
+	}
+
+	// Create Mailjet API config
+	apiConfig := domain.MailjetConfig{
+		APIKey:    providerConfig.Mailjet.APIKey,
+		SecretKey: providerConfig.Mailjet.SecretKey,
+		BaseURL:   "https://api.mailjet.com/v3",
+	}
+
+	// Create webhook status response
+	status := &domain.WebhookRegistrationStatus{
+		EmailProviderKind: domain.EmailProviderKindMailjet,
+		IsRegistered:      false,
+		Endpoints:         []domain.WebhookEndpointStatus{},
+		ProviderDetails: map[string]interface{}{
+			"integration_id": integrationID,
+			"workspace_id":   workspaceID,
+		},
+	}
+
+	// Get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Mailjet webhooks: %w", err)
+	}
+
+	// Look for webhooks that match our integration
+	for _, webhook := range existingWebhooks.Data {
+		if strings.Contains(webhook.Endpoint, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+			strings.Contains(webhook.Endpoint, fmt.Sprintf("integration_id=%s", integrationID)) {
+
+			status.IsRegistered = true
+			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+				URL:    webhook.Endpoint,
+				Active: webhook.Status == "active",
+			})
+
+			// Map event types based on webhook.EventType
+			var registeredEvents []domain.EmailEventType
+			switch domain.MailjetWebhookEventType(webhook.EventType) {
+			case domain.MailjetEventSent:
+				registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
+			case domain.MailjetEventBounce, domain.MailjetEventBlocked:
+				registeredEvents = append(registeredEvents, domain.EmailEventBounce)
+			case domain.MailjetEventSpam:
+				registeredEvents = append(registeredEvents, domain.EmailEventComplaint)
+			}
+
+			status.RegisteredEvents = registeredEvents
+			status.ProviderDetails["webhook_id"] = webhook.ID
+			break
+		}
+	}
+
+	return status, nil
+}
+
+// UnregisterWebhooks implements the domain.WebhookProvider interface for Mailjet
+func (s *MailjetService) UnregisterWebhooks(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	providerConfig *domain.EmailProvider,
+) error {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Mailjet == nil ||
+		providerConfig.Mailjet.APIKey == "" || providerConfig.Mailjet.SecretKey == "" {
+		return fmt.Errorf("Mailjet configuration is missing or invalid")
+	}
+
+	// Create Mailjet API config
+	apiConfig := domain.MailjetConfig{
+		APIKey:    providerConfig.Mailjet.APIKey,
+		SecretKey: providerConfig.Mailjet.SecretKey,
+		BaseURL:   "https://api.mailjet.com/v3",
+	}
+
+	// Get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return fmt.Errorf("failed to list Mailjet webhooks: %w", err)
+	}
+
+	// Delete webhooks that match our criteria
+	var lastError error
+	for _, webhook := range existingWebhooks.Data {
+		if strings.Contains(webhook.Endpoint, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+			strings.Contains(webhook.Endpoint, fmt.Sprintf("integration_id=%s", integrationID)) {
+
+			err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+			if err != nil {
+				s.logger.WithField("webhook_id", webhook.ID).
+					Error(fmt.Sprintf("Failed to delete Mailjet webhook: %v", err))
+				lastError = err
+				// Continue deleting other webhooks even if one fails
+			} else {
+				s.logger.WithField("webhook_id", webhook.ID).
+					Info("Successfully deleted Mailjet webhook")
+			}
+		}
+	}
+
+	if lastError != nil {
+		return fmt.Errorf("failed to delete one or more Mailjet webhooks: %w", lastError)
 	}
 
 	return nil

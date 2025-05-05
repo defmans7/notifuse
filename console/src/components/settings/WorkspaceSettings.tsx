@@ -5,6 +5,7 @@ import { workspaceService } from '../../services/api/workspace'
 import { useNavigate } from '@tanstack/react-router'
 import { Section } from './Section'
 import { TimezonesFormOptions } from '../utils/countries_timezones'
+import { LogoInput } from './LogoInput'
 
 const { Option } = Select
 
@@ -27,6 +28,7 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
     form.setFieldsValue({
       name: workspace?.name || '',
       website_url: workspace?.settings.website_url || '',
+      logo_url: workspace?.settings.logo_url || '',
       timezone: workspace?.settings.timezone || 'UTC'
     })
     setFormTouched(false)
@@ -38,11 +40,12 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
     setSavingSettings(true)
     try {
       await workspaceService.update({
-        id: workspace.id,
+        ...workspace,
         name: values.name,
         settings: {
+          ...workspace.settings,
           website_url: values.website_url,
-          logo_url: workspace?.settings.logo_url || null,
+          logo_url: values.logo_url || null,
           cover_url: workspace?.settings.cover_url || null,
           timezone: values.timezone
         }
@@ -92,6 +95,8 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
           >
             <Input placeholder="https://example.com" />
           </Form.Item>
+
+          <LogoInput />
 
           <Form.Item
             name="timezone"

@@ -20,9 +20,7 @@ import {
   UpdateIntegrationRequest,
   UpdateIntegrationResponse,
   DeleteIntegrationRequest,
-  DeleteIntegrationResponse,
-  TestEmailProviderRequest,
-  TestEmailProviderResponse
+  DeleteIntegrationResponse
 } from './types'
 
 interface DetectFaviconResponse {

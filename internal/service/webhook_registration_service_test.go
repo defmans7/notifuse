@@ -28,7 +28,6 @@ func (s *ExampleService) RegisterWebhooks(ctx context.Context, req *domain.Regis
 	}
 
 	config := &domain.WebhookRegistrationConfig{
-		BaseURL:       req.BaseURL,
 		IntegrationID: req.IntegrationID,
 		EventTypes:    req.EventTypes,
 	}
@@ -55,7 +54,6 @@ func TestExampleService_RegisterWebhooks(t *testing.T) {
 	req := &domain.RegisterWebhookRequest{
 		WorkspaceID:   "ws-123",
 		IntegrationID: "int-123",
-		BaseURL:       "https://example.com/webhooks",
 		EventTypes: []domain.EmailEventType{
 			domain.EmailEventDelivered,
 			domain.EmailEventBounce,
@@ -63,7 +61,6 @@ func TestExampleService_RegisterWebhooks(t *testing.T) {
 	}
 
 	expectedConfig := &domain.WebhookRegistrationConfig{
-		BaseURL:       req.BaseURL,
 		IntegrationID: req.IntegrationID,
 		EventTypes:    req.EventTypes,
 	}
@@ -77,7 +74,6 @@ func TestExampleService_RegisterWebhooks(t *testing.T) {
 	mockWebhookService.EXPECT().
 		RegisterWebhooks(ctx, req.WorkspaceID, gomock.Any()).
 		Do(func(_ context.Context, _ string, config *domain.WebhookRegistrationConfig) {
-			assert.Equal(t, expectedConfig.BaseURL, config.BaseURL)
 			assert.Equal(t, expectedConfig.IntegrationID, config.IntegrationID)
 			assert.Equal(t, expectedConfig.EventTypes, config.EventTypes)
 		}).
@@ -99,7 +95,6 @@ func TestExampleService_RegisterWebhooks_ValidationError(t *testing.T) {
 	req := &domain.RegisterWebhookRequest{
 		// Missing WorkspaceID
 		IntegrationID: "int-123",
-		BaseURL:       "https://example.com/webhooks",
 	}
 
 	// The mock should not be called because validation should fail
@@ -120,7 +115,6 @@ func TestExampleService_RegisterWebhooks_ServiceError(t *testing.T) {
 	req := &domain.RegisterWebhookRequest{
 		WorkspaceID:   "ws-123",
 		IntegrationID: "int-123",
-		BaseURL:       "https://example.com/webhooks",
 		EventTypes: []domain.EmailEventType{
 			domain.EmailEventDelivered,
 		},

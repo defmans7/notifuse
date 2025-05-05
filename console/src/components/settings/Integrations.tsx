@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Form,
   Input,
@@ -15,7 +15,9 @@ import {
   Drawer,
   Dropdown,
   Popconfirm,
-  Card
+  Card,
+  Spin,
+  Tooltip
 } from 'antd'
 import {
   EmailProvider,
@@ -32,6 +34,12 @@ import { emailService } from '../../services/api/email'
 import { Section } from './Section'
 import { faChevronDown, faEnvelope } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  getWebhookStatus,
+  registerWebhook,
+  WebhookRegistrationStatus
+} from '../../services/api/webhook_registration'
+import config from '../../config'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = ['postmark', 'mailgun']
@@ -56,7 +64,7 @@ interface EmailIntegrationProps {
   }
   isOwner: boolean
   workspace: Workspace
-  getIntegrationPurpose: (id: string) => string
+  getIntegrationPurpose: (id: string) => string[]
   isIntegrationInUse: (id: string) => boolean
   renderProviderIcon: (providerKind: EmailProviderKind, height?: number) => React.ReactNode
   renderProviderSpecificDetails: (provider: EmailProvider) => React.ReactNode
@@ -81,7 +89,146 @@ const EmailIntegration = ({
   deleteIntegration
 }: EmailIntegrationProps) => {
   const provider = integration.email_provider
-  const purpose = getIntegrationPurpose(integration.id)
+  const purposes = getIntegrationPurpose(integration.id)
+  const [webhookStatus, setWebhookStatus] = useState<WebhookRegistrationStatus | null>(null)
+  const [loadingWebhooks, setLoadingWebhooks] = useState(false)
+  const [registrationInProgress, setRegistrationInProgress] = useState(false)
+
+  // Fetch webhook status when component mounts
+  useEffect(() => {
+    if (workspace?.id && integration?.id) {
+      fetchWebhookStatus()
+    }
+  }, [workspace?.id, integration?.id])
+
+  // Function to fetch webhook status
+  const fetchWebhookStatus = async () => {
+    if (!workspace?.id || !integration?.id) return
+
+    setLoadingWebhooks(true)
+    try {
+      const response = await getWebhookStatus({
+        workspace_id: workspace.id,
+        integration_id: integration.id
+      })
+
+      setWebhookStatus(response.status)
+    } catch (error) {
+      console.error('Failed to fetch webhook status:', error)
+    } finally {
+      setLoadingWebhooks(false)
+    }
+  }
+
+  // Function to register webhooks
+  const handleRegisterWebhooks = async () => {
+    if (!workspace?.id || !integration?.id) return
+
+    setRegistrationInProgress(true)
+    try {
+      await registerWebhook({
+        workspace_id: workspace.id,
+        integration_id: integration.id,
+        base_url: config.API_ENDPOINT
+      })
+
+      // Refresh webhook status after registration
+      await fetchWebhookStatus()
+      message.success('Webhooks registered successfully')
+    } catch (error) {
+      console.error('Failed to register webhooks:', error)
+      message.error('Failed to register webhooks')
+    } finally {
+      setRegistrationInProgress(false)
+    }
+  }
+
+  // Render webhook status
+  const renderWebhookStatus = () => {
+    if (loadingWebhooks) {
+      return (
+        <Descriptions.Item label="Webhooks">
+          <Spin size="small" /> Loading webhook status...
+        </Descriptions.Item>
+      )
+    }
+
+    if (!webhookStatus) {
+      return (
+        <Descriptions.Item label="Webhooks">
+          <Tag color="orange">Not configured</Tag>
+          {isOwner && (
+            <Button
+              size="small"
+              className="ml-2"
+              type="primary"
+              onClick={handleRegisterWebhooks}
+              loading={registrationInProgress}
+            >
+              Register Webhooks
+            </Button>
+          )}
+        </Descriptions.Item>
+      )
+    }
+
+    return (
+      <Descriptions.Item label="Webhooks">
+        <div>
+          <div className="mb-2">
+            <Tag color={webhookStatus.is_registered ? 'green' : 'red'}>
+              {webhookStatus.is_registered ? 'Active' : 'Not registered'}
+            </Tag>
+            {isOwner && (
+              <Button
+                size="small"
+                className="ml-2"
+                type={webhookStatus.is_registered ? undefined : 'primary'}
+                onClick={handleRegisterWebhooks}
+                loading={registrationInProgress}
+              >
+                {webhookStatus.is_registered ? 'Re-register' : 'Register Webhooks'}
+              </Button>
+            )}
+          </div>
+
+          {webhookStatus.is_registered &&
+            webhookStatus.registered_events &&
+            webhookStatus.registered_events.length > 0 && (
+              <div className="mb-2">
+                <div className="text-sm text-gray-500 mb-1">Registered event types:</div>
+                <Space wrap>
+                  {webhookStatus.registered_events.map((event) => (
+                    <Tag key={event} color="blue">
+                      {event.charAt(0).toUpperCase() + event.slice(1)}
+                    </Tag>
+                  ))}
+                </Space>
+              </div>
+            )}
+
+          {webhookStatus.endpoints && webhookStatus.endpoints.length > 0 && (
+            <div>
+              <div className="text-sm text-gray-500 mb-1">Webhook endpoints:</div>
+              {webhookStatus.endpoints.map((endpoint, index) => (
+                <div key={index} className="mb-1">
+                  <Tooltip title={endpoint.url}>
+                    <Tag color={endpoint.active ? 'green' : 'orange'}>
+                      {endpoint.event_type} {endpoint.active ? '✅' : '⚠️'}
+                    </Tag>
+                  </Tooltip>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {webhookStatus.error && (
+            <Alert message={webhookStatus.error} type="error" showIcon className="mt-2" />
+          )}
+        </div>
+      </Descriptions.Item>
+    )
+  }
 
   return (
     <Card
@@ -120,13 +267,19 @@ const EmailIntegration = ({
         <Descriptions.Item label="Used for">
           <Space>
             {isIntegrationInUse(integration.id) ? (
-              <Tag color={purpose === 'Marketing Emails' ? 'blue' : 'green'}>{purpose}</Tag>
+              <>
+                {purposes.includes('Marketing Emails') && <Tag color="blue">Marketing Emails</Tag>}
+                {purposes.includes('Transactional Emails') && (
+                  <Tag color="green">Transactional Emails</Tag>
+                )}
+                {purposes.length === 0 && <Tag color="red">Not assigned</Tag>}
+              </>
             ) : (
-              'Not assigned'
+              <Tag color="red">Not assigned</Tag>
             )}
             {isOwner && (
               <>
-                {purpose !== 'Marketing Emails' &&
+                {!purposes.includes('Marketing Emails') &&
                   !transactionalEmailOnly.includes(provider.kind) && (
                     <Popconfirm
                       title="Set as marketing email provider?"
@@ -146,7 +299,7 @@ const EmailIntegration = ({
                       </Button>
                     </Popconfirm>
                   )}
-                {purpose !== 'Transactional Emails' && (
+                {!purposes.includes('Transactional Emails') && (
                   <Popconfirm
                     title="Set as transactional email provider?"
                     description="All transactional emails (notifications, password resets, etc.) will be sent through this provider from now on."
@@ -170,6 +323,7 @@ const EmailIntegration = ({
           </Space>
         </Descriptions.Item>
         {renderProviderSpecificDetails(provider)}
+        {renderWebhookStatus()}
       </Descriptions>
     </Card>
   )
@@ -250,14 +404,18 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   }
 
   // Get purpose of integration
-  const getIntegrationPurpose = (id: string): string => {
+  const getIntegrationPurpose = (id: string): string[] => {
+    const purposes: string[] = []
+
     if (workspace.settings.marketing_email_provider_id === id) {
-      return 'Marketing Emails'
+      purposes.push('Marketing Emails')
     }
+
     if (workspace.settings.transactional_email_provider_id === id) {
-      return 'Transactional Emails'
+      purposes.push('Transactional Emails')
     }
-    return 'Not assigned'
+
+    return purposes
   }
 
   // Set integration as default for a purpose

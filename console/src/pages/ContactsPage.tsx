@@ -476,7 +476,17 @@ export function ContactsPage() {
       hidden: !visibleColumns.lists
     },
     {
-      title: '',
+      title: (
+        <>
+          <ContactColumnsSelector
+            columns={allColumns.map((col) => ({
+              ...col,
+              visible: visibleColumns[col.key]
+            }))}
+            onColumnVisibilityChange={handleColumnVisibilityChange}
+          />
+        </>
+      ),
       key: 'actions',
       width: 50,
       fixed: 'right' as const,
@@ -527,13 +537,6 @@ export function ContactsPage() {
 
       <div className="flex justify-between items-center mb-6">
         <Filter fields={filterFields} activeFilters={activeFilters} />
-        <ContactColumnsSelector
-          columns={allColumns.map((col) => ({
-            ...col,
-            visible: visibleColumns[col.key]
-          }))}
-          onColumnVisibilityChange={handleColumnVisibilityChange}
-        />
       </div>
 
       <Table

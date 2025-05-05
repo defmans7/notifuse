@@ -288,6 +288,18 @@ func (a *App) InitServices() error {
 		a.logger,
 	)
 
+	// Initialize http client
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	// Initialize email provider services
+	a.postmarkService = service.NewPostmarkService(httpClient, a.authService, a.logger)
+	a.mailgunService = service.NewMailgunService(httpClient, a.authService, a.logger)
+	a.mailjetService = service.NewMailjetService(httpClient, a.authService, a.logger)
+	a.sparkPostService = service.NewSparkPostService(httpClient, a.authService, a.logger)
+	a.sesService = service.NewSESService(a.authService, a.logger)
+
 	// Initialize email service
 	a.emailService = service.NewEmailService(
 		a.logger,
@@ -296,6 +308,22 @@ func (a *App) InitServices() error {
 		a.workspaceRepo,
 		a.templateRepo,
 		a.templateService,
+	)
+
+	// Set HTTP client for email service
+	a.emailService.SetHTTPClient(httpClient)
+
+	// Initialize webhook registration service
+	a.webhookRegistrationService = service.NewWebhookRegistrationService(
+		a.workspaceRepo,
+		a.authService,
+		a.postmarkService,
+		a.mailgunService,
+		a.mailjetService,
+		a.sparkPostService,
+		a.sesService,
+		a.logger,
+		a.config.APIEndpoint,
 	)
 
 	// Initialize workspace service
@@ -311,6 +339,7 @@ func (a *App) InitServices() error {
 		a.listService,
 		a.contactListService,
 		a.templateService,
+		a.webhookRegistrationService,
 		a.config.Security.SecretKey,
 	)
 
@@ -324,29 +353,6 @@ func (a *App) InitServices() error {
 		a.templateService,
 		a.contactService,
 		a.emailService,
-		a.logger,
-	)
-
-	// initialize http client
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	a.postmarkService = service.NewPostmarkService(httpClient, a.authService, a.logger)
-	a.mailgunService = service.NewMailgunService(httpClient, a.authService, a.logger)
-	a.mailjetService = service.NewMailjetService(httpClient, a.authService, a.logger)
-	a.sparkPostService = service.NewSparkPostService(httpClient, a.authService, a.logger)
-	a.sesService = service.NewSESService(a.authService, a.logger)
-
-	// Initialize webhook registration service
-	a.webhookRegistrationService = service.NewWebhookRegistrationService(
-		a.workspaceRepo,
-		a.authService,
-		a.postmarkService,
-		a.mailgunService,
-		a.mailjetService,
-		a.sparkPostService,
-		a.sesService,
 		a.logger,
 	)
 

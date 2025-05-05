@@ -18,7 +18,6 @@ func TestRegisterWebhookRequest_Validate(t *testing.T) {
 			request: RegisterWebhookRequest{
 				WorkspaceID:   "ws-123",
 				IntegrationID: "int-123",
-				BaseURL:       "https://example.com/webhooks",
 				EventTypes: []EmailEventType{
 					EmailEventDelivered,
 					EmailEventBounce,
@@ -31,7 +30,6 @@ func TestRegisterWebhookRequest_Validate(t *testing.T) {
 			request: RegisterWebhookRequest{
 				WorkspaceID:   "ws-123",
 				IntegrationID: "int-123",
-				BaseURL:       "https://example.com/webhooks",
 			},
 			wantErr: false,
 		},
@@ -39,7 +37,6 @@ func TestRegisterWebhookRequest_Validate(t *testing.T) {
 			name: "Missing workspace ID",
 			request: RegisterWebhookRequest{
 				IntegrationID: "int-123",
-				BaseURL:       "https://example.com/webhooks",
 				EventTypes:    []EmailEventType{EmailEventDelivered},
 			},
 			wantErr: true,
@@ -49,21 +46,10 @@ func TestRegisterWebhookRequest_Validate(t *testing.T) {
 			name: "Missing integration ID",
 			request: RegisterWebhookRequest{
 				WorkspaceID: "ws-123",
-				BaseURL:     "https://example.com/webhooks",
 				EventTypes:  []EmailEventType{EmailEventDelivered},
 			},
 			wantErr: true,
 			errMsg:  "integration_id is required",
-		},
-		{
-			name: "Missing base URL",
-			request: RegisterWebhookRequest{
-				WorkspaceID:   "ws-123",
-				IntegrationID: "int-123",
-				EventTypes:    []EmailEventType{EmailEventDelivered},
-			},
-			wantErr: true,
-			errMsg:  "base_url is required",
 		},
 	}
 
@@ -183,7 +169,6 @@ func TestWebhookRegistrationStatus(t *testing.T) {
 
 func TestWebhookRegistrationConfig(t *testing.T) {
 	config := &WebhookRegistrationConfig{
-		BaseURL:       "https://example.com/webhooks",
 		IntegrationID: "int-123",
 		EventTypes: []EmailEventType{
 			EmailEventDelivered,
@@ -192,7 +177,6 @@ func TestWebhookRegistrationConfig(t *testing.T) {
 	}
 
 	// Basic structure verification
-	assert.Equal(t, "https://example.com/webhooks", config.BaseURL)
 	assert.Equal(t, "int-123", config.IntegrationID)
 	assert.Len(t, config.EventTypes, 2)
 	assert.Contains(t, config.EventTypes, EmailEventDelivered)

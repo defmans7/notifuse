@@ -281,7 +281,7 @@ export function TransactionalNotificationsPage() {
         {currentWorkspace && hasNotifications && (
           <UpsertTransactionalNotificationDrawer
             workspace={currentWorkspace}
-            buttonContent={'New Notification'}
+            buttonContent={'Create Notification'}
             buttonProps={{ type: 'primary' }}
           />
         )}

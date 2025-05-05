@@ -31,13 +31,6 @@ func NewMailgunService(httpClient domain.HTTPClient, authService domain.AuthServ
 
 // ListWebhooks retrieves all registered webhooks for a domain
 func (s *MailgunService) ListWebhooks(ctx context.Context, config domain.MailgunConfig) (*domain.MailgunWebhookListResponse, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// We'll use a placeholder workspace ID for authentication
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Construct the API URL
 	baseURL := config.BaseURL
@@ -108,13 +101,6 @@ func (s *MailgunService) ListWebhooks(ctx context.Context, config domain.Mailgun
 
 // CreateWebhook creates a new webhook
 func (s *MailgunService) CreateWebhook(ctx context.Context, config domain.MailgunConfig, webhook domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// We'll use a placeholder workspace ID for authentication
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	if len(webhook.Events) == 0 {
 		return nil, fmt.Errorf("at least one event type is required")
@@ -189,13 +175,6 @@ func (s *MailgunService) CreateWebhook(ctx context.Context, config domain.Mailgu
 
 // GetWebhook retrieves a webhook by ID
 func (s *MailgunService) GetWebhook(ctx context.Context, config domain.MailgunConfig, webhookID string) (*domain.MailgunWebhook, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// We'll use a placeholder workspace ID for authentication
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Construct the API URL
 	baseURL := config.BaseURL
@@ -258,13 +237,6 @@ func (s *MailgunService) GetWebhook(ctx context.Context, config domain.MailgunCo
 
 // UpdateWebhook updates an existing webhook
 func (s *MailgunService) UpdateWebhook(ctx context.Context, config domain.MailgunConfig, webhookID string, webhook domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
-	// For this API functionality, we're not tied to a specific workspace
-	// We'll use a placeholder workspace ID for authentication
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Construct the API URL
 	baseURL := config.BaseURL
@@ -330,13 +302,6 @@ func (s *MailgunService) UpdateWebhook(ctx context.Context, config domain.Mailgu
 
 // DeleteWebhook deletes a webhook by ID
 func (s *MailgunService) DeleteWebhook(ctx context.Context, config domain.MailgunConfig, webhookID string) error {
-	// For this API functionality, we're not tied to a specific workspace
-	// We'll use a placeholder workspace ID for authentication
-	workspaceID := "system"
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
-	}
 
 	// Construct the API URL
 	baseURL := config.BaseURL
@@ -381,4 +346,278 @@ func (s *MailgunService) TestWebhook(ctx context.Context, config domain.MailgunC
 	// We could potentially simulate a webhook event, but that's beyond the scope
 	// of this implementation
 	return fmt.Errorf("testing webhooks is not supported by the Mailgun API")
+}
+
+// RegisterWebhooks implements the domain.WebhookProvider interface for Mailgun
+func (s *MailgunService) RegisterWebhooks(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	baseURL string,
+	eventTypes []domain.EmailEventType,
+	providerConfig *domain.EmailProvider,
+) (*domain.WebhookRegistrationStatus, error) {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Mailgun == nil ||
+		providerConfig.Mailgun.APIKey == "" || providerConfig.Mailgun.Domain == "" {
+		return nil, fmt.Errorf("Mailgun configuration is missing or invalid")
+	}
+
+	// Create Mailgun API config
+	baseApiURL := ""
+	if providerConfig.Mailgun.Region == "eu" {
+		baseApiURL = "https://api.eu.mailgun.net/v3"
+	} else {
+		baseApiURL = "https://api.mailgun.net/v3"
+	}
+
+	apiConfig := domain.MailgunConfig{
+		APIKey:  providerConfig.Mailgun.APIKey,
+		Domain:  providerConfig.Mailgun.Domain,
+		BaseURL: baseApiURL,
+		Region:  providerConfig.Mailgun.Region,
+	}
+
+	// Generate webhook URL that includes workspace_id and integration_id
+	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindMailgun, workspaceID, integrationID)
+
+	// Map our event types to Mailgun event types
+	var registeredEvents []domain.EmailEventType
+	mailgunEvents := make(map[string]bool)
+
+	for _, eventType := range eventTypes {
+		switch eventType {
+		case domain.EmailEventDelivered:
+			mailgunEvents["delivered"] = true
+			registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
+		case domain.EmailEventBounce:
+			mailgunEvents["permanent_fail"] = true
+			mailgunEvents["temporary_fail"] = true
+			registeredEvents = append(registeredEvents, domain.EmailEventBounce)
+		case domain.EmailEventComplaint:
+			mailgunEvents["complained"] = true
+			registeredEvents = append(registeredEvents, domain.EmailEventComplaint)
+		}
+	}
+
+	// Get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Mailgun webhooks: %w", err)
+	}
+
+	// Delete existing webhooks that match our criteria
+	for _, webhook := range existingWebhooks.Items {
+		if strings.Contains(webhook.URL, baseURL) &&
+			strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
+
+			err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+			if err != nil {
+				s.logger.WithField("webhook_id", webhook.ID).
+					Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))
+				// Continue with other webhooks even if one fails
+			}
+		}
+	}
+
+	// Create a new webhook for each event type
+	endpoints := []domain.WebhookEndpointStatus{}
+	providerDetails := map[string]interface{}{
+		"integration_id": integrationID,
+		"workspace_id":   workspaceID,
+		"webhook_ids":    []string{},
+	}
+
+	for eventType := range mailgunEvents {
+		webhookConfig := domain.MailgunWebhook{
+			URL:    webhookURL,
+			Events: []string{eventType},
+			Active: true,
+		}
+
+		webhook, err := s.CreateWebhook(ctx, apiConfig, webhookConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Mailgun webhook for event %s: %w", eventType, err)
+		}
+
+		endpoints = append(endpoints, domain.WebhookEndpointStatus{
+			URL:       webhookURL,
+			EventType: mapMailgunEventType(eventType),
+			Active:    webhook.Active,
+		})
+
+		// Add webhook ID to provider details
+		webhookIDs := providerDetails["webhook_ids"].([]string)
+		webhookIDs = append(webhookIDs, webhook.ID)
+		providerDetails["webhook_ids"] = webhookIDs
+	}
+
+	// Create webhook registration status
+	status := &domain.WebhookRegistrationStatus{
+		EmailProviderKind: domain.EmailProviderKindMailgun,
+		IsRegistered:      len(endpoints) > 0,
+		RegisteredEvents:  registeredEvents,
+		Endpoints:         endpoints,
+		ProviderDetails:   providerDetails,
+	}
+
+	return status, nil
+}
+
+// GetWebhookStatus implements the domain.WebhookProvider interface for Mailgun
+func (s *MailgunService) GetWebhookStatus(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	providerConfig *domain.EmailProvider,
+) (*domain.WebhookRegistrationStatus, error) {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Mailgun == nil ||
+		providerConfig.Mailgun.APIKey == "" || providerConfig.Mailgun.Domain == "" {
+		return nil, fmt.Errorf("Mailgun configuration is missing or invalid")
+	}
+
+	// Create Mailgun API config
+	baseApiURL := ""
+	if providerConfig.Mailgun.Region == "eu" {
+		baseApiURL = "https://api.eu.mailgun.net/v3"
+	} else {
+		baseApiURL = "https://api.mailgun.net/v3"
+	}
+
+	apiConfig := domain.MailgunConfig{
+		APIKey:  providerConfig.Mailgun.APIKey,
+		Domain:  providerConfig.Mailgun.Domain,
+		BaseURL: baseApiURL,
+		Region:  providerConfig.Mailgun.Region,
+	}
+
+	// Create webhook status response
+	status := &domain.WebhookRegistrationStatus{
+		EmailProviderKind: domain.EmailProviderKindMailgun,
+		IsRegistered:      false,
+		Endpoints:         []domain.WebhookEndpointStatus{},
+		ProviderDetails: map[string]interface{}{
+			"integration_id": integrationID,
+			"workspace_id":   workspaceID,
+			"webhook_ids":    []string{},
+		},
+	}
+
+	// Get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Mailgun webhooks: %w", err)
+	}
+
+	// Check for webhooks that match our integration
+	registeredEventMap := make(map[domain.EmailEventType]bool)
+	webhookIDs := []string{}
+
+	for _, webhook := range existingWebhooks.Items {
+		if strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
+
+			status.IsRegistered = true
+			webhookIDs = append(webhookIDs, webhook.ID)
+
+			// Add endpoint
+			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+				URL:       webhook.URL,
+				EventType: mapMailgunEventType(webhook.ID), // In Mailgun, the ID is the event type
+				Active:    webhook.Active,
+			})
+
+			// Track registered event types
+			eventType := mapMailgunEventType(webhook.ID)
+			if eventType != "" {
+				registeredEventMap[eventType] = true
+			}
+		}
+	}
+
+	// Convert registered event map to slice
+	var registeredEvents []domain.EmailEventType
+	for eventType := range registeredEventMap {
+		registeredEvents = append(registeredEvents, eventType)
+	}
+	status.RegisteredEvents = registeredEvents
+	status.ProviderDetails["webhook_ids"] = webhookIDs
+
+	return status, nil
+}
+
+// UnregisterWebhooks implements the domain.WebhookProvider interface for Mailgun
+func (s *MailgunService) UnregisterWebhooks(
+	ctx context.Context,
+	workspaceID string,
+	integrationID string,
+	providerConfig *domain.EmailProvider,
+) error {
+	// Validate the provider configuration
+	if providerConfig == nil || providerConfig.Mailgun == nil ||
+		providerConfig.Mailgun.APIKey == "" || providerConfig.Mailgun.Domain == "" {
+		return fmt.Errorf("Mailgun configuration is missing or invalid")
+	}
+
+	// Create Mailgun API config
+	baseApiURL := ""
+	if providerConfig.Mailgun.Region == "eu" {
+		baseApiURL = "https://api.eu.mailgun.net/v3"
+	} else {
+		baseApiURL = "https://api.mailgun.net/v3"
+	}
+
+	apiConfig := domain.MailgunConfig{
+		APIKey:  providerConfig.Mailgun.APIKey,
+		Domain:  providerConfig.Mailgun.Domain,
+		BaseURL: baseApiURL,
+		Region:  providerConfig.Mailgun.Region,
+	}
+
+	// Get existing webhooks
+	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	if err != nil {
+		return fmt.Errorf("failed to list Mailgun webhooks: %w", err)
+	}
+
+	// Delete webhooks that match our integration
+	var lastError error
+	for _, webhook := range existingWebhooks.Items {
+		if strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
+
+			err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+			if err != nil {
+				s.logger.WithField("webhook_id", webhook.ID).
+					Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))
+				lastError = err
+				// Continue deleting other webhooks even if one fails
+			} else {
+				s.logger.WithField("webhook_id", webhook.ID).
+					Info("Successfully deleted Mailgun webhook")
+			}
+		}
+	}
+
+	if lastError != nil {
+		return fmt.Errorf("failed to delete one or more Mailgun webhooks: %w", lastError)
+	}
+
+	return nil
+}
+
+// Helper function to map Mailgun event types to our domain event types
+func mapMailgunEventType(eventType string) domain.EmailEventType {
+	switch eventType {
+	case "delivered":
+		return domain.EmailEventDelivered
+	case "permanent_fail", "temporary_fail":
+		return domain.EmailEventBounce
+	case "complained":
+		return domain.EmailEventComplaint
+	default:
+		return ""
+	}
 }
