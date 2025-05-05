@@ -66,8 +66,5 @@ export const workspaceService = {
     api.post<UpdateIntegrationResponse>('/api/workspaces.updateIntegration', data),
 
   deleteIntegration: (data: DeleteIntegrationRequest) =>
-    api.post<DeleteIntegrationResponse>('/api/workspaces.deleteIntegration', data),
-
-  testEmailProvider: (data: TestEmailProviderRequest) =>
-    api.post<TestEmailProviderResponse>('/api/workspaces.testEmailProvider', data)
+    api.post<DeleteIntegrationResponse>('/api/workspaces.deleteIntegration', data)
 }

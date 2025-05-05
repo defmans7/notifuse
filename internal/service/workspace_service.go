@@ -390,24 +390,29 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		return nil, &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}
 
-	workspace := &domain.Workspace{
-		ID:        id,
-		Name:      name,
-		Settings:  settings,
-		UpdatedAt: time.Now(),
+	// Get the existing workspace to preserve integrations and other fields
+	existingWorkspace, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get existing workspace")
+		return nil, err
 	}
 
-	if err := workspace.Validate(s.secretKey); err != nil {
+	// Update only the fields specified in the request
+	existingWorkspace.Name = name
+	existingWorkspace.Settings = settings
+	existingWorkspace.UpdatedAt = time.Now()
+
+	if err := existingWorkspace.Validate(s.secretKey); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
 		return nil, err
 	}
 
-	if err := s.repo.Update(ctx, workspace); err != nil {
+	if err := s.repo.Update(ctx, existingWorkspace); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to update workspace")
 		return nil, err
 	}
 
-	return workspace, nil
+	return existingWorkspace, nil
 }
 
 // DeleteWorkspace deletes a workspace if the user is an owner

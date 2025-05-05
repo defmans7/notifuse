@@ -12,6 +12,7 @@ import {
 import {
   faGear,
   faPlus,
+  faPowerOff,
   faRightFromBracket,
   faTerminal,
   faUserGroup
@@ -251,9 +252,7 @@ export function WorkspaceLayout() {
               {collapsed && (
                 <Button
                   type="text"
-                  icon={
-                    <FontAwesomeIcon icon={faRightFromBracket} size="sm" style={{ opacity: 0.7 }} />
-                  }
+                  icon={<FontAwesomeIcon icon={faPowerOff} size="sm" style={{ opacity: 0.7 }} />}
                   onClick={() => signout()}
                   style={{ width: '100%' }}
                 />

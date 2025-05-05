@@ -1,12 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
-  Card,
   Form,
   Input,
   Switch,
   Button,
-  Row,
-  Col,
   InputNumber,
   Alert,
   Select,
@@ -14,9 +11,11 @@ import {
   message,
   Space,
   Descriptions,
-  Tabs,
-  Typography,
-  Empty
+  Tag,
+  Drawer,
+  Dropdown,
+  Popconfirm,
+  Card
 } from 'antd'
 import {
   EmailProvider,
@@ -28,12 +27,14 @@ import {
   DeleteIntegrationRequest,
   IntegrationType
 } from '../../services/api/types'
-import { MailOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { workspaceService } from '../../services/api/workspace'
+import { emailService } from '../../services/api/email'
 import { Section } from './Section'
+import { faChevronDown, faEnvelope } from '@fortawesome/free-solid-svg-icons'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 
-const { Title, Text } = Typography
-const { TabPane } = Tabs
+// Provider types that only support transactional emails, not marketing emails
+const transactionalEmailOnly: EmailProviderKind[] = ['postmark', 'mailgun']
 
 // Component Props
 interface IntegrationsProps {
@@ -41,6 +42,137 @@ interface IntegrationsProps {
   onSave: (updatedWorkspace: Workspace) => Promise<void>
   loading: boolean
   isOwner: boolean
+}
+
+// EmailIntegration component props
+interface EmailIntegrationProps {
+  integration: {
+    id: string
+    name: string
+    type: IntegrationType
+    email_provider: EmailProvider
+    created_at: string
+    updated_at: string
+  }
+  isOwner: boolean
+  workspace: Workspace
+  getIntegrationPurpose: (id: string) => string
+  isIntegrationInUse: (id: string) => boolean
+  renderProviderIcon: (providerKind: EmailProviderKind, height?: number) => React.ReactNode
+  renderProviderSpecificDetails: (provider: EmailProvider) => React.ReactNode
+  startEditEmailProvider: (integration: Integration) => void
+  startTestEmailProvider: (integrationId: string) => void
+  setIntegrationAsDefault: (id: string, purpose: 'marketing' | 'transactional') => Promise<void>
+  deleteIntegration: (integrationId: string) => Promise<void>
+}
+
+// EmailIntegration component
+const EmailIntegration = ({
+  integration,
+  isOwner,
+  workspace,
+  getIntegrationPurpose,
+  isIntegrationInUse,
+  renderProviderIcon,
+  renderProviderSpecificDetails,
+  startEditEmailProvider,
+  startTestEmailProvider,
+  setIntegrationAsDefault,
+  deleteIntegration
+}: EmailIntegrationProps) => {
+  const provider = integration.email_provider
+  const purpose = getIntegrationPurpose(integration.id)
+
+  return (
+    <Card
+      title={
+        <>
+          <div className="float-right">
+            {isOwner ? (
+              <Space>
+                <Button onClick={() => startEditEmailProvider(integration)} size="small">
+                  Edit
+                </Button>
+                <Popconfirm
+                  title="Delete this integration?"
+                  description="This action cannot be undone."
+                  onConfirm={() => deleteIntegration(integration.id)}
+                  okText="Yes"
+                  cancelText="No"
+                >
+                  <Button size="small">Delete</Button>
+                </Popconfirm>
+                <Button onClick={() => startTestEmailProvider(integration.id)} size="small">
+                  Test
+                </Button>
+              </Space>
+            ) : null}
+          </div>
+          {renderProviderIcon(provider.kind, 24)}
+        </>
+      }
+    >
+      <Descriptions bordered size="small" column={1} className="mt-2">
+        <Descriptions.Item label="Name">{integration.name}</Descriptions.Item>
+        <Descriptions.Item label="Sender">
+          {provider.default_sender_name} &lt;{provider.default_sender_email}&gt;
+        </Descriptions.Item>
+        <Descriptions.Item label="Used for">
+          <Space>
+            {isIntegrationInUse(integration.id) ? (
+              <Tag color={purpose === 'Marketing Emails' ? 'blue' : 'green'}>{purpose}</Tag>
+            ) : (
+              'Not assigned'
+            )}
+            {isOwner && (
+              <>
+                {purpose !== 'Marketing Emails' &&
+                  !transactionalEmailOnly.includes(provider.kind) && (
+                    <Popconfirm
+                      title="Set as marketing email provider?"
+                      description="All marketing emails (broadcasts, campaigns) will be sent through this provider from now on."
+                      onConfirm={() => setIntegrationAsDefault(integration.id, 'marketing')}
+                      okText="Yes"
+                      cancelText="No"
+                    >
+                      <Button
+                        size="small"
+                        className="mr-2 mt-2"
+                        type={
+                          !workspace?.settings.marketing_email_provider_id ? 'primary' : undefined
+                        }
+                      >
+                        Use for Marketing
+                      </Button>
+                    </Popconfirm>
+                  )}
+                {purpose !== 'Transactional Emails' && (
+                  <Popconfirm
+                    title="Set as transactional email provider?"
+                    description="All transactional emails (notifications, password resets, etc.) will be sent through this provider from now on."
+                    onConfirm={() => setIntegrationAsDefault(integration.id, 'transactional')}
+                    okText="Yes"
+                    cancelText="No"
+                  >
+                    <Button
+                      size="small"
+                      className="mt-2"
+                      type={
+                        !workspace?.settings.transactional_email_provider_id ? 'primary' : undefined
+                      }
+                    >
+                      Use for Transactional
+                    </Button>
+                  </Popconfirm>
+                )}
+              </>
+            )}
+          </Space>
+        </Descriptions.Item>
+        {renderProviderSpecificDetails(provider)}
+      </Descriptions>
+    </Card>
+  )
 }
 
 // Helper functions for handling email integrations
@@ -55,6 +187,7 @@ interface EmailProviderFormValues {
   mailjet?: EmailProvider['mailjet']
   default_sender_email: string
   default_sender_name: string
+  type?: IntegrationType
 }
 
 const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailProvider => {
@@ -84,29 +217,20 @@ const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailPr
 
 // Main Integrations component
 export function Integrations({ workspace, onSave, loading, isOwner }: IntegrationsProps) {
-  // State for integrations management
-  const [activeTab, setActiveTab] = useState('email')
-  const [emailIntegrations, setEmailIntegrations] = useState<Integration[]>([])
-
-  // State for adding/editing email providers
-  const [addingEmailProvider, setAddingEmailProvider] = useState(false)
-  const [editingIntegrationId, setEditingIntegrationId] = useState<string | null>(null)
+  // State for providers
   const [emailProviderForm] = Form.useForm()
   const [selectedProviderType, setSelectedProviderType] = useState<EmailProviderKind | null>(null)
+  const [editingIntegrationId, setEditingIntegrationId] = useState<string | null>(null)
+
+  // Drawer state
+  const [providerDrawerVisible, setProviderDrawerVisible] = useState(false)
 
   // Test email modal state
   const [testModalVisible, setTestModalVisible] = useState(false)
   const [testEmailAddress, setTestEmailAddress] = useState('')
   const [testingIntegrationId, setTestingIntegrationId] = useState<string | null>(null)
+  const [testingProvider, setTestingProvider] = useState<EmailProvider | null>(null)
   const [testingEmailLoading, setTestingEmailLoading] = useState(false)
-
-  // Load integrations when workspace changes
-  useEffect(() => {
-    if (workspace && workspace.integrations) {
-      const emailProviders = workspace.integrations.filter((i) => i.type === 'email')
-      setEmailIntegrations(emailProviders)
-    }
-  }, [workspace])
 
   if (!workspace) {
     return null
@@ -140,8 +264,9 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const setIntegrationAsDefault = async (id: string, purpose: 'marketing' | 'transactional') => {
     try {
       const updateData = {
-        id: workspace.id,
+        ...workspace,
         settings: {
+          ...workspace.settings,
           ...(purpose === 'marketing'
             ? { marketing_email_provider_id: id }
             : { transactional_email_provider_id: id })
@@ -161,21 +286,17 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     }
   }
 
-  // Start adding a new email provider
-  const startAddEmailProvider = () => {
-    setSelectedProviderType(null)
-    setAddingEmailProvider(true)
-    setEditingIntegrationId(null)
-    emailProviderForm.resetFields()
-  }
-
   // Start editing an existing email provider
   const startEditEmailProvider = (integration: Integration) => {
     if (integration.type !== 'email') return
 
     setEditingIntegrationId(integration.id)
     setSelectedProviderType(integration.email_provider.kind)
-    emailProviderForm.setFieldsValue(integration.email_provider)
+    emailProviderForm.setFieldsValue({
+      name: integration.name,
+      ...integration.email_provider
+    })
+    setProviderDrawerVisible(true)
   }
 
   // Start testing an email provider
@@ -187,30 +308,42 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     }
 
     setTestingIntegrationId(integrationId)
+    setTestingProvider(integration.email_provider)
     setTestEmailAddress('')
     setTestModalVisible(true)
   }
 
   // Cancel adding/editing email provider
   const cancelEmailProviderOperation = () => {
-    setAddingEmailProvider(false)
-    setEditingIntegrationId(null)
+    closeProviderDrawer()
+  }
+
+  // Handle provider selection and open drawer
+  const handleSelectProviderType = (provider: EmailProviderKind) => {
+    setSelectedProviderType(provider)
+    emailProviderForm.setFieldsValue({
+      kind: provider,
+      type: 'email',
+      name: provider.charAt(0).toUpperCase() + provider.slice(1)
+    })
+    setProviderDrawerVisible(true)
+  }
+
+  // Close provider drawer
+  const closeProviderDrawer = () => {
+    setProviderDrawerVisible(false)
     setSelectedProviderType(null)
     emailProviderForm.resetFields()
   }
 
-  // Select provider type when adding new provider
-  const handleSelectProviderType = (provider: EmailProviderKind) => {
-    setSelectedProviderType(provider)
-    emailProviderForm.setFieldsValue({ kind: provider })
-  }
-
-  // Save new or edited email provider
-  const saveEmailProvider = async (values: EmailProviderFormValues) => {
+  // Save new or edited integration
+  const saveEmailProvider = async (values: EmailProviderFormValues & { name?: string }) => {
     if (!workspace) return
 
     try {
       const provider = constructProviderFromForm(values)
+      const name = values.name || provider.kind
+      const type: IntegrationType = 'email'
 
       // If editing an existing integration
       if (editingIntegrationId) {
@@ -222,25 +355,24 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         const updateRequest: UpdateIntegrationRequest = {
           workspace_id: workspace.id,
           integration_id: editingIntegrationId,
-          name: integration.name,
+          name: name,
           provider
         }
 
         await workspaceService.updateIntegration(updateRequest)
-        message.success('Email provider updated successfully')
+        message.success('Integration updated successfully')
       }
       // Creating a new integration
       else {
-        const name = `Email Provider (${provider.kind})`
         const createRequest: CreateIntegrationRequest = {
           workspace_id: workspace.id,
           name,
-          type: 'email',
+          type,
           provider
         }
 
         await workspaceService.createIntegration(createRequest)
-        message.success('Email provider created successfully')
+        message.success('Integration created successfully')
       }
 
       // Refresh workspace data
@@ -250,20 +382,14 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       // Reset state
       cancelEmailProviderOperation()
     } catch (error) {
-      console.error('Error saving email provider', error)
-      message.error('Failed to save email provider')
+      console.error('Error saving integration', error)
+      message.error('Failed to save integration')
     }
   }
 
   // Delete an integration
   const deleteIntegration = async (integrationId: string) => {
     if (!workspace) return
-
-    // Check if integration is in use
-    if (isIntegrationInUse(integrationId)) {
-      message.error('Cannot delete an integration that is currently in use')
-      return
-    }
 
     try {
       const deleteRequest: DeleteIntegrationRequest = {
@@ -286,22 +412,31 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Handler for testing the email provider
   const handleTestProvider = async () => {
-    if (!workspace || !testingIntegrationId || !testEmailAddress) return
+    if (!workspace || !testingProvider || !testEmailAddress) return
 
     try {
       setTestingEmailLoading(true)
-      const integration = getIntegrationById(testingIntegrationId)
 
-      if (!integration || integration.type !== 'email') {
-        message.error('Integration not found or not an email provider')
-        return
+      let providerToTest: EmailProvider
+
+      // If testing an existing integration
+      if (testingIntegrationId) {
+        const integration = getIntegrationById(testingIntegrationId)
+        if (!integration || integration.type !== 'email') {
+          message.error('Integration not found or not an email provider')
+          return
+        }
+        providerToTest = integration.email_provider
+      } else {
+        // Testing a provider that hasn't been saved yet
+        providerToTest = testingProvider
       }
 
-      const response = await workspaceService.testEmailProvider({
-        provider: integration.email_provider,
-        to: testEmailAddress,
-        workspace_id: workspace.id
-      })
+      const response = await emailService.testProvider(
+        workspace.id,
+        providerToTest,
+        testEmailAddress
+      )
 
       if (response.success) {
         message.success('Test email sent successfully')
@@ -317,122 +452,126 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     }
   }
 
-  // Render the list of email provider integrations
-  const renderEmailIntegrations = () => {
-    if (emailIntegrations.length === 0) {
-      return (
-        <Empty
-          description="No email integrations configured"
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-        />
-      )
+  // Render the list of available integrations
+  const renderAvailableIntegrations = () => {
+    // Available provider configurations
+    const providers = [
+      {
+        type: 'email' as IntegrationType,
+        kind: 'smtp',
+        name: 'SMTP',
+        icon: <FontAwesomeIcon icon={faEnvelope} className="w-16" />
+      },
+      {
+        type: 'email' as IntegrationType,
+        kind: 'ses',
+        name: 'Amazon SES',
+        icon: <img src="/amazonses.png" alt="Amazon SES" className="h-8 w-16 object-contain" />
+      },
+      {
+        type: 'email' as IntegrationType,
+        kind: 'sparkpost',
+        name: 'SparkPost',
+        icon: <img src="/sparkpost.png" alt="SparkPost" className="h-8 w-16 object-contain" />
+      },
+      {
+        type: 'email' as IntegrationType,
+        kind: 'postmark',
+        name: 'Postmark',
+        icon: <img src="/postmark.png" alt="Postmark" className="h-8 w-16 object-contain" />
+      },
+      {
+        type: 'email' as IntegrationType,
+        kind: 'mailgun',
+        name: 'Mailgun',
+        icon: <img src="/mailgun.png" alt="Mailgun" className="h-8 w-16 object-contain" />
+      },
+      {
+        type: 'email' as IntegrationType,
+        kind: 'mailjet',
+        name: 'Mailjet',
+        icon: <img src="/mailjet.png" alt="Mailjet" className="h-8 w-16 object-contain" />
+      }
+      // Future integration types can be added here
+    ]
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {providers.map((provider) => (
+          <Card
+            key={`${provider.type}-${provider.kind}`}
+            hoverable
+            onClick={() => handleSelectProviderType(provider.kind as EmailProviderKind)}
+            className="flex items-center cursor-pointer"
+            extra={
+              <Button
+                type="primary"
+                ghost
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSelectProviderType(provider.kind as EmailProviderKind)
+                }}
+              >
+                Configure
+              </Button>
+            }
+          >
+            <Card.Meta avatar={provider.icon} title={provider.name} />
+          </Card>
+        ))}
+      </div>
+    )
+  }
+
+  // Render the list of integrations
+  const renderWorkspaceIntegrations = () => {
+    if (!workspace?.integrations) {
+      return null // We'll handle this case differently in the main render
     }
 
-    return emailIntegrations.map((integration) => {
-      const provider = integration.email_provider
-      const isEditing = editingIntegrationId === integration.id
-      const purpose = getIntegrationPurpose(integration.id)
-
-      return (
-        <Card
-          key={integration.id}
-          title={integration.name}
-          className="mb-4"
-          extra={
-            isOwner && !isEditing ? (
-              <Space>
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => startEditEmailProvider(integration)}
-                  size="small"
-                >
-                  Edit
-                </Button>
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => deleteIntegration(integration.id)}
-                  disabled={isIntegrationInUse(integration.id)}
-                  size="small"
-                >
-                  Delete
-                </Button>
-              </Space>
-            ) : null
+    return (
+      <>
+        {workspace?.integrations.map((integration) => {
+          if (integration.type === 'email') {
+            return (
+              <div key={integration.id} className="mb-4">
+                <EmailIntegration
+                  key={integration.id}
+                  integration={integration}
+                  isOwner={isOwner}
+                  workspace={workspace}
+                  getIntegrationPurpose={getIntegrationPurpose}
+                  isIntegrationInUse={isIntegrationInUse}
+                  renderProviderIcon={renderProviderIcon}
+                  renderProviderSpecificDetails={renderProviderSpecificDetails}
+                  startEditEmailProvider={startEditEmailProvider}
+                  startTestEmailProvider={startTestEmailProvider}
+                  setIntegrationAsDefault={setIntegrationAsDefault}
+                  deleteIntegration={deleteIntegration}
+                />
+              </div>
+            )
           }
-        >
-          {isEditing ? (
-            <Form
-              form={emailProviderForm}
-              layout="vertical"
-              onFinish={saveEmailProvider}
-              initialValues={provider || undefined}
-            >
-              <Form.Item name="kind" hidden>
-                <Input />
-              </Form.Item>
 
-              {renderEmailProviderForm(provider.kind)}
-
-              <div className="mt-4 flex justify-end">
-                <Space>
-                  <Button onClick={cancelEmailProviderOperation}>Cancel</Button>
-                  <Button type="primary" htmlType="submit" loading={loading}>
-                    Save
-                  </Button>
-                </Space>
-              </div>
-            </Form>
-          ) : (
-            <>
-              <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="Type">
-                  <Space>
-                    {renderProviderIcon(provider.kind)}
-                    {provider.kind.toUpperCase()}
-                  </Space>
-                </Descriptions.Item>
-                <Descriptions.Item label="Sender">
-                  {provider.default_sender_name} &lt;{provider.default_sender_email}&gt;
-                </Descriptions.Item>
-                <Descriptions.Item label="Used for">{purpose}</Descriptions.Item>
-                {renderProviderSpecificDetails(provider)}
-              </Descriptions>
-
-              <div className="mt-4 flex justify-end">
-                <Space>
-                  <Button onClick={() => startTestEmailProvider(integration.id)}>Test</Button>
-
-                  {purpose !== 'Marketing Emails' && (
-                    <Button
-                      onClick={() => setIntegrationAsDefault(integration.id, 'marketing')}
-                      disabled={!isOwner}
-                    >
-                      Use for Marketing
-                    </Button>
-                  )}
-
-                  {purpose !== 'Transactional Emails' && (
-                    <Button
-                      onClick={() => setIntegrationAsDefault(integration.id, 'transactional')}
-                      disabled={!isOwner}
-                    >
-                      Use for Transactional
-                    </Button>
-                  )}
-                </Space>
-              </div>
-            </>
-          )}
-        </Card>
-      )
-    })
+          // Handle other types of integrations here in the future
+          return (
+            <Card key={integration.id} className="mb-4">
+              <Card.Meta title={integration.name} description={`Type: ${integration.type}`} />
+            </Card>
+          )
+        })}
+      </>
+    )
   }
 
   // Render provider-specific form fields
   const renderEmailProviderForm = (providerType: EmailProviderKind) => {
     return (
       <>
+        <Form.Item name="name" label="Integration Name" rules={[{ required: true }]}>
+          <Input placeholder="Enter a name for this integration" disabled={!isOwner} />
+        </Form.Item>
         <Form.Item name="default_sender_email" label="Sender Email" rules={[{ required: true }]}>
           <Input placeholder="noreply@yourdomain.com" disabled={!isOwner} />
         </Form.Item>
@@ -571,19 +710,19 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   }
 
   // Render provider icon
-  const renderProviderIcon = (providerKind: EmailProviderKind) => {
+  const renderProviderIcon = (providerKind: EmailProviderKind, height?: number) => {
     if (providerKind === 'smtp') {
-      return <MailOutlined style={{ fontSize: 16 }} />
+      return <FontAwesomeIcon icon={faEnvelope} className="h-4 w-8 object-contain" />
     } else if (providerKind === 'ses') {
-      return <img src="/amazonses.png" alt="Amazon SES" style={{ height: 16 }} />
+      return <img src="/amazonses.png" alt="Amazon SES" style={{ height: height || 16 }} />
     } else if (providerKind === 'sparkpost') {
-      return <img src="/sparkpost.png" alt="SparkPost" style={{ height: 16 }} />
+      return <img src="/sparkpost.png" alt="SparkPost" style={{ height: height || 16 }} />
     } else if (providerKind === 'postmark') {
-      return <img src="/postmark.png" alt="Postmark" style={{ height: 16 }} />
+      return <img src="/postmark.png" alt="Postmark" style={{ height: height || 16 }} />
     } else if (providerKind === 'mailgun') {
-      return <img src="/mailgun.png" alt="Mailgun" style={{ height: 16 }} />
+      return <img src="/mailgun.png" alt="Mailgun" style={{ height: height || 16 }} />
     } else if (providerKind === 'mailjet') {
-      return <img src="/mailjet.png" alt="Mailjet" style={{ height: 16 }} />
+      return <img src="/mailjet.png" alt="Mailjet" style={{ height: height || 16 }} />
     }
     return null
   }
@@ -642,115 +781,171 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     return items
   }
 
-  // Render the email provider selection grid
-  const renderEmailProviderGrid = () => {
+  // Render the drawer for configuring email providers
+  const renderProviderDrawer = () => {
+    // Test provider from the drawer
+    const handleTestFromDrawer = () => {
+      // Validate form fields before proceeding
+      emailProviderForm
+        .validateFields()
+        .then((values) => {
+          // Create a temporary provider object from form values
+          const tempProvider = constructProviderFromForm(values)
+
+          // Open test modal with the temporary provider
+          setTestEmailAddress('')
+          setTestingIntegrationId(null) // No integration ID as this is a new provider
+          setTestingProvider(tempProvider)
+          setTestModalVisible(true)
+        })
+        .catch((error) => {
+          // Form validation failed
+          console.error('Validation failed:', error)
+          message.error('Please fill in all required fields before testing')
+        })
+    }
+
     return (
-      <Row gutter={[16, 16]}>
-        <Col span={6}>
-          <Card hoverable onClick={() => handleSelectProviderType('smtp')} className="text-center">
-            <MailOutlined style={{ fontSize: 32 }} />
-            <p className="mt-2">SMTP</p>
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card hoverable onClick={() => handleSelectProviderType('ses')} className="text-center">
-            <img src="/amazonses.png" alt="Amazon SES" style={{ height: 32 }} />
-            <p className="mt-2">Amazon SES</p>
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card
-            hoverable
-            onClick={() => handleSelectProviderType('sparkpost')}
-            className="text-center"
+      <Drawer
+        title={
+          editingIntegrationId
+            ? `Edit ${selectedProviderType?.toUpperCase() || ''} Integration`
+            : `Add New ${selectedProviderType?.toUpperCase() || ''} Integration`
+        }
+        width={600}
+        open={providerDrawerVisible}
+        onClose={closeProviderDrawer}
+        footer={
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={closeProviderDrawer}>Cancel</Button>
+              <Button onClick={handleTestFromDrawer}>Test Integration</Button>
+              <Button type="primary" onClick={() => emailProviderForm.submit()} loading={loading}>
+                Save
+              </Button>
+            </Space>
+          </div>
+        }
+      >
+        {selectedProviderType && (
+          <Form
+            form={emailProviderForm}
+            layout="vertical"
+            onFinish={saveEmailProvider}
+            initialValues={{ kind: selectedProviderType }}
           >
-            <img src="/sparkpost.png" alt="SparkPost" style={{ height: 32 }} />
-            <p className="mt-2">SparkPost</p>
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card
-            hoverable
-            onClick={() => handleSelectProviderType('mailjet')}
-            className="text-center"
-          >
-            <img src="/mailjet.png" alt="Mailjet" style={{ height: 32 }} />
-            <p className="mt-2">Mailjet</p>
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card
-            hoverable
-            onClick={() => handleSelectProviderType('postmark')}
-            className="text-center"
-          >
-            <img src="/postmark.png" alt="Postmark" style={{ height: 32 }} />
-            <p className="mt-2">Postmark</p>
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card
-            hoverable
-            onClick={() => handleSelectProviderType('mailgun')}
-            className="text-center"
-          >
-            <img src="/mailgun.png" alt="Mailgun" style={{ height: 32 }} />
-            <p className="mt-2">Mailgun</p>
-          </Card>
-        </Col>
-      </Row>
+            <Form.Item name="kind" hidden>
+              <Input />
+            </Form.Item>
+
+            <Alert
+              message="Configure Email Provider"
+              description="Give your integration a descriptive name and configure the email provider settings. This integration will allow Notifuse to send emails through your email provider."
+              type="info"
+              showIcon
+              style={{ marginBottom: 24 }}
+            />
+
+            {renderEmailProviderForm(selectedProviderType)}
+          </Form>
+        )}
+      </Drawer>
     )
   }
+
+  // Add integration dropdown menu items
+  const integrationMenuItems = [
+    {
+      key: 'smtp',
+      label: 'SMTP',
+      icon: <FontAwesomeIcon icon={faEnvelope} className="h-6 w-12 object-contain mr-1" />,
+      onClick: () => handleSelectProviderType('smtp')
+    },
+    {
+      key: 'ses',
+      label: 'Amazon SES',
+      icon: <img src="/amazonses.png" alt="Amazon SES" className="h-6 w-12 object-contain mr-1" />,
+      onClick: () => handleSelectProviderType('ses')
+    },
+    {
+      key: 'sparkpost',
+      label: 'SparkPost',
+      icon: <img src="/sparkpost.png" alt="SparkPost" className="h-6 w-12 object-contain mr-1" />,
+      onClick: () => handleSelectProviderType('sparkpost')
+    },
+    {
+      key: 'postmark',
+      label: 'Postmark',
+      icon: <img src="/postmark.png" alt="Postmark" className="h-6 w-12 object-contain mr-1" />,
+      onClick: () => handleSelectProviderType('postmark')
+    },
+    {
+      key: 'mailgun',
+      label: 'Mailgun',
+      icon: <img src="/mailgun.png" alt="Mailgun" className="h-6 w-12 object-contain mr-1" />,
+      onClick: () => handleSelectProviderType('mailgun')
+    },
+    {
+      key: 'mailjet',
+      label: 'Mailjet',
+      icon: <img src="/mailjet.png" alt="Mailjet" className="h-6 w-12 object-contain mr-1" />,
+      onClick: () => handleSelectProviderType('mailjet')
+    }
+    // Future integration types can be added here
+  ]
 
   return (
     <Section
       title="Integrations"
       description="Connect and manage external services"
       extra={
-        isOwner && !addingEmailProvider && editingIntegrationId === null ? (
-          <Button type="primary" onClick={startAddEmailProvider} icon={<PlusOutlined />}>
-            Add Integration
-          </Button>
+        isOwner && (workspace?.integrations?.length ?? 0) > 0 ? (
+          <Dropdown menu={{ items: integrationMenuItems }} trigger={['click']}>
+            <Button type="primary" size="small" ghost>
+              Add Integration <FontAwesomeIcon icon={faChevronDown} />
+            </Button>
+          </Dropdown>
         ) : null
       }
     >
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        <TabPane tab="Email Providers" key="email">
-          {addingEmailProvider ? (
-            <Card title="Add Email Provider">
-              {selectedProviderType ? (
-                <Form form={emailProviderForm} layout="vertical" onFinish={saveEmailProvider}>
-                  <Form.Item name="kind" hidden initialValue={selectedProviderType}>
-                    <Input />
-                  </Form.Item>
-
-                  {renderEmailProviderForm(selectedProviderType)}
-
-                  <div className="mt-4 flex justify-end">
-                    <Space>
-                      <Button onClick={cancelEmailProviderOperation}>Cancel</Button>
-                      <Button type="primary" htmlType="submit" loading={loading}>
-                        Save
-                      </Button>
-                    </Space>
-                  </div>
-                </Form>
-              ) : (
-                <>
-                  <Text>Select an email provider type:</Text>
-                  <div className="mt-4">{renderEmailProviderGrid()}</div>
-                  <div className="mt-4 flex justify-end">
-                    <Button onClick={cancelEmailProviderOperation}>Cancel</Button>
-                  </div>
-                </>
-              )}
-            </Card>
-          ) : (
-            renderEmailIntegrations()
+      {/* Check and display alert for missing email provider configuration */}
+      {workspace && (
+        <>
+          {(!workspace.settings.transactional_email_provider_id ||
+            !workspace.settings.marketing_email_provider_id) && (
+            <Alert
+              message="Email Provider Configuration Needed"
+              description={
+                <div>
+                  {!workspace.settings.transactional_email_provider_id && (
+                    <p>
+                      Consider connecting a transactional email provider to be able to use
+                      transactional emails for account notifications, password resets, and other
+                      important system messages.
+                    </p>
+                  )}
+                  {!workspace.settings.marketing_email_provider_id && (
+                    <p>
+                      Consider connecting a marketing email provider to send newsletters,
+                      promotional campaigns, and announcements to engage with your audience.
+                    </p>
+                  )}
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
           )}
-        </TabPane>
-        {/* Additional integration types can be added as tabs in the future */}
-      </Tabs>
+        </>
+      )}
+
+      {(workspace?.integrations?.length ?? 0) === 0
+        ? renderAvailableIntegrations()
+        : renderWorkspaceIntegrations()}
+
+      {/* Provider Configuration Drawer */}
+      {renderProviderDrawer()}
 
       {/* Test email modal */}
       <Modal

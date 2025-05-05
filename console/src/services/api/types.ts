@@ -107,7 +107,7 @@ export interface MailjetSettings {
   sandbox_mode: boolean
 }
 
-export type IntegrationType = 'email'
+export type IntegrationType = 'email' | 'sms' | 'whatsapp'
 
 export interface Integration {
   id: string

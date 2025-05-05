@@ -186,7 +186,7 @@ type Workspace struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
 	Settings     WorkspaceSettings `json:"settings"`
-	Integrations Integrations      `json:"integrations,omitempty"`
+	Integrations Integrations      `json:"integrations"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
@@ -340,6 +340,14 @@ func (w *Workspace) GetEmailProvider(isMarketing bool) (*EmailProvider, error) {
 	}
 
 	return &integration.EmailProvider, nil
+}
+
+func (w *Workspace) MarshalJSON() ([]byte, error) {
+	type Alias Workspace
+	if w.Integrations == nil {
+		w.Integrations = []Integration{}
+	}
+	return json.Marshal((*Alias)(w))
 }
 
 type FileManagerSettings struct {

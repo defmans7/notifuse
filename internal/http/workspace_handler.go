@@ -63,6 +63,11 @@ func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workspaces.inviteMember", requireAuth(http.HandlerFunc(h.handleInviteMember)))
 	mux.Handle("/api/workspaces.createAPIKey", requireAuth(http.HandlerFunc(h.handleCreateAPIKey)))
 	mux.Handle("/api/workspaces.removeMember", requireAuth(http.HandlerFunc(h.handleRemoveMember)))
+
+	// Integration management routes
+	mux.Handle("/api/workspaces.createIntegration", requireAuth(http.HandlerFunc(h.handleCreateIntegration)))
+	mux.Handle("/api/workspaces.updateIntegration", requireAuth(http.HandlerFunc(h.handleUpdateIntegration)))
+	mux.Handle("/api/workspaces.deleteIntegration", requireAuth(http.HandlerFunc(h.handleDeleteIntegration)))
 }
 
 func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -372,5 +377,132 @@ func (h *WorkspaceHandler) handleRemoveMember(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "success",
 		"message": "Member removed successfully",
+	})
+}
+
+// handleCreateIntegration handles the request to create a new integration
+func (h *WorkspaceHandler) handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req domain.CreateIntegrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := req.Validate(h.secretKey); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	integrationID, err := h.workspaceService.CreateIntegration(
+		r.Context(),
+		req.WorkspaceID,
+		req.Name,
+		req.Type,
+		req.Provider,
+	)
+	if err != nil {
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to create integration")
+
+		if _, ok := err.(*domain.ErrUnauthorized); ok {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+
+		writeError(w, http.StatusInternalServerError, "Failed to create integration")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"status":         "success",
+		"integration_id": integrationID,
+	})
+}
+
+// handleUpdateIntegration handles the request to update an existing integration
+func (h *WorkspaceHandler) handleUpdateIntegration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req domain.UpdateIntegrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := req.Validate(h.secretKey); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err := h.workspaceService.UpdateIntegration(
+		r.Context(),
+		req.WorkspaceID,
+		req.IntegrationID,
+		req.Name,
+		req.Provider,
+	)
+	if err != nil {
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to update integration")
+
+		if _, ok := err.(*domain.ErrUnauthorized); ok {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+
+		writeError(w, http.StatusInternalServerError, "Failed to update integration")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "success",
+		"message": "Integration updated successfully",
+	})
+}
+
+// handleDeleteIntegration handles the request to delete an integration
+func (h *WorkspaceHandler) handleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req domain.DeleteIntegrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err := h.workspaceService.DeleteIntegration(
+		r.Context(),
+		req.WorkspaceID,
+		req.IntegrationID,
+	)
+	if err != nil {
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to delete integration")
+
+		if _, ok := err.(*domain.ErrUnauthorized); ok {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+
+		writeError(w, http.StatusInternalServerError, "Failed to delete integration")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "success",
+		"message": "Integration deleted successfully",
 	})
 }
