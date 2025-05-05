@@ -2,6 +2,9 @@ package domain
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
 // PostmarkWebhookPayload represents the base webhook payload from Postmark
@@ -99,10 +102,38 @@ type PostmarkListWebhooksResponse struct {
 	Webhooks   []PostmarkWebhookResponse `json:"Webhooks"`
 }
 
-// PostmarkConfig contains configuration for Postmark API
-type PostmarkConfig struct {
-	APIEndpoint string `json:"api_endpoint"`
-	ServerToken string `json:"server_token"`
+type PostmarkSettings struct {
+	EncryptedServerToken string `json:"encrypted_server_token,omitempty"`
+	ServerToken          string `json:"server_token,omitempty"`
+}
+
+func (p *PostmarkSettings) DecryptServerToken(passphrase string) error {
+	serverToken, err := crypto.DecryptFromHexString(p.EncryptedServerToken, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt Postmark server token: %w", err)
+	}
+	p.ServerToken = serverToken
+	return nil
+}
+
+func (p *PostmarkSettings) EncryptServerToken(passphrase string) error {
+	encryptedServerToken, err := crypto.EncryptString(p.ServerToken, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt Postmark server token: %w", err)
+	}
+	p.EncryptedServerToken = encryptedServerToken
+	return nil
+}
+
+func (p *PostmarkSettings) Validate(passphrase string) error {
+	// Encrypt server token if it's not empty
+	if p.ServerToken != "" {
+		if err := p.EncryptServerToken(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt Postmark server token: %w", err)
+		}
+	}
+
+	return nil
 }
 
 //go:generate mockgen -destination mocks/mock_postmark_service.go -package mocks github.com/Notifuse/notifuse/internal/domain PostmarkServiceInterface
@@ -110,20 +141,20 @@ type PostmarkConfig struct {
 // PostmarkServiceInterface defines operations for managing Postmark webhooks
 type PostmarkServiceInterface interface {
 	// ListWebhooks retrieves all registered webhooks
-	ListWebhooks(ctx context.Context, config PostmarkConfig) (*PostmarkListWebhooksResponse, error)
+	ListWebhooks(ctx context.Context, config PostmarkSettings) (*PostmarkListWebhooksResponse, error)
 
 	// RegisterWebhook registers a new webhook
-	RegisterWebhook(ctx context.Context, config PostmarkConfig, webhook PostmarkWebhookConfig) (*PostmarkWebhookResponse, error)
+	RegisterWebhook(ctx context.Context, config PostmarkSettings, webhook PostmarkWebhookConfig) (*PostmarkWebhookResponse, error)
 
 	// UnregisterWebhook removes a webhook by ID
-	UnregisterWebhook(ctx context.Context, config PostmarkConfig, webhookID int) error
+	UnregisterWebhook(ctx context.Context, config PostmarkSettings, webhookID int) error
 
 	// GetWebhook retrieves a specific webhook by ID
-	GetWebhook(ctx context.Context, config PostmarkConfig, webhookID int) (*PostmarkWebhookResponse, error)
+	GetWebhook(ctx context.Context, config PostmarkSettings, webhookID int) (*PostmarkWebhookResponse, error)
 
 	// UpdateWebhook updates an existing webhook
-	UpdateWebhook(ctx context.Context, config PostmarkConfig, webhookID int, webhook PostmarkWebhookConfig) (*PostmarkWebhookResponse, error)
+	UpdateWebhook(ctx context.Context, config PostmarkSettings, webhookID int, webhook PostmarkWebhookConfig) (*PostmarkWebhookResponse, error)
 
 	// TestWebhook sends a test event to the webhook
-	TestWebhook(ctx context.Context, config PostmarkConfig, webhookID int, eventType EmailEventType) error
+	TestWebhook(ctx context.Context, config PostmarkSettings, webhookID int, eventType EmailEventType) error
 }

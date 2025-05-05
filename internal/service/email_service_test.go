@@ -457,7 +457,7 @@ func TestEmailService_SendEmail_WithProviders(t *testing.T) {
 				Kind:               domain.EmailProviderKindSES,
 				DefaultSenderEmail: fromAddress,
 				DefaultSenderName:  fromName,
-				SES: &domain.AmazonSES{
+				SES: &domain.AmazonSESSettings{
 					Region:    "us-east-1",
 					AccessKey: "test-access-key",
 					SecretKey: "test-secret-key",
@@ -1410,7 +1410,7 @@ func TestEmailService_SES_WithEncryptedKey(t *testing.T) {
 		Kind:               domain.EmailProviderKindSES,
 		DefaultSenderEmail: from,
 		DefaultSenderName:  fromName,
-		SES: &domain.AmazonSES{
+		SES: &domain.AmazonSESSettings{
 			Region:             "us-east-1",
 			AccessKey:          "test-access-key",
 			EncryptedSecretKey: "encrypted-secret-key", // This will trigger decryption
@@ -1498,7 +1498,7 @@ func TestEmailService_DecryptionErrors(t *testing.T) {
 				Kind:               domain.EmailProviderKindSES,
 				DefaultSenderEmail: from,
 				DefaultSenderName:  fromName,
-				SES: &domain.AmazonSES{
+				SES: &domain.AmazonSESSettings{
 					Region:             "us-east-1",
 					AccessKey:          "access-key",
 					EncryptedSecretKey: "encrypted-secret-key-that-wont-decrypt", // Will cause decryption error

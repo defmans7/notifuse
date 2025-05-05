@@ -2,6 +2,9 @@ package domain
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
 //go:generate mockgen -destination mocks/mock_mailgun_service.go -package mocks github.com/Notifuse/notifuse/internal/domain MailgunServiceInterface
@@ -79,12 +82,48 @@ type MailgunWebhookListResponse struct {
 	Total int              `json:"total"`
 }
 
-// MailgunConfig represents configuration for Mailgun API
-type MailgunConfig struct {
-	APIKey  string `json:"api_key"`
-	Domain  string `json:"domain"`
-	BaseURL string `json:"base_url"`
-	Region  string `json:"region,omitempty"` // "US" or "EU"
+// MailgunSettings contains configuration for Mailgun
+type MailgunSettings struct {
+	EncryptedAPIKey string `json:"encrypted_api_key,omitempty"`
+	Domain          string `json:"domain"`
+	Region          string `json:"region,omitempty"` // "US" or "EU"
+
+	// decoded API key, not stored in the database
+	APIKey string `json:"api_key,omitempty"`
+}
+
+func (m *MailgunSettings) DecryptAPIKey(passphrase string) error {
+	apiKey, err := crypto.DecryptFromHexString(m.EncryptedAPIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt Mailgun API key: %w", err)
+	}
+	m.APIKey = apiKey
+	return nil
+}
+
+func (m *MailgunSettings) EncryptAPIKey(passphrase string) error {
+	encryptedAPIKey, err := crypto.EncryptString(m.APIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt Mailgun API key: %w", err)
+	}
+	m.EncryptedAPIKey = encryptedAPIKey
+	return nil
+}
+
+func (m *MailgunSettings) Validate(passphrase string) error {
+	if m.Domain == "" {
+		return fmt.Errorf("domain is required for Mailgun configuration")
+	}
+
+	// Encrypt API key if it's not empty
+	if m.APIKey != "" {
+		if err := m.EncryptAPIKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt Mailgun API key: %w", err)
+		}
+		m.APIKey = "" // Clear the API key after encryption
+	}
+
+	return nil
 }
 
 //go:generate mockgen -destination mocks/mock_mailgun_service.go -package mocks github.com/Notifuse/notifuse/internal/domain MailgunServiceInterface
@@ -92,20 +131,20 @@ type MailgunConfig struct {
 // MailgunServiceInterface defines operations for managing Mailgun webhooks
 type MailgunServiceInterface interface {
 	// ListWebhooks retrieves all registered webhooks for a domain
-	ListWebhooks(ctx context.Context, config MailgunConfig) (*MailgunWebhookListResponse, error)
+	ListWebhooks(ctx context.Context, config MailgunSettings) (*MailgunWebhookListResponse, error)
 
 	// CreateWebhook creates a new webhook
-	CreateWebhook(ctx context.Context, config MailgunConfig, webhook MailgunWebhook) (*MailgunWebhook, error)
+	CreateWebhook(ctx context.Context, config MailgunSettings, webhook MailgunWebhook) (*MailgunWebhook, error)
 
 	// GetWebhook retrieves a webhook by ID
-	GetWebhook(ctx context.Context, config MailgunConfig, webhookID string) (*MailgunWebhook, error)
+	GetWebhook(ctx context.Context, config MailgunSettings, webhookID string) (*MailgunWebhook, error)
 
 	// UpdateWebhook updates an existing webhook
-	UpdateWebhook(ctx context.Context, config MailgunConfig, webhookID string, webhook MailgunWebhook) (*MailgunWebhook, error)
+	UpdateWebhook(ctx context.Context, config MailgunSettings, webhookID string, webhook MailgunWebhook) (*MailgunWebhook, error)
 
 	// DeleteWebhook deletes a webhook by ID
-	DeleteWebhook(ctx context.Context, config MailgunConfig, webhookID string) error
+	DeleteWebhook(ctx context.Context, config MailgunSettings, webhookID string) error
 
 	// TestWebhook sends a test event to a webhook
-	TestWebhook(ctx context.Context, config MailgunConfig, webhookID string, eventType string) error
+	TestWebhook(ctx context.Context, config MailgunSettings, webhookID string, eventType string) error
 }

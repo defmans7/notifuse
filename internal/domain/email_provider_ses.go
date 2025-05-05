@@ -2,6 +2,9 @@ package domain
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
 //go:generate mockgen -destination mocks/mock_ses_service.go -package mocks github.com/Notifuse/notifuse/internal/domain SESServiceInterface
@@ -130,11 +133,62 @@ type SESConfigurationSetEventDestination struct {
 	SNSDestination       *SESTopicConfig `json:"sns_destination,omitempty"`
 }
 
-// SESConfig contains AWS configuration for SES service
-type SESConfig struct {
-	Region    string `json:"region"`
-	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
+// AmazonSESSettings contains SES email provider settings
+type AmazonSESSettings struct {
+	Region             string `json:"region"`
+	AccessKey          string `json:"access_key"`
+	EncryptedSecretKey string `json:"encrypted_secret_key,omitempty"`
+	SandboxMode        bool   `json:"sandbox_mode"`
+
+	// decoded secret key, not stored in the database
+	SecretKey string `json:"secret_key,omitempty"`
+}
+
+func (a *AmazonSESSettings) DecryptSecretKey(passphrase string) error {
+	secretKey, err := crypto.DecryptFromHexString(a.EncryptedSecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt SES secret key: %w", err)
+	}
+	a.SecretKey = secretKey
+	return nil
+}
+
+func (a *AmazonSESSettings) EncryptSecretKey(passphrase string) error {
+	encryptedSecretKey, err := crypto.EncryptString(a.SecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt SES secret key: %w", err)
+	}
+	a.EncryptedSecretKey = encryptedSecretKey
+	return nil
+}
+
+func (a *AmazonSESSettings) Validate(passphrase string) error {
+	// Check if any field is set to determine if we should validate
+	isConfigured := a.Region != "" || a.AccessKey != "" ||
+		a.EncryptedSecretKey != "" || a.SecretKey != ""
+
+	// If no fields are set, consider it valid (optional config)
+	if !isConfigured {
+		return nil
+	}
+
+	// If any field is set, validate required fields are present
+	if a.Region == "" {
+		return fmt.Errorf("region is required when Amazon SES is configured")
+	}
+
+	if a.AccessKey == "" {
+		return fmt.Errorf("access key is required when Amazon SES is configured")
+	}
+
+	// only encrypt secret key if it's not empty
+	if a.SecretKey != "" {
+		if err := a.EncryptSecretKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt SES secret key: %w", err)
+		}
+	}
+
+	return nil
 }
 
 //go:generate mockgen -destination mocks/mock_ses_service.go -package mocks github.com/Notifuse/notifuse/internal/domain SESServiceInterface
@@ -142,29 +196,29 @@ type SESConfig struct {
 // SESServiceInterface defines operations for managing Amazon SES webhooks via SNS
 type SESServiceInterface interface {
 	// ListConfigurationSets lists all configuration sets
-	ListConfigurationSets(ctx context.Context, config SESConfig) ([]string, error)
+	ListConfigurationSets(ctx context.Context, config AmazonSESSettings) ([]string, error)
 
 	// CreateConfigurationSet creates a new configuration set
-	CreateConfigurationSet(ctx context.Context, config SESConfig, name string) error
+	CreateConfigurationSet(ctx context.Context, config AmazonSESSettings, name string) error
 
 	// DeleteConfigurationSet deletes a configuration set
-	DeleteConfigurationSet(ctx context.Context, config SESConfig, name string) error
+	DeleteConfigurationSet(ctx context.Context, config AmazonSESSettings, name string) error
 
 	// CreateSNSTopic creates a new SNS topic for notifications
-	CreateSNSTopic(ctx context.Context, config SESConfig, topicConfig SESTopicConfig) (string, error)
+	CreateSNSTopic(ctx context.Context, config AmazonSESSettings, topicConfig SESTopicConfig) (string, error)
 
 	// DeleteSNSTopic deletes an SNS topic
-	DeleteSNSTopic(ctx context.Context, config SESConfig, topicARN string) error
+	DeleteSNSTopic(ctx context.Context, config AmazonSESSettings, topicARN string) error
 
 	// CreateEventDestination creates an event destination in a configuration set
-	CreateEventDestination(ctx context.Context, config SESConfig, destination SESConfigurationSetEventDestination) error
+	CreateEventDestination(ctx context.Context, config AmazonSESSettings, destination SESConfigurationSetEventDestination) error
 
 	// UpdateEventDestination updates an event destination
-	UpdateEventDestination(ctx context.Context, config SESConfig, destination SESConfigurationSetEventDestination) error
+	UpdateEventDestination(ctx context.Context, config AmazonSESSettings, destination SESConfigurationSetEventDestination) error
 
 	// DeleteEventDestination deletes an event destination
-	DeleteEventDestination(ctx context.Context, config SESConfig, configSetName, destinationName string) error
+	DeleteEventDestination(ctx context.Context, config AmazonSESSettings, configSetName, destinationName string) error
 
 	// ListEventDestinations lists all event destinations for a configuration set
-	ListEventDestinations(ctx context.Context, config SESConfig, configSetName string) ([]SESConfigurationSetEventDestination, error)
+	ListEventDestinations(ctx context.Context, config AmazonSESSettings, configSetName string) ([]SESConfigurationSetEventDestination, error)
 }

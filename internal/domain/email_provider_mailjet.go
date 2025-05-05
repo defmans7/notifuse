@@ -2,6 +2,9 @@ package domain
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
 //go:generate mockgen -destination mocks/mock_mailjet_service.go -package mocks github.com/Notifuse/notifuse/internal/domain MailjetServiceInterface
@@ -65,11 +68,71 @@ type MailjetWebhookResponse struct {
 	Total int              `json:"Total"`
 }
 
-// MailjetConfig represents configuration for Mailjet API
-type MailjetConfig struct {
-	APIKey    string `json:"api_key"`
-	SecretKey string `json:"secret_key"`
-	BaseURL   string `json:"base_url"`
+// MailjetSettings contains configuration for Mailjet
+type MailjetSettings struct {
+	EncryptedAPIKey    string `json:"encrypted_api_key,omitempty"`
+	EncryptedSecretKey string `json:"encrypted_secret_key,omitempty"`
+	SandboxMode        bool   `json:"sandbox_mode"`
+
+	// decoded keys, not stored in the database
+	APIKey    string `json:"api_key,omitempty"`
+	SecretKey string `json:"secret_key,omitempty"`
+}
+
+func (m *MailjetSettings) DecryptAPIKey(passphrase string) error {
+	apiKey, err := crypto.DecryptFromHexString(m.EncryptedAPIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt Mailjet API key: %w", err)
+	}
+	m.APIKey = apiKey
+	return nil
+}
+
+func (m *MailjetSettings) EncryptAPIKey(passphrase string) error {
+	encryptedAPIKey, err := crypto.EncryptString(m.APIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt Mailjet API key: %w", err)
+	}
+	m.EncryptedAPIKey = encryptedAPIKey
+	return nil
+}
+
+func (m *MailjetSettings) DecryptSecretKey(passphrase string) error {
+	secretKey, err := crypto.DecryptFromHexString(m.EncryptedSecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt Mailjet Secret key: %w", err)
+	}
+	m.SecretKey = secretKey
+	return nil
+}
+
+func (m *MailjetSettings) EncryptSecretKey(passphrase string) error {
+	encryptedSecretKey, err := crypto.EncryptString(m.SecretKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt Mailjet Secret key: %w", err)
+	}
+	m.EncryptedSecretKey = encryptedSecretKey
+	return nil
+}
+
+func (m *MailjetSettings) Validate(passphrase string) error {
+	// API Key is required for Mailjet
+	if m.APIKey != "" {
+		if err := m.EncryptAPIKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt Mailjet API key: %w", err)
+		}
+		m.APIKey = "" // Clear the API key after encryption
+	}
+
+	// Secret Key is required for Mailjet
+	if m.SecretKey != "" {
+		if err := m.EncryptSecretKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt Mailjet Secret key: %w", err)
+		}
+		m.SecretKey = "" // Clear the Secret key after encryption
+	}
+
+	return nil
 }
 
 //go:generate mockgen -destination mocks/mock_mailjet_service.go -package mocks github.com/Notifuse/notifuse/internal/domain MailjetServiceInterface
@@ -77,17 +140,17 @@ type MailjetConfig struct {
 // MailjetServiceInterface defines operations for managing Mailjet webhooks
 type MailjetServiceInterface interface {
 	// ListWebhooks retrieves all registered webhooks
-	ListWebhooks(ctx context.Context, config MailjetConfig) (*MailjetWebhookResponse, error)
+	ListWebhooks(ctx context.Context, config MailjetSettings) (*MailjetWebhookResponse, error)
 
 	// CreateWebhook creates a new webhook
-	CreateWebhook(ctx context.Context, config MailjetConfig, webhook MailjetWebhook) (*MailjetWebhook, error)
+	CreateWebhook(ctx context.Context, config MailjetSettings, webhook MailjetWebhook) (*MailjetWebhook, error)
 
 	// GetWebhook retrieves a webhook by ID
-	GetWebhook(ctx context.Context, config MailjetConfig, webhookID int64) (*MailjetWebhook, error)
+	GetWebhook(ctx context.Context, config MailjetSettings, webhookID int64) (*MailjetWebhook, error)
 
 	// UpdateWebhook updates an existing webhook
-	UpdateWebhook(ctx context.Context, config MailjetConfig, webhookID int64, webhook MailjetWebhook) (*MailjetWebhook, error)
+	UpdateWebhook(ctx context.Context, config MailjetSettings, webhookID int64, webhook MailjetWebhook) (*MailjetWebhook, error)
 
 	// DeleteWebhook deletes a webhook by ID
-	DeleteWebhook(ctx context.Context, config MailjetConfig, webhookID int64) error
+	DeleteWebhook(ctx context.Context, config MailjetSettings, webhookID int64) error
 }

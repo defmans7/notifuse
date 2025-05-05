@@ -30,20 +30,17 @@ func NewMailgunService(httpClient domain.HTTPClient, authService domain.AuthServ
 }
 
 // ListWebhooks retrieves all registered webhooks for a domain
-func (s *MailgunService) ListWebhooks(ctx context.Context, config domain.MailgunConfig) (*domain.MailgunWebhookListResponse, error) {
+func (s *MailgunService) ListWebhooks(ctx context.Context, config domain.MailgunSettings) (*domain.MailgunWebhookListResponse, error) {
 
 	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		// Default to US region if not specified
-		if strings.ToLower(config.Region) == "eu" {
-			baseURL = "https://api.eu.mailgun.net/v3"
-		} else {
-			baseURL = "https://api.mailgun.net/v3"
-		}
+	endpoint := ""
+	if strings.ToLower(config.Region) == "eu" {
+		endpoint = "https://api.eu.mailgun.net/v3"
+	} else {
+		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks", baseURL, config.Domain)
+	apiURL := fmt.Sprintf("%s/%s/webhooks", endpoint, config.Domain)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for listing Mailgun webhooks: %v", err))
@@ -100,7 +97,7 @@ func (s *MailgunService) ListWebhooks(ctx context.Context, config domain.Mailgun
 }
 
 // CreateWebhook creates a new webhook
-func (s *MailgunService) CreateWebhook(ctx context.Context, config domain.MailgunConfig, webhook domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
+func (s *MailgunService) CreateWebhook(ctx context.Context, config domain.MailgunSettings, webhook domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
 
 	if len(webhook.Events) == 0 {
 		return nil, fmt.Errorf("at least one event type is required")
@@ -111,17 +108,14 @@ func (s *MailgunService) CreateWebhook(ctx context.Context, config domain.Mailgu
 	eventType := webhook.Events[0]
 
 	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		// Default to US region if not specified
-		if strings.ToLower(config.Region) == "eu" {
-			baseURL = "https://api.eu.mailgun.net/v3"
-		} else {
-			baseURL = "https://api.mailgun.net/v3"
-		}
+	endpoint := ""
+	if strings.ToLower(config.Region) == "eu" {
+		endpoint = "https://api.eu.mailgun.net/v3"
+	} else {
+		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks", baseURL, config.Domain)
+	apiURL := fmt.Sprintf("%s/%s/webhooks", endpoint, config.Domain)
 
 	// Create the form data
 	form := url.Values{}
@@ -174,20 +168,17 @@ func (s *MailgunService) CreateWebhook(ctx context.Context, config domain.Mailgu
 }
 
 // GetWebhook retrieves a webhook by ID
-func (s *MailgunService) GetWebhook(ctx context.Context, config domain.MailgunConfig, webhookID string) (*domain.MailgunWebhook, error) {
+func (s *MailgunService) GetWebhook(ctx context.Context, config domain.MailgunSettings, webhookID string) (*domain.MailgunWebhook, error) {
 
 	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		// Default to US region if not specified
-		if strings.ToLower(config.Region) == "eu" {
-			baseURL = "https://api.eu.mailgun.net/v3"
-		} else {
-			baseURL = "https://api.mailgun.net/v3"
-		}
+	endpoint := ""
+	if strings.ToLower(config.Region) == "eu" {
+		endpoint = "https://api.eu.mailgun.net/v3"
+	} else {
+		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", baseURL, config.Domain, webhookID)
+	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", endpoint, config.Domain, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for getting Mailgun webhook: %v", err))
@@ -236,20 +227,17 @@ func (s *MailgunService) GetWebhook(ctx context.Context, config domain.MailgunCo
 }
 
 // UpdateWebhook updates an existing webhook
-func (s *MailgunService) UpdateWebhook(ctx context.Context, config domain.MailgunConfig, webhookID string, webhook domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
+func (s *MailgunService) UpdateWebhook(ctx context.Context, config domain.MailgunSettings, webhookID string, webhook domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
 
 	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		// Default to US region if not specified
-		if strings.ToLower(config.Region) == "eu" {
-			baseURL = "https://api.eu.mailgun.net/v3"
-		} else {
-			baseURL = "https://api.mailgun.net/v3"
-		}
+	endpoint := ""
+	if strings.ToLower(config.Region) == "eu" {
+		endpoint = "https://api.eu.mailgun.net/v3"
+	} else {
+		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", baseURL, config.Domain, webhookID)
+	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", endpoint, config.Domain, webhookID)
 
 	// Create the form data
 	form := url.Values{}
@@ -301,20 +289,17 @@ func (s *MailgunService) UpdateWebhook(ctx context.Context, config domain.Mailgu
 }
 
 // DeleteWebhook deletes a webhook by ID
-func (s *MailgunService) DeleteWebhook(ctx context.Context, config domain.MailgunConfig, webhookID string) error {
+func (s *MailgunService) DeleteWebhook(ctx context.Context, config domain.MailgunSettings, webhookID string) error {
 
 	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		// Default to US region if not specified
-		if strings.ToLower(config.Region) == "eu" {
-			baseURL = "https://api.eu.mailgun.net/v3"
-		} else {
-			baseURL = "https://api.mailgun.net/v3"
-		}
+	endpoint := ""
+	if strings.ToLower(config.Region) == "eu" {
+		endpoint = "https://api.eu.mailgun.net/v3"
+	} else {
+		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", baseURL, config.Domain, webhookID)
+	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", endpoint, config.Domain, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for deleting Mailgun webhook: %v", err))
@@ -341,7 +326,7 @@ func (s *MailgunService) DeleteWebhook(ctx context.Context, config domain.Mailgu
 }
 
 // TestWebhook sends a test event to a webhook
-func (s *MailgunService) TestWebhook(ctx context.Context, config domain.MailgunConfig, webhookID string, eventType string) error {
+func (s *MailgunService) TestWebhook(ctx context.Context, config domain.MailgunSettings, webhookID string, eventType string) error {
 	// Mailgun doesn't support testing webhooks directly through their API
 	// We could potentially simulate a webhook event, but that's beyond the scope
 	// of this implementation
@@ -361,21 +346,6 @@ func (s *MailgunService) RegisterWebhooks(
 	if providerConfig == nil || providerConfig.Mailgun == nil ||
 		providerConfig.Mailgun.APIKey == "" || providerConfig.Mailgun.Domain == "" {
 		return nil, fmt.Errorf("Mailgun configuration is missing or invalid")
-	}
-
-	// Create Mailgun API config
-	baseApiURL := ""
-	if providerConfig.Mailgun.Region == "eu" {
-		baseApiURL = "https://api.eu.mailgun.net/v3"
-	} else {
-		baseApiURL = "https://api.mailgun.net/v3"
-	}
-
-	apiConfig := domain.MailgunConfig{
-		APIKey:  providerConfig.Mailgun.APIKey,
-		Domain:  providerConfig.Mailgun.Domain,
-		BaseURL: baseApiURL,
-		Region:  providerConfig.Mailgun.Region,
 	}
 
 	// Generate webhook URL that includes workspace_id and integration_id
@@ -401,7 +371,7 @@ func (s *MailgunService) RegisterWebhooks(
 	}
 
 	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Mailgun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Mailgun webhooks: %w", err)
 	}
@@ -412,7 +382,7 @@ func (s *MailgunService) RegisterWebhooks(
 			strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
 			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+			err := s.DeleteWebhook(ctx, *providerConfig.Mailgun, webhook.ID)
 			if err != nil {
 				s.logger.WithField("webhook_id", webhook.ID).
 					Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))
@@ -436,7 +406,7 @@ func (s *MailgunService) RegisterWebhooks(
 			Active: true,
 		}
 
-		webhook, err := s.CreateWebhook(ctx, apiConfig, webhookConfig)
+		webhook, err := s.CreateWebhook(ctx, *providerConfig.Mailgun, webhookConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Mailgun webhook for event %s: %w", eventType, err)
 		}
@@ -478,21 +448,6 @@ func (s *MailgunService) GetWebhookStatus(
 		return nil, fmt.Errorf("Mailgun configuration is missing or invalid")
 	}
 
-	// Create Mailgun API config
-	baseApiURL := ""
-	if providerConfig.Mailgun.Region == "eu" {
-		baseApiURL = "https://api.eu.mailgun.net/v3"
-	} else {
-		baseApiURL = "https://api.mailgun.net/v3"
-	}
-
-	apiConfig := domain.MailgunConfig{
-		APIKey:  providerConfig.Mailgun.APIKey,
-		Domain:  providerConfig.Mailgun.Domain,
-		BaseURL: baseApiURL,
-		Region:  providerConfig.Mailgun.Region,
-	}
-
 	// Create webhook status response
 	status := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindMailgun,
@@ -506,7 +461,7 @@ func (s *MailgunService) GetWebhookStatus(
 	}
 
 	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Mailgun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Mailgun webhooks: %w", err)
 	}
@@ -561,23 +516,9 @@ func (s *MailgunService) UnregisterWebhooks(
 		return fmt.Errorf("Mailgun configuration is missing or invalid")
 	}
 
-	// Create Mailgun API config
-	baseApiURL := ""
-	if providerConfig.Mailgun.Region == "eu" {
-		baseApiURL = "https://api.eu.mailgun.net/v3"
-	} else {
-		baseApiURL = "https://api.mailgun.net/v3"
-	}
-
-	apiConfig := domain.MailgunConfig{
-		APIKey:  providerConfig.Mailgun.APIKey,
-		Domain:  providerConfig.Mailgun.Domain,
-		BaseURL: baseApiURL,
-		Region:  providerConfig.Mailgun.Region,
-	}
-
 	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Mailgun)
 	if err != nil {
 		return fmt.Errorf("failed to list Mailgun webhooks: %w", err)
 	}
@@ -588,7 +529,7 @@ func (s *MailgunService) UnregisterWebhooks(
 		if strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
 			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+			err := s.DeleteWebhook(ctx, *providerConfig.Mailgun, webhook.ID)
 			if err != nil {
 				s.logger.WithField("webhook_id", webhook.ID).
 					Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))

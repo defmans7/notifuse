@@ -12,18 +12,18 @@ func TestAmazonSESValidation(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ses     AmazonSES
+		ses     AmazonSESSettings
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name:    "Empty SES config",
-			ses:     AmazonSES{},
+			ses:     AmazonSESSettings{},
 			wantErr: false,
 		},
 		{
 			name: "Valid SES config",
-			ses: AmazonSES{
+			ses: AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -32,7 +32,7 @@ func TestAmazonSESValidation(t *testing.T) {
 		},
 		{
 			name: "Missing region",
-			ses: AmazonSES{
+			ses: AmazonSESSettings{
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 			},
@@ -41,7 +41,7 @@ func TestAmazonSESValidation(t *testing.T) {
 		},
 		{
 			name: "Missing access key",
-			ses: AmazonSES{
+			ses: AmazonSESSettings{
 				Region:    "us-east-1",
 				SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 			},
@@ -224,7 +224,7 @@ func TestEmailProviderValidation(t *testing.T) {
 				Kind:               EmailProviderKindSES,
 				DefaultSenderEmail: "default@example.com",
 				DefaultSenderName:  "Default Sender",
-				SES: &AmazonSES{
+				SES: &AmazonSESSettings{
 					Region:    "us-east-1",
 					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 					SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -374,7 +374,7 @@ func TestEncryptionDecryption(t *testing.T) {
 
 	t.Run("SES secret key encryption/decryption", func(t *testing.T) {
 		originalSecretKey := "test-secret-key"
-		ses := AmazonSES{
+		ses := AmazonSESSettings{
 			SecretKey: originalSecretKey,
 		}
 
@@ -441,7 +441,7 @@ func TestEmailProviderEncryptDecryptSecretKeys(t *testing.T) {
 	t.Run("SES provider secret keys", func(t *testing.T) {
 		provider := EmailProvider{
 			Kind: EmailProviderKindSES,
-			SES: &AmazonSES{
+			SES: &AmazonSESSettings{
 				SecretKey: "test-secret-key",
 			},
 		}
@@ -872,7 +872,7 @@ func TestDecryptionErrors(t *testing.T) {
 	t.Run("SES decryption error", func(t *testing.T) {
 		provider := EmailProvider{
 			Kind: EmailProviderKindSES,
-			SES: &AmazonSES{
+			SES: &AmazonSESSettings{
 				// Set invalid encrypted data
 				EncryptedSecretKey: "invalid-encrypted-data",
 			},
@@ -989,7 +989,7 @@ func TestEmailProvider_AdditionalValidation(t *testing.T) {
 				Username: "user@example.com",
 				Password: "password",
 			},
-			SES: &AmazonSES{
+			SES: &AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "test-access-key",
 				SecretKey: "test-secret-key",
@@ -1013,7 +1013,7 @@ func TestEmailProvider_AdditionalValidation(t *testing.T) {
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
 			// Missing SMTP settings but have SES settings
-			SES: &AmazonSES{
+			SES: &AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "test-access-key",
 				SecretKey: "test-secret-key",

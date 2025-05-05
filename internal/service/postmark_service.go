@@ -31,10 +31,9 @@ func NewPostmarkService(httpClient domain.HTTPClient, authService domain.AuthSer
 }
 
 // ListWebhooks retrieves all registered webhooks
-func (s *PostmarkService) ListWebhooks(ctx context.Context, config domain.PostmarkConfig) (*domain.PostmarkListWebhooksResponse, error) {
+func (s *PostmarkService) ListWebhooks(ctx context.Context, config domain.PostmarkSettings) (*domain.PostmarkListWebhooksResponse, error) {
 
-	url := fmt.Sprintf("%s/webhooks", config.APIEndpoint)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.postmarkapp.com/webhooks", nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for listing Postmark webhooks: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -67,9 +66,7 @@ func (s *PostmarkService) ListWebhooks(ctx context.Context, config domain.Postma
 }
 
 // RegisterWebhook registers a new webhook
-func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.PostmarkConfig, webhook domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
-
-	url := fmt.Sprintf("%s/webhooks", config.APIEndpoint)
+func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.PostmarkSettings, webhook domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
 
 	jsonData, err := json.Marshal(webhook)
 	if err != nil {
@@ -77,7 +74,7 @@ func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.Pos
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.postmarkapp.com/webhooks", bytes.NewBuffer(jsonData))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for registering Postmark webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -110,13 +107,12 @@ func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.Pos
 }
 
 // UnregisterWebhook removes a webhook by ID
-func (s *PostmarkService) UnregisterWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int) error {
+func (s *PostmarkService) UnregisterWebhook(ctx context.Context, config domain.PostmarkSettings, webhookID int) error {
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
 
-	url := fmt.Sprintf("%s/webhooks/%d", config.APIEndpoint, webhookID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, "https://api.postmarkapp.com/webhooks/"+webhookIDStr, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for deleting Postmark webhook: %v", err))
 		return fmt.Errorf("failed to create request: %w", err)
@@ -142,13 +138,12 @@ func (s *PostmarkService) UnregisterWebhook(ctx context.Context, config domain.P
 }
 
 // GetWebhook retrieves a specific webhook by ID
-func (s *PostmarkService) GetWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int) (*domain.PostmarkWebhookResponse, error) {
+func (s *PostmarkService) GetWebhook(ctx context.Context, config domain.PostmarkSettings, webhookID int) (*domain.PostmarkWebhookResponse, error) {
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
 
-	url := fmt.Sprintf("%s/webhooks/%d", config.APIEndpoint, webhookID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.postmarkapp.com/webhooks/"+webhookIDStr, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for getting Postmark webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -180,12 +175,10 @@ func (s *PostmarkService) GetWebhook(ctx context.Context, config domain.Postmark
 }
 
 // UpdateWebhook updates an existing webhook
-func (s *PostmarkService) UpdateWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int, webhook domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
+func (s *PostmarkService) UpdateWebhook(ctx context.Context, config domain.PostmarkSettings, webhookID int, webhook domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
-
-	url := fmt.Sprintf("%s/webhooks/%d", config.APIEndpoint, webhookID)
 
 	jsonData, err := json.Marshal(webhook)
 	if err != nil {
@@ -193,7 +186,7 @@ func (s *PostmarkService) UpdateWebhook(ctx context.Context, config domain.Postm
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, "https://api.postmarkapp.com/webhooks/"+webhookIDStr, bytes.NewBuffer(jsonData))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for updating Postmark webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -226,7 +219,7 @@ func (s *PostmarkService) UpdateWebhook(ctx context.Context, config domain.Postm
 }
 
 // TestWebhook sends a test event to the webhook
-func (s *PostmarkService) TestWebhook(ctx context.Context, config domain.PostmarkConfig, webhookID int, eventType domain.EmailEventType) error {
+func (s *PostmarkService) TestWebhook(ctx context.Context, config domain.PostmarkSettings, webhookID int, eventType domain.EmailEventType) error {
 
 	webhookIDStr := strconv.Itoa(webhookID)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
@@ -244,8 +237,6 @@ func (s *PostmarkService) TestWebhook(ctx context.Context, config domain.Postmar
 		return fmt.Errorf("unsupported event type: %s", eventType)
 	}
 
-	url := fmt.Sprintf("%s/webhooks/%d/trigger", config.APIEndpoint, webhookID)
-
 	payload := map[string]string{"Trigger": triggerName}
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
@@ -253,7 +244,7 @@ func (s *PostmarkService) TestWebhook(ctx context.Context, config domain.Postmar
 		return fmt.Errorf("failed to marshal test trigger payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.postmarkapp.com/webhooks/"+webhookIDStr+"/trigger", bytes.NewBuffer(jsonData))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for testing Postmark webhook: %v", err))
 		return fmt.Errorf("failed to create request: %w", err)
@@ -293,12 +284,6 @@ func (s *PostmarkService) RegisterWebhooks(
 		return nil, fmt.Errorf("Postmark configuration is missing or invalid")
 	}
 
-	// Create Postmark API config
-	apiConfig := domain.PostmarkConfig{
-		APIEndpoint: "https://api.postmarkapp.com",
-		ServerToken: providerConfig.Postmark.ServerToken,
-	}
-
 	// Create webhook URL that includes workspace_id and integration_id
 	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindPostmark, workspaceID, integrationID)
 
@@ -333,7 +318,7 @@ func (s *PostmarkService) RegisterWebhooks(
 	}
 
 	// First, get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Postmark)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Postmark webhooks: %w", err)
 	}
@@ -343,7 +328,7 @@ func (s *PostmarkService) RegisterWebhooks(
 
 	// If we have existing webhooks, unregister them
 	for _, webhook := range notifuseWebhooks {
-		err := s.UnregisterWebhook(ctx, apiConfig, webhook.ID)
+		err := s.UnregisterWebhook(ctx, *providerConfig.Postmark, webhook.ID)
 		if err != nil {
 			s.logger.WithField("webhook_id", webhook.ID).
 				Error(fmt.Sprintf("Failed to unregister Postmark webhook: %v", err))
@@ -358,7 +343,7 @@ func (s *PostmarkService) RegisterWebhooks(
 		TriggerRules:  triggers,
 	}
 
-	webhookResponse, err := s.RegisterWebhook(ctx, apiConfig, webhookConfig)
+	webhookResponse, err := s.RegisterWebhook(ctx, *providerConfig.Postmark, webhookConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register Postmark webhook: %w", err)
 	}
@@ -396,14 +381,8 @@ func (s *PostmarkService) GetWebhookStatus(
 		return nil, fmt.Errorf("Postmark configuration is missing or invalid")
 	}
 
-	// Create Postmark API config
-	apiConfig := domain.PostmarkConfig{
-		APIEndpoint: "https://api.postmarkapp.com",
-		ServerToken: providerConfig.Postmark.ServerToken,
-	}
-
 	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Postmark)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Postmark webhooks: %w", err)
 	}
@@ -480,14 +459,8 @@ func (s *PostmarkService) UnregisterWebhooks(
 		return fmt.Errorf("Postmark configuration is missing or invalid")
 	}
 
-	// Create Postmark API config
-	apiConfig := domain.PostmarkConfig{
-		APIEndpoint: "https://api.postmarkapp.com",
-		ServerToken: providerConfig.Postmark.ServerToken,
-	}
-
 	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Postmark)
 	if err != nil {
 		return fmt.Errorf("failed to list Postmark webhooks: %w", err)
 	}
@@ -498,7 +471,7 @@ func (s *PostmarkService) UnregisterWebhooks(
 	// Unregister each webhook
 	var lastError error
 	for _, webhook := range notifuseWebhooks {
-		err := s.UnregisterWebhook(ctx, apiConfig, webhook.ID)
+		err := s.UnregisterWebhook(ctx, *providerConfig.Postmark, webhook.ID)
 		if err != nil {
 			s.logger.WithField("webhook_id", webhook.ID).
 				Error(fmt.Sprintf("Failed to unregister Postmark webhook: %v", err))

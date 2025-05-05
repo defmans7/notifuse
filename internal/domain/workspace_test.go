@@ -1090,7 +1090,7 @@ func TestEmailProvider_Validate(t *testing.T) {
 				Kind:               EmailProviderKindSES,
 				DefaultSenderEmail: "default@example.com",
 				DefaultSenderName:  "Default Sender",
-				SES: &AmazonSES{
+				SES: &AmazonSESSettings{
 					Region:    "us-east-1",
 					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				},
@@ -1136,7 +1136,7 @@ func TestEmailProvider_Validate(t *testing.T) {
 			provider: EmailProvider{
 				Kind:              EmailProviderKindSES,
 				DefaultSenderName: "Default Sender",
-				SES: &AmazonSES{
+				SES: &AmazonSESSettings{
 					Region:    "us-east-1",
 					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				},
@@ -1149,7 +1149,7 @@ func TestEmailProvider_Validate(t *testing.T) {
 			provider: EmailProvider{
 				Kind:               EmailProviderKindSES,
 				DefaultSenderEmail: "default@example.com",
-				SES: &AmazonSES{
+				SES: &AmazonSESSettings{
 					Region:    "us-east-1",
 					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				},
@@ -1163,7 +1163,7 @@ func TestEmailProvider_Validate(t *testing.T) {
 				Kind:               EmailProviderKindSES,
 				DefaultSenderEmail: "not-an-email",
 				DefaultSenderName:  "Default Sender",
-				SES: &AmazonSES{
+				SES: &AmazonSESSettings{
 					Region:    "us-east-1",
 					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				},
@@ -1220,7 +1220,7 @@ func TestEmailProvider_Validate(t *testing.T) {
 				Kind:               EmailProviderKindSES,
 				DefaultSenderEmail: "default@example.com",
 				DefaultSenderName:  "Default Sender",
-				SES: &AmazonSES{
+				SES: &AmazonSESSettings{
 					Region:    "",
 					AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				},
@@ -1281,7 +1281,7 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 			Kind:               EmailProviderKindSES,
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
-			SES: &AmazonSES{
+			SES: &AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				SecretKey: "secret-key",
@@ -1354,7 +1354,7 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 			Kind:               EmailProviderKindSES,
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
-			SES: &AmazonSES{
+			SES: &AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 				SecretKey: "secret-key",
@@ -1574,13 +1574,13 @@ func TestAmazonSES_Validate(t *testing.T) {
 	passphrase := "test-passphrase"
 	testCases := []struct {
 		name     string
-		settings AmazonSES
+		settings AmazonSESSettings
 		wantErr  bool
 		errMsg   string
 	}{
 		{
 			name: "valid settings",
-			settings: AmazonSES{
+			settings: AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 			},
@@ -1588,7 +1588,7 @@ func TestAmazonSES_Validate(t *testing.T) {
 		},
 		{
 			name: "missing region",
-			settings: AmazonSES{
+			settings: AmazonSESSettings{
 				Region:    "",
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
 			},
@@ -1597,7 +1597,7 @@ func TestAmazonSES_Validate(t *testing.T) {
 		},
 		{
 			name: "missing access key",
-			settings: AmazonSES{
+			settings: AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "",
 			},
@@ -1625,7 +1625,7 @@ func TestAmazonSES_EncryptDecryptSecretKey(t *testing.T) {
 	passphrase := "test-passphrase"
 	secretKey := "test-secret-key"
 
-	settings := AmazonSES{
+	settings := AmazonSESSettings{
 		Region:    "us-east-1",
 		AccessKey: "AKIAIOSFODNN7EXAMPLE",
 		SecretKey: secretKey,
@@ -1742,7 +1742,7 @@ func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 					Kind:               EmailProviderKindSES,
 					DefaultSenderEmail: "default-marketing@example.com",
 					DefaultSenderName:  "Default Marketing Sender",
-					SES: &AmazonSES{
+					SES: &AmazonSESSettings{
 						Region:    "us-east-1",
 						AccessKey: "AKIAIOSFODNN7EXAMPLE",
 						SecretKey: "marketing-secret-key",

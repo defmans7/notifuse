@@ -30,15 +30,9 @@ func NewSparkPostService(httpClient domain.HTTPClient, authService domain.AuthSe
 }
 
 // ListWebhooks retrieves all registered webhooks
-func (s *SparkPostService) ListWebhooks(ctx context.Context, config domain.SparkPostConfig) (*domain.SparkPostWebhookListResponse, error) {
+func (s *SparkPostService) ListWebhooks(ctx context.Context, config domain.SparkPostSettings) (*domain.SparkPostWebhookListResponse, error) {
 
-	// Construct the API URL
-	baseURL := config.APIEndpoint
-	if baseURL == "" {
-		baseURL = "https://api.sparkpost.com/api/v1"
-	}
-
-	apiURL := fmt.Sprintf("%s/webhooks", baseURL)
+	apiURL := fmt.Sprintf("%s/webhooks", config.Endpoint)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -76,15 +70,10 @@ func (s *SparkPostService) ListWebhooks(ctx context.Context, config domain.Spark
 }
 
 // CreateWebhook creates a new webhook
-func (s *SparkPostService) CreateWebhook(ctx context.Context, config domain.SparkPostConfig, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
+func (s *SparkPostService) CreateWebhook(ctx context.Context, config domain.SparkPostSettings, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 
 	// Construct the API URL
-	baseURL := config.APIEndpoint
-	if baseURL == "" {
-		baseURL = "https://api.sparkpost.com/api/v1"
-	}
-
-	apiURL := fmt.Sprintf("%s/webhooks", baseURL)
+	apiURL := fmt.Sprintf("%s/webhooks", config.Endpoint)
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -129,15 +118,11 @@ func (s *SparkPostService) CreateWebhook(ctx context.Context, config domain.Spar
 }
 
 // GetWebhook retrieves a webhook by ID
-func (s *SparkPostService) GetWebhook(ctx context.Context, config domain.SparkPostConfig, webhookID string) (*domain.SparkPostWebhookResponse, error) {
+func (s *SparkPostService) GetWebhook(ctx context.Context, config domain.SparkPostSettings, webhookID string) (*domain.SparkPostWebhookResponse, error) {
 
 	// Construct the API URL
-	baseURL := config.APIEndpoint
-	if baseURL == "" {
-		baseURL = "https://api.sparkpost.com/api/v1"
-	}
+	apiURL := fmt.Sprintf("%s/webhooks/%s", config.Endpoint, webhookID)
 
-	apiURL := fmt.Sprintf("%s/webhooks/%s", baseURL, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for getting SparkPost webhook: %v", err))
@@ -172,15 +157,10 @@ func (s *SparkPostService) GetWebhook(ctx context.Context, config domain.SparkPo
 }
 
 // UpdateWebhook updates an existing webhook
-func (s *SparkPostService) UpdateWebhook(ctx context.Context, config domain.SparkPostConfig, webhookID string, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
+func (s *SparkPostService) UpdateWebhook(ctx context.Context, config domain.SparkPostSettings, webhookID string, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 
 	// Construct the API URL
-	baseURL := config.APIEndpoint
-	if baseURL == "" {
-		baseURL = "https://api.sparkpost.com/api/v1"
-	}
-
-	apiURL := fmt.Sprintf("%s/webhooks/%s", baseURL, webhookID)
+	apiURL := fmt.Sprintf("%s/webhooks/%s", config.Endpoint, webhookID)
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -224,18 +204,14 @@ func (s *SparkPostService) UpdateWebhook(ctx context.Context, config domain.Spar
 }
 
 // DeleteWebhook deletes a webhook by ID
-func (s *SparkPostService) DeleteWebhook(ctx context.Context, config domain.SparkPostConfig, webhookID string) error {
+func (s *SparkPostService) DeleteWebhook(ctx context.Context, config domain.SparkPostSettings, webhookID string) error {
 
 	// Log webhook ID for debugging
 	s.logger = s.logger.WithField("webhook_id", webhookID)
 
 	// Construct the API URL
-	baseURL := config.APIEndpoint
-	if baseURL == "" {
-		baseURL = "https://api.sparkpost.com/api/v1"
-	}
+	apiURL := fmt.Sprintf("%s/webhooks/%s", config.Endpoint, webhookID)
 
-	apiURL := fmt.Sprintf("%s/webhooks/%s", baseURL, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for deleting SparkPost webhook: %v", err))
@@ -263,18 +239,13 @@ func (s *SparkPostService) DeleteWebhook(ctx context.Context, config domain.Spar
 }
 
 // TestWebhook sends a test event to a webhook
-func (s *SparkPostService) TestWebhook(ctx context.Context, config domain.SparkPostConfig, webhookID string) error {
+func (s *SparkPostService) TestWebhook(ctx context.Context, config domain.SparkPostSettings, webhookID string) error {
 
 	// Log webhook ID for debugging
 	s.logger = s.logger.WithField("webhook_id", webhookID)
 
 	// Construct the API URL
-	baseURL := config.APIEndpoint
-	if baseURL == "" {
-		baseURL = "https://api.sparkpost.com/api/v1"
-	}
-
-	apiURL := fmt.Sprintf("%s/webhooks/%s/validate", baseURL, webhookID)
+	apiURL := fmt.Sprintf("%s/webhooks/%s/validate", config.Endpoint, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for testing SparkPost webhook: %v", err))
@@ -302,15 +273,10 @@ func (s *SparkPostService) TestWebhook(ctx context.Context, config domain.SparkP
 }
 
 // ValidateWebhook validates a webhook's configuration
-func (s *SparkPostService) ValidateWebhook(ctx context.Context, config domain.SparkPostConfig, webhook domain.SparkPostWebhook) (bool, error) {
+func (s *SparkPostService) ValidateWebhook(ctx context.Context, config domain.SparkPostSettings, webhook domain.SparkPostWebhook) (bool, error) {
 
 	// Construct the API URL
-	baseURL := config.APIEndpoint
-	if baseURL == "" {
-		baseURL = "https://api.sparkpost.com/api/v1"
-	}
-
-	apiURL := fmt.Sprintf("%s/webhooks/validate", baseURL)
+	apiURL := fmt.Sprintf("%s/webhooks/validate", config.Endpoint)
 
 	// Prepare the request body with just the target URL to validate
 	requestBody := map[string]string{
@@ -369,10 +335,34 @@ func (s *SparkPostService) RegisterWebhooks(
 		return nil, fmt.Errorf("SparkPost configuration is missing or invalid")
 	}
 
-	// Create SparkPost API config
-	apiConfig := domain.SparkPostConfig{
-		APIKey:      providerConfig.SparkPost.APIKey,
-		APIEndpoint: "https://api.sparkpost.com/api/v1",
+	// Check if sandbox mode is enabled
+	if providerConfig.SparkPost.SandboxMode {
+		// In sandbox mode, we don't actually register webhooks with SparkPost
+		// but we return a simulated successful response
+		s.logger.Info("SparkPost sandbox mode is enabled, simulating webhook registration")
+
+		webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindSparkPost, workspaceID, integrationID)
+
+		// Create webhook registration status
+		status := &domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSparkPost,
+			IsRegistered:      true,
+			RegisteredEvents:  eventTypes,
+			Endpoints: []domain.WebhookEndpointStatus{
+				{
+					URL:    webhookURL,
+					Active: true,
+				},
+			},
+			ProviderDetails: map[string]interface{}{
+				"webhook_id":     "sandbox-mode-webhook",
+				"integration_id": integrationID,
+				"workspace_id":   workspaceID,
+				"sandbox_mode":   true,
+			},
+		}
+
+		return status, nil
 	}
 
 	// Generate webhook URL that includes workspace_id and integration_id
@@ -391,8 +381,8 @@ func (s *SparkPostService) RegisterWebhooks(
 		}
 	}
 
-	// First check for existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	// First check for existing webhooks using the direct SparkPostSettings
+	existingWebhooks, err := s.directListWebhooks(ctx, providerConfig.SparkPost)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to list SparkPost webhooks: %v", err))
 		return nil, fmt.Errorf("failed to list SparkPost webhooks: %w", err)
@@ -413,7 +403,7 @@ func (s *SparkPostService) RegisterWebhooks(
 	if existingWebhook != nil {
 		// Update the webhook with new events
 		existingWebhook.Events = sparkpostEvents
-		webhookResponse, err = s.UpdateWebhook(ctx, apiConfig, existingWebhook.ID, *existingWebhook)
+		webhookResponse, err = s.directUpdateWebhook(ctx, providerConfig.SparkPost, existingWebhook.ID, *existingWebhook)
 		if err != nil {
 			return nil, fmt.Errorf("failed to update SparkPost webhook: %w", err)
 		}
@@ -427,7 +417,7 @@ func (s *SparkPostService) RegisterWebhooks(
 			AuthType: "none",
 		}
 
-		webhookResponse, err = s.CreateWebhook(ctx, apiConfig, newWebhook)
+		webhookResponse, err = s.directCreateWebhook(ctx, providerConfig.SparkPost, newWebhook)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create SparkPost webhook: %w", err)
 		}
@@ -454,6 +444,140 @@ func (s *SparkPostService) RegisterWebhooks(
 	return status, nil
 }
 
+// directListWebhooks is a helper method that uses SparkPostSettings directly
+func (s *SparkPostService) directListWebhooks(ctx context.Context, settings *domain.SparkPostSettings) (*domain.SparkPostWebhookListResponse, error) {
+
+	apiURL := fmt.Sprintf("%s/webhooks", settings.Endpoint)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create request for listing SparkPost webhooks: %v", err))
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// SparkPost uses API key in header
+	authHeader := fmt.Sprintf("Bearer %s", settings.APIKey)
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to execute request for listing SparkPost webhooks: %v", err))
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		responseBody := string(body)
+		s.logger.Error(fmt.Sprintf("SparkPost API returned non-OK status code %d: %s", resp.StatusCode, responseBody))
+		return nil, fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
+	}
+
+	// Parse the response
+	var response domain.SparkPostWebhookListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to decode SparkPost webhook list response: %v", err))
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &response, nil
+}
+
+// directUpdateWebhook is a helper method that uses SparkPostSettings directly
+func (s *SparkPostService) directUpdateWebhook(ctx context.Context, settings *domain.SparkPostSettings, webhookID string, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
+	// Construct the API URL
+	apiURL := fmt.Sprintf("%s/webhooks/%s", settings.Endpoint, webhookID)
+
+	// Prepare the request body
+	requestBody, err := json.Marshal(webhook)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to marshal webhook configuration: %v", err))
+		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, apiURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create request for updating SparkPost webhook: %v", err))
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// SparkPost uses API key in header
+	authHeader := fmt.Sprintf("Bearer %s", settings.APIKey)
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to execute request for updating SparkPost webhook: %v", err))
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		s.logger.Error(fmt.Sprintf("SparkPost API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
+		return nil, fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
+	}
+
+	// Parse the response to get the updated webhook details
+	var response domain.SparkPostWebhookResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to decode SparkPost webhook response: %v", err))
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &response, nil
+}
+
+// directCreateWebhook is a helper method that uses SparkPostSettings directly
+func (s *SparkPostService) directCreateWebhook(ctx context.Context, settings *domain.SparkPostSettings, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
+
+	apiURL := fmt.Sprintf("%s/webhooks", settings.Endpoint)
+
+	// Prepare the request body
+	requestBody, err := json.Marshal(webhook)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to marshal webhook configuration: %v", err))
+		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create request for creating SparkPost webhook: %v", err))
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// SparkPost uses API key in header
+	authHeader := fmt.Sprintf("Bearer %s", settings.APIKey)
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to execute request for creating SparkPost webhook: %v", err))
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		s.logger.Error(fmt.Sprintf("SparkPost API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
+		return nil, fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
+	}
+
+	// Parse the response to get the created webhook details
+	var response domain.SparkPostWebhookResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to decode SparkPost webhook response: %v", err))
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &response, nil
+}
+
 // GetWebhookStatus implements the domain.WebhookProvider interface for SparkPost
 func (s *SparkPostService) GetWebhookStatus(
 	ctx context.Context,
@@ -466,16 +590,38 @@ func (s *SparkPostService) GetWebhookStatus(
 		return nil, fmt.Errorf("SparkPost configuration is missing or invalid")
 	}
 
-	// Create SparkPost API config
-	apiConfig := domain.SparkPostConfig{
-		APIKey:      providerConfig.SparkPost.APIKey,
-		APIEndpoint: "https://api.sparkpost.com/api/v1",
-	}
+	// Check if sandbox mode is enabled
+	if providerConfig.SparkPost.SandboxMode {
+		// In sandbox mode, we don't actually check webhooks with SparkPost
+		// but we return a simulated response
+		s.logger.Info("SparkPost sandbox mode is enabled, simulating webhook status check")
 
-	// Check if we should use EU endpoint based on endpoint setting
-	if providerConfig.SparkPost.Endpoint != "" &&
-		strings.Contains(strings.ToLower(providerConfig.SparkPost.Endpoint), "eu.sparkpost") {
-		apiConfig.APIEndpoint = "https://api.eu.sparkpost.com/api/v1"
+		webhookURL := domain.GenerateWebhookCallbackURL("https://api.example.com", domain.EmailProviderKindSparkPost, workspaceID, integrationID)
+
+		// Create webhook status
+		status := &domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSparkPost,
+			IsRegistered:      true,
+			Endpoints: []domain.WebhookEndpointStatus{
+				{
+					URL:    webhookURL,
+					Active: true,
+				},
+			},
+			RegisteredEvents: []domain.EmailEventType{
+				domain.EmailEventDelivered,
+				domain.EmailEventBounce,
+				domain.EmailEventComplaint,
+			},
+			ProviderDetails: map[string]interface{}{
+				"webhook_id":     "sandbox-mode-webhook",
+				"integration_id": integrationID,
+				"workspace_id":   workspaceID,
+				"sandbox_mode":   true,
+			},
+		}
+
+		return status, nil
 	}
 
 	// Create webhook status response
@@ -489,8 +635,8 @@ func (s *SparkPostService) GetWebhookStatus(
 		},
 	}
 
-	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	// Get existing webhooks using direct SparkPostSettings
+	existingWebhooks, err := s.directListWebhooks(ctx, providerConfig.SparkPost)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to list SparkPost webhooks: %v", err))
 		return nil, fmt.Errorf("failed to list SparkPost webhooks: %w", err)
@@ -540,14 +686,15 @@ func (s *SparkPostService) UnregisterWebhooks(
 		return fmt.Errorf("SparkPost configuration is missing or invalid")
 	}
 
-	// Create SparkPost API config
-	apiConfig := domain.SparkPostConfig{
-		APIKey:      providerConfig.SparkPost.APIKey,
-		APIEndpoint: "https://api.sparkpost.com/api/v1",
+	// Check if sandbox mode is enabled
+	if providerConfig.SparkPost.SandboxMode {
+		// In sandbox mode, we don't actually unregister webhooks with SparkPost
+		s.logger.Info("SparkPost sandbox mode is enabled, simulating webhook unregistration")
+		return nil
 	}
 
-	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	// Get existing webhooks using the direct SparkPostSettings
+	existingWebhooks, err := s.directListWebhooks(ctx, providerConfig.SparkPost)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to list SparkPost webhooks: %v", err))
 		return fmt.Errorf("failed to list SparkPost webhooks: %w", err)
@@ -559,7 +706,7 @@ func (s *SparkPostService) UnregisterWebhooks(
 		if strings.Contains(webhook.Target, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
 			strings.Contains(webhook.Target, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+			err := s.directDeleteWebhook(ctx, providerConfig.SparkPost, webhook.ID)
 			if err != nil {
 				s.logger.WithField("webhook_id", webhook.ID).
 					Error(fmt.Sprintf("Failed to delete SparkPost webhook: %v", err))
@@ -574,6 +721,41 @@ func (s *SparkPostService) UnregisterWebhooks(
 
 	if lastError != nil {
 		return fmt.Errorf("failed to delete one or more SparkPost webhooks: %w", lastError)
+	}
+
+	return nil
+}
+
+// directDeleteWebhook is a helper method that uses SparkPostSettings directly
+func (s *SparkPostService) directDeleteWebhook(ctx context.Context, settings *domain.SparkPostSettings, webhookID string) error {
+	// Construct the API URL
+	apiURL := fmt.Sprintf("%s/webhooks/%s", settings.Endpoint, webhookID)
+
+	// Log webhook ID for debugging
+	s.logger = s.logger.WithField("webhook_id", webhookID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, apiURL, nil)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create request for deleting SparkPost webhook: %v", err))
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// SparkPost uses API key in header
+	authHeader := fmt.Sprintf("Bearer %s", settings.APIKey)
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to execute request for deleting SparkPost webhook: %v", err))
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		s.logger.Error(fmt.Sprintf("SparkPost API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
+		return fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
 	}
 
 	return nil

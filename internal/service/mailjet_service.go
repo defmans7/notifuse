@@ -31,16 +31,9 @@ func NewMailjetService(httpClient domain.HTTPClient, authService domain.AuthServ
 }
 
 // ListWebhooks retrieves all registered webhooks
-func (s *MailjetService) ListWebhooks(ctx context.Context, config domain.MailjetConfig) (*domain.MailjetWebhookResponse, error) {
+func (s *MailjetService) ListWebhooks(ctx context.Context, config domain.MailjetSettings) (*domain.MailjetWebhookResponse, error) {
 
-	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = "https://api.mailjet.com/v3"
-	}
-
-	apiURL := fmt.Sprintf("%s/eventcallback", baseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.mailjet.com/v3/eventcallback", nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for listing Mailjet webhooks: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -74,15 +67,7 @@ func (s *MailjetService) ListWebhooks(ctx context.Context, config domain.Mailjet
 }
 
 // CreateWebhook creates a new webhook
-func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.MailjetConfig, webhook domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
-
-	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = "https://api.mailjet.com/v3"
-	}
-
-	apiURL := fmt.Sprintf("%s/eventcallback", baseURL)
+func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.MailjetSettings, webhook domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -91,7 +76,7 @@ func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.Mailje
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.mailjet.com/v3/eventcallback", bytes.NewBuffer(requestBody))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for creating Mailjet webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -126,16 +111,9 @@ func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.Mailje
 }
 
 // GetWebhook retrieves a webhook by ID
-func (s *MailjetService) GetWebhook(ctx context.Context, config domain.MailjetConfig, webhookID int64) (*domain.MailjetWebhook, error) {
+func (s *MailjetService) GetWebhook(ctx context.Context, config domain.MailjetSettings, webhookID int64) (*domain.MailjetWebhook, error) {
 
-	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = "https://api.mailjet.com/v3"
-	}
-
-	apiURL := fmt.Sprintf("%s/eventcallback/%d", baseURL, webhookID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.mailjet.com/v3/eventcallback/%d", webhookID), nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for getting Mailjet webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -175,18 +153,10 @@ func (s *MailjetService) GetWebhook(ctx context.Context, config domain.MailjetCo
 }
 
 // UpdateWebhook updates an existing webhook
-func (s *MailjetService) UpdateWebhook(ctx context.Context, config domain.MailjetConfig, webhookID int64, webhook domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
+func (s *MailjetService) UpdateWebhook(ctx context.Context, config domain.MailjetSettings, webhookID int64, webhook domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
 
 	// Ensure the webhook ID in the URL matches the one in the body
 	webhook.ID = webhookID
-
-	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = "https://api.mailjet.com/v3"
-	}
-
-	apiURL := fmt.Sprintf("%s/eventcallback/%d", baseURL, webhookID)
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -195,7 +165,7 @@ func (s *MailjetService) UpdateWebhook(ctx context.Context, config domain.Mailje
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, apiURL, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("https://api.mailjet.com/v3/eventcallback/%d", webhookID), bytes.NewBuffer(requestBody))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for updating Mailjet webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -230,20 +200,13 @@ func (s *MailjetService) UpdateWebhook(ctx context.Context, config domain.Mailje
 }
 
 // DeleteWebhook deletes a webhook by ID
-func (s *MailjetService) DeleteWebhook(ctx context.Context, config domain.MailjetConfig, webhookID int64) error {
+func (s *MailjetService) DeleteWebhook(ctx context.Context, config domain.MailjetSettings, webhookID int64) error {
 
 	// Log webhook ID for debugging
 	webhookIDStr := strconv.FormatInt(webhookID, 10)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
 
-	// Construct the API URL
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = "https://api.mailjet.com/v3"
-	}
-
-	apiURL := fmt.Sprintf("%s/eventcallback/%d", baseURL, webhookID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("https://api.mailjet.com/v3/eventcallback/%d", webhookID), nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for deleting Mailjet webhook: %v", err))
 		return fmt.Errorf("failed to create request: %w", err)
@@ -284,13 +247,6 @@ func (s *MailjetService) RegisterWebhooks(
 		return nil, fmt.Errorf("Mailjet configuration is missing or invalid")
 	}
 
-	// Create Mailjet API config
-	apiConfig := domain.MailjetConfig{
-		APIKey:    providerConfig.Mailjet.APIKey,
-		SecretKey: providerConfig.Mailjet.SecretKey,
-		BaseURL:   "https://api.mailjet.com/v3",
-	}
-
 	// Create webhook URL that includes workspace_id and integration_id
 	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindMailjet, workspaceID, integrationID)
 
@@ -314,7 +270,7 @@ func (s *MailjetService) RegisterWebhooks(
 	}
 
 	// First, get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Mailjet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Mailjet webhooks: %w", err)
 	}
@@ -331,7 +287,7 @@ func (s *MailjetService) RegisterWebhooks(
 
 	// Delete existing webhooks
 	for _, webhook := range notifuseWebhooks {
-		err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+		err := s.DeleteWebhook(ctx, *providerConfig.Mailjet, webhook.ID)
 		if err != nil {
 			s.logger.WithField("webhook_id", webhook.ID).
 				Error(fmt.Sprintf("Failed to delete Mailjet webhook: %v", err))
@@ -347,7 +303,7 @@ func (s *MailjetService) RegisterWebhooks(
 		Status:    "active",
 	}
 
-	webhook, err := s.CreateWebhook(ctx, apiConfig, webhookConfig)
+	webhook, err := s.CreateWebhook(ctx, *providerConfig.Mailjet, webhookConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Mailjet webhook: %w", err)
 	}
@@ -386,13 +342,6 @@ func (s *MailjetService) GetWebhookStatus(
 		return nil, fmt.Errorf("Mailjet configuration is missing or invalid")
 	}
 
-	// Create Mailjet API config
-	apiConfig := domain.MailjetConfig{
-		APIKey:    providerConfig.Mailjet.APIKey,
-		SecretKey: providerConfig.Mailjet.SecretKey,
-		BaseURL:   "https://api.mailjet.com/v3",
-	}
-
 	// Create webhook status response
 	status := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindMailjet,
@@ -405,7 +354,7 @@ func (s *MailjetService) GetWebhookStatus(
 	}
 
 	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Mailjet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Mailjet webhooks: %w", err)
 	}
@@ -454,15 +403,8 @@ func (s *MailjetService) UnregisterWebhooks(
 		return fmt.Errorf("Mailjet configuration is missing or invalid")
 	}
 
-	// Create Mailjet API config
-	apiConfig := domain.MailjetConfig{
-		APIKey:    providerConfig.Mailjet.APIKey,
-		SecretKey: providerConfig.Mailjet.SecretKey,
-		BaseURL:   "https://api.mailjet.com/v3",
-	}
-
 	// Get existing webhooks
-	existingWebhooks, err := s.ListWebhooks(ctx, apiConfig)
+	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Mailjet)
 	if err != nil {
 		return fmt.Errorf("failed to list Mailjet webhooks: %w", err)
 	}
@@ -473,7 +415,7 @@ func (s *MailjetService) UnregisterWebhooks(
 		if strings.Contains(webhook.Endpoint, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
 			strings.Contains(webhook.Endpoint, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			err := s.DeleteWebhook(ctx, apiConfig, webhook.ID)
+			err := s.DeleteWebhook(ctx, *providerConfig.Mailjet, webhook.ID)
 			if err != nil {
 				s.logger.WithField("webhook_id", webhook.ID).
 					Error(fmt.Sprintf("Failed to delete Mailjet webhook: %v", err))

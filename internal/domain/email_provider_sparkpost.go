@@ -2,6 +2,9 @@ package domain
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
 //go:generate mockgen -destination mocks/mock_sparkpost_service.go -package mocks github.com/Notifuse/notifuse/internal/domain SparkPostServiceInterface
@@ -127,10 +130,47 @@ type SparkPostWebhookResponse struct {
 	Results SparkPostWebhook `json:"results"`
 }
 
-// SparkPostConfig represents configuration for SparkPost API
-type SparkPostConfig struct {
-	APIKey      string `json:"api_key"`
-	APIEndpoint string `json:"api_endpoint"`
+// SparkPostSettings contains configuration for SparkPost email provider
+type SparkPostSettings struct {
+	EncryptedAPIKey string `json:"encrypted_api_key,omitempty"`
+	SandboxMode     bool   `json:"sandbox_mode"`
+	Endpoint        string `json:"endpoint"`
+
+	// decoded API key, not stored in the database
+	APIKey string `json:"api_key,omitempty"`
+}
+
+func (s *SparkPostSettings) DecryptAPIKey(passphrase string) error {
+	apiKey, err := crypto.DecryptFromHexString(s.EncryptedAPIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt SparkPost API key: %w", err)
+	}
+	s.APIKey = apiKey
+	return nil
+}
+
+func (s *SparkPostSettings) EncryptAPIKey(passphrase string) error {
+	encryptedAPIKey, err := crypto.EncryptString(s.APIKey, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt SparkPost API key: %w", err)
+	}
+	s.EncryptedAPIKey = encryptedAPIKey
+	return nil
+}
+
+func (s *SparkPostSettings) Validate(passphrase string) error {
+	if s.Endpoint == "" {
+		return fmt.Errorf("endpoint is required for SparkPost configuration")
+	}
+
+	// Encrypt API key if it's not empty
+	if s.APIKey != "" {
+		if err := s.EncryptAPIKey(passphrase); err != nil {
+			return fmt.Errorf("failed to encrypt SparkPost API key: %w", err)
+		}
+	}
+
+	return nil
 }
 
 //go:generate mockgen -destination mocks/mock_sparkpost_service.go -package mocks github.com/Notifuse/notifuse/internal/domain SparkPostServiceInterface
@@ -138,23 +178,23 @@ type SparkPostConfig struct {
 // SparkPostServiceInterface defines operations for managing SparkPost webhooks
 type SparkPostServiceInterface interface {
 	// ListWebhooks retrieves all registered webhooks
-	ListWebhooks(ctx context.Context, config SparkPostConfig) (*SparkPostWebhookListResponse, error)
+	ListWebhooks(ctx context.Context, config SparkPostSettings) (*SparkPostWebhookListResponse, error)
 
 	// CreateWebhook creates a new webhook
-	CreateWebhook(ctx context.Context, config SparkPostConfig, webhook SparkPostWebhook) (*SparkPostWebhookResponse, error)
+	CreateWebhook(ctx context.Context, config SparkPostSettings, webhook SparkPostWebhook) (*SparkPostWebhookResponse, error)
 
 	// GetWebhook retrieves a webhook by ID
-	GetWebhook(ctx context.Context, config SparkPostConfig, webhookID string) (*SparkPostWebhookResponse, error)
+	GetWebhook(ctx context.Context, config SparkPostSettings, webhookID string) (*SparkPostWebhookResponse, error)
 
 	// UpdateWebhook updates an existing webhook
-	UpdateWebhook(ctx context.Context, config SparkPostConfig, webhookID string, webhook SparkPostWebhook) (*SparkPostWebhookResponse, error)
+	UpdateWebhook(ctx context.Context, config SparkPostSettings, webhookID string, webhook SparkPostWebhook) (*SparkPostWebhookResponse, error)
 
 	// DeleteWebhook deletes a webhook by ID
-	DeleteWebhook(ctx context.Context, config SparkPostConfig, webhookID string) error
+	DeleteWebhook(ctx context.Context, config SparkPostSettings, webhookID string) error
 
 	// TestWebhook sends a test event to a webhook
-	TestWebhook(ctx context.Context, config SparkPostConfig, webhookID string) error
+	TestWebhook(ctx context.Context, config SparkPostSettings, webhookID string) error
 
 	// ValidateWebhook validates a webhook's configuration
-	ValidateWebhook(ctx context.Context, config SparkPostConfig, webhook SparkPostWebhook) (bool, error)
+	ValidateWebhook(ctx context.Context, config SparkPostSettings, webhook SparkPostWebhook) (bool, error)
 }
