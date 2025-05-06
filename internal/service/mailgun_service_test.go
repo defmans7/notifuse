@@ -1,0 +1,582 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/pkg/logger"
+)
+
+func TestMailgunService_ListWebhooks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	testLogger := logger.NewMockLogger(t)
+
+	webhookEndpoint := "https://webhook.example.com"
+	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+
+	ctx := context.Background()
+	config := domain.MailgunSettings{
+		Domain: "example.com",
+		APIKey: "test-api-key",
+		Region: "US",
+	}
+
+	t.Run("successful response", func(t *testing.T) {
+		// Mock HTTP response
+		responseBody := `{
+			"webhooks": {
+				"delivered": {
+					"urls": ["https://webhook.example.com/mailgun/delivered"]
+				},
+				"permanent_fail": {
+					"urls": ["https://webhook.example.com/mailgun/failed", "https://other-domain.com/webhook"]
+				},
+				"temporary_fail": {
+					"urls": []
+				},
+				"complained": {
+					"urls": []
+				}
+			}
+		}`
+
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+		}
+
+		// Set expectation for HTTP request
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "GET", req.Method)
+				assert.Equal(t, "https://api.mailgun.net/v3/domains/example.com/webhooks", req.URL.String())
+				// Check for Basic auth header instead of raw header
+				username, password, ok := req.BasicAuth()
+				assert.True(t, ok, "Basic auth header should be set")
+				assert.Equal(t, "api", username)
+				assert.Equal(t, "test-api-key", password)
+
+				return resp, nil
+			})
+
+		// Call the service
+		result, err := service.ListWebhooks(ctx, config)
+
+		// Verify results
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Len(t, result.Webhooks.Delivered.URLs, 1)
+		assert.Equal(t, "https://webhook.example.com/mailgun/delivered", result.Webhooks.Delivered.URLs[0])
+		assert.Len(t, result.Webhooks.PermanentFail.URLs, 1) // Filtered out the non-matching URL
+		assert.Equal(t, "https://webhook.example.com/mailgun/failed", result.Webhooks.PermanentFail.URLs[0])
+		assert.Empty(t, result.Webhooks.TemporaryFail.URLs)
+		assert.Empty(t, result.Webhooks.Complained.URLs)
+	})
+
+	t.Run("EU region", func(t *testing.T) {
+		// Use EU region config
+		euConfig := domain.MailgunSettings{
+			Domain: "example.com",
+			APIKey: "test-api-key",
+			Region: "EU",
+		}
+
+		// Mock HTTP response
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"webhooks": {"delivered": {"urls": []}, "permanent_fail": {"urls": []}, "temporary_fail": {"urls": []}, "complained": {"urls": []}}}`)),
+		}
+
+		// Set expectation for HTTP request with EU endpoint
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request uses EU endpoint
+				assert.Equal(t, "https://api.eu.mailgun.net/v3/domains/example.com/webhooks", req.URL.String())
+				return resp, nil
+			})
+
+		// Call the service
+		result, err := service.ListWebhooks(ctx, euConfig)
+
+		// Verify results
+		require.NoError(t, err)
+		require.NotNil(t, result)
+	})
+
+	t.Run("HTTP request error", func(t *testing.T) {
+		// Set expectation for HTTP error
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, errors.New("connection error"))
+
+		// Call the service
+		result, err := service.ListWebhooks(ctx, config)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to execute request")
+	})
+
+	t.Run("non-200 response", func(t *testing.T) {
+		// Mock error response
+		resp := &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Body:       io.NopCloser(strings.NewReader(`{"error": "Unauthorized"}`)),
+		}
+
+		// Set expectation
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the service
+		result, err := service.ListWebhooks(ctx, config)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "API returned non-OK status code 401")
+	})
+
+	t.Run("invalid JSON response", func(t *testing.T) {
+		// Mock invalid JSON
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{invalid json}`)),
+		}
+
+		// Set expectation
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the service
+		result, err := service.ListWebhooks(ctx, config)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to decode response")
+	})
+}
+
+func TestMailgunService_CreateWebhook(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	testLogger := logger.NewMockLogger(t)
+
+	webhookEndpoint := "https://webhook.example.com"
+	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+
+	ctx := context.Background()
+	config := domain.MailgunSettings{
+		Domain: "example.com",
+		APIKey: "test-api-key",
+		Region: "US",
+	}
+
+	webhook := domain.MailgunWebhook{
+		URL:    "https://webhook.example.com/mailgun/delivered",
+		Events: []string{"delivered"},
+		Active: true,
+	}
+
+	t.Run("successful webhook creation", func(t *testing.T) {
+		// Mock successful response
+		responseBody := `{
+			"message": "Webhook has been created",
+			"webhook": {
+				"id": "delivered",
+				"url": "https://webhook.example.com/mailgun/delivered"
+			}
+		}`
+
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+		}
+
+		// Set expectation for HTTP request
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "POST", req.Method)
+				assert.Equal(t, "https://api.mailgun.net/v3/domains/example.com/webhooks", req.URL.String())
+
+				// Ensure body contains form data
+				body, _ := io.ReadAll(req.Body)
+				assert.Contains(t, string(body), "id=delivered")
+				assert.Contains(t, string(body), "url=https%3A%2F%2Fwebhook.example.com%2Fmailgun%2Fdelivered")
+
+				return resp, nil
+			})
+
+		// Call the service
+		result, err := service.CreateWebhook(ctx, config, webhook)
+
+		// Verify results
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "delivered", result.ID)
+		assert.Equal(t, "https://webhook.example.com/mailgun/delivered", result.URL)
+		assert.Equal(t, []string{"delivered"}, result.Events)
+		assert.True(t, result.Active)
+	})
+
+	t.Run("empty events list", func(t *testing.T) {
+		// Try to create webhook with no events
+		emptyWebhook := domain.MailgunWebhook{
+			URL:    "https://webhook.example.com/mailgun/delivered",
+			Events: []string{},
+			Active: true,
+		}
+
+		// Call the service
+		result, err := service.CreateWebhook(ctx, config, emptyWebhook)
+
+		// Verify error is returned
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "at least one event type is required")
+	})
+
+	t.Run("HTTP request error", func(t *testing.T) {
+		// Set expectation for HTTP error
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, errors.New("connection error"))
+
+		// Call the service
+		result, err := service.CreateWebhook(ctx, config, webhook)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to execute request")
+	})
+
+	t.Run("non-200 response", func(t *testing.T) {
+		// Mock error response
+		resp := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(strings.NewReader(`{"error": "Bad Request"}`)),
+		}
+
+		// Set expectation
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the service
+		result, err := service.CreateWebhook(ctx, config, webhook)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "API returned non-OK status code 400")
+	})
+}
+
+func TestMailgunService_DeleteWebhook(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	testLogger := logger.NewMockLogger(t)
+
+	webhookEndpoint := "https://webhook.example.com"
+	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+
+	ctx := context.Background()
+	config := domain.MailgunSettings{
+		Domain: "example.com",
+		APIKey: "test-api-key",
+		Region: "US",
+	}
+	webhookID := "delivered"
+
+	t.Run("successful webhook deletion", func(t *testing.T) {
+		// Mock successful response
+		responseBody := `{
+			"message": "Webhook has been deleted",
+			"id": "delivered"
+		}`
+
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+		}
+
+		// Set expectation for HTTP request
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "DELETE", req.Method)
+				assert.Equal(t, "https://api.mailgun.net/v3/domains/example.com/webhooks/delivered", req.URL.String())
+
+				return resp, nil
+			})
+
+		// Call the service
+		err := service.DeleteWebhook(ctx, config, webhookID)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("HTTP request error", func(t *testing.T) {
+		// Set expectation for HTTP error
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, errors.New("connection error"))
+
+		// Call the service
+		err := service.DeleteWebhook(ctx, config, webhookID)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to execute request")
+	})
+
+	t.Run("non-200 response", func(t *testing.T) {
+		// Mock error response
+		resp := &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(strings.NewReader(`{"error": "Webhook not found"}`)),
+		}
+
+		// Set expectation
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the service
+		err := service.DeleteWebhook(ctx, config, webhookID)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "API returned non-OK status code 404")
+	})
+}
+
+func TestMailgunService_GetWebhook(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	testLogger := logger.NewMockLogger(t)
+
+	webhookEndpoint := "https://webhook.example.com"
+	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+
+	ctx := context.Background()
+	config := domain.MailgunSettings{
+		Domain: "example.com",
+		APIKey: "test-api-key",
+		Region: "US",
+	}
+	webhookID := "delivered"
+
+	t.Run("successful webhook retrieval", func(t *testing.T) {
+		// Mock successful response
+		responseBody := `{
+			"webhook": {
+				"id": "delivered",
+				"url": "https://webhook.example.com/mailgun/delivered",
+				"active": true
+			}
+		}`
+
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+		}
+
+		// Set expectation for HTTP request
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "GET", req.Method)
+				assert.Equal(t, "https://api.mailgun.net/v3/domains/example.com/webhooks/delivered", req.URL.String())
+
+				return resp, nil
+			})
+
+		// Call the service
+		result, err := service.GetWebhook(ctx, config, webhookID)
+
+		// Verify results
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "delivered", result.ID)
+		assert.Equal(t, "https://webhook.example.com/mailgun/delivered", result.URL)
+		assert.Equal(t, []string{"delivered"}, result.Events)
+		assert.True(t, result.Active)
+	})
+
+	t.Run("HTTP request error", func(t *testing.T) {
+		// Set expectation for HTTP error
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, errors.New("connection error"))
+
+		// Call the service
+		result, err := service.GetWebhook(ctx, config, webhookID)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to execute request")
+	})
+
+	t.Run("non-200 response", func(t *testing.T) {
+		// Mock error response
+		resp := &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(strings.NewReader(`{"error": "Webhook not found"}`)),
+		}
+
+		// Set expectation
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the service
+		result, err := service.GetWebhook(ctx, config, webhookID)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "API returned non-OK status code 404")
+	})
+}
+
+func TestMailgunService_UpdateWebhook(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	testLogger := logger.NewMockLogger(t)
+
+	webhookEndpoint := "https://webhook.example.com"
+	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+
+	ctx := context.Background()
+	config := domain.MailgunSettings{
+		Domain: "example.com",
+		APIKey: "test-api-key",
+		Region: "US",
+	}
+	webhookID := "delivered"
+	webhook := domain.MailgunWebhook{
+		URL:    "https://webhook.example.com/mailgun/delivered-updated",
+		Events: []string{"delivered"},
+		Active: true,
+	}
+
+	t.Run("successful webhook update", func(t *testing.T) {
+		// Mock successful response
+		responseBody := `{
+			"message": "Webhook has been updated",
+			"webhook": {
+				"id": "delivered",
+				"url": "https://webhook.example.com/mailgun/delivered-updated"
+			}
+		}`
+
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+		}
+
+		// Set expectation for HTTP request
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "PUT", req.Method)
+				assert.Equal(t, "https://api.mailgun.net/v3/domains/example.com/webhooks/delivered", req.URL.String())
+
+				// Ensure body contains form data
+				body, _ := io.ReadAll(req.Body)
+				// Use a more generic assertion since the exact form parameter names might differ
+				assert.Contains(t, string(body), "urls=https%3A%2F%2Fwebhook.example.com%2Fmailgun%2Fdelivered-updated")
+
+				return resp, nil
+			})
+
+		// Call the service
+		result, err := service.UpdateWebhook(ctx, config, webhookID, webhook)
+
+		// Verify results
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "delivered", result.ID)
+		assert.Equal(t, "https://webhook.example.com/mailgun/delivered-updated", result.URL)
+		assert.Equal(t, []string{"delivered"}, result.Events)
+		assert.True(t, result.Active)
+	})
+
+	t.Run("HTTP request error", func(t *testing.T) {
+		// Set expectation for HTTP error
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, errors.New("connection error"))
+
+		// Call the service
+		result, err := service.UpdateWebhook(ctx, config, webhookID, webhook)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to execute request")
+	})
+
+	t.Run("non-200 response", func(t *testing.T) {
+		// Mock error response
+		resp := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(strings.NewReader(`{"error": "Bad Request"}`)),
+		}
+
+		// Set expectation
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the service
+		result, err := service.UpdateWebhook(ctx, config, webhookID, webhook)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "API returned non-OK status code 400")
+	})
+}

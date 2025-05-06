@@ -1107,3 +1107,76 @@ func TestEncryptDecrypt_PassphraseEdgeCases(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to decrypt SparkPost API key")
 	})
 }
+
+func TestMailjetSettings_EmptyEncryptedValues(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	t.Run("Empty encrypted API key", func(t *testing.T) {
+		settings := MailjetSettings{
+			EncryptedAPIKey: "",
+		}
+
+		// Decrypting an empty encrypted value should fail
+		err := settings.DecryptAPIKey(passphrase)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "DecryptFromHexString empty string")
+	})
+
+	t.Run("Empty encrypted Secret key", func(t *testing.T) {
+		settings := MailjetSettings{
+			EncryptedSecretKey: "",
+		}
+
+		// Decrypting an empty encrypted value should fail
+		err := settings.DecryptSecretKey(passphrase)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "DecryptFromHexString empty string")
+	})
+}
+
+func TestMailjetSettings_MultiKeyEncryptionWithSamePassphrase(t *testing.T) {
+	passphrase := "test-passphrase"
+	settings := MailjetSettings{
+		APIKey:      "test-api-key",
+		SecretKey:   "test-secret-key",
+		SandboxMode: true,
+	}
+
+	// Encrypt both keys
+	err := settings.EncryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedAPIKey)
+
+	err = settings.EncryptSecretKey(passphrase)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, settings.EncryptedSecretKey)
+
+	// Save encrypted values
+	apiKeyEncrypted := settings.EncryptedAPIKey
+	secretKeyEncrypted := settings.EncryptedSecretKey
+
+	// Clear keys
+	settings.APIKey = ""
+	settings.SecretKey = ""
+
+	// Decrypt with same passphrase
+	err = settings.DecryptAPIKey(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-api-key", settings.APIKey)
+
+	err = settings.DecryptSecretKey(passphrase)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-secret-key", settings.SecretKey)
+
+	// Now try with a wrong passphrase
+	settings.EncryptedAPIKey = apiKeyEncrypted
+	settings.EncryptedSecretKey = secretKeyEncrypted
+	settings.APIKey = ""
+	settings.SecretKey = ""
+
+	err = settings.DecryptAPIKey("wrong-passphrase")
+	assert.Error(t, err)
+
+	err = settings.DecryptSecretKey("wrong-passphrase")
+	assert.Error(t, err)
+}

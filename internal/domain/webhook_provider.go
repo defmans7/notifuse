@@ -2,6 +2,8 @@ package domain
 
 import "context"
 
+//go:generate mockgen -destination mocks/mock_webhook_provider.go -package mocks github.com/Notifuse/notifuse/internal/domain WebhookProvider
+
 // WebhookProvider defines a common interface for all email providers that support webhooks
 type WebhookProvider interface {
 	// RegisterWebhooks registers webhooks for the specified events
