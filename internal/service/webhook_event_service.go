@@ -256,6 +256,13 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 
 // processPostmarkWebhook processes a webhook event from Postmark
 func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+	// First, unmarshal into a map to extract the fields directly
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(rawPayload, &jsonData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Postmark webhook payload: %w", err)
+	}
+
+	// Then unmarshal into our struct
 	var payload domain.PostmarkWebhookPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Postmark webhook payload: %w", err)
@@ -270,74 +277,71 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 	switch payload.RecordType {
 	case "Delivery":
 		eventType = domain.EmailEventDelivered
-		if payload.DeliveredFields != nil {
-			recipientEmail = payload.DeliveredFields.RecipientEmail
 
-			// Parse timestamp
-			if t, err := time.Parse(time.RFC3339, payload.DeliveredFields.DeliveredAt); err == nil {
-				timestamp = t
+		// Extract Delivered fields from the raw JSON
+		if deliveryData, ok := jsonData["Recipient"].(string); ok {
+			recipientEmail = deliveryData
+		}
+
+		if t, ok := jsonData["DeliveredAt"].(string); ok && t != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, t); err == nil {
+				timestamp = parsedTime
 			} else {
 				timestamp = time.Now()
 			}
+		} else {
+			timestamp = time.Now()
 		}
+
 	case "Bounce":
 		eventType = domain.EmailEventBounce
-		if payload.BounceFields != nil {
-			recipientEmail = payload.BounceFields.RecipientEmail
-			bounceType = payload.BounceFields.Type
-			// Map TypeCode to a category
-			switch payload.BounceFields.TypeCode {
-			case 1:
-				bounceCategory = "HardBounce"
-			case 2:
-				bounceCategory = "Transient"
-			case 3:
-				bounceCategory = "Unsubscribe"
-			case 4:
-				bounceCategory = "Subscribe"
-			case 5:
-				bounceCategory = "AutoResponder"
-			case 6:
-				bounceCategory = "AddressChange"
-			case 7:
-				bounceCategory = "DnsError"
-			case 8:
-				bounceCategory = "SpamNotification"
-			case 9:
-				bounceCategory = "OpenRelayTest"
-			case 10:
-				bounceCategory = "Unknown"
-			case 11:
-				bounceCategory = "SoftBounce"
-			case 12:
-				bounceCategory = "VirusNotification"
-			case 13:
-				bounceCategory = "ChallengeVerification"
-			default:
-				bounceCategory = "Unknown"
-			}
-			bounceDiagnostic = payload.BounceFields.Details
 
-			// Parse timestamp
-			if t, err := time.Parse(time.RFC3339, payload.BounceFields.BouncedAt); err == nil {
-				timestamp = t
+		// Extract Bounce fields from the raw JSON
+		if email, ok := jsonData["Email"].(string); ok {
+			recipientEmail = email
+		}
+
+		if typeStr, ok := jsonData["Type"].(string); ok {
+			bounceType = typeStr
+			bounceCategory = typeStr // Use the same value for both in Postmark
+		}
+
+		if details, ok := jsonData["Details"].(string); ok {
+			bounceDiagnostic = details
+		}
+
+		if t, ok := jsonData["BouncedAt"].(string); ok && t != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, t); err == nil {
+				timestamp = parsedTime
 			} else {
 				timestamp = time.Now()
 			}
+		} else {
+			timestamp = time.Now()
 		}
+
 	case "SpamComplaint":
 		eventType = domain.EmailEventComplaint
-		if payload.ComplaintFields != nil {
-			recipientEmail = payload.ComplaintFields.RecipientEmail
-			complaintFeedbackType = payload.ComplaintFields.Type
 
-			// Parse timestamp
-			if t, err := time.Parse(time.RFC3339, payload.ComplaintFields.ComplainedAt); err == nil {
-				timestamp = t
+		// Extract Complaint fields from the raw JSON
+		if email, ok := jsonData["Email"].(string); ok {
+			recipientEmail = email
+		}
+
+		if typeStr, ok := jsonData["Type"].(string); ok {
+			complaintFeedbackType = typeStr
+		}
+
+		if t, ok := jsonData["ComplainedAt"].(string); ok && t != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, t); err == nil {
+				timestamp = parsedTime
 			} else {
 				timestamp = time.Now()
 			}
+		} else {
+			timestamp = time.Now()
 		}
+
 	default:
 		return nil, fmt.Errorf("unsupported Postmark record type: %s", payload.RecordType)
 	}

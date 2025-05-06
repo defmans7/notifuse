@@ -223,7 +223,7 @@ func (s *MailjetService) DeleteWebhook(ctx context.Context, config domain.Mailje
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		s.logger.Error(fmt.Sprintf("Mailjet API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
 		return fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
@@ -443,4 +443,10 @@ func (s *MailjetService) UnregisterWebhooks(
 	}
 
 	return nil
+}
+
+// TestWebhook implements the domain.WebhookProvider interface for Mailjet
+// Mailjet doesn't support testing webhooks directly
+func (s *MailjetService) TestWebhook(ctx context.Context, config domain.MailjetSettings, webhookID string, eventType string) error {
+	return fmt.Errorf("webhook testing is not supported for Mailjet")
 }

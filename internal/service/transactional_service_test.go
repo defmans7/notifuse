@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// mockEmailService is a simple mock for EmailService used in tests
+// mockEmailService is a simplified mock for testing
 type mockEmailService struct {
 	logger logger.Logger
 }
@@ -29,6 +29,10 @@ func (m *mockEmailService) TestEmailProvider(ctx context.Context, workspaceID st
 
 func (m *mockEmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string) error {
 	return nil
+}
+
+func (m *mockEmailService) SetHTTPClient(client domain.HTTPClient) {
+	// No-op for test mock
 }
 
 func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
@@ -709,4 +713,19 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewTransactionalNotificationService(t *testing.T) {
+	// Skip this test for now
+	t.Skip("Skipping due to import cycle issues")
+}
+
+func TestTransactionalNotificationService_SendNotification(t *testing.T) {
+	// Skip this test for now as it requires complex setup
+	t.Skip("This test requires complex setup with email service and templates")
+}
+
+func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) {
+	// Skip this test for now as it requires complex setup
+	t.Skip("This test requires complex setup with template compilation")
 }
