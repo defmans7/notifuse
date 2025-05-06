@@ -1189,7 +1189,7 @@ func TestWorkspaceHandler_HandleCreateAPIKey_MethodNotAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.createAPIKey", nil)
 	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
 
-	// Execute request directly against handler to test method check
+	// Execute request directly against handler
 	w := httptest.NewRecorder()
 	handler.handleCreateAPIKey(w, req)
 
@@ -1771,6 +1771,162 @@ func TestWorkspaceHandler_HandleUpdateIntegration(t *testing.T) {
 
 	assert.Equal(t, "success", response["status"])
 	assert.Equal(t, "Integration updated successfully", response["message"])
+}
+
+func TestWorkspaceHandler_HandleUpdateIntegration_MethodNotAllowed(t *testing.T) {
+	handler, _, _, secretKey, _ := setupTest(t)
+
+	// Create GET request (method not allowed)
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.updateIntegration", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	// Execute request directly against handler
+	w := httptest.NewRecorder()
+	handler.handleUpdateIntegration(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Method not allowed", response["error"])
+}
+
+func TestWorkspaceHandler_HandleUpdateIntegration_InvalidBody(t *testing.T) {
+	handler, _, _, secretKey, _ := setupTest(t)
+
+	// Create request with invalid JSON
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.updateIntegration", strings.NewReader("invalid json"))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	// Execute request directly against handler
+	w := httptest.NewRecorder()
+	handler.handleUpdateIntegration(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Invalid request body", response["error"])
+}
+
+func TestWorkspaceHandler_HandleUpdateIntegration_ValidationError(t *testing.T) {
+	_, _, mux, secretKey, _ := setupTest(t)
+
+	// Create request with missing required fields
+	reqBody := domain.UpdateIntegrationRequest{
+		// Missing WorkspaceID
+		IntegrationID: "integration-123",
+		Name:          "Updated Integration",
+		Provider: domain.EmailProvider{
+			Kind: domain.EmailProviderKindMailgun,
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.updateIntegration", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	// Execute request
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err = json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Contains(t, response["error"], "workspace ID is required")
+}
+
+func TestWorkspaceHandler_HandleUpdateIntegration_UnauthorizedError(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	// Mock unauthorized error
+	unauthorizedErr := &domain.ErrUnauthorized{Message: "Unauthorized to update integration"}
+	workspaceSvc.EXPECT().
+		UpdateIntegration(gomock.Any(), "workspace-123", "integration-123", "Updated Integration", gomock.Any()).
+		Return(unauthorizedErr)
+
+	// Create request
+	reqBody := domain.UpdateIntegrationRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		Name:          "Updated Integration",
+		Provider: domain.EmailProvider{
+			Kind:               domain.EmailProviderKindMailgun,
+			DefaultSenderEmail: "test@example.com",
+			DefaultSenderName:  "Test Sender",
+			Mailgun: &domain.MailgunSettings{
+				Domain: "test.com",
+				APIKey: "api-key-example",
+			},
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.updateIntegration", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	// Execute request
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	var response map[string]string
+	err = json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Unauthorized to update integration", response["error"])
+}
+
+func TestWorkspaceHandler_HandleUpdateIntegration_ServiceError(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	// Mock service error
+	workspaceSvc.EXPECT().
+		UpdateIntegration(gomock.Any(), "workspace-123", "integration-123", "Updated Integration", gomock.Any()).
+		Return(fmt.Errorf("service error"))
+
+	// Create request
+	reqBody := domain.UpdateIntegrationRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		Name:          "Updated Integration",
+		Provider: domain.EmailProvider{
+			Kind:               domain.EmailProviderKindMailgun,
+			DefaultSenderEmail: "test@example.com",
+			DefaultSenderName:  "Test Sender",
+			Mailgun: &domain.MailgunSettings{
+				Domain: "test.com",
+				APIKey: "api-key-example",
+			},
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.updateIntegration", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	// Execute request
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]string
+	err = json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Failed to update integration", response["error"])
 }
 
 func TestWorkspaceHandler_HandleDeleteIntegration(t *testing.T) {
