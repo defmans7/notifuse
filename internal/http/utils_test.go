@@ -24,7 +24,18 @@ func setupTest(t *testing.T) (*WorkspaceHandler, *mocks.MockWorkspaceServiceInte
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 	passphrase := "test-passphrase"
-	mockLogger := new(pkgmocks.MockLogger)
+
+	// Create and configure mock logger
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up expectations for logger methods that might be called during tests
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
 	handler := NewWorkspaceHandler(workspaceSvc, authSvc, publicKey, mockLogger, passphrase)
 
 	mux := http.NewServeMux()

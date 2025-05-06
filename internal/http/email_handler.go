@@ -48,23 +48,23 @@ func (h *EmailHandler) RegisterRoutes(mux *http.ServeMux) {
 // Add the handler for testEmailProvider
 func (h *EmailHandler) handleTestEmailProvider(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.TestEmailProviderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if req.To == "" {
-		writeError(w, http.StatusBadRequest, "Missing recipient email (to)")
+		WriteJSONError(w, "Missing recipient email (to)", http.StatusBadRequest)
 		return
 	}
 
 	if req.WorkspaceID == "" {
-		writeError(w, http.StatusBadRequest, "Missing workspace ID")
+		WriteJSONError(w, "Missing workspace ID", http.StatusBadRequest)
 		return
 	}
 
@@ -79,20 +79,20 @@ func (h *EmailHandler) handleTestEmailProvider(w http.ResponseWriter, r *http.Re
 // handleTestTemplate handles requests to test a template
 func (h *EmailHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.TestTemplateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	workspaceID, templateID, integrationID, recipientEmail, err := req.Validate()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *EmailHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request
 	// If there's an error, include it in the response
 	if err != nil {
 		if _, ok := err.(*domain.ErrTemplateNotFound); ok {
-			writeError(w, http.StatusNotFound, "Template not found")
+			WriteJSONError(w, "Template not found", http.StatusNotFound)
 			return
 		}
 

@@ -39,14 +39,6 @@ func NewWorkspaceHandler(
 	}
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, errorResponse{Error: message})
-}
-
 // RegisterRoutes registers all workspace RPC-style routes with authentication middleware
 func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Create auth middleware
@@ -72,13 +64,13 @@ func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	workspaces, err := h.workspaceService.ListWorkspaces(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list workspaces")
+		WriteJSONError(w, "Failed to list workspaces", http.StatusInternalServerError)
 		return
 	}
 
@@ -87,24 +79,24 @@ func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 
 func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Get workspace ID from query params
 	workspaceID := r.URL.Query().Get("id")
 	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "Missing workspace ID")
+		WriteJSONError(w, "Missing workspace ID", http.StatusBadRequest)
 		return
 	}
 
 	workspace, err := h.workspaceService.GetWorkspace(r.Context(), workspaceID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to get workspace")
+		WriteJSONError(w, "Failed to get workspace", http.StatusInternalServerError)
 		return
 	}
 	if workspace == nil {
-		writeError(w, http.StatusNotFound, "Workspace not found")
+		WriteJSONError(w, "Workspace not found", http.StatusNotFound)
 		return
 	}
 
@@ -116,18 +108,18 @@ func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.CreateWorkspaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(h.secretKey); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -143,9 +135,9 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 	)
 	if err != nil {
 		if err.Error() == "workspace already exists" {
-			writeError(w, http.StatusConflict, "Workspace already exists")
+			WriteJSONError(w, "Workspace already exists", http.StatusConflict)
 		} else {
-			writeError(w, http.StatusInternalServerError, "Failed to create workspace")
+			WriteJSONError(w, "Failed to create workspace", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -162,18 +154,18 @@ func getBytesFromBody(body io.ReadCloser) []byte {
 
 func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.UpdateWorkspaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(h.secretKey); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -184,11 +176,11 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		req.Settings,
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update workspace")
+		WriteJSONError(w, "Failed to update workspace", http.StatusInternalServerError)
 		return
 	}
 	if workspace == nil {
-		writeError(w, http.StatusNotFound, "Workspace not found")
+		WriteJSONError(w, "Workspace not found", http.StatusNotFound)
 		return
 	}
 
@@ -197,24 +189,24 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 
 func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.DeleteWorkspaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	err := h.workspaceService.DeleteWorkspace(r.Context(), req.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to delete workspace")
+		WriteJSONError(w, "Failed to delete workspace", http.StatusInternalServerError)
 		return
 	}
 
@@ -224,21 +216,21 @@ func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) 
 // handleMembers handles the request to get members of a workspace
 func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Get workspace ID from query params
 	workspaceID := r.URL.Query().Get("id")
 	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "Missing workspace ID")
+		WriteJSONError(w, "Missing workspace ID", http.StatusBadRequest)
 		return
 	}
 
 	// Use the new method that includes emails
 	members, err := h.workspaceService.GetWorkspaceMembersWithEmail(r.Context(), workspaceID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to get workspace members")
+		WriteJSONError(w, "Failed to get workspace members", http.StatusInternalServerError)
 		return
 	}
 
@@ -250,19 +242,19 @@ func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request)
 // handleInviteMember handles the request to invite a member to a workspace
 func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.InviteMemberRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -270,7 +262,7 @@ func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Req
 	invitation, token, err := h.workspaceService.InviteMember(r.Context(), req.WorkspaceID, req.Email)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("email", req.Email).WithField("error", err.Error()).Error("Failed to invite member")
-		writeError(w, http.StatusInternalServerError, "Failed to invite member")
+		WriteJSONError(w, "Failed to invite member", http.StatusInternalServerError)
 		return
 	}
 
@@ -295,18 +287,18 @@ func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Req
 // handleCreateAPIKey handles the request to create an API key for a workspace
 func (h *WorkspaceHandler) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.CreateAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -317,11 +309,11 @@ func (h *WorkspaceHandler) handleCreateAPIKey(w http.ResponseWriter, r *http.Req
 
 		// Check if it's an authorization error
 		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			writeError(w, http.StatusForbidden, "Only workspace owners can create API keys")
+			WriteJSONError(w, "Only workspace owners can create API keys", http.StatusForbidden)
 			return
 		}
 
-		writeError(w, http.StatusInternalServerError, "Failed to create API key")
+		WriteJSONError(w, "Failed to create API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -341,23 +333,23 @@ type RemoveMemberRequest struct {
 
 func (h *WorkspaceHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req RemoveMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// Validate request
 	if req.WorkspaceID == "" {
-		writeError(w, http.StatusBadRequest, "Missing workspace_id")
+		WriteJSONError(w, "Missing workspace_id", http.StatusBadRequest)
 		return
 	}
 	if req.UserID == "" {
-		writeError(w, http.StatusBadRequest, "Missing user_id")
+		WriteJSONError(w, "Missing user_id", http.StatusBadRequest)
 		return
 	}
 
@@ -365,11 +357,11 @@ func (h *WorkspaceHandler) handleRemoveMember(w http.ResponseWriter, r *http.Req
 	err := h.workspaceService.RemoveMember(r.Context(), req.WorkspaceID, req.UserID)
 	if err != nil {
 		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			writeError(w, http.StatusForbidden, err.Error())
+			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", req.UserID).WithField("error", err.Error()).Error("Failed to remove member from workspace")
-		writeError(w, http.StatusInternalServerError, "Failed to remove member from workspace")
+		WriteJSONError(w, "Failed to remove member from workspace", http.StatusInternalServerError)
 		return
 	}
 
@@ -383,18 +375,18 @@ func (h *WorkspaceHandler) handleRemoveMember(w http.ResponseWriter, r *http.Req
 // handleCreateIntegration handles the request to create a new integration
 func (h *WorkspaceHandler) handleCreateIntegration(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.CreateIntegrationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(h.secretKey); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -409,11 +401,11 @@ func (h *WorkspaceHandler) handleCreateIntegration(w http.ResponseWriter, r *htt
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to create integration")
 
 		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			writeError(w, http.StatusForbidden, err.Error())
+			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
 
-		writeError(w, http.StatusInternalServerError, "Failed to create integration")
+		WriteJSONError(w, "Failed to create integration", http.StatusInternalServerError)
 		return
 	}
 
@@ -426,18 +418,18 @@ func (h *WorkspaceHandler) handleCreateIntegration(w http.ResponseWriter, r *htt
 // handleUpdateIntegration handles the request to update an existing integration
 func (h *WorkspaceHandler) handleUpdateIntegration(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.UpdateIntegrationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(h.secretKey); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -452,11 +444,11 @@ func (h *WorkspaceHandler) handleUpdateIntegration(w http.ResponseWriter, r *htt
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to update integration")
 
 		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			writeError(w, http.StatusForbidden, err.Error())
+			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
 
-		writeError(w, http.StatusInternalServerError, "Failed to update integration")
+		WriteJSONError(w, "Failed to update integration", http.StatusInternalServerError)
 		return
 	}
 
@@ -469,18 +461,18 @@ func (h *WorkspaceHandler) handleUpdateIntegration(w http.ResponseWriter, r *htt
 // handleDeleteIntegration handles the request to delete an integration
 func (h *WorkspaceHandler) handleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req domain.DeleteIntegrationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -493,11 +485,11 @@ func (h *WorkspaceHandler) handleDeleteIntegration(w http.ResponseWriter, r *htt
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to delete integration")
 
 		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			writeError(w, http.StatusForbidden, err.Error())
+			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
 
-		writeError(w, http.StatusInternalServerError, "Failed to delete integration")
+		WriteJSONError(w, "Failed to delete integration", http.StatusInternalServerError)
 		return
 	}
 
