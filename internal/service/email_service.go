@@ -104,21 +104,21 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 		return fmt.Errorf("failed to get template: %w", err)
 	}
 
-	// Get the integration by ID
-	var integration *domain.Integration
+	// Get the integrationFound by ID
+	var integrationFound *domain.Integration
 	for _, integration := range workspace.Integrations {
 		if integration.ID == integrationID {
-			integration = integration
+			integrationFound = &integration
 			break
 		}
 	}
 
-	if integration == nil {
+	if integrationFound == nil {
 		return fmt.Errorf("integration not found: %s", integrationID)
 	}
 
 	// Validate that the provider is configured
-	if integration.EmailProvider.Kind == "" {
+	if integrationFound.EmailProvider.Kind == "" {
 		return fmt.Errorf("no email provider configured for type: %s", integrationID)
 	}
 
@@ -168,7 +168,7 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 	}
 
 	// Send the email using SendEmail method - we pass empty string for providerType since we're providing the provider directly
-	return s.SendEmail(ctx, workspaceID, false, integration.EmailProvider.DefaultSenderEmail, integration.EmailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &integration.EmailProvider)
+	return s.SendEmail(ctx, workspaceID, false, integrationFound.EmailProvider.DefaultSenderEmail, integrationFound.EmailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &integrationFound.EmailProvider)
 }
 
 // SendEmail sends an email using the specified provider type or a direct provider
