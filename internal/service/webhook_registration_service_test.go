@@ -7,222 +7,670 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// ExampleService is a simple service that uses WebhookRegistrationService
-type ExampleService struct {
-	webhookRegistrationService domain.WebhookRegistrationService
-}
-
-func NewExampleService(webhookRegistrationService domain.WebhookRegistrationService) *ExampleService {
-	return &ExampleService{
-		webhookRegistrationService: webhookRegistrationService,
-	}
-}
-
-func (s *ExampleService) RegisterWebhooks(ctx context.Context, req *domain.RegisterWebhookRequest) (*domain.WebhookRegistrationStatus, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	config := &domain.WebhookRegistrationConfig{
-		IntegrationID: req.IntegrationID,
-		EventTypes:    req.EventTypes,
-	}
-
-	return s.webhookRegistrationService.RegisterWebhooks(ctx, req.WorkspaceID, config)
-}
-
-func (s *ExampleService) GetWebhookStatus(ctx context.Context, req *domain.GetWebhookStatusRequest) (*domain.WebhookRegistrationStatus, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	return s.webhookRegistrationService.GetWebhookStatus(ctx, req.WorkspaceID, req.IntegrationID)
-}
-
-func TestExampleService_RegisterWebhooks(t *testing.T) {
+func TestWebhookRegistrationService_RegisterWebhooks(t *testing.T) {
+	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockWebhookService := mocks.NewMockWebhookRegistrationService(ctrl)
-	service := NewExampleService(mockWebhookService)
+	// Create mocks
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWebhookProvider := mocks.NewMockWebhookProvider(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
+	// Test constants
 	ctx := context.Background()
-	req := &domain.RegisterWebhookRequest{
-		WorkspaceID:   "ws-123",
-		IntegrationID: "int-123",
-		EventTypes: []domain.EmailEventType{
-			domain.EmailEventDelivered,
-			domain.EmailEventBounce,
+	workspaceID := "workspace-123"
+	integrationID := "integration-456"
+	userID := "user-789"
+	apiEndpoint := "https://api.notifuse.com"
+
+	// Create a mock user
+	user := &domain.User{ID: userID}
+
+	tests := []struct {
+		name               string
+		emailProviderKind  domain.EmailProviderKind
+		eventTypes         []domain.EmailEventType
+		providerResponse   *domain.WebhookRegistrationStatus
+		expectedError      string
+		authError          error
+		workspaceRepoError error
+		providerError      error
+	}{
+		{
+			name:              "Successfully register webhooks",
+			emailProviderKind: domain.EmailProviderKindPostmark,
+			eventTypes: []domain.EmailEventType{
+				domain.EmailEventDelivered,
+				domain.EmailEventBounce,
+			},
+			providerResponse: &domain.WebhookRegistrationStatus{
+				EmailProviderKind: domain.EmailProviderKindPostmark,
+				IsRegistered:      true,
+				Endpoints: []domain.WebhookEndpointStatus{
+					{
+						WebhookID: "webhook-123",
+						URL:       "https://api.notifuse.com/webhooks/email?provider=postmark&workspace_id=workspace-123&integration_id=integration-456",
+						EventType: domain.EmailEventDelivered,
+						Active:    true,
+					},
+				},
+			},
+			expectedError: "",
+		},
+		{
+			name:              "Failed authentication",
+			emailProviderKind: domain.EmailProviderKindPostmark,
+			eventTypes:        []domain.EmailEventType{domain.EmailEventDelivered},
+			providerResponse:  nil,
+			expectedError:     "failed to authenticate user: authentication error",
+			authError:         errors.New("authentication error"),
+		},
+		{
+			name:               "Failed to get workspace",
+			emailProviderKind:  domain.EmailProviderKindPostmark,
+			eventTypes:         []domain.EmailEventType{domain.EmailEventDelivered},
+			providerResponse:   nil,
+			expectedError:      "failed to get email provider configuration: failed to get workspace: workspace not found",
+			workspaceRepoError: errors.New("workspace not found"),
+		},
+		{
+			name:              "Provider not implemented",
+			emailProviderKind: "unknown-provider",
+			eventTypes:        []domain.EmailEventType{domain.EmailEventDelivered},
+			providerResponse:  nil,
+			expectedError:     "webhook registration not implemented for provider: unknown-provider",
+		},
+		{
+			name:              "Provider error",
+			emailProviderKind: domain.EmailProviderKindPostmark,
+			eventTypes:        []domain.EmailEventType{domain.EmailEventDelivered},
+			providerResponse:  nil,
+			expectedError:     "failed to register webhooks",
+			providerError:     errors.New("failed to register webhooks"),
 		},
 	}
 
-	expectedConfig := &domain.WebhookRegistrationConfig{
-		IntegrationID: req.IntegrationID,
-		EventTypes:    req.EventTypes,
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a map of webhook providers
+			webhookProviders := map[domain.EmailProviderKind]domain.WebhookProvider{
+				domain.EmailProviderKindPostmark: mockWebhookProvider,
+			}
 
-	expectedStatus := &domain.WebhookRegistrationStatus{
-		EmailProviderKind: domain.EmailProviderKindSES,
-		IsRegistered:      true,
-		Endpoints: []domain.WebhookEndpointStatus{
-			{
-				URL:       "https://example.com/webhook",
-				EventType: domain.EmailEventDelivered,
-				Active:    true,
+			// Create service with the mocks
+			svc := &WebhookRegistrationService{
+				workspaceRepo:    mockWorkspaceRepo,
+				authService:      mockAuthService,
+				logger:           mockLogger,
+				apiEndpoint:      apiEndpoint,
+				webhookProviders: webhookProviders,
+			}
+
+			// Setup test-specific mock expectations
+			config := &domain.WebhookRegistrationConfig{
+				IntegrationID: integrationID,
+				EventTypes:    tt.eventTypes,
+			}
+
+			if tt.authError != nil {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+					Return(nil, nil, tt.authError).
+					MaxTimes(1)
+			} else {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+					Return(ctx, user, nil).
+					MaxTimes(1)
+
+				if tt.workspaceRepoError != nil {
+					mockWorkspaceRepo.EXPECT().
+						GetByID(gomock.Any(), workspaceID).
+						Return(nil, tt.workspaceRepoError).
+						MaxTimes(1)
+				} else {
+					// Create an integration with the mock email provider
+					integration := domain.Integration{
+						ID: integrationID,
+						EmailProvider: domain.EmailProvider{
+							Kind: tt.emailProviderKind,
+						},
+					}
+
+					// Create a workspace with integrations
+					integrations := domain.Integrations{integration}
+					workspace := &domain.Workspace{
+						ID:           workspaceID,
+						Integrations: integrations,
+					}
+
+					mockWorkspaceRepo.EXPECT().
+						GetByID(gomock.Any(), workspaceID).
+						Return(workspace, nil).
+						MaxTimes(1)
+
+					// Setup provider mock if we've passed workspace retrieval
+					if tt.emailProviderKind == domain.EmailProviderKindPostmark {
+						if tt.providerError != nil {
+							mockWebhookProvider.EXPECT().
+								RegisterWebhooks(
+									gomock.Any(),
+									workspaceID,
+									integrationID,
+									apiEndpoint,
+									tt.eventTypes,
+									gomock.Any(), // The email provider config
+								).
+								Return(nil, tt.providerError).
+								MaxTimes(1)
+						} else {
+							mockWebhookProvider.EXPECT().
+								RegisterWebhooks(
+									gomock.Any(),
+									workspaceID,
+									integrationID,
+									apiEndpoint,
+									tt.eventTypes,
+									gomock.Any(), // The email provider config
+								).
+								Return(tt.providerResponse, nil).
+								MaxTimes(1)
+						}
+					}
+				}
+			}
+
+			// Call the method under test
+			result, err := svc.RegisterWebhooks(ctx, workspaceID, config)
+
+			// Assert the result
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.providerResponse, result)
+			}
+		})
+	}
+}
+
+func TestWebhookRegistrationService_GetWebhookStatus(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mocks
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWebhookProvider := mocks.NewMockWebhookProvider(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Test constants
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	integrationID := "integration-456"
+	userID := "user-789"
+	apiEndpoint := "https://api.notifuse.com"
+
+	// Create a mock user
+	user := &domain.User{ID: userID}
+
+	tests := []struct {
+		name               string
+		emailProviderKind  domain.EmailProviderKind
+		providerResponse   *domain.WebhookRegistrationStatus
+		expectedError      string
+		authError          error
+		workspaceRepoError error
+		providerError      error
+	}{
+		{
+			name:              "Successfully get webhook status",
+			emailProviderKind: domain.EmailProviderKindMailgun,
+			providerResponse: &domain.WebhookRegistrationStatus{
+				EmailProviderKind: domain.EmailProviderKindMailgun,
+				IsRegistered:      true,
+				Endpoints: []domain.WebhookEndpointStatus{
+					{
+						WebhookID: "webhook-123",
+						URL:       "https://api.notifuse.com/webhooks/email?provider=mailgun&workspace_id=workspace-123&integration_id=integration-456",
+						EventType: domain.EmailEventDelivered,
+						Active:    true,
+					},
+				},
 			},
-			{
-				URL:       "https://example.com/webhook",
-				EventType: domain.EmailEventBounce,
-				Active:    true,
-			},
+			expectedError: "",
+		},
+		{
+			name:              "Failed authentication",
+			emailProviderKind: domain.EmailProviderKindMailgun,
+			providerResponse:  nil,
+			expectedError:     "failed to authenticate user: authentication error",
+			authError:         errors.New("authentication error"),
+		},
+		{
+			name:               "Failed to get workspace",
+			emailProviderKind:  domain.EmailProviderKindMailgun,
+			providerResponse:   nil,
+			expectedError:      "failed to get email provider configuration: failed to get workspace: workspace not found",
+			workspaceRepoError: errors.New("workspace not found"),
+		},
+		{
+			name:              "Provider not implemented",
+			emailProviderKind: "unknown-provider",
+			providerResponse:  nil,
+			expectedError:     "webhook status check not implemented for provider: unknown-provider",
+		},
+		{
+			name:              "Provider error",
+			emailProviderKind: domain.EmailProviderKindMailgun,
+			providerResponse:  nil,
+			expectedError:     "failed to get webhook status",
+			providerError:     errors.New("failed to get webhook status"),
 		},
 	}
 
-	mockWebhookService.EXPECT().
-		RegisterWebhooks(ctx, req.WorkspaceID, gomock.Any()).
-		Do(func(_ context.Context, _ string, config *domain.WebhookRegistrationConfig) {
-			assert.Equal(t, expectedConfig.IntegrationID, config.IntegrationID)
-			assert.Equal(t, expectedConfig.EventTypes, config.EventTypes)
-		}).
-		Return(expectedStatus, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a map of webhook providers
+			webhookProviders := map[domain.EmailProviderKind]domain.WebhookProvider{
+				domain.EmailProviderKindMailgun: mockWebhookProvider,
+			}
 
-	status, err := service.RegisterWebhooks(ctx, req)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedStatus, status)
-}
+			// Create service with the mocks
+			svc := &WebhookRegistrationService{
+				workspaceRepo:    mockWorkspaceRepo,
+				authService:      mockAuthService,
+				logger:           mockLogger,
+				apiEndpoint:      apiEndpoint,
+				webhookProviders: webhookProviders,
+			}
 
-func TestExampleService_RegisterWebhooks_ValidationError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+			if tt.authError != nil {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+					Return(nil, nil, tt.authError).
+					MaxTimes(1)
+			} else {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+					Return(ctx, user, nil).
+					MaxTimes(1)
 
-	mockWebhookService := mocks.NewMockWebhookRegistrationService(ctrl)
-	service := NewExampleService(mockWebhookService)
+				if tt.workspaceRepoError != nil {
+					mockWorkspaceRepo.EXPECT().
+						GetByID(gomock.Any(), workspaceID).
+						Return(nil, tt.workspaceRepoError).
+						MaxTimes(1)
+				} else {
+					// Create an integration with the mock email provider
+					integration := domain.Integration{
+						ID: integrationID,
+						EmailProvider: domain.EmailProvider{
+							Kind: tt.emailProviderKind,
+						},
+					}
 
-	ctx := context.Background()
-	req := &domain.RegisterWebhookRequest{
-		// Missing WorkspaceID
-		IntegrationID: "int-123",
+					// Create a workspace with integrations
+					integrations := domain.Integrations{integration}
+					workspace := &domain.Workspace{
+						ID:           workspaceID,
+						Integrations: integrations,
+					}
+
+					mockWorkspaceRepo.EXPECT().
+						GetByID(gomock.Any(), workspaceID).
+						Return(workspace, nil).
+						MaxTimes(1)
+
+					// Setup provider mock if we've passed workspace retrieval
+					if tt.emailProviderKind == domain.EmailProviderKindMailgun {
+						if tt.providerError != nil {
+							mockWebhookProvider.EXPECT().
+								GetWebhookStatus(
+									gomock.Any(),
+									workspaceID,
+									integrationID,
+									gomock.Any(), // The email provider config
+								).
+								Return(nil, tt.providerError).
+								MaxTimes(1)
+						} else {
+							mockWebhookProvider.EXPECT().
+								GetWebhookStatus(
+									gomock.Any(),
+									workspaceID,
+									integrationID,
+									gomock.Any(), // The email provider config
+								).
+								Return(tt.providerResponse, nil).
+								MaxTimes(1)
+						}
+					}
+				}
+			}
+
+			// Call the method under test
+			result, err := svc.GetWebhookStatus(ctx, workspaceID, integrationID)
+
+			// Assert the result
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.providerResponse, result)
+			}
+		})
 	}
-
-	// The mock should not be called because validation should fail
-	status, err := service.RegisterWebhooks(ctx, req)
-	assert.Error(t, err)
-	assert.Nil(t, status)
-	assert.Contains(t, err.Error(), "workspace_id is required")
 }
 
-func TestExampleService_RegisterWebhooks_ServiceError(t *testing.T) {
+func TestWebhookRegistrationService_UnregisterWebhooks(t *testing.T) {
+	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockWebhookService := mocks.NewMockWebhookRegistrationService(ctrl)
-	service := NewExampleService(mockWebhookService)
+	// Create mocks
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWebhookProvider := mocks.NewMockWebhookProvider(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
+	// Test constants
 	ctx := context.Background()
-	req := &domain.RegisterWebhookRequest{
-		WorkspaceID:   "ws-123",
-		IntegrationID: "int-123",
-		EventTypes: []domain.EmailEventType{
-			domain.EmailEventDelivered,
+	workspaceID := "workspace-123"
+	integrationID := "integration-456"
+	userID := "user-789"
+	apiEndpoint := "https://api.notifuse.com"
+
+	// Create a mock user
+	user := &domain.User{ID: userID}
+
+	tests := []struct {
+		name               string
+		emailProviderKind  domain.EmailProviderKind
+		expectedError      string
+		authError          error
+		workspaceRepoError error
+		providerError      error
+	}{
+		{
+			name:              "Successfully unregister webhooks",
+			emailProviderKind: domain.EmailProviderKindSparkPost,
+			expectedError:     "",
+		},
+		{
+			name:              "Failed authentication",
+			emailProviderKind: domain.EmailProviderKindSparkPost,
+			expectedError:     "failed to authenticate user: authentication error",
+			authError:         errors.New("authentication error"),
+		},
+		{
+			name:               "Failed to get workspace",
+			emailProviderKind:  domain.EmailProviderKindSparkPost,
+			expectedError:      "failed to get email provider configuration: failed to get workspace: workspace not found",
+			workspaceRepoError: errors.New("workspace not found"),
+		},
+		{
+			name:              "Provider not implemented",
+			emailProviderKind: "unknown-provider",
+			expectedError:     "webhook unregistration not implemented for provider: unknown-provider",
+		},
+		{
+			name:              "Provider error",
+			emailProviderKind: domain.EmailProviderKindSparkPost,
+			expectedError:     "failed to unregister webhooks",
+			providerError:     errors.New("failed to unregister webhooks"),
 		},
 	}
 
-	expectedError := errors.New("service error")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a map of webhook providers
+			webhookProviders := map[domain.EmailProviderKind]domain.WebhookProvider{
+				domain.EmailProviderKindSparkPost: mockWebhookProvider,
+			}
 
-	mockWebhookService.EXPECT().
-		RegisterWebhooks(ctx, req.WorkspaceID, gomock.Any()).
-		Return(nil, expectedError)
+			// Create service with the mocks
+			svc := &WebhookRegistrationService{
+				workspaceRepo:    mockWorkspaceRepo,
+				authService:      mockAuthService,
+				logger:           mockLogger,
+				apiEndpoint:      apiEndpoint,
+				webhookProviders: webhookProviders,
+			}
 
-	status, err := service.RegisterWebhooks(ctx, req)
-	assert.Error(t, err)
-	assert.Nil(t, status)
-	assert.Equal(t, expectedError, err)
+			if tt.authError != nil {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+					Return(nil, nil, tt.authError).
+					MaxTimes(1)
+			} else {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+					Return(ctx, user, nil).
+					MaxTimes(1)
+
+				if tt.workspaceRepoError != nil {
+					mockWorkspaceRepo.EXPECT().
+						GetByID(gomock.Any(), workspaceID).
+						Return(nil, tt.workspaceRepoError).
+						MaxTimes(1)
+				} else {
+					// Create an integration with the mock email provider
+					integration := domain.Integration{
+						ID: integrationID,
+						EmailProvider: domain.EmailProvider{
+							Kind: tt.emailProviderKind,
+						},
+					}
+
+					// Create a workspace with integrations
+					integrations := domain.Integrations{integration}
+					workspace := &domain.Workspace{
+						ID:           workspaceID,
+						Integrations: integrations,
+					}
+
+					mockWorkspaceRepo.EXPECT().
+						GetByID(gomock.Any(), workspaceID).
+						Return(workspace, nil).
+						MaxTimes(1)
+
+					// Setup provider mock if we've passed workspace retrieval
+					if tt.emailProviderKind == domain.EmailProviderKindSparkPost {
+						if tt.providerError != nil {
+							mockWebhookProvider.EXPECT().
+								UnregisterWebhooks(
+									gomock.Any(),
+									workspaceID,
+									integrationID,
+									gomock.Any(), // The email provider config
+								).
+								Return(tt.providerError).
+								MaxTimes(1)
+						} else {
+							mockWebhookProvider.EXPECT().
+								UnregisterWebhooks(
+									gomock.Any(),
+									workspaceID,
+									integrationID,
+									gomock.Any(), // The email provider config
+								).
+								Return(nil).
+								MaxTimes(1)
+						}
+					}
+				}
+			}
+
+			// Call the method under test
+			err := svc.UnregisterWebhooks(ctx, workspaceID, integrationID)
+
+			// Assert the result
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestExampleService_GetWebhookStatus(t *testing.T) {
+func TestWebhookRegistrationService_GetEmailProviderConfig(t *testing.T) {
+	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockWebhookService := mocks.NewMockWebhookRegistrationService(ctrl)
-	service := NewExampleService(mockWebhookService)
+	// Create mocks
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
+	// Test constants
 	ctx := context.Background()
-	req := &domain.GetWebhookStatusRequest{
-		WorkspaceID:   "ws-123",
-		IntegrationID: "int-123",
-	}
+	workspaceID := "workspace-123"
+	integrationID := "integration-456"
+	apiEndpoint := "https://api.notifuse.com"
 
-	expectedStatus := &domain.WebhookRegistrationStatus{
-		EmailProviderKind: domain.EmailProviderKindSES,
-		IsRegistered:      true,
-		Endpoints: []domain.WebhookEndpointStatus{
-			{
-				URL:       "https://example.com/webhook",
-				EventType: domain.EmailEventDelivered,
-				Active:    true,
-			},
-			{
-				URL:       "https://example.com/webhook",
-				EventType: domain.EmailEventBounce,
-				Active:    true,
-			},
+	tests := []struct {
+		name                string
+		emailProviderKind   domain.EmailProviderKind
+		expectedErrorPrefix string
+		workspaceRepoError  error
+		integrationMissing  bool
+	}{
+		{
+			name:                "Successfully get email provider config",
+			emailProviderKind:   domain.EmailProviderKindMailjet,
+			expectedErrorPrefix: "",
+		},
+		{
+			name:                "Failed to get workspace",
+			emailProviderKind:   domain.EmailProviderKindMailjet,
+			expectedErrorPrefix: "failed to get workspace",
+			workspaceRepoError:  errors.New("workspace not found"),
+		},
+		{
+			name:                "Integration not found",
+			emailProviderKind:   domain.EmailProviderKindMailjet,
+			expectedErrorPrefix: "integration with ID integration-not-found not found",
+			integrationMissing:  true,
 		},
 	}
 
-	mockWebhookService.EXPECT().
-		GetWebhookStatus(ctx, req.WorkspaceID, req.IntegrationID).
-		Return(expectedStatus, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create service with the mocks
+			svc := &WebhookRegistrationService{
+				workspaceRepo: mockWorkspaceRepo,
+				authService:   mockAuthService,
+				logger:        mockLogger,
+				apiEndpoint:   apiEndpoint,
+			}
 
-	status, err := service.GetWebhookStatus(ctx, req)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedStatus, status)
+			testIntegrationID := integrationID
+			if tt.integrationMissing {
+				testIntegrationID = "integration-not-found"
+			}
+
+			if tt.workspaceRepoError != nil {
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspaceID).
+					Return(nil, tt.workspaceRepoError).
+					MaxTimes(1)
+			} else {
+				// Create an integration with the mock email provider
+				integration := domain.Integration{
+					ID: integrationID,
+					EmailProvider: domain.EmailProvider{
+						Kind: tt.emailProviderKind,
+					},
+				}
+
+				// Create a workspace with integrations
+				integrations := domain.Integrations{integration}
+				workspace := &domain.Workspace{
+					ID:           workspaceID,
+					Integrations: integrations,
+				}
+
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspaceID).
+					Return(workspace, nil).
+					MaxTimes(1)
+			}
+
+			// Call the method under test using the unexported getEmailProviderConfig
+			result, err := svc.getEmailProviderConfig(ctx, workspaceID, testIntegrationID)
+
+			// Assert the result
+			if tt.expectedErrorPrefix != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErrorPrefix)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				assert.Equal(t, tt.emailProviderKind, result.Kind)
+			}
+		})
+	}
 }
 
-func TestExampleService_GetWebhookStatus_ValidationError(t *testing.T) {
+func TestNewWebhookRegistrationService(t *testing.T) {
+	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockWebhookService := mocks.NewMockWebhookRegistrationService(ctrl)
-	service := NewExampleService(mockWebhookService)
+	// Create mocks
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
-	ctx := context.Background()
-	req := &domain.GetWebhookStatusRequest{
-		// Missing WorkspaceID
-		IntegrationID: "int-123",
-	}
+	// Create provider mocks that implement WebhookProvider
+	mockSparkPostService := mocks.NewMockSparkPostServiceInterface(ctrl)
+	mockPostmarkService := mocks.NewMockPostmarkServiceInterface(ctrl)
+	mockMailgunService := mocks.NewMockMailgunServiceInterface(ctrl)
+	mockMailjetService := mocks.NewMockMailjetServiceInterface(ctrl)
+	mockSESService := mocks.NewMockSESServiceInterface(ctrl)
 
-	// The mock should not be called because validation should fail
-	status, err := service.GetWebhookStatus(ctx, req)
-	assert.Error(t, err)
-	assert.Nil(t, status)
-	assert.Contains(t, err.Error(), "workspace_id is required")
-}
+	// Test constants
+	apiEndpoint := "https://api.notifuse.com"
 
-func TestExampleService_GetWebhookStatus_ServiceError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	// Create service with the mocks
+	svc := NewWebhookRegistrationService(
+		mockWorkspaceRepo,
+		mockAuthService,
+		mockPostmarkService,
+		mockMailgunService,
+		mockMailjetService,
+		mockSparkPostService,
+		mockSESService,
+		mockLogger,
+		apiEndpoint,
+	)
 
-	mockWebhookService := mocks.NewMockWebhookRegistrationService(ctrl)
-	service := NewExampleService(mockWebhookService)
+	// Assertions
+	require.NotNil(t, svc)
+	assert.Equal(t, mockWorkspaceRepo, svc.workspaceRepo)
+	assert.Equal(t, mockAuthService, svc.authService)
+	assert.Equal(t, mockLogger, svc.logger)
+	assert.Equal(t, apiEndpoint, svc.apiEndpoint)
+	assert.NotNil(t, svc.webhookProviders)
 
-	ctx := context.Background()
-	req := &domain.GetWebhookStatusRequest{
-		WorkspaceID:   "ws-123",
-		IntegrationID: "int-123",
-	}
-
-	expectedError := errors.New("service error")
-
-	mockWebhookService.EXPECT().
-		GetWebhookStatus(ctx, req.WorkspaceID, req.IntegrationID).
-		Return(nil, expectedError)
-
-	status, err := service.GetWebhookStatus(ctx, req)
-	assert.Error(t, err)
-	assert.Nil(t, status)
-	assert.Equal(t, expectedError, err)
+	// The webhook providers map should be empty since our mocks don't implement the WebhookProvider interface
+	assert.Equal(t, 0, len(svc.webhookProviders))
 }
