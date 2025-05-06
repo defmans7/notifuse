@@ -17,7 +17,7 @@ type TransactionalNotificationService struct {
 	messageHistoryRepo domain.MessageHistoryRepository
 	templateService    domain.TemplateService
 	contactService     domain.ContactService
-	emailService       *EmailService
+	emailService       domain.EmailServiceInterface
 	logger             logger.Logger
 }
 
@@ -27,7 +27,7 @@ func NewTransactionalNotificationService(
 	messageHistoryRepo domain.MessageHistoryRepository,
 	templateService domain.TemplateService,
 	contactService domain.ContactService,
-	emailService *EmailService,
+	emailService domain.EmailServiceInterface,
 	logger logger.Logger,
 ) *TransactionalNotificationService {
 	return &TransactionalNotificationService{

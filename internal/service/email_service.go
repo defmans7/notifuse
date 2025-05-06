@@ -39,6 +39,7 @@ func NewEmailService(
 	workspaceRepo domain.WorkspaceRepository,
 	templateRepo domain.TemplateRepository,
 	templateService domain.TemplateService,
+	httpClient domain.HTTPClient,
 ) *EmailService {
 	return &EmailService{
 		logger:          logger,
@@ -47,13 +48,8 @@ func NewEmailService(
 		workspaceRepo:   workspaceRepo,
 		templateRepo:    templateRepo,
 		templateService: templateService,
-		httpClient:      &http.Client{Timeout: time.Second * 10},
+		httpClient:      httpClient,
 	}
-}
-
-// SetHTTPClient sets a custom HTTP client (useful for testing)
-func (s *EmailService) SetHTTPClient(client domain.HTTPClient) {
-	s.httpClient = client
 }
 
 // CreateSESClient creates a new SES client with the provided credentials

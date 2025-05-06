@@ -15,4 +15,3 @@
 - swagger api docs
 - test webhooks for email providers
 - add cc and bcc to template settings
-- test mailjet + ses

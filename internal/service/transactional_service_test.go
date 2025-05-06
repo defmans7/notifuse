@@ -5,10 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	mjmlgo "github.com/Boostport/mjml-go"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -29,10 +31,6 @@ func (m *mockEmailService) TestEmailProvider(ctx context.Context, workspaceID st
 
 func (m *mockEmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string) error {
 	return nil
-}
-
-func (m *mockEmailService) SetHTTPClient(client domain.HTTPClient) {
-	// No-op for test mock
 }
 
 func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
@@ -721,11 +719,745 @@ func TestNewTransactionalNotificationService(t *testing.T) {
 }
 
 func TestTransactionalNotificationService_SendNotification(t *testing.T) {
-	// Skip this test for now as it requires complex setup
-	t.Skip("This test requires complex setup with email service and templates")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
+	mockMsgHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Create a stub logger that simply returns itself for chaining calls
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	type testCase struct {
+		name           string
+		params         domain.TransactionalNotificationSendParams
+		mockSetup      func()
+		expectedError  bool
+		expectedResult string
+	}
+
+	ctx := context.Background()
+	workspace := "test-workspace"
+	notificationID := uuid.New().String()
+	templateID := uuid.New().String()
+
+	// Create a sample notification and contact for tests
+	notification := &domain.TransactionalNotification{
+		ID:          notificationID,
+		Name:        "Test Notification",
+		Description: "Test Description",
+		Channels: map[domain.TransactionalChannel]domain.ChannelTemplate{
+			domain.TransactionalChannelEmail: {
+				TemplateID: templateID,
+			},
+		},
+	}
+
+	contact := &domain.Contact{
+		Email: "test@example.com",
+		FirstName: &domain.NullableString{
+			String: "John",
+			IsNull: false,
+		},
+		LastName: &domain.NullableString{
+			String: "Doe",
+			IsNull: false,
+		},
+	}
+
+	tests := []testCase{
+		{
+			name: "Success_SendNotification",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: contact,
+				Data: map[string]interface{}{
+					"product_name": "Test Product",
+					"order_id":     "12345",
+				},
+				Metadata: map[string]interface{}{
+					"source": "api",
+				},
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+
+				// Upsert the contact
+				mockContactService.EXPECT().
+					UpsertContact(gomock.Any(), workspace, contact).
+					Return(domain.UpsertContactOperation{
+						Email:  contact.Email,
+						Action: domain.UpsertContactOperationUpdate,
+					})
+
+				// Get the contact after upsert
+				mockContactService.EXPECT().
+					GetContactByEmail(gomock.Any(), workspace, contact.Email).
+					Return(contact, nil)
+
+				// Expect call to DoSendEmailNotification which will be mocked in a special test version
+				template := notification.Channels[domain.TransactionalChannelEmail]
+
+				// Since we're testing a method on the real service (not a mocked one),
+				// we'll need to mock the templateService and emailService that DoSendEmailNotification calls
+
+				// First get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, template.TemplateID, int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "test@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Then the template is compiled
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: true,
+						HTML:    aws.String("<html>Test content</html>"),
+					}, nil)
+
+				// Then the email is sent
+				mockEmailService.EXPECT().
+					SendEmail(
+						gomock.Any(),
+						workspace,
+						false,
+						gomock.Any(),
+						gomock.Any(),
+						contact.Email,
+						gomock.Any(),
+						gomock.Any(),
+					).Return(nil)
+
+				// Finally, message history is created
+				mockMsgHistoryRepo.EXPECT().
+					Create(gomock.Any(), workspace, gomock.Any()).
+					Return(nil)
+			},
+			expectedError:  false,
+			expectedResult: gomock.Any().String(), // We expect a non-empty message ID
+		},
+		{
+			name: "Error_NotificationNotFound",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: contact,
+			},
+			mockSetup: func() {
+				// Notification not found
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(nil, errors.New("notification not found"))
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+		{
+			name: "Error_ContactMissing",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: nil,
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+		{
+			name: "Error_UpsertContactFailed",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: contact,
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+
+				// Upsert contact fails
+				mockContactService.EXPECT().
+					UpsertContact(gomock.Any(), workspace, contact).
+					Return(domain.UpsertContactOperation{
+						Email:  contact.Email,
+						Action: domain.UpsertContactOperationError,
+						Error:  "contact validation failed",
+					})
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+		{
+			name: "Error_GetContactAfterUpsertFailed",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: contact,
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+
+				// Upsert contact succeeds
+				mockContactService.EXPECT().
+					UpsertContact(gomock.Any(), workspace, contact).
+					Return(domain.UpsertContactOperation{
+						Email:  contact.Email,
+						Action: domain.UpsertContactOperationUpdate,
+					})
+
+				// But getting the contact after upsert fails
+				mockContactService.EXPECT().
+					GetContactByEmail(gomock.Any(), workspace, contact.Email).
+					Return(nil, errors.New("contact not found after upsert"))
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+		{
+			name: "Error_InvalidChannel",
+			params: domain.TransactionalNotificationSendParams{
+				ID:       notificationID,
+				Contact:  contact,
+				Channels: []domain.TransactionalChannel{"invalid-channel"},
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+
+				// Upsert the contact
+				mockContactService.EXPECT().
+					UpsertContact(gomock.Any(), workspace, contact).
+					Return(domain.UpsertContactOperation{
+						Email:  contact.Email,
+						Action: domain.UpsertContactOperationUpdate,
+					})
+
+				// Get the contact after upsert
+				mockContactService.EXPECT().
+					GetContactByEmail(gomock.Any(), workspace, contact.Email).
+					Return(contact, nil)
+
+				// No further calls as the channel validation will fail
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+		{
+			name: "Error_TemplateGetFailed",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: contact,
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+
+				// Upsert the contact
+				mockContactService.EXPECT().
+					UpsertContact(gomock.Any(), workspace, contact).
+					Return(domain.UpsertContactOperation{
+						Email:  contact.Email,
+						Action: domain.UpsertContactOperationUpdate,
+					})
+
+				// Get the contact after upsert
+				mockContactService.EXPECT().
+					GetContactByEmail(gomock.Any(), workspace, contact.Email).
+					Return(contact, nil)
+
+				// Then getting the template fails
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, gomock.Any(), int64(0)).
+					Return(nil, errors.New("template not found"))
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+		{
+			name: "Error_TemplateCompilationFailed",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: contact,
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+
+				// Upsert the contact
+				mockContactService.EXPECT().
+					UpsertContact(gomock.Any(), workspace, contact).
+					Return(domain.UpsertContactOperation{
+						Email:  contact.Email,
+						Action: domain.UpsertContactOperationUpdate,
+					})
+
+				// Get the contact after upsert
+				mockContactService.EXPECT().
+					GetContactByEmail(gomock.Any(), workspace, contact.Email).
+					Return(contact, nil)
+
+				// Get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, gomock.Any(), int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "test@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Then compilation fails
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: false,
+						Error: &mjmlgo.Error{
+							Message: "Compilation error",
+						},
+					}, nil)
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+		{
+			name: "Error_EmailSendFailed",
+			params: domain.TransactionalNotificationSendParams{
+				ID:      notificationID,
+				Contact: contact,
+			},
+			mockSetup: func() {
+				// Get the notification
+				mockRepo.EXPECT().
+					Get(gomock.Any(), workspace, notificationID).
+					Return(notification, nil)
+
+				// Upsert the contact
+				mockContactService.EXPECT().
+					UpsertContact(gomock.Any(), workspace, contact).
+					Return(domain.UpsertContactOperation{
+						Email:  contact.Email,
+						Action: domain.UpsertContactOperationUpdate,
+					})
+
+				// Get the contact after upsert
+				mockContactService.EXPECT().
+					GetContactByEmail(gomock.Any(), workspace, contact.Email).
+					Return(contact, nil)
+
+				// Get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, gomock.Any(), int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "test@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Compilation succeeds
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: true,
+						HTML:    aws.String("<html>Test content</html>"),
+					}, nil)
+
+				// First, expect message history to be created with "sent" status initially
+				mockMsgHistoryRepo.EXPECT().
+					Create(gomock.Any(), workspace, gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, message *domain.MessageHistory) error {
+						assert.Equal(t, domain.MessageStatusSent, message.Status)
+						return nil
+					})
+
+				// Then, email sending fails
+				mockEmailService.EXPECT().
+					SendEmail(
+						gomock.Any(),
+						workspace,
+						false,
+						gomock.Any(),
+						gomock.Any(),
+						contact.Email,
+						gomock.Any(),
+						gomock.Any(),
+					).Return(errors.New("email sending failed"))
+
+				// Finally, expect message history to be updated with "failed" status
+				mockMsgHistoryRepo.EXPECT().
+					Update(gomock.Any(), workspace, gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, message *domain.MessageHistory) error {
+						assert.Equal(t, domain.MessageStatusFailed, message.Status)
+						assert.NotNil(t, message.Error)
+						return nil
+					})
+			},
+			expectedError:  true,
+			expectedResult: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up mocks for this test case
+			tc.mockSetup()
+
+			// Create service with mocked dependencies
+			service := &TransactionalNotificationService{
+				transactionalRepo:  mockRepo,
+				messageHistoryRepo: mockMsgHistoryRepo,
+				templateService:    mockTemplateService,
+				contactService:     mockContactService,
+				emailService:       mockEmailService,
+				logger:             mockLogger,
+			}
+
+			// Call the method being tested
+			result, err := service.SendNotification(ctx, workspace, tc.params)
+
+			// Check results
+			if tc.expectedError {
+				assert.Error(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, result) // Should be a UUID
+			}
+		})
+	}
 }
 
 func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) {
-	// Skip this test for now as it requires complex setup
-	t.Skip("This test requires complex setup with template compilation")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
+	mockMsgHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Create a stub logger that simply returns itself for chaining calls
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	type testCase struct {
+		name           string
+		templateConfig domain.ChannelTemplate
+		messageData    domain.MessageData
+		mockSetup      func()
+		expectedError  bool
+	}
+
+	ctx := context.Background()
+	workspace := "test-workspace"
+	messageID := uuid.New().String()
+	templateID := uuid.New().String()
+
+	contact := &domain.Contact{
+		Email: "test@example.com",
+		FirstName: &domain.NullableString{
+			String: "John",
+			IsNull: false,
+		},
+		LastName: &domain.NullableString{
+			String: "Doe",
+			IsNull: false,
+		},
+	}
+
+	templateConfig := domain.ChannelTemplate{
+		TemplateID: templateID,
+	}
+
+	messageData := domain.MessageData{
+		Data: map[string]interface{}{
+			"contact":  contact,
+			"order_id": "12345",
+		},
+		Metadata: map[string]interface{}{
+			"source": "api",
+		},
+	}
+
+	tests := []testCase{
+		{
+			name:           "Success_SendEmail",
+			templateConfig: templateConfig,
+			messageData:    messageData,
+			mockSetup: func() {
+				// Get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "sender@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Compile the template
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: true,
+						HTML:    aws.String("<html>Test Email</html>"),
+					}, nil)
+
+				// Send the email
+				mockEmailService.EXPECT().
+					SendEmail(
+						gomock.Any(),
+						workspace,
+						false,
+						"sender@example.com",      // FromAddress
+						"Test Sender",             // FromName
+						contact.Email,             // To
+						"Test Subject",            // Subject
+						"<html>Test Email</html>", // Content
+					).Return(nil)
+
+				// Record the message history
+				mockMsgHistoryRepo.EXPECT().
+					Create(gomock.Any(), workspace, gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, message *domain.MessageHistory) error {
+						assert.Equal(t, messageID, message.ID)
+						assert.Equal(t, contact.Email, message.ContactID)
+						assert.Equal(t, templateID, message.TemplateID)
+						assert.Equal(t, "email", message.Channel)
+						assert.Equal(t, domain.MessageStatusSent, message.Status)
+						assert.NotNil(t, message.MessageData)
+						return nil
+					})
+			},
+			expectedError: false,
+		},
+		{
+			name:           "Error_TemplateNotFound",
+			templateConfig: templateConfig,
+			messageData:    messageData,
+			mockSetup: func() {
+				// Template not found
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
+					Return(nil, errors.New("template not found"))
+			},
+			expectedError: true,
+		},
+		{
+			name:           "Error_TemplateCompilationFailed",
+			templateConfig: templateConfig,
+			messageData:    messageData,
+			mockSetup: func() {
+				// Get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "sender@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Compilation fails
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: false,
+						Error: &mjmlgo.Error{
+							Message: "compilation error",
+						},
+					}, nil)
+			},
+			expectedError: true,
+		},
+		{
+			name:           "Error_CompilationWithNoHTMLContent",
+			templateConfig: templateConfig,
+			messageData:    messageData,
+			mockSetup: func() {
+				// Get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "sender@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Compilation succeeds but without HTML content
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: true,
+						HTML:    nil, // Missing HTML content
+					}, nil)
+			},
+			expectedError: true,
+		},
+		{
+			name:           "Error_EmailSendFailed",
+			templateConfig: templateConfig,
+			messageData:    messageData,
+			mockSetup: func() {
+				// Get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "sender@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Compile the template
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: true,
+						HTML:    aws.String("<html>Test Email</html>"),
+					}, nil)
+
+				// First, expect message history to be created with "sent" status initially
+				mockMsgHistoryRepo.EXPECT().
+					Create(gomock.Any(), workspace, gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, message *domain.MessageHistory) error {
+						assert.Equal(t, messageID, message.ID)
+						assert.Equal(t, domain.MessageStatusSent, message.Status)
+						return nil
+					})
+
+				// Then, email sending fails
+				mockEmailService.EXPECT().
+					SendEmail(
+						gomock.Any(),
+						workspace,
+						false,
+						gomock.Any(),
+						gomock.Any(),
+						contact.Email,
+						gomock.Any(),
+						gomock.Any(),
+					).Return(errors.New("email sending failed"))
+
+				// Finally, expect message history to be updated with "failed" status
+				mockMsgHistoryRepo.EXPECT().
+					Update(gomock.Any(), workspace, gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, message *domain.MessageHistory) error {
+						assert.Equal(t, messageID, message.ID)
+						assert.Equal(t, domain.MessageStatusFailed, message.Status)
+						assert.NotNil(t, message.Error)
+						return nil
+					})
+			},
+			expectedError: true,
+		},
+		{
+			name:           "Error_MessageHistoryCreationFailed",
+			templateConfig: templateConfig,
+			messageData:    messageData,
+			mockSetup: func() {
+				// Get the template
+				mockTemplateService.EXPECT().
+					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
+					Return(&domain.Template{
+						ID: templateID,
+						Email: &domain.EmailTemplate{
+							Subject:     "Test Subject",
+							FromAddress: "sender@example.com",
+							FromName:    "Test Sender",
+						},
+					}, nil)
+
+				// Compile the template
+				mockTemplateService.EXPECT().
+					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					Return(&domain.CompileTemplateResponse{
+						Success: true,
+						HTML:    aws.String("<html>Test Email</html>"),
+					}, nil)
+
+				// Message history creation fails
+				mockMsgHistoryRepo.EXPECT().
+					Create(gomock.Any(), workspace, gomock.Any()).
+					Return(errors.New("message history creation failed"))
+
+				// The email should never be sent if message history creation fails
+				// We don't expect a call to SendEmail here
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up mocks for this test case
+			tc.mockSetup()
+
+			// Create service with mocked dependencies
+			service := &TransactionalNotificationService{
+				transactionalRepo:  mockRepo,
+				messageHistoryRepo: mockMsgHistoryRepo,
+				templateService:    mockTemplateService,
+				contactService:     mockContactService,
+				emailService:       mockEmailService,
+				logger:             mockLogger,
+			}
+
+			// Call the method being tested
+			err := service.DoSendEmailNotification(ctx, workspace, messageID, contact, tc.templateConfig, tc.messageData)
+
+			// Check results
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

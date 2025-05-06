@@ -308,10 +308,8 @@ func (a *App) InitServices() error {
 		a.workspaceRepo,
 		a.templateRepo,
 		a.templateService,
+		httpClient,
 	)
-
-	// Set HTTP client for email service
-	a.emailService.SetHTTPClient(httpClient)
 
 	// Initialize webhook registration service
 	a.webhookRegistrationService = service.NewWebhookRegistrationService(

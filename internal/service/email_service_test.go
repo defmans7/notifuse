@@ -48,8 +48,8 @@ func TestEmailService_SendEmail_NoDirectProvider(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -176,8 +176,8 @@ func TestEmailService_SendEmail_DirectProvider(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -217,7 +217,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	emailService := service.NewEmailService(
 		mockLogger,
 		mockAuthService,
@@ -225,6 +225,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
 
 	// Test data
@@ -260,7 +261,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	emailService := service.NewEmailService(
 		mockLogger,
 		mockAuthService,
@@ -268,6 +269,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
 
 	// Test data
@@ -320,8 +322,8 @@ func TestEmailService_TestEmailProvider_Success(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -354,32 +356,6 @@ func TestEmailService_TestEmailProvider_Success(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestEmailService_TestTemplate_Success(t *testing.T) {
-	// Skip the test temporarily due to issues with mocks
-	t.Skip("Skipping test due to issues with template mocking")
-
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := setupMockLogger(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
-	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
-
-	emailService := service.NewEmailService(
-		mockLogger,
-		mockAuthService,
-		"test-secret-key",
-		mockWorkspaceRepo,
-		mockTemplateRepo,
-		mockTemplateService,
-	)
-	emailService.SetHTTPClient(mockHTTPClient)
-}
-
 func TestEmailService_SendEmail_WithProviders(t *testing.T) {
 	// Setup
 	ctrl := gomock.NewController(t)
@@ -399,8 +375,8 @@ func TestEmailService_SendEmail_WithProviders(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -577,8 +553,8 @@ func TestEmailService_SendEmail_DefaultInfo(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -637,8 +613,8 @@ func TestEmailService_SendEmail_SMTP_EncryptedPassword(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -699,8 +675,8 @@ func TestEmailService_SendEmail_WithWorkspace(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -856,8 +832,8 @@ func TestEmailService_SendEmail_NoConfiguredProvider(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -922,8 +898,8 @@ func TestEmailService_SendEmail_WithMailgun(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHttpClient,
 	)
-	emailService.SetHTTPClient(mockHttpClient)
 
 	// Test case: Using Mailgun provider for transactional email
 	t.Run("SendEmail with Mailgun provider", func(t *testing.T) {
@@ -1010,8 +986,8 @@ func TestEmailService_SendEmail_SMTP_ConnectionErrors(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -1105,8 +1081,8 @@ func TestEmailService_SendEmail_HTTP_Errors(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -1252,8 +1228,8 @@ func TestEmailService_SendEmail_UnsupportedProvider(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -1309,8 +1285,8 @@ func TestEmailService_SendEmail_HTTP_ReadResponseError(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -1393,8 +1369,8 @@ func TestEmailService_SES_WithEncryptedKey(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
@@ -1459,8 +1435,8 @@ func TestEmailService_DecryptionErrors(t *testing.T) {
 		mockWorkspaceRepo,
 		mockTemplateRepo,
 		mockTemplateService,
+		mockHTTPClient,
 	)
-	emailService.SetHTTPClient(mockHTTPClient)
 
 	// Test data
 	ctx := context.Background()
