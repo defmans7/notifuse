@@ -15,17 +15,19 @@ import (
 
 // MailgunService implements the domain.MailgunServiceInterface
 type MailgunService struct {
-	httpClient  domain.HTTPClient
-	authService domain.AuthService
-	logger      logger.Logger
+	httpClient      domain.HTTPClient
+	authService     domain.AuthService
+	logger          logger.Logger
+	webhookEndpoint string
 }
 
 // NewMailgunService creates a new instance of MailgunService
-func NewMailgunService(httpClient domain.HTTPClient, authService domain.AuthService, logger logger.Logger) *MailgunService {
+func NewMailgunService(httpClient domain.HTTPClient, authService domain.AuthService, logger logger.Logger, webhookEndpoint string) *MailgunService {
 	return &MailgunService{
-		httpClient:  httpClient,
-		authService: authService,
-		logger:      logger,
+		httpClient:      httpClient,
+		authService:     authService,
+		logger:          logger,
+		webhookEndpoint: webhookEndpoint,
 	}
 }
 
@@ -40,7 +42,8 @@ func (s *MailgunService) ListWebhooks(ctx context.Context, config domain.Mailgun
 		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks", endpoint, config.Domain)
+	// Format according to Mailgun API documentation: https://api.mailgun.net/v3/domains/{domain}/webhooks
+	apiURL := fmt.Sprintf("%s/domains/%s/webhooks", endpoint, config.Domain)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for listing Mailgun webhooks: %v", err))
@@ -64,36 +67,55 @@ func (s *MailgunService) ListWebhooks(ctx context.Context, config domain.Mailgun
 	}
 
 	// Parse the response
-	var response struct {
-		Webhooks map[string]interface{} `json:"webhooks"`
-	}
+	var response domain.MailgunWebhookListResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to decode Mailgun webhook list response: %v", err))
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Convert the response to our domain model
-	result := &domain.MailgunWebhookListResponse{
-		Items: []domain.MailgunWebhook{},
-		Total: len(response.Webhooks),
-	}
-
-	for eventType, webhookData := range response.Webhooks {
-		if webhookMap, ok := webhookData.(map[string]interface{}); ok {
-			url, _ := webhookMap["url"].(string)
-			active := true
-			webhook := domain.MailgunWebhook{
-				ID:     eventType,
-				URL:    url,
-				Events: []string{eventType},
-				Active: active,
+	// only keep URLs that contain the webhookEndpoint
+	if response.Webhooks.Delivered.URLs != nil {
+		filteredURLs := []string{}
+		for _, url := range response.Webhooks.Delivered.URLs {
+			if strings.Contains(url, s.webhookEndpoint) {
+				filteredURLs = append(filteredURLs, url)
 			}
-			result.Items = append(result.Items, webhook)
 		}
+		response.Webhooks.Delivered.URLs = filteredURLs
 	}
 
-	return result, nil
+	// Filter other event types too
+	if response.Webhooks.PermanentFail.URLs != nil {
+		filteredURLs := []string{}
+		for _, url := range response.Webhooks.PermanentFail.URLs {
+			if strings.Contains(url, s.webhookEndpoint) {
+				filteredURLs = append(filteredURLs, url)
+			}
+		}
+		response.Webhooks.PermanentFail.URLs = filteredURLs
+	}
+
+	if response.Webhooks.TemporaryFail.URLs != nil {
+		filteredURLs := []string{}
+		for _, url := range response.Webhooks.TemporaryFail.URLs {
+			if strings.Contains(url, s.webhookEndpoint) {
+				filteredURLs = append(filteredURLs, url)
+			}
+		}
+		response.Webhooks.TemporaryFail.URLs = filteredURLs
+	}
+
+	if response.Webhooks.Complained.URLs != nil {
+		filteredURLs := []string{}
+		for _, url := range response.Webhooks.Complained.URLs {
+			if strings.Contains(url, s.webhookEndpoint) {
+				filteredURLs = append(filteredURLs, url)
+			}
+		}
+		response.Webhooks.Complained.URLs = filteredURLs
+	}
+	return &response, nil
 }
 
 // CreateWebhook creates a new webhook
@@ -115,7 +137,7 @@ func (s *MailgunService) CreateWebhook(ctx context.Context, config domain.Mailgu
 		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks", endpoint, config.Domain)
+	apiURL := fmt.Sprintf("%s/domains/%s/webhooks", endpoint, config.Domain)
 
 	// Create the form data
 	form := url.Values{}
@@ -178,7 +200,7 @@ func (s *MailgunService) GetWebhook(ctx context.Context, config domain.MailgunSe
 		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", endpoint, config.Domain, webhookID)
+	apiURL := fmt.Sprintf("%s/domains/%s/webhooks/%s", endpoint, config.Domain, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for getting Mailgun webhook: %v", err))
@@ -237,11 +259,13 @@ func (s *MailgunService) UpdateWebhook(ctx context.Context, config domain.Mailgu
 		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", endpoint, config.Domain, webhookID)
+	apiURL := fmt.Sprintf("%s/domains/%s/webhooks/%s", endpoint, config.Domain, webhookID)
 
 	// Create the form data
 	form := url.Values{}
-	form.Add("url", webhook.URL)
+	// The Mailgun API has inconsistent documentation/implementation
+	// Use 'urls' parameter instead of 'url' to avoid 405 Method Not Allowed error
+	form.Add("urls", webhook.URL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, apiURL, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -299,7 +323,7 @@ func (s *MailgunService) DeleteWebhook(ctx context.Context, config domain.Mailgu
 		endpoint = "https://api.mailgun.net/v3"
 	}
 
-	apiURL := fmt.Sprintf("%s/%s/webhooks/%s", endpoint, config.Domain, webhookID)
+	apiURL := fmt.Sprintf("%s/domains/%s/webhooks/%s", endpoint, config.Domain, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for deleting Mailgun webhook: %v", err))
@@ -377,16 +401,24 @@ func (s *MailgunService) RegisterWebhooks(
 	}
 
 	// Delete existing webhooks that match our criteria
-	for _, webhook := range existingWebhooks.Items {
-		if strings.Contains(webhook.URL, baseURL) &&
-			strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
-			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
+	// Process delivered webhooks
+	for eventType, urls := range map[string]domain.MailgunUrls{
+		"delivered":      existingWebhooks.Webhooks.Delivered,
+		"permanent_fail": existingWebhooks.Webhooks.PermanentFail,
+		"temporary_fail": existingWebhooks.Webhooks.TemporaryFail,
+		"complained":     existingWebhooks.Webhooks.Complained,
+	} {
+		for _, url := range urls.URLs {
+			if strings.Contains(url, baseURL) &&
+				strings.Contains(url, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+				strings.Contains(url, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			err := s.DeleteWebhook(ctx, *providerConfig.Mailgun, webhook.ID)
-			if err != nil {
-				s.logger.WithField("webhook_id", webhook.ID).
-					Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))
-				// Continue with other webhooks even if one fails
+				err := s.DeleteWebhook(ctx, *providerConfig.Mailgun, eventType)
+				if err != nil {
+					s.logger.WithField("webhook_id", eventType).
+						Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))
+					// Continue with other webhooks even if one fails
+				}
 			}
 		}
 	}
@@ -396,7 +428,6 @@ func (s *MailgunService) RegisterWebhooks(
 	providerDetails := map[string]interface{}{
 		"integration_id": integrationID,
 		"workspace_id":   workspaceID,
-		"webhook_ids":    []string{},
 	}
 
 	for eventType := range mailgunEvents {
@@ -412,22 +443,17 @@ func (s *MailgunService) RegisterWebhooks(
 		}
 
 		endpoints = append(endpoints, domain.WebhookEndpointStatus{
+			WebhookID: webhook.ID,
 			URL:       webhookURL,
 			EventType: mapMailgunEventType(eventType),
 			Active:    webhook.Active,
 		})
-
-		// Add webhook ID to provider details
-		webhookIDs := providerDetails["webhook_ids"].([]string)
-		webhookIDs = append(webhookIDs, webhook.ID)
-		providerDetails["webhook_ids"] = webhookIDs
 	}
 
 	// Create webhook registration status
 	status := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindMailgun,
 		IsRegistered:      len(endpoints) > 0,
-		RegisteredEvents:  registeredEvents,
 		Endpoints:         endpoints,
 		ProviderDetails:   providerDetails,
 	}
@@ -456,7 +482,6 @@ func (s *MailgunService) GetWebhookStatus(
 		ProviderDetails: map[string]interface{}{
 			"integration_id": integrationID,
 			"workspace_id":   workspaceID,
-			"webhook_ids":    []string{},
 		},
 	}
 
@@ -468,26 +493,33 @@ func (s *MailgunService) GetWebhookStatus(
 
 	// Check for webhooks that match our integration
 	registeredEventMap := make(map[domain.EmailEventType]bool)
-	webhookIDs := []string{}
 
-	for _, webhook := range existingWebhooks.Items {
-		if strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
-			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
+	// Check for webhooks that match our integration
+	for eventType, urls := range map[string]domain.MailgunUrls{
+		"delivered":      existingWebhooks.Webhooks.Delivered,
+		"permanent_fail": existingWebhooks.Webhooks.PermanentFail,
+		"temporary_fail": existingWebhooks.Webhooks.TemporaryFail,
+		"complained":     existingWebhooks.Webhooks.Complained,
+	} {
+		for _, url := range urls.URLs {
+			if strings.Contains(url, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+				strings.Contains(url, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			status.IsRegistered = true
-			webhookIDs = append(webhookIDs, webhook.ID)
+				status.IsRegistered = true
 
-			// Add endpoint
-			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
-				URL:       webhook.URL,
-				EventType: mapMailgunEventType(webhook.ID), // In Mailgun, the ID is the event type
-				Active:    webhook.Active,
-			})
+				// Add endpoint
+				status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+					WebhookID: eventType,
+					URL:       url,
+					EventType: mapMailgunEventType(eventType), // In Mailgun, the ID is the event type
+					Active:    true,                           // Assume active if listed
+				})
 
-			// Track registered event types
-			eventType := mapMailgunEventType(webhook.ID)
-			if eventType != "" {
-				registeredEventMap[eventType] = true
+				// Track registered event types
+				eventType := mapMailgunEventType(eventType)
+				if eventType != "" {
+					registeredEventMap[eventType] = true
+				}
 			}
 		}
 	}
@@ -497,8 +529,6 @@ func (s *MailgunService) GetWebhookStatus(
 	for eventType := range registeredEventMap {
 		registeredEvents = append(registeredEvents, eventType)
 	}
-	status.RegisteredEvents = registeredEvents
-	status.ProviderDetails["webhook_ids"] = webhookIDs
 
 	return status, nil
 }
@@ -517,7 +547,6 @@ func (s *MailgunService) UnregisterWebhooks(
 	}
 
 	// Get existing webhooks
-
 	existingWebhooks, err := s.ListWebhooks(ctx, *providerConfig.Mailgun)
 	if err != nil {
 		return fmt.Errorf("failed to list Mailgun webhooks: %w", err)
@@ -525,19 +554,28 @@ func (s *MailgunService) UnregisterWebhooks(
 
 	// Delete webhooks that match our integration
 	var lastError error
-	for _, webhook := range existingWebhooks.Items {
-		if strings.Contains(webhook.URL, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
-			strings.Contains(webhook.URL, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			err := s.DeleteWebhook(ctx, *providerConfig.Mailgun, webhook.ID)
-			if err != nil {
-				s.logger.WithField("webhook_id", webhook.ID).
-					Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))
-				lastError = err
-				// Continue deleting other webhooks even if one fails
-			} else {
-				s.logger.WithField("webhook_id", webhook.ID).
-					Info("Successfully deleted Mailgun webhook")
+	// Delete webhooks that match our integration
+	for eventType, urls := range map[string]domain.MailgunUrls{
+		"delivered":      existingWebhooks.Webhooks.Delivered,
+		"permanent_fail": existingWebhooks.Webhooks.PermanentFail,
+		"temporary_fail": existingWebhooks.Webhooks.TemporaryFail,
+		"complained":     existingWebhooks.Webhooks.Complained,
+	} {
+		for _, url := range urls.URLs {
+			if strings.Contains(url, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
+				strings.Contains(url, fmt.Sprintf("integration_id=%s", integrationID)) {
+
+				err := s.DeleteWebhook(ctx, *providerConfig.Mailgun, eventType)
+				if err != nil {
+					s.logger.WithField("webhook_id", eventType).
+						Error(fmt.Sprintf("Failed to delete Mailgun webhook: %v", err))
+					lastError = err
+					// Continue deleting other webhooks even if one fails
+				} else {
+					s.logger.WithField("webhook_id", eventType).
+						Info("Successfully deleted Mailgun webhook")
+				}
 			}
 		}
 	}

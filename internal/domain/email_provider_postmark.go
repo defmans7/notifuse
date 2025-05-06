@@ -60,12 +60,12 @@ type PostmarkComplaintFields struct {
 
 // PostmarkWebhookConfig represents a webhook configuration in Postmark
 type PostmarkWebhookConfig struct {
-	ID            int                   `json:"ID,omitempty"`
-	URL           string                `json:"Url"`
-	MessageStream string                `json:"MessageStream"`
-	HttpAuth      *HttpAuth             `json:"HttpAuth,omitempty"`
-	HttpHeaders   map[string]string     `json:"HttpHeaders,omitempty"`
-	TriggerRules  []PostmarkTriggerRule `json:"Triggers"`
+	ID            int               `json:"ID,omitempty"`
+	URL           string            `json:"Url"`
+	MessageStream string            `json:"MessageStream"`
+	HttpAuth      *HttpAuth         `json:"HttpAuth,omitempty"`
+	HttpHeaders   []HttpHeader      `json:"HttpHeaders,omitempty"`
+	Triggers      *PostmarkTriggers `json:"Triggers"`
 }
 
 // HttpAuth represents HTTP authentication for webhooks
@@ -74,7 +74,57 @@ type HttpAuth struct {
 	Password string `json:"Password"`
 }
 
+// HttpHeader represents a custom HTTP header
+type HttpHeader struct {
+	Name  string `json:"Name"`
+	Value string `json:"Value"`
+}
+
+// PostmarkTriggers represents the webhook triggers configuration
+type PostmarkTriggers struct {
+	Open               *PostmarkOpenTrigger               `json:"Open,omitempty"`
+	Click              *PostmarkClickTrigger              `json:"Click,omitempty"`
+	Delivery           *PostmarkDeliveryTrigger           `json:"Delivery,omitempty"`
+	Bounce             *PostmarkBounceTrigger             `json:"Bounce,omitempty"`
+	SpamComplaint      *PostmarkSpamComplaintTrigger      `json:"SpamComplaint,omitempty"`
+	SubscriptionChange *PostmarkSubscriptionChangeTrigger `json:"SubscriptionChange,omitempty"`
+}
+
+// PostmarkOpenTrigger represents the open trigger configuration
+type PostmarkOpenTrigger struct {
+	Enabled           bool `json:"Enabled"`
+	PostFirstOpenOnly bool `json:"PostFirstOpenOnly,omitempty"`
+}
+
+// PostmarkClickTrigger represents the click trigger configuration
+type PostmarkClickTrigger struct {
+	Enabled bool `json:"Enabled"`
+}
+
+// PostmarkDeliveryTrigger represents the delivery trigger configuration
+type PostmarkDeliveryTrigger struct {
+	Enabled bool `json:"Enabled"`
+}
+
+// PostmarkBounceTrigger represents the bounce trigger configuration
+type PostmarkBounceTrigger struct {
+	Enabled        bool `json:"Enabled"`
+	IncludeContent bool `json:"IncludeContent,omitempty"`
+}
+
+// PostmarkSpamComplaintTrigger represents the spam complaint trigger configuration
+type PostmarkSpamComplaintTrigger struct {
+	Enabled        bool `json:"Enabled"`
+	IncludeContent bool `json:"IncludeContent,omitempty"`
+}
+
+// PostmarkSubscriptionChangeTrigger represents the subscription change trigger configuration
+type PostmarkSubscriptionChangeTrigger struct {
+	Enabled bool `json:"Enabled"`
+}
+
 // PostmarkTriggerRule represents a trigger for webhooks
+// Note: This is kept for compatibility with existing code
 type PostmarkTriggerRule struct {
 	Key   string `json:"Key"`
 	Match string `json:"Match"`
@@ -86,14 +136,9 @@ type PostmarkWebhookResponse struct {
 	ID            int               `json:"ID"`
 	URL           string            `json:"Url"`
 	MessageStream string            `json:"MessageStream"`
-	Triggers      []PostmarkTrigger `json:"Triggers"`
-}
-
-// PostmarkTrigger represents a webhook trigger in the response
-type PostmarkTrigger struct {
-	Key   string `json:"Key"`
-	Match string `json:"Match"`
-	Value string `json:"Value"`
+	HttpAuth      *HttpAuth         `json:"HttpAuth,omitempty"`
+	HttpHeaders   []HttpHeader      `json:"HttpHeaders,omitempty"`
+	Triggers      *PostmarkTriggers `json:"Triggers"`
 }
 
 // PostmarkListWebhooksResponse represents the response for listing webhooks

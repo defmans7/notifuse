@@ -32,7 +32,7 @@ func NewSparkPostService(httpClient domain.HTTPClient, authService domain.AuthSe
 // ListWebhooks retrieves all registered webhooks
 func (s *SparkPostService) ListWebhooks(ctx context.Context, config domain.SparkPostSettings) (*domain.SparkPostWebhookListResponse, error) {
 
-	apiURL := fmt.Sprintf("%s/webhooks", config.Endpoint)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks", config.Endpoint)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -73,7 +73,7 @@ func (s *SparkPostService) ListWebhooks(ctx context.Context, config domain.Spark
 func (s *SparkPostService) CreateWebhook(ctx context.Context, config domain.SparkPostSettings, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks", config.Endpoint)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks", config.Endpoint)
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -121,7 +121,7 @@ func (s *SparkPostService) CreateWebhook(ctx context.Context, config domain.Spar
 func (s *SparkPostService) GetWebhook(ctx context.Context, config domain.SparkPostSettings, webhookID string) (*domain.SparkPostWebhookResponse, error) {
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks/%s", config.Endpoint, webhookID)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks/%s", config.Endpoint, webhookID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -160,7 +160,7 @@ func (s *SparkPostService) GetWebhook(ctx context.Context, config domain.SparkPo
 func (s *SparkPostService) UpdateWebhook(ctx context.Context, config domain.SparkPostSettings, webhookID string, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks/%s", config.Endpoint, webhookID)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks/%s", config.Endpoint, webhookID)
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -210,7 +210,7 @@ func (s *SparkPostService) DeleteWebhook(ctx context.Context, config domain.Spar
 	s.logger = s.logger.WithField("webhook_id", webhookID)
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks/%s", config.Endpoint, webhookID)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks/%s", config.Endpoint, webhookID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, apiURL, nil)
 	if err != nil {
@@ -245,7 +245,7 @@ func (s *SparkPostService) TestWebhook(ctx context.Context, config domain.SparkP
 	s.logger = s.logger.WithField("webhook_id", webhookID)
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks/%s/validate", config.Endpoint, webhookID)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks/%s/validate", config.Endpoint, webhookID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for testing SparkPost webhook: %v", err))
@@ -276,7 +276,7 @@ func (s *SparkPostService) TestWebhook(ctx context.Context, config domain.SparkP
 func (s *SparkPostService) ValidateWebhook(ctx context.Context, config domain.SparkPostSettings, webhook domain.SparkPostWebhook) (bool, error) {
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks/validate", config.Endpoint)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks/validate", config.Endpoint)
 
 	// Prepare the request body with just the target URL to validate
 	requestBody := map[string]string{
@@ -347,19 +347,22 @@ func (s *SparkPostService) RegisterWebhooks(
 		status := &domain.WebhookRegistrationStatus{
 			EmailProviderKind: domain.EmailProviderKindSparkPost,
 			IsRegistered:      true,
-			RegisteredEvents:  eventTypes,
-			Endpoints: []domain.WebhookEndpointStatus{
-				{
-					URL:    webhookURL,
-					Active: true,
-				},
-			},
+			Endpoints:         []domain.WebhookEndpointStatus{},
 			ProviderDetails: map[string]interface{}{
 				"webhook_id":     "sandbox-mode-webhook",
 				"integration_id": integrationID,
 				"workspace_id":   workspaceID,
 				"sandbox_mode":   true,
 			},
+		}
+
+		// Add endpoints for each event type
+		for _, eventType := range eventTypes {
+			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+				URL:       webhookURL,
+				EventType: eventType,
+				Active:    true,
+			})
 		}
 
 		return status, nil
@@ -408,9 +411,9 @@ func (s *SparkPostService) RegisterWebhooks(
 			return nil, fmt.Errorf("failed to update SparkPost webhook: %w", err)
 		}
 	} else {
-		// Create a new webhook
+		// Create a new webhook - use a short name (max 24 chars)
 		newWebhook := domain.SparkPostWebhook{
-			Name:     fmt.Sprintf("Notifuse-%s", integrationID),
+			Name:     fmt.Sprintf("Notifuse-%s", integrationID[:15]),
 			Target:   webhookURL,
 			Events:   sparkpostEvents,
 			Active:   true,
@@ -427,18 +430,21 @@ func (s *SparkPostService) RegisterWebhooks(
 	status := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindSparkPost,
 		IsRegistered:      true,
-		RegisteredEvents:  eventTypes,
-		Endpoints: []domain.WebhookEndpointStatus{
-			{
-				URL:    webhookURL,
-				Active: true,
-			},
-		},
+		Endpoints:         []domain.WebhookEndpointStatus{},
 		ProviderDetails: map[string]interface{}{
-			"webhook_id":     webhookResponse.Results.ID,
 			"integration_id": integrationID,
 			"workspace_id":   workspaceID,
 		},
+	}
+
+	// Add endpoints for each event type
+	for _, eventType := range eventTypes {
+		status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+			WebhookID: webhookResponse.Results.ID,
+			URL:       webhookURL,
+			EventType: eventType,
+			Active:    true,
+		})
 	}
 
 	return status, nil
@@ -447,7 +453,7 @@ func (s *SparkPostService) RegisterWebhooks(
 // directListWebhooks is a helper method that uses SparkPostSettings directly
 func (s *SparkPostService) directListWebhooks(ctx context.Context, settings *domain.SparkPostSettings) (*domain.SparkPostWebhookListResponse, error) {
 
-	apiURL := fmt.Sprintf("%s/webhooks", settings.Endpoint)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks", settings.Endpoint)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -487,7 +493,7 @@ func (s *SparkPostService) directListWebhooks(ctx context.Context, settings *dom
 // directUpdateWebhook is a helper method that uses SparkPostSettings directly
 func (s *SparkPostService) directUpdateWebhook(ctx context.Context, settings *domain.SparkPostSettings, webhookID string, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks/%s", settings.Endpoint, webhookID)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks/%s", settings.Endpoint, webhookID)
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -534,7 +540,7 @@ func (s *SparkPostService) directUpdateWebhook(ctx context.Context, settings *do
 // directCreateWebhook is a helper method that uses SparkPostSettings directly
 func (s *SparkPostService) directCreateWebhook(ctx context.Context, settings *domain.SparkPostSettings, webhook domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 
-	apiURL := fmt.Sprintf("%s/webhooks", settings.Endpoint)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks", settings.Endpoint)
 
 	// Prepare the request body
 	requestBody, err := json.Marshal(webhook)
@@ -602,23 +608,23 @@ func (s *SparkPostService) GetWebhookStatus(
 		status := &domain.WebhookRegistrationStatus{
 			EmailProviderKind: domain.EmailProviderKindSparkPost,
 			IsRegistered:      true,
-			Endpoints: []domain.WebhookEndpointStatus{
-				{
-					URL:    webhookURL,
-					Active: true,
-				},
-			},
-			RegisteredEvents: []domain.EmailEventType{
-				domain.EmailEventDelivered,
-				domain.EmailEventBounce,
-				domain.EmailEventComplaint,
-			},
+			Endpoints:         []domain.WebhookEndpointStatus{},
 			ProviderDetails: map[string]interface{}{
 				"webhook_id":     "sandbox-mode-webhook",
 				"integration_id": integrationID,
 				"workspace_id":   workspaceID,
 				"sandbox_mode":   true,
 			},
+		}
+
+		// Add endpoints for common event types in sandbox mode
+		registeredEventTypes := []domain.EmailEventType{domain.EmailEventDelivered, domain.EmailEventBounce, domain.EmailEventComplaint}
+		for _, eventType := range registeredEventTypes {
+			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+				URL:       webhookURL,
+				EventType: eventType,
+				Active:    true,
+			})
 		}
 
 		return status, nil
@@ -642,31 +648,24 @@ func (s *SparkPostService) GetWebhookStatus(
 		return nil, fmt.Errorf("failed to list SparkPost webhooks: %w", err)
 	}
 
-	// Look for webhooks that match our integration
+	// Check each webhook in the results for our integrationID
 	for _, webhook := range existingWebhooks.Results {
 		if strings.Contains(webhook.Target, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
 			strings.Contains(webhook.Target, fmt.Sprintf("integration_id=%s", integrationID)) {
 
-			status.IsRegistered = true
-			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
-				URL:    webhook.Target,
-				Active: webhook.Active,
-			})
+			// Add endpoints for registered event types
+			registeredEventTypes := []domain.EmailEventType{domain.EmailEventDelivered, domain.EmailEventBounce, domain.EmailEventComplaint}
 
-			// Map SparkPost events to our event types
-			var registeredEvents []domain.EmailEventType
-			for _, event := range webhook.Events {
-				switch event {
-				case "delivery":
-					registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
-				case "bounce":
-					registeredEvents = append(registeredEvents, domain.EmailEventBounce)
-				case "spam_complaint":
-					registeredEvents = append(registeredEvents, domain.EmailEventComplaint)
-				}
+			for _, eventType := range registeredEventTypes {
+				status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+					WebhookID: webhook.ID,
+					URL:       webhook.Target,
+					EventType: eventType,
+					Active:    true,
+				})
 			}
-			status.RegisteredEvents = registeredEvents
-			status.ProviderDetails["webhook_id"] = webhook.ID
+
+			status.IsRegistered = true
 			break
 		}
 	}
@@ -729,7 +728,7 @@ func (s *SparkPostService) UnregisterWebhooks(
 // directDeleteWebhook is a helper method that uses SparkPostSettings directly
 func (s *SparkPostService) directDeleteWebhook(ctx context.Context, settings *domain.SparkPostSettings, webhookID string) error {
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/webhooks/%s", settings.Endpoint, webhookID)
+	apiURL := fmt.Sprintf("%s/api/v1/webhooks/%s", settings.Endpoint, webhookID)
 
 	// Log webhook ID for debugging
 	s.logger = s.logger.WithField("webhook_id", webhookID)

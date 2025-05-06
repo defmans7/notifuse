@@ -312,18 +312,21 @@ func (s *MailjetService) RegisterWebhooks(
 	status := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindMailjet,
 		IsRegistered:      true,
-		RegisteredEvents:  registeredEvents,
-		Endpoints: []domain.WebhookEndpointStatus{
-			{
-				URL:    webhookURL,
-				Active: webhook.Status == "active",
-			},
-		},
+		Endpoints:         []domain.WebhookEndpointStatus{},
 		ProviderDetails: map[string]interface{}{
-			"webhook_id":     webhook.ID,
 			"integration_id": integrationID,
 			"workspace_id":   workspaceID,
 		},
+	}
+
+	// Add endpoints for each event type
+	for _, eventType := range registeredEvents {
+		status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+			WebhookID: strconv.FormatInt(webhook.ID, 10),
+			URL:       webhookURL,
+			EventType: eventType,
+			Active:    webhook.Status == "active",
+		})
 	}
 
 	return status, nil
@@ -365,24 +368,31 @@ func (s *MailjetService) GetWebhookStatus(
 			strings.Contains(webhook.Endpoint, fmt.Sprintf("integration_id=%s", integrationID)) {
 
 			status.IsRegistered = true
-			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
-				URL:    webhook.Endpoint,
-				Active: webhook.Status == "active",
-			})
 
 			// Map event types based on webhook.EventType
-			var registeredEvents []domain.EmailEventType
 			switch domain.MailjetWebhookEventType(webhook.EventType) {
 			case domain.MailjetEventSent:
-				registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
+				status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+					WebhookID: strconv.FormatInt(webhook.ID, 10),
+					URL:       webhook.Endpoint,
+					EventType: domain.EmailEventDelivered,
+					Active:    webhook.Status == "active",
+				})
 			case domain.MailjetEventBounce, domain.MailjetEventBlocked:
-				registeredEvents = append(registeredEvents, domain.EmailEventBounce)
+				status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+					WebhookID: strconv.FormatInt(webhook.ID, 10),
+					URL:       webhook.Endpoint,
+					EventType: domain.EmailEventBounce,
+					Active:    webhook.Status == "active",
+				})
 			case domain.MailjetEventSpam:
-				registeredEvents = append(registeredEvents, domain.EmailEventComplaint)
+				status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+					WebhookID: strconv.FormatInt(webhook.ID, 10),
+					URL:       webhook.Endpoint,
+					EventType: domain.EmailEventComplaint,
+					Active:    webhook.Status == "active",
+				})
 			}
-
-			status.RegisteredEvents = registeredEvents
-			status.ProviderDetails["webhook_id"] = webhook.ID
 			break
 		}
 	}

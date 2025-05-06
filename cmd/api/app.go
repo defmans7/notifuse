@@ -295,7 +295,7 @@ func (a *App) InitServices() error {
 
 	// Initialize email provider services
 	a.postmarkService = service.NewPostmarkService(httpClient, a.authService, a.logger)
-	a.mailgunService = service.NewMailgunService(httpClient, a.authService, a.logger)
+	a.mailgunService = service.NewMailgunService(httpClient, a.authService, a.logger, a.config.WebhookEndpoint)
 	a.mailjetService = service.NewMailjetService(httpClient, a.authService, a.logger)
 	a.sparkPostService = service.NewSparkPostService(httpClient, a.authService, a.logger)
 	a.sesService = service.NewSESService(a.authService, a.logger)
@@ -323,7 +323,7 @@ func (a *App) InitServices() error {
 		a.sparkPostService,
 		a.sesService,
 		a.logger,
-		a.config.APIEndpoint,
+		a.config.WebhookEndpoint,
 	)
 
 	// Initialize workspace service

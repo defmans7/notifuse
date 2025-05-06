@@ -32,7 +32,13 @@ import {
 import { workspaceService } from '../../services/api/workspace'
 import { emailService } from '../../services/api/email'
 import { Section } from './Section'
-import { faChevronDown, faEnvelope } from '@fortawesome/free-solid-svg-icons'
+import {
+  faCheck,
+  faChevronDown,
+  faEnvelope,
+  faExclamationTriangle,
+  faTerminal
+} from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   getWebhookStatus,
@@ -40,6 +46,7 @@ import {
   WebhookRegistrationStatus
 } from '../../services/api/webhook_registration'
 import config from '../../config'
+import { faPaperPlane } from '@fortawesome/free-regular-svg-icons'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = ['postmark', 'mailgun']
@@ -153,10 +160,23 @@ const EmailIntegration = ({
       )
     }
 
-    if (!webhookStatus) {
+    if (!webhookStatus || !webhookStatus.is_registered) {
       return (
         <Descriptions.Item label="Webhooks">
-          <Tag color="orange">Not configured</Tag>
+          <div className="mb-2">
+            <Tag color="orange">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="text-yellow-500 mr-1" />
+              delivered
+            </Tag>
+            <Tag color="orange">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="text-yellow-500 mr-1" />
+              bounce
+            </Tag>
+            <Tag color="orange">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="text-yellow-500 mr-1" />
+              complaint
+            </Tag>
+          </div>
           {isOwner && (
             <Button
               size="small"
@@ -175,53 +195,48 @@ const EmailIntegration = ({
     return (
       <Descriptions.Item label="Webhooks">
         <div>
-          <div className="mb-2">
-            <Tag color={webhookStatus.is_registered ? 'green' : 'red'}>
-              {webhookStatus.is_registered ? 'Active' : 'Not registered'}
-            </Tag>
-            {isOwner && (
-              <Button
-                size="small"
-                className="ml-2"
-                type={webhookStatus.is_registered ? undefined : 'primary'}
-                onClick={handleRegisterWebhooks}
-                loading={registrationInProgress}
-              >
-                {webhookStatus.is_registered ? 'Re-register' : 'Register Webhooks'}
-              </Button>
-            )}
-          </div>
-
-          {webhookStatus.is_registered &&
-            webhookStatus.registered_events &&
-            webhookStatus.registered_events.length > 0 && (
-              <div className="mb-2">
-                <div className="text-sm text-gray-500 mb-1">Registered event types:</div>
-                <Space wrap>
-                  {webhookStatus.registered_events.map((event) => (
-                    <Tag key={event} color="blue">
-                      {event.charAt(0).toUpperCase() + event.slice(1)}
-                    </Tag>
-                  ))}
-                </Space>
-              </div>
-            )}
-
           {webhookStatus.endpoints && webhookStatus.endpoints.length > 0 && (
-            <div>
-              <div className="text-sm text-gray-500 mb-1">Webhook endpoints:</div>
+            <div className="mb-2">
               {webhookStatus.endpoints.map((endpoint, index) => (
-                <div key={index} className="mb-1">
-                  <Tooltip title={endpoint.url}>
+                <span key={index}>
+                  <Tooltip title={endpoint.webhook_id + ' - ' + endpoint.url}>
                     <Tag color={endpoint.active ? 'green' : 'orange'}>
-                      {endpoint.event_type} {endpoint.active ? '✅' : '⚠️'}
+                      {endpoint.active ? (
+                        <FontAwesomeIcon icon={faCheck} className="text-green-500 mr-1" />
+                      ) : (
+                        <FontAwesomeIcon
+                          icon={faExclamationTriangle}
+                          className="text-yellow-500 mr-1"
+                        />
+                      )}
+                      {endpoint.event_type}
                     </Tag>
                   </Tooltip>
-                </div>
+                </span>
               ))}
             </div>
           )}
 
+          <div className="mb-2">
+            {isOwner && (
+              <Popconfirm
+                title="Register webhooks?"
+                description="This will register or update webhook endpoints for this email provider."
+                onConfirm={handleRegisterWebhooks}
+                okText="Yes"
+                cancelText="No"
+              >
+                <Button
+                  size="small"
+                  className="ml-2"
+                  type={webhookStatus.is_registered ? undefined : 'primary'}
+                  loading={registrationInProgress}
+                >
+                  {webhookStatus.is_registered ? 'Re-register' : 'Register Webhooks'}
+                </Button>
+              </Popconfirm>
+            )}
+          </div>
           {webhookStatus.error && (
             <Alert message={webhookStatus.error} type="error" showIcon className="mt-2" />
           )}
@@ -268,9 +283,15 @@ const EmailIntegration = ({
           <Space>
             {isIntegrationInUse(integration.id) ? (
               <>
-                {purposes.includes('Marketing Emails') && <Tag color="blue">Marketing Emails</Tag>}
+                {purposes.includes('Marketing Emails') && (
+                  <Tag color="blue">
+                    <FontAwesomeIcon icon={faPaperPlane} className="mr-1" /> Marketing Emails
+                  </Tag>
+                )}
                 {purposes.includes('Transactional Emails') && (
-                  <Tag color="green">Transactional Emails</Tag>
+                  <Tag color="purple">
+                    <FontAwesomeIcon icon={faTerminal} className="mr-1" /> Transactional Emails
+                  </Tag>
                 )}
                 {purposes.length === 0 && <Tag color="red">Not assigned</Tag>}
               </>

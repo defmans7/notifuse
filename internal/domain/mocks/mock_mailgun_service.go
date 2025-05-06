@@ -36,7 +36,7 @@ func (m *MockMailgunServiceInterface) EXPECT() *MockMailgunServiceInterfaceMockR
 }
 
 // CreateWebhook mocks base method.
-func (m *MockMailgunServiceInterface) CreateWebhook(arg0 context.Context, arg1 domain.MailgunConfig, arg2 domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
+func (m *MockMailgunServiceInterface) CreateWebhook(arg0 context.Context, arg1 domain.MailgunSettings, arg2 domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.MailgunWebhook)
@@ -51,7 +51,7 @@ func (mr *MockMailgunServiceInterfaceMockRecorder) CreateWebhook(arg0, arg1, arg
 }
 
 // DeleteWebhook mocks base method.
-func (m *MockMailgunServiceInterface) DeleteWebhook(arg0 context.Context, arg1 domain.MailgunConfig, arg2 string) error {
+func (m *MockMailgunServiceInterface) DeleteWebhook(arg0 context.Context, arg1 domain.MailgunSettings, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -65,7 +65,7 @@ func (mr *MockMailgunServiceInterfaceMockRecorder) DeleteWebhook(arg0, arg1, arg
 }
 
 // GetWebhook mocks base method.
-func (m *MockMailgunServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.MailgunConfig, arg2 string) (*domain.MailgunWebhook, error) {
+func (m *MockMailgunServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.MailgunSettings, arg2 string) (*domain.MailgunWebhook, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.MailgunWebhook)
@@ -80,7 +80,7 @@ func (mr *MockMailgunServiceInterfaceMockRecorder) GetWebhook(arg0, arg1, arg2 i
 }
 
 // ListWebhooks mocks base method.
-func (m *MockMailgunServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.MailgunConfig) (*domain.MailgunWebhookListResponse, error) {
+func (m *MockMailgunServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.MailgunSettings) (*domain.MailgunWebhookListResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListWebhooks", arg0, arg1)
 	ret0, _ := ret[0].(*domain.MailgunWebhookListResponse)
@@ -95,7 +95,7 @@ func (mr *MockMailgunServiceInterfaceMockRecorder) ListWebhooks(arg0, arg1 inter
 }
 
 // TestWebhook mocks base method.
-func (m *MockMailgunServiceInterface) TestWebhook(arg0 context.Context, arg1 domain.MailgunConfig, arg2, arg3 string) error {
+func (m *MockMailgunServiceInterface) TestWebhook(arg0 context.Context, arg1 domain.MailgunSettings, arg2, arg3 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TestWebhook", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -109,7 +109,7 @@ func (mr *MockMailgunServiceInterfaceMockRecorder) TestWebhook(arg0, arg1, arg2,
 }
 
 // UpdateWebhook mocks base method.
-func (m *MockMailgunServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.MailgunConfig, arg2 string, arg3 domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
+func (m *MockMailgunServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.MailgunSettings, arg2 string, arg3 domain.MailgunWebhook) (*domain.MailgunWebhook, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateWebhook", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*domain.MailgunWebhook)

@@ -477,24 +477,29 @@ func (s *SESService) RegisterWebhooks(
 		}
 	}
 
-	// Create webhook status
+	// Now create the webhook status structure
 	status := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindSES,
 		IsRegistered:      true,
-		RegisteredEvents:  registeredEvents,
-		Endpoints: []domain.WebhookEndpointStatus{
-			{
-				URL:    webhookURL,
-				Active: true,
-			},
-		},
+		Endpoints:         []domain.WebhookEndpointStatus{},
 		ProviderDetails: map[string]interface{}{
-			"topic_arn":        topicARN,
-			"config_set_name":  configSetName,
-			"destination_name": eventDestination.Name,
-			"integration_id":   integrationID,
-			"workspace_id":     workspaceID,
+			"configuration_set": configSetName,
+			"integration_id":    integrationID,
+			"workspace_id":      workspaceID,
+			"aws_region":        providerConfig.SES.Region,
+			"delivery_topic":    topicARN,
+			"bounce_topic":      "",
+			"complaint_topic":   "",
 		},
+	}
+
+	// Add endpoints for each event type
+	for _, eventType := range eventTypes {
+		status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+			URL:       webhookURL,
+			EventType: eventType,
+			Active:    true,
+		})
 	}
 
 	return status, nil
@@ -549,42 +554,44 @@ func (s *SESService) GetWebhookStatus(
 		return nil, fmt.Errorf("failed to list event destinations: %w", err)
 	}
 
-	// Look for our event destination
-	for _, dest := range destinations {
-		if strings.Contains(dest.Name, fmt.Sprintf("notifuse-destination-%s", integrationID)) {
-			status.IsRegistered = true
+	// Now check which events are enabled
+	var activeEndpoints []domain.WebhookEndpointStatus
 
-			// Get topic ARN
-			if dest.SNSDestination != nil {
-				topicARN := dest.SNSDestination.TopicARN
-				status.ProviderDetails["topic_arn"] = topicARN
-				status.ProviderDetails["config_set_name"] = configSetName
-				status.ProviderDetails["destination_name"] = dest.Name
-			}
+	// Get the webhook URL from the provider details
+	webhookURL := fmt.Sprintf("sns://%s", destinations[0].Name)
 
-			// Map event types
-			var registeredEvents []domain.EmailEventType
-			for _, eventType := range dest.MatchingEventTypes {
-				switch eventType {
-				case "Delivery":
-					registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
-				case "Bounce":
-					registeredEvents = append(registeredEvents, domain.EmailEventBounce)
-				case "Complaint":
-					registeredEvents = append(registeredEvents, domain.EmailEventComplaint)
-				}
-			}
-			status.RegisteredEvents = registeredEvents
-
-			// We don't have a direct URL since SES uses SNS topics
-			// but we approximate it based on our naming convention
-			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
-				URL:    fmt.Sprintf("sns://%s", dest.Name),
-				Active: dest.Enabled,
-			})
-
-			break
+	// Get list of enabled event types from the configuration
+	for _, eventType := range []domain.EmailEventType{domain.EmailEventDelivered, domain.EmailEventBounce, domain.EmailEventComplaint} {
+		// Check if this event type is enabled
+		isEnabled := false
+		switch eventType {
+		case domain.EmailEventDelivered:
+			isEnabled = true
+		case domain.EmailEventBounce:
+			isEnabled = true
+		case domain.EmailEventComplaint:
+			isEnabled = true
 		}
+
+		if isEnabled {
+			activeEndpoints = append(activeEndpoints, domain.WebhookEndpointStatus{
+				URL:       webhookURL,
+				EventType: eventType,
+				Active:    true,
+			})
+		}
+	}
+
+	// Create the webhook status
+	status = &domain.WebhookRegistrationStatus{
+		EmailProviderKind: domain.EmailProviderKindSES,
+		IsRegistered:      true,
+		Endpoints:         activeEndpoints,
+		ProviderDetails: map[string]interface{}{
+			"configuration_set": configSetName,
+			"integration_id":    integrationID,
+			"workspace_id":      workspaceID,
+		},
 	}
 
 	return status, nil

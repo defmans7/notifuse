@@ -77,9 +77,19 @@ type MailgunWebhook struct {
 }
 
 // MailgunWebhookListResponse represents the response from listing webhooks
+type MailgunWebhooks struct {
+	Delivered     MailgunUrls `json:"delivered"`
+	PermanentFail MailgunUrls `json:"permanent_fail"`
+	TemporaryFail MailgunUrls `json:"temporary_fail"`
+	Complained    MailgunUrls `json:"complained"`
+}
+
+type MailgunUrls struct {
+	URLs []string `json:"urls"`
+}
+
 type MailgunWebhookListResponse struct {
-	Items []MailgunWebhook `json:"items"`
-	Total int              `json:"total"`
+	Webhooks MailgunWebhooks `json:"webhooks"`
 }
 
 // MailgunSettings contains configuration for Mailgun

@@ -68,7 +68,18 @@ func TestExampleService_RegisterWebhooks(t *testing.T) {
 	expectedStatus := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindSES,
 		IsRegistered:      true,
-		RegisteredEvents:  req.EventTypes,
+		Endpoints: []domain.WebhookEndpointStatus{
+			{
+				URL:       "https://example.com/webhook",
+				EventType: domain.EmailEventDelivered,
+				Active:    true,
+			},
+			{
+				URL:       "https://example.com/webhook",
+				EventType: domain.EmailEventBounce,
+				Active:    true,
+			},
+		},
 	}
 
 	mockWebhookService.EXPECT().
@@ -148,9 +159,17 @@ func TestExampleService_GetWebhookStatus(t *testing.T) {
 	expectedStatus := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindSES,
 		IsRegistered:      true,
-		RegisteredEvents: []domain.EmailEventType{
-			domain.EmailEventDelivered,
-			domain.EmailEventBounce,
+		Endpoints: []domain.WebhookEndpointStatus{
+			{
+				URL:       "https://example.com/webhook",
+				EventType: domain.EmailEventDelivered,
+				Active:    true,
+			},
+			{
+				URL:       "https://example.com/webhook",
+				EventType: domain.EmailEventBounce,
+				Active:    true,
+			},
 		},
 	}
 

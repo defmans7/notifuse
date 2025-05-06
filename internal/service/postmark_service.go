@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -74,6 +75,8 @@ func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.Pos
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
+	log.Printf("Request: %+v", string(jsonData))
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.postmarkapp.com/webhooks", bytes.NewBuffer(jsonData))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for registering Postmark webhook: %v", err))
@@ -93,6 +96,7 @@ func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.Pos
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Response: %+v", string(body))
 		s.logger.Error(fmt.Sprintf("Postmark API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
 		return nil, fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
 	}
@@ -287,34 +291,44 @@ func (s *PostmarkService) RegisterWebhooks(
 	// Create webhook URL that includes workspace_id and integration_id
 	webhookURL := domain.GenerateWebhookCallbackURL(baseURL, domain.EmailProviderKindPostmark, workspaceID, integrationID)
 
-	// Create triggers for each event type
-	triggers := []domain.PostmarkTriggerRule{}
+	// Map our event types to Postmark trigger settings
+	triggers := &domain.PostmarkTriggers{
+		Open: &domain.PostmarkOpenTrigger{
+			Enabled: false,
+		},
+		Click: &domain.PostmarkClickTrigger{
+			Enabled: false,
+		},
+		Delivery: &domain.PostmarkDeliveryTrigger{
+			Enabled: false,
+		},
+		Bounce: &domain.PostmarkBounceTrigger{
+			Enabled: false,
+		},
+		SpamComplaint: &domain.PostmarkSpamComplaintTrigger{
+			Enabled: false,
+		},
+		SubscriptionChange: &domain.PostmarkSubscriptionChangeTrigger{
+			Enabled: false,
+		},
+	}
 
-	// Add triggers for each event type
+	// Enable triggers based on the event types
+	var eventsAdded []domain.EmailEventType
 	for _, eventType := range eventTypes {
-		var triggerValue string
 		switch eventType {
 		case domain.EmailEventDelivered:
-			triggerValue = "Delivery"
+			triggers.Delivery.Enabled = true
+			eventsAdded = append(eventsAdded, eventType)
 		case domain.EmailEventBounce:
-			triggerValue = "Bounce"
+			triggers.Bounce.Enabled = true
+			eventsAdded = append(eventsAdded, eventType)
 		case domain.EmailEventComplaint:
-			triggerValue = "SpamComplaint"
+			triggers.SpamComplaint.Enabled = true
+			eventsAdded = append(eventsAdded, eventType)
 		default:
 			continue // Skip unsupported event types
 		}
-
-		triggers = append(triggers, domain.PostmarkTriggerRule{
-			Key:   "MessageStream",
-			Match: "Equals",
-			Value: "outbound",
-		})
-
-		triggers = append(triggers, domain.PostmarkTriggerRule{
-			Key:   "RecordType",
-			Match: "Equals",
-			Value: triggerValue,
-		})
 	}
 
 	// First, get existing webhooks
@@ -323,7 +337,7 @@ func (s *PostmarkService) RegisterWebhooks(
 		return nil, fmt.Errorf("failed to list Postmark webhooks: %w", err)
 	}
 
-	// Check if we already have webhooks registered
+	// Check if we have existing webhooks
 	notifuseWebhooks := s.filterPostmarkWebhooks(existingWebhooks.Webhooks, baseURL, workspaceID, integrationID)
 
 	// If we have existing webhooks, unregister them
@@ -340,8 +354,12 @@ func (s *PostmarkService) RegisterWebhooks(
 	webhookConfig := domain.PostmarkWebhookConfig{
 		URL:           webhookURL,
 		MessageStream: "outbound",
-		TriggerRules:  triggers,
+		Triggers:      triggers,
 	}
+
+	// Debug log the webhook config
+	jsonData, _ := json.Marshal(webhookConfig)
+	s.logger.Info(fmt.Sprintf("Registering Postmark webhook with config: %s", string(jsonData)))
 
 	webhookResponse, err := s.RegisterWebhook(ctx, *providerConfig.Postmark, webhookConfig)
 	if err != nil {
@@ -352,18 +370,21 @@ func (s *PostmarkService) RegisterWebhooks(
 	status := &domain.WebhookRegistrationStatus{
 		EmailProviderKind: domain.EmailProviderKindPostmark,
 		IsRegistered:      true,
-		RegisteredEvents:  eventTypes,
-		Endpoints: []domain.WebhookEndpointStatus{
-			{
-				URL:    webhookURL,
-				Active: true,
-			},
-		},
+		Endpoints:         []domain.WebhookEndpointStatus{},
 		ProviderDetails: map[string]interface{}{
-			"webhook_id":     webhookResponse.ID,
 			"integration_id": integrationID,
 			"workspace_id":   workspaceID,
 		},
+	}
+
+	// Add endpoint statuses for each event type
+	for _, eventType := range eventsAdded {
+		status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+			WebhookID: strconv.Itoa(webhookResponse.ID),
+			URL:       webhookURL,
+			EventType: eventType,
+			Active:    true,
+		})
 	}
 
 	return status, nil
@@ -403,44 +424,40 @@ func (s *PostmarkService) GetWebhookStatus(
 
 	// Check each webhook in the response
 	for _, webhook := range notifuseWebhooks {
-		status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
-			URL:    webhook.URL,
-			Active: true,
-		})
+		// Create base endpoint status
+		baseEndpoint := domain.WebhookEndpointStatus{
+			WebhookID: strconv.Itoa(webhook.ID),
+			URL:       webhook.URL,
+			Active:    true,
+		}
 
-		// Determine registered event types
-		for _, trigger := range webhook.Triggers {
-			if trigger.Key == "RecordType" {
-				var eventType domain.EmailEventType
-				switch trigger.Value {
-				case "Delivery":
-					eventType = domain.EmailEventDelivered
-				case "Bounce":
-					eventType = domain.EmailEventBounce
-				case "SpamComplaint":
-					eventType = domain.EmailEventComplaint
-				default:
-					continue
-				}
+		// Determine registered event types from the response
+		if webhook.Triggers != nil {
+			// Check for Delivery event
+			if webhook.Triggers.Delivery != nil && webhook.Triggers.Delivery.Enabled {
+				deliveryEndpoint := baseEndpoint
+				deliveryEndpoint.EventType = domain.EmailEventDelivered
+				status.Endpoints = append(status.Endpoints, deliveryEndpoint)
+			}
 
-				// Add to registered events if not already there
-				found := false
-				for _, registeredEvent := range status.RegisteredEvents {
-					if registeredEvent == eventType {
-						found = true
-						break
-					}
-				}
-				if !found {
-					status.RegisteredEvents = append(status.RegisteredEvents, eventType)
-				}
+			// Check for Bounce event
+			if webhook.Triggers.Bounce != nil && webhook.Triggers.Bounce.Enabled {
+				bounceEndpoint := baseEndpoint
+				bounceEndpoint.EventType = domain.EmailEventBounce
+				status.Endpoints = append(status.Endpoints, bounceEndpoint)
+			}
+
+			// Check for SpamComplaint event
+			if webhook.Triggers.SpamComplaint != nil && webhook.Triggers.SpamComplaint.Enabled {
+				complaintEndpoint := baseEndpoint
+				complaintEndpoint.EventType = domain.EmailEventComplaint
+				status.Endpoints = append(status.Endpoints, complaintEndpoint)
 			}
 		}
 
 		// Mark as registered if we have any endpoints
 		if len(status.Endpoints) > 0 {
 			status.IsRegistered = true
-			status.ProviderDetails["webhook_id"] = webhook.ID
 		}
 	}
 

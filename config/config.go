@@ -12,12 +12,13 @@ import (
 )
 
 type Config struct {
-	Server      ServerConfig
-	Database    DatabaseConfig
-	Security    SecurityConfig
-	RootEmail   string
-	Environment string
-	APIEndpoint string
+	Server          ServerConfig
+	Database        DatabaseConfig
+	Security        SecurityConfig
+	RootEmail       string
+	Environment     string
+	APIEndpoint     string
+	WebhookEndpoint string
 }
 
 type ServerConfig struct {
@@ -167,9 +168,14 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			PasetoPublicKeyBytes:  publicKeyBytes,
 			SecretKey:             v.GetString("SECRET_KEY"),
 		},
-		RootEmail:   v.GetString("ROOT_EMAIL"),
-		Environment: v.GetString("ENVIRONMENT"),
-		APIEndpoint: v.GetString("API_ENDPOINT"),
+		RootEmail:       v.GetString("ROOT_EMAIL"),
+		Environment:     v.GetString("ENVIRONMENT"),
+		APIEndpoint:     v.GetString("API_ENDPOINT"),
+		WebhookEndpoint: v.GetString("WEBHOOK_ENDPOINT"),
+	}
+
+	if config.WebhookEndpoint == "" {
+		config.WebhookEndpoint = config.APIEndpoint
 	}
 
 	return config, nil

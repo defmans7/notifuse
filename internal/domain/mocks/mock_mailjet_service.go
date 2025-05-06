@@ -36,7 +36,7 @@ func (m *MockMailjetServiceInterface) EXPECT() *MockMailjetServiceInterfaceMockR
 }
 
 // CreateWebhook mocks base method.
-func (m *MockMailjetServiceInterface) CreateWebhook(arg0 context.Context, arg1 domain.MailjetConfig, arg2 domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
+func (m *MockMailjetServiceInterface) CreateWebhook(arg0 context.Context, arg1 domain.MailjetSettings, arg2 domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.MailjetWebhook)
@@ -51,7 +51,7 @@ func (mr *MockMailjetServiceInterfaceMockRecorder) CreateWebhook(arg0, arg1, arg
 }
 
 // DeleteWebhook mocks base method.
-func (m *MockMailjetServiceInterface) DeleteWebhook(arg0 context.Context, arg1 domain.MailjetConfig, arg2 int64) error {
+func (m *MockMailjetServiceInterface) DeleteWebhook(arg0 context.Context, arg1 domain.MailjetSettings, arg2 int64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -65,7 +65,7 @@ func (mr *MockMailjetServiceInterfaceMockRecorder) DeleteWebhook(arg0, arg1, arg
 }
 
 // GetWebhook mocks base method.
-func (m *MockMailjetServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.MailjetConfig, arg2 int64) (*domain.MailjetWebhook, error) {
+func (m *MockMailjetServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.MailjetSettings, arg2 int64) (*domain.MailjetWebhook, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.MailjetWebhook)
@@ -80,7 +80,7 @@ func (mr *MockMailjetServiceInterfaceMockRecorder) GetWebhook(arg0, arg1, arg2 i
 }
 
 // ListWebhooks mocks base method.
-func (m *MockMailjetServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.MailjetConfig) (*domain.MailjetWebhookResponse, error) {
+func (m *MockMailjetServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.MailjetSettings) (*domain.MailjetWebhookResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListWebhooks", arg0, arg1)
 	ret0, _ := ret[0].(*domain.MailjetWebhookResponse)
@@ -95,7 +95,7 @@ func (mr *MockMailjetServiceInterfaceMockRecorder) ListWebhooks(arg0, arg1 inter
 }
 
 // UpdateWebhook mocks base method.
-func (m *MockMailjetServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.MailjetConfig, arg2 int64, arg3 domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
+func (m *MockMailjetServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.MailjetSettings, arg2 int64, arg3 domain.MailjetWebhook) (*domain.MailjetWebhook, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateWebhook", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*domain.MailjetWebhook)

@@ -29,7 +29,6 @@ type WebhookRegistrationConfig struct {
 type WebhookRegistrationStatus struct {
 	EmailProviderKind EmailProviderKind       `json:"email_provider_kind"`
 	IsRegistered      bool                    `json:"is_registered"`
-	RegisteredEvents  []EmailEventType        `json:"registered_events,omitempty"`
 	Endpoints         []WebhookEndpointStatus `json:"endpoints,omitempty"`
 	Error             string                  `json:"error,omitempty"`
 	ProviderDetails   map[string]interface{}  `json:"provider_details,omitempty"`
@@ -37,6 +36,7 @@ type WebhookRegistrationStatus struct {
 
 // WebhookEndpointStatus represents the status of a single webhook endpoint
 type WebhookEndpointStatus struct {
+	WebhookID string         `json:"webhook_id,omitempty"`
 	URL       string         `json:"url"`
 	EventType EmailEventType `json:"event_type"`
 	Active    bool           `json:"active"`

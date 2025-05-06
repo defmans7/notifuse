@@ -127,11 +127,6 @@ func TestWebhookRegistrationStatus(t *testing.T) {
 	status := &WebhookRegistrationStatus{
 		EmailProviderKind: EmailProviderKindSES,
 		IsRegistered:      true,
-		RegisteredEvents: []EmailEventType{
-			EmailEventDelivered,
-			EmailEventBounce,
-			EmailEventComplaint,
-		},
 		Endpoints: []WebhookEndpointStatus{
 			{
 				URL:       "https://example.com/webhooks/ses/delivered",
@@ -157,7 +152,6 @@ func TestWebhookRegistrationStatus(t *testing.T) {
 	// Basic structure verification
 	assert.Equal(t, EmailProviderKindSES, status.EmailProviderKind)
 	assert.True(t, status.IsRegistered)
-	assert.Len(t, status.RegisteredEvents, 3)
 	assert.Len(t, status.Endpoints, 3)
 	assert.Equal(t, "my-configuration-set", status.ProviderDetails["configuration_set"])
 

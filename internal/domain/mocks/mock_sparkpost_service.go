@@ -36,7 +36,7 @@ func (m *MockSparkPostServiceInterface) EXPECT() *MockSparkPostServiceInterfaceM
 }
 
 // CreateWebhook mocks base method.
-func (m *MockSparkPostServiceInterface) CreateWebhook(arg0 context.Context, arg1 domain.SparkPostConfig, arg2 domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
+func (m *MockSparkPostServiceInterface) CreateWebhook(arg0 context.Context, arg1 domain.SparkPostSettings, arg2 domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.SparkPostWebhookResponse)
@@ -51,7 +51,7 @@ func (mr *MockSparkPostServiceInterfaceMockRecorder) CreateWebhook(arg0, arg1, a
 }
 
 // DeleteWebhook mocks base method.
-func (m *MockSparkPostServiceInterface) DeleteWebhook(arg0 context.Context, arg1 domain.SparkPostConfig, arg2 string) error {
+func (m *MockSparkPostServiceInterface) DeleteWebhook(arg0 context.Context, arg1 domain.SparkPostSettings, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -65,7 +65,7 @@ func (mr *MockSparkPostServiceInterfaceMockRecorder) DeleteWebhook(arg0, arg1, a
 }
 
 // GetWebhook mocks base method.
-func (m *MockSparkPostServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.SparkPostConfig, arg2 string) (*domain.SparkPostWebhookResponse, error) {
+func (m *MockSparkPostServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.SparkPostSettings, arg2 string) (*domain.SparkPostWebhookResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.SparkPostWebhookResponse)
@@ -80,7 +80,7 @@ func (mr *MockSparkPostServiceInterfaceMockRecorder) GetWebhook(arg0, arg1, arg2
 }
 
 // ListWebhooks mocks base method.
-func (m *MockSparkPostServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.SparkPostConfig) (*domain.SparkPostWebhookListResponse, error) {
+func (m *MockSparkPostServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.SparkPostSettings) (*domain.SparkPostWebhookListResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListWebhooks", arg0, arg1)
 	ret0, _ := ret[0].(*domain.SparkPostWebhookListResponse)
@@ -95,7 +95,7 @@ func (mr *MockSparkPostServiceInterfaceMockRecorder) ListWebhooks(arg0, arg1 int
 }
 
 // TestWebhook mocks base method.
-func (m *MockSparkPostServiceInterface) TestWebhook(arg0 context.Context, arg1 domain.SparkPostConfig, arg2 string) error {
+func (m *MockSparkPostServiceInterface) TestWebhook(arg0 context.Context, arg1 domain.SparkPostSettings, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TestWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -109,7 +109,7 @@ func (mr *MockSparkPostServiceInterfaceMockRecorder) TestWebhook(arg0, arg1, arg
 }
 
 // UpdateWebhook mocks base method.
-func (m *MockSparkPostServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.SparkPostConfig, arg2 string, arg3 domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
+func (m *MockSparkPostServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.SparkPostSettings, arg2 string, arg3 domain.SparkPostWebhook) (*domain.SparkPostWebhookResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateWebhook", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*domain.SparkPostWebhookResponse)
@@ -124,7 +124,7 @@ func (mr *MockSparkPostServiceInterfaceMockRecorder) UpdateWebhook(arg0, arg1, a
 }
 
 // ValidateWebhook mocks base method.
-func (m *MockSparkPostServiceInterface) ValidateWebhook(arg0 context.Context, arg1 domain.SparkPostConfig, arg2 domain.SparkPostWebhook) (bool, error) {
+func (m *MockSparkPostServiceInterface) ValidateWebhook(arg0 context.Context, arg1 domain.SparkPostSettings, arg2 domain.SparkPostWebhook) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidateWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)

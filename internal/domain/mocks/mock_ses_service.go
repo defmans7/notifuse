@@ -36,7 +36,7 @@ func (m *MockSESServiceInterface) EXPECT() *MockSESServiceInterfaceMockRecorder 
 }
 
 // CreateConfigurationSet mocks base method.
-func (m *MockSESServiceInterface) CreateConfigurationSet(arg0 context.Context, arg1 domain.SESConfig, arg2 string) error {
+func (m *MockSESServiceInterface) CreateConfigurationSet(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateConfigurationSet", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -50,7 +50,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) CreateConfigurationSet(arg0, arg1
 }
 
 // CreateEventDestination mocks base method.
-func (m *MockSESServiceInterface) CreateEventDestination(arg0 context.Context, arg1 domain.SESConfig, arg2 domain.SESConfigurationSetEventDestination) error {
+func (m *MockSESServiceInterface) CreateEventDestination(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2 domain.SESConfigurationSetEventDestination) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateEventDestination", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -64,7 +64,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) CreateEventDestination(arg0, arg1
 }
 
 // CreateSNSTopic mocks base method.
-func (m *MockSESServiceInterface) CreateSNSTopic(arg0 context.Context, arg1 domain.SESConfig, arg2 domain.SESTopicConfig) (string, error) {
+func (m *MockSESServiceInterface) CreateSNSTopic(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2 domain.SESTopicConfig) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateSNSTopic", arg0, arg1, arg2)
 	ret0, _ := ret[0].(string)
@@ -79,7 +79,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) CreateSNSTopic(arg0, arg1, arg2 i
 }
 
 // DeleteConfigurationSet mocks base method.
-func (m *MockSESServiceInterface) DeleteConfigurationSet(arg0 context.Context, arg1 domain.SESConfig, arg2 string) error {
+func (m *MockSESServiceInterface) DeleteConfigurationSet(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteConfigurationSet", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -93,7 +93,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) DeleteConfigurationSet(arg0, arg1
 }
 
 // DeleteEventDestination mocks base method.
-func (m *MockSESServiceInterface) DeleteEventDestination(arg0 context.Context, arg1 domain.SESConfig, arg2, arg3 string) error {
+func (m *MockSESServiceInterface) DeleteEventDestination(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2, arg3 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteEventDestination", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -107,7 +107,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) DeleteEventDestination(arg0, arg1
 }
 
 // DeleteSNSTopic mocks base method.
-func (m *MockSESServiceInterface) DeleteSNSTopic(arg0 context.Context, arg1 domain.SESConfig, arg2 string) error {
+func (m *MockSESServiceInterface) DeleteSNSTopic(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteSNSTopic", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -121,7 +121,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) DeleteSNSTopic(arg0, arg1, arg2 i
 }
 
 // ListConfigurationSets mocks base method.
-func (m *MockSESServiceInterface) ListConfigurationSets(arg0 context.Context, arg1 domain.SESConfig) ([]string, error) {
+func (m *MockSESServiceInterface) ListConfigurationSets(arg0 context.Context, arg1 domain.AmazonSESSettings) ([]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListConfigurationSets", arg0, arg1)
 	ret0, _ := ret[0].([]string)
@@ -136,7 +136,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) ListConfigurationSets(arg0, arg1 
 }
 
 // ListEventDestinations mocks base method.
-func (m *MockSESServiceInterface) ListEventDestinations(arg0 context.Context, arg1 domain.SESConfig, arg2 string) ([]domain.SESConfigurationSetEventDestination, error) {
+func (m *MockSESServiceInterface) ListEventDestinations(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2 string) ([]domain.SESConfigurationSetEventDestination, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListEventDestinations", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]domain.SESConfigurationSetEventDestination)
@@ -151,7 +151,7 @@ func (mr *MockSESServiceInterfaceMockRecorder) ListEventDestinations(arg0, arg1,
 }
 
 // UpdateEventDestination mocks base method.
-func (m *MockSESServiceInterface) UpdateEventDestination(arg0 context.Context, arg1 domain.SESConfig, arg2 domain.SESConfigurationSetEventDestination) error {
+func (m *MockSESServiceInterface) UpdateEventDestination(arg0 context.Context, arg1 domain.AmazonSESSettings, arg2 domain.SESConfigurationSetEventDestination) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateEventDestination", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)

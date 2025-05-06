@@ -36,7 +36,7 @@ func (m *MockPostmarkServiceInterface) EXPECT() *MockPostmarkServiceInterfaceMoc
 }
 
 // GetWebhook mocks base method.
-func (m *MockPostmarkServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.PostmarkConfig, arg2 int) (*domain.PostmarkWebhookResponse, error) {
+func (m *MockPostmarkServiceInterface) GetWebhook(arg0 context.Context, arg1 domain.PostmarkSettings, arg2 int) (*domain.PostmarkWebhookResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.PostmarkWebhookResponse)
@@ -51,7 +51,7 @@ func (mr *MockPostmarkServiceInterfaceMockRecorder) GetWebhook(arg0, arg1, arg2 
 }
 
 // ListWebhooks mocks base method.
-func (m *MockPostmarkServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.PostmarkConfig) (*domain.PostmarkListWebhooksResponse, error) {
+func (m *MockPostmarkServiceInterface) ListWebhooks(arg0 context.Context, arg1 domain.PostmarkSettings) (*domain.PostmarkListWebhooksResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListWebhooks", arg0, arg1)
 	ret0, _ := ret[0].(*domain.PostmarkListWebhooksResponse)
@@ -66,7 +66,7 @@ func (mr *MockPostmarkServiceInterfaceMockRecorder) ListWebhooks(arg0, arg1 inte
 }
 
 // RegisterWebhook mocks base method.
-func (m *MockPostmarkServiceInterface) RegisterWebhook(arg0 context.Context, arg1 domain.PostmarkConfig, arg2 domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
+func (m *MockPostmarkServiceInterface) RegisterWebhook(arg0 context.Context, arg1 domain.PostmarkSettings, arg2 domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.PostmarkWebhookResponse)
@@ -81,7 +81,7 @@ func (mr *MockPostmarkServiceInterfaceMockRecorder) RegisterWebhook(arg0, arg1, 
 }
 
 // TestWebhook mocks base method.
-func (m *MockPostmarkServiceInterface) TestWebhook(arg0 context.Context, arg1 domain.PostmarkConfig, arg2 int, arg3 domain.EmailEventType) error {
+func (m *MockPostmarkServiceInterface) TestWebhook(arg0 context.Context, arg1 domain.PostmarkSettings, arg2 int, arg3 domain.EmailEventType) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TestWebhook", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -95,7 +95,7 @@ func (mr *MockPostmarkServiceInterfaceMockRecorder) TestWebhook(arg0, arg1, arg2
 }
 
 // UnregisterWebhook mocks base method.
-func (m *MockPostmarkServiceInterface) UnregisterWebhook(arg0 context.Context, arg1 domain.PostmarkConfig, arg2 int) error {
+func (m *MockPostmarkServiceInterface) UnregisterWebhook(arg0 context.Context, arg1 domain.PostmarkSettings, arg2 int) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UnregisterWebhook", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -109,7 +109,7 @@ func (mr *MockPostmarkServiceInterfaceMockRecorder) UnregisterWebhook(arg0, arg1
 }
 
 // UpdateWebhook mocks base method.
-func (m *MockPostmarkServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.PostmarkConfig, arg2 int, arg3 domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
+func (m *MockPostmarkServiceInterface) UpdateWebhook(arg0 context.Context, arg1 domain.PostmarkSettings, arg2 int, arg3 domain.PostmarkWebhookConfig) (*domain.PostmarkWebhookResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateWebhook", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*domain.PostmarkWebhookResponse)
