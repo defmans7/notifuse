@@ -1818,3 +1818,1468 @@ func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 	err = workspace.AfterLoad("wrong-passphrase")
 	assert.Error(t, err)
 }
+
+func TestWorkspace_GetIntegrationByID(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name           string
+		workspace      Workspace
+		integrationID  string
+		expectedResult *Integration
+	}{
+		{
+			name: "integration found",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Integrations: []Integration{
+					{
+						ID:        "integration-1",
+						Name:      "Integration 1",
+						Type:      IntegrationTypeEmail,
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+					{
+						ID:        "integration-2",
+						Name:      "Integration 2",
+						Type:      IntegrationTypeEmail,
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			integrationID: "integration-1",
+			expectedResult: &Integration{
+				ID:        "integration-1",
+				Name:      "Integration 1",
+				Type:      IntegrationTypeEmail,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+		{
+			name: "integration not found",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Integrations: []Integration{
+					{
+						ID:        "integration-1",
+						Name:      "Integration 1",
+						Type:      IntegrationTypeEmail,
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			integrationID:  "non-existent",
+			expectedResult: nil,
+		},
+		{
+			name: "empty integrations",
+			workspace: Workspace{
+				ID:           "test-workspace",
+				Name:         "Test Workspace",
+				Integrations: []Integration{},
+			},
+			integrationID:  "integration-1",
+			expectedResult: nil,
+		},
+		{
+			name: "nil integrations",
+			workspace: Workspace{
+				ID:           "test-workspace",
+				Name:         "Test Workspace",
+				Integrations: nil,
+			},
+			integrationID:  "integration-1",
+			expectedResult: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.workspace.GetIntegrationByID(tc.integrationID)
+
+			if tc.expectedResult == nil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
+				assert.Equal(t, tc.expectedResult.ID, result.ID)
+				assert.Equal(t, tc.expectedResult.Name, result.Name)
+				assert.Equal(t, tc.expectedResult.Type, result.Type)
+				assert.Equal(t, tc.expectedResult.CreatedAt, result.CreatedAt)
+				assert.Equal(t, tc.expectedResult.UpdatedAt, result.UpdatedAt)
+			}
+		})
+	}
+}
+
+func TestWorkspace_GetIntegrationsByType(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name            string
+		workspace       Workspace
+		integrationType IntegrationType
+		expectedCount   int
+	}{
+		{
+			name: "multiple integrations found",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Integrations: []Integration{
+					{
+						ID:        "integration-1",
+						Name:      "Email Integration 1",
+						Type:      IntegrationTypeEmail,
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+					{
+						ID:        "integration-2",
+						Name:      "Email Integration 2",
+						Type:      IntegrationTypeEmail,
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+					{
+						ID:        "integration-3",
+						Name:      "Other Integration",
+						Type:      "other",
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			integrationType: IntegrationTypeEmail,
+			expectedCount:   2,
+		},
+		{
+			name: "no integrations found",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Integrations: []Integration{
+					{
+						ID:        "integration-1",
+						Name:      "Other Integration 1",
+						Type:      "other",
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			integrationType: IntegrationTypeEmail,
+			expectedCount:   0,
+		},
+		{
+			name: "empty integrations",
+			workspace: Workspace{
+				ID:           "test-workspace",
+				Name:         "Test Workspace",
+				Integrations: []Integration{},
+			},
+			integrationType: IntegrationTypeEmail,
+			expectedCount:   0,
+		},
+		{
+			name: "nil integrations",
+			workspace: Workspace{
+				ID:           "test-workspace",
+				Name:         "Test Workspace",
+				Integrations: nil,
+			},
+			integrationType: IntegrationTypeEmail,
+			expectedCount:   0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.workspace.GetIntegrationsByType(tc.integrationType)
+
+			assert.Equal(t, tc.expectedCount, len(result))
+
+			// Verify all returned integrations are of the correct type
+			for _, integration := range result {
+				assert.Equal(t, tc.integrationType, integration.Type)
+			}
+		})
+	}
+}
+
+func TestWorkspace_AddIntegration(t *testing.T) {
+	now := time.Now()
+
+	t.Run("add new integration", func(t *testing.T) {
+		workspace := Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Integrations: []Integration{
+				{
+					ID:        "integration-1",
+					Name:      "Integration 1",
+					Type:      IntegrationTypeEmail,
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+			},
+		}
+
+		newIntegration := Integration{
+			ID:        "integration-2",
+			Name:      "Integration 2",
+			Type:      IntegrationTypeEmail,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		workspace.AddIntegration(newIntegration)
+
+		assert.Equal(t, 2, len(workspace.Integrations))
+		assert.Equal(t, "integration-1", workspace.Integrations[0].ID)
+		assert.Equal(t, "integration-2", workspace.Integrations[1].ID)
+	})
+
+	t.Run("replace existing integration", func(t *testing.T) {
+		workspace := Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Integrations: []Integration{
+				{
+					ID:        "integration-1",
+					Name:      "Integration 1",
+					Type:      IntegrationTypeEmail,
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+			},
+		}
+
+		updatedIntegration := Integration{
+			ID:        "integration-1",
+			Name:      "Updated Integration",
+			Type:      IntegrationTypeEmail,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		workspace.AddIntegration(updatedIntegration)
+
+		assert.Equal(t, 1, len(workspace.Integrations))
+		assert.Equal(t, "integration-1", workspace.Integrations[0].ID)
+		assert.Equal(t, "Updated Integration", workspace.Integrations[0].Name)
+	})
+
+	t.Run("add to nil integrations", func(t *testing.T) {
+		workspace := Workspace{
+			ID:           "test-workspace",
+			Name:         "Test Workspace",
+			Integrations: nil,
+		}
+
+		integration := Integration{
+			ID:        "integration-1",
+			Name:      "Integration 1",
+			Type:      IntegrationTypeEmail,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		workspace.AddIntegration(integration)
+
+		assert.NotNil(t, workspace.Integrations)
+		assert.Equal(t, 1, len(workspace.Integrations))
+		assert.Equal(t, "integration-1", workspace.Integrations[0].ID)
+	})
+}
+
+func TestWorkspace_RemoveIntegration(t *testing.T) {
+	now := time.Now()
+
+	t.Run("remove existing integration", func(t *testing.T) {
+		workspace := Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Integrations: []Integration{
+				{
+					ID:        "integration-1",
+					Name:      "Integration 1",
+					Type:      IntegrationTypeEmail,
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				{
+					ID:        "integration-2",
+					Name:      "Integration 2",
+					Type:      IntegrationTypeEmail,
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+			},
+		}
+
+		removed := workspace.RemoveIntegration("integration-1")
+
+		assert.True(t, removed)
+		assert.Equal(t, 1, len(workspace.Integrations))
+		assert.Equal(t, "integration-2", workspace.Integrations[0].ID)
+	})
+
+	t.Run("remove non-existent integration", func(t *testing.T) {
+		workspace := Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Integrations: []Integration{
+				{
+					ID:        "integration-1",
+					Name:      "Integration 1",
+					Type:      IntegrationTypeEmail,
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+			},
+		}
+
+		removed := workspace.RemoveIntegration("non-existent")
+
+		assert.False(t, removed)
+		assert.Equal(t, 1, len(workspace.Integrations))
+	})
+
+	t.Run("remove from empty integrations", func(t *testing.T) {
+		workspace := Workspace{
+			ID:           "test-workspace",
+			Name:         "Test Workspace",
+			Integrations: []Integration{},
+		}
+
+		removed := workspace.RemoveIntegration("integration-1")
+
+		assert.False(t, removed)
+		assert.Equal(t, 0, len(workspace.Integrations))
+	})
+
+	t.Run("remove from nil integrations", func(t *testing.T) {
+		workspace := Workspace{
+			ID:           "test-workspace",
+			Name:         "Test Workspace",
+			Integrations: nil,
+		}
+
+		removed := workspace.RemoveIntegration("integration-1")
+
+		assert.False(t, removed)
+		assert.Nil(t, workspace.Integrations)
+	})
+}
+
+func TestWorkspace_GetEmailProvider(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name            string
+		workspace       Workspace
+		isMarketing     bool
+		expectedResult  *EmailProvider
+		expectedError   bool
+		expectedErrText string
+	}{
+		{
+			name: "get transactional provider",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Settings: WorkspaceSettings{
+					TransactionalEmailProviderID: "transactional-provider",
+				},
+				Integrations: []Integration{
+					{
+						ID:   "transactional-provider",
+						Name: "Transactional Provider",
+						Type: IntegrationTypeEmail,
+						EmailProvider: EmailProvider{
+							Kind:               EmailProviderKindSMTP,
+							DefaultSenderEmail: "transactional@example.com",
+							DefaultSenderName:  "Transactional Sender",
+							SMTP: &SMTPSettings{
+								Host:     "smtp.example.com",
+								Port:     587,
+								Username: "test-user",
+								Password: "test-pass",
+							},
+						},
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			isMarketing: false, // Transactional
+			expectedResult: &EmailProvider{
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "transactional@example.com",
+				DefaultSenderName:  "Transactional Sender",
+			},
+			expectedError: false,
+		},
+		{
+			name: "get marketing provider",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Settings: WorkspaceSettings{
+					MarketingEmailProviderID: "marketing-provider",
+				},
+				Integrations: []Integration{
+					{
+						ID:   "marketing-provider",
+						Name: "Marketing Provider",
+						Type: IntegrationTypeEmail,
+						EmailProvider: EmailProvider{
+							Kind:               EmailProviderKindMailjet,
+							DefaultSenderEmail: "marketing@example.com",
+							DefaultSenderName:  "Marketing Sender",
+							Mailjet: &MailjetSettings{
+								APIKey:    "apikey-test",
+								SecretKey: "secretkey-test",
+							},
+						},
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			isMarketing: true, // Marketing
+			expectedResult: &EmailProvider{
+				Kind:               EmailProviderKindMailjet,
+				DefaultSenderEmail: "marketing@example.com",
+				DefaultSenderName:  "Marketing Sender",
+			},
+			expectedError: false,
+		},
+		{
+			name: "no provider configured",
+			workspace: Workspace{
+				ID:       "test-workspace",
+				Name:     "Test Workspace",
+				Settings: WorkspaceSettings{
+					// No provider IDs configured
+				},
+				Integrations: []Integration{
+					{
+						ID:   "some-provider",
+						Name: "Some Provider",
+						Type: IntegrationTypeEmail,
+						EmailProvider: EmailProvider{
+							Kind:               EmailProviderKindSMTP,
+							DefaultSenderEmail: "some@example.com",
+							DefaultSenderName:  "Some Sender",
+							SMTP: &SMTPSettings{
+								Host:     "smtp.example.com",
+								Port:     587,
+								Username: "user",
+								Password: "pass",
+							},
+						},
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			isMarketing:    false, // Transactional
+			expectedResult: nil,
+			expectedError:  false,
+		},
+		{
+			name: "provider not found",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Settings: WorkspaceSettings{
+					TransactionalEmailProviderID: "non-existent-provider",
+				},
+				Integrations: []Integration{
+					{
+						ID:   "existing-provider",
+						Name: "Existing Provider",
+						Type: IntegrationTypeEmail,
+						EmailProvider: EmailProvider{
+							Kind:               EmailProviderKindSMTP,
+							DefaultSenderEmail: "existing@example.com",
+							DefaultSenderName:  "Existing Sender",
+							SMTP: &SMTPSettings{
+								Host:     "smtp.example.com",
+								Port:     587,
+								Username: "user",
+								Password: "pass",
+							},
+						},
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+			},
+			isMarketing:     false, // Transactional
+			expectedResult:  nil,
+			expectedError:   true,
+			expectedErrText: "integration with ID non-existent-provider not found",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// In this test we don't need to validate providers, so we'll skip it
+			result, err := tc.workspace.GetEmailProvider(tc.isMarketing)
+
+			if tc.expectedError {
+				assert.Error(t, err)
+				if tc.expectedErrText != "" {
+					assert.Contains(t, err.Error(), tc.expectedErrText)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			if tc.expectedResult == nil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
+				assert.Equal(t, tc.expectedResult.Kind, result.Kind)
+				assert.Equal(t, tc.expectedResult.DefaultSenderEmail, result.DefaultSenderEmail)
+				assert.Equal(t, tc.expectedResult.DefaultSenderName, result.DefaultSenderName)
+			}
+		})
+	}
+}
+
+func TestWorkspace_MarshalJSON(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name           string
+		workspace      Workspace
+		expectEmptyArr bool
+	}{
+		{
+			name: "marshal with integrations",
+			workspace: Workspace{
+				ID:   "test-workspace",
+				Name: "Test Workspace",
+				Integrations: []Integration{
+					{
+						ID:        "integration-1",
+						Name:      "Integration 1",
+						Type:      IntegrationTypeEmail,
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+				},
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			expectEmptyArr: false,
+		},
+		{
+			name: "marshal with empty integrations",
+			workspace: Workspace{
+				ID:           "test-workspace",
+				Name:         "Test Workspace",
+				Integrations: []Integration{},
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			},
+			expectEmptyArr: true,
+		},
+		{
+			name: "marshal with nil integrations",
+			workspace: Workspace{
+				ID:           "test-workspace",
+				Name:         "Test Workspace",
+				Integrations: nil,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			},
+			expectEmptyArr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			jsonData, err := tc.workspace.MarshalJSON()
+
+			assert.NoError(t, err)
+			assert.NotNil(t, jsonData)
+
+			// Unmarshal to check the integrations field
+			var result map[string]interface{}
+			err = json.Unmarshal(jsonData, &result)
+			assert.NoError(t, err)
+
+			// Verify integrations field is present
+			integrationsVal, exists := result["integrations"]
+			assert.True(t, exists)
+
+			// Check if integrations is an empty array when expected
+			if tc.expectEmptyArr {
+				integrations, ok := integrationsVal.([]interface{})
+				assert.True(t, ok)
+				assert.Empty(t, integrations)
+			}
+		})
+	}
+}
+
+func TestIntegrations_ScanAndValue(t *testing.T) {
+	now := time.Now()
+
+	t.Run("value with content", func(t *testing.T) {
+		integrations := Integrations{
+			{
+				ID:        "integration-1",
+				Name:      "Integration 1",
+				Type:      IntegrationTypeEmail,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		}
+
+		value, err := integrations.Value()
+		assert.NoError(t, err)
+		assert.NotNil(t, value)
+
+		// Should be a JSON byte array
+		jsonBytes, ok := value.([]byte)
+		assert.True(t, ok)
+
+		// Unmarshal to verify content
+		var result []map[string]interface{}
+		err = json.Unmarshal(jsonBytes, &result)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "integration-1", result[0]["id"])
+	})
+
+	t.Run("value with empty slice", func(t *testing.T) {
+		integrations := Integrations{}
+
+		value, err := integrations.Value()
+		assert.NoError(t, err)
+		assert.Nil(t, value)
+	})
+
+	t.Run("scan nil value", func(t *testing.T) {
+		var integrations Integrations
+		err := integrations.Scan(nil)
+		assert.NoError(t, err)
+		assert.Empty(t, integrations)
+	})
+
+	t.Run("scan valid JSON", func(t *testing.T) {
+		var integrations Integrations
+		jsonData := `[{"id":"integration-1","name":"Test Integration","type":"email"}]`
+
+		err := integrations.Scan([]byte(jsonData))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(integrations))
+		assert.Equal(t, "integration-1", integrations[0].ID)
+		assert.Equal(t, "Test Integration", integrations[0].Name)
+		assert.Equal(t, IntegrationTypeEmail, integrations[0].Type)
+	})
+
+	t.Run("scan invalid type", func(t *testing.T) {
+		var integrations Integrations
+		err := integrations.Scan("not-a-byte-array")
+		assert.Error(t, err)
+	})
+
+	t.Run("scan invalid JSON", func(t *testing.T) {
+		var integrations Integrations
+		err := integrations.Scan([]byte("invalid json"))
+		assert.Error(t, err)
+	})
+}
+
+func TestIntegration_ScanAndValue(t *testing.T) {
+	now := time.Now()
+
+	t.Run("value with content", func(t *testing.T) {
+		integration := Integration{
+			ID:        "integration-1",
+			Name:      "Integration 1",
+			Type:      IntegrationTypeEmail,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		value, err := integration.Value()
+		assert.NoError(t, err)
+		assert.NotNil(t, value)
+
+		// Should be a JSON byte array
+		jsonBytes, ok := value.([]byte)
+		assert.True(t, ok)
+
+		// Unmarshal to verify content
+		var result map[string]interface{}
+		err = json.Unmarshal(jsonBytes, &result)
+		assert.NoError(t, err)
+		assert.Equal(t, "integration-1", result["id"])
+		assert.Equal(t, "Integration 1", result["name"])
+	})
+
+	t.Run("scan nil value", func(t *testing.T) {
+		var integration Integration
+		err := integration.Scan(nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("scan valid JSON", func(t *testing.T) {
+		var integration Integration
+		jsonData := `{"id":"integration-1","name":"Test Integration","type":"email"}`
+
+		err := integration.Scan([]byte(jsonData))
+		assert.NoError(t, err)
+		assert.Equal(t, "integration-1", integration.ID)
+		assert.Equal(t, "Test Integration", integration.Name)
+		assert.Equal(t, IntegrationTypeEmail, integration.Type)
+	})
+
+	t.Run("scan invalid type", func(t *testing.T) {
+		var integration Integration
+		err := integration.Scan("not-a-byte-array")
+		assert.Error(t, err)
+	})
+
+	t.Run("scan invalid JSON", func(t *testing.T) {
+		var integration Integration
+		err := integration.Scan([]byte("invalid json"))
+		assert.Error(t, err)
+	})
+}
+
+func TestIntegration_ValidateAndBeforeSaveAfterLoad(t *testing.T) {
+	passphrase := "test-passphrase"
+	now := time.Now()
+
+	t.Run("validate valid integration", func(t *testing.T) {
+		integration := Integration{
+			ID:   "test-integration",
+			Name: "Test Integration",
+			Type: IntegrationTypeEmail,
+			EmailProvider: EmailProvider{
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "test@example.com",
+				DefaultSenderName:  "Test Sender",
+				SMTP: &SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "user",
+					Password: "password",
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		err := integration.Validate(passphrase)
+		assert.NoError(t, err)
+	})
+
+	t.Run("validate with missing required fields", func(t *testing.T) {
+		testCases := []struct {
+			name        string
+			integration Integration
+		}{
+			{
+				name: "missing ID",
+				integration: Integration{
+					ID:   "",
+					Name: "Test Integration",
+					Type: IntegrationTypeEmail,
+				},
+			},
+			{
+				name: "missing name",
+				integration: Integration{
+					ID:   "test-integration",
+					Name: "",
+					Type: IntegrationTypeEmail,
+				},
+			},
+			{
+				name: "missing type",
+				integration: Integration{
+					ID:   "test-integration",
+					Name: "Test Integration",
+					Type: "",
+				},
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				err := tc.integration.Validate(passphrase)
+				assert.Error(t, err)
+			})
+		}
+	})
+
+	t.Run("before save and after load", func(t *testing.T) {
+		// Create integration with sensitive data
+		integration := Integration{
+			ID:   "test-integration",
+			Name: "Test Integration",
+			Type: IntegrationTypeEmail,
+			EmailProvider: EmailProvider{
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "test@example.com",
+				DefaultSenderName:  "Test Sender",
+				SMTP: &SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "user",
+					Password: "password",
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		// First encrypt with BeforeSave
+		err := integration.BeforeSave(passphrase)
+		assert.NoError(t, err)
+
+		// Password should be encrypted now
+		assert.NotEmpty(t, integration.EmailProvider.SMTP.EncryptedPassword)
+		assert.Empty(t, integration.EmailProvider.SMTP.Password)
+
+		// Store original encrypted value
+		encryptedPassword := integration.EmailProvider.SMTP.EncryptedPassword
+
+		// Decrypt with AfterLoad
+		err = integration.AfterLoad(passphrase)
+		assert.NoError(t, err)
+
+		// Password should be decrypted
+		assert.Equal(t, "password", integration.EmailProvider.SMTP.Password)
+		assert.Equal(t, encryptedPassword, integration.EmailProvider.SMTP.EncryptedPassword)
+	})
+}
+
+func TestCreateAPIKeyRequest_Validate(t *testing.T) {
+	testCases := []struct {
+		name    string
+		request CreateAPIKeyRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: CreateAPIKeyRequest{
+				WorkspaceID: "workspace-123",
+				EmailPrefix: "api",
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: CreateAPIKeyRequest{
+				WorkspaceID: "",
+				EmailPrefix: "api",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing email prefix",
+			request: CreateAPIKeyRequest{
+				WorkspaceID: "workspace-123",
+				EmailPrefix: "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing both fields",
+			request: CreateAPIKeyRequest{
+				WorkspaceID: "",
+				EmailPrefix: "",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCreateIntegrationRequest_Validate(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	testCases := []struct {
+		name    string
+		request CreateIntegrationRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "workspace-123",
+				Name:        "Test Integration",
+				Type:        IntegrationTypeEmail,
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "",
+				Name:        "Test Integration",
+				Type:        IntegrationTypeEmail,
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing name",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "workspace-123",
+				Name:        "",
+				Type:        IntegrationTypeEmail,
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing type",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "workspace-123",
+				Name:        "Test Integration",
+				Type:        "",
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid provider",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "workspace-123",
+				Name:        "Test Integration",
+				Type:        IntegrationTypeEmail,
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					// Missing SMTP settings
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.Validate(passphrase)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestUpdateIntegrationRequest_Validate(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	testCases := []struct {
+		name    string
+		request UpdateIntegrationRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: UpdateIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "integration-123",
+				Name:          "Updated Integration",
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: UpdateIntegrationRequest{
+				WorkspaceID:   "",
+				IntegrationID: "integration-123",
+				Name:          "Updated Integration",
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing integration ID",
+			request: UpdateIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "",
+				Name:          "Updated Integration",
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing name",
+			request: UpdateIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "integration-123",
+				Name:          "",
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SMTP: &SMTPSettings{
+						Host:     "smtp.example.com",
+						Port:     587,
+						Username: "user",
+						Password: "password",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid provider",
+			request: UpdateIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "integration-123",
+				Name:          "Updated Integration",
+				Provider: EmailProvider{
+					Kind:               EmailProviderKindSMTP,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					// Missing SMTP settings
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.Validate(passphrase)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestDeleteIntegrationRequest_Validate(t *testing.T) {
+	testCases := []struct {
+		name    string
+		request DeleteIntegrationRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: DeleteIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "integration-123",
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: DeleteIntegrationRequest{
+				WorkspaceID:   "",
+				IntegrationID: "integration-123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing integration ID",
+			request: DeleteIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing both fields",
+			request: DeleteIntegrationRequest{
+				WorkspaceID:   "",
+				IntegrationID: "",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWorkspaceSettings_ValueAndScan(t *testing.T) {
+	// Create a sample workspace settings
+	originalSettings := WorkspaceSettings{
+		WebsiteURL: "https://example.com",
+		LogoURL:    "https://example.com/logo.png",
+		CoverURL:   "https://example.com/cover.jpg",
+		Timezone:   "UTC",
+		FileManager: FileManagerSettings{
+			Endpoint:  "https://s3.amazonaws.com",
+			Bucket:    "my-bucket",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		},
+		TransactionalEmailProviderID: "transactional-provider-id",
+		MarketingEmailProviderID:     "marketing-provider-id",
+	}
+
+	// Test Value method
+	t.Run("value method", func(t *testing.T) {
+		value, err := originalSettings.Value()
+		assert.NoError(t, err)
+		assert.NotNil(t, value)
+
+		// Check that the value is a valid JSON byte array
+		jsonBytes, ok := value.([]byte)
+		assert.True(t, ok)
+
+		// Unmarshal to verify content
+		var result map[string]interface{}
+		err = json.Unmarshal(jsonBytes, &result)
+		assert.NoError(t, err)
+		assert.Equal(t, "https://example.com", result["website_url"])
+		assert.Equal(t, "https://example.com/logo.png", result["logo_url"])
+		assert.Equal(t, "https://example.com/cover.jpg", result["cover_url"])
+		assert.Equal(t, "UTC", result["timezone"])
+		assert.Equal(t, "transactional-provider-id", result["transactional_email_provider_id"])
+		assert.Equal(t, "marketing-provider-id", result["marketing_email_provider_id"])
+	})
+
+	// Test Scan method
+	t.Run("scan method", func(t *testing.T) {
+		// First convert original settings to JSON
+		jsonBytes, err := json.Marshal(originalSettings)
+		assert.NoError(t, err)
+
+		// Now scan it into a new settings object
+		var newSettings WorkspaceSettings
+		err = newSettings.Scan(jsonBytes)
+		assert.NoError(t, err)
+
+		// Verify the fields match the original
+		assert.Equal(t, originalSettings.WebsiteURL, newSettings.WebsiteURL)
+		assert.Equal(t, originalSettings.LogoURL, newSettings.LogoURL)
+		assert.Equal(t, originalSettings.CoverURL, newSettings.CoverURL)
+		assert.Equal(t, originalSettings.Timezone, newSettings.Timezone)
+		assert.Equal(t, originalSettings.TransactionalEmailProviderID, newSettings.TransactionalEmailProviderID)
+		assert.Equal(t, originalSettings.MarketingEmailProviderID, newSettings.MarketingEmailProviderID)
+		assert.Equal(t, originalSettings.FileManager.Endpoint, newSettings.FileManager.Endpoint)
+		assert.Equal(t, originalSettings.FileManager.Bucket, newSettings.FileManager.Bucket)
+		assert.Equal(t, originalSettings.FileManager.AccessKey, newSettings.FileManager.AccessKey)
+	})
+
+	// Test scan with nil
+	t.Run("scan nil", func(t *testing.T) {
+		var settings WorkspaceSettings
+		err := settings.Scan(nil)
+		assert.NoError(t, err)
+	})
+
+	// Test scan with invalid type
+	t.Run("scan invalid type", func(t *testing.T) {
+		var settings WorkspaceSettings
+		err := settings.Scan("not-a-byte-array")
+		assert.Error(t, err)
+	})
+
+	// Test scan with invalid JSON
+	t.Run("scan invalid JSON", func(t *testing.T) {
+		var settings WorkspaceSettings
+		err := settings.Scan([]byte("invalid JSON"))
+		assert.Error(t, err)
+	})
+}
+
+func TestWorkspace_BeforeSave(t *testing.T) {
+	passphrase := "test-passphrase"
+	now := time.Now()
+
+	t.Run("with file manager secret key", func(t *testing.T) {
+		workspace := &Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				Timezone:   "UTC",
+				FileManager: FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+					SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		err := workspace.BeforeSave(passphrase)
+		assert.NoError(t, err)
+		assert.Empty(t, workspace.Settings.FileManager.SecretKey, "Secret key should be cleared after encryption")
+		assert.NotEmpty(t, workspace.Settings.FileManager.EncryptedSecretKey, "Encrypted secret key should not be empty")
+	})
+
+	t.Run("without file manager secret key", func(t *testing.T) {
+		workspace := &Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				Timezone:   "UTC",
+				FileManager: FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+					// No SecretKey set
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		err := workspace.BeforeSave(passphrase)
+		assert.NoError(t, err)
+		assert.Empty(t, workspace.Settings.FileManager.SecretKey)
+		assert.Empty(t, workspace.Settings.FileManager.EncryptedSecretKey)
+	})
+
+	t.Run("with integrations", func(t *testing.T) {
+		workspace := &Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				Timezone:   "UTC",
+			},
+			Integrations: []Integration{
+				{
+					ID:   "integration-1",
+					Name: "Integration 1",
+					Type: IntegrationTypeEmail,
+					EmailProvider: EmailProvider{
+						Kind:               EmailProviderKindSMTP,
+						DefaultSenderEmail: "test@example.com",
+						DefaultSenderName:  "Test Sender",
+						SMTP: &SMTPSettings{
+							Host:     "smtp.example.com",
+							Port:     587,
+							Username: "user",
+							Password: "password",
+						},
+					},
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		err := workspace.BeforeSave(passphrase)
+		assert.NoError(t, err)
+		assert.Empty(t, workspace.Integrations[0].EmailProvider.SMTP.Password, "Password should be cleared after encryption")
+		assert.NotEmpty(t, workspace.Integrations[0].EmailProvider.SMTP.EncryptedPassword, "Encrypted password should not be empty")
+	})
+}
+
+func TestWorkspace_AfterLoad(t *testing.T) {
+	passphrase := "test-passphrase"
+	now := time.Now()
+
+	t.Run("with encrypted file manager secret key", func(t *testing.T) {
+		// First create a workspace with a secret key and encrypt it
+		workspace := &Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				Timezone:   "UTC",
+				FileManager: FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+					SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		// Encrypt the secret key
+		err := workspace.BeforeSave(passphrase)
+		assert.NoError(t, err)
+
+		// Store the encrypted key and clear the secret key
+		encryptedKey := workspace.Settings.FileManager.EncryptedSecretKey
+		workspace.Settings.FileManager.SecretKey = ""
+
+		// Now test AfterLoad
+		err = workspace.AfterLoad(passphrase)
+		assert.NoError(t, err)
+		assert.Equal(t, "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", workspace.Settings.FileManager.SecretKey)
+		assert.Equal(t, encryptedKey, workspace.Settings.FileManager.EncryptedSecretKey)
+	})
+
+	t.Run("without encrypted file manager secret key", func(t *testing.T) {
+		workspace := &Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				Timezone:   "UTC",
+				FileManager: FileManagerSettings{
+					Endpoint:  "https://s3.amazonaws.com",
+					Bucket:    "my-bucket",
+					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+					// No EncryptedSecretKey set
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		err := workspace.AfterLoad(passphrase)
+		assert.NoError(t, err)
+		assert.Empty(t, workspace.Settings.FileManager.SecretKey)
+	})
+
+	t.Run("with integrations", func(t *testing.T) {
+		// Create a workspace with an integration that has an encrypted password
+		integration := Integration{
+			ID:   "integration-1",
+			Name: "Integration 1",
+			Type: IntegrationTypeEmail,
+			EmailProvider: EmailProvider{
+				Kind:               EmailProviderKindSMTP,
+				DefaultSenderEmail: "test@example.com",
+				DefaultSenderName:  "Test Sender",
+				SMTP: &SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "user",
+					Password: "password",
+				},
+			},
+		}
+
+		// Encrypt the integration's password
+		err := integration.BeforeSave(passphrase)
+		assert.NoError(t, err)
+
+		// Create workspace with the integration
+		workspace := &Workspace{
+			ID:   "test-workspace",
+			Name: "Test Workspace",
+			Settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com",
+				Timezone:   "UTC",
+			},
+			Integrations: []Integration{integration},
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+
+		// Test AfterLoad
+		err = workspace.AfterLoad(passphrase)
+		assert.NoError(t, err)
+		assert.Equal(t, "password", workspace.Integrations[0].EmailProvider.SMTP.Password)
+	})
+}
