@@ -37,9 +37,9 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 	var integration domain.Integration
-	for _, integration := range workspace.Integrations {
-		if integration.ID == integrationID {
-			integration = integration
+	for _, i := range workspace.Integrations {
+		if i.ID == integrationID {
+			integration = i
 			break
 		}
 	}

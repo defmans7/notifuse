@@ -13,7 +13,7 @@ import (
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +25,14 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	// For tests we don't need the actual key, we can use a mock or nil since we're not validating auth
 	var publicKey paseto.V4AsymmetricPublicKey
-	mockLogger := &mockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up common logger expectations
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	secretKey := "test-secret-key"
 
 	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
@@ -230,7 +237,7 @@ func TestTaskHandler_RegisterRoutes(t *testing.T) {
 	// For tests we don't need the actual key, we can use a generated one
 	privateKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := privateKey.Public()
-	mockLogger := &mockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	secretKey := "test-secret-key"
 
 	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
@@ -264,7 +271,13 @@ func TestTaskHandler_CreateTask(t *testing.T) {
 
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	var publicKey paseto.V4AsymmetricPublicKey
-	mockLogger := &mockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up common logger expectations
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	secretKey := "test-secret-key"
 
 	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
@@ -380,7 +393,13 @@ func TestTaskHandler_GetTask(t *testing.T) {
 
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	var publicKey paseto.V4AsymmetricPublicKey
-	mockLogger := &mockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up common logger expectations
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	secretKey := "test-secret-key"
 
 	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
@@ -478,7 +497,13 @@ func TestTaskHandler_ListTasks(t *testing.T) {
 
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	var publicKey paseto.V4AsymmetricPublicKey
-	mockLogger := &mockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up common logger expectations
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	secretKey := "test-secret-key"
 
 	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
@@ -592,7 +617,13 @@ func TestTaskHandler_DeleteTask(t *testing.T) {
 
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	var publicKey paseto.V4AsymmetricPublicKey
-	mockLogger := &mockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up common logger expectations
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	secretKey := "test-secret-key"
 
 	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
@@ -679,7 +710,13 @@ func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
 
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	var publicKey paseto.V4AsymmetricPublicKey
-	mockLogger := &mockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up common logger expectations
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+
 	secretKey := "test-secret-key"
 
 	handler := NewTaskHandler(mockTaskService, publicKey, mockLogger, secretKey)
@@ -760,20 +797,3 @@ func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	})
 }
-
-// Mock logger to use in tests
-type mockLogger struct{}
-
-func (l *mockLogger) Debug(msg string)                                       {}
-func (l *mockLogger) Info(msg string)                                        {}
-func (l *mockLogger) Warn(msg string)                                        {}
-func (l *mockLogger) Error(msg string)                                       {}
-func (l *mockLogger) Fatal(msg string)                                       {}
-func (l *mockLogger) Debugf(format string, args ...interface{})              {}
-func (l *mockLogger) Infof(format string, args ...interface{})               {}
-func (l *mockLogger) Warnf(format string, args ...interface{})               {}
-func (l *mockLogger) Errorf(format string, args ...interface{})              {}
-func (l *mockLogger) Fatalf(format string, args ...interface{})              {}
-func (l *mockLogger) WithField(key string, value interface{}) logger.Logger  { return l }
-func (l *mockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }
-func (l *mockLogger) WithError(err error) logger.Logger                      { return l }
