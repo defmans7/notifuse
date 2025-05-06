@@ -294,7 +294,7 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, isMark
 		}
 
 		// Send the email
-		_, err := svc.SendEmail(input)
+		_, err := svc.SendEmailWithContext(ctx, input)
 		if err != nil {
 			if aerr, ok := err.(awserr.Error); ok {
 				return fmt.Errorf("SES error: %s", aerr.Error())

@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/asaskevich/govalidator"
-	"github.com/aws/aws-sdk-go/service/ses"
 )
 
 //go:generate mockgen -destination mocks/mock_email_service.go -package mocks github.com/Notifuse/notifuse/internal/domain EmailServiceInterface
@@ -16,11 +15,6 @@ import (
 // HTTPClient defines the interface for HTTP operations
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
-}
-
-// SESClient defines the interface for AWS SES operations
-type SESClient interface {
-	SendEmail(input *ses.SendEmailInput) (*ses.SendEmailOutput, error)
 }
 
 // EmailProviderKind defines the type of email provider

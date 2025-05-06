@@ -14,17 +14,53 @@ import (
 	"github.com/aws/aws-sdk-go/service/sns"
 )
 
+// Custom domain errors for better testability
+var (
+	ErrInvalidAWSCredentials = fmt.Errorf("invalid AWS credentials")
+	ErrInvalidSNSDestination = fmt.Errorf("SNS destination and Topic ARN are required")
+	ErrInvalidSESConfig      = fmt.Errorf("SES configuration is missing or invalid")
+)
+
 // SESService implements the domain.SESServiceInterface
 type SESService struct {
-	authService domain.AuthService
-	logger      logger.Logger
+	authService      domain.AuthService
+	logger           logger.Logger
+	sessionFactory   func(config domain.AmazonSESSettings) (*session.Session, error)
+	sesClientFactory func(sess *session.Session) domain.SESWebhookClient
+	snsClientFactory func(sess *session.Session) domain.SNSWebhookClient
 }
 
-// NewSESService creates a new instance of SESService
+// NewSESService creates a new instance of SESService with default factories
 func NewSESService(authService domain.AuthService, logger logger.Logger) *SESService {
 	return &SESService{
 		authService: authService,
 		logger:      logger,
+		sessionFactory: func(config domain.AmazonSESSettings) (*session.Session, error) {
+			return createSession(config)
+		},
+		sesClientFactory: func(sess *session.Session) domain.SESWebhookClient {
+			return ses.New(sess)
+		},
+		snsClientFactory: func(sess *session.Session) domain.SNSWebhookClient {
+			return sns.New(sess)
+		},
+	}
+}
+
+// NewSESServiceWithClients creates a new instance of SESService with custom factories for testing
+func NewSESServiceWithClients(
+	authService domain.AuthService,
+	logger logger.Logger,
+	sessionFactory func(config domain.AmazonSESSettings) (*session.Session, error),
+	sesClientFactory func(sess *session.Session) domain.SESWebhookClient,
+	snsClientFactory func(sess *session.Session) domain.SNSWebhookClient,
+) *SESService {
+	return &SESService{
+		authService:      authService,
+		logger:           logger,
+		sessionFactory:   sessionFactory,
+		sesClientFactory: sesClientFactory,
+		snsClientFactory: snsClientFactory,
 	}
 }
 
@@ -36,22 +72,34 @@ func createSession(config domain.AmazonSESSettings) (*session.Session, error) {
 	})
 }
 
-// ListConfigurationSets lists all configuration sets
-func (s *SESService) ListConfigurationSets(ctx context.Context, config domain.AmazonSESSettings) ([]string, error) {
-
-	// Create AWS session
-	sess, err := createSession(config)
-	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return nil, fmt.Errorf("failed to create AWS session: %w", err)
+// getClients creates AWS session and returns SES and SNS clients
+func (s *SESService) getClients(config domain.AmazonSESSettings) (domain.SESWebhookClient, domain.SNSWebhookClient, error) {
+	if config.AccessKey == "" || config.SecretKey == "" {
+		return nil, nil, ErrInvalidAWSCredentials
 	}
 
-	// Create SES client
-	svc := ses.New(sess)
+	sess, err := s.sessionFactory(config)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
+		return nil, nil, fmt.Errorf("failed to create AWS session: %w", err)
+	}
+
+	sesClient := s.sesClientFactory(sess)
+	snsClient := s.snsClientFactory(sess)
+
+	return sesClient, snsClient, nil
+}
+
+// ListConfigurationSets lists all configuration sets
+func (s *SESService) ListConfigurationSets(ctx context.Context, config domain.AmazonSESSettings) ([]string, error) {
+	sesClient, _, err := s.getClients(config)
+	if err != nil {
+		return nil, err
+	}
 
 	// List configuration sets
 	input := &ses.ListConfigurationSetsInput{}
-	result, err := svc.ListConfigurationSetsWithContext(ctx, input)
+	result, err := sesClient.ListConfigurationSetsWithContext(ctx, input)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to list SES configuration sets: %v", err))
 		return nil, fmt.Errorf("failed to list SES configuration sets: %w", err)
@@ -68,16 +116,10 @@ func (s *SESService) ListConfigurationSets(ctx context.Context, config domain.Am
 
 // CreateConfigurationSet creates a new configuration set
 func (s *SESService) CreateConfigurationSet(ctx context.Context, config domain.AmazonSESSettings, name string) error {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	sesClient, _, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return fmt.Errorf("failed to create AWS session: %w", err)
+		return err
 	}
-
-	// Create SES client
-	svc := ses.New(sess)
 
 	// Create configuration set
 	input := &ses.CreateConfigurationSetInput{
@@ -86,7 +128,7 @@ func (s *SESService) CreateConfigurationSet(ctx context.Context, config domain.A
 		},
 	}
 
-	_, err = svc.CreateConfigurationSetWithContext(ctx, input)
+	_, err = sesClient.CreateConfigurationSetWithContext(ctx, input)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create SES configuration set: %v", err))
 		return fmt.Errorf("failed to create SES configuration set: %w", err)
@@ -97,23 +139,17 @@ func (s *SESService) CreateConfigurationSet(ctx context.Context, config domain.A
 
 // DeleteConfigurationSet deletes a configuration set
 func (s *SESService) DeleteConfigurationSet(ctx context.Context, config domain.AmazonSESSettings, name string) error {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	sesClient, _, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return fmt.Errorf("failed to create AWS session: %w", err)
+		return err
 	}
-
-	// Create SES client
-	svc := ses.New(sess)
 
 	// Delete configuration set
 	input := &ses.DeleteConfigurationSetInput{
 		ConfigurationSetName: aws.String(name),
 	}
 
-	_, err = svc.DeleteConfigurationSetWithContext(ctx, input)
+	_, err = sesClient.DeleteConfigurationSetWithContext(ctx, input)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to delete SES configuration set: %v", err))
 		return fmt.Errorf("failed to delete SES configuration set: %w", err)
@@ -124,21 +160,15 @@ func (s *SESService) DeleteConfigurationSet(ctx context.Context, config domain.A
 
 // CreateSNSTopic creates a new SNS topic for notifications
 func (s *SESService) CreateSNSTopic(ctx context.Context, config domain.AmazonSESSettings, topicConfig domain.SESTopicConfig) (string, error) {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	_, snsClient, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return "", fmt.Errorf("failed to create AWS session: %w", err)
+		return "", err
 	}
-
-	// Create SNS client
-	svc := sns.New(sess)
 
 	// If a topic ARN is provided, check if it exists
 	if topicConfig.TopicARN != "" {
 		// Check if the topic exists
-		_, err := svc.GetTopicAttributesWithContext(ctx, &sns.GetTopicAttributesInput{
+		_, err := snsClient.GetTopicAttributesWithContext(ctx, &sns.GetTopicAttributesInput{
 			TopicArn: aws.String(topicConfig.TopicARN),
 		})
 		if err != nil {
@@ -154,7 +184,7 @@ func (s *SESService) CreateSNSTopic(ctx context.Context, config domain.AmazonSES
 		topicName = "notifuse-email-webhooks"
 	}
 
-	createResult, err := svc.CreateTopicWithContext(ctx, &sns.CreateTopicInput{
+	createResult, err := snsClient.CreateTopicWithContext(ctx, &sns.CreateTopicInput{
 		Name: aws.String(topicName),
 	})
 	if err != nil {
@@ -165,7 +195,7 @@ func (s *SESService) CreateSNSTopic(ctx context.Context, config domain.AmazonSES
 	topicARN := *createResult.TopicArn
 
 	// Configure the SNS subscription for the webhook endpoint
-	_, err = svc.SubscribeWithContext(ctx, &sns.SubscribeInput{
+	_, err = snsClient.SubscribeWithContext(ctx, &sns.SubscribeInput{
 		Protocol: aws.String(topicConfig.Protocol),
 		TopicArn: aws.String(topicARN),
 		Endpoint: aws.String(topicConfig.NotificationEndpoint),
@@ -180,19 +210,13 @@ func (s *SESService) CreateSNSTopic(ctx context.Context, config domain.AmazonSES
 
 // DeleteSNSTopic deletes an SNS topic
 func (s *SESService) DeleteSNSTopic(ctx context.Context, config domain.AmazonSESSettings, topicARN string) error {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	_, snsClient, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return fmt.Errorf("failed to create AWS session: %w", err)
+		return err
 	}
 
-	// Create SNS client
-	svc := sns.New(sess)
-
 	// Delete the SNS topic
-	_, err = svc.DeleteTopicWithContext(ctx, &sns.DeleteTopicInput{
+	_, err = snsClient.DeleteTopicWithContext(ctx, &sns.DeleteTopicInput{
 		TopicArn: aws.String(topicARN),
 	})
 	if err != nil {
@@ -205,26 +229,14 @@ func (s *SESService) DeleteSNSTopic(ctx context.Context, config domain.AmazonSES
 
 // CreateEventDestination creates an event destination in a configuration set
 func (s *SESService) CreateEventDestination(ctx context.Context, config domain.AmazonSESSettings, destination domain.SESConfigurationSetEventDestination) error {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	sesClient, _, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return fmt.Errorf("failed to create AWS session: %w", err)
+		return err
 	}
-
-	// Create SES client
-	svc := ses.New(sess)
 
 	// Validate destination
 	if destination.SNSDestination == nil || destination.SNSDestination.TopicARN == "" {
-		return fmt.Errorf("SNS destination and Topic ARN are required")
-	}
-
-	// Convert event types to SES format
-	var eventTypes []*string
-	for _, eventType := range destination.MatchingEventTypes {
-		eventTypes = append(eventTypes, aws.String(eventType))
+		return ErrInvalidSNSDestination
 	}
 
 	// Create event destination
@@ -240,7 +252,7 @@ func (s *SESService) CreateEventDestination(ctx context.Context, config domain.A
 		},
 	}
 
-	_, err = svc.CreateConfigurationSetEventDestinationWithContext(ctx, input)
+	_, err = sesClient.CreateConfigurationSetEventDestinationWithContext(ctx, input)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create SES event destination: %v", err))
 		return fmt.Errorf("failed to create SES event destination: %w", err)
@@ -251,21 +263,9 @@ func (s *SESService) CreateEventDestination(ctx context.Context, config domain.A
 
 // UpdateEventDestination updates an event destination
 func (s *SESService) UpdateEventDestination(ctx context.Context, config domain.AmazonSESSettings, destination domain.SESConfigurationSetEventDestination) error {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	sesClient, _, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return fmt.Errorf("failed to create AWS session: %w", err)
-	}
-
-	// Create SES client
-	svc := ses.New(sess)
-
-	// Convert event types to SES format
-	var eventTypes []*string
-	for _, eventType := range destination.MatchingEventTypes {
-		eventTypes = append(eventTypes, aws.String(eventType))
+		return err
 	}
 
 	// Update event destination
@@ -281,7 +281,7 @@ func (s *SESService) UpdateEventDestination(ctx context.Context, config domain.A
 		},
 	}
 
-	_, err = svc.UpdateConfigurationSetEventDestinationWithContext(ctx, input)
+	_, err = sesClient.UpdateConfigurationSetEventDestinationWithContext(ctx, input)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to update SES event destination: %v", err))
 		return fmt.Errorf("failed to update SES event destination: %w", err)
@@ -292,16 +292,10 @@ func (s *SESService) UpdateEventDestination(ctx context.Context, config domain.A
 
 // DeleteEventDestination deletes an event destination
 func (s *SESService) DeleteEventDestination(ctx context.Context, config domain.AmazonSESSettings, configSetName, destinationName string) error {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	sesClient, _, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return fmt.Errorf("failed to create AWS session: %w", err)
+		return err
 	}
-
-	// Create SES client
-	svc := ses.New(sess)
 
 	// Delete event destination
 	input := &ses.DeleteConfigurationSetEventDestinationInput{
@@ -309,7 +303,7 @@ func (s *SESService) DeleteEventDestination(ctx context.Context, config domain.A
 		EventDestinationName: aws.String(destinationName),
 	}
 
-	_, err = svc.DeleteConfigurationSetEventDestinationWithContext(ctx, input)
+	_, err = sesClient.DeleteConfigurationSetEventDestinationWithContext(ctx, input)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to delete SES event destination: %v", err))
 		return fmt.Errorf("failed to delete SES event destination: %w", err)
@@ -320,16 +314,10 @@ func (s *SESService) DeleteEventDestination(ctx context.Context, config domain.A
 
 // ListEventDestinations lists all event destinations for a configuration set
 func (s *SESService) ListEventDestinations(ctx context.Context, config domain.AmazonSESSettings, configSetName string) ([]domain.SESConfigurationSetEventDestination, error) {
-
-	// Create AWS session
-	sess, err := createSession(config)
+	sesClient, _, err := s.getClients(config)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
-		return nil, fmt.Errorf("failed to create AWS session: %w", err)
+		return nil, err
 	}
-
-	// Create SES client
-	svc := ses.New(sess)
 
 	// List event destinations
 	input := &ses.DescribeConfigurationSetInput{
@@ -339,7 +327,7 @@ func (s *SESService) ListEventDestinations(ctx context.Context, config domain.Am
 		},
 	}
 
-	result, err := svc.DescribeConfigurationSetWithContext(ctx, input)
+	result, err := sesClient.DescribeConfigurationSetWithContext(ctx, input)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to list SES event destinations: %v", err))
 		return nil, fmt.Errorf("failed to list SES event destinations: %w", err)
@@ -369,6 +357,67 @@ func (s *SESService) ListEventDestinations(ctx context.Context, config domain.Am
 	return destinations, nil
 }
 
+// setupSNSTopic creates an SNS topic for webhook notifications
+func (s *SESService) setupSNSTopic(ctx context.Context, config domain.AmazonSESSettings, topicConfig domain.SESTopicConfig) (string, error) {
+	return s.CreateSNSTopic(ctx, config, topicConfig)
+}
+
+// setupConfigurationSet creates or verifies a configuration set
+func (s *SESService) setupConfigurationSet(ctx context.Context, config domain.AmazonSESSettings, configSetName string) error {
+	// List configuration sets to check if it already exists
+	configSets, err := s.ListConfigurationSets(ctx, config)
+	if err != nil {
+		return fmt.Errorf("failed to list configuration sets: %w", err)
+	}
+
+	configSetExists := false
+	for _, set := range configSets {
+		if set == configSetName {
+			configSetExists = true
+			break
+		}
+	}
+
+	if !configSetExists {
+		err = s.CreateConfigurationSet(ctx, config, configSetName)
+		if err != nil {
+			return fmt.Errorf("failed to create configuration set: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// setupEventDestination creates or updates an event destination
+func (s *SESService) setupEventDestination(ctx context.Context, config domain.AmazonSESSettings, eventDestination domain.SESConfigurationSetEventDestination) error {
+	// Check if we need to create or update the event destination
+	destinations, err := s.ListEventDestinations(ctx, config, eventDestination.ConfigurationSetName)
+	if err != nil {
+		return fmt.Errorf("failed to list event destinations: %w", err)
+	}
+
+	destinationExists := false
+	for _, dest := range destinations {
+		if dest.Name == eventDestination.Name {
+			destinationExists = true
+			err = s.UpdateEventDestination(ctx, config, eventDestination)
+			if err != nil {
+				return fmt.Errorf("failed to update event destination: %w", err)
+			}
+			break
+		}
+	}
+
+	if !destinationExists {
+		err = s.CreateEventDestination(ctx, config, eventDestination)
+		if err != nil {
+			return fmt.Errorf("failed to create event destination: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // RegisterWebhooks implements the domain.WebhookProvider interface for SES
 func (s *SESService) RegisterWebhooks(
 	ctx context.Context,
@@ -381,7 +430,7 @@ func (s *SESService) RegisterWebhooks(
 	// Validate the provider configuration
 	if providerConfig == nil || providerConfig.SES == nil ||
 		providerConfig.SES.AccessKey == "" || providerConfig.SES.SecretKey == "" {
-		return nil, fmt.Errorf("SES configuration is missing or invalid")
+		return nil, ErrInvalidSESConfig
 	}
 
 	// Create webhook URL that includes workspace_id and integration_id
@@ -405,6 +454,9 @@ func (s *SESService) RegisterWebhooks(
 		}
 	}
 
+	// Create configuration set name
+	configSetName := fmt.Sprintf("notifuse-%s", integrationID)
+
 	// First, create the SNS topic that will receive the events
 	topicConfig := domain.SESTopicConfig{
 		TopicName:            fmt.Sprintf("notifuse-ses-%s", integrationID),
@@ -412,33 +464,15 @@ func (s *SESService) RegisterWebhooks(
 		NotificationEndpoint: webhookURL,
 	}
 
-	topicARN, err := s.CreateSNSTopic(ctx, *providerConfig.SES, topicConfig)
+	topicARN, err := s.setupSNSTopic(ctx, *providerConfig.SES, topicConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SNS topic: %w", err)
 	}
 
-	// Create configuration set if needed
-	configSetName := fmt.Sprintf("notifuse-%s", integrationID)
-
-	// List configuration sets to check if it already exists
-	configSets, err := s.ListConfigurationSets(ctx, *providerConfig.SES)
+	// Create or verify configuration set
+	err = s.setupConfigurationSet(ctx, *providerConfig.SES, configSetName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list configuration sets: %w", err)
-	}
-
-	configSetExists := false
-	for _, set := range configSets {
-		if set == configSetName {
-			configSetExists = true
-			break
-		}
-	}
-
-	if !configSetExists {
-		err = s.CreateConfigurationSet(ctx, *providerConfig.SES, configSetName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create configuration set: %w", err)
-		}
+		return nil, err
 	}
 
 	// Create event destination in the configuration set
@@ -452,29 +486,10 @@ func (s *SESService) RegisterWebhooks(
 		},
 	}
 
-	// Check if we need to create or update the event destination
-	destinations, err := s.ListEventDestinations(ctx, *providerConfig.SES, configSetName)
+	// Setup event destination
+	err = s.setupEventDestination(ctx, *providerConfig.SES, eventDestination)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list event destinations: %w", err)
-	}
-
-	destinationExists := false
-	for _, dest := range destinations {
-		if dest.Name == eventDestination.Name {
-			destinationExists = true
-			err = s.UpdateEventDestination(ctx, *providerConfig.SES, eventDestination)
-			if err != nil {
-				return nil, fmt.Errorf("failed to update event destination: %w", err)
-			}
-			break
-		}
-	}
-
-	if !destinationExists {
-		err = s.CreateEventDestination(ctx, *providerConfig.SES, eventDestination)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create event destination: %w", err)
-		}
+		return nil, err
 	}
 
 	// Now create the webhook status structure
@@ -515,7 +530,7 @@ func (s *SESService) GetWebhookStatus(
 	// Validate the provider configuration
 	if providerConfig == nil || providerConfig.SES == nil ||
 		providerConfig.SES.AccessKey == "" || providerConfig.SES.SecretKey == "" {
-		return nil, fmt.Errorf("SES configuration is missing or invalid")
+		return nil, ErrInvalidSESConfig
 	}
 
 	// Create webhook status response
@@ -607,7 +622,7 @@ func (s *SESService) UnregisterWebhooks(
 	// Validate the provider configuration
 	if providerConfig == nil || providerConfig.SES == nil ||
 		providerConfig.SES.AccessKey == "" || providerConfig.SES.SecretKey == "" {
-		return fmt.Errorf("SES configuration is missing or invalid")
+		return ErrInvalidSESConfig
 	}
 
 	// Configuration set and destination naming pattern

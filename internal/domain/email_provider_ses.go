@@ -5,9 +5,34 @@ import (
 	"fmt"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/ses"
+	"github.com/aws/aws-sdk-go/service/sns"
 )
 
 //go:generate mockgen -destination mocks/mock_ses_service.go -package mocks github.com/Notifuse/notifuse/internal/domain SESServiceInterface
+//go:generate mockgen -destination mocks/mock_ses_client.go -package mocks github.com/Notifuse/notifuse/internal/domain SESClient
+//go:generate mockgen -destination mocks/mock_sns_client.go -package mocks github.com/Notifuse/notifuse/internal/domain SNSClient
+
+// SESWebhookClient defines the interface for SES client operations related to webhook management
+type SESClient interface {
+	ListConfigurationSetsWithContext(ctx context.Context, input *ses.ListConfigurationSetsInput, opts ...request.Option) (*ses.ListConfigurationSetsOutput, error)
+	CreateConfigurationSetWithContext(ctx context.Context, input *ses.CreateConfigurationSetInput, opts ...request.Option) (*ses.CreateConfigurationSetOutput, error)
+	DeleteConfigurationSetWithContext(ctx context.Context, input *ses.DeleteConfigurationSetInput, opts ...request.Option) (*ses.DeleteConfigurationSetOutput, error)
+	DescribeConfigurationSetWithContext(ctx context.Context, input *ses.DescribeConfigurationSetInput, opts ...request.Option) (*ses.DescribeConfigurationSetOutput, error)
+	CreateConfigurationSetEventDestinationWithContext(ctx context.Context, input *ses.CreateConfigurationSetEventDestinationInput, opts ...request.Option) (*ses.CreateConfigurationSetEventDestinationOutput, error)
+	UpdateConfigurationSetEventDestinationWithContext(ctx context.Context, input *ses.UpdateConfigurationSetEventDestinationInput, opts ...request.Option) (*ses.UpdateConfigurationSetEventDestinationOutput, error)
+	DeleteConfigurationSetEventDestinationWithContext(ctx context.Context, input *ses.DeleteConfigurationSetEventDestinationInput, opts ...request.Option) (*ses.DeleteConfigurationSetEventDestinationOutput, error)
+	SendEmailWithContext(ctx context.Context, input *ses.SendEmailInput, opts ...request.Option) (*ses.SendEmailOutput, error)
+}
+
+// SNSWebhookClient defines the interface for SNS client operations related to webhook management
+type SNSClient interface {
+	CreateTopicWithContext(ctx context.Context, input *sns.CreateTopicInput, opts ...request.Option) (*sns.CreateTopicOutput, error)
+	DeleteTopicWithContext(ctx context.Context, input *sns.DeleteTopicInput, opts ...request.Option) (*sns.DeleteTopicOutput, error)
+	SubscribeWithContext(ctx context.Context, input *sns.SubscribeInput, opts ...request.Option) (*sns.SubscribeOutput, error)
+	GetTopicAttributesWithContext(ctx context.Context, input *sns.GetTopicAttributesInput, opts ...request.Option) (*sns.GetTopicAttributesOutput, error)
+}
 
 // SESWebhookPayload represents an Amazon SES webhook payload
 type SESWebhookPayload struct {
@@ -190,8 +215,6 @@ func (a *AmazonSESSettings) Validate(passphrase string) error {
 
 	return nil
 }
-
-//go:generate mockgen -destination mocks/mock_ses_service.go -package mocks github.com/Notifuse/notifuse/internal/domain SESServiceInterface
 
 // SESServiceInterface defines operations for managing Amazon SES webhooks via SNS
 type SESServiceInterface interface {

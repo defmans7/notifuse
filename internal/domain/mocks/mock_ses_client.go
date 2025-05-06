@@ -5,8 +5,10 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
+	request "github.com/aws/aws-sdk-go/aws/request"
 	ses "github.com/aws/aws-sdk-go/service/ses"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -34,17 +36,142 @@ func (m *MockSESClient) EXPECT() *MockSESClientMockRecorder {
 	return m.recorder
 }
 
-// SendEmail mocks base method.
-func (m *MockSESClient) SendEmail(arg0 *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
+// CreateConfigurationSetEventDestinationWithContext mocks base method.
+func (m *MockSESClient) CreateConfigurationSetEventDestinationWithContext(arg0 context.Context, arg1 *ses.CreateConfigurationSetEventDestinationInput, arg2 ...request.Option) (*ses.CreateConfigurationSetEventDestinationOutput, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendEmail", arg0)
-	ret0, _ := ret[0].(*ses.SendEmailOutput)
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateConfigurationSetEventDestinationWithContext", varargs...)
+	ret0, _ := ret[0].(*ses.CreateConfigurationSetEventDestinationOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SendEmail indicates an expected call of SendEmail.
-func (mr *MockSESClientMockRecorder) SendEmail(arg0 interface{}) *gomock.Call {
+// CreateConfigurationSetEventDestinationWithContext indicates an expected call of CreateConfigurationSetEventDestinationWithContext.
+func (mr *MockSESClientMockRecorder) CreateConfigurationSetEventDestinationWithContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEmail", reflect.TypeOf((*MockSESClient)(nil).SendEmail), arg0)
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConfigurationSetEventDestinationWithContext", reflect.TypeOf((*MockSESClient)(nil).CreateConfigurationSetEventDestinationWithContext), varargs...)
+}
+
+// CreateConfigurationSetWithContext mocks base method.
+func (m *MockSESClient) CreateConfigurationSetWithContext(arg0 context.Context, arg1 *ses.CreateConfigurationSetInput, arg2 ...request.Option) (*ses.CreateConfigurationSetOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateConfigurationSetWithContext", varargs...)
+	ret0, _ := ret[0].(*ses.CreateConfigurationSetOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateConfigurationSetWithContext indicates an expected call of CreateConfigurationSetWithContext.
+func (mr *MockSESClientMockRecorder) CreateConfigurationSetWithContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConfigurationSetWithContext", reflect.TypeOf((*MockSESClient)(nil).CreateConfigurationSetWithContext), varargs...)
+}
+
+// DeleteConfigurationSetEventDestinationWithContext mocks base method.
+func (m *MockSESClient) DeleteConfigurationSetEventDestinationWithContext(arg0 context.Context, arg1 *ses.DeleteConfigurationSetEventDestinationInput, arg2 ...request.Option) (*ses.DeleteConfigurationSetEventDestinationOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteConfigurationSetEventDestinationWithContext", varargs...)
+	ret0, _ := ret[0].(*ses.DeleteConfigurationSetEventDestinationOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteConfigurationSetEventDestinationWithContext indicates an expected call of DeleteConfigurationSetEventDestinationWithContext.
+func (mr *MockSESClientMockRecorder) DeleteConfigurationSetEventDestinationWithContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConfigurationSetEventDestinationWithContext", reflect.TypeOf((*MockSESClient)(nil).DeleteConfigurationSetEventDestinationWithContext), varargs...)
+}
+
+// DeleteConfigurationSetWithContext mocks base method.
+func (m *MockSESClient) DeleteConfigurationSetWithContext(arg0 context.Context, arg1 *ses.DeleteConfigurationSetInput, arg2 ...request.Option) (*ses.DeleteConfigurationSetOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteConfigurationSetWithContext", varargs...)
+	ret0, _ := ret[0].(*ses.DeleteConfigurationSetOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteConfigurationSetWithContext indicates an expected call of DeleteConfigurationSetWithContext.
+func (mr *MockSESClientMockRecorder) DeleteConfigurationSetWithContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConfigurationSetWithContext", reflect.TypeOf((*MockSESClient)(nil).DeleteConfigurationSetWithContext), varargs...)
+}
+
+// DescribeConfigurationSetWithContext mocks base method.
+func (m *MockSESClient) DescribeConfigurationSetWithContext(arg0 context.Context, arg1 *ses.DescribeConfigurationSetInput, arg2 ...request.Option) (*ses.DescribeConfigurationSetOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DescribeConfigurationSetWithContext", varargs...)
+	ret0, _ := ret[0].(*ses.DescribeConfigurationSetOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeConfigurationSetWithContext indicates an expected call of DescribeConfigurationSetWithContext.
+func (mr *MockSESClientMockRecorder) DescribeConfigurationSetWithContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeConfigurationSetWithContext", reflect.TypeOf((*MockSESClient)(nil).DescribeConfigurationSetWithContext), varargs...)
+}
+
+// ListConfigurationSetsWithContext mocks base method.
+func (m *MockSESClient) ListConfigurationSetsWithContext(arg0 context.Context, arg1 *ses.ListConfigurationSetsInput, arg2 ...request.Option) (*ses.ListConfigurationSetsOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListConfigurationSetsWithContext", varargs...)
+	ret0, _ := ret[0].(*ses.ListConfigurationSetsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListConfigurationSetsWithContext indicates an expected call of ListConfigurationSetsWithContext.
+func (mr *MockSESClientMockRecorder) ListConfigurationSetsWithContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListConfigurationSetsWithContext", reflect.TypeOf((*MockSESClient)(nil).ListConfigurationSetsWithContext), varargs...)
+}
+
+// UpdateConfigurationSetEventDestinationWithContext mocks base method.
+func (m *MockSESClient) UpdateConfigurationSetEventDestinationWithContext(arg0 context.Context, arg1 *ses.UpdateConfigurationSetEventDestinationInput, arg2 ...request.Option) (*ses.UpdateConfigurationSetEventDestinationOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "UpdateConfigurationSetEventDestinationWithContext", varargs...)
+	ret0, _ := ret[0].(*ses.UpdateConfigurationSetEventDestinationOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateConfigurationSetEventDestinationWithContext indicates an expected call of UpdateConfigurationSetEventDestinationWithContext.
+func (mr *MockSESClientMockRecorder) UpdateConfigurationSetEventDestinationWithContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConfigurationSetEventDestinationWithContext", reflect.TypeOf((*MockSESClient)(nil).UpdateConfigurationSetEventDestinationWithContext), varargs...)
 }
