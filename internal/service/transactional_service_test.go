@@ -21,7 +21,7 @@ type mockEmailService struct {
 	logger logger.Logger
 }
 
-func (m *mockEmailService) SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, optionalProvider ...*domain.EmailProvider) error {
+func (m *mockEmailService) SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, optionalProvider *domain.EmailProvider) error {
 	return nil
 }
 
@@ -42,6 +42,7 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -167,6 +168,7 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 				contactService:     mockContactService,
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
+				workspaceRepo:      mockWorkspaceRepo,
 			}
 
 			// Call the method being tested
@@ -197,6 +199,7 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -399,6 +402,7 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				contactService:     mockContactService,
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
+				workspaceRepo:      mockWorkspaceRepo,
 			}
 
 			// Call the method being tested
@@ -437,6 +441,7 @@ func TestTransactionalNotificationService_GetNotification(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -500,6 +505,7 @@ func TestTransactionalNotificationService_GetNotification(t *testing.T) {
 				contactService:     mockContactService,
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
+				workspaceRepo:      mockWorkspaceRepo,
 			}
 
 			// Call the method being tested
@@ -526,6 +532,7 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -616,6 +623,7 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 				contactService:     mockContactService,
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
+				workspaceRepo:      mockWorkspaceRepo,
 			}
 
 			// Call the method being tested
@@ -643,6 +651,7 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -698,6 +707,7 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 				contactService:     mockContactService,
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
+				workspaceRepo:      mockWorkspaceRepo,
 			}
 
 			// Call the method being tested
@@ -716,6 +726,29 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 func TestNewTransactionalNotificationService(t *testing.T) {
 	// Skip this test for now
 	t.Skip("Skipping due to import cycle issues")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
+	mockMsgHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+	service := NewTransactionalNotificationService(
+		mockTransactionalRepo,
+		mockMsgHistoryRepo,
+		mockTemplateService,
+		mockContactService,
+		mockEmailService,
+		mockLogger,
+		mockWorkspaceRepo,
+	)
+
+	assert.NotNil(t, service)
 }
 
 func TestTransactionalNotificationService_SendNotification(t *testing.T) {
@@ -728,6 +761,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -761,6 +795,29 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 		},
 	}
 
+	workspaceObj := &domain.Workspace{
+		ID:   workspace,
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			TransactionalEmailProviderID: "integration-1",
+		},
+		Integrations: []domain.Integration{
+			{
+				ID:   "integration-1",
+				Name: "Test Integration",
+				Type: "email",
+				EmailProvider: domain.EmailProvider{
+					Kind:               domain.EmailProviderKindSparkPost,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SparkPost: &domain.SparkPostSettings{
+						EncryptedAPIKey: "encrypted-api-key",
+					},
+				},
+			},
+		},
+	}
+
 	contact := &domain.Contact{
 		Email: "test@example.com",
 		FirstName: &domain.NullableString{
@@ -788,6 +845,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				},
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -838,11 +900,12 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 						gomock.Any(),
 						workspace,
 						false,
-						gomock.Any(),
-						gomock.Any(),
+						"test@example.com",
+						"Test Sender",
 						contact.Email,
-						gomock.Any(),
-						gomock.Any(),
+						"Test Subject",
+						"<html>Test content</html>",
+						gomock.Not(gomock.Nil()),
 					).Return(nil)
 
 				// Finally, message history is created
@@ -860,6 +923,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Contact: contact,
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Notification not found
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -875,6 +943,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Contact: nil,
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -890,6 +963,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Contact: contact,
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -914,6 +992,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Contact: contact,
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -943,6 +1026,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Channels: []domain.TransactionalChannel{"invalid-channel"},
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -973,6 +1061,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Contact: contact,
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -1006,6 +1099,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Contact: contact,
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -1056,6 +1154,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Contact: contact,
 			},
 			mockSetup: func() {
+				// Get the workspace
+				mockWorkspaceRepo.EXPECT().
+					GetByID(gomock.Any(), workspace).
+					Return(workspaceObj, nil)
+
 				// Get the notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -1113,6 +1216,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 						contact.Email,
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Not(gomock.Nil()), // Expect non-nil email provider
 					).Return(errors.New("email sending failed"))
 
 				// Finally, expect message history to be updated with "failed" status
@@ -1142,6 +1246,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				contactService:     mockContactService,
 				emailService:       mockEmailService,
 				logger:             mockLogger,
+				workspaceRepo:      mockWorkspaceRepo,
 			}
 
 			// Call the method being tested
@@ -1169,6 +1274,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -1253,6 +1359,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 						contact.Email,             // To
 						"Test Subject",            // Subject
 						"<html>Test Email</html>", // Content
+						gomock.Not(gomock.Nil()),  // Expect non-nil email provider
 					).Return(nil)
 
 				// Record the message history
@@ -1383,6 +1490,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 						contact.Email,
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Not(gomock.Nil()), // Expect non-nil email provider
 					).Return(errors.New("email sending failed"))
 
 				// Finally, expect message history to be updated with "failed" status
@@ -1447,10 +1555,11 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 				contactService:     mockContactService,
 				emailService:       mockEmailService,
 				logger:             mockLogger,
+				workspaceRepo:      mockWorkspaceRepo,
 			}
 
 			// Call the method being tested
-			err := service.DoSendEmailNotification(ctx, workspace, messageID, contact, tc.templateConfig, tc.messageData)
+			err := service.DoSendEmailNotification(ctx, workspace, messageID, contact, tc.templateConfig, tc.messageData, nil)
 
 			// Check results
 			if tc.expectedError {
