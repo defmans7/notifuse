@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
@@ -74,4 +75,24 @@ func (s *SMTPSettings) Validate(passphrase string) error {
 	}
 
 	return nil
+}
+
+// SMTPClient is an interface for github.com/wneessen/go-mail Client
+type SMTPClient interface {
+	SetSender(email string, name ...string) error
+	SetRecipient(email string, name ...string) error
+	SetSubject(subject string) error
+	SetBodyString(contentType, content string) error
+	DialAndSend() error
+	Close() error
+}
+
+// SMTPClientFactory is an interface for creating SMTP clients
+type SMTPClientFactory interface {
+	NewClient(host string, port int, options ...interface{}) (SMTPClient, error)
+}
+
+// SMTPService is an interface for SMTP email sending service
+type SMTPService interface {
+	SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *EmailProvider) error
 }

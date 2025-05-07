@@ -6,57 +6,41 @@ import (
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/pkg/logger"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// testSMTPService is a wrapper around the real SMTP service for testing
-type testSMTPService struct {
-	logger            logger.Logger
-	mailClientCreator func(host string, options ...interface{}) (interface{}, error)
-	dialAndSendFunc   func(msg interface{}) error
+// MockClientFactory implements ClientFactory for testing
+type MockClientFactory struct {
+	NewClientFunc func(host string, port int, username, password string, useTLS bool) (MailClient, error)
 }
 
-// newTestSMTPService creates a new testSMTPService instance for testing
-func newTestSMTPService(logger logger.Logger) *testSMTPService {
-	return &testSMTPService{
-		logger: logger,
+func (m *MockClientFactory) NewClient(host string, port int, username, password string, useTLS bool) (MailClient, error) {
+	if m.NewClientFunc != nil {
+		return m.NewClientFunc(host, port, username, password, useTLS)
 	}
+	return nil, nil
 }
 
-// Test implementation for SendEmail that doesn't use the actual mail package
-func (s *testSMTPService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
-	if provider.SMTP == nil {
-		return fmt.Errorf("SMTP settings required")
-	}
+// MockMailClient implements MailClient for testing
+type MockMailClient struct {
+	SendFunc  func(from, fromName, to, subject, content string) error
+	CloseFunc func() error
+}
 
-	// Simulate errors for "invalid-email" values
-	if fromAddress == "invalid-email" {
-		return fmt.Errorf("invalid sender: bad format")
+func (m *MockMailClient) Send(from, fromName, to, subject, content string) error {
+	if m.SendFunc != nil {
+		return m.SendFunc(from, fromName, to, subject, content)
 	}
-	if to == "invalid-email" {
-		return fmt.Errorf("invalid recipient email: bad format")
-	}
+	return nil
+}
 
-	// Simulate client creation
-	if s.mailClientCreator != nil {
-		_, err := s.mailClientCreator(provider.SMTP.Host)
-		if err != nil {
-			return fmt.Errorf("failed to create SMTP client: %w", err)
-		}
+func (m *MockMailClient) Close() error {
+	if m.CloseFunc != nil {
+		return m.CloseFunc()
 	}
-
-	// Simulate dial and send
-	if s.dialAndSendFunc != nil {
-		err := s.dialAndSendFunc(nil)
-		if err != nil {
-			return fmt.Errorf("failed to send email: %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -93,15 +77,23 @@ func TestSMTPService_SendEmail(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		// Create service with test implementation
-		service := &testSMTPService{
-			logger: mockLogger,
-			mailClientCreator: func(host string, options ...interface{}) (interface{}, error) {
-				return nil, nil
-			},
-			dialAndSendFunc: func(msg interface{}) error {
+		// Create mock client and factory
+		mockClient := &MockMailClient{
+			SendFunc: func(from, fromName, to, subject, content string) error {
 				return nil
 			},
+		}
+
+		mockFactory := &MockClientFactory{
+			NewClientFunc: func(host string, port int, username, password string, useTLS bool) (MailClient, error) {
+				return mockClient, nil
+			},
+		}
+
+		// Create service with mocks
+		service := &SMTPService{
+			logger:        mockLogger,
+			clientFactory: mockFactory,
 		}
 
 		// Call the method
@@ -121,8 +113,9 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Create service
-		service := &testSMTPService{
-			logger: mockLogger,
+		service := &SMTPService{
+			logger:        mockLogger,
+			clientFactory: &MockClientFactory{},
 		}
 
 		// Call the method
@@ -133,41 +126,18 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		assert.Contains(t, err.Error(), "SMTP settings required")
 	})
 
-	t.Run("invalid sender email", func(t *testing.T) {
-		// Create service
-		service := &testSMTPService{
-			logger: mockLogger,
-		}
-
-		// Call the method with invalid sender
-		err := service.SendEmail(ctx, workspaceID, "invalid-email", fromName, to, subject, content, validProvider)
-
-		// Verify error
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid sender")
-	})
-
-	t.Run("invalid recipient email", func(t *testing.T) {
-		// Create service
-		service := &testSMTPService{
-			logger: mockLogger,
-		}
-
-		// Call the method with invalid recipient
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, "invalid-email", subject, content, validProvider)
-
-		// Verify error
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid recipient email")
-	})
-
 	t.Run("client creation error", func(t *testing.T) {
-		// Create service with creator that returns error
-		service := &testSMTPService{
-			logger: mockLogger,
-			mailClientCreator: func(host string, options ...interface{}) (interface{}, error) {
+		// Create factory that returns error
+		mockFactory := &MockClientFactory{
+			NewClientFunc: func(host string, port int, username, password string, useTLS bool) (MailClient, error) {
 				return nil, fmt.Errorf("connection error")
 			},
+		}
+
+		// Create service with mock factory
+		service := &SMTPService{
+			logger:        mockLogger,
+			clientFactory: mockFactory,
 		}
 
 		// Call the method
@@ -179,15 +149,24 @@ func TestSMTPService_SendEmail(t *testing.T) {
 	})
 
 	t.Run("send error", func(t *testing.T) {
-		// Create service with sender that returns error
-		service := &testSMTPService{
-			logger: mockLogger,
-			mailClientCreator: func(host string, options ...interface{}) (interface{}, error) {
-				return nil, nil
-			},
-			dialAndSendFunc: func(msg interface{}) error {
+		// Create mock client that returns error on send
+		mockClient := &MockMailClient{
+			SendFunc: func(from, fromName, to, subject, content string) error {
 				return fmt.Errorf("send error")
 			},
+		}
+
+		// Create factory that returns the mock client
+		mockFactory := &MockClientFactory{
+			NewClientFunc: func(host string, port int, username, password string, useTLS bool) (MailClient, error) {
+				return mockClient, nil
+			},
+		}
+
+		// Create service with mocks
+		service := &SMTPService{
+			logger:        mockLogger,
+			clientFactory: mockFactory,
 		}
 
 		// Call the method
@@ -195,7 +174,7 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Verify error
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to send email")
+		assert.Contains(t, err.Error(), "send error")
 	})
 }
 
@@ -207,15 +186,15 @@ func TestNewSMTPService(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	// Create service
-	service := newTestSMTPService(mockLogger)
+	service := NewSMTPService(mockLogger)
 
 	// Verify service was created correctly
 	assert.NotNil(t, service)
 	assert.Equal(t, mockLogger, service.logger)
+	assert.IsType(t, &defaultGoMailFactory{}, service.clientFactory)
 }
 
-// Test the real SMTP service's validation logic
-func TestRealSMTPService_Validations(t *testing.T) {
+func TestSMTPService_Validations(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -224,8 +203,11 @@ func TestRealSMTPService_Validations(t *testing.T) {
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
-	// Create the real service
-	service := newTestSMTPService(mockLogger)
+	// Create the service
+	service := &SMTPService{
+		logger:        mockLogger,
+		clientFactory: &MockClientFactory{},
+	}
 
 	// Test data
 	ctx := context.Background()
