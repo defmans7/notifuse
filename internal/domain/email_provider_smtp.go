@@ -7,6 +7,8 @@ import (
 	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
+//go:generate mockgen -destination mocks/mock_smtp_client.go -package mocks github.com/Notifuse/notifuse/internal/domain SMTPClient,SMTPClientFactory,SMTPService
+
 // SMTPWebhookPayload represents an SMTP webhook payload
 // SMTP doesn't typically have a built-in webhook system, so this is a generic structure
 // that could be used with a third-party SMTP provider that offers webhooks

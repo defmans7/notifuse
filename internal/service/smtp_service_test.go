@@ -6,42 +6,60 @@ import (
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// MockClientFactory implements ClientFactory for testing
-type MockClientFactory struct {
-	NewClientFunc func(host string, port int, username, password string, useTLS bool) (MailClient, error)
+// MockMailClientAdapter adapts domain/mocks.MockSMTPClient to the service.MailClient interface
+type MockMailClientAdapter struct {
+	mockClient *mocks.MockSMTPClient
 }
 
-func (m *MockClientFactory) NewClient(host string, port int, username, password string, useTLS bool) (MailClient, error) {
-	if m.NewClientFunc != nil {
-		return m.NewClientFunc(host, port, username, password, useTLS)
+func (a *MockMailClientAdapter) Send(from, fromName, to, subject, content string) error {
+	if err := a.mockClient.SetSender(from, fromName); err != nil {
+		return err
 	}
-	return nil, nil
-}
-
-// MockMailClient implements MailClient for testing
-type MockMailClient struct {
-	SendFunc  func(from, fromName, to, subject, content string) error
-	CloseFunc func() error
-}
-
-func (m *MockMailClient) Send(from, fromName, to, subject, content string) error {
-	if m.SendFunc != nil {
-		return m.SendFunc(from, fromName, to, subject, content)
+	if err := a.mockClient.SetRecipient(to); err != nil {
+		return err
 	}
-	return nil
+	a.mockClient.SetSubject(subject)
+	a.mockClient.SetBodyString("text/html", content)
+	return a.mockClient.DialAndSend()
 }
 
-func (m *MockMailClient) Close() error {
-	if m.CloseFunc != nil {
-		return m.CloseFunc()
+func (a *MockMailClientAdapter) Close() error {
+	return a.mockClient.Close()
+}
+
+// MockFactoryAdapter adapts domain/mocks.MockSMTPClientFactory to the service.ClientFactory interface
+type MockFactoryAdapter struct {
+	mockFactory *mocks.MockSMTPClientFactory
+}
+
+func (a *MockFactoryAdapter) NewClient(host string, port int, username, password string, useTLS bool) (MailClient, error) {
+	// Create options slice similar to what would be passed to the real factory
+	options := []interface{}{
+		username,
+		password,
+		useTLS,
 	}
-	return nil
+
+	// Call the underlying mock factory
+	client, err := a.mockFactory.NewClient(host, port, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Adapt the client to our interface - need explicit type assertion
+	mockClient, ok := client.(*mocks.MockSMTPClient)
+	if !ok {
+		return nil, fmt.Errorf("unexpected client type from factory")
+	}
+
+	return &MockMailClientAdapter{mockClient: mockClient}, nil
 }
 
 func TestSMTPService_SendEmail(t *testing.T) {
@@ -77,23 +95,29 @@ func TestSMTPService_SendEmail(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		// Create mock client and factory
-		mockClient := &MockMailClient{
-			SendFunc: func(from, fromName, to, subject, content string) error {
-				return nil
-			},
-		}
+		// Create mock SMTP client
+		mockSMTPClient := mocks.NewMockSMTPClient(ctrl)
+		mockSMTPClient.EXPECT().SetSender(fromAddress, fromName).Return(nil)
+		mockSMTPClient.EXPECT().SetRecipient(to).Return(nil)
+		mockSMTPClient.EXPECT().SetSubject(subject).Return(nil)
+		mockSMTPClient.EXPECT().SetBodyString("text/html", content).Return(nil)
+		mockSMTPClient.EXPECT().DialAndSend().Return(nil)
+		mockSMTPClient.EXPECT().Close().Return(nil)
 
-		mockFactory := &MockClientFactory{
-			NewClientFunc: func(host string, port int, username, password string, useTLS bool) (MailClient, error) {
-				return mockClient, nil
-			},
-		}
+		// Create mock factory
+		mockSMTPFactory := mocks.NewMockSMTPClientFactory(ctrl)
+		mockSMTPFactory.EXPECT().NewClient(
+			validProvider.SMTP.Host,
+			validProvider.SMTP.Port,
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).Return(mockSMTPClient, nil)
 
-		// Create service with mocks
+		// Create service with mocks using adapter
 		service := &SMTPService{
 			logger:        mockLogger,
-			clientFactory: mockFactory,
+			clientFactory: &MockFactoryAdapter{mockFactory: mockSMTPFactory},
 		}
 
 		// Call the method
@@ -112,10 +136,13 @@ func TestSMTPService_SendEmail(t *testing.T) {
 			DefaultSenderName:  "Default Sender",
 		}
 
-		// Create service
+		// Create mock factory
+		mockSMTPFactory := mocks.NewMockSMTPClientFactory(ctrl)
+
+		// Create service with mock factory
 		service := &SMTPService{
 			logger:        mockLogger,
-			clientFactory: &MockClientFactory{},
+			clientFactory: &MockFactoryAdapter{mockFactory: mockSMTPFactory},
 		}
 
 		// Call the method
@@ -127,17 +154,20 @@ func TestSMTPService_SendEmail(t *testing.T) {
 	})
 
 	t.Run("client creation error", func(t *testing.T) {
-		// Create factory that returns error
-		mockFactory := &MockClientFactory{
-			NewClientFunc: func(host string, port int, username, password string, useTLS bool) (MailClient, error) {
-				return nil, fmt.Errorf("connection error")
-			},
-		}
+		// Create mock factory that returns error
+		mockSMTPFactory := mocks.NewMockSMTPClientFactory(ctrl)
+		mockSMTPFactory.EXPECT().NewClient(
+			validProvider.SMTP.Host,
+			validProvider.SMTP.Port,
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).Return(nil, fmt.Errorf("connection error"))
 
-		// Create service with mock factory
+		// Create service
 		service := &SMTPService{
 			logger:        mockLogger,
-			clientFactory: mockFactory,
+			clientFactory: &MockFactoryAdapter{mockFactory: mockSMTPFactory},
 		}
 
 		// Call the method
@@ -149,24 +179,29 @@ func TestSMTPService_SendEmail(t *testing.T) {
 	})
 
 	t.Run("send error", func(t *testing.T) {
-		// Create mock client that returns error on send
-		mockClient := &MockMailClient{
-			SendFunc: func(from, fromName, to, subject, content string) error {
-				return fmt.Errorf("send error")
-			},
-		}
+		// Create mock SMTP client that returns error on DialAndSend
+		mockSMTPClient := mocks.NewMockSMTPClient(ctrl)
+		mockSMTPClient.EXPECT().SetSender(fromAddress, fromName).Return(nil)
+		mockSMTPClient.EXPECT().SetRecipient(to).Return(nil)
+		mockSMTPClient.EXPECT().SetSubject(subject).Return(nil)
+		mockSMTPClient.EXPECT().SetBodyString("text/html", content).Return(nil)
+		mockSMTPClient.EXPECT().DialAndSend().Return(fmt.Errorf("send error"))
+		mockSMTPClient.EXPECT().Close().Return(nil)
 
-		// Create factory that returns the mock client
-		mockFactory := &MockClientFactory{
-			NewClientFunc: func(host string, port int, username, password string, useTLS bool) (MailClient, error) {
-				return mockClient, nil
-			},
-		}
+		// Create mock factory
+		mockSMTPFactory := mocks.NewMockSMTPClientFactory(ctrl)
+		mockSMTPFactory.EXPECT().NewClient(
+			validProvider.SMTP.Host,
+			validProvider.SMTP.Port,
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).Return(mockSMTPClient, nil)
 
 		// Create service with mocks
 		service := &SMTPService{
 			logger:        mockLogger,
-			clientFactory: mockFactory,
+			clientFactory: &MockFactoryAdapter{mockFactory: mockSMTPFactory},
 		}
 
 		// Call the method
@@ -203,10 +238,13 @@ func TestSMTPService_Validations(t *testing.T) {
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
+	// Create mock factory
+	mockSMTPFactory := mocks.NewMockSMTPClientFactory(ctrl)
+
 	// Create the service
 	service := &SMTPService{
 		logger:        mockLogger,
-		clientFactory: &MockClientFactory{},
+		clientFactory: &MockFactoryAdapter{mockFactory: mockSMTPFactory},
 	}
 
 	// Test data
