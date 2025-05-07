@@ -1,4 +1,4 @@
-package domain_test
+package domain
 
 import (
 	"database/sql"
@@ -6,19 +6,17 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 func TestList_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		list    domain.List
+		list    List
 		wantErr bool
 	}{
 		{
 			name: "valid list",
-			list: domain.List{
+			list: List{
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
@@ -28,7 +26,7 @@ func TestList_Validate(t *testing.T) {
 		},
 		{
 			name: "valid list without description",
-			list: domain.List{
+			list: List{
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: false,
@@ -37,7 +35,7 @@ func TestList_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid ID",
-			list: domain.List{
+			list: List{
 				ID:            "",
 				Name:          "My List",
 				IsDoubleOptin: true,
@@ -45,13 +43,100 @@ func TestList_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "non-alphanumeric ID",
+			list: List{
+				ID:            "list-123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "ID too long",
+			list: List{
+				ID:            "list1234567890123456789012345678901234567890",
+				Name:          "My List",
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
 			name: "invalid name",
-			list: domain.List{
+			list: List{
 				ID:            "list123",
 				Name:          "",
 				IsDoubleOptin: true,
 			},
 			wantErr: true,
+		},
+		{
+			name: "name too long",
+			list: List{
+				ID:            "list123",
+				Name:          string(make([]byte, 256)),
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid double opt-in template",
+			list: List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid welcome template",
+			list: List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				WelcomeTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid unsubscribe template",
+			list: List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid with all template references",
+			list: List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "template1",
+					Version: 1,
+				},
+				WelcomeTemplate: &TemplateReference{
+					ID:      "template2",
+					Version: 1,
+				},
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "template3",
+					Version: 1,
+				},
+			},
+			wantErr: false,
 		},
 	}
 
@@ -69,8 +154,9 @@ func TestList_Validate(t *testing.T) {
 
 func TestScanList(t *testing.T) {
 	now := time.Now()
-	// Create mock scanner
-	scanner := &mockScanner{
+
+	// Test 1: Basic list without templates
+	scanner := &listMockScanner{
 		data: []interface{}{
 			"list123",        // ID
 			"My List",        // Name
@@ -91,8 +177,8 @@ func TestScanList(t *testing.T) {
 		},
 	}
 
-	// Test successful scan
-	list, err := domain.ScanList(scanner)
+	// Test successful scan without templates
+	list, err := ScanList(scanner)
 	assert.NoError(t, err)
 	assert.Equal(t, "list123", list.ID)
 	assert.Equal(t, "My List", list.Name)
@@ -113,17 +199,17 @@ func TestScanList(t *testing.T) {
 
 	// Test scan error
 	scanner.err = sql.ErrNoRows
-	_, err = domain.ScanList(scanner)
+	_, err = ScanList(scanner)
 	assert.Error(t, err)
 }
 
 // Mock scanner for testing
-type mockScanner struct {
+type listMockScanner struct {
 	data []interface{}
 	err  error
 }
 
-func (m *mockScanner) Scan(dest ...interface{}) error {
+func (m *listMockScanner) Scan(dest ...interface{}) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -141,8 +227,8 @@ func (m *mockScanner) Scan(dest ...interface{}) error {
 			if n, ok := m.data[i].(int); ok {
 				*v = n
 			}
-		case **domain.TemplateReference:
-			if tr, ok := m.data[i].(*domain.TemplateReference); ok {
+		case **TemplateReference:
+			if tr, ok := m.data[i].(*TemplateReference); ok {
 				*v = tr
 			}
 		case *time.Time:
@@ -161,47 +247,109 @@ func (m *mockScanner) Scan(dest ...interface{}) error {
 }
 
 func TestErrListNotFound_Error(t *testing.T) {
-	err := &domain.ErrListNotFound{Message: "test error message"}
+	err := &ErrListNotFound{Message: "test error message"}
 	assert.Equal(t, "test error message", err.Error())
 }
 
 func TestCreateListRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name     string
-		request  domain.CreateListRequest
+		request  CreateListRequest
 		wantErr  bool
-		wantList *domain.List
+		wantList *List
 	}{
 		{
 			name: "valid request",
-			request: domain.CreateListRequest{
+			request: CreateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
-				DoubleOptInTemplate: &domain.TemplateReference{
+				DoubleOptInTemplate: &TemplateReference{
 					ID:      "template123",
 					Version: 1,
 				},
 			},
 			wantErr: false,
-			wantList: &domain.List{
+			wantList: &List{
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
-				DoubleOptInTemplate: &domain.TemplateReference{
+				DoubleOptInTemplate: &TemplateReference{
 					ID:      "template123",
 					Version: 1,
 				},
 			},
 		},
 		{
+			name: "valid request with all templates",
+			request: CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				IsPublic:      true,
+				Description:   "Test description",
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "template1",
+					Version: 1,
+				},
+				WelcomeTemplate: &TemplateReference{
+					ID:      "template2",
+					Version: 1,
+				},
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "template3",
+					Version: 1,
+				},
+			},
+			wantErr: false,
+			wantList: &List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				IsPublic:      true,
+				Description:   "Test description",
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "template1",
+					Version: 1,
+				},
+				WelcomeTemplate: &TemplateReference{
+					ID:      "template2",
+					Version: 1,
+				},
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "template3",
+					Version: 1,
+				},
+			},
+		},
+		{
+			name: "valid request with no double opt-in",
+			request: CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				IsPublic:      true,
+				Description:   "Test description",
+			},
+			wantErr: false,
+			wantList: &List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				IsPublic:      true,
+				Description:   "Test description",
+			},
+		},
+		{
 			name: "missing workspace ID",
-			request: domain.CreateListRequest{
+			request: CreateListRequest{
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
@@ -210,7 +358,7 @@ func TestCreateListRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "missing ID",
-			request: domain.CreateListRequest{
+			request: CreateListRequest{
 				WorkspaceID:   "workspace123",
 				Name:          "My List",
 				IsDoubleOptin: true,
@@ -219,7 +367,7 @@ func TestCreateListRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid ID format",
-			request: domain.CreateListRequest{
+			request: CreateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "invalid@id",
 				Name:          "My List",
@@ -228,8 +376,18 @@ func TestCreateListRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "ID too long",
+			request: CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list1234567890123456789012345678901234567890",
+				Name:          "My List",
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing name",
-			request: domain.CreateListRequest{
+			request: CreateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				IsDoubleOptin: true,
@@ -237,12 +395,64 @@ func TestCreateListRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "name too long",
+			request: CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          string(make([]byte, 256)),
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
 			name: "double opt-in without template",
-			request: domain.CreateListRequest{
+			request: CreateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid double opt-in template",
+			request: CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid welcome template",
+			request: CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				WelcomeTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid unsubscribe template",
+			request: CreateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
 			},
 			wantErr: true,
 		},
@@ -263,8 +473,30 @@ func TestCreateListRequest_Validate(t *testing.T) {
 				assert.Equal(t, tt.wantList.IsDoubleOptin, list.IsDoubleOptin)
 				assert.Equal(t, tt.wantList.IsPublic, list.IsPublic)
 				assert.Equal(t, tt.wantList.Description, list.Description)
-				assert.Equal(t, tt.wantList.DoubleOptInTemplate.ID, list.DoubleOptInTemplate.ID)
-				assert.Equal(t, tt.wantList.DoubleOptInTemplate.Version, list.DoubleOptInTemplate.Version)
+
+				if tt.wantList.DoubleOptInTemplate != nil {
+					assert.NotNil(t, list.DoubleOptInTemplate)
+					assert.Equal(t, tt.wantList.DoubleOptInTemplate.ID, list.DoubleOptInTemplate.ID)
+					assert.Equal(t, tt.wantList.DoubleOptInTemplate.Version, list.DoubleOptInTemplate.Version)
+				} else {
+					assert.Nil(t, list.DoubleOptInTemplate)
+				}
+
+				if tt.wantList.WelcomeTemplate != nil {
+					assert.NotNil(t, list.WelcomeTemplate)
+					assert.Equal(t, tt.wantList.WelcomeTemplate.ID, list.WelcomeTemplate.ID)
+					assert.Equal(t, tt.wantList.WelcomeTemplate.Version, list.WelcomeTemplate.Version)
+				} else {
+					assert.Nil(t, list.WelcomeTemplate)
+				}
+
+				if tt.wantList.UnsubscribeTemplate != nil {
+					assert.NotNil(t, list.UnsubscribeTemplate)
+					assert.Equal(t, tt.wantList.UnsubscribeTemplate.ID, list.UnsubscribeTemplate.ID)
+					assert.Equal(t, tt.wantList.UnsubscribeTemplate.Version, list.UnsubscribeTemplate.Version)
+				} else {
+					assert.Nil(t, list.UnsubscribeTemplate)
+				}
 			}
 		})
 	}
@@ -275,7 +507,7 @@ func TestGetListsRequest_FromURLParams(t *testing.T) {
 		name    string
 		params  map[string][]string
 		wantErr bool
-		want    domain.GetListsRequest
+		want    GetListsRequest
 	}{
 		{
 			name: "valid params",
@@ -283,7 +515,7 @@ func TestGetListsRequest_FromURLParams(t *testing.T) {
 				"workspace_id": {"workspace123"},
 			},
 			wantErr: false,
-			want: domain.GetListsRequest{
+			want: GetListsRequest{
 				WorkspaceID: "workspace123",
 			},
 		},
@@ -293,12 +525,26 @@ func TestGetListsRequest_FromURLParams(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "empty workspace ID",
+			params: map[string][]string{
+				"workspace_id": {""},
+			},
+			wantErr: true,
+		},
+		{
+			name: "workspace ID too long",
+			params: map[string][]string{
+				"workspace_id": {"workspace12345678901234567890123456789"},
+			},
+			wantErr: true,
+		},
+		{
 			name: "invalid workspace ID format",
 			params: map[string][]string{
 				"workspace_id": {"invalid@workspace"},
 			},
 			wantErr: false,
-			want: domain.GetListsRequest{
+			want: GetListsRequest{
 				WorkspaceID: "invalid@workspace",
 			},
 		},
@@ -306,7 +552,7 @@ func TestGetListsRequest_FromURLParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := &domain.GetListsRequest{}
+			req := &GetListsRequest{}
 			err := req.FromURLParams(tt.params)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -323,7 +569,7 @@ func TestGetListRequest_FromURLParams(t *testing.T) {
 		name    string
 		params  map[string][]string
 		wantErr bool
-		want    domain.GetListRequest
+		want    GetListRequest
 	}{
 		{
 			name: "valid params",
@@ -332,7 +578,7 @@ func TestGetListRequest_FromURLParams(t *testing.T) {
 				"id":           {"list123"},
 			},
 			wantErr: false,
-			want: domain.GetListRequest{
+			want: GetListRequest{
 				WorkspaceID: "workspace123",
 				ID:          "list123",
 			},
@@ -345,9 +591,25 @@ func TestGetListRequest_FromURLParams(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "empty workspace ID",
+			params: map[string][]string{
+				"workspace_id": {""},
+				"id":           {"list123"},
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing list ID",
 			params: map[string][]string{
 				"workspace_id": {"workspace123"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty list ID",
+			params: map[string][]string{
+				"workspace_id": {"workspace123"},
+				"id":           {""},
 			},
 			wantErr: true,
 		},
@@ -358,7 +620,7 @@ func TestGetListRequest_FromURLParams(t *testing.T) {
 				"id":           {"list123"},
 			},
 			wantErr: false,
-			want: domain.GetListRequest{
+			want: GetListRequest{
 				WorkspaceID: "invalid@workspace",
 				ID:          "list123",
 			},
@@ -371,11 +633,19 @@ func TestGetListRequest_FromURLParams(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "list ID too long",
+			params: map[string][]string{
+				"workspace_id": {"workspace123"},
+				"id":           {"list12345678901234567890123456789012345"},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := &domain.GetListRequest{}
+			req := &GetListRequest{}
 			err := req.FromURLParams(tt.params)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -391,40 +661,102 @@ func TestGetListRequest_FromURLParams(t *testing.T) {
 func TestUpdateListRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name     string
-		request  domain.UpdateListRequest
+		request  UpdateListRequest
 		wantErr  bool
-		wantList *domain.List
+		wantList *List
 	}{
 		{
 			name: "valid request",
-			request: domain.UpdateListRequest{
+			request: UpdateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
-				DoubleOptInTemplate: &domain.TemplateReference{
+				DoubleOptInTemplate: &TemplateReference{
 					ID:      "template123",
 					Version: 1,
 				},
 			},
 			wantErr: false,
-			wantList: &domain.List{
+			wantList: &List{
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
 				IsPublic:      true,
 				Description:   "Test description",
-				DoubleOptInTemplate: &domain.TemplateReference{
+				DoubleOptInTemplate: &TemplateReference{
 					ID:      "template123",
 					Version: 1,
 				},
 			},
 		},
 		{
+			name: "valid request with all templates",
+			request: UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				IsPublic:      true,
+				Description:   "Test description",
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "template1",
+					Version: 1,
+				},
+				WelcomeTemplate: &TemplateReference{
+					ID:      "template2",
+					Version: 1,
+				},
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "template3",
+					Version: 1,
+				},
+			},
+			wantErr: false,
+			wantList: &List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				IsPublic:      true,
+				Description:   "Test description",
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "template1",
+					Version: 1,
+				},
+				WelcomeTemplate: &TemplateReference{
+					ID:      "template2",
+					Version: 1,
+				},
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "template3",
+					Version: 1,
+				},
+			},
+		},
+		{
+			name: "valid request with no double opt-in",
+			request: UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				IsPublic:      true,
+				Description:   "Test description",
+			},
+			wantErr: false,
+			wantList: &List{
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				IsPublic:      true,
+				Description:   "Test description",
+			},
+		},
+		{
 			name: "missing workspace ID",
-			request: domain.UpdateListRequest{
+			request: UpdateListRequest{
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
@@ -433,7 +765,7 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "missing ID",
-			request: domain.UpdateListRequest{
+			request: UpdateListRequest{
 				WorkspaceID:   "workspace123",
 				Name:          "My List",
 				IsDoubleOptin: true,
@@ -442,7 +774,7 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid ID format",
-			request: domain.UpdateListRequest{
+			request: UpdateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "invalid@id",
 				Name:          "My List",
@@ -451,8 +783,18 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "ID too long",
+			request: UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list1234567890123456789012345678901234567890",
+				Name:          "My List",
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing name",
-			request: domain.UpdateListRequest{
+			request: UpdateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				IsDoubleOptin: true,
@@ -460,12 +802,64 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "name too long",
+			request: UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          string(make([]byte, 256)),
+				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
 			name: "double opt-in without template",
-			request: domain.UpdateListRequest{
+			request: UpdateListRequest{
 				WorkspaceID:   "workspace123",
 				ID:            "list123",
 				Name:          "My List",
 				IsDoubleOptin: true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid double opt-in template",
+			request: UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: true,
+				DoubleOptInTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid welcome template",
+			request: UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				WelcomeTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid unsubscribe template",
+			request: UpdateListRequest{
+				WorkspaceID:   "workspace123",
+				ID:            "list123",
+				Name:          "My List",
+				IsDoubleOptin: false,
+				UnsubscribeTemplate: &TemplateReference{
+					ID:      "",
+					Version: 0,
+				},
 			},
 			wantErr: true,
 		},
@@ -486,8 +880,30 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 				assert.Equal(t, tt.wantList.IsDoubleOptin, list.IsDoubleOptin)
 				assert.Equal(t, tt.wantList.IsPublic, list.IsPublic)
 				assert.Equal(t, tt.wantList.Description, list.Description)
-				assert.Equal(t, tt.wantList.DoubleOptInTemplate.ID, list.DoubleOptInTemplate.ID)
-				assert.Equal(t, tt.wantList.DoubleOptInTemplate.Version, list.DoubleOptInTemplate.Version)
+
+				if tt.wantList.DoubleOptInTemplate != nil {
+					assert.NotNil(t, list.DoubleOptInTemplate)
+					assert.Equal(t, tt.wantList.DoubleOptInTemplate.ID, list.DoubleOptInTemplate.ID)
+					assert.Equal(t, tt.wantList.DoubleOptInTemplate.Version, list.DoubleOptInTemplate.Version)
+				} else {
+					assert.Nil(t, list.DoubleOptInTemplate)
+				}
+
+				if tt.wantList.WelcomeTemplate != nil {
+					assert.NotNil(t, list.WelcomeTemplate)
+					assert.Equal(t, tt.wantList.WelcomeTemplate.ID, list.WelcomeTemplate.ID)
+					assert.Equal(t, tt.wantList.WelcomeTemplate.Version, list.WelcomeTemplate.Version)
+				} else {
+					assert.Nil(t, list.WelcomeTemplate)
+				}
+
+				if tt.wantList.UnsubscribeTemplate != nil {
+					assert.NotNil(t, list.UnsubscribeTemplate)
+					assert.Equal(t, tt.wantList.UnsubscribeTemplate.ID, list.UnsubscribeTemplate.ID)
+					assert.Equal(t, tt.wantList.UnsubscribeTemplate.Version, list.UnsubscribeTemplate.Version)
+				} else {
+					assert.Nil(t, list.UnsubscribeTemplate)
+				}
 			}
 		})
 	}
@@ -496,13 +912,13 @@ func TestUpdateListRequest_Validate(t *testing.T) {
 func TestDeleteListRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		request domain.DeleteListRequest
+		request DeleteListRequest
 		wantErr bool
 		wantID  string
 	}{
 		{
 			name: "valid request",
-			request: domain.DeleteListRequest{
+			request: DeleteListRequest{
 				WorkspaceID: "workspace123",
 				ID:          "list123",
 			},
@@ -511,23 +927,41 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "missing workspace ID",
-			request: domain.DeleteListRequest{
+			request: DeleteListRequest{
 				ID: "list123",
 			},
 			wantErr: true,
 			wantID:  "",
 		},
 		{
+			name: "empty workspace ID",
+			request: DeleteListRequest{
+				WorkspaceID: "",
+				ID:          "list123",
+			},
+			wantErr: true,
+			wantID:  "",
+		},
+		{
 			name: "missing list ID",
-			request: domain.DeleteListRequest{
+			request: DeleteListRequest{
 				WorkspaceID: "workspace123",
 			},
 			wantErr: true,
 			wantID:  "",
 		},
 		{
+			name: "empty list ID",
+			request: DeleteListRequest{
+				WorkspaceID: "workspace123",
+				ID:          "",
+			},
+			wantErr: true,
+			wantID:  "",
+		},
+		{
 			name: "invalid workspace ID format",
-			request: domain.DeleteListRequest{
+			request: DeleteListRequest{
 				WorkspaceID: "invalid@workspace",
 				ID:          "list123",
 			},
@@ -536,9 +970,18 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid list ID format",
-			request: domain.DeleteListRequest{
+			request: DeleteListRequest{
 				WorkspaceID: "workspace123",
 				ID:          "invalid@list",
+			},
+			wantErr: true,
+			wantID:  "",
+		},
+		{
+			name: "list ID too long",
+			request: DeleteListRequest{
+				WorkspaceID: "workspace123",
+				ID:          "list12345678901234567890123456789012345",
 			},
 			wantErr: true,
 			wantID:  "",
@@ -562,37 +1005,52 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 func TestContactListTotalType_Validate(t *testing.T) {
 	tests := []struct {
 		name      string
-		totalType domain.ContactListTotalType
+		totalType ContactListTotalType
 		wantErr   bool
 	}{
 		{
 			name:      "valid type - pending",
-			totalType: domain.TotalTypePending,
+			totalType: TotalTypePending,
 			wantErr:   false,
 		},
 		{
 			name:      "valid type - active",
-			totalType: domain.TotalTypeActive,
+			totalType: TotalTypeActive,
 			wantErr:   false,
 		},
 		{
 			name:      "valid type - unsubscribed",
-			totalType: domain.TotalTypeUnsubscribed,
+			totalType: TotalTypeUnsubscribed,
 			wantErr:   false,
 		},
 		{
 			name:      "valid type - bounced",
-			totalType: domain.TotalTypeBounced,
+			totalType: TotalTypeBounced,
 			wantErr:   false,
 		},
 		{
 			name:      "valid type - complained",
-			totalType: domain.TotalTypeComplained,
+			totalType: TotalTypeComplained,
 			wantErr:   false,
 		},
 		{
-			name:      "invalid type",
-			totalType: domain.ContactListTotalType("invalid"),
+			name:      "invalid type - empty",
+			totalType: ContactListTotalType(""),
+			wantErr:   true,
+		},
+		{
+			name:      "invalid type - arbitrary string",
+			totalType: ContactListTotalType("invalid"),
+			wantErr:   true,
+		},
+		{
+			name:      "invalid type - mixed case",
+			totalType: ContactListTotalType("Active"),
+			wantErr:   true,
+		},
+		{
+			name:      "invalid type - similar but not exact",
+			totalType: ContactListTotalType("actives"),
 			wantErr:   true,
 		},
 	}
@@ -602,6 +1060,7 @@ func TestContactListTotalType_Validate(t *testing.T) {
 			err := tt.totalType.Validate()
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid total type")
 			} else {
 				assert.NoError(t, err)
 			}

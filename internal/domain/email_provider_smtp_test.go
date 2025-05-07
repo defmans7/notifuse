@@ -11,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/wneessen/go-mail"
 )
 
 func TestSMTPSettings_EncryptDecryptPassword(t *testing.T) {
@@ -211,95 +212,36 @@ func TestSMTPSettings_Validate(t *testing.T) {
 	}
 }
 
-func TestSMTPClientInterface(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := mocks.NewMockSMTPClient(ctrl)
-
-	sender := "sender@example.com"
-	senderName := "Sender Name"
-	recipient := "recipient@example.com"
-	subject := "Test Subject"
-	contentType := "text/html"
-	content := "<p>This is a test email</p>"
-
-	// Test for successful email sending
-	t.Run("successful email sending", func(t *testing.T) {
-		// Set expectations for each method in the email sending sequence
-		mockClient.EXPECT().SetSender(sender, senderName).Return(nil)
-		mockClient.EXPECT().SetRecipient(recipient).Return(nil)
-		mockClient.EXPECT().SetSubject(subject).Return(nil)
-		mockClient.EXPECT().SetBodyString(contentType, content).Return(nil)
-		mockClient.EXPECT().DialAndSend().Return(nil)
-		mockClient.EXPECT().Close().Return(nil)
-
-		// Simulate email sending sequence
-		err := mockClient.SetSender(sender, senderName)
-		require.NoError(t, err)
-
-		err = mockClient.SetRecipient(recipient)
-		require.NoError(t, err)
-
-		err = mockClient.SetSubject(subject)
-		require.NoError(t, err)
-
-		err = mockClient.SetBodyString(contentType, content)
-		require.NoError(t, err)
-
-		err = mockClient.DialAndSend()
-		require.NoError(t, err)
-
-		err = mockClient.Close()
-		require.NoError(t, err)
-	})
-
-	// Test for error handling
-	t.Run("error handling", func(t *testing.T) {
-		// Reset mock
-		mockClient = mocks.NewMockSMTPClient(ctrl)
-
-		// Set expectations for method that will return an error
-		mockClient.EXPECT().SetSender(sender, senderName).Return(nil)
-		mockClient.EXPECT().SetRecipient(recipient).Return(errors.New("invalid recipient"))
-
-		// Simulate email sending sequence that fails
-		err := mockClient.SetSender(sender, senderName)
-		require.NoError(t, err)
-
-		err = mockClient.SetRecipient(recipient)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid recipient")
-	})
-}
-
+// TestSMTPClientFactoryInterface tests the SMTPClientFactory interface
 func TestSMTPClientFactoryInterface(t *testing.T) {
 	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockFactory := mocks.NewMockSMTPClientFactory(ctrl)
-	mockClient := mocks.NewMockSMTPClient(ctrl)
 
 	host := "smtp.example.com"
 	port := 587
-	options := []interface{}{} // Empty options list
+	username := "user@example.com"
+	password := "password"
+	useTLS := true
+
+	mockMailClient := &mail.Client{}
 
 	// Test successful client creation
 	t.Run("successful client creation", func(t *testing.T) {
-		mockFactory.EXPECT().NewClient(host, port, gomock.Any()).Return(mockClient, nil)
+		mockFactory.EXPECT().CreateClient(host, port, username, password, useTLS).Return(mockMailClient, nil)
 
-		client, err := mockFactory.NewClient(host, port, options...)
+		client, err := mockFactory.CreateClient(host, port, username, password, useTLS)
 		require.NoError(t, err)
-		assert.Equal(t, mockClient, client)
+		assert.Equal(t, mockMailClient, client)
 	})
 
 	// Test error handling
 	t.Run("client creation error", func(t *testing.T) {
-		mockFactory.EXPECT().NewClient(host, port, gomock.Any()).Return(nil, errors.New("connection failed"))
+		mockFactory.EXPECT().CreateClient(host, port, username, password, useTLS).Return(nil, errors.New("connection failed"))
 
-		client, err := mockFactory.NewClient(host, port, options...)
+		client, err := mockFactory.CreateClient(host, port, username, password, useTLS)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "connection failed")
 		assert.Nil(t, client)

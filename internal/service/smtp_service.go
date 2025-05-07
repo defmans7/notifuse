@@ -13,24 +13,13 @@ import (
 // SMTPService implements the domain.EmailProviderService interface for SMTP
 type SMTPService struct {
 	logger        logger.Logger
-	clientFactory ClientFactory
+	clientFactory domain.SMTPClientFactory
 }
 
-// ClientFactory defines an interface for creating mail clients
-type ClientFactory interface {
-	NewClient(host string, port int, username, password string, useTLS bool) (MailClient, error)
-}
-
-// MailClient defines an interface for mail client operations
-type MailClient interface {
-	Send(from, fromName, to, subject, content string) error
-	Close() error
-}
-
-// defaultGoMailFactory implements the ClientFactory interface for go-mail
+// defaultGoMailFactory implements the domain.SMTPClientFactory interface directly using go-mail
 type defaultGoMailFactory struct{}
 
-func (f *defaultGoMailFactory) NewClient(host string, port int, username, password string, useTLS bool) (MailClient, error) {
+func (f *defaultGoMailFactory) CreateClient(host string, port int, username, password string, useTLS bool) (*mail.Client, error) {
 	tlsPolicy := mail.TLSOpportunistic
 	if useTLS {
 		tlsPolicy = mail.TLSMandatory
@@ -49,33 +38,7 @@ func (f *defaultGoMailFactory) NewClient(host string, port int, username, passwo
 		return nil, fmt.Errorf("failed to create mail client: %w", err)
 	}
 
-	return &goMailClientAdapter{client: client}, nil
-}
-
-// goMailClientAdapter adapts go-mail.Client to our MailClient interface
-type goMailClientAdapter struct {
-	client *mail.Client
-}
-
-func (a *goMailClientAdapter) Send(from, fromName, to, subject, content string) error {
-	msg := mail.NewMsg()
-	if err := msg.FromFormat(from, fromName); err != nil {
-		return fmt.Errorf("invalid sender: %w", err)
-	}
-	if err := msg.To(to); err != nil {
-		return fmt.Errorf("invalid recipient: %w", err)
-	}
-	msg.Subject(subject)
-	msg.SetBodyString(mail.TypeTextHTML, content)
-
-	if err := a.client.DialAndSend(msg); err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
-	}
-	return nil
-}
-
-func (a *goMailClientAdapter) Close() error {
-	return a.client.Close()
+	return client, nil
 }
 
 // NewSMTPService creates a new instance of SMTPService
@@ -92,8 +55,8 @@ func (s *SMTPService) SendEmail(ctx context.Context, workspaceID string, fromAdd
 		return fmt.Errorf("SMTP settings required")
 	}
 
-	// Create a client
-	client, err := s.clientFactory.NewClient(
+	// Create a client directly
+	client, err := s.clientFactory.CreateClient(
 		provider.SMTP.Host,
 		provider.SMTP.Port,
 		provider.SMTP.Username,
@@ -105,9 +68,20 @@ func (s *SMTPService) SendEmail(ctx context.Context, workspaceID string, fromAdd
 	}
 	defer client.Close()
 
-	// Send the email
-	if err := client.Send(fromAddress, fromName, to, subject, content); err != nil {
-		return err
+	// Create and configure the message
+	msg := mail.NewMsg()
+	if err := msg.FromFormat(fromAddress, fromName); err != nil {
+		return fmt.Errorf("invalid sender: %w", err)
+	}
+	if err := msg.To(to); err != nil {
+		return fmt.Errorf("invalid recipient: %w", err)
+	}
+	msg.Subject(subject)
+	msg.SetBodyString(mail.TypeTextHTML, content)
+
+	// Send the email directly
+	if err := client.DialAndSend(msg); err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	return nil
