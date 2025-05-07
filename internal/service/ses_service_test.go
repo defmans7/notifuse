@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -22,7 +23,16 @@ func createMockSESService() (*SESService, *mocks.MockSESClient, *mocks.MockSNSCl
 	mockSES := mocks.NewMockSESClient(ctrl)
 	mockSNS := mocks.NewMockSNSClient(ctrl)
 	mockAuth := mocks.NewMockAuthService(ctrl)
-	mockLogger := &pkgmocks.MockLogger{}
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Configure logger to handle any calls
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
 
 	return NewSESServiceWithClients(
 		mockAuth,
@@ -333,73 +343,116 @@ func TestDeleteConfigurationSetMinimal(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestUpdateEventDestinationMinimal tests the UpdateEventDestination method
-func TestUpdateEventDestinationMinimal(t *testing.T) {
-	// Set up mock services
-	ctrl := gomock.NewController(t)
-	mockAuth := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockSNS := mocks.NewMockSNSClient(ctrl)
-	mockSES := mocks.NewMockSESClient(ctrl)
+// TestUpdateEventDestination tests the UpdateEventDestination method
+func TestUpdateEventDestination(t *testing.T) {
+	t.Run("successful update", func(t *testing.T) {
+		// Create mock service and clients
+		service, mockSESClient, _, _ := createMockSESService()
 
-	// Expectations for logger
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		// Setup test data
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
 
-	// Create service
-	service := NewSESServiceWithClients(
-		mockAuth,
-		mockLogger,
-		func(_ domain.AmazonSESSettings) (*session.Session, error) {
-			return &session.Session{}, nil
-		},
-		func(_ *session.Session) domain.SESWebhookClient {
-			return mockSES
-		},
-		func(_ *session.Session) domain.SNSWebhookClient {
-			return mockSNS
-		},
-	)
+		eventDestination := domain.SESConfigurationSetEventDestination{
+			ConfigurationSetName: "test-config-set",
+			Name:                 "test-destination",
+			Enabled:              true,
+			MatchingEventTypes:   []string{"Delivery", "Bounce"},
+			SNSDestination: &domain.SESTopicConfig{
+				TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
+			},
+		}
 
-	// Setup test data
-	testConfig := domain.AmazonSESSettings{
-		AccessKey: "test-access-key",
-		SecretKey: "test-secret-key",
-		Region:    "us-east-1",
-	}
-	destination := domain.SESConfigurationSetEventDestination{
-		ConfigurationSetName: "test-config-set",
-		Name:                 "test-destination",
-		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
-		SNSDestination: &domain.SESTopicConfig{
-			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
-		},
-	}
+		// Configure the mock to return success
+		mockSESClient.EXPECT().
+			UpdateConfigurationSetEventDestinationWithContext(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, input *ses.UpdateConfigurationSetEventDestinationInput, _ ...request.Option) (*ses.UpdateConfigurationSetEventDestinationOutput, error) {
+				// Verify input parameters
+				assert.Equal(t, eventDestination.ConfigurationSetName, *input.ConfigurationSetName)
+				assert.Equal(t, eventDestination.Name, *input.EventDestination.Name)
+				assert.Equal(t, eventDestination.Enabled, *input.EventDestination.Enabled)
+				assert.Equal(t, eventDestination.SNSDestination.TopicARN, *input.EventDestination.SNSDestination.TopicARN)
 
-	// Setup mock outputs
-	mockUpdateOutput := &ses.UpdateConfigurationSetEventDestinationOutput{}
+				// Check event types
+				eventTypes := aws.StringValueSlice(input.EventDestination.MatchingEventTypes)
+				assert.ElementsMatch(t, eventDestination.MatchingEventTypes, eventTypes)
 
-	// Configure mock
-	mockSES.EXPECT().
-		UpdateConfigurationSetEventDestinationWithContext(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, input *ses.UpdateConfigurationSetEventDestinationInput, _ ...request.Option) (*ses.UpdateConfigurationSetEventDestinationOutput, error) {
-			assert.Equal(t, destination.ConfigurationSetName, *input.ConfigurationSetName)
-			assert.Equal(t, destination.Name, *input.EventDestination.Name)
-			assert.Equal(t, destination.Enabled, *input.EventDestination.Enabled)
-			assert.Equal(t, destination.SNSDestination.TopicARN, *input.EventDestination.SNSDestination.TopicARN)
-			assert.Len(t, input.EventDestination.MatchingEventTypes, 2)
-			return mockUpdateOutput, nil
-		})
+				return &ses.UpdateConfigurationSetEventDestinationOutput{}, nil
+			})
 
-	// Call the method being tested
-	err := service.UpdateEventDestination(context.Background(), testConfig, destination)
+		// Call the method being tested
+		err := service.UpdateEventDestination(context.Background(), testConfig, eventDestination)
 
-	// Assert the results
-	assert.NoError(t, err)
+		// Assertions
+		assert.NoError(t, err)
+	})
+
+	t.Run("getClients error", func(t *testing.T) {
+		// Create mock service and clients
+		service, _, _, _ := createMockSESService()
+
+		// Setup test data with invalid credentials
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "", // Empty access key to trigger error
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+
+		eventDestination := domain.SESConfigurationSetEventDestination{
+			ConfigurationSetName: "test-config-set",
+			Name:                 "test-destination",
+			Enabled:              true,
+			MatchingEventTypes:   []string{"Delivery", "Bounce"},
+			SNSDestination: &domain.SESTopicConfig{
+				TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
+			},
+		}
+
+		// Call the method being tested
+		err := service.UpdateEventDestination(context.Background(), testConfig, eventDestination)
+
+		// Assertions
+		assert.Error(t, err)
+		assert.Equal(t, ErrInvalidAWSCredentials, err)
+	})
+
+	t.Run("update error", func(t *testing.T) {
+		// Create mock service and clients
+		service, mockSESClient, _, _ := createMockSESService()
+
+		// Setup test data
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+
+		eventDestination := domain.SESConfigurationSetEventDestination{
+			ConfigurationSetName: "test-config-set",
+			Name:                 "test-destination",
+			Enabled:              true,
+			MatchingEventTypes:   []string{"Delivery", "Bounce"},
+			SNSDestination: &domain.SESTopicConfig{
+				TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
+			},
+		}
+
+		// Configure the mock to return an error
+		mockErr := fmt.Errorf("configuration set not found")
+		mockSESClient.EXPECT().
+			UpdateConfigurationSetEventDestinationWithContext(gomock.Any(), gomock.Any()).
+			Return(nil, mockErr)
+
+		// Call the method being tested
+		err := service.UpdateEventDestination(context.Background(), testConfig, eventDestination)
+
+		// Assertions
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to update SES event destination")
+	})
 }
 
 // TestCreateSNSTopicWithNewTopicMinimal tests the CreateSNSTopic method with a new topic
@@ -549,61 +602,80 @@ func TestCreateSNSTopicWithExistingARNMinimal(t *testing.T) {
 	assert.Equal(t, existingTopicARN, result)
 }
 
-// TestDeleteSNSTopicMinimal tests the DeleteSNSTopic method
-func TestDeleteSNSTopicMinimal(t *testing.T) {
-	// Set up mock services
-	ctrl := gomock.NewController(t)
-	mockAuth := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockSNS := mocks.NewMockSNSClient(ctrl)
-	mockSES := mocks.NewMockSESClient(ctrl)
+// TestDeleteSNSTopic tests the DeleteSNSTopic method
+func TestDeleteSNSTopic(t *testing.T) {
+	t.Run("successful topic deletion", func(t *testing.T) {
+		// Create mock service and clients
+		service, _, mockSNSClient, _ := createMockSESService()
 
-	// Expectations for logger
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		// Setup test data
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+		topicARN := "arn:aws:sns:us-east-1:123456789012:test-topic"
 
-	// Create service
-	service := NewSESServiceWithClients(
-		mockAuth,
-		mockLogger,
-		func(_ domain.AmazonSESSettings) (*session.Session, error) {
-			return &session.Session{}, nil
-		},
-		func(_ *session.Session) domain.SESWebhookClient {
-			return mockSES
-		},
-		func(_ *session.Session) domain.SNSWebhookClient {
-			return mockSNS
-		},
-	)
+		// Configure the mock to return success
+		mockSNSClient.EXPECT().
+			DeleteTopicWithContext(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, input *sns.DeleteTopicInput, _ ...request.Option) (*sns.DeleteTopicOutput, error) {
+				assert.Equal(t, topicARN, *input.TopicArn)
+				return &sns.DeleteTopicOutput{}, nil
+			})
 
-	// Setup test data
-	testConfig := domain.AmazonSESSettings{
-		AccessKey: "test-access-key",
-		SecretKey: "test-secret-key",
-		Region:    "us-east-1",
-	}
-	topicARN := "arn:aws:sns:us-east-1:123456789012:test-topic"
+		// Call the method being tested
+		err := service.DeleteSNSTopic(context.Background(), testConfig, topicARN)
 
-	// Setup mock outputs
-	mockDeleteOutput := &sns.DeleteTopicOutput{}
+		// Assertions
+		assert.NoError(t, err)
+	})
 
-	// Configure mock
-	mockSNS.EXPECT().
-		DeleteTopicWithContext(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, input *sns.DeleteTopicInput, _ ...request.Option) (*sns.DeleteTopicOutput, error) {
-			assert.Equal(t, topicARN, *input.TopicArn)
-			return mockDeleteOutput, nil
-		})
+	t.Run("getClients error", func(t *testing.T) {
+		// Create mock service and clients
+		service, _, _, _ := createMockSESService()
 
-	// Call the method being tested
-	err := service.DeleteSNSTopic(context.Background(), testConfig, topicARN)
+		// Setup test data with invalid credentials
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "", // Empty access key to trigger error
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+		topicARN := "arn:aws:sns:us-east-1:123456789012:test-topic"
 
-	// Assert the results
-	assert.NoError(t, err)
+		// Call the method being tested
+		err := service.DeleteSNSTopic(context.Background(), testConfig, topicARN)
+
+		// Assertions
+		assert.Error(t, err)
+		assert.Equal(t, ErrInvalidAWSCredentials, err)
+	})
+
+	t.Run("DeleteTopic error", func(t *testing.T) {
+		// Create mock service and clients
+		service, _, mockSNSClient, _ := createMockSESService()
+
+		// Setup test data
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+		topicARN := "arn:aws:sns:us-east-1:123456789012:test-topic"
+
+		// Configure the mock to return an error
+		mockErr := fmt.Errorf("topic not found")
+		mockSNSClient.EXPECT().
+			DeleteTopicWithContext(gomock.Any(), gomock.Any()).
+			Return(nil, mockErr)
+
+		// Call the method being tested
+		err := service.DeleteSNSTopic(context.Background(), testConfig, topicARN)
+
+		// Assertions
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to delete SNS topic")
+	})
 }
 
 // TestCreateConfigurationSetMinimal tests the CreateConfigurationSet method
@@ -888,63 +960,86 @@ func TestCreateEventDestinationErrorMinimal(t *testing.T) {
 	assert.Equal(t, ErrInvalidSNSDestination, err)
 }
 
-// TestDeleteEventDestinationMinimal tests the DeleteEventDestination method
-func TestDeleteEventDestinationMinimal(t *testing.T) {
-	// Set up mock services
-	ctrl := gomock.NewController(t)
-	mockAuth := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockSNS := mocks.NewMockSNSClient(ctrl)
-	mockSES := mocks.NewMockSESClient(ctrl)
+// TestDeleteEventDestination tests the DeleteEventDestination method
+func TestDeleteEventDestination(t *testing.T) {
+	t.Run("successful deletion", func(t *testing.T) {
+		// Create mock service and clients
+		service, mockSESClient, _, _ := createMockSESService()
 
-	// Expectations for logger
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		// Setup test data
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+		configSetName := "test-config-set"
+		destinationName := "test-destination"
 
-	// Create service
-	service := NewSESServiceWithClients(
-		mockAuth,
-		mockLogger,
-		func(_ domain.AmazonSESSettings) (*session.Session, error) {
-			return &session.Session{}, nil
-		},
-		func(_ *session.Session) domain.SESWebhookClient {
-			return mockSES
-		},
-		func(_ *session.Session) domain.SNSWebhookClient {
-			return mockSNS
-		},
-	)
+		// Configure the mock to return success
+		mockSESClient.EXPECT().
+			DeleteConfigurationSetEventDestinationWithContext(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, input *ses.DeleteConfigurationSetEventDestinationInput, _ ...request.Option) (*ses.DeleteConfigurationSetEventDestinationOutput, error) {
+				// Verify input parameters
+				assert.Equal(t, configSetName, *input.ConfigurationSetName)
+				assert.Equal(t, destinationName, *input.EventDestinationName)
 
-	// Setup test data
-	testConfig := domain.AmazonSESSettings{
-		AccessKey: "test-access-key",
-		SecretKey: "test-secret-key",
-		Region:    "us-east-1",
-	}
-	configSetName := "test-config-set"
-	destinationName := "test-destination"
+				return &ses.DeleteConfigurationSetEventDestinationOutput{}, nil
+			})
 
-	// Setup mock outputs
-	mockDeleteOutput := &ses.DeleteConfigurationSetEventDestinationOutput{}
+		// Call the method being tested
+		err := service.DeleteEventDestination(context.Background(), testConfig, configSetName, destinationName)
 
-	// Configure mock
-	mockSES.EXPECT().
-		DeleteConfigurationSetEventDestinationWithContext(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, input *ses.DeleteConfigurationSetEventDestinationInput, _ ...request.Option) (*ses.DeleteConfigurationSetEventDestinationOutput, error) {
-			assert.Equal(t, configSetName, *input.ConfigurationSetName)
-			assert.Equal(t, destinationName, *input.EventDestinationName)
-			return mockDeleteOutput, nil
-		})
+		// Assertions
+		assert.NoError(t, err)
+	})
 
-	// Call the method being tested
-	err := service.DeleteEventDestination(context.Background(), testConfig, configSetName, destinationName)
+	t.Run("getClients error", func(t *testing.T) {
+		// Create mock service and clients
+		service, _, _, _ := createMockSESService()
 
-	// Assert the results
-	assert.NoError(t, err)
+		// Setup test data with invalid credentials
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "", // Empty access key to trigger error
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+		configSetName := "test-config-set"
+		destinationName := "test-destination"
+
+		// Call the method being tested
+		err := service.DeleteEventDestination(context.Background(), testConfig, configSetName, destinationName)
+
+		// Assertions
+		assert.Error(t, err)
+		assert.Equal(t, ErrInvalidAWSCredentials, err)
+	})
+
+	t.Run("delete error", func(t *testing.T) {
+		// Create mock service and clients
+		service, mockSESClient, _, _ := createMockSESService()
+
+		// Setup test data
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+		configSetName := "test-config-set"
+		destinationName := "test-destination"
+
+		// Configure the mock to return an error
+		mockErr := fmt.Errorf("configuration set not found")
+		mockSESClient.EXPECT().
+			DeleteConfigurationSetEventDestinationWithContext(gomock.Any(), gomock.Any()).
+			Return(nil, mockErr)
+
+		// Call the method being tested
+		err := service.DeleteEventDestination(context.Background(), testConfig, configSetName, destinationName)
+
+		// Assertions
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to delete SES event destination")
+	})
 }
 
 // TestGetWebhookStatusMinimal tests the GetWebhookStatus method
@@ -1384,5 +1479,49 @@ func TestSendEmail(t *testing.T) {
 		// Verify error
 		assert.Error(t, err)
 		assert.Equal(t, ErrInvalidAWSCredentials, err)
+	})
+}
+
+// TestCreateSession tests the createSession function
+func TestCreateSession(t *testing.T) {
+	t.Run("successful session creation", func(t *testing.T) {
+		// Setup test data
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		}
+
+		// Call the function
+		sess, err := createSession(testConfig)
+
+		// Assertions
+		assert.NoError(t, err)
+		assert.NotNil(t, sess)
+		assert.Equal(t, "us-east-1", *sess.Config.Region)
+
+		// Verify credentials are set correctly
+		creds, err := sess.Config.Credentials.Get()
+		assert.NoError(t, err)
+		assert.Equal(t, "test-access-key", creds.AccessKeyID)
+		assert.Equal(t, "test-secret-key", creds.SecretAccessKey)
+		assert.Empty(t, creds.SessionToken)
+	})
+
+	t.Run("with empty region", func(t *testing.T) {
+		// Setup test data with empty region
+		testConfig := domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "",
+		}
+
+		// Call the function
+		sess, err := createSession(testConfig)
+
+		// Assertions - should still work but with empty region
+		assert.NoError(t, err)
+		assert.NotNil(t, sess)
+		assert.Equal(t, "", *sess.Config.Region)
 	})
 }
