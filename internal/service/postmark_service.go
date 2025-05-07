@@ -524,3 +524,64 @@ func (s *PostmarkService) filterPostmarkWebhooks(
 	}
 	return filtered
 }
+
+// SendEmail sends an email using Postmark
+func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+	if provider.Postmark == nil {
+		return fmt.Errorf("Postmark provider is not configured")
+	}
+
+	// Make sure we have a server token
+	if provider.Postmark.ServerToken == "" {
+		s.logger.Error("Postmark server token is empty")
+		return fmt.Errorf("Postmark server token is required")
+	}
+
+	// Prepare the API endpoint
+	endpoint := "https://api.postmarkapp.com/email"
+
+	// Prepare the request body
+	requestBody := map[string]interface{}{
+		"From":     fmt.Sprintf("%s <%s>", fromName, fromAddress),
+		"To":       to,
+		"Subject":  subject,
+		"HtmlBody": content,
+	}
+
+	// Convert to JSON
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Postmark request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create Postmark request: %w", err)
+	}
+
+	// Add headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Postmark-Server-Token", provider.Postmark.ServerToken)
+
+	// Use the injected HTTP client
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request to Postmark API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read Postmark API response: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("Postmark API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

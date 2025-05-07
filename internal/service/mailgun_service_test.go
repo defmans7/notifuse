@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -577,6 +579,191 @@ func TestMailgunService_UpdateWebhook(t *testing.T) {
 		// Verify error handling
 		assert.Error(t, err)
 		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "API returned non-OK status code 400")
+	})
+}
+
+func TestMailgunService_SendEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	testLogger := logger.NewMockLogger(t)
+
+	webhookEndpoint := "https://webhook.example.com"
+	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+
+	// Test data
+	workspaceID := "workspace-123"
+	fromAddress := "sender@example.com"
+	fromName := "Test Sender"
+	to := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Email Content</p>"
+
+	t.Run("successful email sending", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider config
+		provider := &domain.EmailProvider{
+			Mailgun: &domain.MailgunSettings{
+				Domain: "example.com",
+				APIKey: "test-api-key",
+				Region: "US",
+			},
+		}
+
+		// Mock successful response
+		responseBody := `{
+			"id": "<message-id>",
+			"message": "Queued. Thank you."
+		}`
+
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+		}
+
+		// Set expectation for HTTP request
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "POST", req.Method)
+				assert.Equal(t, "https://api.mailgun.net/v3/example.com/messages", req.URL.String())
+
+				// Verify auth header
+				username, password, ok := req.BasicAuth()
+				assert.True(t, ok)
+				assert.Equal(t, "api", username)
+				assert.Equal(t, provider.Mailgun.APIKey, password)
+
+				// Verify Content-Type header
+				assert.Equal(t, "application/x-www-form-urlencoded", req.Header.Get("Content-Type"))
+
+				// Read and verify form data
+				body, err := io.ReadAll(req.Body)
+				require.NoError(t, err)
+				formData := string(body)
+
+				// Check for required fields in the form data
+				assert.Contains(t, formData, "from="+url.QueryEscape(fmt.Sprintf("%s <%s>", fromName, fromAddress)))
+				assert.Contains(t, formData, "to="+url.QueryEscape(to))
+				assert.Contains(t, formData, "subject="+url.QueryEscape(subject))
+				assert.Contains(t, formData, "html="+url.QueryEscape(content))
+
+				return resp, nil
+			})
+
+		// Call the service
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("EU region", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider config with EU region
+		provider := &domain.EmailProvider{
+			Mailgun: &domain.MailgunSettings{
+				Domain: "example.com",
+				APIKey: "test-api-key",
+				Region: "EU",
+			},
+		}
+
+		// Mock successful response
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"id": "<message-id>", "message": "Queued. Thank you."}`)),
+		}
+
+		// Set expectation for HTTP request with EU endpoint
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify EU endpoint is used
+				assert.Equal(t, "https://api.eu.mailgun.net/v3/example.com/messages", req.URL.String())
+				return resp, nil
+			})
+
+		// Call the service
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("missing Mailgun configuration", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider without Mailgun config
+		provider := &domain.EmailProvider{}
+
+		// Call the service
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify error
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Mailgun provider is not configured")
+	})
+
+	t.Run("HTTP request error", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider config
+		provider := &domain.EmailProvider{
+			Mailgun: &domain.MailgunSettings{
+				Domain: "example.com",
+				APIKey: "test-api-key",
+				Region: "US",
+			},
+		}
+
+		// Set expectation for HTTP error
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, errors.New("connection error"))
+
+		// Call the service
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify error handling
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to execute request")
+	})
+
+	t.Run("API error response", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider config
+		provider := &domain.EmailProvider{
+			Mailgun: &domain.MailgunSettings{
+				Domain: "example.com",
+				APIKey: "test-api-key",
+				Region: "US",
+			},
+		}
+
+		// Mock error response
+		resp := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(strings.NewReader(`{"message": "Invalid recipient address"}`)),
+		}
+
+		// Set expectation
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the service
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify error handling
+		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "API returned non-OK status code 400")
 	})
 }

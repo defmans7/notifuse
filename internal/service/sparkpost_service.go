@@ -759,3 +759,95 @@ func (s *SparkPostService) directDeleteWebhook(ctx context.Context, settings *do
 
 	return nil
 }
+
+// SendEmail sends an email using SparkPost
+func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+	if provider.SparkPost == nil {
+		return fmt.Errorf("SparkPost provider is not configured")
+	}
+
+	// Check for sandbox mode
+	if provider.SparkPost.SandboxMode {
+		s.logger.Info("SparkPost is in sandbox mode, email will be accepted but not delivered")
+	}
+
+	// Prepare the request payload
+	type Recipient struct {
+		Address string `json:"address"`
+	}
+
+	type Content struct {
+		HTML string `json:"html"`
+	}
+
+	type EmailRequest struct {
+		Recipients []Recipient `json:"recipients"`
+		Content    Content     `json:"content"`
+		From       struct {
+			Name  string `json:"name,omitempty"`
+			Email string `json:"email"`
+		} `json:"from"`
+		Subject string `json:"subject"`
+	}
+
+	// Set up the email payload
+	emailReq := EmailRequest{
+		Recipients: []Recipient{
+			{
+				Address: to,
+			},
+		},
+		Content: Content{
+			HTML: content,
+		},
+		From: struct {
+			Name  string `json:"name,omitempty"`
+			Email string `json:"email"`
+		}{
+			Name:  fromName,
+			Email: fromAddress,
+		},
+		Subject: subject,
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(emailReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email request: %w", err)
+	}
+
+	// Construct the API URL
+	endpoint := provider.SparkPost.Endpoint
+	if endpoint == "" {
+		endpoint = "https://api.sparkpost.com"
+	}
+	apiURL := fmt.Sprintf("%s/api/v1/transmissions", endpoint)
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create request for sending SparkPost email: %v", err))
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", provider.SparkPost.APIKey))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to execute request for sending SparkPost email: %v", err))
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		s.logger.Error(fmt.Sprintf("SparkPost API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
+		return fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
+	}
+
+	return nil
+}

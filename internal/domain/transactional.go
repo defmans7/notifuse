@@ -115,25 +115,25 @@ type TransactionalNotificationSendParams struct {
 // TransactionalNotificationService defines the interface for transactional notification operations
 type TransactionalNotificationService interface {
 	// CreateNotification creates a new transactional notification
-	CreateNotification(ctx context.Context, workspace string, params TransactionalNotificationCreateParams) (*TransactionalNotification, error)
+	CreateNotification(ctx context.Context, workspaceID string, params TransactionalNotificationCreateParams) (*TransactionalNotification, error)
 
 	// UpdateNotification updates an existing transactional notification
-	UpdateNotification(ctx context.Context, workspace, id string, params TransactionalNotificationUpdateParams) (*TransactionalNotification, error)
+	UpdateNotification(ctx context.Context, workspaceID, id string, params TransactionalNotificationUpdateParams) (*TransactionalNotification, error)
 
 	// GetNotification retrieves a transactional notification by ID
-	GetNotification(ctx context.Context, workspace, id string) (*TransactionalNotification, error)
+	GetNotification(ctx context.Context, workspaceID, id string) (*TransactionalNotification, error)
 
 	// ListNotifications retrieves all transactional notifications with optional filtering
-	ListNotifications(ctx context.Context, workspace string, filter map[string]interface{}, limit, offset int) ([]*TransactionalNotification, int, error)
+	ListNotifications(ctx context.Context, workspaceID string, filter map[string]interface{}, limit, offset int) ([]*TransactionalNotification, int, error)
 
 	// DeleteNotification soft-deletes a transactional notification
-	DeleteNotification(ctx context.Context, workspace, id string) error
+	DeleteNotification(ctx context.Context, workspaceID, id string) error
 
 	// SendNotification sends a transactional notification to a contact
-	SendNotification(ctx context.Context, workspace string, params TransactionalNotificationSendParams) (string, error)
+	SendNotification(ctx context.Context, workspaceID string, params TransactionalNotificationSendParams) (string, error)
 
 	// DoSendEmailNotification handles sending a notification through the email channel
-	DoSendEmailNotification(ctx context.Context, workspace string, messageID string, contact *Contact, templateConfig ChannelTemplate, messageData MessageData) error
+	DoSendEmailNotification(ctx context.Context, workspaceID string, messageID string, contact *Contact, templateConfig ChannelTemplate, messageData MessageData, emailProvider *EmailProvider) error
 }
 
 // Request and response types for transactional notifications

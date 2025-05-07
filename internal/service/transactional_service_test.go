@@ -894,7 +894,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 						HTML:    aws.String("<html>Test content</html>"),
 					}, nil)
 
-				// Then the email is sent
+				// Then the email is sent - ensure provider is non-nil
 				mockEmailService.EXPECT().
 					SendEmail(
 						gomock.Any(),
@@ -905,7 +905,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 						contact.Email,
 						"Test Subject",
 						"<html>Test content</html>",
-						gomock.Not(gomock.Nil()),
+						gomock.Not(gomock.Nil()), // Ensure we expect a non-nil provider
 					).Return(nil)
 
 				// Finally, message history is created
@@ -1205,18 +1205,18 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 						return nil
 					})
 
-				// Then, email sending fails
+				// Then, email sending fails - ensure provider is non-nil
 				mockEmailService.EXPECT().
 					SendEmail(
 						gomock.Any(),
 						workspace,
 						false,
-						gomock.Any(),
-						gomock.Any(),
+						"test@example.com",
+						"Test Sender",
 						contact.Email,
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Not(gomock.Nil()), // Expect non-nil email provider
+						"Test Subject",
+						"<html>Test content</html>",
+						gomock.Not(gomock.Nil()), // Ensure we expect a non-nil provider
 					).Return(errors.New("email sending failed"))
 
 				// Finally, expect message history to be updated with "failed" status
@@ -1479,18 +1479,18 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 						return nil
 					})
 
-				// Then, email sending fails
+				// Then, email sending fails - ensure provider is non-nil
 				mockEmailService.EXPECT().
 					SendEmail(
 						gomock.Any(),
 						workspace,
 						false,
-						gomock.Any(),
-						gomock.Any(),
-						contact.Email,
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Not(gomock.Nil()), // Expect non-nil email provider
+						"sender@example.com",      // FromAddress
+						"Test Sender",             // FromName
+						contact.Email,             // To
+						"Test Subject",            // Subject
+						"<html>Test Email</html>", // Content
+						gomock.Not(gomock.Nil()),  // Ensure we expect a non-nil provider
 					).Return(errors.New("email sending failed"))
 
 				// Finally, expect message history to be updated with "failed" status
@@ -1559,7 +1559,14 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 			}
 
 			// Call the method being tested
-			err := service.DoSendEmailNotification(ctx, workspace, messageID, contact, tc.templateConfig, tc.messageData, nil)
+			err := service.DoSendEmailNotification(ctx, workspace, messageID, contact, tc.templateConfig, tc.messageData, &domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSparkPost,
+				DefaultSenderEmail: "test@example.com",
+				DefaultSenderName:  "Test Sender",
+				SparkPost: &domain.SparkPostSettings{
+					EncryptedAPIKey: "encrypted-api-key",
+				},
+			})
 
 			// Check results
 			if tc.expectedError {

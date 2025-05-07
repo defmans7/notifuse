@@ -8,6 +8,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
@@ -693,6 +694,66 @@ func (s *SESService) UnregisterWebhooks(
 
 	if lastError != nil {
 		return fmt.Errorf("failed to delete one or more AWS resources: %w", lastError)
+	}
+
+	return nil
+}
+
+// SendEmail sends an email using AWS SES
+func (s *SESService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+	if provider.SES == nil {
+		return fmt.Errorf("SES provider is not configured")
+	}
+
+	// Make sure we have credentials
+	if provider.SES.AccessKey == "" || provider.SES.SecretKey == "" {
+		return ErrInvalidAWSCredentials
+	}
+
+	// Create a new AWS session with the provided credentials
+	awsConfig := &aws.Config{
+		Region:      aws.String(provider.SES.Region),
+		Credentials: credentials.NewStaticCredentials(provider.SES.AccessKey, provider.SES.SecretKey, ""),
+	}
+	awsSession, err := session.NewSession(awsConfig)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
+		return fmt.Errorf("failed to create AWS session: %w", err)
+	}
+
+	// Create SES client
+	sesClient := ses.New(awsSession)
+
+	// Format the "From" header with name and email
+	fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)
+
+	// Create the email
+	input := &ses.SendEmailInput{
+		Destination: &ses.Destination{
+			ToAddresses: []*string{aws.String(to)},
+		},
+		Message: &ses.Message{
+			Body: &ses.Body{
+				Html: &ses.Content{
+					Charset: aws.String("UTF-8"),
+					Data:    aws.String(content),
+				},
+			},
+			Subject: &ses.Content{
+				Charset: aws.String("UTF-8"),
+				Data:    aws.String(subject),
+			},
+		},
+		Source: aws.String(fromHeader),
+	}
+
+	// Send the email
+	_, err = sesClient.SendEmail(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			return fmt.Errorf("SES error: %s", aerr.Error())
+		}
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	return nil

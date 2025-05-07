@@ -12,6 +12,7 @@ type Factory struct {
 	emailService     domain.EmailServiceInterface
 	contactRepo      domain.ContactRepository
 	taskRepo         domain.TaskRepository
+	workspaceRepo    domain.WorkspaceRepository
 	logger           logger.Logger
 	config           *Config
 }
@@ -23,6 +24,7 @@ func NewFactory(
 	emailService domain.EmailServiceInterface,
 	contactRepo domain.ContactRepository,
 	taskRepo domain.TaskRepository,
+	workspaceRepo domain.WorkspaceRepository,
 	logger logger.Logger,
 	config *Config,
 ) *Factory {
@@ -36,6 +38,7 @@ func NewFactory(
 		emailService:     emailService,
 		contactRepo:      contactRepo,
 		taskRepo:         taskRepo,
+		workspaceRepo:    workspaceRepo,
 		logger:           logger,
 		config:           config,
 	}
@@ -63,6 +66,7 @@ func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 		f.templateService,
 		f.contactRepo,
 		f.taskRepo,
+		f.workspaceRepo,
 		f.logger,
 		f.config,
 		timeProvider,

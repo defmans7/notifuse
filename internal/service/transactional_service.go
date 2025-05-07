@@ -19,6 +19,7 @@ type TransactionalNotificationService struct {
 	contactService     domain.ContactService
 	emailService       domain.EmailServiceInterface
 	logger             logger.Logger
+	workspaceRepo      domain.WorkspaceRepository
 }
 
 // NewTransactionalNotificationService creates a new instance of the transactional notification service
@@ -29,6 +30,7 @@ func NewTransactionalNotificationService(
 	contactService domain.ContactService,
 	emailService domain.EmailServiceInterface,
 	logger logger.Logger,
+	workspaceRepo domain.WorkspaceRepository,
 ) *TransactionalNotificationService {
 	return &TransactionalNotificationService{
 		transactionalRepo:  transactionalRepo,
@@ -37,6 +39,7 @@ func NewTransactionalNotificationService(
 		contactService:     contactService,
 		emailService:       emailService,
 		logger:             logger,
+		workspaceRepo:      workspaceRepo,
 	}
 }
 
@@ -239,11 +242,18 @@ func (s *TransactionalNotificationService) DeleteNotification(
 // SendNotification sends a transactional notification to a contact
 func (s *TransactionalNotificationService) SendNotification(
 	ctx context.Context,
-	workspace string,
+	workspaceID string,
 	params domain.TransactionalNotificationSendParams,
 ) (string, error) {
+
+	// Get the workspace to retrieve email provider settings
+	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get workspace: %w", err)
+	}
+
 	// Get the notification
-	notification, err := s.transactionalRepo.Get(ctx, workspace, params.ID)
+	notification, err := s.transactionalRepo.Get(ctx, workspaceID, params.ID)
 	if err != nil {
 		return "", fmt.Errorf("notification not found: %w", err)
 	}
@@ -253,13 +263,13 @@ func (s *TransactionalNotificationService) SendNotification(
 		return "", fmt.Errorf("contact is required")
 	}
 
-	contactOperation := s.contactService.UpsertContact(ctx, workspace, params.Contact)
+	contactOperation := s.contactService.UpsertContact(ctx, workspaceID, params.Contact)
 	if contactOperation.Action == domain.UpsertContactOperationError {
 		return "", fmt.Errorf("failed to upsert contact: %s", contactOperation.Error)
 	}
 
 	// Get the contact with complete information
-	contact, err := s.contactService.GetContactByEmail(ctx, workspace, params.Contact.Email)
+	contact, err := s.contactService.GetContactByEmail(ctx, workspaceID, params.Contact.Email)
 	if err != nil {
 		return "", fmt.Errorf("contact not found after upsert: %w", err)
 	}
@@ -313,13 +323,26 @@ func (s *TransactionalNotificationService) SendNotification(
 
 		// Send the message based on channel type
 		if channel == domain.TransactionalChannelEmail {
+
+			// Get the email provider using the workspace's GetEmailProvider method
+			emailProvider, err := workspace.GetEmailProvider(false)
+			if err != nil {
+				return "", err
+			}
+
+			// Validate that the provider is configured
+			if emailProvider == nil || emailProvider.Kind == "" {
+				return "", fmt.Errorf("no email provider configured for transactional notifications")
+			}
+
 			err = s.DoSendEmailNotification(
 				ctx,
-				workspace,
+				workspaceID,
 				messageID,
 				contact,
 				templateConfig,
 				messageData,
+				emailProvider,
 			)
 			if err == nil {
 				successfulChannels++
@@ -352,6 +375,7 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 	contact *domain.Contact,
 	templateConfig domain.ChannelTemplate,
 	messageData domain.MessageData,
+	emailProvider *domain.EmailProvider,
 ) error {
 	s.logger.WithFields(map[string]interface{}{
 		"workspace":   workspace,
@@ -434,6 +458,7 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 		contact.Email, // To address
 		subject,
 		htmlContent,
+		emailProvider,
 	)
 
 	if err != nil {

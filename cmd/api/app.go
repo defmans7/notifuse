@@ -309,6 +309,7 @@ func (a *App) InitServices() error {
 		a.templateRepo,
 		a.templateService,
 		httpClient,
+		a.config.WebhookEndpoint,
 	)
 
 	// Initialize webhook registration service
@@ -352,6 +353,7 @@ func (a *App) InitServices() error {
 		a.contactService,
 		a.emailService,
 		a.logger,
+		a.workspaceRepo,
 	)
 
 	a.webhookEventService = service.NewWebhookEventService(
@@ -382,6 +384,7 @@ func (a *App) InitServices() error {
 		a.emailService,
 		a.contactRepo,
 		a.taskRepo,
+		a.workspaceRepo,
 		a.logger,
 		broadcastConfig,
 	)

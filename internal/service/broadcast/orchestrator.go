@@ -42,6 +42,7 @@ type BroadcastOrchestrator struct {
 	templateService  domain.TemplateService
 	contactRepo      domain.ContactRepository
 	taskRepo         domain.TaskRepository
+	workspaceRepo    domain.WorkspaceRepository
 	logger           logger.Logger
 	config           *Config
 	timeProvider     TimeProvider
@@ -54,6 +55,7 @@ func NewBroadcastOrchestrator(
 	templateService domain.TemplateService,
 	contactRepo domain.ContactRepository,
 	taskRepo domain.TaskRepository,
+	workspaceRepo domain.WorkspaceRepository,
 	logger logger.Logger,
 	config *Config,
 	timeProvider TimeProvider,
@@ -490,6 +492,23 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		return false, nil
 	}
 
+	// Get the workspace to retrieve email provider settings
+	workspace, err := o.workspaceRepo.GetByID(ctx, task.WorkspaceID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	// Get the email provider using the workspace's GetEmailProvider method
+	emailProvider, err := workspace.GetEmailProvider(true)
+	if err != nil {
+		return false, err
+	}
+
+	// Validate that the provider is configured
+	if emailProvider == nil || emailProvider.Kind == "" {
+		return false, fmt.Errorf("no email provider configured for marketing emails")
+	}
+
 	// Phase 2: Load templates
 	templates, err := o.LoadTemplatesForBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
 	if err != nil {
@@ -567,7 +586,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			broadcastState.BroadcastID,
 			recipients,
 			templates,
-			nil, // Base template data, will be populated per recipient
+			emailProvider,
 		)
 
 		// Handle errors during sending

@@ -1327,3 +1327,62 @@ func TestUnregisterWebhooksInvalidProviderMinimal(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, ErrInvalidSESConfig, err)
 }
+
+// TestSendEmail tests the SendEmail method - using a direct approach with interfaces
+func TestSendEmail(t *testing.T) {
+	// Set up mock services
+	ctrl := gomock.NewController(t)
+	mockAuth := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Expectations for logger
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+
+	// Test data
+	workspaceID := "test-workspace"
+	fromAddress := "sender@example.com"
+	fromName := "Test Sender"
+	to := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Email Content</p>"
+
+	t.Run("missing SES configuration", func(t *testing.T) {
+		// Create a regular service
+		service := NewSESService(mockAuth, mockLogger)
+
+		// Create provider without SES config
+		provider := &domain.EmailProvider{}
+
+		// Call the service method
+		err := service.SendEmail(context.Background(), workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify error
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SES provider is not configured")
+	})
+
+	t.Run("invalid credentials", func(t *testing.T) {
+		// Create a regular service
+		service := NewSESService(mockAuth, mockLogger)
+
+		// Create provider with invalid credentials
+		provider := &domain.EmailProvider{
+			SES: &domain.AmazonSESSettings{
+				AccessKey: "", // Empty access key
+				SecretKey: "test-secret-key",
+				Region:    "us-east-1",
+			},
+		}
+
+		// Call the service method
+		err := service.SendEmail(context.Background(), workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify error
+		assert.Error(t, err)
+		assert.Equal(t, ErrInvalidAWSCredentials, err)
+	})
+}

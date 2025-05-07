@@ -27,6 +27,7 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
@@ -44,6 +45,7 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -77,6 +79,7 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
@@ -94,6 +97,7 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -174,6 +178,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
@@ -191,6 +196,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -300,6 +306,7 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
@@ -317,6 +324,7 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -362,6 +370,7 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
@@ -383,6 +392,7 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		config,
 		mockTimeProvider,
@@ -597,6 +607,7 @@ func TestSaveProgressState(t *testing.T) {
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
 
@@ -612,17 +623,18 @@ func TestSaveProgressState(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
-	// Use the concrete type instead of the interface
+	// Create the orchestrator
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastSender,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
-	).(*broadcast.BroadcastOrchestrator)
+	)
 
 	ctx := context.Background()
 	workspaceID := "workspace-123"

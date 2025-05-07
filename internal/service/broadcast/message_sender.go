@@ -18,11 +18,11 @@ import (
 type MessageSender interface {
 	// SendToRecipient sends a message to a single recipient
 	SendToRecipient(ctx context.Context, workspaceID, broadcastID string, recipient *domain.Contact,
-		template *domain.Template, data map[string]interface{}) error
+		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error
 
 	// SendBatch sends messages to a batch of recipients
 	SendBatch(ctx context.Context, workspaceID, broadcastID string, recipients []*domain.ContactWithList,
-		templates map[string]*domain.Template, data map[string]interface{}) (sent int, failed int, err error)
+		templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error)
 }
 
 // CircuitBreaker provides circuit breaking functionality
@@ -171,7 +171,7 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 
 // SendToRecipient sends a message to a single recipient
 func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadcastID string, recipient *domain.Contact,
-	template *domain.Template, data map[string]interface{}) error {
+	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
 
 	startTime := time.Now()
 	defer func() {
@@ -248,6 +248,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 		recipient.Email,
 		template.Email.Subject,
 		*compiledTemplate.HTML,
+		emailProvider,
 	)
 
 	if err != nil {
@@ -281,7 +282,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 
 // SendBatch sends messages to a batch of recipients
 func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID string, recipients []*domain.ContactWithList,
-	templates map[string]*domain.Template, data map[string]interface{}) (sent int, failed int, err error) {
+	templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error) {
 
 	startTime := time.Now()
 	defer func() {
@@ -391,7 +392,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID 
 		}
 
 		// Send to the recipient
-		err = s.SendToRecipient(ctx, workspaceID, broadcastID, contact, templates[templateID], recipientData)
+		err = s.SendToRecipient(ctx, workspaceID, broadcastID, contact, templates[templateID], recipientData, emailProvider)
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++

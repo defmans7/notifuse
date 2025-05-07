@@ -450,3 +450,91 @@ func (s *MailjetService) UnregisterWebhooks(
 func (s *MailjetService) TestWebhook(ctx context.Context, config domain.MailjetSettings, webhookID string, eventType string) error {
 	return fmt.Errorf("webhook testing is not supported for Mailjet")
 }
+
+// SendEmail sends an email using Mailjet
+func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+	if provider.Mailjet == nil {
+		return fmt.Errorf("Mailjet provider is not configured")
+	}
+
+	// Prepare the request payload
+	type EmailRecipient struct {
+		Email string `json:"Email"`
+		Name  string `json:"Name,omitempty"`
+	}
+
+	type EmailMessage struct {
+		From struct {
+			Email string `json:"Email"`
+			Name  string `json:"Name,omitempty"`
+		} `json:"From"`
+		To               []EmailRecipient `json:"To"`
+		Subject          string           `json:"Subject"`
+		HTMLPart         string           `json:"HTMLPart"`
+		CustomID         string           `json:"CustomID,omitempty"`
+		TextPart         string           `json:"TextPart,omitempty"`
+		TemplateID       int              `json:"TemplateID,omitempty"`
+		TemplateLanguage bool             `json:"TemplateLanguage,omitempty"`
+	}
+
+	type EmailRequest struct {
+		Messages []EmailMessage `json:"Messages"`
+	}
+
+	// Set up the email payload
+	emailReq := EmailRequest{
+		Messages: []EmailMessage{
+			{
+				From: struct {
+					Email string `json:"Email"`
+					Name  string `json:"Name,omitempty"`
+				}{
+					Email: fromAddress,
+					Name:  fromName,
+				},
+				To: []EmailRecipient{
+					{
+						Email: to,
+					},
+				},
+				Subject:  subject,
+				HTMLPart: content,
+				CustomID: workspaceID,
+			},
+		},
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(emailReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.mailjet.com/v3.1/send", bytes.NewBuffer(jsonData))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create request for sending Mailjet email: %v", err))
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set auth and headers
+	req.SetBasicAuth(provider.Mailjet.APIKey, provider.Mailjet.SecretKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to execute request for sending Mailjet email: %v", err))
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		s.logger.Error(fmt.Sprintf("Mailjet API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
+		return fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
+	}
+
+	return nil
+}

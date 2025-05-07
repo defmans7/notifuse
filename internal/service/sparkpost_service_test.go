@@ -875,3 +875,173 @@ func TestSparkPostService_ValidateWebhook(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to decode validation response")
 	})
 }
+
+func TestSparkPostService_SendEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mocks
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Allow any log calls
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+
+	// Initialize service
+	sparkPostService := service.NewSparkPostService(mockHTTPClient, mockAuthService, mockLogger)
+
+	// Test data
+	workspaceID := "workspace-123"
+	fromAddress := "sender@example.com"
+	fromName := "Test Sender"
+	to := "recipient@example.com"
+	subject := "Test Subject"
+	content := "<p>Test Email Content</p>"
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider config
+		provider := &domain.EmailProvider{
+			SparkPost: &domain.SparkPostSettings{
+				Endpoint: "https://api.sparkpost.test",
+				APIKey:   "test-api-key",
+			},
+		}
+
+		// Expect HTTP request and return success response
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "POST", req.Method)
+				assert.Equal(t, "https://api.sparkpost.test/api/v1/transmissions", req.URL.String())
+				assert.Equal(t, "Bearer test-api-key", req.Header.Get("Authorization"))
+				assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+
+				// Verify request body
+				body, _ := io.ReadAll(req.Body)
+				var emailReq map[string]interface{}
+				err := json.Unmarshal(body, &emailReq)
+				assert.NoError(t, err)
+
+				// Check essential fields
+				recipients, ok := emailReq["recipients"].([]interface{})
+				assert.True(t, ok)
+				assert.Len(t, recipients, 1)
+				assert.Equal(t, to, recipients[0].(map[string]interface{})["address"])
+
+				// Check from field
+				from, ok := emailReq["from"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, fromAddress, from["email"])
+				assert.Equal(t, fromName, from["name"])
+
+				// Check subject
+				assert.Equal(t, subject, emailReq["subject"])
+
+				// Check content
+				contentMap, ok := emailReq["content"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, content, contentMap["html"])
+
+				return mockHTTPResponse(http.StatusOK, `{"results":{"id":"test-transmission-id"}}`), nil
+			})
+
+		// Call the service method
+		err := sparkPostService.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify results
+		assert.NoError(t, err)
+	})
+
+	t.Run("Missing SparkPost configuration", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider without SparkPost config
+		provider := &domain.EmailProvider{}
+
+		// Call the service method
+		err := sparkPostService.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SparkPost provider is not configured")
+	})
+
+	t.Run("HTTP request error", func(t *testing.T) {
+		ctx := context.Background()
+		expectedErr := errors.New("connection error")
+
+		// Create provider config
+		provider := &domain.EmailProvider{
+			SparkPost: &domain.SparkPostSettings{
+				Endpoint: "https://api.sparkpost.test",
+				APIKey:   "test-api-key",
+			},
+		}
+
+		// Mock HTTP client to return error
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, expectedErr)
+
+		// Call the service method
+		err := sparkPostService.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to execute request")
+	})
+
+	t.Run("API error response", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider config
+		provider := &domain.EmailProvider{
+			SparkPost: &domain.SparkPostSettings{
+				Endpoint: "https://api.sparkpost.test",
+				APIKey:   "test-api-key",
+			},
+		}
+
+		// Mock error response
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(mockHTTPResponse(http.StatusBadRequest, `{"errors":[{"message":"Invalid recipient address"}]}`), nil)
+
+		// Call the service method
+		err := sparkPostService.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "API returned non-OK status code 400")
+	})
+
+	t.Run("Sandbox mode", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Create provider with sandbox mode enabled
+		provider := &domain.EmailProvider{
+			SparkPost: &domain.SparkPostSettings{
+				Endpoint:    "https://api.sparkpost.test",
+				APIKey:      "test-api-key",
+				SandboxMode: true,
+			},
+		}
+
+		// Expect HTTP request and return success response
+		mockHTTPClient.EXPECT().
+			Do(gomock.Any()).
+			Return(mockHTTPResponse(http.StatusOK, `{"results":{"id":"test-transmission-id"}}`), nil)
+
+		// Call the service method
+		err := sparkPostService.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+
+		// Verify results - should succeed in sandbox mode
+		assert.NoError(t, err)
+	})
+}

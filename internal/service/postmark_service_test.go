@@ -1485,3 +1485,235 @@ func TestPostmarkService_FilterPostmarkWebhooks(t *testing.T) {
 		assert.Empty(t, filtered)
 	})
 }
+
+func TestPostmarkService_SendEmail(t *testing.T) {
+	t.Run("Successfully send email", func(t *testing.T) {
+		// Setup
+		service, httpClient, _, _ := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+		fromAddress := "sender@example.com"
+		fromName := "Sender Name"
+		to := "recipient@example.com"
+		subject := "Test Email"
+		content := "<p>This is a test email</p>"
+
+		// Provider config
+		providerConfig := &domain.EmailProvider{
+			Kind: domain.EmailProviderKindPostmark,
+			Postmark: &domain.PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+		}
+
+		// Expect HTTP request
+		httpClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request details
+				assert.Equal(t, "POST", req.Method)
+				assert.Equal(t, "https://api.postmarkapp.com/email", req.URL.String())
+				assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+				assert.Equal(t, "application/json", req.Header.Get("Accept"))
+				assert.Equal(t, "test-server-token", req.Header.Get("X-Postmark-Server-Token"))
+
+				// Verify request body
+				body, _ := io.ReadAll(req.Body)
+				var requestBody map[string]interface{}
+				err := json.Unmarshal(body, &requestBody)
+				require.NoError(t, err)
+				assert.Equal(t, "Sender Name <sender@example.com>", requestBody["From"])
+				assert.Equal(t, "recipient@example.com", requestBody["To"])
+				assert.Equal(t, "Test Email", requestBody["Subject"])
+				assert.Equal(t, "<p>This is a test email</p>", requestBody["HtmlBody"])
+
+				return createMockResponse(http.StatusOK, `{"MessageID":"12345"}`), nil
+			})
+
+		// Call the method
+		err := service.SendEmail(
+			context.Background(),
+			workspaceID,
+			fromAddress,
+			fromName,
+			to,
+			subject,
+			content,
+			providerConfig,
+		)
+
+		// Verify results
+		assert.NoError(t, err)
+	})
+
+	t.Run("Missing Postmark configuration", func(t *testing.T) {
+		// Setup
+		service, _, _, _ := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+
+		// Call with nil Postmark config
+		err := service.SendEmail(
+			context.Background(),
+			workspaceID,
+			"sender@example.com",
+			"Sender",
+			"recipient@example.com",
+			"Subject",
+			"Content",
+			&domain.EmailProvider{
+				Kind: domain.EmailProviderKindPostmark,
+			},
+		)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Postmark provider is not configured")
+	})
+
+	t.Run("Empty server token", func(t *testing.T) {
+		// Setup
+		service, _, _, _ := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+
+		// Provider config with empty token
+		providerConfig := &domain.EmailProvider{
+			Kind: domain.EmailProviderKindPostmark,
+			Postmark: &domain.PostmarkSettings{
+				ServerToken: "",
+			},
+		}
+
+		// Call with empty server token
+		err := service.SendEmail(
+			context.Background(),
+			workspaceID,
+			"sender@example.com",
+			"Sender",
+			"recipient@example.com",
+			"Subject",
+			"Content",
+			providerConfig,
+		)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Postmark server token is required")
+	})
+
+	t.Run("HTTP client error", func(t *testing.T) {
+		// Setup
+		service, httpClient, _, _ := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+
+		// Provider config
+		providerConfig := &domain.EmailProvider{
+			Kind: domain.EmailProviderKindPostmark,
+			Postmark: &domain.PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+		}
+
+		// Simulate HTTP error
+		httpClient.EXPECT().
+			Do(gomock.Any()).
+			Return(nil, errors.New("network error"))
+
+		// Call the method
+		err := service.SendEmail(
+			context.Background(),
+			workspaceID,
+			"sender@example.com",
+			"Sender",
+			"recipient@example.com",
+			"Subject",
+			"Content",
+			providerConfig,
+		)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to send request to Postmark API")
+	})
+
+	t.Run("API returns error status code", func(t *testing.T) {
+		// Setup
+		service, httpClient, _, _ := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+
+		// Provider config
+		providerConfig := &domain.EmailProvider{
+			Kind: domain.EmailProviderKindPostmark,
+			Postmark: &domain.PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+		}
+
+		// Simulate 400 response
+		httpClient.EXPECT().
+			Do(gomock.Any()).
+			Return(createMockResponse(http.StatusBadRequest, `{"ErrorCode":400,"Message":"Invalid email"}`), nil)
+
+		// Call the method
+		err := service.SendEmail(
+			context.Background(),
+			workspaceID,
+			"sender@example.com",
+			"Sender",
+			"recipient@example.com",
+			"Subject",
+			"Content",
+			providerConfig,
+		)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Postmark API error")
+	})
+
+	t.Run("Error reading response body", func(t *testing.T) {
+		// Setup
+		service, httpClient, _, _ := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+
+		// Provider config
+		providerConfig := &domain.EmailProvider{
+			Kind: domain.EmailProviderKindPostmark,
+			Postmark: &domain.PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+		}
+
+		// Create a mock response with a body that will error when read
+		erroringBody := io.NopCloser(&errorReader{})
+		resp := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       erroringBody,
+		}
+
+		httpClient.EXPECT().
+			Do(gomock.Any()).
+			Return(resp, nil)
+
+		// Call the method
+		err := service.SendEmail(
+			context.Background(),
+			workspaceID,
+			"sender@example.com",
+			"Sender",
+			"recipient@example.com",
+			"Subject",
+			"Content",
+			providerConfig,
+		)
+
+		// Verify results
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to read Postmark API response")
+	})
+}
+
+// errorReader is a helper type that always returns an error when Read is called
+type errorReader struct{}
+
+func (e *errorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read error")
+}

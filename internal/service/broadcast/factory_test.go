@@ -20,6 +20,7 @@ func TestNewFactory(t *testing.T) {
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	config := DefaultConfig()
 
@@ -45,6 +46,7 @@ func TestNewFactory(t *testing.T) {
 				mockEmailService,
 				mockContactRepo,
 				mockTaskRepo,
+				mockWorkspaceRepo,
 				mockLogger,
 				tt.config,
 			)
@@ -78,6 +80,7 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	config := DefaultConfig()
 
@@ -87,6 +90,7 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 		mockEmailService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		config,
 	)
@@ -111,6 +115,7 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	config := DefaultConfig()
 
@@ -120,6 +125,7 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 		mockEmailService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		config,
 	)
@@ -144,6 +150,7 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	config := DefaultConfig()
@@ -158,6 +165,7 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 		mockEmailService,
 		mockContactRepo,
 		mockTaskRepo,
+		mockWorkspaceRepo,
 		mockLogger,
 		config,
 	)

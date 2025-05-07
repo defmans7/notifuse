@@ -2476,7 +2476,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 				recipientEmail,
 				template.Email.Subject,
 				*compiledResult.HTML,
-				nil, // Optional email provider parameter
+				nil,
 			).
 			Return(nil)
 

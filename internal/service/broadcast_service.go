@@ -794,6 +794,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		request.RecipientEmail,
 		template.Email.Subject,
 		*compiledTemplate.HTML,
+		nil,
 	)
 	if err != nil {
 		s.logger.Error("Failed to send email to individual recipient")

@@ -600,3 +600,56 @@ func mapMailgunEventType(eventType string) domain.EmailEventType {
 		return ""
 	}
 }
+
+// SendEmail sends an email using Mailgun
+func (s *MailgunService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+	if provider.Mailgun == nil {
+		return fmt.Errorf("Mailgun provider is not configured")
+	}
+
+	// Determine endpoint based on region
+	endpoint := ""
+	if strings.ToLower(provider.Mailgun.Region) == "eu" {
+		endpoint = "https://api.eu.mailgun.net/v3"
+	} else {
+		endpoint = "https://api.mailgun.net/v3"
+	}
+
+	// Format the API URL
+	apiURL := fmt.Sprintf("%s/%s/messages", endpoint, provider.Mailgun.Domain)
+
+	// Create the form data for the email
+	form := url.Values{}
+	form.Add("from", fmt.Sprintf("%s <%s>", fromName, fromAddress))
+	form.Add("to", to)
+	form.Add("subject", subject)
+	form.Add("html", content)
+
+	// Create the request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to create request for sending Mailgun email: %v", err))
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set basic auth header
+	req.SetBasicAuth("api", provider.Mailgun.APIKey)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Send the request
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to execute request for sending Mailgun email: %v", err))
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		s.logger.Error(fmt.Sprintf("Mailgun API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
+		return fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
+	}
+
+	return nil
+}

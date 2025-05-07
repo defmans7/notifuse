@@ -36,7 +36,7 @@ func (m *MockMessageSender) EXPECT() *MockMessageSenderMockRecorder {
 }
 
 // SendBatch mocks base method.
-func (m *MockMessageSender) SendBatch(arg0 context.Context, arg1, arg2 string, arg3 []*domain.ContactWithList, arg4 map[string]*domain.Template, arg5 map[string]interface{}) (int, int, error) {
+func (m *MockMessageSender) SendBatch(arg0 context.Context, arg1, arg2 string, arg3 []*domain.ContactWithList, arg4 map[string]*domain.Template, arg5 *domain.EmailProvider) (int, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendBatch", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(int)
@@ -52,15 +52,15 @@ func (mr *MockMessageSenderMockRecorder) SendBatch(arg0, arg1, arg2, arg3, arg4,
 }
 
 // SendToRecipient mocks base method.
-func (m *MockMessageSender) SendToRecipient(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 *domain.Template, arg5 map[string]interface{}) error {
+func (m *MockMessageSender) SendToRecipient(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 *domain.Template, arg5 map[string]interface{}, arg6 *domain.EmailProvider) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendToRecipient", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "SendToRecipient", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendToRecipient indicates an expected call of SendToRecipient.
-func (mr *MockMessageSenderMockRecorder) SendToRecipient(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockMessageSenderMockRecorder) SendToRecipient(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToRecipient", reflect.TypeOf((*MockMessageSender)(nil).SendToRecipient), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToRecipient", reflect.TypeOf((*MockMessageSender)(nil).SendToRecipient), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }

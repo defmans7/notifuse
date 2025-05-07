@@ -125,6 +125,7 @@ func TestSendToRecipientSuccess(t *testing.T) {
 			recipient.Email,
 			template.Email.Subject,
 			compiledHTML,
+			nil,
 		).
 		Return(nil)
 
@@ -140,7 +141,7 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	)
 
 	// Call the method being tested
-	err := sender.SendToRecipient(ctx, workspaceID, broadcastID, recipient, template, templateData)
+	err := sender.SendToRecipient(ctx, workspaceID, broadcastID, recipient, template, templateData, nil)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -215,7 +216,7 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 	)
 
 	// Call the method being tested
-	err := sender.SendToRecipient(ctx, workspaceID, broadcastID, recipient, template, templateData)
+	err := sender.SendToRecipient(ctx, workspaceID, broadcastID, recipient, template, templateData, nil)
 
 	// Verify error is returned
 	assert.Error(t, err)
@@ -255,11 +256,11 @@ func TestWithMockMessageSender(t *testing.T) {
 
 	// Set expectations on the mock
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData).
+		SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData, nil).
 		Return(nil)
 
 	// Use the mock (normally this would be in the system under test)
-	err := mockSender.SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData)
+	err := mockSender.SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData, nil)
 
 	// Verify the result
 	assert.NoError(t, err)
@@ -274,11 +275,11 @@ func TestWithMockMessageSender(t *testing.T) {
 
 	// Set up expectations with specific return values
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, templateData).
+		SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, nil).
 		Return(1, 0, nil)
 
 	// Use the mock
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, templateData)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, nil)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -317,11 +318,11 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	// Set up mock to return an error
 	mockError := errors.New("send failed: service unavailable")
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData).
+		SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData, nil).
 		Return(mockError)
 
 	// Call the method
-	err := mockSender.SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData)
+	err := mockSender.SendToRecipient(ctx, workspaceID, broadcastID, contact, template, templateData, nil)
 
 	// Verify error handling
 	assert.Error(t, err)
@@ -338,10 +339,10 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	batchError := errors.New("batch processing failed")
 
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, templateData).
+		SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, nil).
 		Return(0, 0, batchError)
 
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, templateData)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, broadcastID, mockContacts, mockTemplates, nil)
 	assert.Error(t, err)
 	assert.Equal(t, batchError, err)
 	assert.Equal(t, 0, sent)
@@ -456,6 +457,7 @@ func TestSendBatch(t *testing.T) {
 				recipient.Contact.Email,
 				template.Email.Subject,
 				compiledHTML,
+				nil,
 			).
 			Return(nil)
 
@@ -732,6 +734,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			recipients[0].Contact.Email,
 			template.Email.Subject,
 			compiledHTML,
+			nil,
 		).
 		Return(sendError)
 
@@ -883,6 +886,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 			recipients[0].Contact.Email,
 			template.Email.Subject,
 			compiledHTML,
+			nil,
 		).
 		Return(nil)
 

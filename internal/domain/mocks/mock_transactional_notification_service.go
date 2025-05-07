@@ -65,17 +65,17 @@ func (mr *MockTransactionalNotificationServiceMockRecorder) DeleteNotification(a
 }
 
 // DoSendEmailNotification mocks base method.
-func (m *MockTransactionalNotificationService) DoSendEmailNotification(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 domain.ChannelTemplate, arg5 domain.MessageData) error {
+func (m *MockTransactionalNotificationService) DoSendEmailNotification(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 domain.ChannelTemplate, arg5 domain.MessageData, arg6 *domain.EmailProvider) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DoSendEmailNotification", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "DoSendEmailNotification", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DoSendEmailNotification indicates an expected call of DoSendEmailNotification.
-func (mr *MockTransactionalNotificationServiceMockRecorder) DoSendEmailNotification(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockTransactionalNotificationServiceMockRecorder) DoSendEmailNotification(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoSendEmailNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).DoSendEmailNotification), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoSendEmailNotification", reflect.TypeOf((*MockTransactionalNotificationService)(nil).DoSendEmailNotification), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // GetNotification mocks base method.
