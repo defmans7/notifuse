@@ -46,7 +46,7 @@ import {
   WebhookRegistrationStatus
 } from '../../services/api/webhook_registration'
 import config from '../../config'
-import { faPaperPlane } from '@fortawesome/free-regular-svg-icons'
+import { faPaperPlane, faPenToSquare, faTrashCan } from '@fortawesome/free-regular-svg-icons'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = ['postmark', 'mailgun']
@@ -252,9 +252,15 @@ const EmailIntegration = ({
           <div className="float-right">
             {isOwner ? (
               <Space>
-                <Button onClick={() => startEditEmailProvider(integration)} size="small">
-                  Edit
-                </Button>
+                <Tooltip title="Edit">
+                  <Button
+                    type="text"
+                    onClick={() => startEditEmailProvider(integration)}
+                    size="small"
+                  >
+                    <FontAwesomeIcon icon={faPenToSquare} />
+                  </Button>
+                </Tooltip>
                 <Popconfirm
                   title="Delete this integration?"
                   description="This action cannot be undone."
@@ -262,7 +268,11 @@ const EmailIntegration = ({
                   okText="Yes"
                   cancelText="No"
                 >
-                  <Button size="small">Delete</Button>
+                  <Tooltip title="Delete">
+                    <Button size="small" type="text">
+                      <FontAwesomeIcon icon={faTrashCan} />
+                    </Button>
+                  </Tooltip>
                 </Popconfirm>
                 <Button onClick={() => startTestEmailProvider(integration.id)} size="small">
                   Test

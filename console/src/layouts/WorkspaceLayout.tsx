@@ -5,9 +5,7 @@ import {
   faImage,
   faFolderOpen,
   faObjectGroup,
-  faPaperPlane,
-  faSquareCaretLeft,
-  faSquareCaretRight
+  faPaperPlane
 } from '@fortawesome/free-regular-svg-icons'
 import {
   faGear,
@@ -165,10 +163,11 @@ export function WorkspaceLayout() {
                               src={workspace.settings.logo_url}
                               alt=""
                               style={{
-                                height: '16px',
-                                width: '16px',
+                                height: '14px',
+                                width: '14px',
                                 objectFit: 'contain',
-                                verticalAlign: 'middle'
+                                verticalAlign: 'middle',
+                                display: 'inline-block'
                               }}
                             />
                           )}
@@ -192,9 +191,39 @@ export function WorkspaceLayout() {
                 type="text"
                 icon={
                   collapsed ? (
-                    <FontAwesomeIcon icon={faSquareCaretRight} />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-gray-500"
+                    >
+                      <rect width="18" height="18" x="3" y="3" rx="2" />
+                      <path d="M9 3v18" />
+                      <path d="m14 9 3 3-3 3" />
+                    </svg>
                   ) : (
-                    <FontAwesomeIcon icon={faSquareCaretLeft} />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-gray-500"
+                    >
+                      <rect width="18" height="18" x="3" y="3" rx="2" />
+                      <path d="M9 3v18" />
+                      <path d="m16 15-3-3 3-3" />
+                    </svg>
                   )
                 }
                 onClick={() => setCollapsed(!collapsed)}
