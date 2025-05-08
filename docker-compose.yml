@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_HOST=0.0.0.0
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_PREFIX=notifuse
+      - DB_NAME=notifuse_system
+      - ENVIRONMENT=development
+      - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY}
+      - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - ROOT_EMAIL=${ROOT_EMAIL:-admin@example.com}
+      - API_ENDPOINT=${API_ENDPOINT:-http://localhost:8080}
+      - WEBHOOK_ENDPOINT=${WEBHOOK_ENDPOINT:-http://localhost:8080}
+    depends_on:
+      - postgres
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - notifuse-network
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - notifuse-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  notifuse-network:
+    driver: bridge 

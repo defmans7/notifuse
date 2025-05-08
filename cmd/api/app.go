@@ -462,7 +462,7 @@ func (a *App) InitHandlers() error {
 		a.config,
 		a.config.Security.PasetoPublicKey,
 		a.logger)
-	rootHandler := httpHandler.NewRootHandler()
+	rootHandler := httpHandler.NewRootHandlerWithConsole("console/dist", a.logger)
 	workspaceHandler := httpHandler.NewWorkspaceHandler(
 		a.workspaceService,
 		a.authService,
@@ -486,6 +486,7 @@ func (a *App) InitHandlers() error {
 	transactionalHandler := httpHandler.NewTransactionalNotificationHandler(a.transactionalNotificationService, a.config.Security.PasetoPublicKey, a.logger)
 	webhookEventHandler := httpHandler.NewWebhookEventHandler(a.webhookEventService, a.config.Security.PasetoPublicKey, a.logger)
 	webhookRegistrationHandler := httpHandler.NewWebhookRegistrationHandler(a.webhookRegistrationService, a.config.Security.PasetoPublicKey, a.logger)
+
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
 	workspaceHandler.RegisterRoutes(a.mux)
