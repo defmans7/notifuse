@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -86,7 +87,7 @@ func main() {
 
 	// Initialize logger
 	appLogger := logger.NewLogger()
-	appLogger.WithField("port", cfg.Server.Port).Info("Starting API server")
+	appLogger.Info(fmt.Sprintf("Starting API server on %s:%d", cfg.Server.Host, cfg.Server.Port))
 
 	// Run the server
 	if err := runServer(cfg, appLogger); err != nil {
