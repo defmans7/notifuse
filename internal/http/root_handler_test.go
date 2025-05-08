@@ -19,7 +19,7 @@ func TestRootHandler_Handle(t *testing.T) {
 	handler := NewRootHandler()
 
 	// Create a test request
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/api", nil)
 	w := httptest.NewRecorder()
 
 	// Call the handler
@@ -50,7 +50,7 @@ func TestRootHandler_RegisterRoutes(t *testing.T) {
 	defer server.Close()
 
 	// Send a request
-	resp, err := http.Get(server.URL + "/")
+	resp, err := http.Get(server.URL + "/api")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
