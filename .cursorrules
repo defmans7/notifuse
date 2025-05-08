@@ -1,3 +1,5 @@
+Never test tracing and logging.
+
 // Go backend rules
 prefer-imports: github.com/Notifuse/notifuse
 import-alias: github.com/google/uuid -> uuid
@@ -106,3 +108,5 @@ prefer-http-client-tracing: client = tracing.WrapHTTPClient(client)
 prefer-span-attributes: tracing.AddAttribute(ctx, "key", value)
 // Error marking for spans
 prefer-span-error-marking: tracing.MarkSpanError(ctx, err)
+
+Never test tracing and logging
