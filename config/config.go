@@ -98,6 +98,7 @@ type LoadOptions struct {
 
 // Load loads the configuration with default options
 func Load() (*Config, error) {
+	// Try to load .env file but don't require it
 	return LoadWithOptions(LoadOptions{EnvFile: ".env"})
 }
 
@@ -163,7 +164,6 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		v.AddConfigPath(currentPath)
 
 		if err := v.ReadInConfig(); err != nil {
-			log.Printf("Error reading config file %v: %v", opts.EnvFile, err)
 			// It's okay if config file doesn't exist
 			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 				return nil, fmt.Errorf("error reading config file: %w", err)
