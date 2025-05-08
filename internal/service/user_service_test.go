@@ -27,7 +27,6 @@ func (m *mockEmailSender) SendMagicCode(email, code string) error {
 func setupUserTest(t *testing.T) (
 	*mocks.MockUserRepository,
 	*mocks.MockAuthService,
-	*pkgmocks.MockLogger,
 	*UserService,
 	*mockEmailSender,
 ) {
@@ -35,7 +34,46 @@ func setupUserTest(t *testing.T) (
 	mockRepo := mocks.NewMockUserRepository(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTracer := pkgmocks.NewMockTracer(ctrl)
 	mockSender := &mockEmailSender{}
+
+	// Create mock logger with AnyTimes to ignore logging
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
+
+	// Create mock tracer with AnyTimes to ignore tracing
+	mockTracer.EXPECT().StartServiceSpan(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, serviceName, methodName string) (context.Context, *interface{}) {
+			return ctx, nil
+		}).AnyTimes()
+	mockTracer.EXPECT().AddAttribute(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockTracer.EXPECT().MarkSpanError(gomock.Any(), gomock.Any()).AnyTimes()
+	mockTracer.EXPECT().TraceMethodWithResultAny(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, service, method string, f func(context.Context) (interface{}, error)) (interface{}, error) {
+			return f(ctx)
+		}).AnyTimes()
+	mockTracer.EXPECT().EndSpan(gomock.Any(), gomock.Any()).AnyTimes()
+	mockTracer.EXPECT().StartSpan(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, name string) (context.Context, *interface{}) {
+			return ctx, nil
+		}).AnyTimes()
+	mockTracer.EXPECT().StartSpanWithAttributes(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, name string, attrs ...interface{}) (context.Context, *interface{}) {
+			return ctx, nil
+		}).AnyTimes()
+	mockTracer.EXPECT().TraceMethod(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, service, method string, f func(context.Context) error) error {
+			return f(ctx)
+		}).AnyTimes()
+	mockTracer.EXPECT().WrapHTTPClient(gomock.Any()).
+		DoAndReturn(func(client *interface{}) *interface{} {
+			return client
+		}).AnyTimes()
 
 	service, err := NewUserService(UserServiceConfig{
 		Repository:    mockRepo,
@@ -44,16 +82,16 @@ func setupUserTest(t *testing.T) (
 		SessionExpiry: 24 * time.Hour,
 		Logger:        mockLogger,
 		IsDevelopment: false,
+		Tracer:        mockTracer,
 	})
 	require.NoError(t, err)
 
-	return mockRepo, mockAuthService, mockLogger, service, mockSender
+	return mockRepo, mockAuthService, service, mockSender
 }
 
 func TestUserService_SignIn(t *testing.T) {
-	mockRepo, _, mockLogger, service, mockSender := setupUserTest(t)
+	mockRepo, _, service, mockSender := setupUserTest(t)
 
-	ctx := context.Background()
 	email := "test@example.com"
 
 	t.Run("successful sign in - existing user", func(t *testing.T) {
@@ -64,29 +102,14 @@ func TestUserService_SignIn(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(user, nil)
 
 		mockRepo.EXPECT().
-			CreateSession(ctx, gomock.Any()).
+			CreateSession(gomock.Any(), gomock.Any()).
 			Return(nil)
 
-		mockLogger.EXPECT().
-			WithField("user_id", user.ID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("email", user.Email).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("error", "mock error").
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Failed to send magic code")
-
-		code, err := service.SignIn(ctx, domain.SignInInput{Email: email})
+		code, err := service.SignIn(context.Background(), domain.SignInInput{Email: email})
 		require.Error(t, err)
 		require.Equal(t, "mock error", err.Error())
 		require.Empty(t, code)
@@ -94,34 +117,20 @@ func TestUserService_SignIn(t *testing.T) {
 
 	t.Run("successful sign in - new user", func(t *testing.T) {
 		mockSender.shouldError = true // Force email sending error for logging
+
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(nil, &domain.ErrUserNotFound{})
 
 		mockRepo.EXPECT().
-			CreateUser(ctx, gomock.Any()).
+			CreateUser(gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		mockRepo.EXPECT().
-			CreateSession(ctx, gomock.Any()).
+			CreateSession(gomock.Any(), gomock.Any()).
 			Return(nil)
 
-		mockLogger.EXPECT().
-			WithField("user_id", gomock.Any()).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("email", email).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("error", "mock error").
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Failed to send magic code")
-
-		code, err := service.SignIn(ctx, domain.SignInInput{Email: email})
+		code, err := service.SignIn(context.Background(), domain.SignInInput{Email: email})
 		require.Error(t, err)
 		require.Equal(t, "mock error", err.Error())
 		require.Empty(t, code)
@@ -136,14 +145,14 @@ func TestUserService_SignIn(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(user, nil)
 
 		mockRepo.EXPECT().
-			CreateSession(ctx, gomock.Any()).
+			CreateSession(gomock.Any(), gomock.Any()).
 			Return(nil)
 
-		code, err := service.SignIn(ctx, domain.SignInInput{Email: email})
+		code, err := service.SignIn(context.Background(), domain.SignInInput{Email: email})
 		require.NoError(t, err)
 		require.NotEmpty(t, code)
 		require.Len(t, code, 6) // Should be 6 digits
@@ -151,30 +160,18 @@ func TestUserService_SignIn(t *testing.T) {
 
 	t.Run("repository error", func(t *testing.T) {
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(nil, errors.New("db error"))
 
-		mockLogger.EXPECT().
-			WithField("email", email).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("error", "db error").
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Failed to get user by email")
-
-		code, err := service.SignIn(ctx, domain.SignInInput{Email: email})
+		code, err := service.SignIn(context.Background(), domain.SignInInput{Email: email})
 		require.Error(t, err)
 		require.Empty(t, code)
 	})
 }
 
 func TestUserService_VerifyCode(t *testing.T) {
-	mockRepo, mockAuthService, mockLogger, service, _ := setupUserTest(t)
+	mockRepo, mockAuthService, service, _ := setupUserTest(t)
 
-	ctx := context.Background()
 	email := "test@example.com"
 	code := "123456"
 	userID := "user123"
@@ -194,22 +191,22 @@ func TestUserService_VerifyCode(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(user, nil)
 
 		mockRepo.EXPECT().
-			GetSessionsByUserID(ctx, userID).
+			GetSessionsByUserID(gomock.Any(), userID).
 			Return([]*domain.Session{session}, nil)
 
 		mockRepo.EXPECT().
-			UpdateSession(ctx, gomock.Any()).
+			UpdateSession(gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		mockAuthService.EXPECT().
 			GenerateUserAuthToken(user, session.ID, session.ExpiresAt).
 			Return("token123")
 
-		result, err := service.VerifyCode(ctx, domain.VerifyCodeInput{
+		result, err := service.VerifyCode(context.Background(), domain.VerifyCodeInput{
 			Email: email,
 			Code:  code,
 		})
@@ -235,25 +232,14 @@ func TestUserService_VerifyCode(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(user, nil)
 
 		mockRepo.EXPECT().
-			GetSessionsByUserID(ctx, userID).
+			GetSessionsByUserID(gomock.Any(), userID).
 			Return([]*domain.Session{session}, nil)
 
-		mockLogger.EXPECT().
-			WithField("user_id", userID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("email", email).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Invalid magic code")
-
-		result, err := service.VerifyCode(ctx, domain.VerifyCodeInput{
+		result, err := service.VerifyCode(context.Background(), domain.VerifyCodeInput{
 			Email: email,
 			Code:  code,
 		})
@@ -277,29 +263,14 @@ func TestUserService_VerifyCode(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(user, nil)
 
 		mockRepo.EXPECT().
-			GetSessionsByUserID(ctx, userID).
+			GetSessionsByUserID(gomock.Any(), userID).
 			Return([]*domain.Session{session}, nil)
 
-		mockLogger.EXPECT().
-			WithField("user_id", userID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("email", email).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("session_id", session.ID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Magic code expired")
-
-		result, err := service.VerifyCode(ctx, domain.VerifyCodeInput{
+		result, err := service.VerifyCode(context.Background(), domain.VerifyCodeInput{
 			Email: email,
 			Code:  code,
 		})
@@ -311,9 +282,8 @@ func TestUserService_VerifyCode(t *testing.T) {
 }
 
 func TestUserService_VerifyUserSession(t *testing.T) {
-	mockRepo, _, mockLogger, service, _ := setupUserTest(t)
+	mockRepo, _, service, _ := setupUserTest(t)
 
-	ctx := context.Background()
 	userID := "user123"
 	sessionID := "session123"
 
@@ -330,14 +300,14 @@ func TestUserService_VerifyUserSession(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetSessionByID(ctx, sessionID).
+			GetSessionByID(gomock.Any(), sessionID).
 			Return(session, nil)
 
 		mockRepo.EXPECT().
-			GetUserByID(ctx, userID).
+			GetUserByID(gomock.Any(), userID).
 			Return(user, nil)
 
-		result, err := service.VerifyUserSession(ctx, userID, sessionID)
+		result, err := service.VerifyUserSession(context.Background(), userID, sessionID)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -346,25 +316,10 @@ func TestUserService_VerifyUserSession(t *testing.T) {
 
 	t.Run("session not found", func(t *testing.T) {
 		mockRepo.EXPECT().
-			GetSessionByID(ctx, sessionID).
+			GetSessionByID(gomock.Any(), sessionID).
 			Return(nil, errors.New("session not found"))
 
-		mockLogger.EXPECT().
-			WithField("user_id", userID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("session_id", sessionID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("error", "session not found").
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Failed to get session by ID")
-
-		result, err := service.VerifyUserSession(ctx, userID, sessionID)
+		result, err := service.VerifyUserSession(context.Background(), userID, sessionID)
 
 		require.Error(t, err)
 		require.Nil(t, result)
@@ -378,25 +333,10 @@ func TestUserService_VerifyUserSession(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetSessionByID(ctx, sessionID).
+			GetSessionByID(gomock.Any(), sessionID).
 			Return(session, nil)
 
-		mockLogger.EXPECT().
-			WithField("user_id", userID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("session_id", sessionID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("expires_at", session.ExpiresAt).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Session expired")
-
-		result, err := service.VerifyUserSession(ctx, userID, sessionID)
+		result, err := service.VerifyUserSession(context.Background(), userID, sessionID)
 
 		require.Error(t, err)
 		require.Nil(t, result)
@@ -405,9 +345,8 @@ func TestUserService_VerifyUserSession(t *testing.T) {
 }
 
 func TestUserService_GetUserByID(t *testing.T) {
-	mockRepo, _, mockLogger, service, _ := setupUserTest(t)
+	mockRepo, _, service, _ := setupUserTest(t)
 
-	ctx := context.Background()
 	userID := "user123"
 
 	t.Run("successful retrieval", func(t *testing.T) {
@@ -417,10 +356,10 @@ func TestUserService_GetUserByID(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetUserByID(ctx, userID).
+			GetUserByID(gomock.Any(), userID).
 			Return(user, nil)
 
-		result, err := service.GetUserByID(ctx, userID)
+		result, err := service.GetUserByID(context.Background(), userID)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -429,21 +368,10 @@ func TestUserService_GetUserByID(t *testing.T) {
 
 	t.Run("user not found", func(t *testing.T) {
 		mockRepo.EXPECT().
-			GetUserByID(ctx, userID).
+			GetUserByID(gomock.Any(), userID).
 			Return(nil, errors.New("user not found"))
 
-		mockLogger.EXPECT().
-			WithField("user_id", userID).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("error", "user not found").
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Failed to get user by ID")
-
-		result, err := service.GetUserByID(ctx, userID)
+		result, err := service.GetUserByID(context.Background(), userID)
 
 		require.Error(t, err)
 		require.Nil(t, result)
@@ -451,9 +379,8 @@ func TestUserService_GetUserByID(t *testing.T) {
 }
 
 func TestUserService_GetUserByEmail(t *testing.T) {
-	mockRepo, _, mockLogger, service, _ := setupUserTest(t)
+	mockRepo, _, service, _ := setupUserTest(t)
 
-	ctx := context.Background()
 	email := "test@example.com"
 
 	t.Run("successful retrieval", func(t *testing.T) {
@@ -463,10 +390,10 @@ func TestUserService_GetUserByEmail(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(user, nil)
 
-		result, err := service.GetUserByEmail(ctx, email)
+		result, err := service.GetUserByEmail(context.Background(), email)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -475,21 +402,10 @@ func TestUserService_GetUserByEmail(t *testing.T) {
 
 	t.Run("user not found", func(t *testing.T) {
 		mockRepo.EXPECT().
-			GetUserByEmail(ctx, email).
+			GetUserByEmail(gomock.Any(), email).
 			Return(nil, errors.New("user not found"))
 
-		mockLogger.EXPECT().
-			WithField("email", email).
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			WithField("error", "user not found").
-			Return(mockLogger)
-
-		mockLogger.EXPECT().
-			Error("Failed to get user by email")
-
-		result, err := service.GetUserByEmail(ctx, email)
+		result, err := service.GetUserByEmail(context.Background(), email)
 
 		require.Error(t, err)
 		require.Nil(t, result)

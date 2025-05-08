@@ -8,7 +8,9 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/tracing"
 	"github.com/google/uuid"
+	"go.opencensus.io/trace"
 )
 
 type UserService struct {
@@ -18,6 +20,7 @@ type UserService struct {
 	sessionExpiry time.Duration
 	logger        logger.Logger
 	isDevelopment bool
+	tracer        tracing.Tracer
 }
 
 type EmailSender interface {
@@ -31,9 +34,16 @@ type UserServiceConfig struct {
 	SessionExpiry time.Duration
 	Logger        logger.Logger
 	IsDevelopment bool
+	Tracer        tracing.Tracer
 }
 
 func NewUserService(cfg UserServiceConfig) (*UserService, error) {
+	// Default to global tracer if none provided
+	tracer := cfg.Tracer
+	if tracer == nil {
+		tracer = tracing.GetTracer()
+	}
+
 	return &UserService{
 		repo:          cfg.Repository,
 		authService:   cfg.AuthService,
@@ -41,6 +51,7 @@ func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 		sessionExpiry: cfg.SessionExpiry,
 		logger:        cfg.Logger,
 		isDevelopment: cfg.IsDevelopment,
+		tracer:        tracer,
 	}, nil
 }
 
@@ -48,11 +59,17 @@ func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 var _ domain.UserServiceInterface = (*UserService)(nil)
 
 func (s *UserService) SignIn(ctx context.Context, input domain.SignInInput) (string, error) {
+	ctx, span := s.tracer.StartServiceSpan(ctx, "UserService", "SignIn")
+	defer span.End()
+
+	s.tracer.AddAttribute(ctx, "user.email", input.Email)
+
 	// Check if user exists, if not create a new one
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
 		if _, ok := err.(*domain.ErrUserNotFound); !ok {
 			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email")
+			s.tracer.MarkSpanError(ctx, err)
 			return "", err
 		}
 
@@ -63,10 +80,18 @@ func (s *UserService) SignIn(ctx context.Context, input domain.SignInInput) (str
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
+
+		s.tracer.AddAttribute(ctx, "user.id", user.ID)
+		s.tracer.AddAttribute(ctx, "action", "create_new_user")
+
 		if err := s.repo.CreateUser(ctx, user); err != nil {
 			s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to create user")
+			s.tracer.MarkSpanError(ctx, err)
 			return "", err
 		}
+	} else {
+		s.tracer.AddAttribute(ctx, "user.id", user.ID)
+		s.tracer.AddAttribute(ctx, "action", "use_existing_user")
 	}
 
 	// Generate magic code
@@ -84,20 +109,27 @@ func (s *UserService) SignIn(ctx context.Context, input domain.SignInInput) (str
 		MagicCodeExpires: codeExpiresAt,
 	}
 
+	s.tracer.AddAttribute(ctx, "session.id", session.ID)
+	s.tracer.AddAttribute(ctx, "session.expires_at", expiresAt.String())
+
 	if err := s.repo.CreateSession(ctx, session); err != nil {
 		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session")
+		s.tracer.MarkSpanError(ctx, err)
 		return "", err
 	}
 
 	// In development mode, return the code directly
 	// In production, send the code via email
 	if s.isDevelopment {
+		s.tracer.AddAttribute(ctx, "mode", "development")
 		return code, nil
 	}
 
+	s.tracer.AddAttribute(ctx, "mode", "production")
 	// Send magic code via email in production
 	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
 		s.logger.WithField("user_id", user.ID).WithField("email", user.Email).WithField("error", err.Error()).Error("Failed to send magic code")
+		s.tracer.MarkSpanError(ctx, err)
 		return "", err
 	}
 
@@ -105,19 +137,30 @@ func (s *UserService) SignIn(ctx context.Context, input domain.SignInInput) (str
 }
 
 func (s *UserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInput) (*domain.AuthResponse, error) {
+	ctx, span := s.tracer.StartServiceSpan(ctx, "UserService", "VerifyCode")
+	defer span.End()
+
+	s.tracer.AddAttribute(ctx, "user.email", input.Email)
+
 	// Find user by email
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
 		s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Failed to get user by email for code verification")
+		s.tracer.MarkSpanError(ctx, err)
 		return nil, err
 	}
+
+	s.tracer.AddAttribute(ctx, "user.id", user.ID)
 
 	// Find all sessions for this user
 	sessions, err := s.repo.GetSessionsByUserID(ctx, user.ID)
 	if err != nil {
 		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get sessions for user")
+		s.tracer.MarkSpanError(ctx, err)
 		return nil, err
 	}
+
+	s.tracer.AddAttribute(ctx, "sessions.count", len(sessions))
 
 	// Find the session with the matching code
 	var matchingSession *domain.Session
@@ -130,13 +173,19 @@ func (s *UserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInp
 
 	if matchingSession == nil {
 		s.logger.WithField("user_id", user.ID).WithField("email", input.Email).Error("Invalid magic code")
-		return nil, fmt.Errorf("invalid magic code")
+		err := fmt.Errorf("invalid magic code")
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, err
 	}
+
+	s.tracer.AddAttribute(ctx, "session.id", matchingSession.ID)
 
 	// Check if magic code is expired
 	if time.Now().After(matchingSession.MagicCodeExpires) {
 		s.logger.WithField("user_id", user.ID).WithField("email", input.Email).WithField("session_id", matchingSession.ID).Error("Magic code expired")
-		return nil, fmt.Errorf("magic code expired")
+		err := fmt.Errorf("magic code expired")
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, err
 	}
 
 	// Clear the magic code from the session
@@ -145,11 +194,14 @@ func (s *UserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInp
 
 	if err := s.repo.UpdateSession(ctx, matchingSession); err != nil {
 		s.logger.WithField("user_id", user.ID).WithField("session_id", matchingSession.ID).WithField("error", err.Error()).Error("Failed to update session")
+		s.tracer.MarkSpanError(ctx, err)
 		return nil, err
 	}
 
 	// Generate authentication token
 	token := s.authService.GenerateUserAuthToken(user, matchingSession.ID, matchingSession.ExpiresAt)
+	s.tracer.AddAttribute(ctx, "token.generated", true)
+	s.tracer.AddAttribute(ctx, "token.expires_at", matchingSession.ExpiresAt.String())
 
 	return &domain.AuthResponse{
 		Token:     token,
@@ -181,51 +233,88 @@ func generateID() string {
 
 // VerifyUserSession verifies a user session and returns the associated user
 func (s *UserService) VerifyUserSession(ctx context.Context, userID string, sessionID string) (*domain.User, error) {
-	// First check if the session is valid and not expired
-	session, err := s.repo.GetSessionByID(ctx, sessionID)
+	result, err := s.tracer.TraceMethodWithResultAny(ctx, "UserService", "VerifyUserSession", func(ctx context.Context) (interface{}, error) {
+		// Add attributes to the current span
+		s.tracer.AddAttribute(ctx, "user.id", userID)
+		s.tracer.AddAttribute(ctx, "session.id", sessionID)
+
+		// First check if the session is valid and not expired
+		session, err := s.repo.GetSessionByID(ctx, sessionID)
+		if err != nil {
+			s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("error", err.Error()).Error("Failed to get session by ID")
+			return nil, err
+		}
+
+		// Verify that the session belongs to the user
+		if session.UserID != userID {
+			s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("session_user_id", session.UserID).Error("Session does not belong to user")
+			return nil, fmt.Errorf("session does not belong to user")
+		}
+
+		// Check if session is expired
+		if time.Now().After(session.ExpiresAt) {
+			s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("expires_at", session.ExpiresAt).Error("Session expired")
+			return nil, ErrSessionExpired
+		}
+
+		// Get user details
+		user, err := s.repo.GetUserByID(ctx, userID)
+		if err != nil {
+			s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
+			return nil, err
+		}
+
+		// Add user email to span
+		s.tracer.AddAttribute(ctx, "user.email", user.Email)
+
+		return user, nil
+	})
+
 	if err != nil {
-		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("error", err.Error()).Error("Failed to get session by ID")
 		return nil, err
 	}
 
-	// Verify that the session belongs to the user
-	if session.UserID != userID {
-		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("session_user_id", session.UserID).Error("Session does not belong to user")
-		return nil, fmt.Errorf("session does not belong to user")
-	}
-
-	// Check if session is expired
-	if time.Now().After(session.ExpiresAt) {
-		s.logger.WithField("user_id", userID).WithField("session_id", sessionID).WithField("expires_at", session.ExpiresAt).Error("Session expired")
-		return nil, ErrSessionExpired
-	}
-
-	// Get user details
-	user, err := s.repo.GetUserByID(ctx, userID)
-	if err != nil {
-		s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
-		return nil, err
-	}
-
-	return user, nil
+	return result.(*domain.User), nil
 }
 
 // GetUserByID retrieves a user by their ID
 func (s *UserService) GetUserByID(ctx context.Context, userID string) (*domain.User, error) {
+	ctx, span := s.tracer.StartServiceSpan(ctx, "UserService", "GetUserByID")
+	defer span.End()
+
+	s.tracer.AddAttribute(ctx, "user.id", userID)
+
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		s.logger.WithField("user_id", userID).WithField("error", err.Error()).Error("Failed to get user by ID")
+		span.SetStatus(trace.Status{
+			Code:    trace.StatusCodeNotFound,
+			Message: err.Error(),
+		})
 		return nil, err
 	}
+
+	s.tracer.AddAttribute(ctx, "user.email", user.Email)
 	return user, nil
 }
 
 // GetUserByEmail retrieves a user by their email address
 func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	ctx, span := s.tracer.StartServiceSpan(ctx, "UserService", "GetUserByEmail")
+	defer span.End()
+
+	s.tracer.AddAttribute(ctx, "user.email", email)
+
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		s.logger.WithField("email", email).WithField("error", err.Error()).Error("Failed to get user by email")
+		span.SetStatus(trace.Status{
+			Code:    trace.StatusCodeNotFound,
+			Message: err.Error(),
+		})
 		return nil, err
 	}
+
+	s.tracer.AddAttribute(ctx, "user.id", user.ID)
 	return user, nil
 }

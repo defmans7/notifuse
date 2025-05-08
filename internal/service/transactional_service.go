@@ -9,6 +9,8 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/tracing"
+	"go.opencensus.io/trace"
 )
 
 // TransactionalNotificationService provides operations for managing and sending transactional notifications
@@ -49,6 +51,15 @@ func (s *TransactionalNotificationService) CreateNotification(
 	workspace string,
 	params domain.TransactionalNotificationCreateParams,
 ) (*domain.TransactionalNotification, error) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "CreateNotification")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("workspace", workspace),
+		trace.StringAttribute("notification_id", params.ID),
+		trace.StringAttribute("notification_name", params.Name),
+	)
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
 		"id":        params.ID,
@@ -66,6 +77,8 @@ func (s *TransactionalNotificationService) CreateNotification(
 
 	// Validate the notification templates exist
 	for channel, template := range notification.Channels {
+		tracing.AddAttribute(ctx, fmt.Sprintf("channel.%s.template_id", channel), template.TemplateID)
+
 		_, err := s.templateService.GetTemplateByID(ctx, workspace, template.TemplateID, 0)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
@@ -73,6 +86,8 @@ func (s *TransactionalNotificationService) CreateNotification(
 				"channel":     channel,
 				"template_id": template.TemplateID,
 			}).Error("Invalid template for channel")
+
+			tracing.MarkSpanError(ctx, err)
 			return nil, fmt.Errorf("invalid template for channel %s: %w", channel, err)
 		}
 	}
@@ -84,6 +99,8 @@ func (s *TransactionalNotificationService) CreateNotification(
 			"workspace": workspace,
 			"id":        notification.ID,
 		}).Error("Failed to create notification")
+
+		tracing.MarkSpanError(ctx, err)
 		return nil, fmt.Errorf("failed to create notification: %w", err)
 	}
 
@@ -101,6 +118,14 @@ func (s *TransactionalNotificationService) UpdateNotification(
 	workspace, id string,
 	params domain.TransactionalNotificationUpdateParams,
 ) (*domain.TransactionalNotification, error) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "UpdateNotification")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("workspace", workspace),
+		trace.StringAttribute("notification_id", id),
+	)
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
 		"id":        id,
@@ -114,19 +139,32 @@ func (s *TransactionalNotificationService) UpdateNotification(
 			"workspace": workspace,
 			"id":        id,
 		}).Error("Failed to get notification for update")
+
+		tracing.MarkSpanError(ctx, err)
 		return nil, fmt.Errorf("failed to get notification: %w", err)
 	}
 
+	// Add existing details to span
+	span.AddAttributes(
+		trace.StringAttribute("notification.name", notification.Name),
+	)
+
 	// Update fields if provided
 	if params.Name != "" {
+		tracing.AddAttribute(ctx, "update.name", params.Name)
 		notification.Name = params.Name
 	}
 	if params.Description != "" {
+		tracing.AddAttribute(ctx, "update.description", "updated")
 		notification.Description = params.Description
 	}
 	if params.Channels != nil {
+		tracing.AddAttribute(ctx, "update.channels", "updated")
+
 		// Validate the updated templates exist
 		for channel, template := range params.Channels {
+			tracing.AddAttribute(ctx, fmt.Sprintf("channel.%s.template_id", channel), template.TemplateID)
+
 			_, err := s.templateService.GetTemplateByID(ctx, workspace, template.TemplateID, int64(0))
 			if err != nil {
 				s.logger.WithFields(map[string]interface{}{
@@ -134,12 +172,15 @@ func (s *TransactionalNotificationService) UpdateNotification(
 					"channel":     channel,
 					"template_id": template.TemplateID,
 				}).Error("Invalid template for channel in update")
+
+				tracing.MarkSpanError(ctx, err)
 				return nil, fmt.Errorf("invalid template for channel %s: %w", channel, err)
 			}
 		}
 		notification.Channels = params.Channels
 	}
 	if params.Metadata != nil {
+		tracing.AddAttribute(ctx, "update.metadata", "updated")
 		notification.Metadata = params.Metadata
 	}
 
@@ -150,6 +191,8 @@ func (s *TransactionalNotificationService) UpdateNotification(
 			"workspace": workspace,
 			"id":        notification.ID,
 		}).Error("Failed to update notification")
+
+		tracing.MarkSpanError(ctx, err)
 		return nil, fmt.Errorf("failed to update notification: %w", err)
 	}
 
@@ -165,6 +208,14 @@ func (s *TransactionalNotificationService) GetNotification(
 	ctx context.Context,
 	workspace, id string,
 ) (*domain.TransactionalNotification, error) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "GetNotification")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("workspace", workspace),
+		trace.StringAttribute("notification_id", id),
+	)
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
 		"id":        id,
@@ -177,8 +228,17 @@ func (s *TransactionalNotificationService) GetNotification(
 			"workspace": workspace,
 			"id":        id,
 		}).Error("Failed to get notification")
+
+		tracing.MarkSpanError(ctx, err)
 		return nil, fmt.Errorf("failed to get notification: %w", err)
 	}
+
+	// Add notification details to span
+	span.AddAttributes(
+		trace.StringAttribute("notification.name", notification.Name),
+		trace.Int64Attribute("notification.channels_count", int64(len(notification.Channels))),
+	)
+
 	return notification, nil
 }
 
@@ -189,6 +249,24 @@ func (s *TransactionalNotificationService) ListNotifications(
 	filter map[string]interface{},
 	limit, offset int,
 ) ([]*domain.TransactionalNotification, int, error) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "ListNotifications")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("workspace", workspace),
+		trace.Int64Attribute("limit", int64(limit)),
+		trace.Int64Attribute("offset", int64(offset)),
+	)
+
+	// Add filter keys to span
+	if filter != nil {
+		filterKeys := make([]string, 0, len(filter))
+		for k := range filter {
+			filterKeys = append(filterKeys, k)
+		}
+		tracing.AddAttribute(ctx, "filter.keys", filterKeys)
+	}
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
 		"limit":     limit,
@@ -202,6 +280,8 @@ func (s *TransactionalNotificationService) ListNotifications(
 			"error":     err.Error(),
 			"workspace": workspace,
 		}).Error("Failed to list notifications")
+
+		tracing.MarkSpanError(ctx, err)
 		return nil, 0, fmt.Errorf("failed to list notifications: %w", err)
 	}
 
@@ -210,6 +290,12 @@ func (s *TransactionalNotificationService) ListNotifications(
 		"count":     len(notifications),
 		"total":     total,
 	}).Debug("Successfully retrieved notifications list")
+
+	span.AddAttributes(
+		trace.Int64Attribute("result.count", int64(len(notifications))),
+		trace.Int64Attribute("result.total", int64(total)),
+	)
+
 	return notifications, total, nil
 }
 
@@ -218,6 +304,14 @@ func (s *TransactionalNotificationService) DeleteNotification(
 	ctx context.Context,
 	workspace, id string,
 ) error {
+	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "DeleteNotification")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("workspace", workspace),
+		trace.StringAttribute("notification_id", id),
+	)
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
 		"id":        id,
@@ -229,6 +323,8 @@ func (s *TransactionalNotificationService) DeleteNotification(
 			"workspace": workspace,
 			"id":        id,
 		}).Error("Failed to delete notification")
+
+		tracing.MarkSpanError(ctx, err)
 		return fmt.Errorf("failed to delete notification: %w", err)
 	}
 
@@ -245,32 +341,68 @@ func (s *TransactionalNotificationService) SendNotification(
 	workspaceID string,
 	params domain.TransactionalNotificationSendParams,
 ) (string, error) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "SendNotification")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("workspace", workspaceID),
+		trace.StringAttribute("notification_id", params.ID),
+	)
+
+	// Add contact info to span if available
+	if params.Contact != nil {
+		span.AddAttributes(
+			trace.StringAttribute("contact.email", params.Contact.Email),
+		)
+	}
+
+	// Add channel info to span
+	if len(params.Channels) > 0 {
+		channelList := make([]string, 0, len(params.Channels))
+		for _, ch := range params.Channels {
+			channelList = append(channelList, string(ch))
+		}
+		tracing.AddAttribute(ctx, "channels", channelList)
+	}
 
 	// Get the workspace to retrieve email provider settings
 	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		return "", fmt.Errorf("failed to get workspace: %w", err)
 	}
 
 	// Get the notification
 	notification, err := s.transactionalRepo.Get(ctx, workspaceID, params.ID)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		return "", fmt.Errorf("notification not found: %w", err)
 	}
 
+	span.AddAttributes(
+		trace.StringAttribute("notification.name", notification.Name),
+	)
+
 	// Upsert the contact first
 	if params.Contact == nil {
-		return "", fmt.Errorf("contact is required")
+		err := fmt.Errorf("contact is required")
+		tracing.MarkSpanError(ctx, err)
+		return "", err
 	}
 
 	contactOperation := s.contactService.UpsertContact(ctx, workspaceID, params.Contact)
 	if contactOperation.Action == domain.UpsertContactOperationError {
-		return "", fmt.Errorf("failed to upsert contact: %s", contactOperation.Error)
+		err := fmt.Errorf("failed to upsert contact: %s", contactOperation.Error)
+		tracing.MarkSpanError(ctx, err)
+		return "", err
 	}
+
+	tracing.AddAttribute(ctx, "contact.operation", string(contactOperation.Action))
 
 	// Get the contact with complete information
 	contact, err := s.contactService.GetContactByEmail(ctx, workspaceID, params.Contact.Email)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		return "", fmt.Errorf("contact not found after upsert: %w", err)
 	}
 
@@ -291,16 +423,29 @@ func (s *TransactionalNotificationService) SendNotification(
 	}
 
 	if len(channelsToSend) == 0 {
-		return "", fmt.Errorf("no valid channels to send notification")
+		err := fmt.Errorf("no valid channels to send notification")
+		tracing.MarkSpanError(ctx, err)
+		return "", err
 	}
 
 	// Create message history entry
 	messageID := uuid.New().String()
 	successfulChannels := 0
 
+	span.AddAttributes(
+		trace.StringAttribute("message_id", messageID),
+		trace.Int64Attribute("channels_to_send", int64(len(channelsToSend))),
+	)
+
 	// Process each channel
 	for channel := range channelsToSend {
 		templateConfig := notification.Channels[channel]
+
+		childCtx, childSpan := tracing.StartSpan(ctx, fmt.Sprintf("Send.%s", channel))
+		childSpan.AddAttributes(
+			trace.StringAttribute("channel", string(channel)),
+			trace.StringAttribute("template_id", templateConfig.TemplateID),
+		)
 
 		// Prepare message data with contact and custom data
 		messageData := domain.MessageData{
@@ -327,16 +472,25 @@ func (s *TransactionalNotificationService) SendNotification(
 			// Get the email provider using the workspace's GetEmailProvider method
 			emailProvider, err := workspace.GetEmailProvider(false)
 			if err != nil {
+				tracing.MarkSpanError(childCtx, err)
+				childSpan.End()
 				return "", err
 			}
 
 			// Validate that the provider is configured
 			if emailProvider == nil || emailProvider.Kind == "" {
-				return "", fmt.Errorf("no email provider configured for transactional notifications")
+				err := fmt.Errorf("no email provider configured for transactional notifications")
+				tracing.MarkSpanError(childCtx, err)
+				childSpan.End()
+				return "", err
 			}
 
+			childSpan.AddAttributes(
+				trace.StringAttribute("provider.kind", string(emailProvider.Kind)),
+			)
+
 			err = s.DoSendEmailNotification(
-				ctx,
+				childCtx,
 				workspaceID,
 				messageID,
 				contact,
@@ -346,6 +500,7 @@ func (s *TransactionalNotificationService) SendNotification(
 			)
 			if err == nil {
 				successfulChannels++
+				childSpan.End()
 			} else {
 				// Log the error but continue with other channels
 				s.logger.WithFields(map[string]interface{}{
@@ -355,14 +510,23 @@ func (s *TransactionalNotificationService) SendNotification(
 					"contact":      contact.Email,
 					"message_id":   messageID,
 				}).Error("Failed to send email notification")
+
+				tracing.MarkSpanError(childCtx, err)
+				childSpan.End()
 			}
 		}
 		// Add other channel handling here as needed
 	}
 
 	if successfulChannels == 0 {
-		return "", fmt.Errorf("failed to send notification through any channel")
+		err := fmt.Errorf("failed to send notification through any channel")
+		tracing.MarkSpanError(ctx, err)
+		return "", err
 	}
+
+	span.AddAttributes(
+		trace.Int64Attribute("successful_channels", int64(successfulChannels)),
+	)
 
 	return messageID, nil
 }
@@ -377,6 +541,16 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 	messageData domain.MessageData,
 	emailProvider *domain.EmailProvider,
 ) error {
+	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "DoSendEmailNotification")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("workspace", workspace),
+		trace.StringAttribute("message_id", messageID),
+		trace.StringAttribute("contact.email", contact.Email),
+		trace.StringAttribute("template_id", templateConfig.TemplateID),
+	)
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace":   workspace,
 		"message_id":  messageID,
@@ -391,8 +565,15 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 			"error":       err.Error(),
 			"template_id": templateConfig.TemplateID,
 		}).Error("Failed to get template")
+
+		tracing.MarkSpanError(ctx, err)
 		return fmt.Errorf("failed to get template: %w", err)
 	}
+
+	span.AddAttributes(
+		trace.StringAttribute("template.subject", template.Email.Subject),
+		trace.StringAttribute("template.from_email", template.Email.FromAddress),
+	)
 
 	// Compile the template with the message data
 	compiledTemplate, err := s.templateService.CompileTemplate(ctx, workspace, template.Email.VisualEditorTree, messageData.Data)
@@ -401,8 +582,12 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 			"error":       err.Error(),
 			"template_id": templateConfig.TemplateID,
 		}).Error("Failed to compile template")
+
+		tracing.MarkSpanError(ctx, err)
 		return fmt.Errorf("failed to compile template: %w", err)
 	}
+
+	tracing.AddAttribute(ctx, "template.compilation_success", compiledTemplate.Success)
 
 	if !compiledTemplate.Success || compiledTemplate.HTML == nil {
 		errMsg := "Unknown error"
@@ -410,7 +595,10 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 			errMsg = compiledTemplate.Error.Message
 		}
 		s.logger.WithField("error", errMsg).Error("Template compilation failed")
-		return fmt.Errorf("template compilation failed: %s", errMsg)
+
+		err := fmt.Errorf("template compilation failed: %s", errMsg)
+		tracing.MarkSpanError(ctx, err)
+		return err
 	}
 
 	// Get necessary email information from the template
@@ -438,8 +626,12 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 			"error":      err.Error(),
 			"message_id": messageID,
 		}).Error("Failed to create message history")
+
+		tracing.MarkSpanError(ctx, err)
 		return fmt.Errorf("failed to create message history: %w", err)
 	}
+
+	tracing.AddAttribute(ctx, "message_history.created", true)
 
 	// Send the email using the email service
 	s.logger.WithFields(map[string]interface{}{
@@ -448,6 +640,8 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 		"subject":    subject,
 		"message_id": messageID,
 	}).Debug("Sending email")
+
+	tracing.AddAttribute(ctx, "email.sending", true)
 
 	err = s.emailService.SendEmail(
 		ctx,
@@ -475,6 +669,8 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 				"error":      updateErr.Error(),
 				"message_id": messageID,
 			}).Error("Failed to update message history with error status")
+
+			tracing.AddAttribute(ctx, "message_history.update_error", updateErr.Error())
 		}
 
 		s.logger.WithFields(map[string]interface{}{
@@ -482,6 +678,9 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 			"message_id": messageID,
 			"to":         contact.Email,
 		}).Error("Failed to send email")
+
+		tracing.MarkSpanError(ctx, err)
+		tracing.AddAttribute(ctx, "email.error", err.Error())
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
@@ -489,5 +688,7 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 		"message_id": messageID,
 		"to":         contact.Email,
 	}).Info("Email sent successfully")
+
+	tracing.AddAttribute(ctx, "email.sent", true)
 	return nil
 }

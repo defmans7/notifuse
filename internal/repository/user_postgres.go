@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opencensus.io/trace"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/tracing"
 )
 
 type userRepository struct {
@@ -74,12 +76,18 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 }
 
 func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
+	ctx, span := tracing.StartServiceSpan(ctx, "UserRepository", "GetUserByID")
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute("user.id", id))
+
 	var user domain.User
 	query := `
 		SELECT id, email, name, type, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
+	startTime := time.Now()
 	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
 		&user.Email,
@@ -88,12 +96,31 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
+	queryDuration := time.Since(startTime)
+
+	// Add query duration to span
+	span.AddAttributes(trace.StringAttribute("db.query", "SELECT FROM users"),
+		trace.Int64Attribute("db.query_duration_ms", queryDuration.Milliseconds()))
+
 	if err == sql.ErrNoRows {
+		span.SetStatus(trace.Status{
+			Code:    trace.StatusCodeNotFound,
+			Message: "user not found",
+		})
 		return nil, &domain.ErrUserNotFound{Message: "user not found"}
 	}
+
 	if err != nil {
+		span.SetStatus(trace.Status{
+			Code:    trace.StatusCodeUnknown,
+			Message: fmt.Sprintf("failed to get user: %s", err.Error()),
+		})
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
+
+	// Add user email to span
+	span.AddAttributes(trace.StringAttribute("user.email", user.Email))
+
 	return &user, nil
 }
 

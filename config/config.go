@@ -15,6 +15,7 @@ type Config struct {
 	Server          ServerConfig
 	Database        DatabaseConfig
 	Security        SecurityConfig
+	Tracing         TracingConfig
 	RootEmail       string
 	Environment     string
 	APIEndpoint     string
@@ -55,6 +56,41 @@ type SSLConfig struct {
 	KeyFile  string
 }
 
+type TracingConfig struct {
+	Enabled             bool
+	ServiceName         string
+	SamplingProbability float64
+
+	// Trace exporter configuration
+	TraceExporter string // "jaeger", "stackdriver", "zipkin", "azure", "datadog", "xray", "none"
+
+	// Jaeger settings
+	JaegerEndpoint string
+
+	// Zipkin settings
+	ZipkinEndpoint string
+
+	// Stackdriver settings
+	StackdriverProjectID string
+
+	// Azure Monitor settings
+	AzureInstrumentationKey string
+
+	// Datadog settings
+	DatadogAgentAddress string
+	DatadogAPIKey       string
+
+	// AWS X-Ray settings
+	XRayRegion string
+
+	// General agent endpoint (for exporters that support a common agent)
+	AgentEndpoint string
+
+	// Metrics exporter configuration
+	MetricsExporter string // "prometheus", "stackdriver", "datadog", "none" or comma-separated list
+	PrometheusPort  int
+}
+
 // LoadOptions contains options for loading configuration
 type LoadOptions struct {
 	EnvFile string // Optional environment file to load (e.g., ".env", ".env.test")
@@ -79,6 +115,40 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_PREFIX", "notifuse")
 	v.SetDefault("DB_NAME", "${DB_PREFIX}_system")
 	v.SetDefault("ENVIRONMENT", "production")
+
+	// Default tracing config
+	v.SetDefault("TRACING_ENABLED", false)
+	v.SetDefault("TRACING_SERVICE_NAME", "notifuse-api")
+	v.SetDefault("TRACING_SAMPLING_PROBABILITY", 0.1)
+
+	// Default trace exporter config
+	v.SetDefault("TRACING_TRACE_EXPORTER", "none")
+
+	// Jaeger settings
+	v.SetDefault("TRACING_JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
+
+	// Zipkin settings
+	v.SetDefault("TRACING_ZIPKIN_ENDPOINT", "http://localhost:9411/api/v2/spans")
+
+	// Stackdriver settings
+	v.SetDefault("TRACING_STACKDRIVER_PROJECT_ID", "")
+
+	// Azure Monitor settings
+	v.SetDefault("TRACING_AZURE_INSTRUMENTATION_KEY", "")
+
+	// Datadog settings
+	v.SetDefault("TRACING_DATADOG_AGENT_ADDRESS", "localhost:8126")
+	v.SetDefault("TRACING_DATADOG_API_KEY", "")
+
+	// AWS X-Ray settings
+	v.SetDefault("TRACING_XRAY_REGION", "us-west-2")
+
+	// General agent endpoint (for exporters that support a common agent)
+	v.SetDefault("TRACING_AGENT_ENDPOINT", "localhost:8126")
+
+	// Default metrics exporter config
+	v.SetDefault("TRACING_METRICS_EXPORTER", "none")
+	v.SetDefault("TRACING_PROMETHEUS_PORT", 9464)
 
 	// Load environment file if specified
 	if opts.EnvFile != "" {
@@ -167,6 +237,40 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			PasetoPrivateKeyBytes: privateKeyBytes,
 			PasetoPublicKeyBytes:  publicKeyBytes,
 			SecretKey:             v.GetString("SECRET_KEY"),
+		},
+		Tracing: TracingConfig{
+			Enabled:             v.GetBool("TRACING_ENABLED"),
+			ServiceName:         v.GetString("TRACING_SERVICE_NAME"),
+			SamplingProbability: v.GetFloat64("TRACING_SAMPLING_PROBABILITY"),
+
+			// Trace exporter configuration
+			TraceExporter: v.GetString("TRACING_TRACE_EXPORTER"),
+
+			// Jaeger settings
+			JaegerEndpoint: v.GetString("TRACING_JAEGER_ENDPOINT"),
+
+			// Zipkin settings
+			ZipkinEndpoint: v.GetString("TRACING_ZIPKIN_ENDPOINT"),
+
+			// Stackdriver settings
+			StackdriverProjectID: v.GetString("TRACING_STACKDRIVER_PROJECT_ID"),
+
+			// Azure Monitor settings
+			AzureInstrumentationKey: v.GetString("TRACING_AZURE_INSTRUMENTATION_KEY"),
+
+			// Datadog settings
+			DatadogAgentAddress: v.GetString("TRACING_DATADOG_AGENT_ADDRESS"),
+			DatadogAPIKey:       v.GetString("TRACING_DATADOG_API_KEY"),
+
+			// AWS X-Ray settings
+			XRayRegion: v.GetString("TRACING_XRAY_REGION"),
+
+			// General agent endpoint (for exporters that support a common agent)
+			AgentEndpoint: v.GetString("TRACING_AGENT_ENDPOINT"),
+
+			// Metrics exporter configuration
+			MetricsExporter: v.GetString("TRACING_METRICS_EXPORTER"),
+			PrometheusPort:  v.GetInt("TRACING_PROMETHEUS_PORT"),
 		},
 		RootEmail:       v.GetString("ROOT_EMAIL"),
 		Environment:     v.GetString("ENVIRONMENT"),

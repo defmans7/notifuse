@@ -19,6 +19,9 @@ import (
 	"github.com/Notifuse/notifuse/internal/service/broadcast"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
+	"github.com/Notifuse/notifuse/pkg/tracing"
+
+	"contrib.go.opencensus.io/integrations/ocsql"
 )
 
 // AppInterface defines the interface for the App
@@ -41,6 +44,7 @@ type AppInterface interface {
 	// Methods for initialization steps
 	InitDB() error
 	InitMailer() error
+	InitTracing() error
 	InitRepositories() error
 	InitServices() error
 	InitHandlers() error
@@ -139,6 +143,34 @@ func NewRealApp(cfg *config.Config, opts ...AppOption) AppInterface {
 	return app
 }
 
+// InitTracing initializes OpenCensus tracing
+func (a *App) InitTracing() error {
+	tracingConfig := &a.config.Tracing
+
+	if err := tracing.InitTracing(tracingConfig); err != nil {
+		return fmt.Errorf("failed to initialize tracing: %w", err)
+	}
+
+	if tracingConfig.Enabled {
+		exporter := tracingConfig.TraceExporter
+		if exporter == "" {
+			exporter = "jaeger" // Default
+		}
+
+		metricsExporter := tracingConfig.MetricsExporter
+		if metricsExporter == "" {
+			metricsExporter = "prometheus" // Default
+		}
+
+		a.logger.WithField("trace_exporter", exporter).
+			WithField("metrics_exporter", metricsExporter).
+			WithField("sampling_rate", tracingConfig.SamplingProbability).
+			Info("Tracing initialized successfully")
+	}
+
+	return nil
+}
+
 // InitDB initializes the database connection
 func (a *App) InitDB() error {
 	// Ensure system database exists
@@ -147,8 +179,19 @@ func (a *App) InitDB() error {
 	}
 	a.logger.Info("System database check completed")
 
+	// If tracing is enabled, wrap the postgres driver
+	driverName := "postgres"
+	if a.config.Tracing.Enabled {
+		var err error
+		driverName, err = tracing.WrapDBDriver(driverName)
+		if err != nil {
+			return fmt.Errorf("failed to wrap database driver with tracing: %w", err)
+		}
+		a.logger.Info("Database driver wrapped with OpenCensus tracing")
+	}
+
 	// Connect to system database
-	db, err := sql.Open("postgres", database.GetSystemDSN(&a.config.Database))
+	db, err := sql.Open(driverName, database.GetSystemDSN(&a.config.Database))
 	if err != nil {
 		return fmt.Errorf("failed to connect to system database: %w", err)
 	}
@@ -250,6 +293,8 @@ func (a *App) InitServices() error {
 		EmailSender:   a.mailer,
 		SessionExpiry: 30 * 24 * time.Hour, // 30 days
 		IsDevelopment: a.config.IsDevelopment(),
+		Logger:        a.logger,
+		Tracer:        tracing.GetTracer(),
 	}
 
 	a.userService, err = service.NewUserService(userServiceConfig)
@@ -291,6 +336,12 @@ func (a *App) InitServices() error {
 	// Initialize http client
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second,
+	}
+
+	// Wrap HTTP client with tracing if enabled
+	if a.config.Tracing.Enabled {
+		httpClient = tracing.WrapHTTPClient(httpClient)
+		a.logger.Info("HTTP client wrapped with OpenCensus tracing")
 	}
 
 	// Initialize email provider services
@@ -456,8 +507,17 @@ func (a *App) InitHandlers() error {
 
 // Start starts the HTTP server
 func (a *App) Start() error {
-	// Create server with wrapped handler for CORS
-	handler := middleware.CORSMiddleware(a.mux)
+	// Create server with wrapped handler for CORS and tracing
+	var handler http.Handler = a.mux
+
+	// Apply tracing middleware if enabled
+	if a.config.Tracing.Enabled {
+		handler = middleware.TracingMiddleware(handler)
+		a.logger.Info("OpenCensus tracing middleware enabled")
+	}
+
+	// Apply CORS middleware
+	handler = middleware.CORSMiddleware(handler)
 
 	addr := fmt.Sprintf("%s:%d", a.config.Server.Host, a.config.Server.Port)
 	a.logger.WithField("address", addr).Info("Server starting")
@@ -499,11 +559,19 @@ func (a *App) Shutdown(ctx context.Context) error {
 	a.serverMu.RUnlock()
 
 	if server != nil {
-		return server.Shutdown(ctx)
+		if err := server.Shutdown(ctx); err != nil {
+			return err
+		}
 	}
 
 	// Close database connection if it exists
 	if a.db != nil {
+		// If tracing is enabled, unwrap the driver to properly close tracing
+		if a.config.Tracing.Enabled {
+			if err := ocsql.RecordStats(a.db, 5*time.Second); err != nil {
+				a.logger.WithField("error", err).Error("Failed to record final database stats for tracing")
+			}
+		}
 		a.db.Close()
 	}
 
@@ -545,6 +613,10 @@ func (a *App) WaitForServerStart(ctx context.Context) bool {
 
 // Initialize sets up all components of the application
 func (a *App) Initialize() error {
+	if err := a.InitTracing(); err != nil {
+		return err
+	}
+
 	if err := a.InitDB(); err != nil {
 		return err
 	}

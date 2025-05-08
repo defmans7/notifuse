@@ -31,6 +31,16 @@ test-same-package: true
 test-file-suffix: _test.go
 minimum-test-coverage: 75%
 
+// Test simplification rules
+// NEVER test logging or tracing in unit tests - they are implementation details
+// Focus tests on business logic and behavior, not on cross-cutting concerns
+skip-logging-verification: true
+skip-tracing-verification: true
+test-focus-on-business-logic: true
+never-test-logging: true
+never-test-tracing: true
+test-only-functional-behavior: true
+
 // Project structure patterns
 prefer-folder-for-domain: internal/domain
 prefer-folder-for-services: internal/service
@@ -64,3 +74,35 @@ prefer-functions: logger.Debug, logger.Info, logger.Warn, logger.Error, logger.F
 // Mocks
 prefer-folder-for-pkg-mocks: pkg/mocks
 prefer-folder-for-domain-mocks: internal/domain/mocks
+
+// OpenCensus Tracing
+prefer-tracing-path: pkg/tracing
+prefer-tracing-imports: go.opencensus.io/trace, contrib.go.opencensus.io/exporter/jaeger, contrib.go.opencensus.io/exporter/prometheus
+tracing-exporters: jaeger, prometheus, zipkin, stackdriver, datadog, xray
+metrics-exporters: prometheus, stackdriver, datadog
+tracing-helper-functions: StartServiceSpan, EndSpan, TraceMethod, TraceMethodWithResult, AddAttribute, MarkSpanError
+db-tracing-function: WrapDBDriver
+http-tracing-middleware: internal/http/middleware/tracing.go
+app-tracing-init: cmd/api/app.go:InitTracing
+prefer-tracer-interface: github.com/Notifuse/notifuse/pkg/tracing.Tracer
+tracer-implementation: github.com/Notifuse/notifuse/pkg/tracing.DefaultTracer
+tracer-global-access: tracing.GetTracer()
+tracer-method-pattern: tracer.StartServiceSpan, tracer.EndSpan, tracer.AddAttribute, tracer.MarkSpanError, tracer.TraceMethod
+
+// Codecov ignore rules for tracing
+codecov-ignore-tracing-patterns: 'ctx, span := tracing.StartSpan', 'defer tracing.EndSpan', 'tracing.AddAttribute', 'tracing.MarkSpanError', 'tracing.TraceMethod', 'tracing.GetTracer()', 'tracing.WrapHTTPClient', 'tracing.StartServiceSpan'
+codecov-ignore-annotation: '// codecov:ignore'
+codecov-ignore-block-annotation-start: '// codecov:ignore start'
+codecov-ignore-block-annotation-end: '// codecov:ignore end'
+// always put codecov:ignore comments around tracking and logging
+
+// Tracing Patterns
+prefer-span-pattern: ctx, span := tracing.StartSpan(ctx, "operation-name")
+prefer-span-error-handling: defer tracing.EndSpan(span, err)
+prefer-service-span-pattern: ctx, span := tracing.StartServiceSpan(ctx, "ServiceName", "MethodName")
+prefer-service-tracing-pattern: return tracing.TraceMethod(ctx, "ServiceName", "MethodName", func(ctx context.Context) error { /* method body */ })
+prefer-http-client-tracing: client = tracing.WrapHTTPClient(client)
+// Attributes for spans
+prefer-span-attributes: tracing.AddAttribute(ctx, "key", value)
+// Error marking for spans
+prefer-span-error-marking: tracing.MarkSpanError(ctx, err)

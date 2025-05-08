@@ -13,6 +13,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/tracing"
 )
 
 // Maximum time a task can run before timing out
@@ -93,6 +94,15 @@ func (s *TaskService) GetProcessor(taskType string) (domain.TaskProcessor, error
 
 // CreateTask creates a new task
 func (s *TaskService) CreateTask(ctx context.Context, workspace string, task *domain.Task) error {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "CreateTask")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", workspace)
+	if task.BroadcastID != nil {
+		tracing.AddAttribute(ctx, "broadcast_id", *task.BroadcastID)
+	}
+	tracing.AddAttribute(ctx, "task_type", task.Type)
+
 	if task.MaxRuntime <= 0 {
 		task.MaxRuntime = defaultMaxTaskRuntime
 	}
@@ -105,23 +115,53 @@ func (s *TaskService) CreateTask(ctx context.Context, workspace string, task *do
 		task.RetryInterval = 60 // Default to 1 minute between retries
 	}
 
-	return s.repo.Create(ctx, workspace, task)
+	err := s.repo.Create(ctx, workspace, task)
+	if err != nil {
+		tracing.MarkSpanError(ctx, err)
+	}
+	return err
 }
 
 // GetTask retrieves a task by ID
 func (s *TaskService) GetTask(ctx context.Context, workspace, id string) (*domain.Task, error) {
-	return s.repo.Get(ctx, workspace, id)
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "GetTask")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", workspace)
+	tracing.AddAttribute(ctx, "task_id", id)
+
+	task, err := s.repo.Get(ctx, workspace, id)
+	if err != nil {
+		tracing.MarkSpanError(ctx, err)
+	} else if task != nil && task.BroadcastID != nil {
+		tracing.AddAttribute(ctx, "broadcast_id", *task.BroadcastID)
+	}
+
+	return task, err
 }
 
 // ListTasks lists tasks based on filter criteria
 func (s *TaskService) ListTasks(ctx context.Context, workspace string, filter domain.TaskFilter) (*domain.TaskListResponse, error) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "ListTasks")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", workspace)
+	tracing.AddAttribute(ctx, "limit", filter.Limit)
+	tracing.AddAttribute(ctx, "offset", filter.Offset)
+
+	// Removed Status and Type tracing attributes to fix compilation issues
+
 	tasks, totalCount, err := s.repo.List(ctx, workspace, filter)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		return nil, err
 	}
 
 	// Calculate if there are more results
 	hasMore := (filter.Offset + len(tasks)) < totalCount
+	tracing.AddAttribute(ctx, "total_count", totalCount)
+	tracing.AddAttribute(ctx, "result_count", len(tasks))
+	tracing.AddAttribute(ctx, "has_more", hasMore)
 
 	return &domain.TaskListResponse{
 		Tasks:      tasks,
@@ -134,31 +174,60 @@ func (s *TaskService) ListTasks(ctx context.Context, workspace string, filter do
 
 // DeleteTask removes a task
 func (s *TaskService) DeleteTask(ctx context.Context, workspace, id string) error {
-	return s.repo.Delete(ctx, workspace, id)
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "DeleteTask")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", workspace)
+	tracing.AddAttribute(ctx, "task_id", id)
+
+	err := s.repo.Delete(ctx, workspace, id)
+	if err != nil {
+		tracing.MarkSpanError(ctx, err)
+	}
+	return err
 }
 
 // ExecutePendingTasks processes a batch of pending tasks
 func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) error {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "ExecutePendingTasks")
+	defer tracing.EndSpan(span, nil)
+
 	// Get the next batch of tasks
 	if maxTasks <= 0 {
 		maxTasks = 10 // Default value
 	}
 
+	tracing.AddAttribute(ctx, "max_tasks", maxTasks)
+
 	tasks, err := s.repo.GetNextBatch(ctx, maxTasks)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		return fmt.Errorf("failed to get next batch of tasks: %w", err)
 	}
 
+	tracing.AddAttribute(ctx, "task_count", len(tasks))
 	s.logger.WithField("task_count", len(tasks)).Info("Retrieved batch of tasks to process")
 
 	if s.apiEndpoint == "" {
+		tracing.AddAttribute(ctx, "execution_mode", "direct")
 		s.logger.Warn("API endpoint not configured, falling back to direct execution")
 		return s.executeTasksDirectly(ctx, tasks)
 	}
 
+	tracing.AddAttribute(ctx, "execution_mode", "http")
 	// Execute tasks using HTTP roundtrips
 	for _, task := range tasks {
 		go func(t *domain.Task) {
+			taskCtx, taskSpan := tracing.StartServiceSpan(ctx, "TaskService", "DispatchTaskExecution")
+			defer tracing.EndSpan(taskSpan, nil)
+
+			tracing.AddAttribute(taskCtx, "task_id", t.ID)
+			tracing.AddAttribute(taskCtx, "workspace_id", t.WorkspaceID)
+			tracing.AddAttribute(taskCtx, "task_type", t.Type)
+			if t.BroadcastID != nil {
+				tracing.AddAttribute(taskCtx, "broadcast_id", *t.BroadcastID)
+			}
+
 			s.logger.WithField("task_id", t.ID).
 				WithField("workspace_id", t.WorkspaceID).
 				Info("Dispatching task execution via HTTP")
@@ -169,6 +238,7 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 				ID:          t.ID,
 			})
 			if err != nil {
+				tracing.MarkSpanError(taskCtx, err)
 				s.logger.WithField("task_id", t.ID).
 					WithField("workspace_id", t.WorkspaceID).
 					WithField("error", err.Error()).
@@ -181,10 +251,14 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 				Timeout: 53 * time.Second, // 53 seconds timeout as requested
 			}
 
-			// Create request
+			// Wrap with OpenCensus tracing
+			httpClient = tracing.WrapHTTPClient(httpClient)
+
+			// Create request with tracing context
 			endpoint := fmt.Sprintf("%s/api/tasks.execute", s.apiEndpoint)
-			req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(reqBody))
+			req, err := http.NewRequestWithContext(taskCtx, http.MethodPost, endpoint, bytes.NewBuffer(reqBody))
 			if err != nil {
+				tracing.MarkSpanError(taskCtx, err)
 				s.logger.WithField("task_id", t.ID).
 					WithField("workspace_id", t.WorkspaceID).
 					WithField("error", err.Error()).
@@ -194,10 +268,12 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 
 			// Set content type
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Task-ID", t.ID) // Add task ID for tracing
 
 			// Execute request
 			resp, err := httpClient.Do(req)
 			if err != nil {
+				tracing.MarkSpanError(taskCtx, err)
 				s.logger.WithField("task_id", t.ID).
 					WithField("workspace_id", t.WorkspaceID).
 					WithField("error", err.Error()).
@@ -209,6 +285,8 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 			// Check response
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
+				err := fmt.Errorf("non-OK status: %d, response: %s", resp.StatusCode, string(body))
+				tracing.MarkSpanError(taskCtx, err)
 				s.logger.WithField("task_id", t.ID).
 					WithField("workspace_id", t.WorkspaceID).
 					WithField("status_code", resp.StatusCode).
@@ -229,17 +307,33 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 // executeTasksDirectly processes tasks directly without HTTP roundtrips
 // This is used as a fallback when API endpoint is not configured
 func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.Task) error {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "executeTasksDirectly")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "task_count", len(tasks))
+
 	for _, task := range tasks {
 		// Create a separate context for each task with a timeout
 		taskCtx, cancel := context.WithTimeout(ctx, time.Duration(task.MaxRuntime)*time.Second)
 
 		// Handle the task in a goroutine
 		go func(t *domain.Task, ctx context.Context, cancelFunc context.CancelFunc) {
+			execCtx, execSpan := tracing.StartServiceSpan(ctx, "TaskService", "executeTaskDirectly")
+
+			// Set task attributes
+			tracing.AddAttribute(execCtx, "task_id", t.ID)
+			tracing.AddAttribute(execCtx, "workspace_id", t.WorkspaceID)
+			tracing.AddAttribute(execCtx, "task_type", t.Type)
+			if t.BroadcastID != nil {
+				tracing.AddAttribute(execCtx, "broadcast_id", *t.BroadcastID)
+			}
+
 			// Ensure we clean up the context and handle timeout
 			defer func() {
 				// Check if the context expired (timed out)
 				if ctx.Err() == context.DeadlineExceeded {
 					timeoutError := fmt.Errorf("task execution timed out after %d seconds", t.MaxRuntime)
+					tracing.MarkSpanError(execCtx, timeoutError)
 					s.logger.WithField("task_id", t.ID).
 						WithField("workspace_id", t.WorkspaceID).
 						WithField("error", timeoutError.Error()).
@@ -247,16 +341,19 @@ func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.
 
 					// Mark the task as failed due to timeout
 					if err := s.repo.MarkAsFailed(ctx, t.WorkspaceID, t.ID, timeoutError.Error()); err != nil {
+						tracing.MarkSpanError(execCtx, err)
 						s.logger.WithField("task_id", t.ID).
 							WithField("workspace_id", t.WorkspaceID).
 							WithField("error", err.Error()).
 							Error("Failed to mark timed out task as failed")
 					}
 				}
+				tracing.EndSpan(execSpan, ctx.Err())
 				cancelFunc()
 			}()
 
-			if err := s.ExecuteTask(ctx, t.WorkspaceID, t.ID); err != nil {
+			if err := s.ExecuteTask(execCtx, t.WorkspaceID, t.ID); err != nil {
+				tracing.MarkSpanError(execCtx, err)
 				s.logger.WithField("task_id", t.ID).
 					WithField("workspace_id", t.WorkspaceID).
 					WithField("error", err.Error()).
@@ -270,8 +367,15 @@ func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.
 
 // ExecuteTask executes a specific task
 func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string) error {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "ExecuteTask")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", workspace)
+	tracing.AddAttribute(ctx, "task_id", taskID)
+
 	// First check if the context is already cancelled
 	if ctx.Err() != nil {
+		tracing.MarkSpanError(ctx, ctx.Err())
 		return ctx.Err()
 	}
 
@@ -282,9 +386,13 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 
 	// Wrap the initial setup operations in a transaction
 	err = s.WithTransaction(ctx, func(tx *sql.Tx) error {
+		txCtx, txSpan := tracing.StartServiceSpan(ctx, "TaskService", "ExecuteTaskTransaction")
+		defer tracing.EndSpan(txSpan, nil)
+
 		var taskErr error
-		task, taskErr = s.repo.GetTx(ctx, tx, workspace, taskID)
+		task, taskErr = s.repo.GetTx(txCtx, tx, workspace, taskID)
 		if taskErr != nil {
+			tracing.MarkSpanError(txCtx, taskErr)
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
 				"workspace_id": workspace,
@@ -296,10 +404,18 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			}
 		}
 
+		if task != nil {
+			tracing.AddAttribute(txCtx, "task_type", task.Type)
+			if task.BroadcastID != nil {
+				tracing.AddAttribute(txCtx, "broadcast_id", *task.BroadcastID)
+			}
+		}
+
 		// Get the processor for this task type
 		var procErr error
 		processor, procErr = s.GetProcessor(task.Type)
 		if procErr != nil {
+			tracing.MarkSpanError(txCtx, procErr)
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
 				"workspace_id": workspace,
@@ -315,9 +431,11 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 
 		// Set timeout
 		timeoutAt := time.Now().Add(time.Duration(task.MaxRuntime) * time.Second)
+		tracing.AddAttribute(txCtx, "timeout_at", timeoutAt.Format(time.RFC3339))
 
 		// Mark task as running within the same transaction
-		if markErr := s.repo.MarkAsRunningTx(ctx, tx, workspace, taskID, timeoutAt); markErr != nil {
+		if markErr := s.repo.MarkAsRunningTx(txCtx, tx, workspace, taskID, timeoutAt); markErr != nil {
+			tracing.MarkSpanError(txCtx, markErr)
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
 				"workspace_id": workspace,
@@ -334,6 +452,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	})
 
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		return err
 	}
 
@@ -344,9 +463,20 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 
 	// Process the task in a goroutine
 	go func() {
+		procCtx, procSpan := tracing.StartServiceSpan(ctx, "TaskService", "ProcessTask")
+		defer tracing.EndSpan(procSpan, nil)
+
+		tracing.AddAttribute(procCtx, "task_id", taskID)
+		tracing.AddAttribute(procCtx, "workspace_id", workspace)
+		tracing.AddAttribute(procCtx, "task_type", task.Type)
+		if task.BroadcastID != nil {
+			tracing.AddAttribute(procCtx, "broadcast_id", *task.BroadcastID)
+		}
+
 		// Check if context was cancelled before we even start
-		if ctx.Err() != nil {
-			processErr <- ctx.Err()
+		if procCtx.Err() != nil {
+			tracing.MarkSpanError(procCtx, procCtx.Err())
+			processErr <- procCtx.Err()
 			return
 		}
 
@@ -354,12 +484,15 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 		startTime := time.Now()
 
 		// Call the processor
-		completed, err := processor.Process(ctx, task)
+		completed, err := processor.Process(procCtx, task)
 
 		// Calculate elapsed time
 		elapsed := time.Since(startTime)
+		tracing.AddAttribute(procCtx, "elapsed_time_ms", elapsed.Milliseconds())
+		tracing.AddAttribute(procCtx, "task_completed", completed)
 
 		if err != nil {
+			tracing.MarkSpanError(procCtx, err)
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
 				"workspace_id": workspace,
@@ -382,7 +515,14 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	case completed := <-done:
 		if completed {
 			// Task was completed successfully
-			if err := s.repo.MarkAsCompleted(ctx, workspace, taskID); err != nil {
+			completeCtx, completeSpan := tracing.StartServiceSpan(ctx, "TaskService", "MarkTaskCompleted")
+			defer tracing.EndSpan(completeSpan, nil)
+
+			tracing.AddAttribute(completeCtx, "task_id", taskID)
+			tracing.AddAttribute(completeCtx, "workspace_id", workspace)
+
+			if err := s.repo.MarkAsCompleted(completeCtx, workspace, taskID); err != nil {
+				tracing.MarkSpanError(completeCtx, err)
 				s.logger.WithFields(map[string]interface{}{
 					"task_id":      taskID,
 					"workspace_id": workspace,
@@ -400,8 +540,18 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			}).Info("Task completed successfully")
 		} else {
 			// Mark task as paused for next run
+			pauseCtx, pauseSpan := tracing.StartServiceSpan(ctx, "TaskService", "MarkTaskPaused")
+			defer tracing.EndSpan(pauseSpan, nil)
+
+			tracing.AddAttribute(pauseCtx, "task_id", taskID)
+			tracing.AddAttribute(pauseCtx, "workspace_id", workspace)
+
 			nextRun := time.Now().Add(1 * time.Minute)
-			if err := s.repo.MarkAsPaused(ctx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
+			tracing.AddAttribute(pauseCtx, "next_run", nextRun.Format(time.RFC3339))
+			tracing.AddAttribute(pauseCtx, "progress", task.Progress)
+
+			if err := s.repo.MarkAsPaused(pauseCtx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
+				tracing.MarkSpanError(pauseCtx, err)
 				s.logger.WithFields(map[string]interface{}{
 					"task_id":      taskID,
 					"workspace_id": workspace,
@@ -421,7 +571,15 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 		}
 	case err := <-processErr:
 		// Task failed with an error
-		if markErr := s.repo.MarkAsFailed(ctx, workspace, taskID, err.Error()); markErr != nil {
+		failCtx, failSpan := tracing.StartServiceSpan(ctx, "TaskService", "MarkTaskFailed")
+		defer tracing.EndSpan(failSpan, nil)
+
+		tracing.AddAttribute(failCtx, "task_id", taskID)
+		tracing.AddAttribute(failCtx, "workspace_id", workspace)
+		tracing.AddAttribute(failCtx, "error", err.Error())
+
+		if markErr := s.repo.MarkAsFailed(failCtx, workspace, taskID, err.Error()); markErr != nil {
+			tracing.MarkSpanError(failCtx, markErr)
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
 				"workspace_id": workspace,
@@ -433,12 +591,19 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 		return err
 	case <-ctx.Done():
 		// Task timed out or context was cancelled
+		timeoutCtx, timeoutSpan := tracing.StartServiceSpan(ctx, "TaskService", "HandleTaskTimeout")
+
+		tracing.AddAttribute(timeoutCtx, "task_id", taskID)
+		tracing.AddAttribute(timeoutCtx, "workspace_id", workspace)
+		tracing.AddAttribute(timeoutCtx, "context_error", ctx.Err().Error())
+
 		if ctx.Err() == context.DeadlineExceeded {
 			// This is a timeout
 			timeoutErr := &domain.ErrTaskTimeout{
 				TaskID:     taskID,
 				MaxRuntime: task.MaxRuntime,
 			}
+			tracing.MarkSpanError(timeoutCtx, timeoutErr)
 
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
@@ -450,12 +615,18 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			if task.RetryCount < task.MaxRetries {
 				// MarkAsPaused now includes state and progress parameters
 				nextRun := time.Now().Add(time.Duration(task.RetryInterval) * time.Second)
-				if err := s.repo.MarkAsPaused(ctx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
+				tracing.AddAttribute(timeoutCtx, "retry_count", task.RetryCount+1)
+				tracing.AddAttribute(timeoutCtx, "max_retries", task.MaxRetries)
+				tracing.AddAttribute(timeoutCtx, "next_run", nextRun.Format(time.RFC3339))
+
+				if err := s.repo.MarkAsPaused(timeoutCtx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
+					tracing.MarkSpanError(timeoutCtx, err)
 					s.logger.WithFields(map[string]interface{}{
 						"task_id":      taskID,
 						"workspace_id": workspace,
 						"error":        err.Error(),
 					}).Error("Failed to mark task as paused after timeout")
+					tracing.EndSpan(timeoutSpan, err)
 					return &domain.ErrTaskExecution{
 						TaskID: taskID,
 						Reason: "failed to mark task as paused after timeout",
@@ -472,12 +643,16 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 				}).Warn("Task timed out and will retry")
 			} else {
 				// No retries left, mark as failed
-				if err := s.repo.MarkAsFailed(ctx, workspace, taskID, timeoutErr.Error()); err != nil {
+				tracing.AddAttribute(timeoutCtx, "retries_exhausted", true)
+
+				if err := s.repo.MarkAsFailed(timeoutCtx, workspace, taskID, timeoutErr.Error()); err != nil {
+					tracing.MarkSpanError(timeoutCtx, err)
 					s.logger.WithFields(map[string]interface{}{
 						"task_id":      taskID,
 						"workspace_id": workspace,
 						"error":        err.Error(),
 					}).Error("Failed to mark task as failed after timeout")
+					tracing.EndSpan(timeoutSpan, err)
 					return &domain.ErrTaskExecution{
 						TaskID: taskID,
 						Reason: "failed to mark task as failed after timeout",
@@ -491,6 +666,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 				}).Warn("Task timed out and has no retries left")
 			}
 
+			tracing.EndSpan(timeoutSpan, timeoutErr)
 			return timeoutErr
 		} else {
 			// This is a cancellation
@@ -498,13 +674,16 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 				TaskID: taskID,
 				Reason: "task execution was cancelled",
 			}
+			tracing.MarkSpanError(timeoutCtx, cancelErr)
 
-			if err := s.repo.MarkAsFailed(ctx, workspace, taskID, cancelErr.Error()); err != nil {
+			if err := s.repo.MarkAsFailed(timeoutCtx, workspace, taskID, cancelErr.Error()); err != nil {
+				tracing.MarkSpanError(timeoutCtx, err)
 				s.logger.WithFields(map[string]interface{}{
 					"task_id":      taskID,
 					"workspace_id": workspace,
 					"error":        err.Error(),
 				}).Error("Failed to mark task as failed after cancellation")
+				tracing.EndSpan(timeoutSpan, err)
 				return &domain.ErrTaskExecution{
 					TaskID: taskID,
 					Reason: "failed to mark task as failed after cancellation",
@@ -516,6 +695,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 				"workspace_id": workspace,
 			}).Warn("Task execution was cancelled")
 
+			tracing.EndSpan(timeoutSpan, cancelErr)
 			return cancelErr
 		}
 	}
@@ -538,7 +718,13 @@ func (s *TaskService) SubscribeToBroadcastEvents(eventBus domain.EventBus) {
 
 // Event handlers for broadcast events
 func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload domain.EventPayload) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "handleBroadcastScheduled")
+	defer tracing.EndSpan(span, nil)
+
 	broadcastID := payload.EntityID
+	tracing.AddAttribute(ctx, "broadcast_id", broadcastID)
+	tracing.AddAttribute(ctx, "workspace_id", payload.WorkspaceID)
+	tracing.AddAttribute(ctx, "event_type", payload.Type)
 
 	s.logger.WithFields(map[string]interface{}{
 		"broadcast_id": broadcastID,
@@ -547,10 +733,14 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 
 	// Use a transaction for checking and potentially updating/creating task
 	err := s.WithTransaction(ctx, func(tx *sql.Tx) error {
+		txCtx, txSpan := tracing.StartServiceSpan(ctx, "TaskService", "BroadcastScheduledTransaction")
+		defer tracing.EndSpan(txSpan, nil)
+
 		// Try to find the task for this broadcast ID directly
-		existingTask, err := s.repo.GetTaskByBroadcastID(ctx, payload.WorkspaceID, broadcastID)
+		existingTask, err := s.repo.GetTaskByBroadcastID(txCtx, payload.WorkspaceID, broadcastID)
 		if err != nil {
 			// If no task exists, we'll create one later
+			tracing.AddAttribute(txCtx, "task_exists", false)
 			s.logger.WithField("broadcast_id", broadcastID).
 				WithField("error", err.Error()).
 				Debug("No existing task found for broadcast, will create new one")
@@ -558,6 +748,10 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 
 		// Update existing task if found
 		if existingTask != nil {
+			tracing.AddAttribute(txCtx, "task_exists", true)
+			tracing.AddAttribute(txCtx, "task_id", existingTask.ID)
+			tracing.AddAttribute(txCtx, "current_status", string(existingTask.Status))
+
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
 				"task_id":      existingTask.ID,
@@ -566,6 +760,9 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 			// Update task state if needed
 			sendNow, _ := payload.Data["send_now"].(bool)
 			status, _ := payload.Data["status"].(string)
+
+			tracing.AddAttribute(txCtx, "send_now", sendNow)
+			tracing.AddAttribute(txCtx, "broadcast_status", status)
 
 			if sendNow && status == string(domain.BroadcastStatusSending) {
 				// If broadcast is being sent immediately, mark task as pending and set next run to now
@@ -579,7 +776,8 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 					existingTask.BroadcastID = &broadcastIDCopy
 				}
 
-				if updateErr := s.repo.Update(ctx, payload.WorkspaceID, existingTask); updateErr != nil {
+				if updateErr := s.repo.Update(txCtx, payload.WorkspaceID, existingTask); updateErr != nil {
+					tracing.MarkSpanError(txCtx, updateErr)
 					s.logger.WithFields(map[string]interface{}{
 						"broadcast_id": broadcastID,
 						"task_id":      existingTask.ID,
@@ -598,6 +796,10 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 		// Set up task state
 		sendNow, _ := payload.Data["send_now"].(bool)
 		status, _ := payload.Data["status"].(string)
+
+		tracing.AddAttribute(txCtx, "send_now", sendNow)
+		tracing.AddAttribute(txCtx, "broadcast_status", status)
+		tracing.AddAttribute(txCtx, "creating_new_task", true)
 
 		// Create a copy of the broadcast ID for the pointer
 		broadcastIDCopy := broadcastID
@@ -629,9 +831,11 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 			// Schedule the task to run in the future
 			nextRunAfter := time.Now().Add(1 * time.Minute)
 			task.NextRunAfter = &nextRunAfter
+			tracing.AddAttribute(txCtx, "next_run_after", nextRunAfter.Format(time.RFC3339))
 		}
 
-		if createErr := s.CreateTask(ctx, payload.WorkspaceID, task); createErr != nil {
+		if createErr := s.CreateTask(txCtx, payload.WorkspaceID, task); createErr != nil {
+			tracing.MarkSpanError(txCtx, createErr)
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
 				"error":        createErr.Error(),
@@ -648,6 +852,7 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 	})
 
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": payload.WorkspaceID,
@@ -657,11 +862,21 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 }
 
 func (s *TaskService) handleBroadcastPaused(ctx context.Context, payload domain.EventPayload) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "handleBroadcastPaused")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", payload.WorkspaceID)
+	tracing.AddAttribute(ctx, "event_type", payload.Type)
+
 	broadcastID, ok := payload.Data["broadcast_id"].(string)
 	if !ok || broadcastID == "" {
+		err := fmt.Errorf("missing or invalid broadcast_id")
+		tracing.MarkSpanError(ctx, err)
 		s.logger.Error("Failed to handle broadcast paused event: missing or invalid broadcast_id")
 		return
 	}
+
+	tracing.AddAttribute(ctx, "broadcast_id", broadcastID)
 
 	s.logger.WithFields(map[string]interface{}{
 		"broadcast_id": broadcastID,
@@ -671,13 +886,20 @@ func (s *TaskService) handleBroadcastPaused(ctx context.Context, payload domain.
 	// Find associated task by broadcast ID
 	task, err := s.repo.GetTaskByBroadcastID(ctx, payload.WorkspaceID, broadcastID)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithField("error", err.Error()).Debug("No task found for paused broadcast")
 		return
 	}
 
+	tracing.AddAttribute(ctx, "task_id", task.ID)
+	tracing.AddAttribute(ctx, "current_status", string(task.Status))
+
 	// Pause the task
 	nextRunAfter := time.Now().Add(24 * time.Hour) // Pause for 24 hours
+	tracing.AddAttribute(ctx, "next_run_after", nextRunAfter.Format(time.RFC3339))
+
 	if err := s.repo.MarkAsPaused(ctx, payload.WorkspaceID, task.ID, nextRunAfter, task.Progress, task.State); err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"task_id":      task.ID,
@@ -692,11 +914,21 @@ func (s *TaskService) handleBroadcastPaused(ctx context.Context, payload domain.
 }
 
 func (s *TaskService) handleBroadcastResumed(ctx context.Context, payload domain.EventPayload) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "handleBroadcastResumed")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", payload.WorkspaceID)
+	tracing.AddAttribute(ctx, "event_type", payload.Type)
+
 	broadcastID, ok := payload.Data["broadcast_id"].(string)
 	if !ok || broadcastID == "" {
+		err := fmt.Errorf("missing or invalid broadcast_id")
+		tracing.MarkSpanError(ctx, err)
 		s.logger.Error("Failed to handle broadcast resumed event: missing or invalid broadcast_id")
 		return
 	}
+
+	tracing.AddAttribute(ctx, "broadcast_id", broadcastID)
 
 	s.logger.WithFields(map[string]interface{}{
 		"broadcast_id": broadcastID,
@@ -706,15 +938,24 @@ func (s *TaskService) handleBroadcastResumed(ctx context.Context, payload domain
 	// Find associated task by broadcast ID
 	task, err := s.repo.GetTaskByBroadcastID(ctx, payload.WorkspaceID, broadcastID)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithField("error", err.Error()).Debug("No task found for resumed broadcast")
 		return
 	}
+
+	tracing.AddAttribute(ctx, "task_id", task.ID)
+	tracing.AddAttribute(ctx, "current_status", string(task.Status))
 
 	// Resume the task
 	nextRunAfter := time.Now()
 	task.NextRunAfter = &nextRunAfter
 	task.Status = domain.TaskStatusPending
+
+	tracing.AddAttribute(ctx, "next_run_after", nextRunAfter.Format(time.RFC3339))
+	tracing.AddAttribute(ctx, "new_status", string(task.Status))
+
 	if err := s.repo.Update(ctx, payload.WorkspaceID, task); err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"task_id":      task.ID,
@@ -729,11 +970,21 @@ func (s *TaskService) handleBroadcastResumed(ctx context.Context, payload domain
 }
 
 func (s *TaskService) handleBroadcastSent(ctx context.Context, payload domain.EventPayload) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "handleBroadcastSent")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", payload.WorkspaceID)
+	tracing.AddAttribute(ctx, "event_type", payload.Type)
+
 	broadcastID, ok := payload.Data["broadcast_id"].(string)
 	if !ok || broadcastID == "" {
+		err := fmt.Errorf("missing or invalid broadcast_id")
+		tracing.MarkSpanError(ctx, err)
 		s.logger.Error("Failed to handle broadcast sent event: missing or invalid broadcast_id")
 		return
 	}
+
+	tracing.AddAttribute(ctx, "broadcast_id", broadcastID)
 
 	s.logger.WithFields(map[string]interface{}{
 		"broadcast_id": broadcastID,
@@ -743,12 +994,17 @@ func (s *TaskService) handleBroadcastSent(ctx context.Context, payload domain.Ev
 	// Find associated task by broadcast ID
 	task, err := s.repo.GetTaskByBroadcastID(ctx, payload.WorkspaceID, broadcastID)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithField("error", err.Error()).Debug("No task found for sent broadcast")
 		return
 	}
 
+	tracing.AddAttribute(ctx, "task_id", task.ID)
+	tracing.AddAttribute(ctx, "current_status", string(task.Status))
+
 	// Mark the task as completed
 	if err := s.repo.MarkAsCompleted(ctx, payload.WorkspaceID, task.ID); err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"task_id":      task.ID,
@@ -763,16 +1019,28 @@ func (s *TaskService) handleBroadcastSent(ctx context.Context, payload domain.Ev
 }
 
 func (s *TaskService) handleBroadcastFailed(ctx context.Context, payload domain.EventPayload) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "handleBroadcastFailed")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", payload.WorkspaceID)
+	tracing.AddAttribute(ctx, "event_type", payload.Type)
+
 	broadcastID, ok := payload.Data["broadcast_id"].(string)
 	if !ok || broadcastID == "" {
+		err := fmt.Errorf("missing or invalid broadcast_id")
+		tracing.MarkSpanError(ctx, err)
 		s.logger.Error("Failed to handle broadcast failed event: missing or invalid broadcast_id")
 		return
 	}
+
+	tracing.AddAttribute(ctx, "broadcast_id", broadcastID)
 
 	reason, _ := payload.Data["reason"].(string)
 	if reason == "" {
 		reason = "Broadcast failed"
 	}
+
+	tracing.AddAttribute(ctx, "failure_reason", reason)
 
 	s.logger.WithFields(map[string]interface{}{
 		"broadcast_id": broadcastID,
@@ -783,12 +1051,17 @@ func (s *TaskService) handleBroadcastFailed(ctx context.Context, payload domain.
 	// Find associated task by broadcast ID
 	task, err := s.repo.GetTaskByBroadcastID(ctx, payload.WorkspaceID, broadcastID)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithField("error", err.Error()).Debug("No task found for failed broadcast")
 		return
 	}
 
+	tracing.AddAttribute(ctx, "task_id", task.ID)
+	tracing.AddAttribute(ctx, "current_status", string(task.Status))
+
 	// Mark the task as failed
 	if err := s.repo.MarkAsFailed(ctx, payload.WorkspaceID, task.ID, reason); err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"task_id":      task.ID,
@@ -803,11 +1076,21 @@ func (s *TaskService) handleBroadcastFailed(ctx context.Context, payload domain.
 }
 
 func (s *TaskService) handleBroadcastCancelled(ctx context.Context, payload domain.EventPayload) {
+	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "handleBroadcastCancelled")
+	defer tracing.EndSpan(span, nil)
+
+	tracing.AddAttribute(ctx, "workspace_id", payload.WorkspaceID)
+	tracing.AddAttribute(ctx, "event_type", payload.Type)
+
 	broadcastID, ok := payload.Data["broadcast_id"].(string)
 	if !ok || broadcastID == "" {
+		err := fmt.Errorf("missing or invalid broadcast_id")
+		tracing.MarkSpanError(ctx, err)
 		s.logger.Error("Failed to handle broadcast cancelled event: missing or invalid broadcast_id")
 		return
 	}
+
+	tracing.AddAttribute(ctx, "broadcast_id", broadcastID)
 
 	s.logger.WithFields(map[string]interface{}{
 		"broadcast_id": broadcastID,
@@ -817,12 +1100,20 @@ func (s *TaskService) handleBroadcastCancelled(ctx context.Context, payload doma
 	// Find associated task by broadcast ID
 	task, err := s.repo.GetTaskByBroadcastID(ctx, payload.WorkspaceID, broadcastID)
 	if err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithField("error", err.Error()).Debug("No task found for cancelled broadcast")
 		return
 	}
 
+	tracing.AddAttribute(ctx, "task_id", task.ID)
+	tracing.AddAttribute(ctx, "current_status", string(task.Status))
+
 	// Mark the task as failed with cancellation reason
-	if err := s.repo.MarkAsFailed(ctx, payload.WorkspaceID, task.ID, "Broadcast was cancelled"); err != nil {
+	cancelReason := "Broadcast was cancelled"
+	tracing.AddAttribute(ctx, "cancel_reason", cancelReason)
+
+	if err := s.repo.MarkAsFailed(ctx, payload.WorkspaceID, task.ID, cancelReason); err != nil {
+		tracing.MarkSpanError(ctx, err)
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"task_id":      task.ID,
