@@ -56,32 +56,8 @@ COPY --from=backend-builder /tmp/server /app/server
 # Copy the built console files
 COPY --from=frontend-builder /build/console/dist/ /app/console/dist/
 
-# Environment variables with defaults that can be overridden
-ENV SERVER_PORT=8080 \
-    SERVER_HOST=0.0.0.0 \
-    DB_HOST=postgres \
-    DB_PORT=5432 \
-    DB_USER=postgres \
-    DB_PASSWORD=postgres \
-    DB_PREFIX=notifuse \
-    DB_NAME=notifuse_system \
-    ENVIRONMENT=production \
-    TRACING_ENABLED=false \
-    TRACING_SERVICE_NAME=notifuse-api \
-    TRACING_SAMPLING_PROBABILITY=0.1 \
-    TRACING_TRACE_EXPORTER=none \
-    TRACING_METRICS_EXPORTER=none
-
-# The following environment variables need to be provided at runtime:
-# - PASETO_PRIVATE_KEY (Required)
-# - PASETO_PUBLIC_KEY (Required)
-# - SECRET_KEY (Required)
-# - ROOT_EMAIL
-# - API_ENDPOINT
-# - WEBHOOK_ENDPOINT
-
 # Expose the application port
-EXPOSE ${SERVER_PORT}
+EXPOSE 8080
 
 # Run the application
 CMD ["/app/server"] 
