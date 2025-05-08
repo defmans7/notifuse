@@ -86,7 +86,7 @@ func main() {
 
 	// Initialize logger
 	appLogger := logger.NewLogger()
-	appLogger.Info("Starting API server")
+	appLogger.WithField("port", cfg.Server.Port).Info("Starting API server")
 
 	// Run the server
 	if err := runServer(cfg, appLogger); err != nil {

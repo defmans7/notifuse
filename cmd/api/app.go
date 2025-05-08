@@ -521,7 +521,7 @@ func (a *App) Start() error {
 	handler = middleware.CORSMiddleware(handler)
 
 	addr := fmt.Sprintf("%s:%d", a.config.Server.Host, a.config.Server.Port)
-	a.logger.WithField("address", addr).Info("Server starting")
+	a.logger.WithField("address", addr).Info(fmt.Sprintf("Server starting on %s", addr))
 
 	// Create a fresh notification channel and update the server
 	a.serverMu.Lock()
