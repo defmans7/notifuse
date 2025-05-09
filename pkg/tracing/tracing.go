@@ -364,20 +364,6 @@ func initDatadogMetricsExporter(cfg *config.TracingConfig) error {
 	return nil
 }
 
-// WrapDBDriver wraps a database driver with OpenCensus instrumentation
-func WrapDBDriver(driverName string) (string, error) {
-	// Register a new driver with OpenCensus instrumentation
-	driverNameWithOC := fmt.Sprintf("%s-opencensus", driverName)
-
-	// Register the wrapped driver with ocsql
-	_, err := ocsql.Register(driverName, ocsql.WithAllTraceOptions())
-	if err != nil {
-		return "", fmt.Errorf("failed to register opencensus sql driver: %w", err)
-	}
-
-	return driverNameWithOC, nil
-}
-
 // GetHTTPOptions returns options for HTTP client tracing
 func GetHTTPOptions() ochttp.Transport {
 	return ochttp.Transport{

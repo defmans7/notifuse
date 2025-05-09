@@ -34,6 +34,7 @@ type DatabaseConfig struct {
 	Password string
 	DBName   string
 	Prefix   string
+	SSLMode  string
 }
 
 type SecurityConfig struct {
@@ -114,6 +115,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_PASSWORD", "postgres")
 	v.SetDefault("DB_PREFIX", "notifuse")
 	v.SetDefault("DB_NAME", "${DB_PREFIX}_system")
+	v.SetDefault("DB_SSLMODE", "require")
 	v.SetDefault("ENVIRONMENT", "production")
 
 	// Default tracing config
@@ -229,6 +231,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			Password: v.GetString("DB_PASSWORD"),
 			DBName:   v.GetString("DB_NAME"),
 			Prefix:   v.GetString("DB_PREFIX"),
+			SSLMode:  v.GetString("DB_SSLMODE"),
 		},
 		Security: SecurityConfig{
 			PasetoPrivateKey:      privateKey,

@@ -45,7 +45,6 @@ import {
   registerWebhook,
   WebhookRegistrationStatus
 } from '../../services/api/webhook_registration'
-import config from '../../config'
 import { faPaperPlane, faPenToSquare, faTrashCan } from '@fortawesome/free-regular-svg-icons'
 
 // Provider types that only support transactional emails, not marketing emails
@@ -136,7 +135,7 @@ const EmailIntegration = ({
       await registerWebhook({
         workspace_id: workspace.id,
         integration_id: integration.id,
-        base_url: config.API_ENDPOINT
+        base_url: window.API_ENDPOINT || 'http://localhost:3000'
       })
 
       // Refresh webhook status after registration

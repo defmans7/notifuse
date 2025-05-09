@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -10,8 +11,9 @@ import (
 )
 
 type RootHandler struct {
-	consoleDir string
-	logger     logger.Logger
+	consoleDir  string
+	logger      logger.Logger
+	apiEndpoint string
 }
 
 func NewRootHandler() *RootHandler {
@@ -19,14 +21,21 @@ func NewRootHandler() *RootHandler {
 }
 
 // NewRootHandlerWithConsole creates a root handler that also serves console static files
-func NewRootHandlerWithConsole(consoleDir string, logger logger.Logger) *RootHandler {
+func NewRootHandlerWithConsole(consoleDir string, logger logger.Logger, apiEndpoint string) *RootHandler {
 	return &RootHandler{
-		consoleDir: consoleDir,
-		logger:     logger,
+		consoleDir:  consoleDir,
+		logger:      logger,
+		apiEndpoint: apiEndpoint,
 	}
 }
 
 func (h *RootHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	// Handle config.js request
+	if r.URL.Path == "/config.js" {
+		h.serveConfigJS(w, r)
+		return
+	}
+
 	// If configured to serve console files and path doesn't start with /api
 	if h.consoleDir != "" && !strings.HasPrefix(r.URL.Path, "/api") {
 		h.serveConsole(w, r)
@@ -43,6 +52,17 @@ func (h *RootHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		// For unhandled API paths
 		http.NotFound(w, r)
 	}
+}
+
+// serveConfigJS generates and serves the config.js file with environment variables
+func (h *RootHandler) serveConfigJS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	configJS := fmt.Sprintf("window.API_ENDPOINT = %q;", h.apiEndpoint)
+	w.Write([]byte(configJS))
 }
 
 // serveConsole handles serving static files, with a fallback for SPA routing
@@ -66,6 +86,7 @@ func (h *RootHandler) serveConsole(w http.ResponseWriter, r *http.Request) {
 
 func (h *RootHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", h.Handle)
+	mux.HandleFunc("/config.js", h.serveConfigJS)
 
 	// If console directory is configured, add specific /api route
 	if h.consoleDir != "" {

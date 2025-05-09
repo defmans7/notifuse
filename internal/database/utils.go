@@ -12,22 +12,24 @@ import (
 
 // GetSystemDSN returns the DSN for the system database
 func GetSystemDSN(cfg *config.DatabaseConfig) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.User,
 		cfg.Password,
 		cfg.Host,
 		cfg.Port,
 		cfg.DBName,
+		cfg.SSLMode,
 	)
 }
 
 // GetPostgresDSN returns the DSN for connecting to PostgreSQL server without specifying a database
 func GetPostgresDSN(cfg *config.DatabaseConfig) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/postgres?sslmode=disable",
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/postgres?sslmode=%s",
 		cfg.User,
 		cfg.Password,
 		cfg.Host,
 		cfg.Port,
+		cfg.SSLMode,
 	)
 }
 
@@ -36,12 +38,13 @@ func GetWorkspaceDSN(cfg *config.DatabaseConfig, workspaceID string) string {
 	// Replace hyphens with underscores for PostgreSQL compatibility
 	safeID := strings.ReplaceAll(workspaceID, "-", "_")
 	dbName := fmt.Sprintf("%s_ws_%s", cfg.Prefix, safeID)
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.User,
 		cfg.Password,
 		cfg.Host,
 		cfg.Port,
 		dbName,
+		cfg.SSLMode,
 	)
 }
 
@@ -134,10 +137,9 @@ func EnsureWorkspaceDatabaseExists(cfg *config.DatabaseConfig, workspaceID strin
 }
 
 // EnsureSystemDatabaseExists creates the system database if it doesn't exist
-func EnsureSystemDatabaseExists(cfg *config.DatabaseConfig) error {
+func EnsureSystemDatabaseExists(dsn string, dbName string) error {
 	// Connect to PostgreSQL server without specifying a database
-	pgDSN := GetPostgresDSN(cfg)
-	db, err := sql.Open("postgres", pgDSN)
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to PostgreSQL server: %w", err)
 	}
@@ -151,7 +153,7 @@ func EnsureSystemDatabaseExists(cfg *config.DatabaseConfig) error {
 	// Check if database exists
 	var exists bool
 	query := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
-	err = db.QueryRow(query, cfg.DBName).Scan(&exists)
+	err = db.QueryRow(query, dbName).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("failed to check if database exists: %w", err)
 	}
@@ -161,7 +163,7 @@ func EnsureSystemDatabaseExists(cfg *config.DatabaseConfig) error {
 		// Use fmt.Sprintf for proper quoting of identifiers in SQL
 		createDBQuery := fmt.Sprintf("CREATE DATABASE %s",
 			// Proper quoting to prevent SQL injection
-			strings.ReplaceAll(cfg.DBName, `"`, `""`))
+			strings.ReplaceAll(dbName, `"`, `""`))
 
 		_, err = db.Exec(createDBQuery)
 		if err != nil {

@@ -1,4 +1,9 @@
-import config from '../../config'
+declare global {
+  interface Window {
+    API_ENDPOINT?: string
+  }
+}
+
 import { router } from '../../router'
 
 class ApiError extends Error {
@@ -39,7 +44,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...options.headers
   }
 
-  const response = await fetch(`${config.API_ENDPOINT}${endpoint}`, {
+  const apiEndpoint = window.API_ENDPOINT || 'http://localhost:3000'
+  const response = await fetch(`${apiEndpoint}${endpoint}`, {
     ...options,
     headers
   })

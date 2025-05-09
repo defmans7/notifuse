@@ -173,19 +173,21 @@ func (a *App) InitTracing() error {
 
 // InitDB initializes the database connection
 func (a *App) InitDB() error {
+
 	// Ensure system database exists
-	if err := database.EnsureSystemDatabaseExists(&a.config.Database); err != nil {
+	if err := database.EnsureSystemDatabaseExists(database.GetPostgresDSN(&a.config.Database), a.config.Database.DBName); err != nil {
 		return fmt.Errorf("failed to ensure system database exists: %w", err)
 	}
+
 	a.logger.Info("System database check completed")
 
 	// If tracing is enabled, wrap the postgres driver
 	driverName := "postgres"
 	if a.config.Tracing.Enabled {
 		var err error
-		driverName, err = tracing.WrapDBDriver(driverName)
+		driverName, err = ocsql.Register(driverName, ocsql.WithAllTraceOptions())
 		if err != nil {
-			return fmt.Errorf("failed to wrap database driver with tracing: %w", err)
+			return fmt.Errorf("failed to register opencensus sql driver: %w", err)
 		}
 		a.logger.Info("Database driver wrapped with OpenCensus tracing")
 	}
@@ -462,7 +464,7 @@ func (a *App) InitHandlers() error {
 		a.config,
 		a.config.Security.PasetoPublicKey,
 		a.logger)
-	rootHandler := httpHandler.NewRootHandlerWithConsole("console/dist", a.logger)
+	rootHandler := httpHandler.NewRootHandlerWithConsole("console/dist", a.logger, a.config.APIEndpoint)
 	workspaceHandler := httpHandler.NewWorkspaceHandler(
 		a.workspaceService,
 		a.authService,
@@ -638,7 +640,7 @@ func (a *App) Initialize() error {
 		return err
 	}
 
-	a.logger.Info("Application successfully initialized with refactored broadcast system")
+	a.logger.Info("Application successfully initialized")
 
 	return nil
 }

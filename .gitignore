@@ -11,3 +11,4 @@ bin/
 coverage.html
 coverage.out
 /api
+console/public/config.js

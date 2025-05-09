@@ -259,7 +259,7 @@ export function CreateTemplateDrawer({
       last_name: 'Doe',
       email: 'john.doe@example.com'
     },
-    unsubscribe_link: `${import.meta.env.VITE_API_ENDPOINT}/unsubscribe?email={{ contact.email }}&list_id={{ list.id }}&hmac={{ contact.hmac }}`
+    unsubscribe_link: `${window.API_ENDPOINT}/unsubscribe?email={{ contact.email }}&list_id={{ list.id }}&hmac={{ contact.hmac }}`
   }
 
   const showDrawer = () => {

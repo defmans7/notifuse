@@ -190,8 +190,7 @@ export function WorkspaceMembers({
   }
 
   const domainName = `${workspaceId}.${
-    import.meta.env.VITE_API_ENDPOINT?.replace(/^https?:\/\//, '').split('/')[0] ||
-    'api.example.com'
+    window.API_ENDPOINT?.replace(/^https?:\/\//, '').split('/')[0] || 'api.example.com'
   }`
 
   const handleRemoveMember = async (userId: string) => {

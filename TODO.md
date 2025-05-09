@@ -16,3 +16,4 @@
 - test webhooks for email providers
 - add cc and bcc to template settings
 - remove secretKey from email services, decrypt is always called
+- test the docker compose
