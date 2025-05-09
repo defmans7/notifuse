@@ -183,6 +183,7 @@ func (a *App) InitDB() error {
 
 	// Ensure system database exists
 	if err := database.EnsureSystemDatabaseExists(database.GetPostgresDSN(&a.config.Database), a.config.Database.DBName); err != nil {
+		a.logger.Error(err.Error())
 		return fmt.Errorf("failed to ensure system database exists: %w", err)
 	}
 

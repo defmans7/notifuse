@@ -38,7 +38,7 @@ func runServer(cfg *config.Config, appLogger logger.Logger) error {
 
 	// Initialize all components
 	if err := app.Initialize(); err != nil {
-		appLogger.WithField("error", err.Error()).Fatal("Failed to initialize application")
+		appLogger.WithField("error", err.Error()).Fatal(err.Error())
 		return err
 	}
 
