@@ -1133,7 +1133,7 @@ func TestBuildTemplateData(t *testing.T) {
 		// Check unsubscribe URL
 		unsubscribeURL, ok := data["unsubscribe_url"].(string)
 		assert.True(t, ok)
-		assert.Contains(t, unsubscribeURL, "https://api.example.com/public/unsubscribe")
+		assert.Contains(t, unsubscribeURL, "https://api.example.com/unsubscribe")
 		assert.Contains(t, unsubscribeURL, "email=test%40example.com")
 		assert.Contains(t, unsubscribeURL, "list=list-789")
 		assert.Contains(t, unsubscribeURL, "list_name=Newsletter")
@@ -1146,7 +1146,7 @@ func TestBuildTemplateData(t *testing.T) {
 		// Check tracking pixel URL
 		trackingPixelURL, ok := data["tracking_opens_url"].(string)
 		assert.True(t, ok)
-		assert.Contains(t, trackingPixelURL, "https://api.example.com/public/opens")
+		assert.Contains(t, trackingPixelURL, "https://api.example.com/opens")
 		assert.Contains(t, trackingPixelURL, "id=msg-456")
 		assert.Contains(t, trackingPixelURL, "t=o")
 		assert.Contains(t, trackingPixelURL, "w=ws-123")
@@ -1154,7 +1154,7 @@ func TestBuildTemplateData(t *testing.T) {
 		// Check click tracking URL
 		trackingClickURL, ok := data["tracking_click_url"].(string)
 		assert.True(t, ok)
-		assert.Contains(t, trackingClickURL, "https://api.example.com/public/click")
+		assert.Contains(t, trackingClickURL, "https://api.example.com/click")
 		assert.Contains(t, trackingClickURL, "id=msg-456")
 		assert.Contains(t, trackingClickURL, "w=ws-123")
 	})
@@ -1186,7 +1186,7 @@ func TestBuildTemplateData(t *testing.T) {
 		// Check tracking opens URL still exists even without API endpoint
 		trackingPixelURL, ok := data["tracking_opens_url"].(string)
 		assert.True(t, ok)
-		assert.Contains(t, trackingPixelURL, "/public/opens")
+		assert.Contains(t, trackingPixelURL, "/opens")
 
 		// No unsubscribe URL should be present
 		_, exists := data["unsubscribe_url"]
