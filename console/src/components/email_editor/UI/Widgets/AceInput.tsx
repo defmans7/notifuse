@@ -53,7 +53,7 @@ const AceInput = (props: AceInputProps) => {
       debounceChangePeriod={300}
       name={props.id}
       editorProps={{ $blockScrolling: true }}
-      fontSize="14px"
+      fontSize="12px"
       height={props.height}
       width={props.width}
       className="ace-input"

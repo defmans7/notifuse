@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import React from 'react'
 import {
   Form,
   Input,
@@ -46,6 +47,7 @@ import {
   WebhookRegistrationStatus
 } from '../../services/api/webhook_registration'
 import { faPaperPlane, faPenToSquare, faTrashCan } from '@fortawesome/free-regular-svg-icons'
+import { emailProviders } from '../integrations/EmailProviders'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = ['postmark', 'mailgun']
@@ -72,7 +74,6 @@ interface EmailIntegrationProps {
   workspace: Workspace
   getIntegrationPurpose: (id: string) => string[]
   isIntegrationInUse: (id: string) => boolean
-  renderProviderIcon: (providerKind: EmailProviderKind, height?: number) => React.ReactNode
   renderProviderSpecificDetails: (provider: EmailProvider) => React.ReactNode
   startEditEmailProvider: (integration: Integration) => void
   startTestEmailProvider: (integrationId: string) => void
@@ -87,7 +88,6 @@ const EmailIntegration = ({
   workspace,
   getIntegrationPurpose,
   isIntegrationInUse,
-  renderProviderIcon,
   renderProviderSpecificDetails,
   startEditEmailProvider,
   startTestEmailProvider,
@@ -279,7 +279,9 @@ const EmailIntegration = ({
               </Space>
             ) : null}
           </div>
-          {renderProviderIcon(provider.kind, 24)}
+          {emailProviders
+            .find((p) => p.kind === integration.email_provider.kind)
+            ?.getIcon('', 24) || <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />}
         </>
       }
     >
@@ -642,73 +644,32 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Render the list of available integrations
   const renderAvailableIntegrations = () => {
-    // Available provider configurations
-    const providers = [
-      {
-        type: 'email' as IntegrationType,
-        kind: 'smtp',
-        name: 'SMTP',
-        icon: <FontAwesomeIcon icon={faEnvelope} className="w-16" />
-      },
-      {
-        type: 'email' as IntegrationType,
-        kind: 'ses',
-        name: 'Amazon SES',
-        icon: <img src="/amazonses.png" alt="Amazon SES" className="h-8 w-16 object-contain" />
-      },
-      {
-        type: 'email' as IntegrationType,
-        kind: 'sparkpost',
-        name: 'SparkPost',
-        icon: <img src="/sparkpost.png" alt="SparkPost" className="h-8 w-16 object-contain" />
-      },
-      {
-        type: 'email' as IntegrationType,
-        kind: 'postmark',
-        name: 'Postmark',
-        icon: <img src="/postmark.png" alt="Postmark" className="h-8 w-16 object-contain" />
-      },
-      {
-        type: 'email' as IntegrationType,
-        kind: 'mailgun',
-        name: 'Mailgun',
-        icon: <img src="/mailgun.png" alt="Mailgun" className="h-8 w-16 object-contain" />
-      },
-      {
-        type: 'email' as IntegrationType,
-        kind: 'mailjet',
-        name: 'Mailjet',
-        icon: <img src="/mailjet.png" alt="Mailjet" className="h-8 w-16 object-contain" />
-      }
-      // Future integration types can be added here
-    ]
-
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {providers.map((provider) => (
-          <Card
+      <>
+        {emailProviders.map((provider) => (
+          <div
             key={`${provider.type}-${provider.kind}`}
-            hoverable
-            onClick={() => handleSelectProviderType(provider.kind as EmailProviderKind)}
-            className="flex items-center cursor-pointer"
-            extra={
-              <Button
-                type="primary"
-                ghost
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleSelectProviderType(provider.kind as EmailProviderKind)
-                }}
-              >
-                Configure
-              </Button>
-            }
+            onClick={() => handleSelectProviderType(provider.kind)}
+            className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all cursor-pointer mb-4 relative"
           >
-            <Card.Meta avatar={provider.icon} title={provider.name} />
-          </Card>
+            <div className="flex items-center">
+              {provider.getIcon('', 'large')}
+              <span className="ml-3 font-medium">{provider.name}</span>
+            </div>
+            <Button
+              type="primary"
+              ghost
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSelectProviderType(provider.kind)
+              }}
+            >
+              Configure
+            </Button>
+          </div>
         ))}
-      </div>
+      </>
     )
   }
 
@@ -731,7 +692,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                   workspace={workspace}
                   getIntegrationPurpose={getIntegrationPurpose}
                   isIntegrationInUse={isIntegrationInUse}
-                  renderProviderIcon={renderProviderIcon}
                   renderProviderSpecificDetails={renderProviderSpecificDetails}
                   startEditEmailProvider={startEditEmailProvider}
                   startTestEmailProvider={startTestEmailProvider}
@@ -897,25 +857,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     )
   }
 
-  // Render provider icon
-  const renderProviderIcon = (providerKind: EmailProviderKind, height?: number) => {
-    if (providerKind === 'smtp') {
-      return <FontAwesomeIcon icon={faEnvelope} className="h-4 w-8 object-contain" />
-    } else if (providerKind === 'ses') {
-      return <img src="/amazonses.png" alt="Amazon SES" style={{ height: height || 16 }} />
-    } else if (providerKind === 'sparkpost') {
-      return <img src="/sparkpost.png" alt="SparkPost" style={{ height: height || 16 }} />
-    } else if (providerKind === 'postmark') {
-      return <img src="/postmark.png" alt="Postmark" style={{ height: height || 16 }} />
-    } else if (providerKind === 'mailgun') {
-      return <img src="/mailgun.png" alt="Mailgun" style={{ height: height || 16 }} />
-    } else if (providerKind === 'mailjet') {
-      return <img src="/mailjet.png" alt="Mailjet" style={{ height: height || 16 }} />
-    }
-    return null
-  }
-
-  // Render provider-specific details in description list
+  // Render provider specific details for the given provider
   const renderProviderSpecificDetails = (provider: EmailProvider) => {
     const items = []
 
@@ -1042,45 +984,14 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   }
 
   // Add integration dropdown menu items
-  const integrationMenuItems = [
-    {
-      key: 'smtp',
-      label: 'SMTP',
-      icon: <FontAwesomeIcon icon={faEnvelope} className="h-6 w-12 object-contain mr-1" />,
-      onClick: () => handleSelectProviderType('smtp')
-    },
-    {
-      key: 'ses',
-      label: 'Amazon SES',
-      icon: <img src="/amazonses.png" alt="Amazon SES" className="h-6 w-12 object-contain mr-1" />,
-      onClick: () => handleSelectProviderType('ses')
-    },
-    {
-      key: 'sparkpost',
-      label: 'SparkPost',
-      icon: <img src="/sparkpost.png" alt="SparkPost" className="h-6 w-12 object-contain mr-1" />,
-      onClick: () => handleSelectProviderType('sparkpost')
-    },
-    {
-      key: 'postmark',
-      label: 'Postmark',
-      icon: <img src="/postmark.png" alt="Postmark" className="h-6 w-12 object-contain mr-1" />,
-      onClick: () => handleSelectProviderType('postmark')
-    },
-    {
-      key: 'mailgun',
-      label: 'Mailgun',
-      icon: <img src="/mailgun.png" alt="Mailgun" className="h-6 w-12 object-contain mr-1" />,
-      onClick: () => handleSelectProviderType('mailgun')
-    },
-    {
-      key: 'mailjet',
-      label: 'Mailjet',
-      icon: <img src="/mailjet.png" alt="Mailjet" className="h-6 w-12 object-contain mr-1" />,
-      onClick: () => handleSelectProviderType('mailjet')
-    }
-    // Future integration types can be added here
-  ]
+  const integrationMenuItems = emailProviders.map((provider) => ({
+    key: provider.kind,
+    label: provider.name,
+    icon: React.cloneElement(
+      provider.getIcon('h-6 w-12 object-contain mr-1') as React.ReactElement
+    ),
+    onClick: () => handleSelectProviderType(provider.kind)
+  }))
 
   return (
     <Section

@@ -463,7 +463,7 @@ export interface TestEmailProviderResponse {
 export interface TestTemplateRequest {
   workspace_id: string
   template_id: string
-  provider_type: 'marketing' | 'transactional'
+  integration_id: string
   recipient_email: string
 }
 

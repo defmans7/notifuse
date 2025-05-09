@@ -1,94 +1,79 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Typography,
-  Space,
-  Tooltip,
-  Button,
-  Modal,
-  Input,
-  message,
-  Table,
-  Tag,
-  Popconfirm
-} from 'antd'
+import { Typography, Space, Tooltip, Button, message, Table, Tag, Popconfirm } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import {
   transactionalNotificationsApi,
   TransactionalNotification,
-  ChannelTemplates
+  ChannelTemplates,
+  ChannelTemplate
 } from '../services/api/transactional_notifications'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPenToSquare,
   faTrashCan,
   faEnvelope,
-  faPaperPlane
+  faPaperPlane,
+  faEye
 } from '@fortawesome/free-regular-svg-icons'
 import UpsertTransactionalNotificationDrawer from '../components/transactional/UpsertTransactionalNotificationDrawer'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
 import { useAuth } from '../contexts/AuthContext'
+import SendTemplateModal from '../components/templates/SendTemplateModal'
+import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
+import { templatesApi } from '../services/api/template'
 
 const { Title, Paragraph, Text } = Typography
 
-// Component for rendering channels
-const ChannelsList: React.FC<{ channels: ChannelTemplates }> = ({ channels }) => {
+// Template preview component
+const TemplatePreview: React.FC<{ templateId: string; workspaceId: string }> = ({
+  templateId,
+  workspaceId
+}) => {
+  const { data: templateData } = useQuery({
+    queryKey: ['template', workspaceId, templateId],
+    queryFn: () => templatesApi.get({ workspace_id: workspaceId, id: templateId }),
+    enabled: !!workspaceId && !!templateId
+  })
+
+  if (!templateData?.template) {
+    return null
+  }
+
   return (
-    <Space direction="vertical" size="small">
-      {channels.email && (
-        <Tag color="blue">
-          <FontAwesomeIcon icon={faEnvelope} style={{ opacity: 0.7 }} /> Email
-        </Tag>
-      )}
-      {/* Add more channel types here as they become available */}
-    </Space>
+    <TemplatePreviewDrawer record={templateData.template} workspaceId={workspaceId}>
+      <Button
+        type="primary"
+        ghost
+        size="small"
+        className="ml-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        Preview
+      </Button>
+    </TemplatePreviewDrawer>
   )
 }
 
-// Test notification modal component
-const TestNotificationModal = ({
-  isOpen,
-  onClose,
-  onSend,
-  loading
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onSend: (email: string) => void
-  loading: boolean
+// Component for rendering channels
+const ChannelsList: React.FC<{ channels: ChannelTemplates; workspaceId?: string }> = ({
+  channels,
+  workspaceId
 }) => {
-  const [email, setEmail] = useState('')
-
   return (
-    <Modal
-      title="Send Test Notification"
-      open={isOpen}
-      onCancel={onClose}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          Cancel
-        </Button>,
-        <Button
-          key="send"
-          type="primary"
-          onClick={() => onSend(email)}
-          disabled={!email || loading}
-          loading={loading}
-        >
-          Send Test Notification
-        </Button>
-      ]}
-    >
-      <div className="py-2">
-        <p className="mb-4">Send a test notification to verify how it will look.</p>
-        <Input
-          placeholder="recipient@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          type="email"
-        />
-      </div>
-    </Modal>
+    <Space direction="vertical" size="small">
+      {channels.email && (
+        <div className="flex items-center justify-between w-full">
+          <Tag color="blue">
+            <FontAwesomeIcon icon={faEnvelope} style={{ opacity: 0.7 }} /> Email
+          </Tag>
+          {channels.email.template_id && workspaceId && (
+            <TemplatePreview templateId={channels.email.template_id} workspaceId={workspaceId} />
+          )}
+        </div>
+      )}
+      {/* Add more channel types here as they become available */}
+    </Space>
   )
 }
 
@@ -150,33 +135,6 @@ export function TransactionalNotificationsPage() {
     setTestModalOpen(true)
   }
 
-  const sendTestNotification = async (email: string) => {
-    if (!notificationToTest) return
-
-    setTestLoading(true)
-    try {
-      // Mock implementation - would need to be connected to actual API
-      // await transactionalNotificationsApi.send({
-      //   workspace_id: workspaceId as string,
-      //   notification: {
-      //     id: notificationToTest.id,
-      //     contact: { email },
-      //     data: { test: true }
-      //   }
-      // })
-
-      // Simulate API call for now
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      message.success('Test notification sent successfully')
-      setTestModalOpen(false)
-    } catch (error) {
-      message.error(`Error: ${error instanceof Error ? error.message : 'Something went wrong'}`)
-    } finally {
-      setTestLoading(false)
-    }
-  }
-
   if (notificationsError) {
     return (
       <div>
@@ -210,7 +168,9 @@ export function TransactionalNotificationsPage() {
       title: 'Channels',
       dataIndex: 'channels',
       key: 'channels',
-      render: (channels: ChannelTemplates) => <ChannelsList channels={channels} />
+      render: (channels: ChannelTemplates) => (
+        <ChannelsList channels={channels} workspaceId={workspaceId as string} />
+      )
     },
     {
       title: 'Created',
@@ -315,13 +275,21 @@ export function TransactionalNotificationsPage() {
         </div>
       )}
 
-      {/* Test notification modal */}
-      <TestNotificationModal
-        isOpen={testModalOpen}
-        onClose={() => setTestModalOpen(false)}
-        onSend={sendTestNotification}
-        loading={testLoading}
-      />
+      {/* Use SendTemplateModal for testing */}
+      {notificationToTest?.channels?.email?.template_id && (
+        <SendTemplateModal
+          isOpen={testModalOpen}
+          onClose={() => setTestModalOpen(false)}
+          template={
+            {
+              id: notificationToTest.channels.email.template_id,
+              category: 'transactional'
+            } as any
+          }
+          workspace={currentWorkspace || null}
+          loading={testLoading}
+        />
+      )}
     </div>
   )
 }

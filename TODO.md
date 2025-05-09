@@ -8,12 +8,11 @@
 - tracking pixel handler to count the opens
 - test transactional email
 - user notifications center
-- logo + colors in workspace settings
+- logo + colors in workspace settings for notification center
 - add email hmac in unsubscribe links for auth
 - message history handler
 - contact show profile
 - swagger api docs
 - test webhooks for email providers
 - add cc and bcc to template settings
-- remove secretKey from email services, decrypt is always called
 - test the docker compose

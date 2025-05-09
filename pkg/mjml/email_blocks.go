@@ -700,7 +700,6 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 
 				// --- Liquid Processing ---
 				if strings.Contains(partText, "{{") || strings.Contains(partText, "{%") {
-					log.Printf("Liquid processing: %s", partText)
 					engine := liquid.NewEngine() // Consider creating the engine once outside the loop if performance is critical
 					var jsonData map[string]interface{}
 					if templateData != "" { // Check if templateData is provided
@@ -976,7 +975,6 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					if err != nil {
 						return "", fmt.Errorf("liquid rendering error in heading block (ID: %s): %w", block.ID, err)
 					}
-					log.Printf("Heading block partText: %s", renderedContent)
 					partText = renderedContent
 				} else {
 					// Only escape if it wasn't processed as Liquid

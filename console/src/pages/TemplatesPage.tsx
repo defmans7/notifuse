@@ -30,59 +30,13 @@ import { renderCategoryTag } from '../components/templates'
 import { useAuth } from '../contexts/AuthContext'
 import dayjs from '../lib/dayjs'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
+import SendTemplateModal from '../components/templates/SendTemplateModal'
 
 const { Title, Paragraph, Text } = Typography
 
 // Define search params interface
 interface TemplatesSearch {
   category?: string
-}
-
-// Add a new constant for the SendTemplateModal component
-const SendTemplateModal = ({
-  isOpen,
-  onClose,
-  onSend,
-  loading
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onSend: (email: string) => void
-  loading: boolean
-}) => {
-  const [email, setEmail] = useState('')
-
-  return (
-    <Modal
-      title="Send Test Email"
-      open={isOpen}
-      onCancel={onClose}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          Cancel
-        </Button>,
-        <Button
-          key="send"
-          type="primary"
-          onClick={() => onSend(email)}
-          disabled={!email || loading}
-          loading={loading}
-        >
-          Send Test Email
-        </Button>
-      ]}
-    >
-      <div className="py-2">
-        <p className="mb-4">Send a test email using this template to verify how it will look.</p>
-        <Input
-          placeholder="recipient@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          type="email"
-        />
-      </div>
-    </Modal>
-  )
 }
 
 export function TemplatesPage() {
@@ -97,7 +51,6 @@ export function TemplatesPage() {
   const selectedCategory = search.category || 'all'
   // Add state for the test template modal
   const [testModalOpen, setTestModalOpen] = useState(false)
-  const [testLoading, setTestLoading] = useState(false)
   const [templateToTest, setTemplateToTest] = useState<Template | null>(null)
 
   // Function to update search params
@@ -167,32 +120,6 @@ export function TemplatesPage() {
   const handleTestTemplate = (template: Template) => {
     setTemplateToTest(template)
     setTestModalOpen(true)
-  }
-
-  // Add function to send the test email
-  const sendTestEmail = async (email: string) => {
-    if (!templateToTest || !workspace) return
-
-    setTestLoading(true)
-    try {
-      const response = await emailService.testTemplate(
-        workspaceId!,
-        templateToTest.id,
-        templateToTest.category === 'marketing' ? 'marketing' : 'transactional',
-        email
-      )
-
-      if (response.success) {
-        message.success('Test email sent successfully')
-        setTestModalOpen(false)
-      } else {
-        message.error(`Failed to send test email: ${response.error || 'Unknown error'}`)
-      }
-    } catch (error: any) {
-      message.error(`Error: ${error?.message || 'Something went wrong'}`)
-    } finally {
-      setTestLoading(false)
-    }
   }
 
   const columns = [
@@ -421,12 +348,12 @@ export function TemplatesPage() {
         </div>
       )}
 
-      {/* Add the SendTemplateModal component */}
+      {/* Use the new SendTemplateModal component */}
       <SendTemplateModal
         isOpen={testModalOpen}
         onClose={() => setTestModalOpen(false)}
-        onSend={sendTestEmail}
-        loading={testLoading}
+        template={templateToTest}
+        workspace={workspace}
       />
     </div>
   )
