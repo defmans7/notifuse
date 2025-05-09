@@ -1,11 +1,21 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Typography, Space, Tooltip, Button, message, Table, Tag, Popconfirm } from 'antd'
+import {
+  Typography,
+  Space,
+  Tooltip,
+  Button,
+  message,
+  Table,
+  Tag,
+  Popconfirm,
+  Modal,
+  Alert
+} from 'antd'
 import { useParams } from '@tanstack/react-router'
 import {
   transactionalNotificationsApi,
   TransactionalNotification,
-  ChannelTemplates,
-  ChannelTemplate
+  ChannelTemplates
 } from '../services/api/transactional_notifications'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -15,13 +25,15 @@ import {
   faPaperPlane,
   faEye
 } from '@fortawesome/free-regular-svg-icons'
+import { faTerminal } from '@fortawesome/free-solid-svg-icons'
 import UpsertTransactionalNotificationDrawer from '../components/transactional/UpsertTransactionalNotificationDrawer'
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import dayjs from '../lib/dayjs'
 import { useAuth } from '../contexts/AuthContext'
 import SendTemplateModal from '../components/templates/SendTemplateModal'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { templatesApi } from '../services/api/template'
+import { usePrismjs } from '../components/email_editor/UI/Widgets/PrismJS'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -81,11 +93,12 @@ export function TransactionalNotificationsPage() {
   // Find the current workspace from the workspaces array
   const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
 
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
   const [notificationToDelete, setNotificationToDelete] =
     useState<TransactionalNotification | null>(null)
   const [testModalOpen, setTestModalOpen] = useState(false)
-  const [testLoading, setTestLoading] = useState(false)
+  const [apiModalOpen, setApiModalOpen] = useState(false)
+  const [currentApiNotification, setCurrentApiNotification] =
+    useState<TransactionalNotification | null>(null)
   const [notificationToTest, setNotificationToTest] = useState<TransactionalNotification | null>(
     null
   )
@@ -115,7 +128,6 @@ export function TransactionalNotificationsPage() {
       })
 
       message.success('Transactional notification deleted successfully')
-      setDeleteModalVisible(false)
       setNotificationToDelete(null)
 
       // Refresh the list
@@ -129,6 +141,11 @@ export function TransactionalNotificationsPage() {
   const handleTestNotification = (notification: TransactionalNotification) => {
     setNotificationToTest(notification)
     setTestModalOpen(true)
+  }
+
+  const handleShowApiModal = (notification: TransactionalNotification) => {
+    setCurrentApiNotification(notification)
+    setApiModalOpen(true)
   }
 
   if (notificationsError) {
@@ -145,13 +162,14 @@ export function TransactionalNotificationsPage() {
 
   const columns = [
     {
-      title: 'Name',
+      title: 'Name / ID',
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: TransactionalNotification) => (
-        <Tooltip title={'ID for API: ' + record.id}>
-          <Text strong>{text}</Text>
-        </Tooltip>
+        <>
+          <div className="font-bold">{text}</div>
+          <div className=" text-gray-500">{record.id}</div>
+        </>
       )
     },
     {
@@ -211,6 +229,11 @@ export function TransactionalNotificationsPage() {
               <FontAwesomeIcon icon={faPaperPlane} style={{ opacity: 0.7 }} />
             </Button>
           </Tooltip>
+          <Tooltip title="API Command">
+            <Button type="text" size="small" onClick={() => handleShowApiModal(record)}>
+              <FontAwesomeIcon icon={faTerminal} style={{ opacity: 0.7 }} />
+            </Button>
+          </Tooltip>
           <Tooltip title="Delete">
             <Popconfirm
               title="Delete the notification?"
@@ -229,6 +252,9 @@ export function TransactionalNotificationsPage() {
       )
     }
   ]
+
+  const preRef = useRef<HTMLPreElement>(null)
+  usePrismjs(preRef, ['line-numbers'])
 
   return (
     <div className="p-6">
@@ -271,6 +297,58 @@ export function TransactionalNotificationsPage() {
         </div>
       )}
 
+      {/* API Command Modal */}
+      <Modal
+        title="API Command"
+        open={apiModalOpen}
+        onCancel={() => setApiModalOpen(false)}
+        footer={null}
+        width={800}
+      >
+        {currentApiNotification && (
+          <div>
+            <p className="mb-4">
+              Use this curl command to send a transactional notification via API:
+            </p>
+            <Alert
+              type="info"
+              message="If the contact email doesn't exist in your workspace, it will be automatically
+              created."
+              className="!mb-4"
+            />
+
+            <pre
+              ref={preRef}
+              className="language-bash"
+              style={{
+                fontSize: '12px',
+                margin: 0,
+                padding: '10px'
+              }}
+            >
+              <code className="language-bash">{`curl -X POST \\
+  "${window.location.origin}/api/transactional.send" \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+  "workspace_id": "${workspaceId}",
+  "notification": {
+    "id": "${currentApiNotification.id}",
+    "channels": ["email"],
+    "contact": {
+      "email": "recipient@example.com"
+      // other optional contact fields here
+    },
+    "data": {
+      // Your template variables here
+    }
+  }
+}'`}</code>
+            </pre>
+          </div>
+        )}
+      </Modal>
+
       {/* Use SendTemplateModal for testing */}
       {notificationToTest?.channels?.email?.template_id && (
         <SendTemplateModal
@@ -283,7 +361,6 @@ export function TransactionalNotificationsPage() {
             } as any
           }
           workspace={currentWorkspace || null}
-          loading={testLoading}
         />
       )}
     </div>
