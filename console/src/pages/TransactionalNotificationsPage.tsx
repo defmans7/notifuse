@@ -42,15 +42,11 @@ const TemplatePreview: React.FC<{ templateId: string; workspaceId: string }> = (
 
   return (
     <TemplatePreviewDrawer record={templateData.template} workspaceId={workspaceId}>
-      <Button
-        type="primary"
-        ghost
-        size="small"
-        className="ml-2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        Preview
-      </Button>
+      <Tooltip title="Preview template">
+        <Button type="text" size="small" className="ml-2">
+          <FontAwesomeIcon icon={faEye} style={{ opacity: 0.7 }} />
+        </Button>
+      </Tooltip>
     </TemplatePreviewDrawer>
   )
 }
