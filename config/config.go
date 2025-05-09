@@ -252,7 +252,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			Port:      v.GetInt("SMTP_PORT"),
 			Username:  v.GetString("SMTP_USERNAME"),
 			Password:  v.GetString("SMTP_PASSWORD"),
-			FromEmail: v.GetString("FROM_EMAIL"),
+			FromEmail: v.GetString("SMTP_FROM_EMAIL"),
 			FromName:  v.GetString("SMTP_FROM_NAME"),
 		},
 		Security: SecurityConfig{
