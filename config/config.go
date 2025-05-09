@@ -15,6 +15,7 @@ type Config struct {
 	Database        DatabaseConfig
 	Security        SecurityConfig
 	Tracing         TracingConfig
+	SMTP            SMTPConfig
 	RootEmail       string
 	Environment     string
 	APIEndpoint     string
@@ -91,6 +92,15 @@ type TracingConfig struct {
 	PrometheusPort  int
 }
 
+type SMTPConfig struct {
+	Host      string
+	Port      int
+	Username  string
+	Password  string
+	FromEmail string
+	FromName  string
+}
+
 // LoadOptions contains options for loading configuration
 type LoadOptions struct {
 	EnvFile string // Optional environment file to load (e.g., ".env", ".env.test")
@@ -117,6 +127,10 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_NAME", "${DB_PREFIX}_system")
 	v.SetDefault("DB_SSLMODE", "require")
 	v.SetDefault("ENVIRONMENT", "production")
+
+	// SMTP defaults
+	v.SetDefault("SMTP_PORT", 587)
+	v.SetDefault("SMTP_FROM_NAME", "Notifuse")
 
 	// Default tracing config
 	v.SetDefault("TRACING_ENABLED", false)
@@ -232,6 +246,14 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			DBName:   v.GetString("DB_NAME"),
 			Prefix:   v.GetString("DB_PREFIX"),
 			SSLMode:  v.GetString("DB_SSLMODE"),
+		},
+		SMTP: SMTPConfig{
+			Host:      v.GetString("SMTP_HOST"),
+			Port:      v.GetInt("SMTP_PORT"),
+			Username:  v.GetString("SMTP_USERNAME"),
+			Password:  v.GetString("SMTP_PASSWORD"),
+			FromEmail: v.GetString("FROM_EMAIL"),
+			FromName:  v.GetString("SMTP_FROM_NAME"),
 		},
 		Security: SecurityConfig{
 			PasetoPrivateKey:      privateKey,

@@ -135,7 +135,7 @@ func TestValidatingMailer_SendWorkspaceInvitation(t *testing.T) {
 		SMTPPassword: "password",
 		FromEmail:    "noreply@example.com",
 		FromName:     "Notifuse",
-		BaseURL:      "https://example.com",
+		APIEndpoint:  "https://example.com",
 	}
 
 	mailer := NewValidatingMailer(config)
@@ -294,7 +294,7 @@ func TestSMTPMailer_SendWorkspaceInvitation(t *testing.T) {
 		SMTPPassword: "password",
 		FromEmail:    "noreply@example.com",
 		FromName:     "Notifuse",
-		BaseURL:      baseURL,
+		APIEndpoint:  baseURL,
 	}
 
 	// Create a test mode mailer
@@ -372,7 +372,7 @@ func TestSMTPMailer_WithEdgeCases(t *testing.T) {
 				SMTPPassword: "password",
 				FromEmail:    "noreply@example.com",
 				FromName:     "Notifuse",
-				BaseURL:      tc.baseURL,
+				APIEndpoint:  tc.baseURL,
 			}
 
 			// Use test mode mailer
@@ -415,7 +415,7 @@ func TestNewSMTPMailer(t *testing.T) {
 		SMTPPassword: "password",
 		FromEmail:    "noreply@example.com",
 		FromName:     "Notifuse",
-		BaseURL:      "https://notifuse.example.com",
+		APIEndpoint:  "https://notifuse.example.com",
 	}
 
 	// Create new mailer
@@ -452,7 +452,7 @@ func TestMailerConfig(t *testing.T) {
 				SMTPPassword: "password",
 				FromEmail:    "noreply@example.com",
 				FromName:     "Notifuse",
-				BaseURL:      "https://notifuse.example.com",
+				APIEndpoint:  "https://notifuse.example.com",
 			},
 			validate: func(t *testing.T, config *Config) {
 				if config.SMTPHost != "smtp.example.com" {
@@ -523,7 +523,7 @@ func TestSMTPMailer_SendMagicCode(t *testing.T) {
 		SMTPPassword: "password",
 		FromEmail:    "noreply@example.com",
 		FromName:     "Notifuse",
-		BaseURL:      baseURL,
+		APIEndpoint:  baseURL,
 	}
 
 	// Create a test mode mailer

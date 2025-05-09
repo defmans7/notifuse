@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -241,13 +240,13 @@ func (a *App) InitMailer() error {
 	} else {
 		// Use SMTP mailer in production
 		a.mailer = mailer.NewSMTPMailer(&mailer.Config{
-			SMTPHost:     os.Getenv("SMTP_HOST"),
-			SMTPPort:     587,
-			SMTPUsername: os.Getenv("SMTP_USERNAME"),
-			SMTPPassword: os.Getenv("SMTP_PASSWORD"),
-			FromEmail:    os.Getenv("FROM_EMAIL"),
-			FromName:     "Notifuse",
-			BaseURL:      os.Getenv("BASE_URL"),
+			SMTPHost:     a.config.SMTP.Host,
+			SMTPPort:     a.config.SMTP.Port,
+			SMTPUsername: a.config.SMTP.Username,
+			SMTPPassword: a.config.SMTP.Password,
+			FromEmail:    a.config.SMTP.FromEmail,
+			FromName:     a.config.SMTP.FromName,
+			APIEndpoint:  a.config.APIEndpoint,
 		})
 		a.logger.Info("Using SMTP mailer for production")
 	}

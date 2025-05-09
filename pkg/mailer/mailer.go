@@ -24,7 +24,7 @@ type Config struct {
 	SMTPPassword string
 	FromEmail    string
 	FromName     string
-	BaseURL      string
+	APIEndpoint  string
 }
 
 // SMTPMailer implements the Mailer interface using SMTP
@@ -51,7 +51,7 @@ func NewTestSMTPMailer(config *Config) *SMTPMailer {
 
 // SendWorkspaceInvitation sends an invitation email with the given token
 func (m *SMTPMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, token string) error {
-	inviteURL := fmt.Sprintf("%s/invitation?token=%s", m.config.BaseURL, token)
+	inviteURL := fmt.Sprintf("%s/invitation?token=%s", m.config.APIEndpoint, token)
 
 	// Create a new message
 	msg := mail.NewMsg()
