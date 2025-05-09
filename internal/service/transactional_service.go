@@ -22,6 +22,7 @@ type TransactionalNotificationService struct {
 	emailService       domain.EmailServiceInterface
 	logger             logger.Logger
 	workspaceRepo      domain.WorkspaceRepository
+	apiEndpoint        string
 }
 
 // NewTransactionalNotificationService creates a new instance of the transactional notification service
@@ -33,6 +34,7 @@ func NewTransactionalNotificationService(
 	emailService domain.EmailServiceInterface,
 	logger logger.Logger,
 	workspaceRepo domain.WorkspaceRepository,
+	apiEndpoint string,
 ) *TransactionalNotificationService {
 	return &TransactionalNotificationService{
 		transactionalRepo:  transactionalRepo,
@@ -42,6 +44,7 @@ func NewTransactionalNotificationService(
 		emailService:       emailService,
 		logger:             logger,
 		workspaceRepo:      workspaceRepo,
+		apiEndpoint:        apiEndpoint,
 	}
 }
 
@@ -448,17 +451,28 @@ func (s *TransactionalNotificationService) SendNotification(
 		)
 
 		// Prepare message data with contact and custom data
-		messageData := domain.MessageData{
-			Data: map[string]interface{}{
-				"contact": contact,
-			},
+		apiEndpoint := s.apiEndpoint // Use the service's configured API endpoint
+
+		contactWithList := domain.ContactWithList{
+			Contact: contact,
+		}
+
+		templateData, err := domain.BuildTemplateData(workspace.ID, contactWithList, messageID, apiEndpoint, nil)
+		if err != nil {
+			tracing.MarkSpanError(childCtx, err)
+			childSpan.End()
+			return "", fmt.Errorf("failed to build template data: %w", err)
 		}
 
 		// Add custom data if provided
 		if params.Data != nil {
 			for key, value := range params.Data {
-				messageData.Data[key] = value
+				templateData[key] = value
 			}
+		}
+
+		messageData := domain.MessageData{
+			Data: templateData,
 		}
 
 		// Add metadata if provided

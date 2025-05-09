@@ -169,6 +169,7 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
+				apiEndpoint:        "https://api.example.com",
 			}
 
 			// Call the method being tested
@@ -403,6 +404,7 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
+				apiEndpoint:        "https://api.example.com",
 			}
 
 			// Call the method being tested
@@ -506,6 +508,7 @@ func TestTransactionalNotificationService_GetNotification(t *testing.T) {
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
+				apiEndpoint:        "https://api.example.com",
 			}
 
 			// Call the method being tested
@@ -624,6 +627,7 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
+				apiEndpoint:        "https://api.example.com",
 			}
 
 			// Call the method being tested
@@ -708,6 +712,7 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 				emailService:       nil, // Not used in this test
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
+				apiEndpoint:        "https://api.example.com",
 			}
 
 			// Call the method being tested
@@ -724,31 +729,38 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 }
 
 func TestNewTransactionalNotificationService(t *testing.T) {
-	// Skip this test for now
-	t.Skip("Skipping due to import cycle issues")
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
+	mockRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 	mockMsgHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	apiEndpoint := "https://api.example.com"
 
 	service := NewTransactionalNotificationService(
-		mockTransactionalRepo,
+		mockRepo,
 		mockMsgHistoryRepo,
 		mockTemplateService,
 		mockContactService,
 		mockEmailService,
 		mockLogger,
 		mockWorkspaceRepo,
+		apiEndpoint,
 	)
 
 	assert.NotNil(t, service)
+	assert.Equal(t, mockRepo, service.transactionalRepo)
+	assert.Equal(t, mockMsgHistoryRepo, service.messageHistoryRepo)
+	assert.Equal(t, mockTemplateService, service.templateService)
+	assert.Equal(t, mockContactService, service.contactService)
+	assert.Equal(t, mockEmailService, service.emailService)
+	assert.Equal(t, mockLogger, service.logger)
+	assert.Equal(t, mockWorkspaceRepo, service.workspaceRepo)
+	assert.Equal(t, apiEndpoint, service.apiEndpoint)
 }
 
 func TestTransactionalNotificationService_SendNotification(t *testing.T) {
@@ -1247,6 +1259,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				emailService:       mockEmailService,
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
+				apiEndpoint:        "https://api.example.com",
 			}
 
 			// Call the method being tested
@@ -1556,6 +1569,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 				emailService:       mockEmailService,
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
+				apiEndpoint:        "https://api.example.com",
 			}
 
 			// Call the method being tested

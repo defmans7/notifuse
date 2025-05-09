@@ -640,7 +640,7 @@ func BuildTemplateData(workspaceID string, contactWithList ContactWithList, mess
 		workspaceID := url.QueryEscape(workspaceID)
 
 		// Note: In a real implementation, you would add a signature token for security
-		unsubscribeURL := fmt.Sprintf("%s/public/unsubscribe?email=%s&list=%s&list_name=%s&workspace=%s&message=%s",
+		unsubscribeURL := fmt.Sprintf("%s/unsubscribe?email=%s&list=%s&list_name=%s&workspace=%s&message=%s",
 			apiEndpoint, email, listID, listName, workspaceID, messageID)
 
 		templateData["unsubscribe_url"] = unsubscribeURL
@@ -656,14 +656,14 @@ func BuildTemplateData(workspaceID string, contactWithList ContactWithList, mess
 	workspaceID = url.QueryEscape(workspaceID)
 
 	// Tracking pixel for opens
-	trackingPixelURL := fmt.Sprintf("%s/public/opens?id=%s&t=o&w=%s",
+	trackingPixelURL := fmt.Sprintf("%s/opens?id=%s&t=o&w=%s",
 		apiEndpoint, messageID, workspaceID)
 
 	templateData["tracking_opens_url"] = trackingPixelURL
 
 	// Base URL for click tracking
 	// Usage in templates: {{tracking_base}}&url={{encoded_destination_url}}
-	trackingBaseURL := fmt.Sprintf("%s/public/click?id=%s&w=%s",
+	trackingBaseURL := fmt.Sprintf("%s/click?id=%s&w=%s",
 		apiEndpoint, messageID, workspaceID)
 
 	templateData["tracking_click_url"] = trackingBaseURL

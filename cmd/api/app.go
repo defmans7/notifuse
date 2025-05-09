@@ -414,6 +414,7 @@ func (a *App) InitServices() error {
 		a.emailService,
 		a.logger,
 		a.workspaceRepo,
+		a.config.APIEndpoint,
 	)
 
 	a.webhookEventService = service.NewWebhookEventService(
