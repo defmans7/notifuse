@@ -174,7 +174,12 @@ func (a *App) InitTracing() error {
 // InitDB initializes the database connection
 func (a *App) InitDB() error {
 
-	a.logger.Info("Connecting to database...")
+	password := a.config.Database.Password
+	maskedPassword := ""
+	if len(password) > 0 {
+		maskedPassword = fmt.Sprintf("%c...%c", password[0], password[len(password)-1])
+	}
+	a.logger.Info(fmt.Sprintf("Connecting to database %s:%d, user %s, sslmode %s, password: %s, dbname: %s", a.config.Database.Host, a.config.Database.Port, a.config.Database.User, a.config.Database.SSLMode, maskedPassword, a.config.Database.DBName))
 
 	// Ensure system database exists
 	if err := database.EnsureSystemDatabaseExists(database.GetPostgresDSN(&a.config.Database), a.config.Database.DBName); err != nil {
