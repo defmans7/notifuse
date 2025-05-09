@@ -174,6 +174,8 @@ func (a *App) InitTracing() error {
 // InitDB initializes the database connection
 func (a *App) InitDB() error {
 
+	a.logger.Info("Connecting to database...")
+
 	// Ensure system database exists
 	if err := database.EnsureSystemDatabaseExists(database.GetPostgresDSN(&a.config.Database), a.config.Database.DBName); err != nil {
 		return fmt.Errorf("failed to ensure system database exists: %w", err)
