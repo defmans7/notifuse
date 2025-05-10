@@ -4,7 +4,6 @@
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
 
-- redirection handler "/visit?mid={message_id}&wid={workspace_id}" to count the clicks and redirect to the url
 - tracking pixel handler to count the opens
 - test transactional email
 - user notifications center

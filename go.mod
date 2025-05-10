@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.7
 
 require (
-	aidanwoods.dev/go-paseto v1.5.1
+	aidanwoods.dev/go-paseto v1.5.4
 	contrib.go.opencensus.io/exporter/aws v0.0.0-20230502192102-15967c811cec
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
@@ -35,7 +35,7 @@ require (
 )
 
 require (
-	aidanwoods.dev/go-result v0.1.0 // indirect
+	aidanwoods.dev/go-result v0.3.1 // indirect
 	cloud.google.com/go/compute v1.24.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/monitoring v1.18.0 // indirect

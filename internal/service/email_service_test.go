@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	mjmlgo "github.com/Boostport/mjml-go"
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -899,4 +900,129 @@ func TestEmailService_getProviderService(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEmailService_VisitLink(t *testing.T) {
+	// Setup the controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Setup mocks
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockMessageRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+
+	// Create the email service
+	emailService := EmailService{
+		logger:          mockLogger,
+		authService:     mockAuthService,
+		workspaceRepo:   mockWorkspaceRepo,
+		templateRepo:    mockTemplateRepo,
+		templateService: mockTemplateService,
+		httpClient:      mockHTTPClient,
+		messageRepo:     mockMessageRepo,
+	}
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	messageID := "message-456"
+
+	t.Run("Successfully updates message status to clicked", func(t *testing.T) {
+		// Create a message that hasn't been clicked yet
+		message := &domain.MessageHistory{
+			ID:       messageID,
+			Status:   domain.MessageStatusDelivered,
+			OpenedAt: nil,
+		}
+
+		// Setup message repository mock
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(message, nil)
+
+		// Expect an update with clicked status
+		mockMessageRepo.EXPECT().
+			Update(ctx, workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, updated *domain.MessageHistory) error {
+				// Verify the updated message has the correct status
+				assert.Equal(t, domain.MessageStatusClicked, updated.Status)
+				assert.NotNil(t, updated.ClickedAt)
+				assert.NotNil(t, updated.OpenedAt) // Should set opened timestamp if missing
+				return nil
+			})
+
+		// Call method under test
+		err := emailService.VisitLink(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.NoError(t, err)
+	})
+
+	t.Run("Does not update already clicked message", func(t *testing.T) {
+		// Create a message that's already been clicked
+		clickedTime := time.Now().Add(-1 * time.Hour)
+		openedTime := time.Now().Add(-2 * time.Hour)
+		message := &domain.MessageHistory{
+			ID:        messageID,
+			Status:    domain.MessageStatusClicked,
+			ClickedAt: &clickedTime,
+			OpenedAt:  &openedTime,
+		}
+
+		// Setup message repository mock - should get the message
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(message, nil)
+
+		// No update should be called since the message is already clicked
+
+		// Call method under test
+		err := emailService.VisitLink(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.NoError(t, err)
+	})
+
+	t.Run("Message not found", func(t *testing.T) {
+		// Setup message repository mock to return not found error
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(nil, assert.AnError)
+
+		// Call method under test
+		err := emailService.VisitLink(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get message")
+	})
+
+	t.Run("Error updating message", func(t *testing.T) {
+		// Create a message that hasn't been clicked yet
+		message := &domain.MessageHistory{
+			ID:     messageID,
+			Status: domain.MessageStatusDelivered,
+		}
+
+		// Setup message repository mock
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(message, nil)
+
+		// Expect an update but return an error
+		mockMessageRepo.EXPECT().
+			Update(ctx, workspaceID, gomock.Any()).
+			Return(assert.AnError)
+
+		// Call method under test
+		err := emailService.VisitLink(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to update message")
+	})
 }

@@ -41,6 +41,7 @@ func (h *EmailHandler) RegisterRoutes(mux *http.ServeMux) {
 	requireAuth := authMiddleware.RequireAuth()
 
 	// Register RPC-style endpoints with dot notation
+	mux.Handle("/visit", requireAuth(http.HandlerFunc(h.handleClickRedirection)))
 	mux.Handle("/api/email.testProvider", requireAuth(http.HandlerFunc(h.handleTestEmailProvider)))
 	mux.Handle("/api/email.testTemplate", requireAuth(http.HandlerFunc(h.handleTestTemplate)))
 }
@@ -120,4 +121,29 @@ func (h *EmailHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *EmailHandler) handleClickRedirection(w http.ResponseWriter, r *http.Request) {
+	// Get the message id (mid) and workspace id (wid) from the query parameters
+	messageID := r.URL.Query().Get("mid")
+	workspaceID := r.URL.Query().Get("wid")
+	redirectTo := r.URL.Query().Get("url")
+
+	// Check if URL is provided, show error if missing
+	if redirectTo == "" {
+		http.Error(w, "Missing redirect URL", http.StatusBadRequest)
+		return
+	}
+
+	// redirect to the url if mid and wid are present
+	if messageID == "" || workspaceID == "" {
+		http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+		return
+	}
+
+	// increment the click count
+	h.emailService.VisitLink(r.Context(), messageID, workspaceID)
+
+	// redirect to the url
+	http.Redirect(w, r, redirectTo, http.StatusSeeOther)
 }

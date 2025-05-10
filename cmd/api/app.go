@@ -369,6 +369,7 @@ func (a *App) InitServices() error {
 		a.workspaceRepo,
 		a.templateRepo,
 		a.templateService,
+		a.messageHistoryRepo,
 		httpClient,
 		a.config.WebhookEndpoint,
 	)

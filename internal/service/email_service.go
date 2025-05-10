@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -19,6 +20,7 @@ type EmailService struct {
 	workspaceRepo    domain.WorkspaceRepository
 	templateRepo     domain.TemplateRepository
 	templateService  domain.TemplateService
+	messageRepo      domain.MessageHistoryRepository
 	httpClient       domain.HTTPClient
 	webhookEndpoint  string
 	smtpService      domain.EmailProviderService
@@ -37,6 +39,7 @@ func NewEmailService(
 	workspaceRepo domain.WorkspaceRepository,
 	templateRepo domain.TemplateRepository,
 	templateService domain.TemplateService,
+	messageRepo domain.MessageHistoryRepository,
 	httpClient domain.HTTPClient,
 	webhookEndpoint string,
 ) *EmailService {
@@ -55,6 +58,7 @@ func NewEmailService(
 		workspaceRepo:    workspaceRepo,
 		templateRepo:     templateRepo,
 		templateService:  templateService,
+		messageRepo:      messageRepo,
 		httpClient:       httpClient,
 		webhookEndpoint:  webhookEndpoint,
 		smtpService:      smtpService,
@@ -238,4 +242,32 @@ func (s *EmailService) getProviderService(providerKind domain.EmailProviderKind)
 	default:
 		return nil, fmt.Errorf("unsupported provider kind: %s", providerKind)
 	}
+}
+
+func (s *EmailService) VisitLink(ctx context.Context, messageID string, workspaceID string) error {
+	// find the message by id
+	message, err := s.messageRepo.Get(ctx, workspaceID, messageID)
+	if err != nil {
+		return fmt.Errorf("failed to get message: %w", err)
+	}
+
+	// update message status to clicked
+	if message.Status != domain.MessageStatusClicked {
+		now := time.Now()
+		message.Status = domain.MessageStatusClicked
+		message.ClickedAt = &now
+		message.Error = nil
+
+		// if open is missing, set it to now
+		if message.OpenedAt == nil {
+			message.OpenedAt = &now
+		}
+
+		err = s.messageRepo.Update(ctx, workspaceID, message)
+		if err != nil {
+			return fmt.Errorf("failed to update message: %w", err)
+		}
+	}
+
+	return nil
 }

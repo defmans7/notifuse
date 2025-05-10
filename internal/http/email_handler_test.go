@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockPublicKey implements paseto.V4AsymmetricPublicKey interface for testing
+type mockPublicKey struct{}
+
+// ExportHex satisfies the interface
+func (m *mockPublicKey) ExportHex() string {
+	return ""
+}
+
+// ID satisfies the interface
+func (m *mockPublicKey) ID() []byte {
+	return []byte("")
+}
+
+// Equal satisfies the interface
+func (m *mockPublicKey) Equal(paseto.V4AsymmetricPublicKey) bool {
+	return false
+}
+
+// Verify satisfies the interface
+func (m *mockPublicKey) Verify([]byte, []byte) bool {
+	return true
+}
 
 // setupEmailHandlerTest prepares a test environment for email handler tests
 func setupEmailHandlerTest(t *testing.T) (*mocks.MockEmailServiceInterface, *pkgmocks.MockLogger, *EmailHandler, paseto.V4AsymmetricSecretKey) {
@@ -571,6 +595,85 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 				if tc.expectedResp.Error != "" {
 					assert.Equal(t, tc.expectedResp.Error, response.Error)
 				}
+			}
+		})
+	}
+}
+
+func TestEmailHandler_HandleClickRedirection(t *testing.T) {
+	// Setup
+	mockEmailService, _, handler, _ := setupEmailHandlerTest(t)
+
+	tests := []struct {
+		name               string
+		queryParams        map[string]string
+		setupExpectations  func()
+		expectedStatusCode int
+		expectedRedirectTo string
+		expectedBody       string
+	}{
+		{
+			name: "Success with all parameters",
+			queryParams: map[string]string{
+				"mid": "message-123",
+				"wid": "workspace-123",
+				"url": "https://example.com",
+			},
+			setupExpectations: func() {
+				mockEmailService.EXPECT().
+					VisitLink(gomock.Any(), "message-123", "workspace-123").
+					Return(nil)
+			},
+			expectedStatusCode: http.StatusSeeOther,
+			expectedRedirectTo: "https://example.com",
+		},
+		{
+			name: "Missing message ID or workspace ID",
+			queryParams: map[string]string{
+				"url": "https://example.com",
+			},
+			setupExpectations:  func() {},
+			expectedStatusCode: http.StatusSeeOther,
+			expectedRedirectTo: "https://example.com",
+		},
+		{
+			name:               "Missing URL parameter",
+			queryParams:        map[string]string{},
+			setupExpectations:  func() {},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       "Missing redirect URL\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup request
+			req := httptest.NewRequest(http.MethodGet, "/visit", nil)
+			q := req.URL.Query()
+			for key, value := range tt.queryParams {
+				q.Add(key, value)
+			}
+			req.URL.RawQuery = q.Encode()
+
+			// Setup expectations
+			tt.setupExpectations()
+
+			// Create response recorder
+			w := httptest.NewRecorder()
+
+			// Call the handler
+			handler.handleClickRedirection(w, req.WithContext(context.Background()))
+
+			// Assertions
+			assert.Equal(t, tt.expectedStatusCode, w.Code)
+
+			if tt.expectedRedirectTo != "" {
+				location := w.Header().Get("Location")
+				assert.Equal(t, tt.expectedRedirectTo, location)
+			}
+
+			if tt.expectedBody != "" {
+				assert.Equal(t, tt.expectedBody, w.Body.String())
 			}
 		})
 	}
