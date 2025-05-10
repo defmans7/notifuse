@@ -76,6 +76,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
 
       const req = {
         workspace_id: workspaceId,
+        message_id: 'preview',
         visual_editor_tree: treeObject as any,
         test_data: record.test_data || {}
       }

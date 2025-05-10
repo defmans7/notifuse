@@ -65,6 +65,7 @@ const Preview = (props: PreviewProps) => {
       try {
         const req = {
           workspace_id: props.workspaceId,
+          message_id: 'test',
           visual_editor_tree: props.tree,
           test_data: testDataJson
         }
