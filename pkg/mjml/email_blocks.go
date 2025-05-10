@@ -369,12 +369,12 @@ type Columns6666BlockData struct {
 
 type TrackingSettings struct {
 	EnableTracking bool   `json:"enableTracking"`
+	Endpoint       string `json:"endpoint"`
 	UTMSource      string `json:"utmSource"`
 	UTMMedium      string `json:"utmMedium"`
 	UTMCampaign    string `json:"utmCampaign"`
 	UTMContent     string `json:"utmContent"`
 	UTMTerm        string `json:"utmTerm"`
-	Endpoint       string `json:"endpoint"`
 }
 
 // Value implements the driver.Valuer interface for database storage

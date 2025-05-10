@@ -316,6 +316,7 @@ func (a *App) InitServices() error {
 		a.templateRepo,
 		a.authService,
 		a.logger,
+		a.config.APIEndpoint,
 	)
 
 	// Initialize contact service

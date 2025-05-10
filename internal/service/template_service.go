@@ -16,13 +16,15 @@ type TemplateService struct {
 	repo        domain.TemplateRepository
 	authService domain.AuthService
 	logger      logger.Logger
+	apiEndpoint string
 }
 
-func NewTemplateService(repo domain.TemplateRepository, authService domain.AuthService, logger logger.Logger) *TemplateService {
+func NewTemplateService(repo domain.TemplateRepository, authService domain.AuthService, logger logger.Logger, apiEndpoint string) *TemplateService {
 	return &TemplateService{
 		repo:        repo,
 		authService: authService,
 		logger:      logger,
+		apiEndpoint: apiEndpoint,
 	}
 }
 
@@ -196,6 +198,7 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.Co
 
 	trackingSettings := notifusemjml.TrackingSettings{
 		EnableTracking: payload.EnableTracking,
+		Endpoint:       s.apiEndpoint,
 	}
 
 	if payload.UTMSource != nil {

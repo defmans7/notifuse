@@ -17,3 +17,4 @@
 - add cc and bcc to template settings
 - test the docker compose
 - transactional should have options : enable tracking, utm source, utm medium, utm campaign, utm content
+- add endpoint to trackingSettings
