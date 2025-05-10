@@ -21,8 +21,6 @@ func (n *EmailBlock) GetBlockData() any {
 		return n.Data.(DividerBlockData)
 	case "section":
 		return n.Data.(SectionBlockData)
-	case "openTracking":
-		return n.Data.(OpenTrackingBlockData)
 	case "text":
 		return n.Data.(TextBlockData)
 	default:

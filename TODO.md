@@ -16,4 +16,4 @@
 - test webhooks for email providers
 - add cc and bcc to template settings
 - test the docker compose
-- {{ open_tracking_pixel_src }} is not set in the send email
+- transactional should have options : enable tracking, utm source, utm medium, utm campaign, utm content

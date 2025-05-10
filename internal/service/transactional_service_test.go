@@ -9,6 +9,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/mock/gomock"
@@ -900,7 +901,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 
 				// Then the template is compiled
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: true,
 						HTML:    aws.String("<html>Test content</html>"),
@@ -1148,7 +1149,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 
 				// Then compilation fails
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: false,
 						Error: &mjmlgo.Error{
@@ -1203,7 +1204,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 
 				// Compilation succeeds
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: true,
 						HTML:    aws.String("<html>Test content</html>"),
@@ -1355,7 +1356,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 
 				// Compile the template
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: true,
 						HTML:    aws.String("<html>Test Email</html>"),
@@ -1421,7 +1422,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 
 				// Compilation fails
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: false,
 						Error: &mjmlgo.Error{
@@ -1450,7 +1451,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 
 				// Compilation succeeds but without HTML content
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: true,
 						HTML:    nil, // Missing HTML content
@@ -1477,7 +1478,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 
 				// Compile the template
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: true,
 						HTML:    aws.String("<html>Test Email</html>"),
@@ -1537,7 +1538,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 
 				// Compile the template
 				mockTemplateService.EXPECT().
-					CompileTemplate(gomock.Any(), workspace, gomock.Any(), gomock.Any()).
+					CompileTemplate(gomock.Any(), gomock.Any()).
 					Return(&domain.CompileTemplateResponse{
 						Success: true,
 						HTML:    aws.String("<html>Test Email</html>"),
@@ -1573,14 +1574,28 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 			}
 
 			// Call the method being tested
-			err := service.DoSendEmailNotification(ctx, workspace, messageID, contact, tc.templateConfig, tc.messageData, &domain.EmailProvider{
-				Kind:               domain.EmailProviderKindSparkPost,
-				DefaultSenderEmail: "test@example.com",
-				DefaultSenderName:  "Test Sender",
-				SparkPost: &domain.SparkPostSettings{
-					EncryptedAPIKey: "encrypted-api-key",
+			err := service.DoSendEmailNotification(
+				ctx,
+				workspace,
+				messageID,
+				contact,
+				templateConfig,
+				messageData,
+				mjml.TrackingSettings{
+					EnableTracking: true,
+					UTMSource:      "test",
+					UTMMedium:      "email",
+					UTMCampaign:    "test_campaign",
 				},
-			})
+				&domain.EmailProvider{
+					Kind:               domain.EmailProviderKindSparkPost,
+					DefaultSenderEmail: "test@example.com",
+					DefaultSenderName:  "Test Sender",
+					SparkPost: &domain.SparkPostSettings{
+						EncryptedAPIKey: "encrypted-api-key",
+					},
+				},
+			)
 
 			// Check results
 			if tc.expectedError {

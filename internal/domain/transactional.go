@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/Notifuse/notifuse/pkg/mjml"
 )
 
 //go:generate mockgen -destination mocks/mock_transactional_notification_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TransactionalNotificationService
@@ -53,12 +55,13 @@ func (ct *ChannelTemplates) Scan(value interface{}) error {
 
 // TransactionalNotification represents a transactional notification configuration
 type TransactionalNotification struct {
-	ID          string           `json:"id"` // Unique identifier for the notification, also used for API triggering
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Channels    ChannelTemplates `json:"channels"`
-	IsPublic    bool             `json:"is_public"` // Indicates if the notification is publicly accessible
-	Metadata    MapOfAny         `json:"metadata,omitempty"`
+	ID               string                `json:"id"` // Unique identifier for the notification, also used for API triggering
+	Name             string                `json:"name"`
+	Description      string                `json:"description"`
+	Channels         ChannelTemplates      `json:"channels"`
+	TrackingSettings mjml.TrackingSettings `json:"tracking_settings"`
+	IsPublic         bool                  `json:"is_public"` // Indicates if the notification is publicly accessible
+	Metadata         MapOfAny              `json:"metadata,omitempty"`
 
 	// System timestamps
 	CreatedAt time.Time  `json:"created_at"`
@@ -86,21 +89,23 @@ type TransactionalNotificationRepository interface {
 
 // TransactionalNotificationCreateParams contains the parameters for creating a new transactional notification
 type TransactionalNotificationCreateParams struct {
-	ID          string           `json:"id" validate:"required"` // Unique identifier for API triggering
-	Name        string           `json:"name" validate:"required"`
-	Description string           `json:"description"`
-	Channels    ChannelTemplates `json:"channels" validate:"required,min=1"`
-	IsPublic    bool             `json:"is_public"`
-	Metadata    MapOfAny         `json:"metadata,omitempty"`
+	ID             string           `json:"id" validate:"required"` // Unique identifier for API triggering
+	Name           string           `json:"name" validate:"required"`
+	Description    string           `json:"description"`
+	Channels       ChannelTemplates `json:"channels" validate:"required,min=1"`
+	IsPublic       bool             `json:"is_public"`
+	EnableTracking bool             `json:"enable_tracking"`
+	Metadata       MapOfAny         `json:"metadata,omitempty"`
 }
 
 // TransactionalNotificationUpdateParams contains the parameters for updating an existing transactional notification
 type TransactionalNotificationUpdateParams struct {
-	Name        string           `json:"name,omitempty"`
-	Description string           `json:"description,omitempty"`
-	Channels    ChannelTemplates `json:"channels,omitempty"`
-	IsPublic    *bool            `json:"is_public,omitempty"`
-	Metadata    MapOfAny         `json:"metadata,omitempty"`
+	Name           string           `json:"name,omitempty"`
+	Description    string           `json:"description,omitempty"`
+	Channels       ChannelTemplates `json:"channels,omitempty"`
+	IsPublic       *bool            `json:"is_public,omitempty"`
+	EnableTracking *bool            `json:"enable_tracking,omitempty"`
+	Metadata       MapOfAny         `json:"metadata,omitempty"`
 }
 
 // TransactionalNotificationSendParams contains the parameters for sending a transactional notification
@@ -133,7 +138,7 @@ type TransactionalNotificationService interface {
 	SendNotification(ctx context.Context, workspaceID string, params TransactionalNotificationSendParams) (string, error)
 
 	// DoSendEmailNotification handles sending a notification through the email channel
-	DoSendEmailNotification(ctx context.Context, workspaceID string, messageID string, contact *Contact, templateConfig ChannelTemplate, messageData MessageData, emailProvider *EmailProvider) error
+	DoSendEmailNotification(ctx context.Context, workspaceID string, messageID string, contact *Contact, templateConfig ChannelTemplate, messageData MessageData, trackingSettings mjml.TrackingSettings, emailProvider *EmailProvider) error
 }
 
 // Request and response types for transactional notifications

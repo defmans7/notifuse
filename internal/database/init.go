@@ -214,6 +214,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			description TEXT,
 			channels JSONB NOT NULL,
 			is_public BOOLEAN NOT NULL DEFAULT FALSE,
+			tracking_settings JSONB,
 			metadata JSONB,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

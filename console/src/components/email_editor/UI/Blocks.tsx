@@ -36,7 +36,6 @@ export const Blocks = (props: BlocksProps) => {
           {props.renderBlockForMenu(props.blockDefinitions['text'])}
           {props.renderBlockForMenu(props.blockDefinitions['liquid'])}
           {props.renderBlockForMenu(props.blockDefinitions['divider'])}
-          {props.renderBlockForMenu(props.blockDefinitions['openTracking'])}
         </>
       )
     }

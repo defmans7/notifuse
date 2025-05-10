@@ -261,7 +261,8 @@ func TestTreeToMjml_HeadingBlock(t *testing.T) {
 		Data: headingData,
 	}
 
-	mjml, err := TreeToMjml(rootStyles, headingBlock, "", map[string]string{}, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, headingBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for heading block: %v", err)
 	}
@@ -345,11 +346,12 @@ func TestTreeToMjml_HeadingWithFormatting(t *testing.T) {
 		Data: headingData,
 	}
 
-	urlParams := map[string]string{
-		"utm_source": "test",
+	trackingSettings := TrackingSettings{
+		EnableTracking: false,
+		UTMSource:      "test",
 	}
 
-	mjml, err := TreeToMjml(rootStyles, headingBlock, "", urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, headingBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for heading with formatting: %v", err)
 	}
@@ -381,7 +383,8 @@ func TestTreeToMjml_OpenTracking(t *testing.T) {
 		Data: OpenTrackingBlockData{},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, openTrackingBlock, "", map[string]string{}, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, openTrackingBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for openTracking block: %v", err)
 	}
@@ -391,7 +394,7 @@ func TestTreeToMjml_OpenTracking(t *testing.T) {
 		t.Error("Expected <mj-raw> tag but not found")
 	}
 
-	if !strings.Contains(mjml, "<img src=\"{{ open_tracking_pixel_src }}\"") {
+	if !strings.Contains(mjml, "<img src=\"{{ tracking_opens_url }}\"") {
 		t.Error("Expected image tag with tracking pixel but not found")
 	}
 
@@ -434,8 +437,9 @@ func TestTreeToMjml_HeadingLiquidProcessingError(t *testing.T) {
 	}
 
 	templateData := `{}`
+	trackingSettings := TrackingSettings{}
 
-	_, err := TreeToMjml(rootStyles, headingBlock, templateData, map[string]string{}, 0, nil)
+	_, err := TreeToMjml(rootStyles, headingBlock, templateData, trackingSettings, 0, nil)
 
 	// The error might not occur because the text is not recognized as liquid template
 	// This is because we check for "{{" and "{%" patterns
@@ -490,7 +494,8 @@ func TestTreeToMjml_TextWithLiquidAndData(t *testing.T) {
 		"status": "shipped"
 	}`
 
-	mjml, err := TreeToMjml(rootStyles, textBlock, templateData, map[string]string{}, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, textBlock, templateData, trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for text with liquid: %v", err)
 	}
@@ -537,8 +542,9 @@ func TestTreeToMjml_InvalidJsonTemplateData(t *testing.T) {
 
 	// Invalid JSON in templateData
 	templateData := `{"name": "John Doe", invalid json}`
+	trackingSettings := TrackingSettings{}
 
-	_, err := TreeToMjml(rootStyles, textBlock, templateData, map[string]string{}, 0, nil)
+	_, err := TreeToMjml(rootStyles, textBlock, templateData, trackingSettings, 0, nil)
 
 	// Should return an error for invalid JSON
 	if err == nil {
@@ -569,7 +575,8 @@ func TestTreeToMjml_MarshalUnmarshalError(t *testing.T) {
 		Data: c, // This will cause Marshal to fail
 	}
 
-	_, err := TreeToMjml(rootStyles, block, "", map[string]string{}, 0, nil)
+	trackingSettings := TrackingSettings{}
+	_, err := TreeToMjml(rootStyles, block, "", trackingSettings, 0, nil)
 
 	// Should return an error when marshalling fails
 	if err == nil {
@@ -602,7 +609,8 @@ func TestTreeToMjml_ChildBlockError(t *testing.T) {
 		Children: []EmailBlock{errorBlock},
 	}
 
-	_, err := TreeToMjml(rootStyles, rootBlock, "{}", map[string]string{}, 0, nil)
+	trackingSettings := TrackingSettings{}
+	_, err := TreeToMjml(rootStyles, rootBlock, "{}", trackingSettings, 0, nil)
 
 	// Should return an error propagated from the child
 	if err == nil {
@@ -628,7 +636,8 @@ func TestTreeToMjml_UnknownBlockType(t *testing.T) {
 		},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, unknownBlock, "", map[string]string{}, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, unknownBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml unexpectedly failed for unknown block type: %v", err)
 	}
@@ -684,7 +693,8 @@ func TestTreeToMjml_NestedColumnWidthCalculation(t *testing.T) {
 		},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, sectionBlock, "", map[string]string{}, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, sectionBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed for nested column layout: %v", err)
 	}

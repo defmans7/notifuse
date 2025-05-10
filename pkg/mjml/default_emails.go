@@ -1,5 +1,14 @@
 package mjml
 
+func NewOpenTrackingBlock() EmailBlock {
+	return EmailBlock{
+		ID:       "openTracking",
+		Kind:     "openTracking",
+		Data:     map[string]interface{}{},
+		Children: []EmailBlock{},
+	}
+}
+
 // DeepCopyBlock creates a deep copy of an EmailBlock to prevent modifying original blocks by reference
 func DeepCopyBlock(block EmailBlock) EmailBlock {
 	// Create a new block with the same ID and Kind
@@ -772,12 +781,7 @@ func DefaultBlocks() map[string]EmailBlock {
 	}
 
 	// OpenTracking block
-	blocks["openTracking"] = EmailBlock{
-		ID:       "openTracking",
-		Kind:     "openTracking",
-		Data:     map[string]interface{}{},
-		Children: []EmailBlock{},
-	}
+	blocks["openTracking"] = NewOpenTrackingBlock()
 
 	// Section block
 	blocks["section"] = EmailBlock{

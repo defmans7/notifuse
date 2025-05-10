@@ -152,13 +152,13 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, workspaceID string
 	return nil
 }
 
-func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID string, tree notifusemjml.EmailBlock, testData domain.MapOfAny) (*domain.CompileTemplateResponse, error) {
+func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.CompileTemplateRequest) (*domain.CompileTemplateResponse, error) {
 	// Check if user is already authenticated in context
 	if user := ctx.Value("authenticated_user"); user == nil {
 		// Authenticate user for workspace
 		var user *domain.User
 		var err error
-		ctx, user, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+		ctx, user, err = s.authService.AuthenticateUserForWorkspace(ctx, payload.WorkspaceID)
 		if err != nil {
 			// Return standard Go error for non-compilation issues
 			return nil, fmt.Errorf("failed to authenticate user: %w", err)
@@ -169,7 +169,7 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID strin
 	}
 
 	// Extract root styles from the tree data
-	rootDataMap, ok := tree.Data.(map[string]interface{})
+	rootDataMap, ok := payload.VisualEditorTree.Data.(map[string]interface{})
 	if !ok {
 		s.logger.Error("CompileTemplate: Root block data is not a map")
 		// Return standard Go error for non-compilation issues
@@ -184,8 +184,8 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID strin
 
 	// Prepare template data JSON string
 	var templateDataStr string
-	if testData != nil && len(testData) > 0 {
-		jsonDataBytes, err := json.Marshal(testData)
+	if payload.TemplateData != nil && len(payload.TemplateData) > 0 {
+		jsonDataBytes, err := json.Marshal(payload.TemplateData)
 		if err != nil {
 			s.logger.WithField("error", err).Error("Failed to marshal test_data to JSON")
 			// Return standard Go error for non-compilation issues
@@ -194,8 +194,33 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, workspaceID strin
 		templateDataStr = string(jsonDataBytes)
 	}
 
+	trackingSettings := notifusemjml.TrackingSettings{
+		EnableTracking: payload.EnableTracking,
+	}
+
+	if payload.UTMSource != nil {
+		trackingSettings.UTMSource = *payload.UTMSource
+	}
+	if payload.UTMMedium != nil {
+		trackingSettings.UTMMedium = *payload.UTMMedium
+	}
+	if payload.UTMCampaign != nil {
+		trackingSettings.UTMCampaign = *payload.UTMCampaign
+	}
+	if payload.UTMContent != nil {
+		trackingSettings.UTMContent = *payload.UTMContent
+	}
+	if payload.UTMTerm != nil {
+		trackingSettings.UTMTerm = *payload.UTMTerm
+	}
+
+	// inject tracking pixel in tree
+	if payload.EnableTracking {
+		payload.VisualEditorTree.Children = append(payload.VisualEditorTree.Children, notifusemjml.NewOpenTrackingBlock())
+	}
+
 	// Compile tree to MJML using our pkg/mjml function
-	mjmlResult, err := notifusemjml.TreeToMjml(rootStyles, tree, templateDataStr, map[string]string{}, 0, nil)
+	mjmlResult, err := notifusemjml.TreeToMjml(rootStyles, payload.VisualEditorTree, templateDataStr, trackingSettings, 0, nil)
 	if err != nil {
 		return &domain.CompileTemplateResponse{
 			Success: false,

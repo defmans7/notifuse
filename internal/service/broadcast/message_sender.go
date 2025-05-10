@@ -17,7 +17,7 @@ import (
 // MessageSender is the interface for sending messages to recipients
 type MessageSender interface {
 	// SendToRecipient sends a message to a single recipient
-	SendToRecipient(ctx context.Context, workspaceID, broadcastID string, recipient *domain.Contact,
+	SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, email string,
 		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error
 
 	// SendBatch sends messages to a batch of recipients
@@ -170,25 +170,25 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 }
 
 // SendToRecipient sends a message to a single recipient
-func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadcastID string, recipient *domain.Contact,
+func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
 
 	startTime := time.Now()
 	defer func() {
 		s.logger.WithFields(map[string]interface{}{
 			"duration_ms":  time.Since(startTime).Milliseconds(),
-			"broadcast_id": broadcastID,
+			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
-			"recipient":    recipient.Email,
+			"recipient":    email,
 		}).Debug("Message send completed")
 	}()
 
 	// Check circuit breaker
 	if s.circuitBreaker != nil && s.circuitBreaker.IsOpen() {
 		s.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
+			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
-			"recipient":    recipient.Email,
+			"recipient":    email,
 		}).Warn("Circuit breaker open, skipping send")
 		return NewBroadcastError(ErrCodeCircuitOpen, "circuit breaker is open", true, nil)
 	}
@@ -196,9 +196,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 	// Apply rate limiting
 	if err := s.enforceRateLimit(ctx); err != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
+			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
-			"recipient":    recipient.Email,
+			"recipient":    email,
 			"error":        err.Error(),
 		}).Warn("Rate limiting interrupted by context cancellation")
 		return NewBroadcastError(ErrCodeRateLimitExceeded, "rate limiting interrupted", true, err)
@@ -207,16 +207,24 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 	// Compile template with the provided data
 	compiledTemplate, err := s.templateService.CompileTemplate(
 		ctx,
-		workspaceID,
-		template.Email.VisualEditorTree,
-		data,
+		domain.CompileTemplateRequest{
+			WorkspaceID:      workspaceID,
+			VisualEditorTree: template.Email.VisualEditorTree,
+			TemplateData:     data,
+			EnableTracking:   broadcast.TestSettings.Enabled,
+			UTMSource:        &broadcast.UTMParameters.Source,
+			UTMMedium:        &broadcast.UTMParameters.Medium,
+			UTMCampaign:      &broadcast.UTMParameters.Campaign,
+			UTMContent:       &broadcast.UTMParameters.Content,
+			UTMTerm:          &broadcast.UTMParameters.Term,
+		},
 	)
 
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
+			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
-			"recipient":    recipient.Email,
+			"recipient":    email,
 			"template_id":  template.ID,
 			"error":        err.Error(),
 		}).Error("Failed to compile template")
@@ -229,9 +237,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 			errMsg = compiledTemplate.Error.Message
 		}
 		s.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
+			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
-			"recipient":    recipient.Email,
+			"recipient":    email,
 			"template_id":  template.ID,
 			"error":        errMsg,
 		}).Error("Failed to generate HTML from template")
@@ -245,7 +253,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 		true, // is marketing
 		template.Email.FromAddress,
 		template.Email.FromName,
-		recipient.Email,
+		email,
 		template.Email.Subject,
 		*compiledTemplate.HTML,
 		emailProvider,
@@ -258,9 +266,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 		}
 
 		s.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
+			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
-			"recipient":    recipient.Email,
+			"recipient":    email,
 			"error":        err.Error(),
 		}).Error("Failed to send message")
 		return NewBroadcastError(ErrCodeSendFailed, "failed to send message", true, err)
@@ -272,9 +280,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID, broadc
 	}
 
 	s.logger.WithFields(map[string]interface{}{
-		"broadcast_id": broadcastID,
+		"broadcast_id": broadcast.ID,
 		"workspace_id": workspaceID,
-		"recipient":    recipient.Email,
+		"recipient":    email,
 	}).Debug("Message sent successfully")
 
 	return nil
@@ -392,7 +400,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID 
 		}
 
 		// Send to the recipient
-		err = s.SendToRecipient(ctx, workspaceID, broadcastID, contact, templates[templateID], recipientData, emailProvider)
+		err = s.SendToRecipient(ctx, workspaceID, broadcast, contact.Email, templates[templateID], recipientData, emailProvider)
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++

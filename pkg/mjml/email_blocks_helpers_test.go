@@ -2,8 +2,10 @@ package mjml
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -79,38 +81,81 @@ func TestToKebabCase(t *testing.T) {
 	}
 }
 
-func TestTrackURL(t *testing.T) {
-	params := map[string]string{
-		"utm_source":   "test_source",
-		"utm_medium":   "test_medium",
-		"utm_campaign": "test_campaign",
-	}
-	tests := []struct {
-		name     string
-		inputURL string
-		expect   string
-	}{
-		{"basic", "http://example.com", "http://example.com?utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
-		{"withExistingParam", "http://example.com?other=val", "http://example.com?other=val&utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
-		{"withExistingUTM", "http://example.com?utm_source=original", "http://example.com?utm_source=original"},
-		{"https", "https://secure.example.com/path?p=1", "https://secure.example.com/path?p=1&utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
-		{"liquidPlaceholder", "{{ variable_url }}", "{{ variable_url }}"},
-		{"emptyURL", "", ""},
-		{"mailto", "mailto:test@example.com", "mailto:test@example.com"},
-		{"tel", "tel:+1234567890", "tel:+1234567890"},
-		{"invalidURL", "://invalid", "://invalid"}, // Test invalid URL handling
-		{"withFragment", "http://example.com/page#section1", "http://example.com/page?utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source#section1"}, // Preserve fragment
-	}
+func TestTrackingSettings_GetTrackingURL(t *testing.T) {
+	t.Run("without tracking enabled", func(t *testing.T) {
+		trackingSettings := TrackingSettings{
+			EnableTracking: false,
+			UTMSource:      "test_source",
+			UTMMedium:      "test_medium",
+			UTMCampaign:    "test_campaign",
+		}
+		tests := []struct {
+			name     string
+			inputURL string
+			expect   string
+		}{
+			{"basic", "http://example.com", "http://example.com?utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
+			{"withExistingParam", "http://example.com?other=val", "http://example.com?other=val&utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
+			{"withExistingUTM", "http://example.com?utm_source=original", "http://example.com?utm_source=original"},
+			{"https", "https://secure.example.com/path?p=1", "https://secure.example.com/path?p=1&utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source"},
+			{"liquidPlaceholder", "{{ variable_url }}", "{{ variable_url }}"},
+			{"emptyURL", "", ""},
+			{"mailto", "mailto:test@example.com", "mailto:test@example.com"},
+			{"tel", "tel:+1234567890", "tel:+1234567890"},
+			{"invalidURL", "://invalid", "://invalid"},
+			{"withFragment", "http://example.com/page#section1", "http://example.com/page?utm_campaign=test_campaign&utm_medium=test_medium&utm_source=test_source#section1"},
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := trackURL(tt.inputURL, params)
-			// Comparing URLs can be tricky due to query param order, basic compare for now
-			if result != tt.expect {
-				t.Errorf("trackURL(%q) = %q; want %q", tt.inputURL, result, tt.expect)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := trackingSettings.GetTrackingURL(tt.inputURL)
+				if result != tt.expect {
+					t.Errorf("GetTrackingURL(%q) = %q; want %q", tt.inputURL, result, tt.expect)
+				}
+			})
+		}
+	})
+
+	t.Run("with tracking enabled", func(t *testing.T) {
+		trackingSettings := TrackingSettings{
+			EnableTracking: true,
+			UTMSource:      "test_source",
+			UTMMedium:      "test_medium",
+			UTMCampaign:    "test_campaign",
+			Endpoint:       "track.example.com",
+		}
+
+		// Test with a basic URL - should redirect to tracking endpoint
+		sourceURL := "http://example.com"
+		result := trackingSettings.GetTrackingURL(sourceURL)
+
+		// Should be a tracking URL with the tracking endpoint
+		if !strings.HasPrefix(result, "https://track.example.com") {
+			t.Errorf("Expected tracking URL with endpoint, got: %s", result)
+		}
+
+		// URL should contain original URL as a parameter
+		encodedOriginal := url.QueryEscape(sourceURL)
+		if !strings.Contains(result, "url="+encodedOriginal) {
+			t.Errorf("Expected tracking URL to contain original URL, got: %s", result)
+		}
+
+		// Special cases should still be returned as-is
+		specialCases := []string{
+			"{{ variable_url }}",
+			"",
+			"mailto:test@example.com",
+			"tel:+1234567890",
+			"://invalid",
+		}
+
+		for _, special := range specialCases {
+			result := trackingSettings.GetTrackingURL(special)
+			if result != special {
+				t.Errorf("Special case %q should be returned unchanged, got: %q", special, result)
 			}
-		})
-	}
+		}
+	})
 }
 
 func TestIndentPad(t *testing.T) {

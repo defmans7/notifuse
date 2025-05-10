@@ -40,7 +40,8 @@ func TestTreeToMjml_SectionBackground(t *testing.T) {
 		Children: []EmailBlock{sectionBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for section background test: %v", err)
 	}
@@ -93,7 +94,8 @@ func TestTreeToMjml_SectionBackgroundColor(t *testing.T) {
 
 	rootBlock := EmailBlock{ID: "root_bg_color", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []EmailBlock{sectionBlock}}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for section background color test: %v", err)
 	}
@@ -134,7 +136,8 @@ func TestTreeToMjml_SectionColumnsOnMobile(t *testing.T) {
 		Children: []EmailBlock{sectionBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for columnsOnMobile test: %v", err)
 	}
@@ -181,7 +184,8 @@ func TestTreeToMjml_SectionBorders(t *testing.T) {
 
 	rootBlock := EmailBlock{ID: "root_border", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []EmailBlock{sectionBlock}}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for section border test: %v", err)
 	}

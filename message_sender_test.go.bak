@@ -85,13 +85,6 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	workspaceID := "workspace-123"
 	broadcast := &domain.Broadcast{
 		ID: "broadcast-456",
-		UTMParameters: &domain.UTMParameters{
-			Source:   "test",
-			Medium:   "email",
-			Campaign: "unit-test",
-			Content:  "test-content",
-			Term:     "test-term",
-		},
 	}
 	recipientEmail := "test@example.com"
 
@@ -104,7 +97,7 @@ func TestSendToRecipientSuccess(t *testing.T) {
 			Subject:     "Test Subject",
 		},
 	}
-	templateData := domain.MapOfAny{
+	templateData := map[string]interface{}{
 		"name": "Test User",
 	}
 
@@ -183,13 +176,6 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 	workspaceID := "workspace-123"
 	broadcast := &domain.Broadcast{
 		ID: "broadcast-456",
-		UTMParameters: &domain.UTMParameters{
-			Source:   "test",
-			Medium:   "email",
-			Campaign: "unit-test",
-			Content:  "test-content",
-			Term:     "test-term",
-		},
 	}
 	recipientEmail := "test@example.com"
 
@@ -201,7 +187,7 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 			Subject:     "Test Subject",
 		},
 	}
-	templateData := domain.MapOfAny{
+	templateData := map[string]interface{}{
 		"name": "Test User",
 	}
 
@@ -264,13 +250,6 @@ func TestWithMockMessageSender(t *testing.T) {
 	workspaceID := "workspace-123"
 	broadcast := &domain.Broadcast{
 		ID: "broadcast-123",
-		UTMParameters: &domain.UTMParameters{
-			Source:   "test",
-			Medium:   "email",
-			Campaign: "unit-test",
-			Content:  "test-content",
-			Term:     "test-term",
-		},
 	}
 	recipientEmail := "test@example.com"
 	template := &domain.Template{
@@ -281,7 +260,7 @@ func TestWithMockMessageSender(t *testing.T) {
 			Subject:     "Test Subject",
 		},
 	}
-	templateData := domain.MapOfAny{
+	templateData := map[string]interface{}{
 		"name": "John",
 	}
 
@@ -332,13 +311,6 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	workspaceID := "workspace-123"
 	broadcast := &domain.Broadcast{
 		ID: "broadcast-123",
-		UTMParameters: &domain.UTMParameters{
-			Source:   "test",
-			Medium:   "email",
-			Campaign: "unit-test",
-			Content:  "test-content",
-			Term:     "test-term",
-		},
 	}
 	recipientEmail := "test@example.com"
 	template := &domain.Template{
@@ -349,7 +321,7 @@ func TestErrorHandlingWithMock(t *testing.T) {
 			Subject:     "Test Subject",
 		},
 	}
-	templateData := domain.MapOfAny{
+	templateData := map[string]interface{}{
 		"name": "John",
 	}
 
@@ -460,13 +432,6 @@ func TestSendBatch(t *testing.T) {
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled:    false,
 			Variations: variations,
-		},
-		UTMParameters: &domain.UTMParameters{
-			Source:   "test",
-			Medium:   "email",
-			Campaign: "unit-test",
-			Content:  "test-content",
-			Term:     "test-term",
 		},
 	}
 
@@ -747,13 +712,6 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			Enabled:    false,
 			Variations: variations,
 		},
-		UTMParameters: &domain.UTMParameters{
-			Source:   "test",
-			Medium:   "email",
-			Campaign: "unit-test",
-			Content:  "test-content",
-			Term:     "test-term",
-		},
 	}
 
 	// Set up expectations for GetBroadcast and GetAPIEndpoint
@@ -912,13 +870,6 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled:    false,
 			Variations: variations,
-		},
-		UTMParameters: &domain.UTMParameters{
-			Source:   "test",
-			Medium:   "email",
-			Campaign: "unit-test",
-			Content:  "test-content",
-			Term:     "test-term",
 		},
 	}
 

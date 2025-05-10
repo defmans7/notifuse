@@ -103,9 +103,9 @@ export interface SectionBlockData {
 }
 
 // Open tracking block data
-export interface OpenTrackingBlockData {
-  // No specific data structure
-}
+// export interface OpenTrackingBlockData {
+//   // No specific data structure
+// }
 
 // Text block data
 export interface TextBlockData {

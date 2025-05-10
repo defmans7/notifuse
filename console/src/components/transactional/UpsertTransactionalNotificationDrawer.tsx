@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Button, Drawer, Form, Input, Space, App, Switch } from 'antd'
+import { Button, Drawer, Form, Input, Space, App, Switch, Collapse, Typography } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   transactionalNotificationsApi,
@@ -44,9 +44,11 @@ export function UpsertTransactionalNotificationDrawer({
   const [loading, setLoading] = useState(false)
   const { message, modal } = App.useApp()
   const [formTouched, setFormTouched] = useState(false)
+  const { Panel } = Collapse
 
   // Watch notification name changes using Form.useWatch
   const notificationName = Form.useWatch('name', form)
+  const enableTracking = Form.useWatch(['channels', 'email', 'enable_tracking'], form)
 
   // Update API ID when name changes
   useEffect(() => {
@@ -105,7 +107,15 @@ export function UpsertTransactionalNotificationDrawer({
         is_public: false,
         channels: {
           email: {
-            template_id: ''
+            template_id: '',
+            enable_tracking: true,
+            utm_params: {
+              source: '',
+              medium: '',
+              campaign: '',
+              content: '',
+              term: ''
+            }
           }
         }
       })
@@ -267,6 +277,64 @@ export function UpsertTransactionalNotificationDrawer({
                   utmDisabled={false}
                 />
               </Form.Item>
+
+              <Form.Item
+                name={['channels', 'email', 'enable_tracking']}
+                label="Enable Link Tracking"
+                valuePropName="checked"
+                initialValue={true}
+                tooltip="When enabled, links in the email will be tracked for opens and clicks"
+              >
+                <Switch />
+              </Form.Item>
+
+              <Collapse className="mb-4">
+                <Panel header="UTM Parameters" key="utm_params">
+                  <Typography.Paragraph className="text-sm text-gray-500 mb-4">
+                    Define UTM parameters for links in your email for better campaign tracking.
+                  </Typography.Paragraph>
+
+                  <Form.Item
+                    name={['channels', 'email', 'utm_params', 'source']}
+                    label="UTM Source"
+                    tooltip="Identifies which site sent the traffic (e.g. google, newsletter)"
+                  >
+                    <Input placeholder="e.g. notifuse" disabled={!enableTracking} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={['channels', 'email', 'utm_params', 'medium']}
+                    label="UTM Medium"
+                    tooltip="Identifies what type of link was used (e.g. email, cpc, banner)"
+                  >
+                    <Input placeholder="e.g. email" disabled={!enableTracking} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={['channels', 'email', 'utm_params', 'campaign']}
+                    label="UTM Campaign"
+                    tooltip="Identifies a specific product promotion or strategic campaign"
+                  >
+                    <Input placeholder="e.g. welcome_series" disabled={!enableTracking} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={['channels', 'email', 'utm_params', 'content']}
+                    label="UTM Content"
+                    tooltip="Identifies what specifically was clicked (e.g. header_link, body_link)"
+                  >
+                    <Input placeholder="e.g. cta_button" disabled={!enableTracking} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={['channels', 'email', 'utm_params', 'term']}
+                    label="UTM Term"
+                    tooltip="Identifies search terms (typically used for paid search)"
+                  >
+                    <Input placeholder="e.g. email_notifications" disabled={!enableTracking} />
+                  </Form.Item>
+                </Panel>
+              </Collapse>
 
               <Form.Item
                 name="is_public"

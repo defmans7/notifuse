@@ -440,6 +440,12 @@ export interface CompileTemplateRequest {
   workspace_id: string
   visual_editor_tree: BlockInterface
   test_data?: Record<string, any> | null
+  enable_tracking?: boolean
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  utm_content?: string
+  utm_term?: string
 }
 
 export interface CompileTemplateResponse {

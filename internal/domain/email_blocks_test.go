@@ -83,14 +83,6 @@ func TestEmailBlock_GetBlockData(t *testing.T) {
 			typeOf: "domain.SectionBlockData",
 		},
 		{
-			name: "OpenTracking block",
-			block: EmailBlock{
-				Kind: "openTracking",
-				Data: OpenTrackingBlockData{},
-			},
-			typeOf: "domain.OpenTrackingBlockData",
-		},
-		{
 			name: "Text block",
 			block: EmailBlock{
 				Kind: "text",

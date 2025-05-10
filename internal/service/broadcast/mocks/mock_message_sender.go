@@ -52,7 +52,7 @@ func (mr *MockMessageSenderMockRecorder) SendBatch(arg0, arg1, arg2, arg3, arg4,
 }
 
 // SendToRecipient mocks base method.
-func (m *MockMessageSender) SendToRecipient(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 *domain.Template, arg5 map[string]interface{}, arg6 *domain.EmailProvider) error {
+func (m *MockMessageSender) SendToRecipient(arg0 context.Context, arg1 string, arg2 *domain.Broadcast, arg3 string, arg4 *domain.Template, arg5 map[string]interface{}, arg6 *domain.EmailProvider) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendToRecipient", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(error)

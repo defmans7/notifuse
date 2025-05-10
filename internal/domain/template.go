@@ -210,7 +210,7 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 		}
 
 		// Compile tree to MJML using our pkg/mjml function
-		mjmlResult, err := mjml.TreeToMjml(rootStyles, e.VisualEditorTree, templateDataStr, map[string]string{}, 0, nil)
+		mjmlResult, err := mjml.TreeToMjml(rootStyles, e.VisualEditorTree, templateDataStr, mjml.TrackingSettings{}, 0, nil)
 		if err != nil {
 			return fmt.Errorf("failed to generate MJML from tree: %w", err)
 		}
@@ -477,24 +477,30 @@ func (r *DeleteTemplateRequest) Validate() (workspaceID string, id string, err e
 type CompileTemplateRequest struct {
 	WorkspaceID      string          `json:"workspace_id"`
 	VisualEditorTree mjml.EmailBlock `json:"visual_editor_tree"` // Use the struct from pkg/mjml
-	TestData         MapOfAny        `json:"test_data,omitempty"`
+	TemplateData     MapOfAny        `json:"test_data,omitempty"`
+	EnableTracking   bool            `json:"enable_tracking,omitempty"`
+	UTMSource        *string         `json:"utm_source,omitempty"`
+	UTMMedium        *string         `json:"utm_medium,omitempty"`
+	UTMCampaign      *string         `json:"utm_campaign,omitempty"`
+	UTMContent       *string         `json:"utm_content,omitempty"`
+	UTMTerm          *string         `json:"utm_term,omitempty"`
 }
 
-func (r *CompileTemplateRequest) Validate() (workspaceID string, tree mjml.EmailBlock, testData MapOfAny, err error) {
+func (r *CompileTemplateRequest) Validate() (err error) {
 	if r.WorkspaceID == "" {
-		return "", mjml.EmailBlock{}, nil, fmt.Errorf("invalid compile template request: workspace_id is required")
+		return fmt.Errorf("invalid compile template request: workspace_id is required")
 	}
 	// Basic validation for the tree root kind
 	if r.VisualEditorTree.Kind != "root" {
-		return "", mjml.EmailBlock{}, nil, fmt.Errorf("invalid compile template request: visual_editor_tree must have kind 'root'")
+		return fmt.Errorf("invalid compile template request: visual_editor_tree must have kind 'root'")
 	}
 	if r.VisualEditorTree.Data == nil {
 		// Add default root styles if missing, or return error? Let's return error for now.
 		// Alternatively, could initialize with default rootStyles here.
-		return "", mjml.EmailBlock{}, nil, fmt.Errorf("invalid compile template request: visual_editor_tree root block must have data (styles)")
+		return fmt.Errorf("invalid compile template request: visual_editor_tree root block must have data (styles)")
 	}
 
-	return r.WorkspaceID, r.VisualEditorTree, r.TestData, nil
+	return nil
 }
 
 type CompileTemplateResponse struct {
@@ -556,7 +562,7 @@ type TemplateService interface {
 	DeleteTemplate(ctx context.Context, workspaceID string, id string) error
 
 	// CompileTemplate compiles a visual editor tree to MJML and HTML
-	CompileTemplate(ctx context.Context, workspaceID string, tree mjml.EmailBlock, testData MapOfAny) (*CompileTemplateResponse, error) // Use mjml.EmailBlock
+	CompileTemplate(ctx context.Context, payload CompileTemplateRequest) (*CompileTemplateResponse, error) // Use mjml.EmailBlock
 }
 
 // TemplateRepository provides database operations for templates

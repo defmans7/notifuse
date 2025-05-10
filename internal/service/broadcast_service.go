@@ -9,6 +9,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/google/uuid"
 )
 
 // BroadcastService handles all broadcast-related operations
@@ -754,10 +755,22 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	}
 
 	// Prepare template data
-	templateData := domain.MapOfAny{
-		"contact": domain.MapOfAny{
-			"email": request.RecipientEmail,
-		},
+	// templateData := domain.MapOfAny{
+	// 	"contact": domain.MapOfAny{
+	// 		"email": request.RecipientEmail,
+	// 	},
+	// }
+
+	messageID := uuid.New().String()
+
+	templateData, err := domain.BuildTemplateData(request.WorkspaceID, domain.ContactWithList{
+		Contact:  contact,
+		ListID:   "",
+		ListName: "",
+	}, messageID, s.apiEndpoint, broadcast)
+	if err != nil {
+		s.logger.Error("Failed to build template data for broadcast")
+		return err
 	}
 
 	// Add contact data if available
@@ -769,7 +782,11 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	}
 
 	// Compile the template
-	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, request.WorkspaceID, template.Email.VisualEditorTree, templateData)
+	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, domain.CompileTemplateRequest{
+		WorkspaceID:      request.WorkspaceID,
+		VisualEditorTree: template.Email.VisualEditorTree,
+		TemplateData:     templateData,
+	})
 	if err != nil {
 		s.logger.Error("Failed to compile template for broadcast")
 		return err

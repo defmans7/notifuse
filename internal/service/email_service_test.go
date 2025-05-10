@@ -359,9 +359,11 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		mockTemplateService.EXPECT().
 			CompileTemplate(
 				ctx,
-				workspaceID,
-				editorTree,
-				template.TestData,
+				domain.CompileTemplateRequest{
+					WorkspaceID:      workspaceID,
+					VisualEditorTree: editorTree,
+					TemplateData:     template.TestData,
+				},
 			).Return(compilationResult, nil)
 
 		// Provider should send an email
@@ -562,9 +564,11 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		mockTemplateService.EXPECT().
 			CompileTemplate(
 				ctx,
-				workspaceID,
-				editorTree,
-				template.TestData,
+				domain.CompileTemplateRequest{
+					WorkspaceID:      workspaceID,
+					VisualEditorTree: editorTree,
+					TemplateData:     template.TestData,
+				},
 			).Return(&domain.CompileTemplateResponse{
 			Success: false,
 			HTML:    nil,

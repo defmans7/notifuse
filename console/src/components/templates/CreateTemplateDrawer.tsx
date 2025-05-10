@@ -22,7 +22,6 @@ import DividerBlockDefinition from '../../components/email_editor/UI/definitions
 import HeadingBlockDefinition from '../../components/email_editor/UI/definitions/Heading'
 import ImageBlockDefinition from '../../components/email_editor/UI/definitions/Image'
 import OneColumnBlockDefinition from '../../components/email_editor/UI/definitions/OneColumn'
-import OpenTrackingBlockDefinition from '../../components/email_editor/UI/definitions/OpenTracking'
 import RootBlockDefinition from '../../components/email_editor/UI/definitions/Root'
 import TextBlockDefinition from '../../components/email_editor/UI/definitions/Text'
 import LiquidTemplateBlockDefinition from '../../components/email_editor/UI/definitions/Liquid'
@@ -56,7 +55,6 @@ const blockDefinitions = {
   columns6666: Columns6666BlockDefinition,
   image: ImageBlockDefinition,
   divider: DividerBlockDefinition,
-  openTracking: OpenTrackingBlockDefinition,
   button: ButtonBlockDefinition,
   text: TextBlockDefinition,
   heading: HeadingBlockDefinition,
@@ -88,7 +86,6 @@ const createDefaultBlocks = () => {
   const heading = generateBlockFromDefinition(HeadingBlockDefinition)
   const logo = generateBlockFromDefinition(ImageBlockDefinition)
   const divider = generateBlockFromDefinition(DividerBlockDefinition)
-  const openTracking = generateBlockFromDefinition(OpenTrackingBlockDefinition)
   const btn = generateBlockFromDefinition(ButtonBlockDefinition)
   const column = generateBlockFromDefinition(OneColumnBlockDefinition)
 
@@ -125,7 +122,6 @@ const createDefaultBlocks = () => {
   column.children[0].children.push(text)
   column.children[0].children.push(divider)
   column.children[0].children.push(btn)
-  column.children[0].children.push(openTracking)
 
   // Create root block with column as child
   const rootData = cloneDeep(RootBlockDefinition.defaultData)

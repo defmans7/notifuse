@@ -10,9 +10,9 @@ import (
 func TestTreeToMjml_SimpleText(t *testing.T) {
 	rootStyles := createRootStyles()
 	block := createTextBlock("txt1", "Hello World")
-	urlParams := map[string]string{}
+	trackingSettings := TrackingSettings{}
 
-	mjml, err := TreeToMjml(rootStyles, block, "", urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, block, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly: %v", err)
 	}
@@ -64,8 +64,8 @@ func TestTreeToMjml_Nested(t *testing.T) {
 		Children: []EmailBlock{sectionBlock},
 	}
 
-	urlParams := map[string]string{}
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", urlParams, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for nested structure: %v", err)
 	}
@@ -115,10 +115,10 @@ func TestTreeToMjml_Liquid(t *testing.T) {
 		Children: []EmailBlock{liquidBlock},
 	}
 
-	urlParams := map[string]string{}
+	trackingSettings := TrackingSettings{}
 	templateData := `{"name": "LiquidUser"}`
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, templateData, urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, rootBlock, templateData, trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for liquid block: %v", err)
 	}
@@ -147,10 +147,10 @@ func TestTreeToMjml_LiquidError(t *testing.T) {
 		Children: []EmailBlock{liquidBlock},
 	}
 
-	urlParams := map[string]string{}
+	trackingSettings := TrackingSettings{}
 	templateData := `{}`
 
-	_, err := TreeToMjml(rootStyles, rootBlock, templateData, urlParams, 0, nil)
+	_, err := TreeToMjml(rootStyles, rootBlock, templateData, trackingSettings, 0, nil)
 	if err == nil {
 		t.Fatal("TreeToMjml should have failed for invalid liquid tag, but err was nil")
 	}
@@ -187,12 +187,13 @@ func TestTreeToMjml_ImageWithTracking(t *testing.T) {
 		Children: []EmailBlock{imageBlock},
 	}
 
-	urlParams := map[string]string{
-		"utm_source": "test_img_src",
-		"utm_medium": "email",
+	trackingSettings := TrackingSettings{
+		EnableTracking: false, // Disable redirect to tracking endpoint
+		UTMSource:      "test_img_src",
+		UTMMedium:      "email",
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for image block: %v", err)
 	}
@@ -230,7 +231,8 @@ func TestTreeToMjml_NilData(t *testing.T) {
 		Children: nil,
 	}
 
-	mjml, err := TreeToMjml(rootStyles, block, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, block, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly with nil data: %v", err)
 	}
@@ -278,13 +280,14 @@ func TestTreeToMjml_Button(t *testing.T) {
 		Children: []EmailBlock{buttonBlock},
 	}
 
-	urlParams := map[string]string{
-		"utm_source":   "test_btn_src",
-		"utm_medium":   "email",
-		"utm_campaign": "promo",
+	trackingSettings := TrackingSettings{
+		EnableTracking: false, // Disable redirect to tracking endpoint
+		UTMSource:      "test_btn_src",
+		UTMMedium:      "email",
+		UTMCampaign:    "promo",
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for button block: %v", err)
 	}
@@ -369,7 +372,8 @@ func TestTreeToMjml_Divider(t *testing.T) {
 		Children: []EmailBlock{dividerBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for divider block: %v", err)
 	}
@@ -420,7 +424,8 @@ func TestTreeToMjml_Spacer(t *testing.T) {
 		Children: []EmailBlock{spacerBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for spacer block: %v", err)
 	}
@@ -480,7 +485,8 @@ func TestTreeToMjml_TwoColumnLayout(t *testing.T) {
 		Children: []EmailBlock{sectionBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for two-column block: %v", err)
 	}
@@ -579,11 +585,12 @@ func TestTreeToMjml_TextFormatting(t *testing.T) {
 		Children: []EmailBlock{textBlock},
 	}
 
-	urlParams := map[string]string{
-		"utm_source": "text_format_test",
+	trackingSettings := TrackingSettings{
+		EnableTracking: false, // Disable redirect to tracking endpoint
+		UTMSource:      "text_format_test",
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", urlParams, 0, nil)
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for formatted text block: %v", err)
 	}
@@ -644,7 +651,6 @@ func TestTreeToMjml_TextFormatting(t *testing.T) {
 	if !strings.Contains(mjml, `text-decoration: underline !important`) {
 		t.Error("Missing underline style on hyperlink (from root)")
 	}
-
 }
 
 func TestTreeToMjml_InvalidDataUnmarshal(t *testing.T) {
@@ -667,7 +673,8 @@ func TestTreeToMjml_InvalidDataUnmarshal(t *testing.T) {
 		Children: []EmailBlock{invalidButtonBlock},
 	}
 
-	_, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	_, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 
 	// Expect an error
 	if err == nil {
@@ -721,7 +728,8 @@ func TestTreeToMjml_Columns816Layout(t *testing.T) {
 		Children: []EmailBlock{sectionBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for columns816 block: %v", err)
 	}
@@ -784,7 +792,8 @@ func TestTreeToMjml_OneColumnLayout(t *testing.T) {
 		Children: []EmailBlock{sectionBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for oneColumn block: %v", err)
 	}
@@ -819,7 +828,8 @@ func TestTreeToMjml_Columns168Layout(t *testing.T) {
 	}
 	rootBlock := EmailBlock{ID: "root_168", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []EmailBlock{sectionBlock}}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed for columns168 block: %v", err)
 	}
@@ -851,7 +861,8 @@ func TestTreeToMjml_Columns204Layout(t *testing.T) {
 	}
 	rootBlock := EmailBlock{ID: "root_204", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []EmailBlock{sectionBlock}}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed for columns204 block: %v", err)
 	}
@@ -883,7 +894,8 @@ func TestTreeToMjml_Columns420Layout(t *testing.T) {
 	}
 	rootBlock := EmailBlock{ID: "root_420", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []EmailBlock{sectionBlock}}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed for columns420 block: %v", err)
 	}
@@ -917,7 +929,8 @@ func TestTreeToMjml_Columns888Layout(t *testing.T) {
 	}
 	rootBlock := EmailBlock{ID: "root_888", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []EmailBlock{sectionBlock}}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed for columns888 block: %v", err)
 	}
@@ -951,7 +964,8 @@ func TestTreeToMjml_Columns6666Layout(t *testing.T) {
 	}
 	rootBlock := EmailBlock{ID: "root_6666", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []EmailBlock{sectionBlock}}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed for columns6666 block: %v", err)
 	}
@@ -1006,7 +1020,8 @@ func TestTreeToMjml_HeadingBlocks(t *testing.T) {
 		Children: []EmailBlock{headingBlock},
 	}
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for heading block: %v", err)
 	}
@@ -1065,7 +1080,8 @@ func TestTreeToMjml_HeadingWithLiquidContent(t *testing.T) {
 	// Provide templateData for liquid tag processing
 	templateData := `{"name": "Customer", "order_id": "ORD-123", "status": "shipped"}`
 
-	mjml, err := TreeToMjml(rootStyles, rootBlock, templateData, nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, templateData, trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for heading with liquid: %v", err)
 	}
@@ -1105,7 +1121,8 @@ func TestTreeToMjml_HeadingWithInvalidLiquid(t *testing.T) {
 	}
 
 	// This test verifies the code doesn't crash with invalid liquid but continues processing
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "{}", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "{}", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml failed unexpectedly for heading with invalid liquid: %v", err)
 	}
@@ -1116,97 +1133,120 @@ func TestTreeToMjml_HeadingWithInvalidLiquid(t *testing.T) {
 	}
 }
 
-func TestTrackURL_InvalidURL(t *testing.T) {
-	// Test invalid URL handling
-	urlParams := map[string]string{"utm_source": "test"}
-	result := trackURL("://invalid", urlParams)
-
-	// Should return original URL for invalid URLs
-	if result != "://invalid" {
-		t.Errorf("Expected original invalid URL to be returned, got: %s", result)
-	}
-}
-
-func TestTrackURL_ComprehensiveEdgeCases(t *testing.T) {
+func TestTrackingSettings_GetTrackingURLComprehensiveEdgeCases(t *testing.T) {
 	tests := []struct {
-		name      string
-		url       string
-		urlParams map[string]string
-		expected  string
+		name             string
+		url              string
+		trackingSettings TrackingSettings
+		expected         string
 	}{
 		{
-			name:      "Basic URL without params",
-			url:       "https://example.com",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "https://example.com?utm_source=test",
+			name: "Basic URL without params",
+			url:  "https://example.com",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "https://example.com?utm_source=test",
 		},
 		{
-			name:      "URL with existing params",
-			url:       "https://example.com?existing=param",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "https://example.com?existing=param&utm_source=test",
+			name: "URL with existing params",
+			url:  "https://example.com?existing=param",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "https://example.com?existing=param&utm_source=test",
 		},
 		{
-			name:      "Multiple UTM params",
-			url:       "https://example.com",
-			urlParams: map[string]string{"utm_source": "test", "utm_medium": "email", "utm_campaign": "welcome"},
-			expected:  "https://example.com?utm_campaign=welcome&utm_medium=email&utm_source=test",
+			name: "Multiple UTM params",
+			url:  "https://example.com",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+				UTMMedium:      "email",
+				UTMCampaign:    "welcome",
+			},
+			expected: "https://example.com?utm_campaign=welcome&utm_medium=email&utm_source=test",
 		},
 		{
-			name:      "URL with fragment",
-			url:       "https://example.com/page#section",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "https://example.com/page?utm_source=test#section",
+			name: "URL with fragment",
+			url:  "https://example.com/page#section",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "https://example.com/page?utm_source=test#section",
 		},
 		{
-			name:      "Empty URL",
-			url:       "",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "",
+			name: "Empty URL",
+			url:  "",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "",
 		},
 		{
-			name:      "Liquid variable placeholder",
-			url:       "{{ some_variable }}",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "{{ some_variable }}",
+			name: "Liquid variable placeholder",
+			url:  "{{ some_variable }}",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "{{ some_variable }}",
 		},
 		{
-			name:      "mailto link",
-			url:       "mailto:user@example.com",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "mailto:user@example.com",
+			name: "mailto link",
+			url:  "mailto:user@example.com",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "mailto:user@example.com",
 		},
 		{
-			name:      "tel link",
-			url:       "tel:+1234567890",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "tel:+1234567890",
+			name: "tel link",
+			url:  "tel:+1234567890",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "tel:+1234567890",
 		},
 		{
-			name:      "URL with existing UTM param",
-			url:       "https://example.com?utm_source=original",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "https://example.com?utm_source=original",
+			name: "URL with existing UTM param",
+			url:  "https://example.com?utm_source=original",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "https://example.com?utm_source=original",
 		},
 		{
-			name:      "Empty params",
-			url:       "https://example.com",
-			urlParams: map[string]string{},
-			expected:  "https://example.com",
+			name: "Empty params",
+			url:  "https://example.com",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+			},
+			expected: "https://example.com",
 		},
 		{
-			name:      "URL with spaces",
-			url:       "https://example.com/page with spaces",
-			urlParams: map[string]string{"utm_source": "test"},
-			expected:  "https://example.com/page%20with%20spaces?utm_source=test",
+			name: "URL with spaces",
+			url:  "https://example.com/page with spaces",
+			trackingSettings: TrackingSettings{
+				EnableTracking: false,
+				UTMSource:      "test",
+			},
+			expected: "https://example.com/page%20with%20spaces?utm_source=test",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := trackURL(tt.url, tt.urlParams)
+			result := tt.trackingSettings.GetTrackingURL(tt.url)
 			if result != tt.expected {
-				t.Errorf("trackURL(%q, %v) = %q, want %q", tt.url, tt.urlParams, result, tt.expected)
+				t.Errorf("trackingSettings.GetTrackingURL(%q) = %q, want %q", tt.url, result, tt.expected)
 			}
 		})
 	}
@@ -1588,7 +1628,8 @@ func TestTreeToMjml_AdditionalUnknownBlockType(t *testing.T) {
 	}
 
 	// Ensure unknown types don't cause errors
-	mjml, err := TreeToMjml(rootStyles, rootBlock, "", nil, 0, nil)
+	trackingSettings := TrackingSettings{}
+	mjml, err := TreeToMjml(rootStyles, rootBlock, "", trackingSettings, 0, nil)
 	if err != nil {
 		t.Fatalf("TreeToMjml should not fail for unknown block types: %v", err)
 	}

@@ -765,20 +765,20 @@ export const treeToMjml = (
       children = [] // mj-divider is self-contained
       break
 
-    case 'openTracking':
-      // Output the tracking pixel using mj-image
-      tagName = 'mj-image'
-      attributes = {
-        src: '{{ open_tracking_pixel_src }}', // Placeholder replaced server-side
-        alt: '',
-        height: '1px',
-        width: '1px',
-        padding: '0', // Ensure no extra space
-        // Add styles for better compatibility, hidden visually but loaded
-        style: 'display:block; max-height:1px; max-width:1px; visibility:hidden; mso-hide:all;'
-      }
-      children = []
-      break
+    // case 'openTracking':
+    //   // Output the tracking pixel using mj-image
+    //   tagName = 'mj-image'
+    //   attributes = {
+    //     src: '{{ tracking_opens_url }}', // Placeholder replaced server-side
+    //     alt: '',
+    //     height: '1px',
+    //     width: '1px',
+    //     padding: '0', // Ensure no extra space
+    //     // Add styles for better compatibility, hidden visually but loaded
+    //     style: 'display:block; max-height:1px; max-width:1px; visibility:hidden; mso-hide:all;'
+    //   }
+    //   children = []
+    //   break
 
     case 'liquid':
       // Process liquid content and return it directly (will be inserted raw by parent)

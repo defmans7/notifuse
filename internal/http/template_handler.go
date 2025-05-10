@@ -210,13 +210,12 @@ func (h *TemplateHandler) handleCompile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	workspaceID, tree, testData, err := req.Validate()
-	if err != nil {
+	if err := req.Validate(); err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	resp, err := h.service.CompileTemplate(r.Context(), workspaceID, tree, testData)
+	resp, err := h.service.CompileTemplate(r.Context(), req)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Warn("Template compilation failed")
 		WriteJSONError(w, fmt.Sprintf("Compilation failed: %s", err.Error()), http.StatusBadRequest)

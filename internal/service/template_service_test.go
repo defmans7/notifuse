@@ -643,7 +643,11 @@ func TestCompileTemplate_Success(t *testing.T) {
 	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{ID: userID}, nil)
 
 	// --- Act ---
-	resp, err := svc.CompileTemplate(ctx, workspaceID, testTree, testData)
+	resp, err := svc.CompileTemplate(ctx, domain.CompileTemplateRequest{
+		WorkspaceID:      workspaceID,
+		VisualEditorTree: testTree,
+		TemplateData:     testData,
+	})
 
 	// --- Assert ---
 	require.NoError(t, err)
@@ -690,7 +694,11 @@ func TestCompileTemplate_TreeToMjmlError(t *testing.T) {
 	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{ID: userID}, nil)
 
 	// --- Act ---
-	resp, err := svc.CompileTemplate(ctx, workspaceID, badLiquidTree, nil)
+	resp, err := svc.CompileTemplate(ctx, domain.CompileTemplateRequest{
+		WorkspaceID:      workspaceID,
+		VisualEditorTree: badLiquidTree,
+		TemplateData:     nil,
+	})
 
 	// --- Assert ---
 	require.NoError(t, err, "CompileTemplate should return nil error even on internal failure")
@@ -724,7 +732,11 @@ func TestCompileTemplate_AuthError(t *testing.T) {
 	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, authErr)
 
 	// --- Act ---
-	resp, err := svc.CompileTemplate(ctx, workspaceID, testTree, nil)
+	resp, err := svc.CompileTemplate(ctx, domain.CompileTemplateRequest{
+		WorkspaceID:      workspaceID,
+		VisualEditorTree: testTree,
+		TemplateData:     nil,
+	})
 
 	// --- Assert ---
 	require.Error(t, err)
@@ -754,7 +766,11 @@ func TestCompileTemplate_InvalidTreeData(t *testing.T) {
 	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{ID: userID}, nil)
 
 	// --- Act ---
-	resp, err := svc.CompileTemplate(ctx, workspaceID, invalidTree, nil)
+	resp, err := svc.CompileTemplate(ctx, domain.CompileTemplateRequest{
+		WorkspaceID:      workspaceID,
+		VisualEditorTree: invalidTree,
+		TemplateData:     nil,
+	})
 
 	// --- Assert ---
 	require.Error(t, err)

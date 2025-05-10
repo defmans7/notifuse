@@ -161,7 +161,11 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 		}
 
 		// Use templateService to compile the template with the tree
-		compileResult, err := s.templateService.CompileTemplate(ctx, workspaceID, template.Email.VisualEditorTree, testData)
+		compileResult, err := s.templateService.CompileTemplate(ctx, domain.CompileTemplateRequest{
+			WorkspaceID:      workspaceID,
+			VisualEditorTree: template.Email.VisualEditorTree,
+			TemplateData:     testData,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to compile template: %w", err)
 		}

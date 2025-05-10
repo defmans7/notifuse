@@ -2462,7 +2462,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			HTML:    &compiledHTML,
 		}
 		mockTemplateSvc.EXPECT().
-			CompileTemplate(gomock.Any(), workspaceID, emailBlock, gomock.Any()).
+			CompileTemplate(gomock.Any(), gomock.Any()).
 			Return(compiledResult, nil)
 
 		// Mock email service to send email

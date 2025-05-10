@@ -1,6 +1,7 @@
 package mjml
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,45 +20,6 @@ func indentPad(n int) string {
 		return ""
 	}
 	return strings.Repeat(" ", n)
-}
-
-// trackURL adds UTM parameters to a URL string.
-func trackURL(urlString string, urlParams map[string]string) string {
-	// Ignore if URL is empty, a placeholder, mailto:, tel:, or already tracked (basic check)
-	if urlString == "" || strings.Contains(urlString, "{{") || strings.Contains(urlString, "{%") || strings.HasPrefix(urlString, "mailto:") || strings.HasPrefix(urlString, "tel:") || strings.Contains(urlString, "utm_source=") {
-		return urlString
-	}
-
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		log.Printf("Warning: Could not parse URL for tracking, returning original: %s, error: %v", urlString, err)
-		return urlString // Return original URL if parsing fails (e.g., relative URL)
-	}
-
-	// Only proceed if scheme is http or https
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return urlString
-	}
-
-	query := parsedURL.Query()
-	if value, ok := urlParams["utm_source"]; ok && value != "" && !query.Has("utm_source") {
-		query.Add("utm_source", value)
-	}
-	if value, ok := urlParams["utm_medium"]; ok && value != "" && !query.Has("utm_medium") {
-		query.Add("utm_medium", value)
-	}
-	if value, ok := urlParams["utm_campaign"]; ok && value != "" && !query.Has("utm_campaign") {
-		query.Add("utm_campaign", value)
-	}
-	if value, ok := urlParams["utm_content"]; ok && value != "" && !query.Has("utm_content") {
-		query.Add("utm_content", value)
-	}
-	if value, ok := urlParams["utm_id"]; ok && value != "" && !query.Has("utm_id") {
-		query.Add("utm_id", value)
-	}
-	parsedURL.RawQuery = query.Encode()
-
-	return parsedURL.String()
 }
 
 // TagConversion maps custom tags to MJML tags (if any were used - seems unused in the converted code)
@@ -405,6 +367,96 @@ type Columns6666BlockData struct {
 	Columns [4]int `json:"columns"` // [6, 6, 6, 6]
 }
 
+type TrackingSettings struct {
+	EnableTracking bool   `json:"enableTracking"`
+	UTMSource      string `json:"utmSource"`
+	UTMMedium      string `json:"utmMedium"`
+	UTMCampaign    string `json:"utmCampaign"`
+	UTMContent     string `json:"utmContent"`
+	UTMTerm        string `json:"utmTerm"`
+	Endpoint       string `json:"endpoint"`
+}
+
+// Value implements the driver.Valuer interface for database storage
+func (t TrackingSettings) Value() (driver.Value, error) {
+	return json.Marshal(t)
+}
+
+// Scan implements the sql.Scanner interface for database retrieval
+func (t *TrackingSettings) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	v, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed for TrackingSettings")
+	}
+
+	return json.Unmarshal(v, t)
+}
+
+func (t *TrackingSettings) GetTrackingURL(sourceURL string) string {
+	// Ignore if URL is empty, a placeholder, mailto:, tel:, or already tracked (basic check)
+	if sourceURL == "" || strings.Contains(sourceURL, "{{") || strings.Contains(sourceURL, "{%") || strings.HasPrefix(sourceURL, "mailto:") || strings.HasPrefix(sourceURL, "tel:") {
+		return sourceURL
+	}
+
+	// parse sourceURL to get the domain
+	parsedURL, err := url.Parse(sourceURL)
+	if err != nil {
+		return sourceURL
+	}
+
+	// Get existing query parameters
+	queryParams := parsedURL.Query()
+
+	// Check if URL already has UTM parameters - if yes, don't modify them
+	hasExistingUTM := false
+	for key := range queryParams {
+		if strings.HasPrefix(strings.ToLower(key), "utm_") {
+			hasExistingUTM = true
+			break
+		}
+	}
+
+	// Add UTM parameters to the URL if no existing UTM parameters
+	if !hasExistingUTM {
+		if t.UTMSource != "" {
+			queryParams.Add("utm_source", t.UTMSource)
+		}
+		if t.UTMMedium != "" {
+			queryParams.Add("utm_medium", t.UTMMedium)
+		}
+		if t.UTMCampaign != "" {
+			queryParams.Add("utm_campaign", t.UTMCampaign)
+		}
+		if t.UTMContent != "" {
+			queryParams.Add("utm_content", t.UTMContent)
+		}
+		if t.UTMTerm != "" {
+			queryParams.Add("utm_term", t.UTMTerm)
+		}
+		parsedURL.RawQuery = queryParams.Encode()
+	}
+
+	if !t.EnableTracking {
+		return parsedURL.String()
+	}
+
+	newURLParams := url.Values{}
+	newURLParams.Add("url", sourceURL)
+
+	// if tracking is enable create a new URL with the tracking endpoint
+	newURL := url.URL{
+		Scheme:   "https",
+		Host:     t.Endpoint,
+		RawQuery: newURLParams.Encode(),
+	}
+
+	return newURL.String()
+}
+
 // TreeToMjml converts an EmailBlock tree into an MJML string.
 // rootStyles: Expected to be a map derived from RootBlockData.Styles, used for text/heading defaults.
 // block: The current EmailBlock node to process.
@@ -414,7 +466,7 @@ type Columns6666BlockData struct {
 // parent: Pointer to the parent EmailBlock, used for context (e.g., column width calculation).
 //
 // Returns the MJML string and an error if one occurred during processing.
-func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateData string, urlParams map[string]string, indent int, parent *EmailBlock) (string, error) {
+func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateData string, trackingSettings TrackingSettings, indent int, parent *EmailBlock) (string, error) {
 	var sb strings.Builder
 	space := indentPad(indent)
 	tagName := ""
@@ -496,7 +548,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 
 		var bodyChildrenSb strings.Builder
 		for _, child := range children {
-			childMjml, err := TreeToMjml(rootStyles, child, templateData, urlParams, indent+4, &block) // Pass current block as parent
+			childMjml, err := TreeToMjml(rootStyles, child, templateData, trackingSettings, indent+4, &block) // Pass current block as parent
 			if err != nil {
 				return "", fmt.Errorf("error processing child block (ID: %s, Kind: %s): %w", child.ID, child.Kind, err)
 			}
@@ -559,7 +611,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		if sectionData.ColumnsOnMobile && len(children) > 0 {
 			var groupChildrenSb strings.Builder
 			for _, child := range children {
-				childMjml, err := TreeToMjml(rootStyles, child, templateData, urlParams, indent+4, &block)
+				childMjml, err := TreeToMjml(rootStyles, child, templateData, trackingSettings, indent+4, &block)
 				if err != nil {
 					return "", fmt.Errorf("error processing child block for mj-group (ID: %s, Kind: %s): %w", child.ID, child.Kind, err)
 				}
@@ -742,7 +794,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					disableTracking := getMapBool(hyperlinkRaw, "disable_tracking")
 					finalURL := linkURL
 					if !disableTracking && linkURL != "" {
-						finalURL = trackURL(linkURL, urlParams)
+						finalURL = trackingSettings.GetTrackingURL(linkURL)
 					}
 
 					var linkStyleList []string
@@ -999,7 +1051,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 					disableTracking := getMapBool(hyperlinkRaw, "disable_tracking")
 					finalURL := linkURL
 					if !disableTracking && linkURL != "" {
-						finalURL = trackURL(linkURL, urlParams)
+						finalURL = trackingSettings.GetTrackingURL(linkURL)
 					}
 
 					var linkStyleList []string
@@ -1200,7 +1252,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 			disableTracking := false // Default to false if field doesn't exist
 			finalURL := href
 			if !disableTracking {
-				finalURL = trackURL(href, urlParams)
+				finalURL = trackingSettings.GetTrackingURL(href)
 			}
 			imageAttrs["href"] = finalURL
 			imageAttrs["target"] = "_blank"
@@ -1250,7 +1302,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		if href := buttonData.Button.Href; href != "" {
 			finalURL := href
 			if !buttonData.Button.DisableTracking {
-				finalURL = trackURL(href, urlParams)
+				finalURL = trackingSettings.GetTrackingURL(href)
 			}
 			buttonAttrs["href"] = finalURL
 			buttonAttrs["target"] = "_blank"
@@ -1356,7 +1408,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		tagName = "mj-raw"
 		attributes = nil // Not needed for mj-raw content
 		// Note: Using single quotes within the style attribute for the Go string literal.
-		content = `<img src="{{ open_tracking_pixel_src }}" alt="" height="1" width="1" style="display:block; max-height:1px; max-width:1px; visibility:hidden; mso-hide:all; border:0; padding:0;" />`
+		content = `<img src="{{ tracking_opens_url }}" alt="" height="1" width="1" style="display:block; max-height:1px; max-width:1px; visibility:hidden; mso-hide:all; border:0; padding:0;" />`
 		children = nil
 
 	case "liquid":
@@ -1425,7 +1477,7 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 	if len(children) > 0 && childrenMjml == "" {
 		var childrenSb strings.Builder
 		for _, child := range children {
-			childMjml, err := TreeToMjml(rootStyles, child, templateData, urlParams, indent+2, &block)
+			childMjml, err := TreeToMjml(rootStyles, child, templateData, trackingSettings, indent+2, &block)
 			if err != nil {
 				return "", fmt.Errorf("error processing child block (ID: %s, Kind: %s): %w", child.ID, child.Kind, err)
 			}

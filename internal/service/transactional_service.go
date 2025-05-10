@@ -9,6 +9,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/Notifuse/notifuse/pkg/tracing"
 	"go.opencensus.io/trace"
 )
@@ -510,6 +511,7 @@ func (s *TransactionalNotificationService) SendNotification(
 				contact,
 				templateConfig,
 				messageData,
+				notification.TrackingSettings,
 				emailProvider,
 			)
 			if err == nil {
@@ -553,6 +555,7 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 	contact *domain.Contact,
 	templateConfig domain.ChannelTemplate,
 	messageData domain.MessageData,
+	trackingSettings mjml.TrackingSettings,
 	emailProvider *domain.EmailProvider,
 ) error {
 	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "DoSendEmailNotification")
@@ -589,8 +592,20 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 		trace.StringAttribute("template.from_email", template.Email.FromAddress),
 	)
 
+	compileTemplateRequest := domain.CompileTemplateRequest{
+		WorkspaceID:      workspace,
+		VisualEditorTree: template.Email.VisualEditorTree,
+		TemplateData:     messageData.Data,
+		EnableTracking:   trackingSettings.EnableTracking,
+		UTMSource:        &trackingSettings.UTMSource,
+		UTMMedium:        &trackingSettings.UTMMedium,
+		UTMCampaign:      &trackingSettings.UTMCampaign,
+		UTMContent:       &trackingSettings.UTMContent,
+		UTMTerm:          &trackingSettings.UTMTerm,
+	}
+
 	// Compile the template with the message data
-	compiledTemplate, err := s.templateService.CompileTemplate(ctx, workspace, template.Email.VisualEditorTree, messageData.Data)
+	compiledTemplate, err := s.templateService.CompileTemplate(ctx, compileTemplateRequest)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"error":       err.Error(),
