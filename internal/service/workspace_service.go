@@ -439,6 +439,22 @@ func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, id string) error
 		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}
 
+	// Get the workspace to retrieve all integrations
+	workspace, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get workspace")
+		return err
+	}
+
+	// Delete all integrations before deleting the workspace
+	for _, integration := range workspace.Integrations {
+		err = s.DeleteIntegration(ctx, id, integration.ID)
+		if err != nil {
+			s.logger.WithField("workspace_id", id).WithField("integration_id", integration.ID).WithField("error", err.Error()).Warn("Failed to delete integration during workspace deletion")
+			// Continue with other integrations even if one fails
+		}
+	}
+
 	if err := s.repo.Delete(ctx, id); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to delete workspace")
 		return err

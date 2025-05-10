@@ -703,12 +703,14 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	ctx := context.Background()
 	userID := "testuser"
 	workspaceID := "testworkspace"
 
-	t.Run("successful delete as owner", func(t *testing.T) {
+	t.Run("successful delete as owner with no integrations", func(t *testing.T) {
 		expectedUser := &domain.User{
 			ID: userID,
 		}
@@ -719,8 +721,146 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 			Role:        "owner",
 		}
 
+		// Workspace with no integrations
+		workspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: []domain.Integration{},
+		}
+
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(workspace, nil)
+		mockRepo.EXPECT().Delete(ctx, workspaceID).Return(nil)
+
+		err := service.DeleteWorkspace(ctx, workspaceID)
+		require.NoError(t, err)
+	})
+
+	t.Run("successful delete as owner with integrations", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		userWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Workspace with two integrations
+		integrations := []domain.Integration{
+			{
+				ID:   "integration-1",
+				Name: "Integration 1",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSMTP,
+				},
+			},
+			{
+				ID:   "integration-2",
+				Name: "Integration 2",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSMTP,
+				},
+			},
+		}
+
+		workspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: integrations,
+		}
+
+		// Initial authentication for the DeleteWorkspace itself
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(workspace, nil)
+
+		// For each DeleteIntegration call inside DeleteWorkspace, expect these mocks
+		// The DeleteIntegration method will call AuthenticateUserForWorkspace again for each integration
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil).Times(2)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil).Times(2)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(workspace, nil).Times(2)
+
+		// For first integration
+		webhookStatus1 := &domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSMTP,
+			IsRegistered:      true,
+		}
+		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, "integration-1").Return(webhookStatus1, nil)
+		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, "integration-1").Return(nil)
+
+		// For second integration
+		webhookStatus2 := &domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSMTP,
+			IsRegistered:      true,
+		}
+		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, "integration-2").Return(webhookStatus2, nil)
+		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, "integration-2").Return(nil)
+
+		// Once for each integration deletion
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil).Times(2)
+
+		// Final workspace deletion
+		mockRepo.EXPECT().Delete(ctx, workspaceID).Return(nil)
+
+		err := service.DeleteWorkspace(ctx, workspaceID)
+		require.NoError(t, err)
+	})
+
+	t.Run("continues deletion despite integration deletion failure", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		userWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Workspace with one integration
+		integrations := []domain.Integration{
+			{
+				ID:   "integration-1",
+				Name: "Integration 1",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSMTP,
+				},
+			},
+		}
+
+		workspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: integrations,
+		}
+
+		// Initial authentication for DeleteWorkspace
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(workspace, nil)
+
+		// Authentication for DeleteIntegration
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(workspace, nil)
+
+		// The integration deletion fails
+		webhookStatus := &domain.WebhookRegistrationStatus{
+			EmailProviderKind: domain.EmailProviderKindSMTP,
+			IsRegistered:      true,
+		}
+		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, "integration-1").Return(webhookStatus, nil)
+		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, "integration-1").Return(errors.New("webhook error"))
+		// The update fails
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(errors.New("integration delete error"))
+
+		// Should still proceed with workspace deletion
 		mockRepo.EXPECT().Delete(ctx, workspaceID).Return(nil)
 
 		err := service.DeleteWorkspace(ctx, workspaceID)
@@ -744,6 +884,26 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 		err := service.DeleteWorkspace(ctx, workspaceID)
 		require.Error(t, err)
 		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("error getting workspace details", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		userWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, errors.New("error getting workspace"))
+
+		err := service.DeleteWorkspace(ctx, workspaceID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error getting workspace")
 	})
 }
 
