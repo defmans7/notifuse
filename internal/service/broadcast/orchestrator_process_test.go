@@ -33,6 +33,13 @@ func setupTestEnvironment(t *testing.T) (
 	ctrl := gomock.NewController(t)
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+
+	// Ensure mock message sender implements the correct interface
+	mockMessageSender.EXPECT().
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
+
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)

@@ -192,6 +192,9 @@ func TestTransactionalNotificationSendParams(t *testing.T) {
 			"email": "john@example.com",
 		},
 		Metadata: MapOfAny{"source": "registration"},
+		CC:       []string{"manager@example.com", "support@example.com"},
+		BCC:      []string{"archive@example.com"},
+		ReplyTo:  "replies@example.com",
 	}
 
 	// Verify field values
@@ -200,6 +203,9 @@ func TestTransactionalNotificationSendParams(t *testing.T) {
 	assert.Equal(t, []TransactionalChannel{TransactionalChannelEmail}, params.Channels)
 	assert.Equal(t, MapOfAny{"name": "John Doe", "email": "john@example.com"}, params.Data)
 	assert.Equal(t, MapOfAny{"source": "registration"}, params.Metadata)
+	assert.Equal(t, []string{"manager@example.com", "support@example.com"}, params.CC)
+	assert.Equal(t, []string{"archive@example.com"}, params.BCC)
+	assert.Equal(t, "replies@example.com", params.ReplyTo)
 }
 
 // Tests for request validation methods and URL parameter handling
@@ -610,9 +616,27 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 					Contact: &Contact{
 						Email: "contact@example.com",
 					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
 					Data: MapOfAny{
 						"name": "John Doe",
 					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid request with cc and bcc",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					CC:       []string{"cc1@example.com", "cc2@example.com"},
+					BCC:      []string{"bcc@example.com"},
+					ReplyTo:  "replies@example.com",
 				},
 			},
 			wantErr: false,
@@ -639,6 +663,7 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 					Contact: &Contact{
 						Email: "contact@example.com",
 					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
 				},
 			},
 			wantErr: true,
@@ -652,6 +677,7 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 					Contact: &Contact{
 						Email: "contact@example.com",
 					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
 				},
 			},
 			wantErr: true,
@@ -662,11 +688,76 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 			req: SendTransactionalRequest{
 				WorkspaceID: "workspace-123",
 				Notification: TransactionalNotificationSendParams{
-					ID: "notification-456",
+					ID:       "notification-456",
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
 				},
 			},
 			wantErr: true,
 			errMsg:  "notification.contact is required",
+		},
+		{
+			name: "invalid cc email",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					CC:       []string{"not-an-email"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "cc 'not-an-email' must be a valid email address",
+		},
+		{
+			name: "invalid bcc email",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					BCC:      []string{"not-an-email"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "bcc 'not-an-email' must be a valid email address",
+		},
+		{
+			name: "invalid replyTo email",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					ReplyTo:  "not-an-email",
+				},
+			},
+			wantErr: true,
+			errMsg:  "replyTo 'not-an-email' must be a valid email address",
+		},
+		{
+			name: "missing channels",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					// Missing or empty Channels
+					Channels: []TransactionalChannel{},
+				},
+			},
+			wantErr: true,
+			errMsg:  "notification must have at least one channel",
 		},
 	}
 
@@ -849,6 +940,7 @@ func TestRequestsWithMetadata(t *testing.T) {
 			Contact: &Contact{
 				Email: "contact@example.com",
 			},
+			Channels: []TransactionalChannel{TransactionalChannelEmail},
 			Metadata: MapOfAny{
 				"source":      "api",
 				"campaign_id": "campaign-123",
@@ -868,8 +960,8 @@ func TestChannelTemplateSettings(t *testing.T) {
 		"from_name":  "Support Team",
 		"from_email": "support@example.com",
 		"reply_to":   "no-reply@example.com",
-		"cc":         []string{"manager@example.com"},
-		"bcc":        []string{"archive@example.com"},
+		"cc":         []string{"manager@example.com", "team@example.com"},
+		"bcc":        []string{"archive@example.com", "logs@example.com"},
 		"custom_field": map[string]interface{}{
 			"tracking_id": "abc123",
 			"department":  "sales",
@@ -878,8 +970,7 @@ func TestChannelTemplateSettings(t *testing.T) {
 
 	template := ChannelTemplate{
 		TemplateID: "template-123",
-
-		Settings: emailSettings,
+		Settings:   emailSettings,
 	}
 
 	// Create notification with this template
@@ -888,7 +979,6 @@ func TestChannelTemplateSettings(t *testing.T) {
 		Notification: TransactionalNotificationCreateParams{
 			ID:   "notification-456",
 			Name: "Welcome Email",
-
 			Channels: ChannelTemplates{
 				TransactionalChannelEmail: template,
 			},
@@ -902,10 +992,73 @@ func TestChannelTemplateSettings(t *testing.T) {
 	assert.Equal(t, "Support Team", req.Notification.Channels[TransactionalChannelEmail].Settings["from_name"])
 	assert.Equal(t, "support@example.com", req.Notification.Channels[TransactionalChannelEmail].Settings["from_email"])
 
+	// Verify reply_to, cc, and bcc settings
+	assert.Equal(t, "no-reply@example.com", req.Notification.Channels[TransactionalChannelEmail].Settings["reply_to"])
+
+	// Verify cc addresses
+	ccAddresses, ok := req.Notification.Channels[TransactionalChannelEmail].Settings["cc"].([]string)
+	require.True(t, ok, "cc should be a string array")
+	assert.Len(t, ccAddresses, 2)
+	assert.Contains(t, ccAddresses, "manager@example.com")
+	assert.Contains(t, ccAddresses, "team@example.com")
+
+	// Verify bcc addresses
+	bccAddresses, ok := req.Notification.Channels[TransactionalChannelEmail].Settings["bcc"].([]string)
+	require.True(t, ok, "bcc should be a string array")
+	assert.Len(t, bccAddresses, 2)
+	assert.Contains(t, bccAddresses, "archive@example.com")
+	assert.Contains(t, bccAddresses, "logs@example.com")
+
 	// Test access to nested values
 	customField := req.Notification.Channels[TransactionalChannelEmail].Settings["custom_field"].(map[string]interface{})
 	assert.Equal(t, "abc123", customField["tracking_id"])
 	assert.Equal(t, "sales", customField["department"])
+}
+
+// Test the additional fields in TransactionalNotificationSendParams when sending
+func TestTransactionalNotificationSendParamsWithCcBcc(t *testing.T) {
+	// Test sending with cc and bcc
+	sendParams := TransactionalNotificationSendParams{
+		ID: "notification-123",
+		Contact: &Contact{
+			Email: "contact@example.com",
+		},
+		Channels: []TransactionalChannel{TransactionalChannelEmail},
+		Data: MapOfAny{
+			"name": "John Doe",
+		},
+		CC:      []string{"cc1@example.com", "cc2@example.com"},
+		BCC:     []string{"bcc@example.com"},
+		ReplyTo: "replies@example.com",
+	}
+
+	// Create a send request
+	sendReq := SendTransactionalRequest{
+		WorkspaceID:  "workspace-123",
+		Notification: sendParams,
+	}
+
+	// Validate the request
+	err := sendReq.Validate()
+	require.NoError(t, err, "Valid request with cc, bcc and replyTo should not fail validation")
+
+	// Verify values are preserved
+	assert.Equal(t, []string{"cc1@example.com", "cc2@example.com"}, sendReq.Notification.CC)
+	assert.Equal(t, []string{"bcc@example.com"}, sendReq.Notification.BCC)
+	assert.Equal(t, "replies@example.com", sendReq.Notification.ReplyTo)
+
+	// Test JSON serialization and deserialization
+	jsonData, err := json.Marshal(sendReq)
+	require.NoError(t, err)
+
+	var unmarshaled SendTransactionalRequest
+	err = json.Unmarshal(jsonData, &unmarshaled)
+	require.NoError(t, err)
+
+	// Verify values are preserved through serialization
+	assert.Equal(t, sendReq.Notification.CC, unmarshaled.Notification.CC)
+	assert.Equal(t, sendReq.Notification.BCC, unmarshaled.Notification.BCC)
+	assert.Equal(t, sendReq.Notification.ReplyTo, unmarshaled.Notification.ReplyTo)
 }
 
 // TestChannelTemplates_ComplexDataStructures tests the serialization and deserialization

@@ -17,7 +17,7 @@ import (
 // MessageSender is the interface for sending messages to recipients
 type MessageSender interface {
 	// SendToRecipient sends a message to a single recipient
-	SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, email string,
+	SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, messageID string, email string,
 		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error
 
 	// SendBatch sends messages to a batch of recipients
@@ -170,7 +170,7 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 }
 
 // SendToRecipient sends a message to a single recipient
-func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, email string,
+func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, messageID string, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
 
 	startTime := time.Now()
@@ -209,6 +209,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		ctx,
 		domain.CompileTemplateRequest{
 			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
 			VisualEditorTree: template.Email.VisualEditorTree,
 			TemplateData:     data,
 			EnableTracking:   broadcast.TestSettings.Enabled,
@@ -257,6 +258,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		template.Email.Subject,
 		*compiledTemplate.HTML,
 		emailProvider,
+		template.Email.ReplyTo,
+		nil,
+		nil,
 	)
 
 	if err != nil {
@@ -400,7 +404,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID 
 		}
 
 		// Send to the recipient
-		err = s.SendToRecipient(ctx, workspaceID, broadcast, contact.Email, templates[templateID], recipientData, emailProvider)
+		err = s.SendToRecipient(ctx, workspaceID, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider)
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++

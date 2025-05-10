@@ -94,7 +94,7 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 	htmlContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
 
 	// Send email using SendEmail method with the direct provider
-	return s.SendEmail(ctx, workspaceID, false, provider.DefaultSenderEmail, provider.DefaultSenderName, to, subject, htmlContent, &provider)
+	return s.SendEmail(ctx, workspaceID, false, provider.DefaultSenderEmail, provider.DefaultSenderName, to, subject, htmlContent, &provider, "", nil, nil)
 }
 
 // TestTemplate tests a template by sending a test email
@@ -185,12 +185,18 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 		emailContent = "<h1>Notifuse: Test Template Email</h1><p>This is a test email from template " + template.Name + ".</p>"
 	}
 
+	// Get reply-to from the template if available
+	replyTo := ""
+	if template.Email != nil && template.Email.ReplyTo != "" {
+		replyTo = template.Email.ReplyTo
+	}
+
 	// Send the email using SendEmail method with the provider from the integration
-	return s.SendEmail(ctx, workspaceID, false, integrationFound.EmailProvider.DefaultSenderEmail, integrationFound.EmailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &integrationFound.EmailProvider)
+	return s.SendEmail(ctx, workspaceID, false, integrationFound.EmailProvider.DefaultSenderEmail, integrationFound.EmailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &integrationFound.EmailProvider, replyTo, nil, nil)
 }
 
 // SendEmail sends an email using the specified provider
-func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider) error {
+func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 
 	// If fromAddress is not provided, use the default sender email from the provider
 	if fromAddress == "" {
@@ -209,7 +215,7 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, isMark
 	}
 
 	// Delegate to the provider-specific implementation
-	return providerService.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+	return providerService.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, replyTo, cc, bcc)
 }
 
 // getProviderService returns the appropriate email provider service based on provider kind

@@ -361,6 +361,7 @@ export function TransactionalNotificationsPage() {
             } as any
           }
           workspace={currentWorkspace || null}
+          withCCAndBCC={true}
         />
       )}
     </div>

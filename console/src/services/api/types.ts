@@ -438,6 +438,7 @@ export interface MjmlCompileError {
 
 export interface CompileTemplateRequest {
   workspace_id: string
+  message_id: string
   visual_editor_tree: BlockInterface
   test_data?: Record<string, any> | null
   enable_tracking?: boolean
@@ -471,6 +472,8 @@ export interface TestTemplateRequest {
   template_id: string
   integration_id: string
   recipient_email: string
+  cc?: string[]
+  bcc?: string[]
 }
 
 export interface TestTemplateResponse {

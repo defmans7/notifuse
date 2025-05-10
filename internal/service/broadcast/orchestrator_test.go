@@ -23,6 +23,10 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockMessageSender.EXPECT().
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
@@ -75,6 +79,10 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockMessageSender.EXPECT().
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
@@ -174,6 +182,10 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockMessageSender.EXPECT().
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
@@ -302,6 +314,10 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockMessageSender.EXPECT().
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
@@ -366,6 +382,10 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockMessageSender.EXPECT().
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
@@ -603,6 +623,10 @@ func TestSaveProgressState(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockMessageSender.EXPECT().
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)

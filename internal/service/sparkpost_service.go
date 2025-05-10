@@ -761,7 +761,7 @@ func (s *SparkPostService) directDeleteWebhook(ctx context.Context, settings *do
 }
 
 // SendEmail sends an email using SparkPost
-func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.SparkPost == nil {
 		return fmt.Errorf("SparkPost provider is not configured")
 	}
@@ -774,6 +774,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fr
 	// Prepare the request payload
 	type Recipient struct {
 		Address string `json:"address"`
+		Type    string `json:"type,omitempty"`
 	}
 
 	type Content struct {
@@ -788,6 +789,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fr
 			Email string `json:"email"`
 		} `json:"from"`
 		Subject string `json:"subject"`
+		ReplyTo string `json:"reply_to,omitempty"`
 	}
 
 	// Set up the email payload
@@ -795,6 +797,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fr
 		Recipients: []Recipient{
 			{
 				Address: to,
+				Type:    "to",
 			},
 		},
 		Content: Content{
@@ -808,6 +811,31 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fr
 			Email: fromAddress,
 		},
 		Subject: subject,
+	}
+
+	// Add replyTo if specified
+	if replyTo != "" {
+		emailReq.ReplyTo = replyTo
+	}
+
+	// Add CC recipients if specified
+	for _, ccAddress := range cc {
+		if ccAddress != "" {
+			emailReq.Recipients = append(emailReq.Recipients, Recipient{
+				Address: ccAddress,
+				Type:    "cc",
+			})
+		}
+	}
+
+	// Add BCC recipients if specified
+	for _, bccAddress := range bcc {
+		if bccAddress != "" {
+			emailReq.Recipients = append(emailReq.Recipients, Recipient{
+				Address: bccAddress,
+				Type:    "bcc",
+			})
+		}
 	}
 
 	// Convert to JSON

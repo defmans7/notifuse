@@ -452,7 +452,7 @@ func (s *MailjetService) TestWebhook(ctx context.Context, config domain.MailjetS
 }
 
 // SendEmail sends an email using Mailjet
-func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.Mailjet == nil {
 		return fmt.Errorf("Mailjet provider is not configured")
 	}
@@ -468,40 +468,70 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, from
 			Email string `json:"Email"`
 			Name  string `json:"Name,omitempty"`
 		} `json:"From"`
-		To               []EmailRecipient `json:"To"`
-		Subject          string           `json:"Subject"`
-		HTMLPart         string           `json:"HTMLPart"`
-		CustomID         string           `json:"CustomID,omitempty"`
-		TextPart         string           `json:"TextPart,omitempty"`
-		TemplateID       int              `json:"TemplateID,omitempty"`
-		TemplateLanguage bool             `json:"TemplateLanguage,omitempty"`
+		To               []EmailRecipient  `json:"To"`
+		Cc               []EmailRecipient  `json:"Cc,omitempty"`
+		Bcc              []EmailRecipient  `json:"Bcc,omitempty"`
+		Subject          string            `json:"Subject"`
+		HTMLPart         string            `json:"HTMLPart"`
+		CustomID         string            `json:"CustomID,omitempty"`
+		TextPart         string            `json:"TextPart,omitempty"`
+		TemplateID       int               `json:"TemplateID,omitempty"`
+		TemplateLanguage bool              `json:"TemplateLanguage,omitempty"`
+		Headers          map[string]string `json:"Headers,omitempty"`
 	}
 
 	type EmailRequest struct {
 		Messages []EmailMessage `json:"Messages"`
 	}
 
-	// Set up the email payload
-	emailReq := EmailRequest{
-		Messages: []EmailMessage{
+	// Create the email message
+	message := EmailMessage{
+		From: struct {
+			Email string `json:"Email"`
+			Name  string `json:"Name,omitempty"`
+		}{
+			Email: fromAddress,
+			Name:  fromName,
+		},
+		To: []EmailRecipient{
 			{
-				From: struct {
-					Email string `json:"Email"`
-					Name  string `json:"Name,omitempty"`
-				}{
-					Email: fromAddress,
-					Name:  fromName,
-				},
-				To: []EmailRecipient{
-					{
-						Email: to,
-					},
-				},
-				Subject:  subject,
-				HTMLPart: content,
-				CustomID: workspaceID,
+				Email: to,
 			},
 		},
+		Subject:  subject,
+		HTMLPart: content,
+		CustomID: workspaceID,
+	}
+
+	// Add CC recipients if specified
+	if len(cc) > 0 {
+		for _, ccAddr := range cc {
+			if ccAddr != "" {
+				message.Cc = append(message.Cc, EmailRecipient{Email: ccAddr})
+			}
+		}
+	}
+
+	// Add BCC recipients if specified
+	if len(bcc) > 0 {
+		for _, bccAddr := range bcc {
+			if bccAddr != "" {
+				message.Bcc = append(message.Bcc, EmailRecipient{Email: bccAddr})
+			}
+		}
+	}
+
+	// Add Reply-To if specified
+	if replyTo != "" {
+		if message.Headers == nil {
+			message.Headers = make(map[string]string)
+		}
+		message.Headers["Reply-To"] = replyTo
+	}
+
+	// Set up the email payload
+	emailReq := EmailRequest{
+		Messages: []EmailMessage{message},
 	}
 
 	// Convert to JSON

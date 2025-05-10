@@ -602,7 +602,7 @@ func mapMailgunEventType(eventType string) domain.EmailEventType {
 }
 
 // SendEmail sends an email using Mailgun
-func (s *MailgunService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+func (s *MailgunService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.Mailgun == nil {
 		return fmt.Errorf("Mailgun provider is not configured")
 	}
@@ -624,6 +624,25 @@ func (s *MailgunService) SendEmail(ctx context.Context, workspaceID string, from
 	form.Add("to", to)
 	form.Add("subject", subject)
 	form.Add("html", content)
+
+	// Add cc recipients if provided
+	for _, ccAddress := range cc {
+		if ccAddress != "" {
+			form.Add("cc", ccAddress)
+		}
+	}
+
+	// Add bcc recipients if provided
+	for _, bccAddress := range bcc {
+		if bccAddress != "" {
+			form.Add("bcc", bccAddress)
+		}
+	}
+
+	// Add reply-to if provided
+	if replyTo != "" {
+		form.Add("h:Reply-To", replyTo)
+	}
 
 	// Create the request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(form.Encode()))

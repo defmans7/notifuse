@@ -657,7 +657,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Verify results
 		require.NoError(t, err)
@@ -691,7 +691,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Verify results
 		require.NoError(t, err)
@@ -704,7 +704,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		provider := &domain.EmailProvider{}
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Verify error
 		assert.Error(t, err)
@@ -729,7 +729,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			Return(nil, errors.New("connection error"))
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Verify error handling
 		assert.Error(t, err)
@@ -760,7 +760,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			Return(resp, nil)
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider)
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Verify error handling
 		assert.Error(t, err)

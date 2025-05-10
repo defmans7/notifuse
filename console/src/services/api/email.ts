@@ -32,19 +32,25 @@ export const emailService = {
    * @param templateId The ID of the template to test
    * @param integrationId The ID of the integration to use
    * @param recipientEmail The email address to send the test email to
+   * @param cc Optional array of CC email addresses
+   * @param bcc Optional array of BCC email addresses
    * @returns A response indicating success or failure
    */
   testTemplate: (
     workspaceId: string,
     templateId: string,
     integrationId: string,
-    recipientEmail: string
+    recipientEmail: string,
+    cc?: string[],
+    bcc?: string[]
   ): Promise<TestTemplateResponse> => {
     const request: TestTemplateRequest = {
       workspace_id: workspaceId,
       template_id: templateId,
       integration_id: integrationId,
-      recipient_email: recipientEmail
+      recipient_email: recipientEmail,
+      cc,
+      bcc
     }
     return api.post<TestTemplateResponse>('/api/email.testTemplate', request)
   }

@@ -24,27 +24,7 @@ import type { Workspace } from '../../services/api/types'
 import TemplateSelectorInput from '../templates/TemplateSelectorInput'
 import { DeleteOutlined } from '@ant-design/icons'
 import React from 'react'
-
-// Function to extract TLD from URL
-const extractTLD = (url: string): string => {
-  try {
-    if (!url || !url.trim()) return ''
-
-    // Add protocol if missing to make URL parsing work
-    const urlWithProtocol = url.startsWith('http') ? url : `https://${url}`
-    const hostname = new URL(urlWithProtocol).hostname
-
-    // Split by dots and get the last two parts (or just the last if it's a simple domain)
-    const parts = hostname.split('.')
-    if (parts.length >= 2) {
-      return parts.slice(-2).join('.')
-    }
-    return hostname
-  } catch (e) {
-    console.error('Error extracting TLD:', e)
-    return ''
-  }
-}
+import extractTLD from '../utils/tld'
 
 // Custom component to handle A/B testing configuration
 const ABTestingConfig = ({ form }: { form: any }) => {

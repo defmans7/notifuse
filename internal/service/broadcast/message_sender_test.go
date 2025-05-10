@@ -138,6 +138,9 @@ func TestSendToRecipientSuccess(t *testing.T) {
 			template.Email.Subject,
 			compiledHTML,
 			nil,
+			"",  // replyTo
+			nil, // cc
+			nil, // bcc
 		).
 		Return(nil)
 
@@ -153,7 +156,8 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	)
 
 	// Call the method being tested
-	err := sender.SendToRecipient(ctx, workspaceID, broadcast, recipientEmail, template, templateData, nil)
+	messageID := "test-message-id"
+	err := sender.SendToRecipient(ctx, workspaceID, broadcast, messageID, recipientEmail, template, templateData, nil)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -191,6 +195,7 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 			Term:     "test-term",
 		},
 	}
+	messageID := "test-message-id"
 	recipientEmail := "test@example.com"
 
 	template := &domain.Template{
@@ -240,7 +245,7 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 	)
 
 	// Call the method being tested
-	err := sender.SendToRecipient(ctx, workspaceID, broadcast, recipientEmail, template, templateData, nil)
+	err := sender.SendToRecipient(ctx, workspaceID, broadcast, messageID, recipientEmail, template, templateData, nil)
 
 	// Verify error is returned
 	assert.Error(t, err)
@@ -286,12 +291,13 @@ func TestWithMockMessageSender(t *testing.T) {
 	}
 
 	// Set expectations on the mock
+	messageID := "test-message-id"
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, broadcast, recipientEmail, template, templateData, nil).
+		SendToRecipient(ctx, workspaceID, broadcast, messageID, recipientEmail, template, templateData, nil).
 		Return(nil)
 
 	// Use the mock (normally this would be in the system under test)
-	err := mockSender.SendToRecipient(ctx, workspaceID, broadcast, recipientEmail, template, templateData, nil)
+	err := mockSender.SendToRecipient(ctx, workspaceID, broadcast, messageID, recipientEmail, template, templateData, nil)
 
 	// Verify the result
 	assert.NoError(t, err)
@@ -355,12 +361,13 @@ func TestErrorHandlingWithMock(t *testing.T) {
 
 	// Set up mock to return an error
 	mockError := errors.New("send failed: service unavailable")
+	messageID := "test-message-id"
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, broadcast, recipientEmail, template, templateData, nil).
+		SendToRecipient(ctx, workspaceID, broadcast, messageID, recipientEmail, template, templateData, nil).
 		Return(mockError)
 
 	// Call the method
-	err := mockSender.SendToRecipient(ctx, workspaceID, broadcast, recipientEmail, template, templateData, nil)
+	err := mockSender.SendToRecipient(ctx, workspaceID, broadcast, messageID, recipientEmail, template, templateData, nil)
 
 	// Verify error handling
 	assert.Error(t, err)
@@ -507,6 +514,9 @@ func TestSendBatch(t *testing.T) {
 				template.Email.Subject,
 				compiledHTML,
 				nil,
+				"",  // replyTo
+				nil, // cc
+				nil, // bcc
 			).
 			Return(nil)
 
@@ -795,6 +805,9 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			template.Email.Subject,
 			compiledHTML,
 			nil,
+			"",  // replyTo
+			nil, // cc
+			nil, // bcc
 		).
 		Return(sendError)
 
@@ -958,6 +971,9 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 			template.Email.Subject,
 			compiledHTML,
 			nil,
+			"",  // replyTo
+			nil, // cc
+			nil, // bcc
 		).
 		Return(nil)
 

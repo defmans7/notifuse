@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Button, Drawer, Form, Input, Space, App, Switch, Collapse, Typography } from 'antd'
+import { Button, Drawer, Form, Input, Space, App, Switch, Row, Col } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   transactionalNotificationsApi,
@@ -10,6 +10,7 @@ import {
 import type { Workspace } from '../../services/api/types'
 import TemplateSelectorInput from '../templates/TemplateSelectorInput'
 import React from 'react'
+import extractTLD from '../utils/tld'
 
 // Helper function to generate a valid API ID from a name
 const generateApiId = (name: string): string => {
@@ -44,11 +45,9 @@ export function UpsertTransactionalNotificationDrawer({
   const [loading, setLoading] = useState(false)
   const { message, modal } = App.useApp()
   const [formTouched, setFormTouched] = useState(false)
-  const { Panel } = Collapse
 
   // Watch notification name changes using Form.useWatch
   const notificationName = Form.useWatch('name', form)
-  const enableTracking = Form.useWatch(['channels', 'email', 'enable_tracking'], form)
 
   // Update API ID when name changes
   useEffect(() => {
@@ -56,6 +55,10 @@ export function UpsertTransactionalNotificationDrawer({
       // Only auto-generate ID for new notifications
       const apiId = generateApiId(notificationName)
       form.setFieldValue('id', apiId)
+
+      // Also update utm_content with the same pattern
+      // UTM parameters are independent of enable_tracking
+      form.setFieldValue(['channels', 'email', 'utm_params', 'content'], apiId)
     }
   }, [notificationName, form, isOpen, notification])
 
@@ -99,6 +102,9 @@ export function UpsertTransactionalNotificationDrawer({
         metadata: notification.metadata || undefined
       })
     } else {
+      // Extract domain from website_url
+      const domain = extractTLD(workspace.settings.website_url || '')
+
       // Set default values for a new notification
       form.setFieldsValue({
         id: '',
@@ -110,12 +116,13 @@ export function UpsertTransactionalNotificationDrawer({
             template_id: '',
             enable_tracking: true,
             utm_params: {
-              source: '',
-              medium: '',
-              campaign: '',
-              content: '',
-              term: ''
-            }
+              source: domain || '',
+              medium: 'email',
+              campaign: 'transactional',
+              content: ''
+            },
+            cc_enabled: false,
+            bcc_enabled: false
           }
         }
       })
@@ -278,72 +285,71 @@ export function UpsertTransactionalNotificationDrawer({
                 />
               </Form.Item>
 
-              <Form.Item
-                name={['channels', 'email', 'enable_tracking']}
-                label="Enable Link Tracking"
-                valuePropName="checked"
-                initialValue={true}
-                tooltip="When enabled, links in the email will be tracked for opens and clicks"
-              >
-                <Switch />
-              </Form.Item>
+              <Row>
+                <Col span={12}>
+                  <Form.Item
+                    name="is_public"
+                    label="User Visible"
+                    valuePropName="checked"
+                    tooltip="When enabled, users can view and mute this notification in their notification center"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name={['channels', 'email', 'enable_tracking']}
+                    label="Enable Link Tracking"
+                    valuePropName="checked"
+                    initialValue={true}
+                    tooltip="When enabled, links in the email will be tracked for opens and clicks"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
 
-              <Collapse className="mb-4">
-                <Panel header="UTM Parameters" key="utm_params">
-                  <Typography.Paragraph className="text-sm text-gray-500 mb-4">
-                    Define UTM parameters for links in your email for better campaign tracking.
-                  </Typography.Paragraph>
+              <p className="text-sm text-gray-500 pt-8">
+                Define UTM parameters for links in your email for better campaign tracking.
+              </p>
 
+              <Row gutter={16}>
+                <Col span={12}>
                   <Form.Item
                     name={['channels', 'email', 'utm_params', 'source']}
-                    label="UTM Source"
+                    label="utm_source"
                     tooltip="Identifies which site sent the traffic (e.g. google, newsletter)"
                   >
-                    <Input placeholder="e.g. notifuse" disabled={!enableTracking} />
+                    <Input placeholder="e.g. notifuse" />
                   </Form.Item>
 
                   <Form.Item
                     name={['channels', 'email', 'utm_params', 'medium']}
-                    label="UTM Medium"
+                    label="utm_medium"
                     tooltip="Identifies what type of link was used (e.g. email, cpc, banner)"
                   >
-                    <Input placeholder="e.g. email" disabled={!enableTracking} />
+                    <Input placeholder="e.g. email" />
                   </Form.Item>
+                </Col>
 
+                <Col span={12}>
                   <Form.Item
                     name={['channels', 'email', 'utm_params', 'campaign']}
-                    label="UTM Campaign"
+                    label="utm_campaign"
                     tooltip="Identifies a specific product promotion or strategic campaign"
                   >
-                    <Input placeholder="e.g. welcome_series" disabled={!enableTracking} />
+                    <Input placeholder="e.g. welcome_series" />
                   </Form.Item>
 
                   <Form.Item
                     name={['channels', 'email', 'utm_params', 'content']}
-                    label="UTM Content"
+                    label="utm_content"
                     tooltip="Identifies what specifically was clicked (e.g. header_link, body_link)"
                   >
-                    <Input placeholder="e.g. cta_button" disabled={!enableTracking} />
+                    <Input placeholder="e.g. cta_button" />
                   </Form.Item>
-
-                  <Form.Item
-                    name={['channels', 'email', 'utm_params', 'term']}
-                    label="UTM Term"
-                    tooltip="Identifies search terms (typically used for paid search)"
-                  >
-                    <Input placeholder="e.g. email_notifications" disabled={!enableTracking} />
-                  </Form.Item>
-                </Panel>
-              </Collapse>
-
-              <Form.Item
-                name="is_public"
-                label="User Visible"
-                valuePropName="checked"
-                tooltip="When enabled, users can view and mute this notification in their notification center"
-              >
-                <Switch />
-              </Form.Item>
+                </Col>
+              </Row>
             </div>
           </Form>
         </Drawer>

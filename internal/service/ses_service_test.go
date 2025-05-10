@@ -1453,7 +1453,7 @@ func TestSendEmail(t *testing.T) {
 		provider := &domain.EmailProvider{}
 
 		// Call the service method
-		err := service.SendEmail(context.Background(), workspaceID, fromAddress, fromName, to, subject, content, provider)
+		err := service.SendEmail(context.Background(), workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Verify error
 		assert.Error(t, err)
@@ -1474,7 +1474,7 @@ func TestSendEmail(t *testing.T) {
 		}
 
 		// Call the service method
-		err := service.SendEmail(context.Background(), workspaceID, fromAddress, fromName, to, subject, content, provider)
+		err := service.SendEmail(context.Background(), workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Verify error
 		assert.Error(t, err)

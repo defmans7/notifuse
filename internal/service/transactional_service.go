@@ -513,6 +513,8 @@ func (s *TransactionalNotificationService) SendNotification(
 				messageData,
 				notification.TrackingSettings,
 				emailProvider,
+				params.CC,
+				params.BCC,
 			)
 			if err == nil {
 				successfulChannels++
@@ -557,6 +559,8 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 	messageData domain.MessageData,
 	trackingSettings mjml.TrackingSettings,
 	emailProvider *domain.EmailProvider,
+	cc []string,
+	bcc []string,
 ) error {
 	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "DoSendEmailNotification")
 	defer span.End()
@@ -594,6 +598,7 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 
 	compileTemplateRequest := domain.CompileTemplateRequest{
 		WorkspaceID:      workspace,
+		MessageID:        messageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
 		TemplateData:     messageData.Data,
 		EnableTracking:   trackingSettings.EnableTracking,
@@ -682,6 +687,9 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 		subject,
 		htmlContent,
 		emailProvider,
+		template.Email.ReplyTo,
+		cc,
+		bcc,
 	)
 
 	if err != nil {

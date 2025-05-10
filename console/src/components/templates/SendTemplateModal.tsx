@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Modal, Button, Input, Select, Typography, Space } from 'antd'
+import { Modal, Button, Input, Select, Typography, Form } from 'antd'
 import { Workspace, Template, Integration } from '../../services/api/types'
 import { emailService } from '../../services/api/email'
 import { message } from 'antd'
@@ -14,6 +14,7 @@ interface SendTemplateModalProps {
   template: Template | null
   workspace: Workspace | null
   loading?: boolean
+  withCCAndBCC?: boolean
 }
 
 export default function SendTemplateModal({
@@ -21,11 +22,15 @@ export default function SendTemplateModal({
   onClose,
   template,
   workspace,
-  loading = false
+  loading = false,
+  withCCAndBCC = false
 }: SendTemplateModalProps) {
   const [email, setEmail] = useState('')
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>('')
   const [sendLoading, setSendLoading] = useState(false)
+  const [ccEmails, setCcEmails] = useState<string[]>([])
+  const [bccEmails, setBccEmails] = useState<string[]>([])
+  const [form] = Form.useForm()
 
   // Filter to only email integrations
   const emailIntegrations =
@@ -50,6 +55,16 @@ export default function SendTemplateModal({
     }
   }, [isOpen, template, workspace, emailIntegrations, selectedIntegrationId])
 
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setEmail('')
+      setCcEmails([])
+      setBccEmails([])
+      form.resetFields()
+    }
+  }, [isOpen, form])
+
   const handleSend = async () => {
     if (!template || !workspace || !selectedIntegrationId) return
 
@@ -59,13 +74,14 @@ export default function SendTemplateModal({
         workspace.id,
         template.id,
         selectedIntegrationId,
-        email
+        email,
+        ccEmails.length > 0 ? ccEmails : undefined,
+        bccEmails.length > 0 ? bccEmails : undefined
       )
 
       if (response.success) {
         message.success('Test email sent successfully')
         onClose()
-        setEmail('')
       } else {
         message.error(`Failed to send test email: ${response.error || 'Unknown error'}`)
       }
@@ -110,38 +126,67 @@ export default function SendTemplateModal({
           Send Test Email
         </Button>
       ]}
+      width={withCCAndBCC ? 600 : 520}
     >
-      <div className="py-2 space-y-4">
-        <p>Send a test email using this template to verify how it will look.</p>
+      <Form form={form} layout="vertical">
+        <div className="py-2 space-y-4">
+          <p>Send a test email using this template to verify how it will look.</p>
 
-        <div>
-          <div className="mb-1">Email Integration</div>
-          <Select
-            className="w-full"
-            placeholder="Select an email integration"
-            value={selectedIntegrationId}
-            onChange={setSelectedIntegrationId}
-            disabled={emailIntegrations.length === 0}
-          >
-            {emailIntegrations.map(renderIntegrationOption)}
-          </Select>
-          {emailIntegrations.length === 0 && (
-            <Text type="warning" className="mt-1 block">
-              No email integrations available. Please configure one in Settings.
-            </Text>
+          <Form.Item label="Email Integration">
+            <Select
+              className="w-full"
+              placeholder="Select an email integration"
+              value={selectedIntegrationId}
+              onChange={setSelectedIntegrationId}
+              disabled={emailIntegrations.length === 0}
+            >
+              {emailIntegrations.map(renderIntegrationOption)}
+            </Select>
+            {emailIntegrations.length === 0 && (
+              <Text type="warning" className="mt-1 block">
+                No email integrations available. Please configure one in Settings.
+              </Text>
+            )}
+          </Form.Item>
+
+          <Form.Item label="Recipient Email" required>
+            <Input
+              placeholder="recipient@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+            />
+          </Form.Item>
+
+          {withCCAndBCC && (
+            <>
+              <Form.Item label="CC Recipients">
+                <Select
+                  mode="tags"
+                  placeholder="Enter CC email addresses"
+                  value={ccEmails}
+                  onChange={setCcEmails}
+                  tokenSeparators={[',', ' ']}
+                  className="w-full"
+                  allowClear
+                />
+              </Form.Item>
+
+              <Form.Item label="BCC Recipients">
+                <Select
+                  mode="tags"
+                  placeholder="Enter BCC email addresses"
+                  value={bccEmails}
+                  onChange={setBccEmails}
+                  tokenSeparators={[',', ' ']}
+                  className="w-full"
+                  allowClear
+                />
+              </Form.Item>
+            </>
           )}
         </div>
-
-        <div>
-          <div className="mb-1">Recipient Email</div>
-          <Input
-            placeholder="recipient@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-          />
-        </div>
-      </div>
+      </Form>
     </Modal>
   )
 }

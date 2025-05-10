@@ -4,7 +4,7 @@
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
 
-- redirection handler to count the clicks and redirect to the url
+- redirection handler "/visit?mid={message_id}&wid={workspace_id}" to count the clicks and redirect to the url
 - tracking pixel handler to count the opens
 - test transactional email
 - user notifications center
@@ -14,7 +14,5 @@
 - contact show profile
 - swagger api docs
 - test webhooks for email providers
-- add cc and bcc to template settings
+- create the redirection endpoint url in
 - test the docker compose
-- transactional should have options : enable tracking, utm source, utm medium, utm campaign, utm content
-- add endpoint to trackingSettings

@@ -198,7 +198,7 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.Co
 
 	trackingSettings := notifusemjml.TrackingSettings{
 		EnableTracking: payload.EnableTracking,
-		Endpoint:       s.apiEndpoint,
+		Endpoint:       domain.GenerateEmailRedirectionEndpoint(payload.WorkspaceID, payload.MessageID, s.apiEndpoint),
 	}
 
 	if payload.UTMSource != nil {

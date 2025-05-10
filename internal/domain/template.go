@@ -154,7 +154,7 @@ func (t TemplateReference) Value() (driver.Value, error) {
 type EmailTemplate struct {
 	FromAddress      string          `json:"from_address"`
 	FromName         string          `json:"from_name"`
-	ReplyTo          *string         `json:"reply_to,omitempty"`
+	ReplyTo          string          `json:"reply_to,omitempty"`
 	Subject          string          `json:"subject"`
 	SubjectPreview   *string         `json:"subject_preview,omitempty"`
 	CompiledPreview  string          `json:"compiled_preview"` // compiled html
@@ -218,7 +218,7 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	}
 
 	// Validate optional fields
-	if e.ReplyTo != nil && !govalidator.IsEmail(*e.ReplyTo) {
+	if e.ReplyTo != "" && !govalidator.IsEmail(e.ReplyTo) {
 		return fmt.Errorf("invalid email template: reply_to is not a valid email")
 	}
 	if e.SubjectPreview != nil && len(*e.SubjectPreview) > 32 {
@@ -476,6 +476,7 @@ func (r *DeleteTemplateRequest) Validate() (workspaceID string, id string, err e
 
 type CompileTemplateRequest struct {
 	WorkspaceID      string          `json:"workspace_id"`
+	MessageID        string          `json:"message_id"`
 	VisualEditorTree mjml.EmailBlock `json:"visual_editor_tree"` // Use the struct from pkg/mjml
 	TemplateData     MapOfAny        `json:"test_data,omitempty"`
 	EnableTracking   bool            `json:"enable_tracking,omitempty"`
@@ -489,6 +490,9 @@ type CompileTemplateRequest struct {
 func (r *CompileTemplateRequest) Validate() (err error) {
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("invalid compile template request: workspace_id is required")
+	}
+	if r.MessageID == "" {
+		return fmt.Errorf("invalid compile template request: message_id is required")
 	}
 	// Basic validation for the tree root kind
 	if r.VisualEditorTree.Kind != "root" {
@@ -675,4 +679,9 @@ func BuildTemplateData(workspaceID string, contactWithList ContactWithList, mess
 	templateData["tracking_click_url"] = trackingBaseURL
 
 	return templateData, nil
+}
+
+func GenerateEmailRedirectionEndpoint(workspaceID string, messageID string, apiEndpoint string) string {
+	return fmt.Sprintf("%s/visit?mid=%s&wid=%s",
+		apiEndpoint, messageID, workspaceID)
 }

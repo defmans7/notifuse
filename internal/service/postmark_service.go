@@ -526,7 +526,7 @@ func (s *PostmarkService) filterPostmarkWebhooks(
 }
 
 // SendEmail sends an email using Postmark
-func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.Postmark == nil {
 		return fmt.Errorf("Postmark provider is not configured")
 	}
@@ -546,6 +546,37 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, fro
 		"To":       to,
 		"Subject":  subject,
 		"HtmlBody": content,
+	}
+
+	// Add CC if specified
+	if len(cc) > 0 {
+		var ccAddresses []string
+		for _, ccAddr := range cc {
+			if ccAddr != "" {
+				ccAddresses = append(ccAddresses, ccAddr)
+			}
+		}
+		if len(ccAddresses) > 0 {
+			requestBody["Cc"] = strings.Join(ccAddresses, ",")
+		}
+	}
+
+	// Add BCC if specified
+	if len(bcc) > 0 {
+		var bccAddresses []string
+		for _, bccAddr := range bcc {
+			if bccAddr != "" {
+				bccAddresses = append(bccAddresses, bccAddr)
+			}
+		}
+		if len(bccAddresses) > 0 {
+			requestBody["Bcc"] = strings.Join(bccAddresses, ",")
+		}
+	}
+
+	// Add ReplyTo if specified
+	if replyTo != "" {
+		requestBody["ReplyTo"] = replyTo
 	}
 
 	// Convert to JSON

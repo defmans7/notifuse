@@ -91,6 +91,8 @@ export interface SendTransactionalNotificationRequest {
     channels?: TransactionalChannel[]
     data?: Record<string, any>
     metadata?: Record<string, any>
+    cc?: string[]
+    bcc?: string[]
   }
 }
 

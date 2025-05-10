@@ -700,7 +700,7 @@ func (s *SESService) UnregisterWebhooks(
 }
 
 // SendEmail sends an email using AWS SES
-func (s *SESService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider) error {
+func (s *SESService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.SES == nil {
 		return fmt.Errorf("SES provider is not configured")
 	}
@@ -727,11 +727,40 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, fromAddr
 	// Format the "From" header with name and email
 	fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)
 
-	// Create the email
+	// Create the destination with required addresses
+	destination := &ses.Destination{
+		ToAddresses: []*string{aws.String(to)},
+	}
+
+	// Add CC addresses if provided
+	if len(cc) > 0 {
+		var ccAddresses []*string
+		for _, ccAddress := range cc {
+			if ccAddress != "" {
+				ccAddresses = append(ccAddresses, aws.String(ccAddress))
+			}
+		}
+		if len(ccAddresses) > 0 {
+			destination.CcAddresses = ccAddresses
+		}
+	}
+
+	// Add BCC addresses if provided
+	if len(bcc) > 0 {
+		var bccAddresses []*string
+		for _, bccAddress := range bcc {
+			if bccAddress != "" {
+				bccAddresses = append(bccAddresses, aws.String(bccAddress))
+			}
+		}
+		if len(bccAddresses) > 0 {
+			destination.BccAddresses = bccAddresses
+		}
+	}
+
+	// Create the email input
 	input := &ses.SendEmailInput{
-		Destination: &ses.Destination{
-			ToAddresses: []*string{aws.String(to)},
-		},
+		Destination: destination,
 		Message: &ses.Message{
 			Body: &ses.Body{
 				Html: &ses.Content{
@@ -745,6 +774,11 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, fromAddr
 			},
 		},
 		Source: aws.String(fromHeader),
+	}
+
+	// Add ReplyTo if provided
+	if replyTo != "" {
+		input.ReplyToAddresses = []*string{aws.String(replyTo)}
 	}
 
 	// Send the email

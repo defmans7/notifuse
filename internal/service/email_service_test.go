@@ -22,9 +22,9 @@ type mockEmailProviderService struct {
 	calls map[string][]interface{}
 }
 
-func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider) error {
+func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	// Check if an expectation is set
-	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s", workspaceID, fromAddress, fromName, to, subject)
+	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s", workspaceID, fromAddress, fromName, to, subject, replyTo)
 	if m.calls == nil {
 		m.ctrl.T.Fatalf("No expectations set for SendEmail")
 		return nil
@@ -32,8 +32,8 @@ func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID st
 
 	call, exists := m.calls[key]
 	if !exists {
-		m.ctrl.T.Fatalf("Unexpected call to SendEmail with args: %v, %v, %v, %v, %v, %v, %v",
-			ctx, workspaceID, fromAddress, fromName, to, subject, content)
+		m.ctrl.T.Fatalf("Unexpected call to SendEmail with args: %v, %v, %v, %v, %v, %v, %v, %v, %v",
+			ctx, workspaceID, fromAddress, fromName, to, subject, content, replyTo, cc, bcc)
 		return nil
 	}
 
@@ -45,13 +45,17 @@ func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID st
 }
 
 func (m *mockEmailProviderService) expectSendEmail(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, err error) {
+	m.expectSendEmailWithOptions(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil, err)
+}
+
+func (m *mockEmailProviderService) expectSendEmailWithOptions(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string, err error) {
 	// Initialize the calls map if needed
 	if m.calls == nil {
 		m.calls = make(map[string][]interface{})
 	}
 
 	// Store the expectation
-	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s", workspaceID, fromAddress, fromName, to, subject)
+	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s", workspaceID, fromAddress, fromName, to, subject, replyTo)
 	m.calls[key] = []interface{}{err}
 }
 
@@ -126,7 +130,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 
 		// Provider should send an email
 		testEmailContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
-		mockSESService.expectSendEmail(
+		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
 			provider.DefaultSenderEmail,
@@ -135,6 +139,9 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 			"Notifuse: Test Email Provider",
 			testEmailContent,
 			&provider,
+			"",
+			nil,
+			nil,
 			nil,
 		)
 
@@ -209,7 +216,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		testEmailContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
-		mockSESService.expectSendEmail(
+		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
 			provider.DefaultSenderEmail,
@@ -218,6 +225,9 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 			"Notifuse: Test Email Provider",
 			testEmailContent,
 			&provider,
+			"",
+			nil,
+			nil,
 			assert.AnError,
 		)
 
@@ -336,6 +346,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 			Email: &domain.EmailTemplate{
 				Subject:          "Test Subject",
 				VisualEditorTree: editorTree,
+				ReplyTo:          "reply-to@example.com",
 			},
 			TestData: map[string]interface{}{
 				"name": "Test User",
@@ -367,7 +378,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 			).Return(compilationResult, nil)
 
 		// Provider should send an email
-		mockSESService.expectSendEmail(
+		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
 			workspace.Integrations[0].EmailProvider.DefaultSenderEmail,
@@ -376,6 +387,9 @@ func TestEmailService_TestTemplate(t *testing.T) {
 			template.Email.Subject,
 			htmlResult,
 			&workspace.Integrations[0].EmailProvider,
+			template.Email.ReplyTo,
+			nil,
+			nil,
 			nil,
 		)
 
@@ -640,6 +654,9 @@ func TestEmailService_SendEmail(t *testing.T) {
 		providerKind    domain.EmailProviderKind
 		mockService     *mockEmailProviderService
 		isDefaultSender bool
+		replyTo         string
+		cc              []string
+		bcc             []string
 	}{
 		{
 			name:            "SMTP provider",
@@ -683,6 +700,15 @@ func TestEmailService_SendEmail(t *testing.T) {
 			mockService:     mockSESService,
 			isDefaultSender: true,
 		},
+		{
+			name:            "With ReplyTo and CC/BCC",
+			providerKind:    domain.EmailProviderKindSES,
+			mockService:     mockSESService,
+			isDefaultSender: false,
+			replyTo:         "reply@example.com",
+			cc:              []string{"cc1@example.com", "cc2@example.com"},
+			bcc:             []string{"bcc@example.com"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -707,7 +733,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 			}
 
 			// Set expectation for the mock service
-			tc.mockService.expectSendEmail(
+			tc.mockService.expectSendEmailWithOptions(
 				ctx,
 				workspaceID,
 				expectedFromAddress,
@@ -716,11 +742,14 @@ func TestEmailService_SendEmail(t *testing.T) {
 				subject,
 				content,
 				&provider,
+				tc.replyTo,
+				tc.cc,
+				tc.bcc,
 				nil,
 			)
 
 			// Call method under test
-			err := emailService.SendEmail(ctx, workspaceID, false, testFromAddress, testFromName, toEmail, subject, content, &provider)
+			err := emailService.SendEmail(ctx, workspaceID, false, testFromAddress, testFromName, toEmail, subject, content, &provider, tc.replyTo, tc.cc, tc.bcc)
 
 			// Assertions
 			require.NoError(t, err)
@@ -733,7 +762,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 		}
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, false, fromAddress, fromName, toEmail, subject, content, &provider)
+		err := emailService.SendEmail(ctx, workspaceID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
 
 		// Assertions
 		require.Error(t, err)
@@ -747,7 +776,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 			DefaultSenderName:  "Default Sender",
 		}
 
-		mockSESService.expectSendEmail(
+		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
 			fromAddress,
@@ -756,11 +785,14 @@ func TestEmailService_SendEmail(t *testing.T) {
 			subject,
 			content,
 			&provider,
+			"",
+			nil,
+			nil,
 			assert.AnError,
 		)
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, false, fromAddress, fromName, toEmail, subject, content, &provider)
+		err := emailService.SendEmail(ctx, workspaceID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
 
 		// Assertions
 		require.Error(t, err)

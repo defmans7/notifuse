@@ -784,6 +784,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	// Compile the template
 	compiledTemplate, err := s.templateSvc.CompileTemplate(ctx, domain.CompileTemplateRequest{
 		WorkspaceID:      request.WorkspaceID,
+		MessageID:        messageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
 		TemplateData:     templateData,
 	})
@@ -811,6 +812,9 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		request.RecipientEmail,
 		template.Email.Subject,
 		*compiledTemplate.HTML,
+		nil,
+		template.Email.ReplyTo,
+		nil,
 		nil,
 	)
 	if err != nil {

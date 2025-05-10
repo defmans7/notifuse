@@ -206,9 +206,9 @@ func (e *EmailProvider) DecryptSecretKeys(passphrase string) error {
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
 	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string) error
-	SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider) error
+	SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, replyTo string, cc []string, bcc []string) error
 }
 
 type EmailProviderService interface {
-	SendEmail(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider) error
+	SendEmail(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, replyTo string, cc []string, bcc []string) error
 }

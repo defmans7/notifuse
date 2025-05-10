@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/asaskevich/govalidator"
 )
 
 //go:generate mockgen -destination mocks/mock_transactional_notification_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TransactionalNotificationService
@@ -115,6 +116,9 @@ type TransactionalNotificationSendParams struct {
 	Channels []TransactionalChannel `json:"channels,omitempty"`          // Specific channels to send through (if empty, use all configured channels)
 	Data     MapOfAny               `json:"data,omitempty"`              // Data to populate the template with
 	Metadata MapOfAny               `json:"metadata,omitempty"`          // Additional metadata for tracking
+	CC       []string               `json:"cc,omitempty"`                // CC email addresses
+	BCC      []string               `json:"bcc,omitempty"`               // BCC email addresses
+	ReplyTo  string                 `json:"reply_to,omitempty"`          // Reply-To email address
 }
 
 // TransactionalNotificationService defines the interface for transactional notification operations
@@ -138,7 +142,7 @@ type TransactionalNotificationService interface {
 	SendNotification(ctx context.Context, workspaceID string, params TransactionalNotificationSendParams) (string, error)
 
 	// DoSendEmailNotification handles sending a notification through the email channel
-	DoSendEmailNotification(ctx context.Context, workspaceID string, messageID string, contact *Contact, templateConfig ChannelTemplate, messageData MessageData, trackingSettings mjml.TrackingSettings, emailProvider *EmailProvider) error
+	DoSendEmailNotification(ctx context.Context, workspaceID string, messageID string, contact *Contact, templateConfig ChannelTemplate, messageData MessageData, trackingSettings mjml.TrackingSettings, emailProvider *EmailProvider, cc []string, bcc []string) error
 }
 
 // Request and response types for transactional notifications
@@ -301,6 +305,28 @@ func (req *SendTransactionalRequest) Validate() error {
 
 	if req.Notification.Contact.Validate() != nil {
 		return NewValidationError("notification.contact is invalid")
+	}
+
+	if len(req.Notification.Channels) == 0 {
+		return NewValidationError("notification must have at least one channel")
+	}
+
+	// validate optional cc and bcc
+	for _, cc := range req.Notification.CC {
+		if !govalidator.IsEmail(cc) {
+			return NewValidationError(fmt.Sprintf("cc '%s' must be a valid email address", cc))
+		}
+	}
+
+	for _, bcc := range req.Notification.BCC {
+		if !govalidator.IsEmail(bcc) {
+			return NewValidationError(fmt.Sprintf("bcc '%s' must be a valid email address", bcc))
+		}
+	}
+
+	// validate reply_to if provided
+	if req.Notification.ReplyTo != "" && !govalidator.IsEmail(req.Notification.ReplyTo) {
+		return NewValidationError(fmt.Sprintf("replyTo '%s' must be a valid email address", req.Notification.ReplyTo))
 	}
 
 	return nil

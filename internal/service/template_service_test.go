@@ -26,7 +26,7 @@ func setupTemplateServiceTest(ctrl *gomock.Controller) (*service.TemplateService
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
-	templateService := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+	templateService := service.NewTemplateService(mockRepo, mockAuthService, mockLogger, "https://api.example.com")
 	return templateService, mockRepo, mockAuthService, mockLogger
 }
 
@@ -631,7 +631,7 @@ func TestCompileTemplate_Success(t *testing.T) {
 	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
 	mockLogger := &MockLogger{}
 
-	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger, "https://api.example.com")
 
 	ctx := context.Background()
 	workspaceID := "ws_123"
@@ -678,7 +678,7 @@ func TestCompileTemplate_TreeToMjmlError(t *testing.T) {
 	mockAuthService := domainmocks.NewMockAuthService(ctrl)
 	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
 	mockLogger := &MockLogger{}
-	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger, "https://api.example.com")
 
 	ctx := context.Background()
 	workspaceID := "ws_123"
@@ -720,7 +720,7 @@ func TestCompileTemplate_AuthError(t *testing.T) {
 	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
 	mockLogger := &MockLogger{}
 
-	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger, "https://api.example.com")
 
 	ctx := context.Background()
 	workspaceID := "ws_123"
@@ -753,7 +753,7 @@ func TestCompileTemplate_InvalidTreeData(t *testing.T) {
 	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
 	mockLogger := &MockLogger{}
 
-	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger)
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger, "https://api.example.com")
 
 	ctx := context.Background()
 	workspaceID := "ws_123"

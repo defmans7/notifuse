@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -851,7 +852,17 @@ func TestTransactionalNotificationHandler_HandleDelete(t *testing.T) {
 }
 
 func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
-	mockService, mockLogger, handler := setupTransactionalHandlerTest(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockTransactionalNotificationService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// For tests we don't need the actual key, we can create a new one
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger)
 
 	workspaceID := "workspace1"
 	notificationID := "test-notification"
@@ -866,6 +877,7 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			Data: domain.MapOfAny{
 				"name": "Test User",
 			},
+			Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail}, // Required field
 		},
 	}
 
@@ -890,11 +902,12 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			method:      http.MethodPost,
 			requestBody: "invalid json",
 			setupMock: func() {
+				// Set expectation for logger mock
 				mockLogger.EXPECT().
-					WithField("error", gomock.Any()).
+					WithField(gomock.Eq("error"), gomock.Any()).
 					Return(mockLogger)
 				mockLogger.EXPECT().
-					Error("Failed to decode request body")
+					Error(gomock.Eq("Failed to decode request body"))
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkResponse:  nil,
@@ -918,8 +931,9 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			requestBody: domain.SendTransactionalRequest{
 				WorkspaceID: workspaceID,
 				Notification: domain.TransactionalNotificationSendParams{
-					ID:      notificationID,
-					Contact: &domain.Contact{}, // Empty contact
+					ID:       notificationID,
+					Contact:  &domain.Contact{}, // Empty contact
+					Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail},
 				},
 			},
 			setupMock:      func() {},
@@ -932,14 +946,14 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			requestBody: validReqBody,
 			setupMock: func() {
 				mockService.EXPECT().
-					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					SendNotification(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
 					Return("", errors.New("notification not found"))
 
 				mockLogger.EXPECT().
-					WithField("error", "notification not found").
+					WithField(gomock.Eq("error"), gomock.Any()).
 					Return(mockLogger)
 				mockLogger.EXPECT().
-					Error("Failed to send transactional notification")
+					Error(gomock.Eq("Failed to send transactional notification"))
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkResponse:  nil,
@@ -950,14 +964,14 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			requestBody: validReqBody,
 			setupMock: func() {
 				mockService.EXPECT().
-					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					SendNotification(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
 					Return("", errors.New("notification not active"))
 
 				mockLogger.EXPECT().
-					WithField("error", "notification not active").
+					WithField(gomock.Eq("error"), gomock.Any()).
 					Return(mockLogger)
 				mockLogger.EXPECT().
-					Error("Failed to send transactional notification")
+					Error(gomock.Eq("Failed to send transactional notification"))
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkResponse:  nil,
@@ -968,14 +982,14 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			requestBody: validReqBody,
 			setupMock: func() {
 				mockService.EXPECT().
-					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					SendNotification(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
 					Return("", errors.New("no valid channels"))
 
 				mockLogger.EXPECT().
-					WithField("error", "no valid channels").
+					WithField(gomock.Eq("error"), gomock.Any()).
 					Return(mockLogger)
 				mockLogger.EXPECT().
-					Error("Failed to send transactional notification")
+					Error(gomock.Eq("Failed to send transactional notification"))
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkResponse:  nil,
@@ -986,7 +1000,7 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			requestBody: validReqBody,
 			setupMock: func() {
 				mockService.EXPECT().
-					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					SendNotification(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
 					Return("msg_123", nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -1001,19 +1015,95 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 			},
 		},
 		{
+			name:   "with cc and bcc valid emails",
+			method: http.MethodPost,
+			requestBody: domain.SendTransactionalRequest{
+				WorkspaceID: workspaceID,
+				Notification: domain.TransactionalNotificationSendParams{
+					ID: notificationID,
+					Contact: &domain.Contact{
+						Email: "test@example.com",
+					},
+					Data: domain.MapOfAny{
+						"name": "Test User",
+					},
+					Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail},
+					CC:       []string{"cc1@example.com", "cc2@example.com"},
+					BCC:      []string{"bcc@example.com"},
+				},
+			},
+			setupMock: func() {
+				mockService.EXPECT().
+					SendNotification(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, wsID string, params domain.TransactionalNotificationSendParams) (string, error) {
+						// Verify cc and bcc are passed correctly
+						assert.Equal(t, []string{"cc1@example.com", "cc2@example.com"}, params.CC)
+						assert.Equal(t, []string{"bcc@example.com"}, params.BCC)
+						assert.Contains(t, params.Channels, domain.TransactionalChannelEmail)
+						return "msg_with_cc_bcc", nil
+					})
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, response map[string]interface{}) {
+				success, ok := response["success"].(bool)
+				assert.True(t, ok)
+				assert.True(t, success)
+
+				messageID, ok := response["message_id"].(string)
+				assert.True(t, ok)
+				assert.Equal(t, "msg_with_cc_bcc", messageID)
+			},
+		},
+		{
+			name:   "with invalid cc email",
+			method: http.MethodPost,
+			requestBody: domain.SendTransactionalRequest{
+				WorkspaceID: workspaceID,
+				Notification: domain.TransactionalNotificationSendParams{
+					ID: notificationID,
+					Contact: &domain.Contact{
+						Email: "test@example.com",
+					},
+					Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail},
+					CC:       []string{"invalid-email"},
+				},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
+			name:   "with invalid bcc email",
+			method: http.MethodPost,
+			requestBody: domain.SendTransactionalRequest{
+				WorkspaceID: workspaceID,
+				Notification: domain.TransactionalNotificationSendParams{
+					ID: notificationID,
+					Contact: &domain.Contact{
+						Email: "test@example.com",
+					},
+					Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail},
+					BCC:      []string{"invalid-email"},
+				},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
+		},
+		{
 			name:        "service error",
 			method:      http.MethodPost,
 			requestBody: validReqBody,
 			setupMock: func() {
 				mockService.EXPECT().
-					SendNotification(gomock.Any(), workspaceID, gomock.Any()).
+					SendNotification(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
 					Return("", errors.New("service error"))
 
 				mockLogger.EXPECT().
-					WithField("error", "service error").
+					WithField(gomock.Eq("error"), gomock.Any()).
 					Return(mockLogger)
 				mockLogger.EXPECT().
-					Error("Failed to send transactional notification")
+					Error(gomock.Eq("Failed to send transactional notification"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse:  nil,

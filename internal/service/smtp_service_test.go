@@ -106,7 +106,7 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call the method
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, invalidProvider)
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, invalidProvider, "", nil, nil)
 
 		// Verify error
 		require.Error(t, err)
@@ -126,7 +126,7 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call the method
-		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, validProvider)
+		err := service.SendEmail(ctx, workspaceID, fromAddress, fromName, to, subject, content, validProvider, "", nil, nil)
 
 		// Verify error
 		require.Error(t, err)
