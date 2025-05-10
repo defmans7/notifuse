@@ -516,30 +516,49 @@ type CompileTemplateResponse struct {
 
 // TestTemplateRequest represents a request to test a template
 type TestTemplateRequest struct {
-	WorkspaceID    string `json:"workspace_id"`
-	TemplateID     string `json:"template_id"`
-	IntegrationID  string `json:"integration_id"`
-	RecipientEmail string `json:"recipient_email"`
+	WorkspaceID    string   `json:"workspace_id"`
+	TemplateID     string   `json:"template_id"`
+	IntegrationID  string   `json:"integration_id"`
+	RecipientEmail string   `json:"recipient_email"`
+	CC             []string `json:"cc,omitempty"`
+	BCC            []string `json:"bcc,omitempty"`
 }
 
-func (r *TestTemplateRequest) Validate() (string, string, string, string, error) {
+func (r *TestTemplateRequest) Validate() (string, string, string, string, []string, []string, error) {
 	if r.WorkspaceID == "" {
-		return "", "", "", "", fmt.Errorf("workspace_id is required")
+		return "", "", "", "", nil, nil, fmt.Errorf("workspace_id is required")
 	}
 	if r.TemplateID == "" {
-		return "", "", "", "", fmt.Errorf("template_id is required")
+		return "", "", "", "", nil, nil, fmt.Errorf("template_id is required")
 	}
 	if r.IntegrationID == "" {
-		return "", "", "", "", fmt.Errorf("integration_id is required")
+		return "", "", "", "", nil, nil, fmt.Errorf("integration_id is required")
 	}
 	if r.RecipientEmail == "" {
-		return "", "", "", "", fmt.Errorf("recipient_email is required")
+		return "", "", "", "", nil, nil, fmt.Errorf("recipient_email is required")
 	}
 	if !govalidator.IsEmail(r.RecipientEmail) {
-		return "", "", "", "", fmt.Errorf("invalid recipient_email format")
+		return "", "", "", "", nil, nil, fmt.Errorf("invalid recipient_email format")
 	}
 
-	return r.WorkspaceID, r.TemplateID, r.IntegrationID, r.RecipientEmail, nil
+	// Validate CC and BCC email addresses if provided
+	if r.CC != nil {
+		for _, email := range r.CC {
+			if !govalidator.IsEmail(email) {
+				return "", "", "", "", nil, nil, fmt.Errorf("invalid CC email format: %s", email)
+			}
+		}
+	}
+
+	if r.BCC != nil {
+		for _, email := range r.BCC {
+			if !govalidator.IsEmail(email) {
+				return "", "", "", "", nil, nil, fmt.Errorf("invalid BCC email format: %s", email)
+			}
+		}
+	}
+
+	return r.WorkspaceID, r.TemplateID, r.IntegrationID, r.RecipientEmail, r.CC, r.BCC, nil
 }
 
 // TestTemplateResponse represents the response from testing a template

@@ -98,7 +98,7 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 }
 
 // TestTemplate tests a template by sending a test email
-func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string) error {
+func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string, cc []string, bcc []string) error {
 	// Authenticate user for workspace
 	var err error
 	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
@@ -192,7 +192,7 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 	}
 
 	// Send the email using SendEmail method with the provider from the integration
-	return s.SendEmail(ctx, workspaceID, false, integrationFound.EmailProvider.DefaultSenderEmail, integrationFound.EmailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &integrationFound.EmailProvider, replyTo, nil, nil)
+	return s.SendEmail(ctx, workspaceID, false, integrationFound.EmailProvider.DefaultSenderEmail, integrationFound.EmailProvider.DefaultSenderName, recipientEmail, emailSubject, emailContent, &integrationFound.EmailProvider, replyTo, cc, bcc)
 }
 
 // SendEmail sends an email using the specified provider

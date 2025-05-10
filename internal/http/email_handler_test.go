@@ -331,6 +331,8 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 						"template123",
 						"invalid",
 						"test@example.com",
+						nil,
+						nil,
 					).
 					Return(fmt.Errorf("integration not found: invalid"))
 			},
@@ -357,6 +359,8 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 						"template123",
 						"marketing",
 						"test@example.com",
+						nil,
+						nil,
 					).
 					Return(errors.New("service error"))
 			},
@@ -383,11 +387,42 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 						"template123",
 						"marketing",
 						"test@example.com",
+						nil,
+						nil,
 					).
 					Return(&domain.ErrTemplateNotFound{Message: "not found"})
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedResp:   nil,
+		},
+		{
+			name:   "Success with CC and BCC",
+			method: http.MethodPost,
+			reqBody: domain.TestTemplateRequest{
+				WorkspaceID:    "workspace123",
+				TemplateID:     "template123",
+				IntegrationID:  "marketing",
+				RecipientEmail: "test@example.com",
+				CC:             []string{"cc1@example.com", "cc2@example.com"},
+				BCC:            []string{"bcc@example.com"},
+			},
+			setupMock: func(m *mocks.MockEmailServiceInterface) {
+				m.EXPECT().
+					TestTemplate(
+						gomock.Any(),
+						"workspace123",
+						"template123",
+						"marketing",
+						"test@example.com",
+						[]string{"cc1@example.com", "cc2@example.com"},
+						[]string{"bcc@example.com"},
+					).
+					Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResp: &domain.TestTemplateResponse{
+				Success: true,
+			},
 		},
 		{
 			name:   "Success",
@@ -406,6 +441,8 @@ func TestEmailHandler_HandleTestTemplate(t *testing.T) {
 						"template123",
 						"marketing",
 						"test@example.com",
+						nil,
+						nil,
 					).
 					Return(nil)
 			},

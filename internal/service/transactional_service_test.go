@@ -30,7 +30,7 @@ func (m *mockEmailService) TestEmailProvider(ctx context.Context, workspaceID st
 	return nil
 }
 
-func (m *mockEmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string) error {
+func (m *mockEmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string, cc []string, bcc []string) error {
 	return nil
 }
 

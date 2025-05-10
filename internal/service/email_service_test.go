@@ -394,7 +394,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		)
 
 		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail)
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil)
 
 		// Assertions
 		require.NoError(t, err)
@@ -406,7 +406,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 			Return(ctx, nil, assert.AnError)
 
 		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail)
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil)
 
 		// Assertions
 		require.Error(t, err)
@@ -422,7 +422,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 			Return(nil, assert.AnError)
 
 		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail)
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil)
 
 		// Assertions
 		require.Error(t, err)
@@ -461,7 +461,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 			Return(nil, assert.AnError)
 
 		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail)
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil)
 
 		// Assertions
 		require.Error(t, err)
@@ -500,7 +500,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 			Return(&template, nil)
 
 		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail)
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil)
 
 		// Assertions
 		require.Error(t, err)
@@ -592,7 +592,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		}, assert.AnError)
 
 		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail)
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil)
 
 		// Assertions
 		require.Error(t, err)

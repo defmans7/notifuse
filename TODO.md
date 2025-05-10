@@ -16,3 +16,5 @@
 - test webhooks for email providers
 - create the redirection endpoint url in
 - test the docker compose
+- delete integration should unregister the webhook
+- delete the workspace should unregister the webhook
