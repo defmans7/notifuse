@@ -30,6 +30,8 @@ export default function SendTemplateModal({
   const [sendLoading, setSendLoading] = useState(false)
   const [ccEmails, setCcEmails] = useState<string[]>([])
   const [bccEmails, setBccEmails] = useState<string[]>([])
+  const [replyTo, setReplyTo] = useState<string>('')
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [form] = Form.useForm()
 
   // Filter to only email integrations
@@ -61,9 +63,11 @@ export default function SendTemplateModal({
       setEmail('')
       setCcEmails([])
       setBccEmails([])
+      setReplyTo('')
+      setShowAdvancedOptions(false)
       form.resetFields()
     }
-  }, [isOpen, form])
+  }, [isOpen, form, withCCAndBCC])
 
   const handleSend = async () => {
     if (!template || !workspace || !selectedIntegrationId) return
@@ -76,7 +80,8 @@ export default function SendTemplateModal({
         selectedIntegrationId,
         email,
         ccEmails.length > 0 ? ccEmails : undefined,
-        bccEmails.length > 0 ? bccEmails : undefined
+        bccEmails.length > 0 ? bccEmails : undefined,
+        replyTo
       )
 
       if (response.success) {
@@ -126,7 +131,7 @@ export default function SendTemplateModal({
           Send Test Email
         </Button>
       ]}
-      width={withCCAndBCC ? 600 : 520}
+      width={showAdvancedOptions ? 600 : 520}
     >
       <Form form={form} layout="vertical">
         <div className="py-2 space-y-4">
@@ -158,7 +163,13 @@ export default function SendTemplateModal({
             />
           </Form.Item>
 
-          {withCCAndBCC && (
+          {!showAdvancedOptions && (
+            <Button type="link" onClick={() => setShowAdvancedOptions(true)} className="!p-0">
+              + add CC, BCC, reply-to
+            </Button>
+          )}
+
+          {showAdvancedOptions && (
             <>
               <Form.Item label="CC Recipients">
                 <Select
@@ -167,7 +178,6 @@ export default function SendTemplateModal({
                   value={ccEmails}
                   onChange={setCcEmails}
                   tokenSeparators={[',', ' ']}
-                  className="w-full"
                   allowClear
                 />
               </Form.Item>
@@ -179,7 +189,15 @@ export default function SendTemplateModal({
                   value={bccEmails}
                   onChange={setBccEmails}
                   tokenSeparators={[',', ' ']}
-                  className="w-full"
+                  allowClear
+                />
+              </Form.Item>
+
+              <Form.Item label="Reply-To">
+                <Input
+                  placeholder="Enter Reply-To email address"
+                  value={replyTo}
+                  onChange={(e) => setReplyTo(e.target.value)}
                   allowClear
                 />
               </Form.Item>

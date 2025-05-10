@@ -90,13 +90,13 @@ func (h *EmailHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	workspaceID, templateID, integrationID, recipientEmail, cc, bcc, err := req.Validate()
+	workspaceID, templateID, integrationID, recipientEmail, cc, bcc, replyTo, err := req.Validate()
 	if err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = h.emailService.TestTemplate(r.Context(), workspaceID, templateID, integrationID, recipientEmail, cc, bcc)
+	err = h.emailService.TestTemplate(r.Context(), workspaceID, templateID, integrationID, recipientEmail, cc, bcc, replyTo)
 
 	// Create response
 	response := domain.TestTemplateResponse{

@@ -64,15 +64,15 @@ func (mr *MockEmailServiceInterfaceMockRecorder) TestEmailProvider(arg0, arg1, a
 }
 
 // TestTemplate mocks base method.
-func (m *MockEmailServiceInterface) TestTemplate(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5, arg6 []string) error {
+func (m *MockEmailServiceInterface) TestTemplate(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5, arg6 []string, arg7 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TestTemplate", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret := m.ctrl.Call(m, "TestTemplate", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // TestTemplate indicates an expected call of TestTemplate.
-func (mr *MockEmailServiceInterfaceMockRecorder) TestTemplate(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
+func (mr *MockEmailServiceInterfaceMockRecorder) TestTemplate(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TestTemplate", reflect.TypeOf((*MockEmailServiceInterface)(nil).TestTemplate), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TestTemplate", reflect.TypeOf((*MockEmailServiceInterface)(nil).TestTemplate), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 }

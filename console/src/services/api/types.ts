@@ -474,6 +474,7 @@ export interface TestTemplateRequest {
   recipient_email: string
   cc?: string[]
   bcc?: string[]
+  reply_to?: string
 }
 
 export interface TestTemplateResponse {
