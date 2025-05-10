@@ -271,3 +271,26 @@ func (s *EmailService) VisitLink(ctx context.Context, messageID string, workspac
 
 	return nil
 }
+
+func (s *EmailService) OpenEmail(ctx context.Context, messageID string, workspaceID string) error {
+	// find the message by id
+	message, err := s.messageRepo.Get(ctx, workspaceID, messageID)
+	if err != nil {
+		return fmt.Errorf("failed to get message: %w", err)
+	}
+
+	// update message status to opened
+	if message.Status != domain.MessageStatusOpened {
+		now := time.Now()
+		message.Status = domain.MessageStatusOpened
+		message.OpenedAt = &now
+		message.Error = nil
+
+		err = s.messageRepo.Update(ctx, workspaceID, message)
+		if err != nil {
+			return fmt.Errorf("failed to update message: %w", err)
+		}
+	}
+
+	return nil
+}

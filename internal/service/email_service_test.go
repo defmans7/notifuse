@@ -1026,3 +1026,124 @@ func TestEmailService_VisitLink(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to update message")
 	})
 }
+
+func TestEmailService_OpenEmail(t *testing.T) {
+	// Setup the controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Setup mocks
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockMessageRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+
+	// Create the email service
+	emailService := EmailService{
+		logger:          mockLogger,
+		authService:     mockAuthService,
+		workspaceRepo:   mockWorkspaceRepo,
+		templateRepo:    mockTemplateRepo,
+		templateService: mockTemplateService,
+		httpClient:      mockHTTPClient,
+		messageRepo:     mockMessageRepo,
+	}
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	messageID := "message-456"
+
+	t.Run("Successfully updates message status to opened", func(t *testing.T) {
+		// Create a message that hasn't been opened yet
+		message := &domain.MessageHistory{
+			ID:     messageID,
+			Status: domain.MessageStatusDelivered,
+		}
+
+		// Setup message repository mock
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(message, nil)
+
+		// Expect an update with opened status
+		mockMessageRepo.EXPECT().
+			Update(ctx, workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, updated *domain.MessageHistory) error {
+				// Verify the updated message has the correct status
+				assert.Equal(t, domain.MessageStatusOpened, updated.Status)
+				assert.NotNil(t, updated.OpenedAt)
+				return nil
+			})
+
+		// Call method under test
+		err := emailService.OpenEmail(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.NoError(t, err)
+	})
+
+	t.Run("Does not update already opened message", func(t *testing.T) {
+		// Create a message that's already been opened
+		openedTime := time.Now().Add(-2 * time.Hour)
+		message := &domain.MessageHistory{
+			ID:       messageID,
+			Status:   domain.MessageStatusOpened,
+			OpenedAt: &openedTime,
+		}
+
+		// Setup message repository mock - should get the message
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(message, nil)
+
+		// No update should be called since the message is already opened
+
+		// Call method under test
+		err := emailService.OpenEmail(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.NoError(t, err)
+	})
+
+	t.Run("Message not found", func(t *testing.T) {
+		// Setup message repository mock to return not found error
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(nil, assert.AnError)
+
+		// Call method under test
+		err := emailService.OpenEmail(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get message")
+	})
+
+	t.Run("Error updating message", func(t *testing.T) {
+		// Create a message that hasn't been opened yet
+		message := &domain.MessageHistory{
+			ID:     messageID,
+			Status: domain.MessageStatusDelivered,
+		}
+
+		// Setup message repository mock
+		mockMessageRepo.EXPECT().
+			Get(ctx, workspaceID, messageID).
+			Return(message, nil)
+
+		// Expect an update but return an error
+		mockMessageRepo.EXPECT().
+			Update(ctx, workspaceID, gomock.Any()).
+			Return(assert.AnError)
+
+		// Call method under test
+		err := emailService.OpenEmail(ctx, messageID, workspaceID)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to update message")
+	})
+}

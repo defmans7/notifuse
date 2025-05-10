@@ -691,22 +691,18 @@ func BuildTemplateData(workspaceID string, contactWithList ContactWithList, mess
 	workspaceID = url.QueryEscape(workspaceID)
 
 	// Tracking pixel for opens
-	trackingPixelURL := fmt.Sprintf("%s/opens?id=%s&t=o&w=%s",
+	trackingPixelURL := fmt.Sprintf("%s/opens?mid=%s&wid=%s",
 		apiEndpoint, messageID, workspaceID)
 
 	templateData["tracking_opens_url"] = trackingPixelURL
-
-	// Base URL for click tracking
-	// Usage in templates: {{tracking_base}}&url={{encoded_destination_url}}
-	trackingBaseURL := fmt.Sprintf("%s/click?id=%s&w=%s",
-		apiEndpoint, messageID, workspaceID)
-
-	templateData["tracking_click_url"] = trackingBaseURL
 
 	return templateData, nil
 }
 
 func GenerateEmailRedirectionEndpoint(workspaceID string, messageID string, apiEndpoint string) string {
+	// URL encode the parameters to handle special characters
+	encodedMID := url.QueryEscape(messageID)
+	encodedWID := url.QueryEscape(workspaceID)
 	return fmt.Sprintf("%s/visit?mid=%s&wid=%s",
-		apiEndpoint, messageID, workspaceID)
+		apiEndpoint, encodedMID, encodedWID)
 }

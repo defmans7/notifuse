@@ -444,17 +444,16 @@ func (t *TrackingSettings) GetTrackingURL(sourceURL string) string {
 		return parsedURL.String()
 	}
 
-	newURLParams := url.Values{}
-	newURLParams.Add("url", sourceURL)
-
-	// if tracking is enable create a new URL with the tracking endpoint
-	newURL := url.URL{
-		Scheme:   "https",
-		Host:     t.Endpoint,
-		RawQuery: newURLParams.Encode(),
+	// parse endpoint and add url to the query params
+	parsedEndpoint, err := url.Parse(t.Endpoint)
+	if err != nil {
+		return sourceURL
 	}
+	endpointParams := parsedEndpoint.Query()
+	endpointParams.Add("url", sourceURL)
+	parsedEndpoint.RawQuery = endpointParams.Encode()
 
-	return newURL.String()
+	return parsedEndpoint.String()
 }
 
 // TreeToMjml converts an EmailBlock tree into an MJML string.

@@ -678,3 +678,97 @@ func TestEmailHandler_HandleClickRedirection(t *testing.T) {
 		})
 	}
 }
+
+func TestEmailHandler_HandleOpens(t *testing.T) {
+	// Setup
+	mockEmailService, _, handler, _ := setupEmailHandlerTest(t)
+
+	tests := []struct {
+		name                string
+		queryParams         map[string]string
+		setupExpectations   func()
+		expectedStatusCode  int
+		expectedBody        string
+		expectedContentType string
+	}{
+		{
+			name: "Success with all parameters",
+			queryParams: map[string]string{
+				"mid": "message-123",
+				"wid": "workspace-123",
+			},
+			setupExpectations: func() {
+				mockEmailService.EXPECT().
+					OpenEmail(gomock.Any(), "message-123", "workspace-123").
+					Return(nil)
+			},
+			expectedStatusCode:  http.StatusOK,
+			expectedContentType: "image/png",
+		},
+		{
+			name: "Missing message ID",
+			queryParams: map[string]string{
+				"wid": "workspace-123",
+			},
+			setupExpectations:  func() {},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       "Missing message ID or workspace ID\n",
+		},
+		{
+			name: "Missing workspace ID",
+			queryParams: map[string]string{
+				"mid": "message-123",
+			},
+			setupExpectations:  func() {},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       "Missing message ID or workspace ID\n",
+		},
+		{
+			name:               "Missing both IDs",
+			queryParams:        map[string]string{},
+			setupExpectations:  func() {},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       "Missing message ID or workspace ID\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup request
+			req := httptest.NewRequest(http.MethodGet, "/opens", nil)
+			q := req.URL.Query()
+			for key, value := range tt.queryParams {
+				q.Add(key, value)
+			}
+			req.URL.RawQuery = q.Encode()
+
+			// Setup expectations
+			tt.setupExpectations()
+
+			// Create response recorder
+			w := httptest.NewRecorder()
+
+			// Call the handler
+			handler.handleOpens(w, req.WithContext(context.Background()))
+
+			// Assertions
+			assert.Equal(t, tt.expectedStatusCode, w.Code)
+
+			if tt.expectedBody != "" {
+				assert.Equal(t, tt.expectedBody, w.Body.String())
+			}
+
+			if tt.expectedContentType != "" {
+				assert.Equal(t, tt.expectedContentType, w.Header().Get("Content-Type"))
+			}
+
+			// If it's a successful response, verify it returned a PNG image
+			// The transparent pixel is 67 bytes long
+			if tt.expectedStatusCode == http.StatusOK {
+				assert.Equal(t, 67, len(w.Body.Bytes()))
+				// Verify PNG signature in the first 8 bytes
+				assert.Equal(t, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, w.Body.Bytes()[:8])
+			}
+		})
+	}
+}

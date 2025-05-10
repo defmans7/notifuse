@@ -1147,16 +1147,8 @@ func TestBuildTemplateData(t *testing.T) {
 		trackingPixelURL, ok := data["tracking_opens_url"].(string)
 		assert.True(t, ok)
 		assert.Contains(t, trackingPixelURL, "https://api.example.com/opens")
-		assert.Contains(t, trackingPixelURL, "id=msg-456")
-		assert.Contains(t, trackingPixelURL, "t=o")
-		assert.Contains(t, trackingPixelURL, "w=ws-123")
-
-		// Check click tracking URL
-		trackingClickURL, ok := data["tracking_click_url"].(string)
-		assert.True(t, ok)
-		assert.Contains(t, trackingClickURL, "https://api.example.com/click")
-		assert.Contains(t, trackingClickURL, "id=msg-456")
-		assert.Contains(t, trackingClickURL, "w=ws-123")
+		assert.Contains(t, trackingPixelURL, "mid=msg-456")
+		assert.Contains(t, trackingPixelURL, "wid=ws-123")
 	})
 
 	t.Run("with minimal data", func(t *testing.T) {
@@ -1187,6 +1179,8 @@ func TestBuildTemplateData(t *testing.T) {
 		trackingPixelURL, ok := data["tracking_opens_url"].(string)
 		assert.True(t, ok)
 		assert.Contains(t, trackingPixelURL, "/opens")
+		assert.Contains(t, trackingPixelURL, "mid=msg-456")
+		assert.Contains(t, trackingPixelURL, "wid=ws-123")
 
 		// No unsubscribe URL should be present
 		_, exists := data["unsubscribe_url"]
@@ -1194,4 +1188,44 @@ func TestBuildTemplateData(t *testing.T) {
 	})
 
 	// We'll skip the third test case since it would require mocking
+}
+
+// TestGenerateEmailRedirectionEndpoint tests the generation of the URL for tracking email redirections
+func TestGenerateEmailRedirectionEndpoint(t *testing.T) {
+	tests := []struct {
+		name        string
+		workspaceID string
+		messageID   string
+		apiEndpoint string
+		expected    string
+	}{
+		{
+			name:        "with all parameters",
+			workspaceID: "ws-123",
+			messageID:   "msg-456",
+			apiEndpoint: "https://api.example.com",
+			expected:    "https://api.example.com/visit?mid=msg-456&wid=ws-123",
+		},
+		{
+			name:        "with empty api endpoint",
+			workspaceID: "ws-123",
+			messageID:   "msg-456",
+			apiEndpoint: "",
+			expected:    "/visit?mid=msg-456&wid=ws-123",
+		},
+		{
+			name:        "with special characters that need encoding",
+			workspaceID: "ws/123&test=1",
+			messageID:   "msg=456?test=1",
+			apiEndpoint: "https://api.example.com",
+			expected:    "https://api.example.com/visit?mid=msg%3D456%3Ftest%3D1&wid=ws%2F123%26test%3D1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := GenerateEmailRedirectionEndpoint(tt.workspaceID, tt.messageID, tt.apiEndpoint)
+			assert.Equal(t, tt.expected, url)
+		})
+	}
 }

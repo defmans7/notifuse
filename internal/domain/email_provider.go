@@ -208,6 +208,7 @@ type EmailServiceInterface interface {
 	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string, cc []string, bcc []string, replyTo string) error
 	SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, replyTo string, cc []string, bcc []string) error
 	VisitLink(ctx context.Context, messageID string, workspaceID string) error
+	OpenEmail(ctx context.Context, messageID string, workspaceID string) error
 }
 
 type EmailProviderService interface {
