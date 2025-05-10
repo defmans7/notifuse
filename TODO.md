@@ -4,7 +4,6 @@
 - middleware compression + logger
 - test https://tiptap.dev/docs/editor/getting-started/overview
 
-- tracking pixel handler to count the opens
 - test transactional email
 - user notifications center
 - logo + colors in workspace settings for notification center

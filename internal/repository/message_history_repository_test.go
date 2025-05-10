@@ -750,3 +750,126 @@ func TestMessageHistoryRepository_UpdateStatus(t *testing.T) {
 		require.Contains(t, err.Error(), "failed to update message status")
 	})
 }
+
+func TestMessageHistoryRepository_SetClicked(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	messageID := "msg-123"
+	timestamp := time.Now()
+
+	t.Run("successful click update", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		// Expect the clicked_at update query
+		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, status = 'clicked', updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
+			WithArgs(timestamp, messageID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		// Expect the opened_at update query
+		mock.ExpectExec(`UPDATE message_history SET opened_at = \$1, updated_at = NOW\(\) WHERE id = \$2 AND opened_at IS NULL`).
+			WithArgs(timestamp, messageID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		err := repo.SetClicked(ctx, workspaceID, messageID, timestamp)
+		require.NoError(t, err)
+	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		err := repo.SetClicked(ctx, workspaceID, messageID, timestamp)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("clicked update error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		// First query fails
+		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, status = 'clicked', updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
+			WithArgs(timestamp, messageID).
+			WillReturnError(errors.New("execution error"))
+
+		err := repo.SetClicked(ctx, workspaceID, messageID, timestamp)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to set clicked")
+	})
+
+	t.Run("opened update error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		// First query succeeds
+		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, status = 'clicked', updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
+			WithArgs(timestamp, messageID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		// Second query fails
+		mock.ExpectExec(`UPDATE message_history SET opened_at = \$1, updated_at = NOW\(\) WHERE id = \$2 AND opened_at IS NULL`).
+			WithArgs(timestamp, messageID).
+			WillReturnError(errors.New("execution error"))
+
+		err := repo.SetClicked(ctx, workspaceID, messageID, timestamp)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to set opened")
+	})
+}
+
+func TestMessageHistoryRepository_SetOpened(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	messageID := "msg-123"
+	timestamp := time.Now()
+
+	t.Run("successful open update", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		// Expect the opened_at update query
+		mock.ExpectExec(`UPDATE message_history SET opened_at = \$1, updated_at = NOW\(\) WHERE id = \$2 AND opened_at IS NULL`).
+			WithArgs(timestamp, messageID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		err := repo.SetOpened(ctx, workspaceID, messageID, timestamp)
+		require.NoError(t, err)
+	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		err := repo.SetOpened(ctx, workspaceID, messageID, timestamp)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("opened update error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		// Query fails
+		mock.ExpectExec(`UPDATE message_history SET opened_at = \$1, updated_at = NOW\(\) WHERE id = \$2 AND opened_at IS NULL`).
+			WithArgs(timestamp, messageID).
+			WillReturnError(errors.New("execution error"))
+
+		err := repo.SetOpened(ctx, workspaceID, messageID, timestamp)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to set opened")
+	})
+}

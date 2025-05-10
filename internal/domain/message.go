@@ -100,4 +100,10 @@ type MessageHistoryRepository interface {
 
 	// UpdateStatus updates the status of a message and sets the corresponding timestamp
 	UpdateStatus(ctx context.Context, workspaceID, id string, status MessageStatus, timestamp time.Time) error
+
+	// SetClicked sets the clicked_at timestamp and ensures opened_at is also set
+	SetClicked(ctx context.Context, workspaceID, id string, timestamp time.Time) error
+
+	// SetOpened sets the opened_at timestamp if not already set
+	SetOpened(ctx context.Context, workspaceID, id string, timestamp time.Time) error
 }

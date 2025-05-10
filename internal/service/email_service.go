@@ -246,27 +246,10 @@ func (s *EmailService) getProviderService(providerKind domain.EmailProviderKind)
 
 func (s *EmailService) VisitLink(ctx context.Context, messageID string, workspaceID string) error {
 	// find the message by id
-	message, err := s.messageRepo.Get(ctx, workspaceID, messageID)
+	err := s.messageRepo.SetClicked(ctx, workspaceID, messageID, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to get message: %w", err)
-	}
-
-	// update message status to clicked
-	if message.Status != domain.MessageStatusClicked {
-		now := time.Now()
-		message.Status = domain.MessageStatusClicked
-		message.ClickedAt = &now
-		message.Error = nil
-
-		// if open is missing, set it to now
-		if message.OpenedAt == nil {
-			message.OpenedAt = &now
-		}
-
-		err = s.messageRepo.Update(ctx, workspaceID, message)
-		if err != nil {
-			return fmt.Errorf("failed to update message: %w", err)
-		}
+		s.logger.Error(err.Error())
+		return fmt.Errorf("failed to set clicked: %w", err)
 	}
 
 	return nil
@@ -274,22 +257,10 @@ func (s *EmailService) VisitLink(ctx context.Context, messageID string, workspac
 
 func (s *EmailService) OpenEmail(ctx context.Context, messageID string, workspaceID string) error {
 	// find the message by id
-	message, err := s.messageRepo.Get(ctx, workspaceID, messageID)
+	err := s.messageRepo.SetOpened(ctx, workspaceID, messageID, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to get message: %w", err)
-	}
-
-	// update message status to opened
-	if message.Status != domain.MessageStatusOpened {
-		now := time.Now()
-		message.Status = domain.MessageStatusOpened
-		message.OpenedAt = &now
-		message.Error = nil
-
-		err = s.messageRepo.Update(ctx, workspaceID, message)
-		if err != nil {
-			return fmt.Errorf("failed to update message: %w", err)
-		}
+		s.logger.Error(err.Error())
+		return fmt.Errorf("failed to set opened: %w", err)
 	}
 
 	return nil

@@ -97,6 +97,34 @@ func (mr *MockMessageHistoryRepositoryMockRecorder) GetByContact(ctx, workspaceI
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByContact", reflect.TypeOf((*MockMessageHistoryRepository)(nil).GetByContact), ctx, workspaceID, contactID, limit, offset)
 }
 
+// SetClicked mocks base method.
+func (m *MockMessageHistoryRepository) SetClicked(ctx context.Context, workspaceID, id string, timestamp time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetClicked", ctx, workspaceID, id, timestamp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetClicked indicates an expected call of SetClicked.
+func (mr *MockMessageHistoryRepositoryMockRecorder) SetClicked(ctx, workspaceID, id, timestamp interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClicked", reflect.TypeOf((*MockMessageHistoryRepository)(nil).SetClicked), ctx, workspaceID, id, timestamp)
+}
+
+// SetOpened mocks base method.
+func (m *MockMessageHistoryRepository) SetOpened(ctx context.Context, workspaceID, id string, timestamp time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetOpened", ctx, workspaceID, id, timestamp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetOpened indicates an expected call of SetOpened.
+func (mr *MockMessageHistoryRepositoryMockRecorder) SetOpened(ctx, workspaceID, id, timestamp interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOpened", reflect.TypeOf((*MockMessageHistoryRepository)(nil).SetOpened), ctx, workspaceID, id, timestamp)
+}
+
 // Update mocks base method.
 func (m *MockMessageHistoryRepository) Update(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
 	m.ctrl.T.Helper()

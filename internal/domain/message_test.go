@@ -302,6 +302,53 @@ func (m *mockMessageHistoryRepository) UpdateStatus(ctx context.Context, workspa
 	return nil
 }
 
+func (m *mockMessageHistoryRepository) SetClicked(ctx context.Context, workspace, id string, timestamp time.Time) error {
+	key := workspace + "-" + id
+	message, exists := m.messages[key]
+	if !exists {
+		return &ErrNotFound{Entity: "message", ID: id}
+	}
+
+	// Only update if clicked_at is nil
+	if message.ClickedAt == nil {
+		message.ClickedAt = &timestamp
+		message.Status = MessageStatusClicked
+	}
+
+	// Always ensure opened_at is set if not already
+	if message.OpenedAt == nil {
+		message.OpenedAt = &timestamp
+	}
+
+	message.UpdatedAt = timestamp
+	m.messages[key] = message
+
+	return nil
+}
+
+func (m *mockMessageHistoryRepository) SetOpened(ctx context.Context, workspace, id string, timestamp time.Time) error {
+	key := workspace + "-" + id
+	message, exists := m.messages[key]
+	if !exists {
+		return &ErrNotFound{Entity: "message", ID: id}
+	}
+
+	// Only update if opened_at is nil
+	if message.OpenedAt == nil {
+		message.OpenedAt = &timestamp
+
+		// Only update status if it's not already clicked
+		if message.Status != MessageStatusClicked {
+			message.Status = MessageStatusOpened
+		}
+	}
+
+	message.UpdatedAt = timestamp
+	m.messages[key] = message
+
+	return nil
+}
+
 // Test for MessageHistoryRepository interface compliance
 func TestMockMessageHistoryRepository_ImplementsInterface(t *testing.T) {
 	var _ MessageHistoryRepository = (*mockMessageHistoryRepository)(nil)

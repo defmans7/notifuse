@@ -35,6 +35,20 @@ func (m *MockEmailServiceInterface) EXPECT() *MockEmailServiceInterfaceMockRecor
 	return m.recorder
 }
 
+// OpenEmail mocks base method.
+func (m *MockEmailServiceInterface) OpenEmail(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OpenEmail", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// OpenEmail indicates an expected call of OpenEmail.
+func (mr *MockEmailServiceInterfaceMockRecorder) OpenEmail(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenEmail", reflect.TypeOf((*MockEmailServiceInterface)(nil).OpenEmail), arg0, arg1, arg2)
+}
+
 // SendEmail mocks base method.
 func (m *MockEmailServiceInterface) SendEmail(arg0 context.Context, arg1 string, arg2 bool, arg3, arg4, arg5, arg6, arg7 string, arg8 *domain.EmailProvider, arg9 string, arg10, arg11 []string) error {
 	m.ctrl.T.Helper()
@@ -89,18 +103,4 @@ func (m *MockEmailServiceInterface) VisitLink(arg0 context.Context, arg1, arg2 s
 func (mr *MockEmailServiceInterfaceMockRecorder) VisitLink(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VisitLink", reflect.TypeOf((*MockEmailServiceInterface)(nil).VisitLink), arg0, arg1, arg2)
-}
-
-// OpenEmail mocks base method.
-func (m *MockEmailServiceInterface) OpenEmail(arg0 context.Context, arg1, arg2 string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OpenEmail", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// OpenEmail indicates an expected call of OpenEmail.
-func (mr *MockEmailServiceInterfaceMockRecorder) OpenEmail(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenEmail", reflect.TypeOf((*MockEmailServiceInterface)(nil).OpenEmail), arg0, arg1, arg2)
 }

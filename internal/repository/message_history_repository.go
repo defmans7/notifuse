@@ -379,3 +379,66 @@ func (r *MessageHistoryRepository) UpdateStatus(ctx context.Context, workspaceID
 
 	return nil
 }
+
+func (r *MessageHistoryRepository) SetClicked(ctx context.Context, workspaceID, id string, timestamp time.Time) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// First query: Update clicked_at if it's null
+	clickQuery := `
+		UPDATE message_history 
+		SET 
+			clicked_at = $1,
+			status = 'clicked',
+			updated_at = NOW()
+		WHERE id = $2 AND clicked_at IS NULL
+	`
+
+	_, err = workspaceDB.ExecContext(ctx, clickQuery, timestamp, id)
+	if err != nil {
+		return fmt.Errorf("failed to set clicked: %w", err)
+	}
+
+	// Second query: Update opened_at if it's null as a click means the message was opened
+	openQuery := `
+		UPDATE message_history 
+		SET 
+			opened_at = $1,
+			updated_at = NOW()
+		WHERE id = $2 AND opened_at IS NULL
+	`
+
+	_, err = workspaceDB.ExecContext(ctx, openQuery, timestamp, id)
+	if err != nil {
+		return fmt.Errorf("failed to set opened: %w", err)
+	}
+
+	return nil
+}
+
+func (r *MessageHistoryRepository) SetOpened(ctx context.Context, workspaceID, id string, timestamp time.Time) error {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// First query: Update opened_at if it's null
+	query := `
+		UPDATE message_history 
+		SET 
+			opened_at = $1,
+			updated_at = NOW()
+		WHERE id = $2 AND opened_at IS NULL
+	`
+
+	_, err = workspaceDB.ExecContext(ctx, query, timestamp, id)
+	if err != nil {
+		return fmt.Errorf("failed to set opened: %w", err)
+	}
+
+	return nil
+}
