@@ -77,6 +77,16 @@ export function ContactDetailsDrawer({
   const [statusForm] = Form.useForm()
   const [subscribeForm] = Form.useForm()
 
+  // Keep track of the currently displayed contact
+  const [displayContact, setDisplayContact] = React.useState<Contact>(contact)
+
+  // Update the display contact whenever the input contact changes
+  React.useEffect(() => {
+    if (contact) {
+      setDisplayContact(contact)
+    }
+  }, [contact])
+
   // Load message history for this contact
   const { data: messageHistory, isLoading: loadingMessages } = useQuery({
     queryKey: ['message_history', workspaceId, contact.email],
@@ -104,10 +114,13 @@ export function ContactDetailsDrawer({
     refetchOnWindowFocus: true
   })
 
-  // Update parent component when contact is refreshed
+  // Update displayed contact and parent component when contact is refreshed
   React.useEffect(() => {
-    if (refreshedContact && onContactUpdated) {
-      onContactUpdated(refreshedContact)
+    if (refreshedContact) {
+      setDisplayContact(refreshedContact)
+      if (onContactUpdated) {
+        onContactUpdated(refreshedContact)
+      }
     }
   }, [refreshedContact, onContactUpdated])
 
@@ -144,9 +157,6 @@ export function ContactDetailsDrawer({
     queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contact.email] })
     queryClient.invalidateQueries({ queryKey: ['contacts', workspaceId] })
   }
-
-  // Use the refreshed contact data if available, otherwise fall back to the original contact
-  const displayContact = refreshedContact || contact
 
   // Find list names based on list IDs
   const getListName = (listId: string): string => {
