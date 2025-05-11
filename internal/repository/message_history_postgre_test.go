@@ -873,3 +873,79 @@ func TestMessageHistoryRepository_SetOpened(t *testing.T) {
 		require.Contains(t, err.Error(), "failed to set opened")
 	})
 }
+
+// Helper function to create string pointer
+func strPtr(s string) *string {
+	return &s
+}
+
+// Helper function to create bool pointer
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// Helper function to create time pointer
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+// Helper function to add a message history row to mock rows
+func addRowFromMessage(rows *sqlmock.Rows, message *domain.MessageHistory) {
+	// Convert nullable fields to sql.Null* types
+	var broadcastID sql.NullString
+	if message.BroadcastID != nil {
+		broadcastID = sql.NullString{String: *message.BroadcastID, Valid: true}
+	}
+
+	var errorMsg sql.NullString
+	if message.Error != nil {
+		errorMsg = sql.NullString{String: *message.Error, Valid: true}
+	}
+
+	// Convert time fields to sql.NullTime
+	var deliveredAt, failedAt, openedAt, clickedAt, bouncedAt, complainedAt, unsubscribedAt sql.NullTime
+
+	if message.DeliveredAt != nil {
+		deliveredAt = sql.NullTime{Time: *message.DeliveredAt, Valid: true}
+	}
+	if message.FailedAt != nil {
+		failedAt = sql.NullTime{Time: *message.FailedAt, Valid: true}
+	}
+	if message.OpenedAt != nil {
+		openedAt = sql.NullTime{Time: *message.OpenedAt, Valid: true}
+	}
+	if message.ClickedAt != nil {
+		clickedAt = sql.NullTime{Time: *message.ClickedAt, Valid: true}
+	}
+	if message.BouncedAt != nil {
+		bouncedAt = sql.NullTime{Time: *message.BouncedAt, Valid: true}
+	}
+	if message.ComplainedAt != nil {
+		complainedAt = sql.NullTime{Time: *message.ComplainedAt, Valid: true}
+	}
+	if message.UnsubscribedAt != nil {
+		unsubscribedAt = sql.NullTime{Time: *message.UnsubscribedAt, Valid: true}
+	}
+
+	rows.AddRow(
+		message.ID,
+		message.ContactID,
+		broadcastID,
+		message.TemplateID,
+		message.TemplateVersion,
+		message.Channel,
+		message.Status,
+		errorMsg,
+		message.MessageData,
+		message.SentAt,
+		deliveredAt,
+		failedAt,
+		openedAt,
+		clickedAt,
+		bouncedAt,
+		complainedAt,
+		unsubscribedAt,
+		message.CreatedAt,
+		message.UpdatedAt,
+	)
+}

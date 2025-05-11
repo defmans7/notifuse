@@ -16,13 +16,33 @@ services:
       - DB_PASSWORD=postgres
       - DB_PREFIX=notifuse
       - DB_NAME=notifuse_system
-      - ENVIRONMENT=development
+      - DB_SSLMODE=disable
+      - ENVIRONMENT=production
       - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY}
       - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - ROOT_EMAIL=${ROOT_EMAIL:-admin@example.com}
-      - API_ENDPOINT=${API_ENDPOINT:-http://localhost:8080}
-      - WEBHOOK_ENDPOINT=${WEBHOOK_ENDPOINT:-http://localhost:8080}
+      - ROOT_EMAIL=${ROOT_EMAIL:your@email.com}
+      - SMTP_HOST=smtp.example.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=your-username
+      - SMTP_PASSWORD=your-password
+      - SMTP_FROM_EMAIL=noreply@example.com
+      - SMTP_FROM_NAME=Notifuse
+      - API_ENDPOINT=${API_ENDPOINT:-https://notifuse.yourdomain.com}
+      - TRACING_ENABLED=false
+      - TRACING_SERVICE_NAME=notifuse
+      - TRACING_SAMPLING_PROBABILITY=0.05
+      - TRACING_TRACE_EXPORTER="none"
+      - TRACING_JAEGER_ENDPOINT="http://localhost:14268/api/traces"
+      - TRACING_ZIPKIN_ENDPOINT="http://localhost:9411/api/v2/spans"
+      - TRACING_STACKDRIVER_PROJECT_ID=""
+      - TRACING_AZURE_INSTRUMENTATION_KEY=""
+      - TRACING_DATADOG_AGENT_ADDRESS="localhost:8126"
+      - TRACING_DATADOG_API_KEY=""
+      - TRACING_XRAY_REGION="us-west-2"
+      - TRACING_AGENT_ENDPOINT="localhost:6831"
+      - TRACING_METRICS_EXPORTER="prometheus"
+      - TRACING_PROMETHEUS_PORT=9464
     depends_on:
       - postgres
     volumes:
@@ -32,7 +52,7 @@ services:
       - notifuse-network
 
   postgres:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     ports:
       - "5432:5432"
     environment:

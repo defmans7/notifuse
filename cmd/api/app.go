@@ -85,6 +85,7 @@ type App struct {
 	transactionalNotificationService *service.TransactionalNotificationService
 	webhookEventService              *service.WebhookEventService
 	webhookRegistrationService       *service.WebhookRegistrationService
+	messageHistoryService            *service.MessageHistoryService
 	// providers
 	postmarkService  *service.PostmarkService
 	mailgunService   *service.MailgunService
@@ -461,6 +462,9 @@ func (a *App) InitServices() error {
 	// Set the task service on the broadcast service
 	a.broadcastService.SetTaskService(a.taskService)
 
+	// Initialize message history service
+	a.messageHistoryService = service.NewMessageHistoryService(a.messageHistoryRepo, a.logger)
+
 	return nil
 }
 
@@ -498,6 +502,12 @@ func (a *App) InitHandlers() error {
 	transactionalHandler := httpHandler.NewTransactionalNotificationHandler(a.transactionalNotificationService, a.config.Security.PasetoPublicKey, a.logger)
 	webhookEventHandler := httpHandler.NewWebhookEventHandler(a.webhookEventService, a.config.Security.PasetoPublicKey, a.logger)
 	webhookRegistrationHandler := httpHandler.NewWebhookRegistrationHandler(a.webhookRegistrationService, a.config.Security.PasetoPublicKey, a.logger)
+	messageHistoryHandler := httpHandler.NewMessageHistoryHandler(
+		a.messageHistoryService,
+		a.authService,
+		a.config.Security.PasetoPublicKey,
+		a.logger,
+	)
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
@@ -513,6 +523,7 @@ func (a *App) InitHandlers() error {
 	transactionalHandler.RegisterRoutes(a.mux)
 	webhookEventHandler.RegisterRoutes(a.mux)
 	webhookRegistrationHandler.RegisterRoutes(a.mux)
+	messageHistoryHandler.RegisterRoutes(a.mux)
 	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	return nil

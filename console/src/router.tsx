@@ -12,6 +12,7 @@ import { FileManagerPage } from './pages/FileManagerPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 import { BroadcastsPage } from './pages/BroadcastsPage'
 import { TransactionalNotificationsPage } from './pages/TransactionalNotificationsPage'
+import { LogsPage } from './pages/LogsPage'
 import { createRouter } from '@tanstack/react-router'
 
 export interface ContactsSearch {
@@ -98,6 +99,12 @@ const workspaceTransactionalNotificationsRoute = createRoute({
   component: TransactionalNotificationsPage
 })
 
+const workspaceLogsRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/logs',
+  component: LogsPage
+})
+
 export const workspaceContactsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/contacts',
@@ -139,6 +146,7 @@ const routeTree = rootRoute.addChildren([
     workspaceContactsRoute,
     workspaceListsRoute,
     workspaceTransactionalNotificationsRoute,
+    workspaceLogsRoute,
     workspaceFileManagerRoute,
     workspaceSettingsRoute,
     workspaceTemplatesRoute

@@ -13,7 +13,8 @@ import {
   faPowerOff,
   faRightFromBracket,
   faTerminal,
-  faUserGroup
+  faUserGroup,
+  faBarsStaggered
 } from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../contexts/AuthContext'
 import { Workspace } from '../services/api/types'
@@ -46,6 +47,8 @@ export function WorkspaceLayout() {
     selectedKey = 'file-manager'
   } else if (currentPath.includes('/transactional-notifications')) {
     selectedKey = 'transactional-notifications'
+  } else if (currentPath.includes('/logs')) {
+    selectedKey = 'logs'
   }
 
   const handleWorkspaceChange = (workspaceId: string) => {
@@ -113,6 +116,15 @@ export function WorkspaceLayout() {
       label: (
         <Link to="/workspace/$workspaceId/file-manager" params={{ workspaceId }}>
           File Manager
+        </Link>
+      )
+    },
+    {
+      key: 'logs',
+      icon: <FontAwesomeIcon icon={faBarsStaggered} size="sm" style={{ opacity: 0.7 }} />,
+      label: (
+        <Link to="/workspace/$workspaceId/logs" params={{ workspaceId }}>
+          Logs
         </Link>
       )
     },

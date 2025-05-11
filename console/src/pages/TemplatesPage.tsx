@@ -1,21 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Typography,
-  Button,
-  Table,
-  Tooltip,
-  Space,
-  Popconfirm,
-  message,
-  Segmented,
-  Modal,
-  Input,
-  Card
-} from 'antd'
+import { Typography, Button, Table, Tooltip, Space, Popconfirm, message, Segmented } from 'antd'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
-import { emailService } from '../services/api/email'
 import type { Template, Workspace } from '../services/api/types'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {

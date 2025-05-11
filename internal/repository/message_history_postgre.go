@@ -6,7 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"encoding/base64"
+	"strings"
+
+	sq "github.com/Masterminds/squirrel"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/tracing"
 )
 
 // MessageHistoryRepository implements domain.MessageHistoryRepository
@@ -441,4 +446,241 @@ func (r *MessageHistoryRepository) SetOpened(ctx context.Context, workspaceID, i
 	}
 
 	return nil
+}
+
+// ListMessages retrieves message history with cursor-based pagination and filtering
+func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID string, params domain.MessageListParams) ([]*domain.MessageHistory, string, error) {
+	// codecov:ignore start
+	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "ListMessages")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	// codecov:ignore end
+
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		// codecov:ignore start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore end
+		return nil, "", fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// Set a reasonable default limit if not provided
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+
+	// Use squirrel to build the query with placeholders
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	queryBuilder := psql.Select(
+		"id", "contact_id", "broadcast_id", "template_id", "template_version",
+		"channel", "status", "error", "message_data", "sent_at", "delivered_at",
+		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
+		"unsubscribed_at", "created_at", "updated_at",
+	).From("message_history")
+
+	// Apply filters using squirrel
+	if params.Channel != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"channel": params.Channel})
+	}
+
+	if params.Status != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"status": params.Status})
+	}
+
+	if params.ContactID != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"contact_id": params.ContactID})
+	}
+
+	if params.BroadcastID != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"broadcast_id": params.BroadcastID})
+	}
+
+	if params.TemplateID != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"template_id": params.TemplateID})
+	}
+
+	if params.HasError != nil {
+		if *params.HasError {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"error": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"error": nil})
+		}
+	}
+
+	// Time range filters
+	if params.SentAfter != nil {
+		queryBuilder = queryBuilder.Where(sq.GtOrEq{"sent_at": params.SentAfter})
+	}
+
+	if params.SentBefore != nil {
+		queryBuilder = queryBuilder.Where(sq.LtOrEq{"sent_at": params.SentBefore})
+	}
+
+	if params.UpdatedAfter != nil {
+		queryBuilder = queryBuilder.Where(sq.GtOrEq{"updated_at": params.UpdatedAfter})
+	}
+
+	if params.UpdatedBefore != nil {
+		queryBuilder = queryBuilder.Where(sq.LtOrEq{"updated_at": params.UpdatedBefore})
+	}
+
+	// Handle cursor-based pagination
+	if params.Cursor != "" {
+		// Decode the base64 cursor
+		decodedCursor, err := base64.StdEncoding.DecodeString(params.Cursor)
+		if err != nil {
+			// codecov:ignore start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore end
+			return nil, "", fmt.Errorf("invalid cursor encoding: %w", err)
+		}
+
+		// Parse the compound cursor (timestamp~id)
+		cursorStr := string(decodedCursor)
+		cursorParts := strings.Split(cursorStr, "~")
+		if len(cursorParts) != 2 {
+			// codecov:ignore start
+			tracing.MarkSpanError(ctx, fmt.Errorf("invalid cursor format"))
+			// codecov:ignore end
+			return nil, "", fmt.Errorf("invalid cursor format: expected timestamp~id")
+		}
+
+		cursorTime, err := time.Parse(time.RFC3339, cursorParts[0])
+		if err != nil {
+			// codecov:ignore start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore end
+			return nil, "", fmt.Errorf("invalid cursor timestamp format: %w", err)
+		}
+
+		cursorID := cursorParts[1]
+
+		// Query for messages before the cursor (newer messages first)
+		// Either created_at is less than cursor time
+		// OR created_at equals cursor time AND id is less than cursor id
+		queryBuilder = queryBuilder.Where(
+			sq.Or{
+				sq.Lt{"created_at": cursorTime},
+				sq.And{
+					sq.Eq{"created_at": cursorTime},
+					sq.Lt{"id": cursorID},
+				},
+			},
+		)
+		queryBuilder = queryBuilder.OrderBy("created_at DESC", "id DESC")
+	} else {
+		// Default ordering when no cursor is provided - most recent first
+		queryBuilder = queryBuilder.OrderBy("created_at DESC", "id DESC")
+	}
+
+	// Add limit
+	queryBuilder = queryBuilder.Limit(uint64(limit + 1)) // Fetch one extra to determine if there are more results
+
+	// Execute the query
+	query, args, err := queryBuilder.ToSql()
+	if err != nil {
+		// codecov:ignore start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore end
+		return nil, "", fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := workspaceDB.QueryContext(ctx, query, args...)
+	if err != nil {
+		// codecov:ignore start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore end
+		return nil, "", fmt.Errorf("failed to query message history: %w", err)
+	}
+	defer rows.Close()
+
+	messages := []*domain.MessageHistory{}
+	for rows.Next() {
+		message := &domain.MessageHistory{}
+		var broadcastID sql.NullString
+		var errorMsg sql.NullString
+		var deliveredAt, failedAt, openedAt, clickedAt, bouncedAt, complainedAt, unsubscribedAt sql.NullTime
+
+		err := rows.Scan(
+			&message.ID, &message.ContactID, &broadcastID, &message.TemplateID, &message.TemplateVersion,
+			&message.Channel, &message.Status, &errorMsg, &message.MessageData,
+			&message.SentAt, &deliveredAt, &failedAt, &openedAt,
+			&clickedAt, &bouncedAt, &complainedAt, &unsubscribedAt,
+			&message.CreatedAt, &message.UpdatedAt,
+		)
+
+		if err != nil {
+			// codecov:ignore start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore end
+			return nil, "", fmt.Errorf("failed to scan message history row: %w", err)
+		}
+
+		// Convert nullable fields
+		if broadcastID.Valid {
+			message.BroadcastID = &broadcastID.String
+		}
+
+		if errorMsg.Valid {
+			message.Error = &errorMsg.String
+		}
+
+		if deliveredAt.Valid {
+			message.DeliveredAt = &deliveredAt.Time
+		}
+
+		if failedAt.Valid {
+			message.FailedAt = &failedAt.Time
+		}
+
+		if openedAt.Valid {
+			message.OpenedAt = &openedAt.Time
+		}
+
+		if clickedAt.Valid {
+			message.ClickedAt = &clickedAt.Time
+		}
+
+		if bouncedAt.Valid {
+			message.BouncedAt = &bouncedAt.Time
+		}
+
+		if complainedAt.Valid {
+			message.ComplainedAt = &complainedAt.Time
+		}
+
+		if unsubscribedAt.Valid {
+			message.UnsubscribedAt = &unsubscribedAt.Time
+		}
+
+		messages = append(messages, message)
+	}
+
+	if err = rows.Err(); err != nil {
+		// codecov:ignore start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore end
+		return nil, "", fmt.Errorf("error iterating message history rows: %w", err)
+	}
+
+	// Determine if we have more results and generate cursor
+	var nextCursor string
+
+	// Check if we got an extra result, which indicates there are more results
+	hasMore := len(messages) > limit
+	if hasMore {
+		// Remove the extra item
+		messages = messages[:limit]
+	}
+
+	// Generate the next cursor based on the last item if we have results
+	if len(messages) > 0 && hasMore {
+		lastMessage := messages[len(messages)-1]
+		cursorStr := fmt.Sprintf("%s~%s", lastMessage.CreatedAt.Format(time.RFC3339), lastMessage.ID)
+		nextCursor = base64.StdEncoding.EncodeToString([]byte(cursorStr))
+	}
+
+	return messages, nextCursor, nil
 }
