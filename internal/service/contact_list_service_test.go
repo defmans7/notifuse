@@ -83,43 +83,6 @@ func TestContactListService_AddContactToList(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("double opt-in list", func(t *testing.T) {
-		contactList := &domain.ContactList{
-			Email:  email,
-			ListID: listID,
-			Status: domain.ContactListStatusActive,
-		}
-
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{}, nil)
-
-		mockContactRepo.EXPECT().
-			GetContactByEmail(gomock.Any(), workspaceID, email).
-			Return(&domain.Contact{Email: email}, nil)
-
-		mockListRepo.EXPECT().
-			GetListByID(gomock.Any(), workspaceID, listID).
-			Return(&domain.List{
-				ID:            listID,
-				IsDoubleOptin: true,
-			}, nil)
-
-		mockRepo.EXPECT().
-			AddContactToList(gomock.Any(), workspaceID, gomock.Any()).
-			DoAndReturn(func(_ context.Context, _ string, cl *domain.ContactList) error {
-				require.Equal(t, domain.ContactListStatusPending, cl.Status)
-				return nil
-			})
-
-		mockListRepo.EXPECT().
-			IncrementTotal(gomock.Any(), workspaceID, listID, domain.TotalTypeActive).
-			Return(nil)
-
-		err := service.AddContactToList(ctx, workspaceID, contactList)
-		require.NoError(t, err)
-	})
-
 	t.Run("authentication error", func(t *testing.T) {
 		contactList := &domain.ContactList{
 			Email:  email,

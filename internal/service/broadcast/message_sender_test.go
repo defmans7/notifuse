@@ -525,7 +525,7 @@ func TestSendBatch(t *testing.T) {
 			RecordMessageSent(ctx, workspaceID, gomock.Any()).
 			Do(func(_ context.Context, _ string, message *domain.MessageHistory) {
 				// Verify the message history is correct
-				assert.Equal(t, recipient.Contact.Email, message.ContactID)
+				assert.Equal(t, recipient.Contact.Email, message.ContactEmail)
 				assert.Equal(t, broadcastID, *message.BroadcastID)
 				assert.Equal(t, "template-123", message.TemplateID)
 				assert.Equal(t, int(template.Version), message.TemplateVersion)
@@ -816,7 +816,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		RecordMessageSent(ctx, workspaceID, gomock.Any()).
 		Do(func(_ context.Context, _ string, message *domain.MessageHistory) {
 			// Verify the message history is correct
-			assert.Equal(t, recipients[0].Contact.Email, message.ContactID)
+			assert.Equal(t, recipients[0].Contact.Email, message.ContactEmail)
 			assert.Equal(t, broadcastID, *message.BroadcastID)
 			assert.Equal(t, "template-123", message.TemplateID)
 			assert.Equal(t, int(template.Version), message.TemplateVersion)

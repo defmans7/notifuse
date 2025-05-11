@@ -36,7 +36,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 
 	query := `
 		INSERT INTO message_history (
-			id, contact_id, broadcast_id, template_id, template_version, 
+			id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
@@ -52,7 +52,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		ctx,
 		query,
 		message.ID,
-		message.ContactID,
+		message.ContactEmail,
 		message.BroadcastID,
 		message.TemplateID,
 		message.TemplateVersion,
@@ -88,7 +88,7 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID strin
 
 	query := `
 		UPDATE message_history SET
-			contact_id = $2,
+			contact_email = $2,
 			broadcast_id = $3,
 			template_id = $4,
 			template_version = $5,
@@ -111,7 +111,7 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID strin
 		ctx,
 		query,
 		message.ID,
-		message.ContactID,
+		message.ContactEmail,
 		message.BroadcastID,
 		message.TemplateID,
 		message.TemplateVersion,
@@ -146,7 +146,7 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 
 	query := `
 		SELECT 
-			id, contact_id, broadcast_id, template_id, template_version, 
+			id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
@@ -157,7 +157,7 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 	var message domain.MessageHistory
 	err = workspaceDB.QueryRowContext(ctx, query, id).Scan(
 		&message.ID,
-		&message.ContactID,
+		&message.ContactEmail,
 		&message.BroadcastID,
 		&message.TemplateID,
 		&message.TemplateVersion,
@@ -187,7 +187,7 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 }
 
 // GetByContact retrieves message history for a specific contact
-func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID, contactID string, limit, offset int) ([]*domain.MessageHistory, int, error) {
+func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID, contactEmail string, limit, offset int) ([]*domain.MessageHistory, int, error) {
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
@@ -195,9 +195,9 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 	}
 
 	// First get total count
-	countQuery := `SELECT COUNT(*) FROM message_history WHERE contact_id = $1`
+	countQuery := `SELECT COUNT(*) FROM message_history WHERE contact_email = $1`
 	var totalCount int
-	err = workspaceDB.QueryRowContext(ctx, countQuery, contactID).Scan(&totalCount)
+	err = workspaceDB.QueryRowContext(ctx, countQuery, contactEmail).Scan(&totalCount)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count message history: %w", err)
 	}
@@ -212,17 +212,17 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 
 	query := `
 		SELECT 
-			id, contact_id, broadcast_id, template_id, template_version, 
+			id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
 		FROM message_history
-		WHERE contact_id = $1
+		WHERE contact_email = $1
 		ORDER BY sent_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := workspaceDB.QueryContext(ctx, query, contactID, limit, offset)
+	rows, err := workspaceDB.QueryContext(ctx, query, contactEmail, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query message history: %w", err)
 	}
@@ -233,7 +233,7 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 		var message domain.MessageHistory
 		err := rows.Scan(
 			&message.ID,
-			&message.ContactID,
+			&message.ContactEmail,
 			&message.BroadcastID,
 			&message.TemplateID,
 			&message.TemplateVersion,
@@ -290,7 +290,7 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 
 	query := `
 		SELECT 
-			id, contact_id, broadcast_id, template_id, template_version, 
+			id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
@@ -311,7 +311,7 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 		var message domain.MessageHistory
 		err := rows.Scan(
 			&message.ID,
-			&message.ContactID,
+			&message.ContactEmail,
 			&message.BroadcastID,
 			&message.TemplateID,
 			&message.TemplateVersion,
@@ -474,7 +474,7 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	// Use squirrel to build the query with placeholders
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	queryBuilder := psql.Select(
-		"id", "contact_id", "broadcast_id", "template_id", "template_version",
+		"id", "contact_email", "broadcast_id", "template_id", "template_version",
 		"channel", "status", "error", "message_data", "sent_at", "delivered_at",
 		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 		"unsubscribed_at", "created_at", "updated_at",
@@ -489,8 +489,8 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		queryBuilder = queryBuilder.Where(sq.Eq{"status": params.Status})
 	}
 
-	if params.ContactID != "" {
-		queryBuilder = queryBuilder.Where(sq.Eq{"contact_id": params.ContactID})
+	if params.ContactEmail != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"contact_email": params.ContactEmail})
 	}
 
 	if params.BroadcastID != "" {
@@ -604,7 +604,7 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		var deliveredAt, failedAt, openedAt, clickedAt, bouncedAt, complainedAt, unsubscribedAt sql.NullTime
 
 		err := rows.Scan(
-			&message.ID, &message.ContactID, &broadcastID, &message.TemplateID, &message.TemplateVersion,
+			&message.ID, &message.ContactEmail, &broadcastID, &message.TemplateID, &message.TemplateVersion,
 			&message.Channel, &message.Status, &errorMsg, &message.MessageData,
 			&message.SentAt, &deliveredAt, &failedAt, &openedAt,
 			&clickedAt, &bouncedAt, &complainedAt, &unsubscribedAt,

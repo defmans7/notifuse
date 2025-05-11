@@ -1390,7 +1390,7 @@ func TestTransactionalNotificationService_DoSendEmailNotification(t *testing.T) 
 					Create(gomock.Any(), workspace, gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, message *domain.MessageHistory) error {
 						assert.Equal(t, messageID, message.ID)
-						assert.Equal(t, contact.Email, message.ContactID)
+						assert.Equal(t, contact.Email, message.ContactEmail)
 						assert.Equal(t, templateID, message.TemplateID)
 						assert.Equal(t, "email", message.Channel)
 						assert.Equal(t, domain.MessageStatusSent, message.Status)

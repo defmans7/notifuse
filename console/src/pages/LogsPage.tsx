@@ -105,7 +105,7 @@ const filterOptions: FilterOption[] = [
       { value: 'push', label: 'Push' }
     ]
   },
-  { key: 'contact_id', label: 'Contact ID' },
+  { key: 'contact_email', label: 'Contact Email' },
   { key: 'template_id', label: 'Template ID' },
   { key: 'broadcast_id', label: 'Broadcast ID' },
   {
@@ -396,8 +396,8 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
     },
     {
       title: 'Contact ID',
-      dataIndex: 'contact_id',
-      key: 'contact_id',
+      dataIndex: 'contact_email',
+      key: 'contact_email',
       ellipsis: true
     },
     {

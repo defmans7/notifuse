@@ -643,15 +643,15 @@ func (s *TransactionalNotificationService) DoSendEmailNotification(
 
 	// Create message history record
 	messageHistory := &domain.MessageHistory{
-		ID:          messageID,
-		ContactID:   contact.Email,
-		TemplateID:  templateConfig.TemplateID,
-		Channel:     "email",
-		Status:      domain.MessageStatusSent,
-		MessageData: messageData,
-		SentAt:      time.Now().UTC(),
-		CreatedAt:   time.Now().UTC(),
-		UpdatedAt:   time.Now().UTC(),
+		ID:           messageID,
+		ContactEmail: contact.Email,
+		TemplateID:   templateConfig.TemplateID,
+		Channel:      "email",
+		Status:       domain.MessageStatusSent,
+		MessageData:  messageData,
+		SentAt:       time.Now().UTC(),
+		CreatedAt:    time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
 	}
 
 	// Save to message history

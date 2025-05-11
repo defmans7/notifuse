@@ -62,7 +62,7 @@ func (d *MessageData) Scan(value interface{}) error {
 // MessageHistory represents a record of a message sent to a contact
 type MessageHistory struct {
 	ID              string        `json:"id"`
-	ContactID       string        `json:"contact_id"`
+	ContactEmail    string        `json:"contact_email"`
 	BroadcastID     *string       `json:"broadcast_id,omitempty"`
 	TemplateID      string        `json:"template_id"`
 	TemplateVersion int           `json:"template_version"`
@@ -129,12 +129,12 @@ type MessageListParams struct {
 	Limit  int    `json:"limit,omitempty"`
 
 	// Filters
-	Channel     string        `json:"channel,omitempty"`      // email, sms, push, etc.
-	Status      MessageStatus `json:"status,omitempty"`       // message status filter
-	ContactID   string        `json:"contact_id,omitempty"`   // filter by contact
-	BroadcastID string        `json:"broadcast_id,omitempty"` // filter by broadcast
-	TemplateID  string        `json:"template_id,omitempty"`  // filter by template
-	HasError    *bool         `json:"has_error,omitempty"`    // filter messages with/without errors
+	Channel      string        `json:"channel,omitempty"`       // email, sms, push, etc.
+	Status       MessageStatus `json:"status,omitempty"`        // message status filter
+	ContactEmail string        `json:"contact_email,omitempty"` // filter by contact
+	BroadcastID  string        `json:"broadcast_id,omitempty"`  // filter by broadcast
+	TemplateID   string        `json:"template_id,omitempty"`   // filter by template
+	HasError     *bool         `json:"has_error,omitempty"`     // filter messages with/without errors
 
 	// Time range filters
 	SentAfter     *time.Time `json:"sent_after,omitempty"`
@@ -149,7 +149,7 @@ func (p *MessageListParams) FromQuery(query url.Values) error {
 	p.Cursor = query.Get("cursor")
 	p.Channel = query.Get("channel")
 	p.Status = MessageStatus(query.Get("status"))
-	p.ContactID = query.Get("contact_id")
+	p.ContactEmail = query.Get("contact_email")
 	p.BroadcastID = query.Get("broadcast_id")
 	p.TemplateID = query.Get("template_id")
 
@@ -238,9 +238,9 @@ func (p *MessageListParams) Validate() error {
 		}
 	}
 
-	// Validate contact ID if provided
-	if p.ContactID != "" && !govalidator.IsUUID(p.ContactID) {
-		return fmt.Errorf("invalid contact ID format")
+	// Validate contact email if provided
+	if p.ContactEmail != "" && !govalidator.IsEmail(p.ContactEmail) {
+		return fmt.Errorf("invalid contact email format")
 	}
 
 	// Validate broadcast ID if provided

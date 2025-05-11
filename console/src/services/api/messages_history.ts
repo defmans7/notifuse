@@ -17,7 +17,7 @@ export type MessageStatus =
 
 export interface MessageHistory {
   id: string
-  contact_id: string
+  contact_email: string
   broadcast_id?: string
   template_id: string
   template_version: number
@@ -48,7 +48,7 @@ export interface MessageListParams {
   // Filters
   channel?: string
   status?: MessageStatus
-  contact_id?: string
+  contact_email?: string
   broadcast_id?: string
   template_id?: string
   has_error?: boolean
@@ -82,7 +82,7 @@ export function listMessages(
   if (params.limit) queryParams.append('limit', String(params.limit))
   if (params.channel) queryParams.append('channel', params.channel)
   if (params.status) queryParams.append('status', params.status)
-  if (params.contact_id) queryParams.append('contact_id', params.contact_id)
+  if (params.contact_email) queryParams.append('contact_email', params.contact_email)
   if (params.broadcast_id) queryParams.append('broadcast_id', params.broadcast_id)
   if (params.template_id) queryParams.append('template_id', params.template_id)
   if (params.has_error !== undefined) queryParams.append('has_error', String(params.has_error))

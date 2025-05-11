@@ -233,14 +233,14 @@ func TestMessageHistoryHandler_handleList_Success(t *testing.T) {
 	// Mock messages result
 	messages := []*domain.MessageHistory{
 		{
-			ID:         "msg1",
-			ContactID:  "contact1",
-			TemplateID: "template1",
-			Channel:    "email",
-			Status:     domain.MessageStatusSent,
-			SentAt:     time.Now().Add(-time.Hour),
-			CreatedAt:  time.Now().Add(-time.Hour),
-			UpdatedAt:  time.Now().Add(-time.Hour),
+			ID:           "msg1",
+			ContactEmail: "contact1",
+			TemplateID:   "template1",
+			Channel:      "email",
+			Status:       domain.MessageStatusSent,
+			SentAt:       time.Now().Add(-time.Hour),
+			CreatedAt:    time.Now().Add(-time.Hour),
+			UpdatedAt:    time.Now().Add(-time.Hour),
 		},
 	}
 
@@ -302,7 +302,7 @@ func TestMessageHistoryHandler_handleList_Success(t *testing.T) {
 	assert.True(t, response.HasMore)
 	assert.Len(t, response.Messages, 1)
 	assert.Equal(t, "msg1", response.Messages[0].ID)
-	assert.Equal(t, "contact1", response.Messages[0].ContactID)
+	assert.Equal(t, "contact1", response.Messages[0].ContactEmail)
 }
 
 func TestMessageHistoryHandler_handleList_ServiceError(t *testing.T) {

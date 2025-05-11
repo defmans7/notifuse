@@ -163,7 +163,7 @@ func TestMessageHistory(t *testing.T) {
 	broadcastID := "broadcast123"
 	message := MessageHistory{
 		ID:              "msg123",
-		ContactID:       "contact456",
+		ContactEmail:    "contact456",
 		BroadcastID:     &broadcastID,
 		TemplateID:      "template789",
 		TemplateVersion: 1,
@@ -185,7 +185,7 @@ func TestMessageHistory(t *testing.T) {
 
 	// Test basic field values
 	assert.Equal(t, "msg123", message.ID)
-	assert.Equal(t, "contact456", message.ContactID)
+	assert.Equal(t, "contact456", message.ContactEmail)
 	assert.Equal(t, "broadcast123", *message.BroadcastID)
 	assert.Equal(t, "template789", message.TemplateID)
 	assert.Equal(t, 1, message.TemplateVersion)
@@ -233,21 +233,21 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 		{
 			name: "basic string filters",
 			queryData: map[string][]string{
-				"cursor":       {"next_page"},
-				"channel":      {"email"},
-				"status":       {"delivered"},
-				"contact_id":   {"5f8d7a6b-9c4e-4a3b-8d1f-3c5e7a8b9c4e"},
-				"broadcast_id": {"a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"},
-				"template_id":  {"7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d"},
+				"cursor":        {"next_page"},
+				"channel":       {"email"},
+				"status":        {"delivered"},
+				"contact_email": {"contact@example.com"},
+				"broadcast_id":  {"a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"},
+				"template_id":   {"7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d"},
 			},
 			want: MessageListParams{
-				Cursor:      "next_page",
-				Channel:     "email",
-				Status:      MessageStatusDelivered,
-				ContactID:   "5f8d7a6b-9c4e-4a3b-8d1f-3c5e7a8b9c4e",
-				BroadcastID: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-				TemplateID:  "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-				Limit:       20, // Default limit
+				Cursor:       "next_page",
+				Channel:      "email",
+				Status:       MessageStatusDelivered,
+				ContactEmail: "contact@example.com",
+				BroadcastID:  "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+				TemplateID:   "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+				Limit:        20, // Default limit
 			},
 			wantErr: false,
 		},
@@ -336,9 +336,9 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "with invalid contact_id",
+			name: "with invalid contact_email",
 			queryData: map[string][]string{
-				"contact_id": {"not-a-uuid"}, // Not a UUID format
+				"contact_email": {"not-a-email"}, // Not a UUID format
 			},
 			wantErr: true,
 		},
@@ -395,7 +395,7 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 				"cursor":         {"next_page"},
 				"channel":        {"email"},
 				"status":         {"delivered"},
-				"contact_id":     {"5f8d7a6b-9c4e-4a3b-8d1f-3c5e7a8b9c4e"},
+				"contact_email":  {"contact@example.com"},
 				"broadcast_id":   {"a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"},
 				"template_id":    {"7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d"},
 				"has_error":      {"true"},
@@ -409,7 +409,7 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 				Cursor:        "next_page",
 				Channel:       "email",
 				Status:        MessageStatusDelivered,
-				ContactID:     "5f8d7a6b-9c4e-4a3b-8d1f-3c5e7a8b9c4e",
+				ContactEmail:  "contact@example.com",
 				BroadcastID:   "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
 				TemplateID:    "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
 				HasError:      boolPtr(true),
@@ -438,7 +438,7 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			assert.Equal(t, tt.want.Cursor, params.Cursor)
 			assert.Equal(t, tt.want.Channel, params.Channel)
 			assert.Equal(t, tt.want.Status, params.Status)
-			assert.Equal(t, tt.want.ContactID, params.ContactID)
+			assert.Equal(t, tt.want.ContactEmail, params.ContactEmail)
 			assert.Equal(t, tt.want.BroadcastID, params.BroadcastID)
 			assert.Equal(t, tt.want.TemplateID, params.TemplateID)
 			assert.Equal(t, tt.want.Limit, params.Limit)
@@ -562,22 +562,22 @@ func TestMessageListParams_Validate(t *testing.T) {
 		{
 			name: "valid IDs",
 			params: MessageListParams{
-				ContactID:   "5f8d7a6b-9c4e-4a3b-8d1f-3c5e7a8b9c4e",
-				BroadcastID: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-				TemplateID:  "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+				ContactEmail: "contact@example.com",
+				BroadcastID:  "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+				TemplateID:   "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
 			},
 			want: MessageListParams{
-				ContactID:   "5f8d7a6b-9c4e-4a3b-8d1f-3c5e7a8b9c4e",
-				BroadcastID: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-				TemplateID:  "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-				Limit:       20, // Default limit
+				ContactEmail: "contact@example.com",
+				BroadcastID:  "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+				TemplateID:   "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+				Limit:        20, // Default limit
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid contact ID",
 			params: MessageListParams{
-				ContactID: "not-a-uuid",
+				ContactEmail: "not-a-uuid",
 			},
 			wantErr: true,
 		},
@@ -650,7 +650,7 @@ func TestMessageListParams_Validate(t *testing.T) {
 			}
 			assert.Equal(t, tt.want.Channel, params.Channel)
 			assert.Equal(t, tt.want.Status, params.Status)
-			assert.Equal(t, tt.want.ContactID, params.ContactID)
+			assert.Equal(t, tt.want.ContactEmail, params.ContactEmail)
 			assert.Equal(t, tt.want.BroadcastID, params.BroadcastID)
 			assert.Equal(t, tt.want.TemplateID, params.TemplateID)
 

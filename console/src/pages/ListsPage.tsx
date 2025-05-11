@@ -25,9 +25,10 @@ import {
   faCircleCheck,
   faPenToSquare,
   faTrashCan,
-  faFaceFrown
+  faFaceFrown,
+  faHourglass
 } from '@fortawesome/free-regular-svg-icons'
-import { faUserPlus, faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { Check, X } from 'lucide-react'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
@@ -217,7 +218,7 @@ export function ListsPage() {
                     title={
                       <Space>
                         <FontAwesomeIcon
-                          icon={faUserPlus}
+                          icon={faHourglass}
                           className="text-blue-500"
                           style={{ opacity: 0.7 }}
                         />{' '}

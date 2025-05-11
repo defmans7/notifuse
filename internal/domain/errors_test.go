@@ -61,52 +61,6 @@ func TestErrTaskTimeout_Error(t *testing.T) {
 	}
 }
 
-func TestErrBroadcastDelivery_Error(t *testing.T) {
-	// Test with nil wrapped error
-	err1 := &ErrBroadcastDelivery{
-		BroadcastID: "broadcast123",
-		Email:       "user@example.com",
-		Reason:      "template not found",
-	}
-
-	expected1 := "broadcast delivery failed [broadcast123] to user@example.com: template not found"
-	if err1.Error() != expected1 {
-		t.Errorf("Expected error message '%s', got '%s'", expected1, err1.Error())
-	}
-
-	// Test with wrapped error
-	underlyingErr := fmt.Errorf("SMTP connection refused")
-	err2 := &ErrBroadcastDelivery{
-		BroadcastID: "broadcast456",
-		Email:       "other@example.com",
-		Reason:      "email sending failed",
-		Err:         underlyingErr,
-	}
-
-	expected2 := "broadcast delivery failed [broadcast456] to other@example.com: email sending failed - SMTP connection refused"
-	if err2.Error() != expected2 {
-		t.Errorf("Expected error message '%s', got '%s'", expected2, err2.Error())
-	}
-
-	// Test error unwrapping
-	if !errors.Is(err2, underlyingErr) {
-		t.Error("errors.Is() failed to find the wrapped error")
-	}
-}
-
-func TestErrBroadcastInvalidState_Error(t *testing.T) {
-	err := &ErrBroadcastInvalidState{
-		BroadcastID:   "broadcast789",
-		CurrentState:  "draft",
-		ExpectedState: "sending",
-	}
-
-	expected := "broadcast [broadcast789] in invalid state: current=draft, expected=sending"
-	if err.Error() != expected {
-		t.Errorf("Expected error message '%s', got '%s'", expected, err.Error())
-	}
-}
-
 func TestErrorTypeAssertion(t *testing.T) {
 	// Test that we can properly use type assertions with these errors
 	var err error

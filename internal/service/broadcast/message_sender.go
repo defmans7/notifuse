@@ -414,7 +414,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID 
 
 		message := &domain.MessageHistory{
 			ID:              messageID,
-			ContactID:       contact.Email,
+			ContactEmail:    contact.Email,
 			BroadcastID:     &broadcastID,
 			TemplateID:      templateID,
 			TemplateVersion: int(templates[templateID].Version),

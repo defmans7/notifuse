@@ -47,14 +47,9 @@ func (s *ContactListService) AddContactToList(ctx context.Context, workspaceID s
 	}
 
 	// Verify list exists
-	list, err := s.listRepo.GetListByID(ctx, workspaceID, contactList.ListID)
+	_, err = s.listRepo.GetListByID(ctx, workspaceID, contactList.ListID)
 	if err != nil {
 		return fmt.Errorf("list not found: %w", err)
-	}
-
-	// If the list requires double opt-in, set status to pending
-	if list.IsDoubleOptin {
-		contactList.Status = domain.ContactListStatusPending
 	}
 
 	now := time.Now().UTC()

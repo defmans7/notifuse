@@ -47,7 +47,7 @@ func createSampleMessageHistory() *domain.MessageHistory {
 
 	return &domain.MessageHistory{
 		ID:              "msg-123",
-		ContactID:       "contact-123",
+		ContactEmail:    "contact-123",
 		BroadcastID:     &broadcastID,
 		TemplateID:      "template-123",
 		TemplateVersion: 1,
@@ -83,7 +83,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 		mock.ExpectExec(`INSERT INTO message_history`).
 			WithArgs(
 				message.ID,
-				message.ContactID,
+				message.ContactEmail,
 				message.BroadcastID,
 				message.TemplateID,
 				message.TemplateVersion,
@@ -125,7 +125,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 		mock.ExpectExec(`INSERT INTO message_history`).
 			WithArgs(
 				message.ID,
-				message.ContactID,
+				message.ContactEmail,
 				message.BroadcastID,
 				message.TemplateID,
 				message.TemplateVersion,
@@ -167,7 +167,7 @@ func TestMessageHistoryRepository_Update(t *testing.T) {
 		mock.ExpectExec(`UPDATE message_history SET`).
 			WithArgs(
 				message.ID,
-				message.ContactID,
+				message.ContactEmail,
 				message.BroadcastID,
 				message.TemplateID,
 				message.TemplateVersion,
@@ -208,7 +208,7 @@ func TestMessageHistoryRepository_Update(t *testing.T) {
 		mock.ExpectExec(`UPDATE message_history SET`).
 			WithArgs(
 				message.ID,
-				message.ContactID,
+				message.ContactEmail,
 				message.BroadcastID,
 				message.TemplateID,
 				message.TemplateVersion,
@@ -251,13 +251,13 @@ func TestMessageHistoryRepository_Get(t *testing.T) {
 			Return(db, nil)
 
 		rows := sqlmock.NewRows([]string{
-			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"id", "contact_email", "broadcast_id", "template_id", "template_version",
 			"channel", "status", "message_data", "sent_at", "delivered_at",
 			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 			"unsubscribed_at", "created_at", "updated_at",
 		}).AddRow(
 			message.ID,
-			message.ContactID,
+			message.ContactEmail,
 			message.BroadcastID,
 			message.TemplateID,
 			message.TemplateVersion,
@@ -284,7 +284,7 @@ func TestMessageHistoryRepository_Get(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, message.ID, result.ID)
-		assert.Equal(t, message.ContactID, result.ContactID)
+		assert.Equal(t, message.ContactEmail, result.ContactEmail)
 		assert.Equal(t, *message.BroadcastID, *result.BroadcastID)
 		assert.Equal(t, message.Status, result.Status)
 	})
@@ -321,10 +321,10 @@ func TestMessageHistoryRepository_Get(t *testing.T) {
 			Return(db, nil)
 
 		rows := sqlmock.NewRows([]string{
-			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"id", "contact_email", "broadcast_id", "template_id", "template_version",
 		}).AddRow(
 			message.ID,
-			message.ContactID,
+			message.ContactEmail,
 			message.BroadcastID,
 			message.TemplateID,
 			message.TemplateVersion,
@@ -347,7 +347,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 
 	ctx := context.Background()
 	workspaceID := "workspace-123"
-	contactID := "contact-123"
+	contactEmail := "contact@example.com"
 	message := createSampleMessageHistory()
 	limit := 10
 	offset := 0
@@ -362,19 +362,19 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 
 		// Set up count query
 		countRows := sqlmock.NewRows([]string{"count"}).AddRow(1)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
-			WithArgs(contactID).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_email = \$1`).
+			WithArgs(contactEmail).
 			WillReturnRows(countRows)
 
 		// Set up data query
 		dataRows := sqlmock.NewRows([]string{
-			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"id", "contact_email", "broadcast_id", "template_id", "template_version",
 			"channel", "status", "message_data", "sent_at", "delivered_at",
 			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 			"unsubscribed_at", "created_at", "updated_at",
 		}).AddRow(
 			message.ID,
-			message.ContactID,
+			message.ContactEmail,
 			message.BroadcastID,
 			message.TemplateID,
 			message.TemplateVersion,
@@ -393,17 +393,17 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			message.UpdatedAt,
 		)
 
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
-			WithArgs(contactID, limit, offset).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_email = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactEmail, limit, offset).
 			WillReturnRows(dataRows)
 
-		results, count, err := repo.GetByContact(ctx, workspaceID, contactID, limit, offset)
+		results, count, err := repo.GetByContact(ctx, workspaceID, contactEmail, limit, offset)
 		require.NoError(t, err)
 		require.NotNil(t, results)
 		require.Equal(t, 1, count)
 		require.Len(t, results, 1)
 		assert.Equal(t, message.ID, results[0].ID)
-		assert.Equal(t, message.ContactID, results[0].ContactID)
+		assert.Equal(t, message.ContactEmail, results[0].ContactEmail)
 	})
 
 	t.Run("workspace connection error", func(t *testing.T) {
@@ -411,7 +411,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(nil, errors.New("connection error"))
 
-		results, count, err := repo.GetByContact(ctx, workspaceID, contactID, limit, offset)
+		results, count, err := repo.GetByContact(ctx, workspaceID, contactEmail, limit, offset)
 		require.Error(t, err)
 		require.Nil(t, results)
 		require.Zero(t, count)
@@ -423,11 +423,11 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			GetConnection(ctx, workspaceID).
 			Return(db, nil)
 
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
-			WithArgs(contactID).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_email = \$1`).
+			WithArgs(contactEmail).
 			WillReturnError(errors.New("count error"))
 
-		results, count, err := repo.GetByContact(ctx, workspaceID, contactID, limit, offset)
+		results, count, err := repo.GetByContact(ctx, workspaceID, contactEmail, limit, offset)
 		require.Error(t, err)
 		require.Nil(t, results)
 		require.Zero(t, count)
@@ -441,16 +441,16 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 
 		// Set up count query
 		countRows := sqlmock.NewRows([]string{"count"}).AddRow(1)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
-			WithArgs(contactID).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_email = \$1`).
+			WithArgs(contactEmail).
 			WillReturnRows(countRows)
 
 		// But data query fails
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
-			WithArgs(contactID, limit, offset).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_email = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactEmail, limit, offset).
 			WillReturnError(errors.New("query error"))
 
-		results, count, err := repo.GetByContact(ctx, workspaceID, contactID, limit, offset)
+		results, count, err := repo.GetByContact(ctx, workspaceID, contactEmail, limit, offset)
 		require.Error(t, err)
 		require.Nil(t, results)
 		require.Zero(t, count)
@@ -464,19 +464,19 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 
 		// Set up count query
 		countRows := sqlmock.NewRows([]string{"count"}).AddRow(1)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
-			WithArgs(contactID).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_email = \$1`).
+			WithArgs(contactEmail).
 			WillReturnRows(countRows)
 
 		// Return incomplete row to cause scan error
-		dataRows := sqlmock.NewRows([]string{"id", "contact_id"}).
+		dataRows := sqlmock.NewRows([]string{"id", "contact_email"}).
 			AddRow("msg-123", "contact-123")
 
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
-			WithArgs(contactID, limit, offset).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_email = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactEmail, limit, offset).
 			WillReturnRows(dataRows)
 
-		results, count, err := repo.GetByContact(ctx, workspaceID, contactID, limit, offset)
+		results, count, err := repo.GetByContact(ctx, workspaceID, contactEmail, limit, offset)
 		require.Error(t, err)
 		require.Nil(t, results)
 		require.Zero(t, count)
@@ -490,21 +490,21 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 
 		// Set up count query
 		countRows := sqlmock.NewRows([]string{"count"}).AddRow(1)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_id = \$1`).
-			WithArgs(contactID).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE contact_email = \$1`).
+			WithArgs(contactEmail).
 			WillReturnRows(countRows)
 
 		// Should use default limit of 50 and offset of 0
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_id = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
-			WithArgs(contactID, 50, 0).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_email = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
+			WithArgs(contactEmail, 50, 0).
 			WillReturnRows(sqlmock.NewRows([]string{
-				"id", "contact_id", "broadcast_id", "template_id", "template_version",
+				"id", "contact_email", "broadcast_id", "template_id", "template_version",
 				"channel", "status", "message_data", "sent_at", "delivered_at",
 				"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 				"unsubscribed_at", "created_at", "updated_at",
 			}).AddRow(
 				message.ID,
-				message.ContactID,
+				message.ContactEmail,
 				message.BroadcastID,
 				message.TemplateID,
 				message.TemplateVersion,
@@ -524,7 +524,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			))
 
 		// Call with negative limit and offset
-		results, count, err := repo.GetByContact(ctx, workspaceID, contactID, -5, -10)
+		results, count, err := repo.GetByContact(ctx, workspaceID, contactEmail, -5, -10)
 		require.NoError(t, err)
 		require.NotNil(t, results)
 		require.Equal(t, 1, count)
@@ -559,13 +559,13 @@ func TestMessageHistoryRepository_GetByBroadcast(t *testing.T) {
 
 		// Set up data query
 		dataRows := sqlmock.NewRows([]string{
-			"id", "contact_id", "broadcast_id", "template_id", "template_version",
+			"id", "contact_email", "broadcast_id", "template_id", "template_version",
 			"channel", "status", "message_data", "sent_at", "delivered_at",
 			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 			"unsubscribed_at", "created_at", "updated_at",
 		}).AddRow(
 			message.ID,
-			message.ContactID,
+			message.ContactEmail,
 			message.BroadcastID,
 			message.TemplateID,
 			message.TemplateVersion,
@@ -929,7 +929,7 @@ func addRowFromMessage(rows *sqlmock.Rows, message *domain.MessageHistory) {
 
 	rows.AddRow(
 		message.ID,
-		message.ContactID,
+		message.ContactEmail,
 		broadcastID,
 		message.TemplateID,
 		message.TemplateVersion,

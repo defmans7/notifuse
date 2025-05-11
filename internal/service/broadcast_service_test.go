@@ -953,7 +953,7 @@ func TestBroadcastService_RecordMessageSent(t *testing.T) {
 		workspaceID := "ws123"
 		message := &domain.MessageHistory{
 			ID:              "msg123",
-			ContactID:       "contact123",
+			ContactEmail:    "contact123",
 			BroadcastID:     stringPtr("bcast123"),
 			TemplateID:      "template123",
 			TemplateVersion: 1,
@@ -970,7 +970,7 @@ func TestBroadcastService_RecordMessageSent(t *testing.T) {
 			DoAndReturn(func(_ context.Context, wsID string, msg *domain.MessageHistory) error {
 				assert.Equal(t, workspaceID, wsID)
 				assert.Equal(t, message.ID, msg.ID)
-				assert.Equal(t, message.ContactID, msg.ContactID)
+				assert.Equal(t, message.ContactEmail, msg.ContactEmail)
 				assert.Equal(t, message.Channel, msg.Channel)
 				assert.Equal(t, message.Status, msg.Status)
 				return nil
@@ -992,7 +992,7 @@ func TestBroadcastService_RecordMessageSent(t *testing.T) {
 		workspaceID := "ws123"
 		message := &domain.MessageHistory{
 			ID:              "msg123",
-			ContactID:       "contact123",
+			ContactEmail:    "contact123",
 			BroadcastID:     stringPtr("bcast123"),
 			TemplateID:      "template123",
 			TemplateVersion: 1,
@@ -1025,7 +1025,7 @@ func TestBroadcastService_RecordMessageSent(t *testing.T) {
 		workspaceID := "ws123"
 		message := &domain.MessageHistory{
 			ID:              "msg123",
-			ContactID:       "contact123",
+			ContactEmail:    "contact123",
 			BroadcastID:     stringPtr("bcast123"),
 			TemplateID:      "template123",
 			TemplateVersion: 1,

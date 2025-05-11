@@ -92,7 +92,7 @@ export function ContactDetailsDrawer({
     queryKey: ['message_history', workspaceId, contact.email],
     queryFn: () =>
       listMessages(workspaceId, {
-        contact_id: contact.email,
+        contact_email: contact.email,
         limit: 50
       }),
     enabled: visible && !!contact

@@ -14,9 +14,9 @@ import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPenToSquare, faEye } from '@fortawesome/free-regular-svg-icons'
+import { faPenToSquare, faEye, faHourglass } from '@fortawesome/free-regular-svg-icons'
 import { faCircleCheck, faFaceFrown } from '@fortawesome/free-regular-svg-icons'
-import { faUserPlus, faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { ContactDetailsDrawer } from '../components/contacts/ContactDetailsDrawer'
 import dayjs from '../lib/dayjs'
 import { useAuth } from '../contexts/AuthContext'
@@ -298,7 +298,7 @@ export function ContactsPage() {
                   break
                 case 'pending':
                   color = 'blue'
-                  icon = <FontAwesomeIcon icon={faUserPlus} style={{ marginRight: '4px' }} />
+                  icon = <FontAwesomeIcon icon={faHourglass} style={{ marginRight: '4px' }} />
                   statusText = 'Pending confirmation'
                   break
                 case 'unsubscribed':
