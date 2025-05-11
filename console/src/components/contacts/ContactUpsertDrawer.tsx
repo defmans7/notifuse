@@ -11,7 +11,8 @@ import {
   Alert,
   InputNumber,
   DatePicker,
-  message
+  message,
+  Popconfirm
 } from 'antd'
 import type { InputProps } from 'antd/es/input'
 import type { TextAreaProps } from 'antd/es/input/TextArea'
@@ -23,6 +24,7 @@ import { Languages } from '../utils/languages'
 import { Contact, UpsertContactOperationAction } from '../../services/api/contacts'
 import { contactsApi } from '../../services/api/contacts'
 import { useQueryClient } from '@tanstack/react-query'
+import dayjs from '../../lib/dayjs'
 
 const { Option } = Select
 const { Text } = Typography
@@ -201,9 +203,10 @@ export function ContactUpsertDrawer({
       )
       setSelectedFields(fieldsToShow)
 
-      // Format JSON fields for display
+      // Format JSON fields for display and convert date strings to dayjs objects
       const formattedValues = { ...contact }
       fieldsToShow.forEach((field) => {
+        // Handle JSON fields
         if (field.startsWith('custom_json_')) {
           try {
             formattedValues[field as keyof Contact] = JSON.stringify(
@@ -213,6 +216,14 @@ export function ContactUpsertDrawer({
             )
           } catch (e) {
             console.error(`Error formatting JSON for field ${field}:`, e)
+          }
+        }
+
+        // Handle date fields - convert string to dayjs object for DatePicker
+        else if (field === 'last_order_at' || field.startsWith('custom_datetime_')) {
+          const dateValue = contact[field as keyof Contact]
+          if (dateValue) {
+            formattedValues[field as keyof Contact] = dayjs(dateValue as string)
           }
         }
       })
@@ -234,14 +245,22 @@ export function ContactUpsertDrawer({
         workspace_id: workspaceId
       }
 
-      // Parse JSON fields before submission
+      // Convert dayjs objects to strings for API submission and parse JSON
       selectedFields.forEach((field) => {
+        // Handle JSON fields
         if (field.startsWith('custom_json_')) {
           try {
             contactData[field] = JSON.parse(values[field])
           } catch (e) {
             message.error(`Invalid JSON in field ${field}`)
             return
+          }
+        }
+        // Handle date fields - convert dayjs to ISO string
+        else if (field === 'last_order_at' || field.startsWith('custom_datetime_')) {
+          const dateValue = values[field]
+          if (dateValue && dateValue.$d) {
+            contactData[field] = dateValue.toISOString()
           }
         }
       })
@@ -430,15 +449,17 @@ export function ContactUpsertDrawer({
                 label={
                   <Space>
                     <span>{fieldInfo.label}</span>
-                    <Button
-                      type="text"
-                      size="small"
-                      danger
-                      onClick={() => handleRemoveField(field)}
-                      style={{ marginLeft: 'auto' }}
+                    <Popconfirm
+                      title="Remove field"
+                      description="Are you sure you want to remove this field?"
+                      onConfirm={() => handleRemoveField(field)}
+                      okText="Yes"
+                      cancelText="No"
                     >
-                      Remove
-                    </Button>
+                      <Button type="link" size="small" danger style={{ marginLeft: 'auto' }}>
+                        Remove field
+                      </Button>
+                    </Popconfirm>
                   </Space>
                 }
               >

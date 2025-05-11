@@ -1,0 +1,374 @@
+openapi: 3.0.3
+info:
+  title: Notifuse API
+  description: API for Notifuse - a notification and newsletter management platform
+  version: 1.0.0
+  contact:
+    name: Notifuse Support
+    url: https://notifuse.com/support
+    email: support@notifuse.com
+servers:
+  - url: https://{customerDomain}
+    description: Customer-specific Notifuse API server
+    variables:
+      customerDomain:
+        description: Your unique Notifuse domain (provided during account setup)
+paths:
+  /api/transactional.send:
+    post:
+      summary: Send a transactional notification
+      description: |
+        Sends a transactional notification to a contact through specified channels.
+        Requires authentication.
+      operationId: sendTransactionalNotification
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendTransactionalRequest'
+      responses:
+        '200':
+          description: Notification sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message_id:
+                    type: string
+                    description: Unique identifier for the sent message
+                    example: 'msg_1234567890abcdef'
+                  success:
+                    type: boolean
+                    description: Whether the notification was sent successfully
+                    example: true
+        '400':
+          description: Bad request - validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFoundExample:
+                  value:
+                    error: 'Notification not found'
+                inactiveExample:
+                  value:
+                    error: 'Notification is not active'
+                noChannelsExample:
+                  value:
+                    error: 'No valid channels configured'
+                validationExample:
+                  value:
+                    error: 'notification.contact is required'
+        '401':
+          description: Unauthorized - invalid or missing authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: 'Unauthorized'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: 'Failed to send notification'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: PASETO
+      description: PASETO token for authentication
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      required:
+        - error
+
+    SendTransactionalRequest:
+      type: object
+      required:
+        - workspace_id
+        - notification
+      properties:
+        workspace_id:
+          type: string
+          description: The ID of the workspace
+          example: 'ws_1234567890'
+        notification:
+          $ref: '#/components/schemas/TransactionalNotificationSendParams'
+
+    TransactionalNotificationSendParams:
+      type: object
+      required:
+        - id
+        - contact
+      properties:
+        id:
+          type: string
+          description: ID of the notification to send
+          example: 'welcome_email'
+        contact:
+          $ref: '#/components/schemas/Contact'
+        channels:
+          type: array
+          description: Specific channels to send through (if empty, use all configured channels)
+          items:
+            type: string
+            enum: [email]
+          example: ['email']
+        data:
+          type: object
+          additionalProperties: true
+          description: Data to populate the template with
+          example:
+            user_name: 'John Doe'
+            activation_link: 'https://example.com/activate/abc123'
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata for tracking
+          example:
+            campaign_id: 'spring_promo_2023'
+            source: 'user_signup'
+        cc:
+          type: array
+          description: CC email addresses
+          items:
+            type: string
+            format: email
+          example: ['manager@example.com']
+        bcc:
+          type: array
+          description: BCC email addresses
+          items:
+            type: string
+            format: email
+          example: ['archive@example.com']
+        reply_to:
+          type: string
+          format: email
+          description: Reply-To email address
+          example: 'support@example.com'
+
+    Contact:
+      type: object
+      required:
+        - email
+      properties:
+        # Required fields
+        email:
+          type: string
+          format: email
+          description: Email address of the contact
+          example: 'user@example.com'
+
+        # Optional fields
+        external_id:
+          type: string
+          nullable: true
+          description: External identifier for the contact
+          example: 'user_12345'
+        timezone:
+          type: string
+          nullable: true
+          description: Timezone of the contact
+          example: 'America/New_York'
+        language:
+          type: string
+          nullable: true
+          description: Preferred language of the contact
+          example: 'en-US'
+        first_name:
+          type: string
+          nullable: true
+          description: First name of the contact
+          example: 'John'
+        last_name:
+          type: string
+          nullable: true
+          description: Last name of the contact
+          example: 'Doe'
+        phone:
+          type: string
+          nullable: true
+          description: Phone number of the contact
+          example: '+15551234567'
+        address_line_1:
+          type: string
+          nullable: true
+          description: First line of address
+          example: '123 Main St'
+        address_line_2:
+          type: string
+          nullable: true
+          description: Second line of address
+          example: 'Apt 4B'
+        country:
+          type: string
+          nullable: true
+          description: Country of the contact
+          example: 'US'
+        postcode:
+          type: string
+          nullable: true
+          description: Postal code
+          example: '10001'
+        state:
+          type: string
+          nullable: true
+          description: State or province
+          example: 'NY'
+        job_title:
+          type: string
+          nullable: true
+          description: Job title of the contact
+          example: 'Software Engineer'
+
+        # Commerce related fields
+        lifetime_value:
+          type: number
+          format: float
+          nullable: true
+          description: Lifetime value of the contact
+          example: 1250.50
+        orders_count:
+          type: number
+          format: float
+          nullable: true
+          description: Number of orders placed by the contact
+          example: 5
+        last_order_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date and time of the contact's last order
+          example: '2023-05-15T14:30:00Z'
+
+        # Custom string fields
+        custom_string_1:
+          type: string
+          nullable: true
+          description: Custom string field 1
+          example: 'Premium tier'
+        custom_string_2:
+          type: string
+          nullable: true
+          description: Custom string field 2
+        custom_string_3:
+          type: string
+          nullable: true
+          description: Custom string field 3
+        custom_string_4:
+          type: string
+          nullable: true
+          description: Custom string field 4
+        custom_string_5:
+          type: string
+          nullable: true
+          description: Custom string field 5
+
+        # Custom number fields
+        custom_number_1:
+          type: number
+          format: float
+          nullable: true
+          description: Custom number field 1
+          example: 42
+        custom_number_2:
+          type: number
+          format: float
+          nullable: true
+          description: Custom number field 2
+        custom_number_3:
+          type: number
+          format: float
+          nullable: true
+          description: Custom number field 3
+        custom_number_4:
+          type: number
+          format: float
+          nullable: true
+          description: Custom number field 4
+        custom_number_5:
+          type: number
+          format: float
+          nullable: true
+          description: Custom number field 5
+
+        # Custom datetime fields
+        custom_datetime_1:
+          type: string
+          format: date-time
+          nullable: true
+          description: Custom datetime field 1
+          example: '2023-06-01T09:00:00Z'
+        custom_datetime_2:
+          type: string
+          format: date-time
+          nullable: true
+          description: Custom datetime field 2
+        custom_datetime_3:
+          type: string
+          format: date-time
+          nullable: true
+          description: Custom datetime field 3
+        custom_datetime_4:
+          type: string
+          format: date-time
+          nullable: true
+          description: Custom datetime field 4
+        custom_datetime_5:
+          type: string
+          format: date-time
+          nullable: true
+          description: Custom datetime field 5
+
+        # Custom JSON fields
+        custom_json_1:
+          type: object
+          nullable: true
+          description: Custom JSON field 1
+          example: { 'preferences': { 'theme': 'dark', 'notifications': true } }
+        custom_json_2:
+          type: object
+          nullable: true
+          description: Custom JSON field 2
+        custom_json_3:
+          type: object
+          nullable: true
+          description: Custom JSON field 3
+        custom_json_4:
+          type: object
+          nullable: true
+          description: Custom JSON field 4
+        custom_json_5:
+          type: object
+          nullable: true
+          description: Custom JSON field 5
+
+        # System timestamps
+        created_at:
+          type: string
+          format: date-time
+          description: When the contact was created
+          example: '2023-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: When the contact was last updated
+          example: '2023-04-22T15:45:00Z'

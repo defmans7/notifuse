@@ -13,18 +13,21 @@ import {
   Modal,
   Select,
   Form,
-  message
+  message,
+  Popover
 } from 'antd'
 import { Contact } from '../../services/api/contacts'
 import { List } from '../../services/api/types'
 import dayjs from '../../lib/dayjs'
+import numbro from 'numbro'
 import { ContactUpsertDrawer } from './ContactUpsertDrawer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faCalendar,
   faShoppingCart,
   faMoneyBillWave,
-  faPlus
+  faPlus,
+  faEllipsis
 } from '@fortawesome/free-solid-svg-icons'
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
@@ -45,6 +48,7 @@ interface ContactDetailsDrawerProps {
   onClose: () => void
   lists?: List[]
   onContactUpdated?: (updatedContact: Contact) => void
+  workspaceTimezone?: string
 }
 
 // Add this type definition for the lists with name
@@ -52,6 +56,7 @@ interface ContactListWithName {
   list_id: string
   status: string
   name: string
+  created_at?: string
 }
 
 export function ContactDetailsDrawer({
@@ -60,7 +65,8 @@ export function ContactDetailsDrawer({
   visible,
   onClose,
   lists = [],
-  onContactUpdated
+  onContactUpdated,
+  workspaceTimezone = 'UTC'
 }: ContactDetailsDrawerProps) {
   if (!contact) return null
 
@@ -191,20 +197,118 @@ export function ContactDetailsDrawer({
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return '-'
+
+    // Format number values with numbro
+    if (typeof value === 'number') {
+      // For currency-like fields
+      if (String(value).includes('.') && value > 0) {
+        return numbro(value).format({
+          thousandSeparated: true,
+          mantissa: 2,
+          trimMantissa: true
+        })
+      }
+      // For integer values
+      return numbro(value).format({
+        thousandSeparated: true,
+        mantissa: 0
+      })
+    }
+
     if (typeof value === 'object') return JSON.stringify(value, null, 2)
     return value
+  }
+
+  // Format JSON with truncation and popover for full view
+  const formatJson = (jsonData: any): React.ReactNode => {
+    if (!jsonData) return '-'
+
+    try {
+      // If it's already an object, stringify it
+      const jsonStr = typeof jsonData === 'string' ? jsonData : JSON.stringify(jsonData)
+      const obj = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
+
+      // Pretty format for popover
+      const prettyJson = JSON.stringify(obj, null, 2)
+
+      // Truncate for display
+      const displayText = jsonStr.length > 100 ? jsonStr.substring(0, 100) + '...' : jsonStr
+
+      const popoverContent = (
+        <div
+          className="p-2 bg-gray-50 rounded border border-gray-200 max-h-96 overflow-auto"
+          style={{ maxWidth: '500px' }}
+        >
+          <pre className="text-xs m-0 whitespace-pre-wrap break-all">{prettyJson}</pre>
+        </div>
+      )
+
+      return (
+        <Popover
+          content={popoverContent}
+          title="JSON Data"
+          placement="rightTop"
+          trigger="click"
+          styles={{
+            root: {
+              maxWidth: '400px'
+            }
+          }}
+        >
+          <div className="text-xs bg-gray-50 p-2 rounded border border-gray-200 cursor-pointer hover:bg-gray-100">
+            <code className="truncate block">{displayText}</code>
+            <div className="text-right mt-1 text-blue-500">
+              <small>
+                <FontAwesomeIcon icon={faEllipsis} className="mr-1" />
+                Click to view full JSON
+              </small>
+            </div>
+          </div>
+        </Popover>
+      )
+    } catch (e) {
+      return <Text type="danger">Invalid JSON</Text>
+    }
   }
 
   // Format date using dayjs
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return '-'
-    return dayjs(dateString).format('lll')
+    return `${dayjs(dateString).format('lll')} in ${workspaceTimezone}`
   }
 
-  // Format currency value
+  // Format currency value using numbro
   const formatCurrency = (value: number | undefined): string => {
     if (value === undefined || value === null) return '$0.00'
-    return `$${value.toFixed(2)}`
+    return numbro(value).formatCurrency({
+      mantissa: 2,
+      currencySymbol: '$',
+      thousandSeparated: true,
+      trimMantissa: true,
+      spaceSeparatedCurrency: false
+    })
+  }
+
+  // Format number with thousand separators
+  const formatNumber = (value: number | undefined): string => {
+    if (value === undefined || value === null) return '0'
+    return numbro(value).format({
+      thousandSeparated: true,
+      mantissa: 0,
+      trimMantissa: true,
+      average: false
+    })
+  }
+
+  // Format average number (with K, M, B, etc. for large numbers)
+  const formatAverage = (value: number | undefined): string => {
+    if (value === undefined || value === null) return '0'
+    return numbro(value).format({
+      average: true,
+      mantissa: 1,
+      spaceSeparated: true,
+      trimMantissa: true
+    })
   }
 
   // Get color for list status
@@ -410,6 +514,43 @@ export function ContactDetailsDrawer({
     }
   ]
 
+  // Add a separate section for JSON fields
+  const jsonFields = [
+    {
+      key: 'custom_json_1',
+      label: 'Custom JSON 1',
+      value: displayContact.custom_json_1,
+      show: !!displayContact.custom_json_1
+    },
+    {
+      key: 'custom_json_2',
+      label: 'Custom JSON 2',
+      value: displayContact.custom_json_2,
+      show: !!displayContact.custom_json_2
+    },
+    {
+      key: 'custom_json_3',
+      label: 'Custom JSON 3',
+      value: displayContact.custom_json_3,
+      show: !!displayContact.custom_json_3
+    },
+    {
+      key: 'custom_json_4',
+      label: 'Custom JSON 4',
+      value: displayContact.custom_json_4,
+      show: !!displayContact.custom_json_4
+    },
+    {
+      key: 'custom_json_5',
+      label: 'Custom JSON 5',
+      value: displayContact.custom_json_5,
+      show: !!displayContact.custom_json_5
+    }
+  ]
+
+  // Check if there are any JSON fields to display
+  const hasJsonFields = jsonFields.some((field) => field.show)
+
   // Prepare contact lists with enhanced information
   const contactListsWithNames = displayContact.contact_lists.map((list) => ({
     ...list,
@@ -432,7 +573,7 @@ export function ContactDetailsDrawer({
   return (
     <Drawer
       title="Contact Details"
-      width={1000}
+      width="90%"
       placement="right"
       className="drawer-body-no-padding"
       onClose={onClose}
@@ -444,7 +585,8 @@ export function ContactDetailsDrawer({
           onSuccess={handleContactUpdated}
           buttonProps={{
             icon: <FontAwesomeIcon icon={faPenToSquare} />,
-            type: 'text',
+            type: 'primary',
+            ghost: true,
             buttonContent: 'Update'
           }}
         />
@@ -452,7 +594,7 @@ export function ContactDetailsDrawer({
     >
       <div className="flex h-full">
         {/* Left column - Contact Details (1/4 width) */}
-        <div className="w-1/4 bg-gray-50 overflow-y-auto h-full">
+        <div className="w-1/3 bg-gray-50 overflow-y-auto h-full">
           {/* Contact info at the top */}
           <div className="p-6 pb-4 border-b border-gray-200 flex flex-col items-center text-center">
             <Title level={4} style={{ margin: 0, marginBottom: '4px' }}>
@@ -461,95 +603,125 @@ export function ContactDetailsDrawer({
             <Text type="secondary">{displayContact.email}</Text>
           </div>
 
-          <div className="p-6">
-            <div className="contact-details">
-              {isLoadingContact && (
-                <div className="mb-4 p-2 bg-blue-50 text-blue-600 rounded text-center">
-                  <Spin size="small" className="mr-2" />
-                  <span>Refreshing contact data...</span>
-                </div>
-              )}
+          <div className="contact-details">
+            {isLoadingContact && (
+              <div className="mb-4 p-2 bg-blue-50 text-blue-600 rounded text-center">
+                <Spin size="small" className="mr-2" />
+                <span>Refreshing contact data...</span>
+              </div>
+            )}
 
-              {/* Flat list of all fields without icons */}
-              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {contactFields
-                  .filter(
-                    (field) =>
-                      field.value !== undefined &&
-                      field.value !== null &&
-                      field.value !== '-' &&
-                      (field.show === undefined || field.show) &&
-                      // Skip email as it's already shown at the top
-                      field.key !== 'email' &&
-                      // Skip name fields as they're already shown at the top
-                      field.key !== 'first_name' &&
-                      field.key !== 'last_name'
-                  )
+            {/* Display fields in a side-by-side layout */}
+            {contactFields
+              .filter(
+                (field) =>
+                  field.value !== undefined &&
+                  field.value !== null &&
+                  field.value !== '-' &&
+                  (field.show === undefined || field.show) &&
+                  // Skip email as it's already shown at the top
+                  field.key !== 'email' &&
+                  // Skip name fields as they're already shown at the top
+                  field.key !== 'first_name' &&
+                  field.key !== 'last_name' &&
+                  // Skip JSON fields as they'll be shown separately
+                  !field.key.startsWith('custom_json_')
+              )
+              .map((field) => (
+                <div
+                  key={field.key}
+                  className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
+                >
+                  <Tooltip title={`Field ID: ${field.key}`}>
+                    <span className="font-semibold text-slate-600">{field.label}</span>
+                  </Tooltip>
+                  <span>{formatValue(field.value)}</span>
+                </div>
+              ))}
+
+            {/* Custom JSON fields */}
+            {hasJsonFields && (
+              <div>
+                {jsonFields
+                  .filter((field) => field.show)
                   .map((field) => (
-                    <div key={field.key}>
+                    <div
+                      key={field.key}
+                      className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
+                    >
                       <Tooltip title={`Field ID: ${field.key}`}>
-                        <Text strong style={{ cursor: 'help' }}>
-                          {field.label}:
-                        </Text>
+                        <span className="font-semibold text-slate-600">{field.label}</span>
                       </Tooltip>
-                      <div>
-                        <Text>{formatValue(field.value)}</Text>
-                      </div>
+                      {formatJson(field.value)}
                     </div>
                   ))}
-              </Space>
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right column - Message History (3/4 width) */}
-        <div className="w-3/4 p-6 overflow-y-auto h-full">
+        <div className="w-2/3 p-6 overflow-y-auto h-full">
           {/* E-commerce Stats (3-column grid) */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             {/* Lifetime Value */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-              <div className="text-sm text-gray-500 mb-2">
-                <Tooltip title="Field ID: lifetime_value">
+            <Tooltip
+              title={
+                displayContact.lifetime_value
+                  ? formatCurrency(displayContact.lifetime_value)
+                  : '$0.00'
+              }
+            >
+              <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                <div className="text-sm text-gray-500 mb-2">
                   <span className="flex items-center cursor-help">
                     <FontAwesomeIcon icon={faMoneyBillWave} className="mr-2" />
                     Lifetime Value
                   </span>
-                </Tooltip>
+                </div>
+                <div className="text-2xl font-semibold">
+                  {formatAverage(displayContact.lifetime_value || 0)}
+                </div>
               </div>
-              <div className="text-2xl font-semibold">
-                {formatCurrency(displayContact.lifetime_value)}
-              </div>
-            </div>
+            </Tooltip>
 
             {/* Orders Count */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-              <div className="text-sm text-gray-500 mb-2">
-                <Tooltip title="Field ID: orders_count">
+            <Tooltip title={`${formatNumber(displayContact.orders_count || 0)} orders`}>
+              <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                <div className="text-sm text-gray-500 mb-2">
                   <span className="flex items-center cursor-help">
                     <FontAwesomeIcon icon={faShoppingCart} className="mr-2" />
                     Orders Count
                   </span>
-                </Tooltip>
+                </div>
+                <div className="text-2xl font-semibold">
+                  {formatAverage(displayContact.orders_count || 0)}
+                </div>
               </div>
-              <div className="text-2xl font-semibold">{displayContact.orders_count || 0}</div>
-            </div>
+            </Tooltip>
 
             {/* Last Order */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-              <div className="text-sm text-gray-500 mb-2">
-                <Tooltip title="Field ID: last_order_at">
+            <Tooltip
+              title={
+                displayContact.last_order_at
+                  ? `${dayjs(displayContact.last_order_at).format('LLLL')} in ${workspaceTimezone}`
+                  : 'No orders yet'
+              }
+            >
+              <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                <div className="text-sm text-gray-500 mb-2">
                   <span className="flex items-center cursor-help">
                     <FontAwesomeIcon icon={faCalendar} className="mr-2" />
                     Last Order
                   </span>
-                </Tooltip>
+                </div>
+                <div className="text-lg font-semibold">
+                  {displayContact.last_order_at
+                    ? dayjs(displayContact.last_order_at).fromNow()
+                    : 'Never'}
+                </div>
               </div>
-              <div className="text-lg font-semibold">
-                {displayContact.last_order_at
-                  ? dayjs(displayContact.last_order_at).format('ll')
-                  : 'Never'}
-              </div>
-            </div>
+            </Tooltip>
           </div>
 
           {/* List subscriptions with action buttons */}
@@ -579,7 +751,7 @@ export function ContactDetailsDrawer({
                 title: 'Subscription list',
                 dataIndex: 'name',
                 key: 'name',
-                width: '50%',
+                width: '30%',
                 render: (name: string, record: any) => (
                   <Tooltip title={`List ID: ${record.list_id}`}>
                     <span style={{ cursor: 'help' }}>{name}</span>
@@ -590,8 +762,23 @@ export function ContactDetailsDrawer({
                 title: 'Status',
                 dataIndex: 'status',
                 key: 'status',
-                width: '30%',
+                width: '20%',
                 render: (status: string) => <Tag color={getStatusColor(status)}>{status}</Tag>
+              },
+              {
+                title: 'Subscribed on',
+                dataIndex: 'created_at',
+                key: 'created_at',
+                width: '30%',
+                render: (date: string) => {
+                  if (!date) return '-'
+
+                  return (
+                    <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
+                      <span>{dayjs(date).fromNow()}</span>
+                    </Tooltip>
+                  )
+                }
               },
               {
                 title: '',

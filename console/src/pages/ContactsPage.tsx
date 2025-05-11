@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Table, Tag, Button, Space } from 'antd'
+import { Table, Tag, Button, Space, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useParams, useSearch } from '@tanstack/react-router'
 import { contactsApi, type Contact, type ListContactsRequest } from '../services/api/contacts'
@@ -15,7 +15,11 @@ import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare, faEye } from '@fortawesome/free-regular-svg-icons'
+import { faCircleCheck, faFaceFrown } from '@fortawesome/free-regular-svg-icons'
+import { faUserPlus, faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { ContactDetailsDrawer } from '../components/contacts/ContactDetailsDrawer'
+import dayjs from '../lib/dayjs'
+import { useAuth } from '../contexts/AuthContext'
 
 const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
@@ -67,6 +71,11 @@ export function ContactsPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId/contacts' })
   const search = useSearch({ from: workspaceContactsRoute.id })
   const queryClient = useQueryClient()
+  const { workspaces } = useAuth()
+
+  // Get the current workspace timezone
+  const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
+  const workspaceTimezone = currentWorkspace?.settings.timezone || 'UTC'
 
   const [visibleColumns, setVisibleColumns] =
     React.useState<Record<string, boolean>>(DEFAULT_VISIBLE_COLUMNS)
@@ -108,6 +117,7 @@ export function ContactsPage() {
   }
 
   const allColumns: { key: string; title: string }[] = [
+    { key: 'lists', title: 'Lists' },
     { key: 'name', title: 'Name' },
     { key: 'phone', title: 'Phone' },
     { key: 'country', title: 'Country' },
@@ -118,7 +128,6 @@ export function ContactsPage() {
     { key: 'lifetime_value', title: 'Lifetime Value' },
     { key: 'orders_count', title: 'Orders Count' },
     { key: 'last_order_at', title: 'Last Order' },
-    { key: 'lists', title: 'Lists' },
     { key: 'custom_string_1', title: 'Custom String 1' },
     { key: 'custom_string_2', title: 'Custom String 2' },
     { key: 'custom_string_3', title: 'Custom String 3' },
@@ -268,6 +277,87 @@ export function ContactsPage() {
       onHeaderCell: () => ({
         className: '!bg-white'
       })
+    },
+    {
+      title: 'Lists',
+      key: 'lists',
+      render: (_: unknown, record: Contact) => (
+        <Space direction="vertical" size={2}>
+          {record.contact_lists.map(
+            (list: { list_id: string; status?: string; created_at?: string }) => {
+              let color = 'blue'
+              let icon = null
+              let statusText = ''
+
+              // Match status to color and icon
+              switch (list.status) {
+                case 'active':
+                  color = 'green'
+                  icon = <FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: '4px' }} />
+                  statusText = 'Active subscriber'
+                  break
+                case 'pending':
+                  color = 'blue'
+                  icon = <FontAwesomeIcon icon={faUserPlus} style={{ marginRight: '4px' }} />
+                  statusText = 'Pending confirmation'
+                  break
+                case 'unsubscribed':
+                  color = 'gray'
+                  icon = <FontAwesomeIcon icon={faBan} style={{ marginRight: '4px' }} />
+                  statusText = 'Unsubscribed from list'
+                  break
+                case 'bounced':
+                  color = 'orange'
+                  icon = (
+                    <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: '4px' }} />
+                  )
+                  statusText = 'Email bounced'
+                  break
+                case 'complained':
+                  color = 'red'
+                  icon = <FontAwesomeIcon icon={faFaceFrown} style={{ marginRight: '4px' }} />
+                  statusText = 'Marked as spam'
+                  break
+                default:
+                  color = 'blue'
+                  statusText = 'Status unknown'
+                  break
+              }
+
+              // Find list name from listsData
+              const listData = listsData?.lists?.find((l) => l.id === list.list_id)
+              const listName = listData?.name || list.list_id
+
+              // Format creation date if available using workspace timezone
+              const creationDate = list.created_at
+                ? dayjs(list.created_at).tz(workspaceTimezone).format('LL - HH:mm')
+                : 'Unknown date'
+
+              const tooltipTitle = (
+                <>
+                  <div>
+                    <strong>{statusText}</strong>
+                  </div>
+                  <div>Subscribed on: {creationDate}</div>
+                  <div>
+                    <small>Timezone: {workspaceTimezone}</small>
+                  </div>
+                </>
+              )
+
+              return (
+                <Tooltip key={list.list_id} title={tooltipTitle}>
+                  <Tag color={color} style={{ marginBottom: '2px' }}>
+                    {icon}
+                    {listName}
+                  </Tag>
+                </Tooltip>
+              )
+            }
+          )}
+        </Space>
+      ),
+      hidden: !visibleColumns.lists
     },
     {
       title: 'Name',
@@ -488,20 +578,6 @@ export function ContactsPage() {
       hidden: !visibleColumns.custom_json_5
     },
     {
-      title: 'Lists',
-      key: 'lists',
-      render: (_: unknown, record: Contact) => (
-        <>
-          {record.contact_lists.map((list: { list_id: string }) => (
-            <Tag key={list.list_id} color="blue">
-              {list.list_id}
-            </Tag>
-          ))}
-        </>
-      ),
-      hidden: !visibleColumns.lists
-    },
-    {
       title: (
         <>
           <ContactColumnsSelector
@@ -604,6 +680,7 @@ export function ContactsPage() {
         onClose={closeContactDetails}
         lists={listsData?.lists || []}
         onContactUpdated={handleContactUpdated}
+        workspaceTimezone={workspaceTimezone}
       />
     </div>
   )
