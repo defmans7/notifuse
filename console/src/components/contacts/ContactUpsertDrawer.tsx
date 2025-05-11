@@ -382,7 +382,7 @@ export function ContactUpsertDrawer({
   return (
     <>
       <Button onClick={() => setDrawerVisible(true)} {...defaultButtonProps} loading={loading}>
-        {buttonContent || (contact ? 'Update Contact' : 'Add Contact')}
+        {buttonContent || (buttonProps?.icon ? '' : contact ? 'Update Contact' : 'Add Contact')}
       </Button>
 
       <Drawer

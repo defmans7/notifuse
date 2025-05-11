@@ -14,7 +14,8 @@ import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
+import { faPenToSquare, faEye } from '@fortawesome/free-regular-svg-icons'
+import { ContactDetailsDrawer } from '../components/contacts/ContactDetailsDrawer'
 
 const filterFields: FilterField[] = [
   { key: 'email', label: 'Email', type: 'string' as const },
@@ -74,6 +75,9 @@ export function ContactsPage() {
   const [allContacts, setAllContacts] = React.useState<Contact[]>([])
   // Track cursor state internally instead of in URL
   const [currentCursor, setCurrentCursor] = React.useState<string | undefined>(undefined)
+  // State for contact details drawer
+  const [selectedContact, setSelectedContact] = React.useState<Contact | undefined>(undefined)
+  const [detailsDrawerVisible, setDetailsDrawerVisible] = React.useState(false)
 
   // Fetch lists for the current workspace
   const { data: listsData } = useQuery({
@@ -232,6 +236,28 @@ export function ContactsPage() {
     queryClient,
     workspaceId
   ])
+
+  // Show contact details drawer
+  const showContactDetails = (contact: Contact) => {
+    setSelectedContact(contact)
+    setDetailsDrawerVisible(true)
+  }
+
+  // Close contact details drawer
+  const closeContactDetails = () => {
+    setDetailsDrawerVisible(false)
+  }
+
+  // Handle contact updates from the drawer
+  const handleContactUpdated = (updatedContact: Contact) => {
+    // Update the selected contact
+    setSelectedContact(updatedContact)
+
+    // Update the contact in the contacts list
+    setAllContacts((prevContacts) =>
+      prevContacts.map((c) => (c.email === updatedContact.email ? updatedContact : c))
+    )
+  }
 
   const columns: ColumnsType<Contact> = [
     {
@@ -494,15 +520,23 @@ export function ContactsPage() {
         className: '!bg-white'
       }),
       render: (_: unknown, record: Contact) => (
-        <ContactUpsertDrawer
-          workspaceId={workspaceId}
-          contact={record}
-          buttonProps={{
-            type: 'text',
-            buttonContent: <FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />,
-            size: 'small'
-          }}
-        />
+        <Space size="small">
+          <Button
+            type="text"
+            icon={<FontAwesomeIcon icon={faEye} />}
+            onClick={() => showContactDetails(record)}
+            title="View Contact Details"
+          />
+          <ContactUpsertDrawer
+            workspaceId={workspaceId}
+            contact={record}
+            onSuccess={() => refetch()}
+            buttonProps={{
+              icon: <FontAwesomeIcon icon={faPenToSquare} />,
+              type: 'text'
+            }}
+          />
+        </Space>
       )
     }
   ].filter((col) => !col.hidden)
@@ -562,6 +596,15 @@ export function ContactsPage() {
           </Button>
         </div>
       )}
+
+      <ContactDetailsDrawer
+        workspaceId={workspaceId}
+        contact={selectedContact}
+        visible={detailsDrawerVisible}
+        onClose={closeContactDetails}
+        lists={listsData?.lists || []}
+        onContactUpdated={handleContactUpdated}
+      />
     </div>
   )
 }
