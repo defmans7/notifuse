@@ -108,6 +108,21 @@ func (mr *MockContactServiceMockRecorder) GetContacts(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContacts", reflect.TypeOf((*MockContactService)(nil).GetContacts), arg0, arg1)
 }
 
+// GetNotificationCenter mocks base method.
+func (m *MockContactService) GetNotificationCenter(arg0 context.Context, arg1, arg2, arg3 string) (*domain.NotificationCenterResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNotificationCenter", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*domain.NotificationCenterResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNotificationCenter indicates an expected call of GetNotificationCenter.
+func (mr *MockContactServiceMockRecorder) GetNotificationCenter(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationCenter", reflect.TypeOf((*MockContactService)(nil).GetNotificationCenter), arg0, arg1, arg2, arg3)
+}
+
 // UpsertContact mocks base method.
 func (m *MockContactService) UpsertContact(arg0 context.Context, arg1 string, arg2 *domain.Contact) domain.UpsertContactOperation {
 	m.ctrl.T.Helper()

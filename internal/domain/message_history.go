@@ -98,7 +98,7 @@ type MessageHistoryRepository interface {
 	Get(ctx context.Context, workspaceID, id string) (*MessageHistory, error)
 
 	// GetByContact retrieves message history for a specific contact
-	GetByContact(ctx context.Context, workspaceID, contactID string, limit, offset int) ([]*MessageHistory, int, error)
+	GetByContact(ctx context.Context, workspaceID, contactEmail string, limit, offset int) ([]*MessageHistory, int, error)
 
 	// GetByBroadcast retrieves message history for a specific broadcast
 	GetByBroadcast(ctx context.Context, workspaceID, broadcastID string, limit, offset int) ([]*MessageHistory, int, error)

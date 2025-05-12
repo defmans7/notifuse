@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/asaskevich/govalidator"
 	"github.com/tidwall/gjson"
 )
@@ -568,6 +569,9 @@ type ContactService interface {
 
 	// UpsertContact creates a new contact or updates an existing one
 	UpsertContact(ctx context.Context, workspaceID string, contact *Contact) UpsertContactOperation
+
+	// GetNotificationCenter returns public lists and notifications for a contact
+	GetNotificationCenter(ctx context.Context, email string, workspaceID string, emailHMAC string) (*NotificationCenterResponse, error)
 }
 
 // ContactRepository is the interface for contact operations
@@ -1007,4 +1011,24 @@ type ContactWithList struct {
 	Contact  *Contact `json:"contact"`   // The contact
 	ListID   string   `json:"list_id"`   // ID of the list that the contact belongs to
 	ListName string   `json:"list_name"` // Name of the list that the contact belongs to
+}
+
+// NotificationCenterResponse contains the response data for the notification center
+type NotificationCenterResponse struct {
+	Contact                   *Contact                     `json:"contact"`
+	PublicLists               []*List                      `json:"public_lists"`
+	ContactLists              []*ContactList               `json:"contact_lists"`
+	PublicTransactionalNotifs []*TransactionalNotification `json:"public_transactional_notifications"`
+}
+
+// VerifyEmailHMAC verifies if the provided HMAC for an email is valid
+func VerifyEmailHMAC(email string, providedHMAC string, secretKey string) bool {
+	// Use the crypto package to verify the HMAC
+	computedHMAC := ComputeEmailHMAC(email, secretKey)
+	return computedHMAC == providedHMAC
+}
+
+// ComputeEmailHMAC computes an HMAC for an email address using the workspace secret key
+func ComputeEmailHMAC(email string, secretKey string) string {
+	return crypto.ComputeHMAC256([]byte(email), secretKey)
 }

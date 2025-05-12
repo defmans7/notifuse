@@ -27,34 +27,17 @@ func NewContactRepository(workspaceRepo domain.WorkspaceRepository) domain.Conta
 }
 
 func (r *contactRepository) GetContactByEmail(ctx context.Context, workspaceID, email string) (*domain.Contact, error) {
-	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
-	}
-
-	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	query, args, err := psql.Select("c.*").
-		From("contacts c").
-		Where(sq.Eq{"c.email": email}).
-		ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build query: %w", err)
-	}
-
-	row := db.QueryRowContext(ctx, query, args...)
-
-	contact, err := domain.ScanContact(row)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("contact not found")
-		}
-		return nil, fmt.Errorf("failed to get contact: %w", err)
-	}
-
-	return contact, nil
+	filter := sq.Eq{"c.email": email}
+	return r.fetchContact(ctx, workspaceID, filter)
 }
 
 func (r *contactRepository) GetContactByExternalID(ctx context.Context, externalID, workspaceID string) (*domain.Contact, error) {
+	filter := sq.Eq{"c.external_id": externalID}
+	return r.fetchContact(ctx, workspaceID, filter)
+}
+
+// fetchContact is a private helper method to fetch a single contact by a given filter
+func (r *contactRepository) fetchContact(ctx context.Context, workspaceID string, filter sq.Sqlizer) (*domain.Contact, error) {
 	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
@@ -63,7 +46,7 @@ func (r *contactRepository) GetContactByExternalID(ctx context.Context, external
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	query, args, err := psql.Select("c.*").
 		From("contacts c").
-		Where(sq.Eq{"c.external_id": externalID}).
+		Where(filter).
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
@@ -77,6 +60,48 @@ func (r *contactRepository) GetContactByExternalID(ctx context.Context, external
 			return nil, fmt.Errorf("contact not found")
 		}
 		return nil, fmt.Errorf("failed to get contact: %w", err)
+	}
+
+	// Fetch contact lists for this contact
+	listsQuery, listsArgs, err := psql.Select("cl.list_id", "cl.status", "cl.created_at", "cl.updated_at", "cl.deleted_at", "l.name as list_name").
+		From("contact_lists cl").
+		Join("lists l ON cl.list_id = l.id").
+		Where(sq.Eq{"cl.email": contact.Email}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build contact lists query: %w", err)
+	}
+
+	rows, err := db.QueryContext(ctx, listsQuery, listsArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch contact lists: %w", err)
+	}
+	defer rows.Close()
+
+	contact.ContactLists = []*domain.ContactList{}
+	for rows.Next() {
+		var contactList domain.ContactList
+		var deletedAt *time.Time
+		var listName string
+		err := rows.Scan(
+			&contactList.ListID,
+			&contactList.Status,
+			&contactList.CreatedAt,
+			&contactList.UpdatedAt,
+			&deletedAt,
+			&listName,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan contact list: %w", err)
+		}
+		contactList.Email = contact.Email
+		contactList.DeletedAt = deletedAt
+		contactList.ListName = listName
+		contact.ContactLists = append(contact.ContactLists, &contactList)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating contact lists: %w", err)
 	}
 
 	return contact, nil
@@ -203,10 +228,11 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		}
 
 		// Query for contact lists using squirrel
-		listQueryBuilder := psql.Select("email, list_id, status, created_at, updated_at").
-			From("contact_lists").
-			Where(sq.Eq{"email": emails}).  // squirrel handles IN clauses automatically
-			Where(sq.Eq{"deleted_at": nil}) // Filter out deleted contact_list entries
+		listQueryBuilder := psql.Select("cl.email, cl.list_id, cl.status, cl.created_at, cl.updated_at, l.name as list_name").
+			From("contact_lists cl").
+			Join("lists l ON cl.list_id = l.id").
+			Where(sq.Eq{"cl.email": emails}).  // squirrel handles IN clauses automatically
+			Where(sq.Eq{"cl.deleted_at": nil}) // Filter out deleted contact_list entries
 
 		listQuery, listArgs, err := listQueryBuilder.ToSql()
 		if err != nil {
@@ -230,11 +256,13 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		for listRows.Next() {
 			var email string
 			var list domain.ContactList
-			err := listRows.Scan(&email, &list.ListID, &list.Status, &list.CreatedAt, &list.UpdatedAt)
+			var listName string
+			err := listRows.Scan(&email, &list.ListID, &list.Status, &list.CreatedAt, &list.UpdatedAt, &listName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to scan contact list: %w", err)
 			}
 
+			list.ListName = listName
 			if contact, ok := contactMap[email]; ok {
 				contact.ContactLists = append(contact.ContactLists, &list)
 			}

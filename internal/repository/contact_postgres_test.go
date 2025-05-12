@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	sq "github.com/Masterminds/squirrel"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,9 +75,23 @@ func TestGetContactByEmail(t *testing.T) {
 		WithArgs(email).
 		WillReturnRows(rows)
 
+	// Set up expectations for contact lists query
+	listRows := sqlmock.NewRows([]string{
+		"list_id", "status", "created_at", "updated_at", "deleted_at", "list_name",
+	}).AddRow(
+		"list1", "active", now, now, nil, "Marketing List",
+	)
+
+	mock.ExpectQuery(`SELECT cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, cl\.deleted_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email = \$1`).
+		WithArgs(email).
+		WillReturnRows(listRows)
+
 	contact, err := repo.GetContactByEmail(context.Background(), "workspace123", email)
 	require.NoError(t, err)
 	assert.Equal(t, email, contact.Email)
+	assert.Len(t, contact.ContactLists, 1)
+	assert.Equal(t, "list1", contact.ContactLists[0].ListID)
+	assert.Equal(t, "Marketing List", contact.ContactLists[0].ListName)
 
 	// Test case 2: Contact not found
 	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
@@ -101,6 +116,7 @@ func TestGetContactByExternalID(t *testing.T) {
 	repo := NewContactRepository(workspaceRepo)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	externalID := "ext123"
+	email := "test@example.com"
 
 	// Test case 1: Contact found
 	rows := sqlmock.NewRows([]string{
@@ -115,7 +131,7 @@ func TestGetContactByExternalID(t *testing.T) {
 		"created_at", "updated_at",
 	}).
 		AddRow(
-			"test@example.com", externalID, "Europe/Paris", "en-US",
+			email, externalID, "Europe/Paris", "en-US",
 			"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
 			"USA", "12345", "CA", "Developer",
 			100.50, 5, now,
@@ -130,8 +146,24 @@ func TestGetContactByExternalID(t *testing.T) {
 		WithArgs(externalID).
 		WillReturnRows(rows)
 
-	_, err := repo.GetContactByExternalID(context.Background(), externalID, "workspace123")
+	// Set up expectations for contact lists query
+	listRows := sqlmock.NewRows([]string{
+		"list_id", "status", "created_at", "updated_at", "deleted_at", "list_name",
+	}).AddRow(
+		"list1", "active", now, now, nil, "Marketing List",
+	)
+
+	mock.ExpectQuery(`SELECT cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, cl\.deleted_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email = \$1`).
+		WithArgs(email).
+		WillReturnRows(listRows)
+
+	contact, err := repo.GetContactByExternalID(context.Background(), externalID, "workspace123")
 	require.NoError(t, err)
+	assert.Equal(t, email, contact.Email)
+	assert.Equal(t, externalID, contact.ExternalID.String)
+	assert.Len(t, contact.ContactLists, 1)
+	assert.Equal(t, "list1", contact.ContactLists[0].ListID)
+	assert.Equal(t, "Marketing List", contact.ContactLists[0].ListName)
 
 	// Test case 2: Contact not found
 	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.external_id = \$1`).
@@ -145,6 +177,7 @@ func TestGetContactByExternalID(t *testing.T) {
 	// Test: get contact by external ID successful case
 	t.Run("successful_case", func(t *testing.T) {
 		externalID := "e-123"
+		email := "test@example.com"
 
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
@@ -158,7 +191,7 @@ func TestGetContactByExternalID(t *testing.T) {
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 			"created_at", "updated_at",
 		}).AddRow(
-			"test@example.com", "e-123", "Europe/Paris", "en-US", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{},
+			email, "e-123", "Europe/Paris", "en-US", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{},
 			"", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{},
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			time.Now(), time.Now(),
@@ -168,15 +201,135 @@ func TestGetContactByExternalID(t *testing.T) {
 			WithArgs(externalID).
 			WillReturnRows(rows)
 
+		// Set up expectations for contact lists query (empty result)
+		listRows := sqlmock.NewRows([]string{
+			"list_id", "status", "created_at", "updated_at", "deleted_at", "list_name",
+		})
+
+		mock.ExpectQuery(`SELECT cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, cl\.deleted_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email = \$1`).
+			WithArgs(email).
+			WillReturnRows(listRows)
+
 		// Act
 		contact, err := repo.GetContactByExternalID(context.Background(), externalID, "workspace123")
 
 		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, contact)
-		assert.Equal(t, "test@example.com", contact.Email)
+		assert.Equal(t, email, contact.Email)
 		assert.Equal(t, "e-123", contact.ExternalID.String)
+		assert.Empty(t, contact.ContactLists)
 		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+// Add a test for the new fetchContact method
+func TestFetchContact(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(db, nil).AnyTimes()
+
+	repo := NewContactRepository(workspaceRepo)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	email := "test@example.com"
+
+	t.Run("with custom filter", func(t *testing.T) {
+		// Test with a custom filter (phone number)
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language",
+			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+			"country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "ext123", "Europe/Paris", "en-US",
+				"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+				"USA", "12345", "CA", "Developer",
+				100.50, 5, now,
+				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
+				42.0, 43.0, 44.0, 45.0, 46.0,
+				now, now, now, now, now,
+				[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
+				now, now,
+			)
+
+		phone := "+1234567890"
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.phone = \$1`).
+			WithArgs(phone).
+			WillReturnRows(rows)
+
+		// Set up expectations for contact lists query
+		listRows := sqlmock.NewRows([]string{
+			"list_id", "status", "created_at", "updated_at", "deleted_at", "list_name",
+		}).AddRow(
+			"list1", "active", now, now, nil, "Marketing List",
+		).AddRow(
+			"list2", "active", now, now, nil, "Newsletter",
+		)
+
+		mock.ExpectQuery(`SELECT cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, cl\.deleted_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email = \$1`).
+			WithArgs(email).
+			WillReturnRows(listRows)
+
+		// Use the private method directly for testing
+		contact, err := repo.(*contactRepository).fetchContact(context.Background(), "workspace123", sq.Eq{"c.phone": phone})
+		require.NoError(t, err)
+		assert.Equal(t, email, contact.Email)
+		assert.Equal(t, phone, contact.Phone.String)
+		assert.Len(t, contact.ContactLists, 2)
+		assert.Equal(t, "list1", contact.ContactLists[0].ListID)
+		assert.Equal(t, "Marketing List", contact.ContactLists[0].ListName)
+		assert.Equal(t, "list2", contact.ContactLists[1].ListID)
+		assert.Equal(t, "Newsletter", contact.ContactLists[1].ListName)
+	})
+
+	t.Run("with error on contact lists query", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language",
+			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+			"country", "postcode", "state", "job_title",
+			"lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+			"created_at", "updated_at",
+		}).
+			AddRow(
+				email, "ext123", "Europe/Paris", "en-US",
+				"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+				"USA", "12345", "CA", "Developer",
+				100.50, 5, now,
+				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
+				42.0, 43.0, 44.0, 45.0, 46.0,
+				now, now, now, now, now,
+				[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
+				now, now,
+			)
+
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		// Set up expectations for contact lists query with error
+		mock.ExpectQuery(`SELECT cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, cl\.deleted_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email = \$1`).
+			WithArgs(email).
+			WillReturnError(errors.New("database error"))
+
+		// Use GetContactByEmail which uses fetchContact internally
+		_, err := repo.GetContactByEmail(context.Background(), "workspace123", email)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to fetch contact lists")
 	})
 }
 
@@ -224,12 +377,12 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the contact lists query
 		listRows := sqlmock.NewRows([]string{
-			"email", "list_id", "status", "created_at", "updated_at",
+			"email", "list_id", "status", "created_at", "updated_at", "list_name",
 		}).AddRow(
-			"test@example.com", "list1", "active", time.Now(), time.Now(),
+			"test@example.com", "list1", "active", time.Now(), time.Now(), "Marketing List",
 		)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
+		mock.ExpectQuery(`SELECT cl\.email, cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email IN \(\$1\) AND cl\.deleted_at IS NULL`).
 			WithArgs("test@example.com").
 			WillReturnRows(listRows)
 
@@ -246,6 +399,7 @@ func TestGetContacts(t *testing.T) {
 		assert.Len(t, resp.Contacts[0].ContactLists, 1)
 		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
 		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
+		assert.Equal(t, "Marketing List", resp.Contacts[0].ContactLists[0].ListName)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -292,12 +446,12 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the contact lists query
 		listRows := sqlmock.NewRows([]string{
-			"email", "list_id", "status", "created_at", "updated_at",
+			"email", "list_id", "status", "created_at", "updated_at", "list_name",
 		}).AddRow(
-			"test@example.com", "list1", "active", time.Now(), time.Now(),
+			"test@example.com", "list1", "active", time.Now(), time.Now(), "Marketing List",
 		)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
+		mock.ExpectQuery(`SELECT cl\.email, cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email IN \(\$1\) AND cl\.deleted_at IS NULL`).
 			WithArgs("test@example.com").
 			WillReturnRows(listRows)
 
@@ -317,6 +471,7 @@ func TestGetContacts(t *testing.T) {
 		assert.Len(t, resp.Contacts[0].ContactLists, 1)
 		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
 		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
+		assert.Equal(t, "Marketing List", resp.Contacts[0].ContactLists[0].ListName)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -388,16 +543,16 @@ func TestGetContacts(t *testing.T) {
 
 		// Create the expected SQL pattern for the IN query with multiple params
 		// Use this simpler pattern to match the actual SQL generated
-		sqlPattern := `SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10\)`
+		sqlPattern := `SELECT cl\.email, cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email IN \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10\) AND cl\.deleted_at IS NULL`
 
 		listRows := sqlmock.NewRows([]string{
-			"email", "list_id", "status", "created_at", "updated_at",
+			"email", "list_id", "status", "created_at", "updated_at", "list_name",
 		})
 
 		// Add contact list records for each email
 		for _, email := range emails {
 			listRows.AddRow(
-				email, "list1", "active", now, now,
+				email, "list1", "active", now, now, "Marketing List",
 			)
 		}
 
@@ -602,12 +757,12 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the contact lists query
 		listRows := sqlmock.NewRows([]string{
-			"email", "list_id", "status", "created_at", "updated_at",
+			"email", "list_id", "status", "created_at", "updated_at", "list_name",
 		}).AddRow(
-			"test@example.com", "list1", "active", time.Now(), time.Now(),
+			"test@example.com", "list1", "active", time.Now(), time.Now(), "Marketing List",
 		)
 
-		mock.ExpectQuery(`SELECT email, list_id, status, created_at, updated_at FROM contact_lists WHERE email IN \(\$1\)`).
+		mock.ExpectQuery(`SELECT cl\.email, cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email IN \(\$1\) AND cl\.deleted_at IS NULL`).
 			WithArgs("test@example.com").
 			WillReturnRows(listRows)
 
@@ -630,6 +785,7 @@ func TestGetContacts(t *testing.T) {
 		assert.Len(t, resp.Contacts[0].ContactLists, 1)
 		assert.Equal(t, "list1", resp.Contacts[0].ContactLists[0].ListID)
 		assert.Equal(t, domain.ContactListStatusActive, resp.Contacts[0].ContactLists[0].Status)
+		assert.Equal(t, "Marketing List", resp.Contacts[0].ContactLists[0].ListName)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -662,183 +818,5 @@ func TestGetContacts(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to execute query")
 		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle contact scan errors", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := setupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
-
-		repo := NewContactRepository(workspaceRepo)
-
-		// Create a row with invalid data that will cause scan to fail
-		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
-			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
-			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
-			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
-			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
-			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", "not-a-number", 5, time.Now(), // lifetime_value as a string to cause scan error
-			"custom1", "custom2", "custom3", "custom4", "custom5",
-			1.0, 2.0, 3.0, 4.0, 5.0,
-			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			time.Now(), time.Now(),
-		)
-
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
-			WithArgs().
-			WillReturnRows(rows)
-
-		req := &domain.GetContactsRequest{
-			WorkspaceID:      "workspace123",
-			Limit:            10,
-			WithContactLists: false,
-		}
-
-		_, err := repo.GetContacts(context.Background(), req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to scan contact")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle error in rows iteration", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := setupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
-
-		repo := NewContactRepository(workspaceRepo)
-
-		// Create rows that will return an error during iteration
-		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
-			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
-			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
-			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
-			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at",
-		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
-			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
-			"custom1", "custom2", "custom3", "custom4", "custom5",
-			1.0, 2.0, 3.0, 4.0, 5.0,
-			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
-			time.Now(), time.Now(),
-		).RowError(0, errors.New("row error"))
-
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
-			WithArgs().
-			WillReturnRows(rows)
-
-		req := &domain.GetContactsRequest{
-			WorkspaceID:      "workspace123",
-			Limit:            10,
-			WithContactLists: false,
-		}
-
-		_, err := repo.GetContacts(context.Background(), req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "error iterating over rows")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestDeleteContact(t *testing.T) {
-	db, mock, cleanup := setupMockDB(t)
-	defer cleanup()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(db, nil).AnyTimes()
-
-	repo := NewContactRepository(workspaceRepo)
-	email := "test@example.com"
-
-	t.Run("should delete existing contact", func(t *testing.T) {
-		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
-			WithArgs(email).
-			WillReturnResult(sqlmock.NewResult(0, 1))
-
-		err := repo.DeleteContact(context.Background(), email, "workspace123")
-		require.NoError(t, err)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle non-existent contact", func(t *testing.T) {
-		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
-			WithArgs("nonexistent@example.com").
-			WillReturnResult(sqlmock.NewResult(0, 0))
-
-		err := repo.DeleteContact(context.Background(), "nonexistent@example.com", "workspace123")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "contact not found")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle database execution errors", func(t *testing.T) {
-		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
-			WithArgs(email).
-			WillReturnError(errors.New("database error"))
-
-		err := repo.DeleteContact(context.Background(), email, "workspace123")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to delete contact")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle rows affected errors", func(t *testing.T) {
-		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
-			WithArgs(email).
-			WillReturnResult(sqlmock.NewErrorResult(errors.New("rows affected error")))
-
-		err := repo.DeleteContact(context.Background(), email, "workspace123")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get affected rows")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("should handle workspace connection errors", func(t *testing.T) {
-		// Create a new mock workspace repository without a DB
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(nil, errors.New("failed to get workspace connection")).AnyTimes()
-
-		repo := NewContactRepository(workspaceRepo)
-
-		err := repo.DeleteContact(context.Background(), email, "workspace123")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get workspace connection")
 	})
 }

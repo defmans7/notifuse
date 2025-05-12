@@ -32,6 +32,7 @@ const (
 type ContactList struct {
 	Email     string            `json:"email"`
 	ListID    string            `json:"list_id"`
+	ListName  string            `json:"list_name"`
 	Status    ContactListStatus `json:"status"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`

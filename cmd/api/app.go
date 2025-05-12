@@ -325,6 +325,12 @@ func (a *App) InitServices() error {
 		a.contactRepo,
 		a.workspaceRepo,
 		a.authService,
+		a.listService,
+		a.listRepo,
+		a.contactListService,
+		a.contactListRepo,
+		a.transactionalNotificationService,
+		a.transactionalNotificationRepo,
 		a.logger,
 	)
 
