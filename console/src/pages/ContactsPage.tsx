@@ -84,9 +84,6 @@ export function ContactsPage() {
   const [allContacts, setAllContacts] = React.useState<Contact[]>([])
   // Track cursor state internally instead of in URL
   const [currentCursor, setCurrentCursor] = React.useState<string | undefined>(undefined)
-  // State for contact details drawer
-  const [selectedContact, setSelectedContact] = React.useState<Contact | undefined>(undefined)
-  const [detailsDrawerVisible, setDetailsDrawerVisible] = React.useState(false)
 
   // Fetch lists for the current workspace
   const { data: listsData } = useQuery({
@@ -246,23 +243,9 @@ export function ContactsPage() {
     workspaceId
   ])
 
-  // Show contact details drawer
-  const showContactDetails = (contact: Contact) => {
-    setSelectedContact(contact)
-    setDetailsDrawerVisible(true)
-  }
-
-  // Close contact details drawer
-  const closeContactDetails = () => {
-    setDetailsDrawerVisible(false)
-  }
-
   // Handle contact updates from the drawer
   const handleContactUpdated = (updatedContact: Contact) => {
-    // Update the selected contact
-    setSelectedContact(updatedContact)
-
-    // Update the contact in the contacts list
+    // Update the contact in the contacts list only
     setAllContacts((prevContacts) =>
       prevContacts.map((c) => (c.email === updatedContact.email ? updatedContact : c))
     )
@@ -597,11 +580,17 @@ export function ContactsPage() {
       }),
       render: (_: unknown, record: Contact) => (
         <Space size="small">
-          <Button
-            type="text"
-            icon={<FontAwesomeIcon icon={faEye} />}
-            onClick={() => showContactDetails(record)}
-            title="View Contact Details"
+          <ContactDetailsDrawer
+            workspaceId={workspaceId}
+            contact={record}
+            lists={listsData?.lists || []}
+            onContactUpdated={handleContactUpdated}
+            workspaceTimezone={workspaceTimezone}
+            key={record.email}
+            buttonProps={{
+              icon: <FontAwesomeIcon icon={faEye} />,
+              type: 'text'
+            }}
           />
           <ContactUpsertDrawer
             workspaceId={workspaceId}
@@ -672,17 +661,6 @@ export function ContactsPage() {
           </Button>
         </div>
       )}
-
-      <ContactDetailsDrawer
-        workspaceId={workspaceId}
-        contact={selectedContact}
-        visible={detailsDrawerVisible}
-        onClose={closeContactDetails}
-        lists={listsData?.lists || []}
-        onContactUpdated={handleContactUpdated}
-        workspaceTimezone={workspaceTimezone}
-        key={selectedContact?.email}
-      />
     </div>
   )
 }

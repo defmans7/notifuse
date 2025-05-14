@@ -186,20 +186,21 @@ func TestErrContactListNotFound_Error(t *testing.T) {
 	assert.Equal(t, "test error message", err.Error())
 }
 
-func TestAddContactToListRequest_Validate(t *testing.T) {
+func TestSubscribeToListsRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name        string
-		request     domain.AddContactToListRequest
+		request     domain.SubscribeToListsRequest
 		wantErr     bool
 		wantContact *domain.ContactList
 	}{
 		{
 			name: "valid request",
-			request: domain.AddContactToListRequest{
+			request: domain.SubscribeToListsRequest{
 				WorkspaceID: "workspace123",
-				Email:       "test@example.com",
-				ListID:      "list123",
-				Status:      "active",
+				Contact: domain.Contact{
+					Email: "test@example.com",
+				},
+				ListIDs: []string{"list123"},
 			},
 			wantErr: false,
 			wantContact: &domain.ContactList{
@@ -210,48 +211,51 @@ func TestAddContactToListRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "missing workspace ID",
-			request: domain.AddContactToListRequest{
-				Email:  "test@example.com",
-				ListID: "list123",
-				Status: "active",
+			request: domain.SubscribeToListsRequest{
+				Contact: domain.Contact{
+					Email: "test@example.com",
+				},
+				ListIDs: []string{"list123"},
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing email",
-			request: domain.AddContactToListRequest{
+			request: domain.SubscribeToListsRequest{
 				WorkspaceID: "workspace123",
-				ListID:      "list123",
-				Status:      "active",
+				ListIDs:     []string{"list123"},
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid email",
-			request: domain.AddContactToListRequest{
+			request: domain.SubscribeToListsRequest{
 				WorkspaceID: "workspace123",
-				Email:       "not-an-email",
-				ListID:      "list123",
-				Status:      "active",
+				Contact: domain.Contact{
+					Email: "not-an-email",
+				},
+				ListIDs: []string{"list123"},
 			},
 			wantErr: true,
 		},
 		{
-			name: "missing list ID",
-			request: domain.AddContactToListRequest{
+			name: "missing list IDs",
+			request: domain.SubscribeToListsRequest{
 				WorkspaceID: "workspace123",
-				Email:       "test@example.com",
-				Status:      "active",
+				Contact: domain.Contact{
+					Email: "test@example.com",
+				},
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid status",
-			request: domain.AddContactToListRequest{
+			name: "empty list IDs",
+			request: domain.SubscribeToListsRequest{
 				WorkspaceID: "workspace123",
-				Email:       "test@example.com",
-				ListID:      "list123",
-				Status:      "invalid",
+				Contact: domain.Contact{
+					Email: "test@example.com",
+				},
+				ListIDs: []string{},
 			},
 			wantErr: true,
 		},
@@ -259,17 +263,11 @@ func TestAddContactToListRequest_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			contact, workspaceID, err := tt.request.Validate()
+			err := tt.request.Validate()
 			if tt.wantErr {
 				assert.Error(t, err)
-				assert.Empty(t, workspaceID)
-				assert.Nil(t, contact)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.request.WorkspaceID, workspaceID)
-				assert.Equal(t, tt.wantContact.Email, contact.Email)
-				assert.Equal(t, tt.wantContact.ListID, contact.ListID)
-				assert.Equal(t, tt.wantContact.Status, contact.Status)
 			}
 		})
 	}

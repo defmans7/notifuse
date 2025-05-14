@@ -282,7 +282,13 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(nil).Times(4)
 
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
-		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
+		mockListService.EXPECT().SubscribeToLists(ctx, &domain.SubscribeToListsRequest{
+			WorkspaceID: workspaceID,
+			Contact: domain.Contact{
+				Email: expectedUser.Email,
+			},
+			ListIDs: []string{"test"},
+		}, true).Return(nil)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
 			Endpoint:  "https://s3.amazonaws.com",
@@ -438,7 +444,13 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(errors.New("template creation failed")).AnyTimes()
 
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
-		mockContactListService.EXPECT().AddContactToList(ctx, workspaceID, gomock.Any()).Return(nil)
+		mockListService.EXPECT().SubscribeToLists(ctx, &domain.SubscribeToListsRequest{
+			WorkspaceID: workspaceID,
+			Contact: domain.Contact{
+				Email: expectedUser.Email,
+			},
+			ListIDs: []string{"test"},
+		}, true).Return(nil)
 
 		workspace, err := service.CreateWorkspace(ctx, workspaceID, "Test Workspace", "https://example.com", "https://example.com/logo.png", "https://example.com/cover.png", "UTC", domain.FileManagerSettings{
 			Endpoint:  "https://s3.amazonaws.com",

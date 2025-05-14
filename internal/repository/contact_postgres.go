@@ -57,7 +57,7 @@ func (r *contactRepository) fetchContact(ctx context.Context, workspaceID string
 	contact, err := domain.ScanContact(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("contact not found")
+			return nil, domain.ErrContactNotFound
 		}
 		return nil, fmt.Errorf("failed to get contact: %w", err)
 	}

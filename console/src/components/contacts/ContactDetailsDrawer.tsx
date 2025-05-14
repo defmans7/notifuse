@@ -44,11 +44,24 @@ const { Title, Text } = Typography
 interface ContactDetailsDrawerProps {
   workspaceId: string
   contact?: Contact
-  visible: boolean
-  onClose: () => void
+  visible?: boolean
+  onClose?: () => void
   lists?: List[]
   onContactUpdated?: (updatedContact: Contact) => void
   workspaceTimezone?: string
+  buttonProps?: {
+    type?: 'primary' | 'default' | 'dashed' | 'link' | 'text'
+    icon?: React.ReactNode
+    buttonContent?: React.ReactNode
+    className?: string
+    style?: React.CSSProperties
+    size?: 'large' | 'middle' | 'small'
+    disabled?: boolean
+    loading?: boolean
+    danger?: boolean
+    ghost?: boolean
+    block?: boolean
+  }
 }
 
 // Add this type definition for the lists with name
@@ -62,13 +75,34 @@ interface ContactListWithName {
 export function ContactDetailsDrawer({
   workspaceId,
   contact,
-  visible,
-  onClose,
+  visible: externalVisible,
+  onClose: externalOnClose,
   lists = [],
   onContactUpdated,
-  workspaceTimezone = 'UTC'
+  workspaceTimezone = 'UTC',
+  buttonProps
 }: ContactDetailsDrawerProps) {
   if (!contact) return null
+
+  // Internal drawer visibility state
+  const [internalVisible, setInternalVisible] = React.useState(false)
+
+  // Determine if drawer is visible (either controlled externally or internally)
+  const isVisible = externalVisible !== undefined ? externalVisible : internalVisible
+
+  // Handle drawer close
+  const handleClose = () => {
+    if (externalOnClose) {
+      externalOnClose()
+    } else {
+      setInternalVisible(false)
+    }
+  }
+
+  // Handle drawer open
+  const handleOpen = () => {
+    setInternalVisible(true)
+  }
 
   const queryClient = useQueryClient()
   const [statusModalVisible, setStatusModalVisible] = React.useState(false)
@@ -98,7 +132,7 @@ export function ContactDetailsDrawer({
       setDisplayContact(contact)
       contactRef.current = contact.email
     }
-  }, [contact, visible, contact?.email])
+  }, [contact, isVisible, contact?.email])
 
   // Load message history for this contact
   const { data: messageHistory, isLoading: loadingMessages } = useQuery({
@@ -108,7 +142,7 @@ export function ContactDetailsDrawer({
         contact_email: contact.email,
         limit: 50
       }),
-    enabled: visible && !!contact
+    enabled: isVisible && !!contact
   })
 
   // Fetch the single contact to ensure we have the latest data
@@ -123,7 +157,7 @@ export function ContactDetailsDrawer({
       })
       return response.contacts[0]
     },
-    enabled: visible && !!contact,
+    enabled: isVisible && !!contact,
     refetchOnWindowFocus: true
   })
 
@@ -139,10 +173,10 @@ export function ContactDetailsDrawer({
 
   // When the drawer is closed, reset the contact reference to ensure fresh load on next open
   React.useEffect(() => {
-    if (!visible) {
+    if (!isVisible) {
       contactRef.current = null
     }
-  }, [visible])
+  }, [isVisible])
 
   // Mutation for updating subscription status
   const updateStatusMutation = useMutation({
@@ -600,14 +634,406 @@ export function ContactDetailsDrawer({
     { label: 'Blacklisted', value: 'blacklisted' }
   ]
 
+  // If buttonProps is provided, render a button that opens the drawer
+  if (buttonProps) {
+    const {
+      type = 'default',
+      icon,
+      buttonContent,
+      className,
+      style,
+      size,
+      disabled,
+      loading,
+      danger,
+      ghost,
+      block
+    } = buttonProps
+
+    return (
+      <>
+        <Button
+          type={type}
+          icon={icon}
+          className={className}
+          style={style}
+          size={size}
+          disabled={disabled}
+          loading={loading}
+          danger={danger}
+          ghost={ghost}
+          block={block}
+          onClick={handleOpen}
+        >
+          {buttonContent}
+        </Button>
+
+        <Drawer
+          title="Contact Details"
+          width="90%"
+          placement="right"
+          className="drawer-body-no-padding"
+          onClose={handleClose}
+          open={internalVisible}
+          extra={
+            <ContactUpsertDrawer
+              workspaceId={workspaceId}
+              contact={displayContact}
+              onSuccess={handleContactUpdated}
+              buttonProps={{
+                icon: <FontAwesomeIcon icon={faPenToSquare} />,
+                type: 'primary',
+                ghost: true,
+                buttonContent: 'Update'
+              }}
+            />
+          }
+        >
+          <div className="flex h-full">
+            {/* Left column - Contact Details (1/4 width) */}
+            <div className="w-1/3 bg-gray-50 overflow-y-auto h-full">
+              {/* Contact info at the top */}
+              <div className="p-6 pb-4 border-b border-gray-200 flex flex-col items-center text-center">
+                <Title level={4} style={{ margin: 0, marginBottom: '4px' }}>
+                  {fullName}
+                </Title>
+                <Text type="secondary">{displayContact.email}</Text>
+              </div>
+
+              <div className="contact-details">
+                {isLoadingContact && (
+                  <div className="mb-4 p-2 bg-blue-50 text-blue-600 rounded text-center">
+                    <Spin size="small" className="mr-2" />
+                    <span>Refreshing contact data...</span>
+                  </div>
+                )}
+
+                {/* Display fields in a side-by-side layout */}
+                {contactFields
+                  .filter(
+                    (field) =>
+                      field.value !== undefined &&
+                      field.value !== null &&
+                      field.value !== '-' &&
+                      (field.show === undefined || field.show) &&
+                      // Skip email as it's already shown at the top
+                      field.key !== 'email' &&
+                      // Skip name fields as they're already shown at the top
+                      field.key !== 'first_name' &&
+                      field.key !== 'last_name' &&
+                      // Skip JSON fields as they'll be shown separately
+                      !field.key.startsWith('custom_json_')
+                  )
+                  .map((field) => (
+                    <div
+                      key={field.key}
+                      className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
+                    >
+                      <Tooltip title={`Field ID: ${field.key}`}>
+                        <span className="font-semibold text-slate-600">{field.label}</span>
+                      </Tooltip>
+                      <span>{formatValue(field.value)}</span>
+                    </div>
+                  ))}
+
+                {/* Custom JSON fields */}
+                {hasJsonFields && (
+                  <div>
+                    {jsonFields
+                      .filter((field) => field.show)
+                      .map((field) => (
+                        <div
+                          key={field.key}
+                          className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
+                        >
+                          <Tooltip title={`Field ID: ${field.key}`}>
+                            <span className="font-semibold text-slate-600">{field.label}</span>
+                          </Tooltip>
+                          {formatJson(field.value)}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right column - Message History (3/4 width) */}
+            <div className="w-2/3 p-6 overflow-y-auto h-full">
+              {/* E-commerce Stats (3-column grid) */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {/* Lifetime Value */}
+                <Tooltip
+                  title={
+                    displayContact.lifetime_value
+                      ? formatCurrency(displayContact.lifetime_value)
+                      : '$0.00'
+                  }
+                >
+                  <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                    <div className="text-sm text-gray-500 mb-2">
+                      <span className="flex items-center cursor-help">
+                        <FontAwesomeIcon icon={faMoneyBillWave} className="mr-2" />
+                        Lifetime Value
+                      </span>
+                    </div>
+                    <div className="text-2xl font-semibold">
+                      {formatAverage(displayContact.lifetime_value || 0)}
+                    </div>
+                  </div>
+                </Tooltip>
+
+                {/* Orders Count */}
+                <Tooltip title={`${formatNumber(displayContact.orders_count || 0)} orders`}>
+                  <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                    <div className="text-sm text-gray-500 mb-2">
+                      <span className="flex items-center cursor-help">
+                        <FontAwesomeIcon icon={faShoppingCart} className="mr-2" />
+                        Orders Count
+                      </span>
+                    </div>
+                    <div className="text-2xl font-semibold">
+                      {formatAverage(displayContact.orders_count || 0)}
+                    </div>
+                  </div>
+                </Tooltip>
+
+                {/* Last Order */}
+                <Tooltip
+                  title={
+                    displayContact.last_order_at
+                      ? `${dayjs(displayContact.last_order_at).format('LLLL')} in ${workspaceTimezone}`
+                      : 'No orders yet'
+                  }
+                >
+                  <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                    <div className="text-sm text-gray-500 mb-2">
+                      <span className="flex items-center cursor-help">
+                        <FontAwesomeIcon icon={faCalendar} className="mr-2" />
+                        Last Order
+                      </span>
+                    </div>
+                    <div className="text-lg font-semibold">
+                      {displayContact.last_order_at
+                        ? dayjs(displayContact.last_order_at).fromNow()
+                        : 'Never'}
+                    </div>
+                  </div>
+                </Tooltip>
+              </div>
+
+              {/* List subscriptions with action buttons */}
+              <div className="flex justify-between items-center mb-3">
+                <Title level={5} style={{ margin: 0 }}>
+                  List Subscriptions
+                </Title>
+                <Button
+                  type="primary"
+                  ghost
+                  size="small"
+                  icon={<FontAwesomeIcon icon={faPlus} />}
+                  onClick={openSubscribeModal}
+                  disabled={availableLists.length === 0}
+                >
+                  Subscribe to List
+                </Button>
+              </div>
+
+              {contactListsWithNames.length > 0 ? (
+                <Table
+                  dataSource={contactListsWithNames}
+                  rowKey={(record) => `${record.list_id}_${record.status}`}
+                  pagination={false}
+                  size="small"
+                  columns={[
+                    {
+                      title: 'Subscription list',
+                      dataIndex: 'name',
+                      key: 'name',
+                      width: '30%',
+                      render: (name: string, record: any) => (
+                        <Tooltip title={`List ID: ${record.list_id}`}>
+                          <span style={{ cursor: 'help' }}>{name}</span>
+                        </Tooltip>
+                      )
+                    },
+                    {
+                      title: 'Status',
+                      dataIndex: 'status',
+                      key: 'status',
+                      width: '20%',
+                      render: (status: string) => <Tag color={getStatusColor(status)}>{status}</Tag>
+                    },
+                    {
+                      title: 'Subscribed on',
+                      dataIndex: 'created_at',
+                      key: 'created_at',
+                      width: '30%',
+                      render: (date: string) => {
+                        if (!date) return '-'
+
+                        return (
+                          <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
+                            <span>{dayjs(date).fromNow()}</span>
+                          </Tooltip>
+                        )
+                      }
+                    },
+                    {
+                      title: '',
+                      key: 'actions',
+                      width: '20%',
+                      render: (_: any, record: ContactListWithName) => (
+                        <Button
+                          size="small"
+                          onClick={() => openStatusModal(record)}
+                          loading={
+                            updateStatusMutation.isPending &&
+                            selectedList?.list_id === record.list_id
+                          }
+                        >
+                          Change Status
+                        </Button>
+                      )
+                    }
+                  ]}
+                />
+              ) : (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="This contact is not subscribed to any lists"
+                  style={{ margin: '20px 0' }}
+                >
+                  <Button
+                    type="primary"
+                    onClick={openSubscribeModal}
+                    disabled={availableLists.length === 0}
+                    icon={<FontAwesomeIcon icon={faPlus} />}
+                  >
+                    Subscribe to List
+                  </Button>
+                </Empty>
+              )}
+
+              <div className="mt-6">
+                <div className="section-header">
+                  <Space>
+                    <Title level={5} style={{ margin: 0 }}>
+                      Message History
+                    </Title>
+                  </Space>
+                </div>
+
+                {loadingMessages ? (
+                  <div
+                    className="loading-container"
+                    style={{ padding: '40px 0', textAlign: 'center' }}
+                  >
+                    <Spin size="large" />
+                    <div style={{ marginTop: 16 }}>Loading message history...</div>
+                  </div>
+                ) : messageHistory && messageHistory.messages.length > 0 ? (
+                  <Table
+                    dataSource={messageHistory.messages}
+                    columns={messageColumns}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    scroll={{ y: 600 }}
+                  />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="No messages found for this contact"
+                    style={{ margin: '40px 0' }}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Change Status Modal */}
+          <Modal
+            title={`Change Status for ${selectedList?.name || 'List'}`}
+            open={statusModalVisible}
+            onCancel={() => setStatusModalVisible(false)}
+            footer={null}
+          >
+            <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
+              <Form.Item
+                name="status"
+                label="Subscription Status"
+                rules={[{ required: true, message: 'Please select a status' }]}
+              >
+                <Select options={statusOptions} />
+              </Form.Item>
+              <Form.Item>
+                <Space>
+                  <Button type="primary" htmlType="submit" loading={updateStatusMutation.isPending}>
+                    Update Status
+                  </Button>
+                  <Button onClick={() => setStatusModalVisible(false)}>Cancel</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </Modal>
+
+          {/* Subscribe to List Modal */}
+          <Modal
+            title="Subscribe to List"
+            open={subscribeModalVisible}
+            onCancel={() => setSubscribeModalVisible(false)}
+            footer={null}
+          >
+            <Form form={subscribeForm} layout="vertical" onFinish={handleSubscribe}>
+              <Form.Item
+                name="list_id"
+                label="Select List"
+                rules={[{ required: true, message: 'Please select a list' }]}
+              >
+                <Select
+                  options={availableLists.map((list) => ({
+                    label: list.name,
+                    value: list.id
+                  }))}
+                  placeholder="Select a list"
+                />
+              </Form.Item>
+              <Form.Item
+                name="status"
+                label="Subscription Status"
+                initialValue="active"
+                rules={[{ required: true, message: 'Please select a status' }]}
+              >
+                <Select
+                  options={[
+                    { label: 'Active', value: 'active' },
+                    { label: 'Pending', value: 'pending' }
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item>
+                <Space>
+                  <Button type="primary" htmlType="submit" loading={addToListMutation.isPending}>
+                    Subscribe
+                  </Button>
+                  <Button onClick={() => setSubscribeModalVisible(false)}>Cancel</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </Modal>
+        </Drawer>
+      </>
+    )
+  }
+
   return (
     <Drawer
       title="Contact Details"
       width="90%"
       placement="right"
       className="drawer-body-no-padding"
-      onClose={onClose}
-      open={visible}
+      onClose={externalOnClose}
+      open={externalVisible}
       extra={
         <ContactUpsertDrawer
           workspaceId={workspaceId}
@@ -771,63 +1197,80 @@ export function ContactDetailsDrawer({
             </Button>
           </div>
 
-          <Table
-            dataSource={contactListsWithNames}
-            rowKey={(record) => `${record.list_id}_${record.status}`}
-            pagination={false}
-            size="small"
-            columns={[
-              {
-                title: 'Subscription list',
-                dataIndex: 'name',
-                key: 'name',
-                width: '30%',
-                render: (name: string, record: any) => (
-                  <Tooltip title={`List ID: ${record.list_id}`}>
-                    <span style={{ cursor: 'help' }}>{name}</span>
-                  </Tooltip>
-                )
-              },
-              {
-                title: 'Status',
-                dataIndex: 'status',
-                key: 'status',
-                width: '20%',
-                render: (status: string) => <Tag color={getStatusColor(status)}>{status}</Tag>
-              },
-              {
-                title: 'Subscribed on',
-                dataIndex: 'created_at',
-                key: 'created_at',
-                width: '30%',
-                render: (date: string) => {
-                  if (!date) return '-'
-
-                  return (
-                    <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
-                      <span>{dayjs(date).fromNow()}</span>
+          {contactListsWithNames.length > 0 ? (
+            <Table
+              dataSource={contactListsWithNames}
+              rowKey={(record) => `${record.list_id}_${record.status}`}
+              pagination={false}
+              size="small"
+              columns={[
+                {
+                  title: 'Subscription list',
+                  dataIndex: 'name',
+                  key: 'name',
+                  width: '30%',
+                  render: (name: string, record: any) => (
+                    <Tooltip title={`List ID: ${record.list_id}`}>
+                      <span style={{ cursor: 'help' }}>{name}</span>
                     </Tooltip>
                   )
+                },
+                {
+                  title: 'Status',
+                  dataIndex: 'status',
+                  key: 'status',
+                  width: '20%',
+                  render: (status: string) => <Tag color={getStatusColor(status)}>{status}</Tag>
+                },
+                {
+                  title: 'Subscribed on',
+                  dataIndex: 'created_at',
+                  key: 'created_at',
+                  width: '30%',
+                  render: (date: string) => {
+                    if (!date) return '-'
+
+                    return (
+                      <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
+                        <span>{dayjs(date).fromNow()}</span>
+                      </Tooltip>
+                    )
+                  }
+                },
+                {
+                  title: '',
+                  key: 'actions',
+                  width: '20%',
+                  render: (_: any, record: ContactListWithName) => (
+                    <Button
+                      size="small"
+                      onClick={() => openStatusModal(record)}
+                      loading={
+                        updateStatusMutation.isPending && selectedList?.list_id === record.list_id
+                      }
+                    >
+                      Change Status
+                    </Button>
+                  )
                 }
-              },
-              {
-                title: '',
-                key: 'actions',
-                width: '20%',
-                render: (_: any, record: ContactListWithName) => (
-                  <Button
-                    size="small"
-                    onClick={() => openStatusModal(record)}
-                    loading={
-                      updateStatusMutation.isPending && selectedList?.list_id === record.list_id
-                    }
-                  >
-                    Change Status
-                  </Button>
-                )
-              }
-            ]}
-          />
+              ]}
+            />
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="This contact is not subscribed to any lists"
+              style={{ margin: '20px 0' }}
+            >
+              <Button
+                type="primary"
+                onClick={openSubscribeModal}
+                disabled={availableLists.length === 0}
+                icon={<FontAwesomeIcon icon={faPlus} />}
+              >
+                Subscribe to List
+              </Button>
+            </Empty>
+          )}
 
           <div className="mt-6">
             <div className="section-header">

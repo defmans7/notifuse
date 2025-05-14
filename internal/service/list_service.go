@@ -10,16 +10,22 @@ import (
 )
 
 type ListService struct {
-	repo        domain.ListRepository
-	authService domain.AuthService
-	logger      logger.Logger
+	repo            domain.ListRepository
+	workspaceRepo   domain.WorkspaceRepository
+	contactListRepo domain.ContactListRepository
+	contactRepo     domain.ContactRepository
+	authService     domain.AuthService
+	logger          logger.Logger
 }
 
-func NewListService(repo domain.ListRepository, authService domain.AuthService, logger logger.Logger) *ListService {
+func NewListService(repo domain.ListRepository, workspaceRepo domain.WorkspaceRepository, contactListRepo domain.ContactListRepository, contactRepo domain.ContactRepository, authService domain.AuthService, logger logger.Logger) *ListService {
 	return &ListService{
-		repo:        repo,
-		authService: authService,
-		logger:      logger,
+		repo:            repo,
+		workspaceRepo:   workspaceRepo,
+		contactListRepo: contactListRepo,
+		contactRepo:     contactRepo,
+		authService:     authService,
+		logger:          logger,
 	}
 }
 
@@ -130,4 +136,175 @@ func (s *ListService) GetListStats(ctx context.Context, workspaceID string, id s
 	}
 
 	return stats, nil
+}
+
+// this method is used to subscribe a contact to a list
+// request can come from 3 different sources:
+// 1. API
+// 2. Frontend (authenticated with email and email_hmac)
+// 3. Frontend (unauthenticated with email)
+func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.SubscribeToListsRequest, hasBearerToken bool) error {
+	var err error
+
+	workspace, err := s.workspaceRepo.GetByID(ctx, payload.WorkspaceID)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to get workspace: %v", err))
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	isAuthenticated := false
+
+	if hasBearerToken {
+		ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspace.ID)
+		if err != nil {
+			return fmt.Errorf("failed to authenticate user: %w", err)
+		}
+		isAuthenticated = true
+	} else {
+		// verify contact hmac
+		if payload.Contact.EmailHMAC == "" {
+			return fmt.Errorf("email_hmac is required")
+		}
+
+		secretKey := workspace.Settings.SecretKey
+		if !domain.VerifyEmailHMAC(payload.Contact.Email, payload.Contact.EmailHMAC, secretKey) {
+			return fmt.Errorf("invalid email verification")
+		}
+
+		isAuthenticated = true
+	}
+
+	// if the contact is not authenticated we only allow inserting the contact to avoid public frontend injections
+	canUpsert := true
+	if !isAuthenticated {
+		// check if the contact already exists
+		if existingContact, _ := s.contactRepo.GetContactByEmail(ctx, workspace.ID, payload.Contact.Email); existingContact != nil {
+			canUpsert = false
+		}
+	}
+
+	if canUpsert {
+		// upsert the contact
+		_, err = s.contactRepo.UpsertContact(ctx, workspace.ID, &payload.Contact)
+		if err != nil {
+			s.logger.WithField("email", payload.Contact.Email).Error(fmt.Sprintf("Failed to upsert contact: %v", err))
+			return fmt.Errorf("failed to upsert contact: %w", err)
+		}
+	}
+
+	// get the lists
+	lists, err := s.repo.GetLists(ctx, workspace.ID)
+	if err != nil {
+		s.logger.WithField("list_ids", payload.ListIDs).Error(fmt.Sprintf("Failed to get lists: %v", err))
+		return fmt.Errorf("failed to get lists: %w", err)
+	}
+
+	// get the list
+	for _, listID := range payload.ListIDs {
+		var list *domain.List
+		for _, l := range lists {
+			if l.ID == listID {
+				list = l
+				break
+			}
+		}
+
+		if list == nil {
+			s.logger.WithField("list_id", listID).Error(fmt.Sprintf("List not found"))
+			return fmt.Errorf("list not found")
+		}
+
+		// reject if the list is not public and the request is not coming from the API
+		if !list.IsPublic && !hasBearerToken {
+			return fmt.Errorf("list is not public")
+		}
+
+		contactList := &domain.ContactList{
+			Email:     payload.Contact.Email,
+			ListID:    listID,
+			ListName:  list.Name,
+			Status:    domain.ContactListStatusActive,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+
+		// if the list is double optin and the contact is not authenticated, set the status to pending
+		if list.IsDoubleOptin && !isAuthenticated {
+			contactList.Status = domain.ContactListStatusPending
+		}
+
+		// Subscribe to the list
+		err = s.contactListRepo.AddContactToList(ctx, workspace.ID, contactList)
+		if err != nil {
+			s.logger.WithField("email", contactList.Email).
+				WithField("list_id", contactList.ListID).
+				Error(fmt.Sprintf("Failed to subscribe to list: %v", err))
+			return fmt.Errorf("failed to subscribe to list: %w", err)
+		}
+	}
+	return nil
+}
+
+// this method is used to unsubscribe a contact from a list
+// request can come from 2 different sources:
+// 1. API
+// 2. Frontend (authenticated with email and email_hmac)
+func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.UnsubscribeFromListsRequest, hasBearerToken bool) error {
+	var err error
+
+	workspace, err := s.workspaceRepo.GetByID(ctx, payload.WorkspaceID)
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("Failed to get workspace: %v", err))
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	if hasBearerToken {
+		ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspace.ID)
+		if err != nil {
+			return fmt.Errorf("failed to authenticate user: %w", err)
+		}
+	} else {
+		// verify contact hmac
+		if payload.EmailHMAC == "" {
+			return fmt.Errorf("email_hmac is required")
+		}
+
+		secretKey := workspace.Settings.SecretKey
+		if !domain.VerifyEmailHMAC(payload.Email, payload.EmailHMAC, secretKey) {
+			return fmt.Errorf("invalid email verification")
+		}
+	}
+
+	// get the lists
+	lists, err := s.repo.GetLists(ctx, workspace.ID)
+	if err != nil {
+		s.logger.WithField("list_ids", payload.ListIDs).Error(fmt.Sprintf("Failed to get lists: %v", err))
+		return fmt.Errorf("failed to get lists: %w", err)
+	}
+
+	// get the list
+	for _, listID := range payload.ListIDs {
+		var list *domain.List
+		for _, l := range lists {
+			if l.ID == listID {
+				list = l
+				break
+			}
+		}
+
+		if list == nil {
+			s.logger.WithField("list_id", listID).Error(fmt.Sprintf("List not found"))
+			return fmt.Errorf("list not found")
+		}
+
+		// Subscribe to the list
+		err = s.contactListRepo.UpdateContactListStatus(ctx, workspace.ID, payload.Email, listID, domain.ContactListStatusUnsubscribed)
+		if err != nil {
+			s.logger.WithField("email", payload.Email).
+				WithField("list_id", listID).
+				Error(fmt.Sprintf("Failed to unsubscribe from list: %v", err))
+			return fmt.Errorf("failed to unsubscribe from list: %w", err)
+		}
+	}
+	return nil
 }

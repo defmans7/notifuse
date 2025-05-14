@@ -22,9 +22,11 @@ func setupTest(t *testing.T) (
 ) {
 	ctrl := gomock.NewController(t)
 	mockRepo := mocks.NewMockContactListRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockListRepo := mocks.NewMockListRepository(ctrl)
+	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	// Set up logger expectations
@@ -35,106 +37,9 @@ func setupTest(t *testing.T) (
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
-	service := NewContactListService(mockRepo, mockAuthService, mockContactRepo, mockListRepo, mockLogger)
+	service := NewContactListService(mockRepo, mockWorkspaceRepo, mockAuthService, mockContactRepo, mockListRepo, mockContactListRepo, mockLogger)
 
 	return mockRepo, mockAuthService, mockContactRepo, mockListRepo, service, ctrl
-}
-
-func TestContactListService_AddContactToList(t *testing.T) {
-	mockRepo, mockAuthService, mockContactRepo, mockListRepo, service, ctrl := setupTest(t)
-	defer ctrl.Finish()
-
-	ctx := context.Background()
-	workspaceID := "workspace123"
-	email := "test@example.com"
-	listID := "list123"
-
-	t.Run("successful addition", func(t *testing.T) {
-		contactList := &domain.ContactList{
-			Email:  email,
-			ListID: listID,
-			Status: domain.ContactListStatusActive,
-		}
-
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{}, nil)
-
-		mockContactRepo.EXPECT().
-			GetContactByEmail(gomock.Any(), workspaceID, email).
-			Return(&domain.Contact{Email: email}, nil)
-
-		mockListRepo.EXPECT().
-			GetListByID(gomock.Any(), workspaceID, listID).
-			Return(&domain.List{
-				ID:            listID,
-				IsDoubleOptin: false,
-			}, nil)
-
-		mockRepo.EXPECT().
-			AddContactToList(gomock.Any(), workspaceID, gomock.Any()).
-			Return(nil)
-
-		err := service.AddContactToList(ctx, workspaceID, contactList)
-		require.NoError(t, err)
-	})
-
-	t.Run("authentication error", func(t *testing.T) {
-		contactList := &domain.ContactList{
-			Email:  email,
-			ListID: listID,
-			Status: domain.ContactListStatusActive,
-		}
-
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, nil, errors.New("auth error"))
-
-		err := service.AddContactToList(ctx, workspaceID, contactList)
-		require.Error(t, err)
-	})
-
-	t.Run("contact not found", func(t *testing.T) {
-		contactList := &domain.ContactList{
-			Email:  email,
-			ListID: listID,
-			Status: domain.ContactListStatusActive,
-		}
-
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{}, nil)
-
-		mockContactRepo.EXPECT().
-			GetContactByEmail(gomock.Any(), workspaceID, email).
-			Return(nil, errors.New("not found"))
-
-		err := service.AddContactToList(ctx, workspaceID, contactList)
-		require.Error(t, err)
-	})
-
-	t.Run("list not found", func(t *testing.T) {
-		contactList := &domain.ContactList{
-			Email:  email,
-			ListID: listID,
-			Status: domain.ContactListStatusActive,
-		}
-
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{}, nil)
-
-		mockContactRepo.EXPECT().
-			GetContactByEmail(gomock.Any(), workspaceID, email).
-			Return(&domain.Contact{Email: email}, nil)
-
-		mockListRepo.EXPECT().
-			GetListByID(gomock.Any(), workspaceID, listID).
-			Return(nil, errors.New("not found"))
-
-		err := service.AddContactToList(ctx, workspaceID, contactList)
-		require.Error(t, err)
-	})
 }
 
 func TestContactListService_GetContactListByIDs(t *testing.T) {

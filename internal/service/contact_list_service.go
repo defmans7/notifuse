@@ -3,25 +3,28 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type ContactListService struct {
-	repo        domain.ContactListRepository
-	authService domain.AuthService
-	contactRepo domain.ContactRepository
-	listRepo    domain.ListRepository
-	logger      logger.Logger
+	repo            domain.ContactListRepository
+	workspaceRepo   domain.WorkspaceRepository
+	authService     domain.AuthService
+	contactRepo     domain.ContactRepository
+	listRepo        domain.ListRepository
+	contactListRepo domain.ContactListRepository
+	logger          logger.Logger
 }
 
 func NewContactListService(
 	repo domain.ContactListRepository,
+	workspaceRepo domain.WorkspaceRepository,
 	authService domain.AuthService,
 	contactRepo domain.ContactRepository,
 	listRepo domain.ListRepository,
+	contactListRepo domain.ContactListRepository,
 	logger logger.Logger,
 ) *ContactListService {
 	return &ContactListService{
@@ -31,43 +34,6 @@ func NewContactListService(
 		listRepo:    listRepo,
 		logger:      logger,
 	}
-}
-
-func (s *ContactListService) AddContactToList(ctx context.Context, workspaceID string, contactList *domain.ContactList) error {
-	// Verify contact exists by email
-	var err error
-	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
-	}
-
-	_, err = s.contactRepo.GetContactByEmail(ctx, workspaceID, contactList.Email)
-	if err != nil {
-		return fmt.Errorf("contact not found: %w", err)
-	}
-
-	// Verify list exists
-	_, err = s.listRepo.GetListByID(ctx, workspaceID, contactList.ListID)
-	if err != nil {
-		return fmt.Errorf("list not found: %w", err)
-	}
-
-	now := time.Now().UTC()
-	contactList.CreatedAt = now
-	contactList.UpdatedAt = now
-
-	if err := contactList.Validate(); err != nil {
-		return fmt.Errorf("invalid contact list: %w", err)
-	}
-
-	if err := s.repo.AddContactToList(ctx, workspaceID, contactList); err != nil {
-		s.logger.WithField("email", contactList.Email).
-			WithField("list_id", contactList.ListID).
-			Error(fmt.Sprintf("Failed to add contact to list: %v", err))
-		return fmt.Errorf("failed to add contact to list: %w", err)
-	}
-
-	return nil
 }
 
 func (s *ContactListService) GetContactListByIDs(ctx context.Context, workspaceID string, email, listID string) (*domain.ContactList, error) {

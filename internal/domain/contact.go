@@ -4,13 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/asaskevich/govalidator"
 	"github.com/tidwall/gjson"
+)
+
+var (
+	ErrContactNotFound = errors.New("contact not found")
 )
 
 //go:generate mockgen -destination mocks/mock_contact_service.go -package mocks github.com/Notifuse/notifuse/internal/domain ContactService
@@ -75,6 +81,8 @@ type Contact struct {
 
 	// Join contact_lists
 	ContactLists []*ContactList `json:"contact_lists"`
+	// Not persisted
+	EmailHMAC string `json:"email_hmac,omitempty"`
 }
 
 // Validate ensures that the contact has all required fields
@@ -89,6 +97,18 @@ func (c *Contact) Validate() error {
 	}
 
 	return nil
+}
+
+// VerifyEmailHMAC verifies if the provided HMAC for an email is valid
+func VerifyEmailHMAC(email string, providedHMAC string, secretKey string) bool {
+	// Use the crypto package to verify the HMAC
+	computedHMAC := ComputeEmailHMAC(email, secretKey)
+	return computedHMAC == providedHMAC
+}
+
+// ComputeEmailHMAC computes an HMAC for an email address using the workspace secret key
+func ComputeEmailHMAC(email string, secretKey string) string {
+	return crypto.ComputeHMAC256([]byte(email), secretKey)
 }
 
 // For database scanning

@@ -49,31 +49,3 @@ func (mr *MockNotificationCenterServiceMockRecorder) GetNotificationCenter(arg0,
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationCenter", reflect.TypeOf((*MockNotificationCenterService)(nil).GetNotificationCenter), arg0, arg1, arg2, arg3)
 }
-
-// SubscribeToList mocks base method.
-func (m *MockNotificationCenterService) SubscribeToList(arg0 context.Context, arg1, arg2, arg3 string, arg4 *string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeToList", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SubscribeToList indicates an expected call of SubscribeToList.
-func (mr *MockNotificationCenterServiceMockRecorder) SubscribeToList(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToList", reflect.TypeOf((*MockNotificationCenterService)(nil).SubscribeToList), arg0, arg1, arg2, arg3, arg4)
-}
-
-// UnsubscribeFromList mocks base method.
-func (m *MockNotificationCenterService) UnsubscribeFromList(arg0 context.Context, arg1, arg2, arg3, arg4 string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnsubscribeFromList", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UnsubscribeFromList indicates an expected call of UnsubscribeFromList.
-func (mr *MockNotificationCenterServiceMockRecorder) UnsubscribeFromList(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsubscribeFromList", reflect.TypeOf((*MockNotificationCenterService)(nil).UnsubscribeFromList), arg0, arg1, arg2, arg3, arg4)
-}

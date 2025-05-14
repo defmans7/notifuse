@@ -247,16 +247,13 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
-	// create a default contact list for the workspace
-	contactList := &domain.ContactList{
-		Email:     userDetails.Email,
-		ListID:    list.ID,
-		Status:    domain.ContactListStatusActive,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	err = s.contactListService.AddContactToList(ctx, id, contactList)
+	err = s.listService.SubscribeToLists(ctx, &domain.SubscribeToListsRequest{
+		WorkspaceID: id,
+		Contact: domain.Contact{
+			Email: userDetails.Email,
+		},
+		ListIDs: []string{list.ID},
+	}, true)
 	if err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to create default contact list for workspace")
 		return nil, err

@@ -4,15 +4,13 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleCheck, faFaceFrown, faHourglass } from '@fortawesome/free-regular-svg-icons'
 import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { listsApi } from '../../services/api/list'
-import { ListStats as ListStatsType } from '../../services/api/types'
 
 interface ListStatsProps {
   workspaceId: string
   listId: string
-  initialStats?: ListStatsType
 }
 
-export function ListStats({ workspaceId, listId, initialStats }: ListStatsProps) {
+export function ListStats({ workspaceId, listId }: ListStatsProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['list-stats', workspaceId, listId],
     queryFn: async () => {
@@ -21,23 +19,21 @@ export function ListStats({ workspaceId, listId, initialStats }: ListStatsProps)
         list_id: listId
       })
     },
-    initialData: initialStats ? { list_id: listId, stats: initialStats } : undefined,
     // Refetch every minute to keep stats up to date
     refetchInterval: 60000
   })
 
-  const stats = data?.stats ||
-    initialStats || {
-      total_active: 0,
-      total_pending: 0,
-      total_unsubscribed: 0,
-      total_bounced: 0,
-      total_complained: 0
-    }
+  const stats = data?.stats || {
+    total_active: 0,
+    total_pending: 0,
+    total_unsubscribed: 0,
+    total_bounced: 0,
+    total_complained: 0
+  }
 
   // Formatter function for statistics that handles loading state
   const formatStat = (value: number | string) => {
-    if (isLoading && !initialStats) {
+    if (isLoading) {
       return <Spin size="small" />
     }
     return value

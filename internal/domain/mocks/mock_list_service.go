@@ -108,6 +108,34 @@ func (mr *MockListServiceMockRecorder) GetLists(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLists", reflect.TypeOf((*MockListService)(nil).GetLists), arg0, arg1)
 }
 
+// SubscribeToLists mocks base method.
+func (m *MockListService) SubscribeToLists(arg0 context.Context, arg1 *domain.SubscribeToListsRequest, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubscribeToLists", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SubscribeToLists indicates an expected call of SubscribeToLists.
+func (mr *MockListServiceMockRecorder) SubscribeToLists(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToLists", reflect.TypeOf((*MockListService)(nil).SubscribeToLists), arg0, arg1, arg2)
+}
+
+// UnsubscribeFromLists mocks base method.
+func (m *MockListService) UnsubscribeFromLists(arg0 context.Context, arg1 *domain.UnsubscribeFromListsRequest, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnsubscribeFromLists", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnsubscribeFromLists indicates an expected call of UnsubscribeFromLists.
+func (mr *MockListServiceMockRecorder) UnsubscribeFromLists(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsubscribeFromLists", reflect.TypeOf((*MockListService)(nil).UnsubscribeFromLists), arg0, arg1, arg2)
+}
+
 // UpdateList mocks base method.
 func (m *MockListService) UpdateList(arg0 context.Context, arg1 string, arg2 *domain.List) error {
 	m.ctrl.T.Helper()

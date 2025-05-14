@@ -190,17 +190,7 @@ export function ListsPage() {
               }
               key={list.id}
             >
-              <ListStats
-                workspaceId={workspaceId}
-                listId={list.id}
-                initialStats={{
-                  total_active: list.total_active,
-                  total_pending: list.total_pending,
-                  total_unsubscribed: list.total_unsubscribed,
-                  total_bounced: list.total_bounced,
-                  total_complained: list.total_complained
-                }}
-              />
+              <ListStats workspaceId={workspaceId} listId={list.id} />
 
               <Divider />
 

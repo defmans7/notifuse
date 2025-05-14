@@ -120,53 +120,53 @@ func ScanContactList(scanner interface {
 	return cl, nil
 }
 
-// Request/Response types
-type AddContactToListRequest struct {
-	WorkspaceID string `json:"workspace_id"`
-	Email       string `json:"email"`
-	ListID      string `json:"list_id"`
-	Status      string `json:"status"`
-}
+// // Request/Response types
+// type AddContactToListRequest struct {
+// 	WorkspaceID string `json:"workspace_id"`
+// 	Email       string `json:"email"`
+// 	ListID      string `json:"list_id"`
+// 	Status      string `json:"status"`
+// }
 
-func (r *AddContactToListRequest) Validate() (contactList *ContactList, workspaceID string, err error) {
-	if r.WorkspaceID == "" {
-		return nil, "", fmt.Errorf("workspace_id is required")
-	}
+// func (r *AddContactToListRequest) Validate() (contactList *ContactList, workspaceID string, err error) {
+// 	if r.WorkspaceID == "" {
+// 		return nil, "", fmt.Errorf("workspace_id is required")
+// 	}
 
-	if r.Email == "" {
-		return nil, "", fmt.Errorf("email is required")
-	}
-	if !govalidator.IsEmail(r.Email) {
-		return nil, "", fmt.Errorf("invalid email format: %s", r.Email)
-	}
+// 	if r.Email == "" {
+// 		return nil, "", fmt.Errorf("email is required")
+// 	}
+// 	if !govalidator.IsEmail(r.Email) {
+// 		return nil, "", fmt.Errorf("invalid email format: %s", r.Email)
+// 	}
 
-	if r.ListID == "" {
-		return nil, "", fmt.Errorf("list_id is required")
-	}
+// 	if r.ListID == "" {
+// 		return nil, "", fmt.Errorf("list_id is required")
+// 	}
 
-	if r.Status == "" {
-		return nil, "", fmt.Errorf("status is required")
-	}
+// 	if r.Status == "" {
+// 		return nil, "", fmt.Errorf("status is required")
+// 	}
 
-	// Validate status is one of the allowed values
-	validStatus := false
-	for _, status := range []string{"active", "pending", "unsubscribed", "blacklisted"} {
-		if r.Status == status {
-			validStatus = true
-			break
-		}
-	}
+// 	// Validate status is one of the allowed values
+// 	validStatus := false
+// 	for _, status := range []string{"active", "pending", "unsubscribed", "blacklisted"} {
+// 		if r.Status == status {
+// 			validStatus = true
+// 			break
+// 		}
+// 	}
 
-	if !validStatus {
-		return nil, "", fmt.Errorf("invalid status: %s", r.Status)
-	}
+// 	if !validStatus {
+// 		return nil, "", fmt.Errorf("invalid status: %s", r.Status)
+// 	}
 
-	return &ContactList{
-		Email:  r.Email,
-		ListID: r.ListID,
-		Status: ContactListStatus(r.Status),
-	}, r.WorkspaceID, nil
-}
+// 	return &ContactList{
+// 		Email:  r.Email,
+// 		ListID: r.ListID,
+// 		Status: ContactListStatus(r.Status),
+// 	}, r.WorkspaceID, nil
+// }
 
 type GetContactListRequest struct {
 	WorkspaceID string `json:"workspace_id"`
@@ -318,8 +318,6 @@ func (r *RemoveContactFromListRequest) Validate() (err error) {
 
 // ContactListService provides operations for managing contact list relationships
 type ContactListService interface {
-	// AddContactToList adds a contact to a list
-	AddContactToList(ctx context.Context, workspaceID string, contactList *ContactList) error
 
 	// GetContactListByIDs retrieves a contact list by email and list ID
 	GetContactListByIDs(ctx context.Context, workspaceID string, email, listID string) (*ContactList, error)

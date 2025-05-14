@@ -255,11 +255,6 @@ export interface List {
   is_double_optin: boolean
   is_public: boolean
   description?: string
-  total_active: number
-  total_pending: number
-  total_unsubscribed: number
-  total_bounced: number
-  total_complained: number
   double_optin_template?: TemplateReference
   welcome_template?: TemplateReference
   unsubscribe_template?: TemplateReference

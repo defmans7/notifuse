@@ -35,20 +35,6 @@ func (m *MockContactListService) EXPECT() *MockContactListServiceMockRecorder {
 	return m.recorder
 }
 
-// AddContactToList mocks base method.
-func (m *MockContactListService) AddContactToList(arg0 context.Context, arg1 string, arg2 *domain.ContactList) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddContactToList", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddContactToList indicates an expected call of AddContactToList.
-func (mr *MockContactListServiceMockRecorder) AddContactToList(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddContactToList", reflect.TypeOf((*MockContactListService)(nil).AddContactToList), arg0, arg1, arg2)
-}
-
 // GetContactListByIDs mocks base method.
 func (m *MockContactListService) GetContactListByIDs(arg0 context.Context, arg1, arg2, arg3 string) (*domain.ContactList, error) {
 	m.ctrl.T.Helper()

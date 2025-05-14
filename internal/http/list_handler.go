@@ -37,6 +37,7 @@ func (h *ListHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/lists.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("/api/lists.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 	mux.Handle("/api/lists.stats", requireAuth(http.HandlerFunc(h.handleStats)))
+	mux.Handle("/api/lists.subscribe", requireAuth(http.HandlerFunc(h.handleSubscribe)))
 }
 
 func (h *ListHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -217,5 +218,36 @@ func (h *ListHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"list_id": listID,
 		"stats":   stats,
+	})
+}
+
+func (h *ListHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req domain.SubscribeToListsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to validate request")
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	hasBearerToken := true
+	if err := h.service.SubscribeToLists(r.Context(), &req, hasBearerToken); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to subscribe to lists")
+		WriteJSONError(w, "Failed to subscribe to lists", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
 	})
 }

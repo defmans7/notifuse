@@ -326,18 +326,15 @@ func (a *App) InitServices() error {
 		a.contactRepo,
 		a.workspaceRepo,
 		a.authService,
-		a.listService,
-		a.listRepo,
-		a.contactListService,
-		a.contactListRepo,
-		a.transactionalNotificationService,
-		a.transactionalNotificationRepo,
 		a.logger,
 	)
 
 	// Initialize list service
 	a.listService = service.NewListService(
 		a.listRepo,
+		a.workspaceRepo,
+		a.contactListRepo,
+		a.contactRepo,
 		a.authService,
 		a.logger,
 	)
@@ -345,9 +342,11 @@ func (a *App) InitServices() error {
 	// Initialize contact list service
 	a.contactListService = service.NewContactListService(
 		a.contactListRepo,
+		a.workspaceRepo,
 		a.authService,
 		a.contactRepo,
 		a.listRepo,
+		a.contactListRepo,
 		a.logger,
 	)
 
@@ -477,7 +476,6 @@ func (a *App) InitServices() error {
 		a.contactRepo,
 		a.workspaceRepo,
 		a.listRepo,
-		a.contactListRepo,
 		a.logger,
 	)
 
@@ -526,6 +524,7 @@ func (a *App) InitHandlers() error {
 	)
 	notificationCenterHandler := httpHandler.NewNotificationCenterHandler(
 		a.notificationCenterService,
+		a.listService,
 		a.logger,
 	)
 

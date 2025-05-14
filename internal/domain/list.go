@@ -332,8 +332,65 @@ type ListStats struct {
 	TotalComplained   int `json:"total_complained"`
 }
 
+type SubscribeToListsRequest struct {
+	WorkspaceID string   `json:"workspace_id"`
+	Contact     Contact  `json:"contact"`
+	ListIDs     []string `json:"list_ids"`
+}
+
+func (r *SubscribeToListsRequest) Validate() (err error) {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if err := r.Contact.Validate(); err != nil {
+		return fmt.Errorf("invalid contact: %w", err)
+	}
+
+	if len(r.ListIDs) == 0 {
+		return fmt.Errorf("list_ids is required")
+	}
+
+	return nil
+}
+
+type UnsubscribeFromListsRequest struct {
+	WorkspaceID string   `json:"workspace_id"`
+	Email       string   `json:"email"`
+	EmailHMAC   string   `json:"email_hmac"`
+	ListIDs     []string `json:"list_ids"`
+}
+
+// from url params
+func (r *UnsubscribeFromListsRequest) FromURLParams(queryParams url.Values) (err error) {
+	r.WorkspaceID = queryParams.Get("workspace_id")
+	r.Email = queryParams.Get("email")
+	r.EmailHMAC = queryParams.Get("email_hmac")
+	r.ListIDs = queryParams["list_ids"]
+
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+
+	if r.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+
+	if len(r.ListIDs) == 0 {
+		return fmt.Errorf("list_ids is required")
+	}
+
+	return nil
+}
+
 // ListService provides operations for managing lists
 type ListService interface {
+	// SubscribeToLists subscribes a contact to a list
+	SubscribeToLists(ctx context.Context, payload *SubscribeToListsRequest, hasBearerToken bool) error
+
+	// UnsubscribeFromLists unsubscribes a contact from a list
+	UnsubscribeFromLists(ctx context.Context, payload *UnsubscribeFromListsRequest, hasBearerToken bool) error
+
 	// CreateList creates a new list
 	CreateList(ctx context.Context, workspaceID string, list *List) error
 

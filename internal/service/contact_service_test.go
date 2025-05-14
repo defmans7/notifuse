@@ -21,23 +21,11 @@ func TestContactService_GetContactByEmail(t *testing.T) {
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockListService := mocks.NewMockListService(ctrl)
-	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockContactListService := mocks.NewMockContactListService(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockTransactionalService := mocks.NewMockTransactionalNotificationService(ctrl)
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 
 	service := NewContactService(
 		mockRepo,
 		mockWorkspaceRepo,
 		mockAuthService,
-		mockListService,
-		mockListRepo,
-		mockContactListService,
-		mockContactListRepo,
-		mockTransactionalService,
-		mockTransactionalRepo,
 		mockLogger,
 	)
 
@@ -94,23 +82,11 @@ func TestContactService_GetContactByExternalID(t *testing.T) {
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockListService := mocks.NewMockListService(ctrl)
-	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockContactListService := mocks.NewMockContactListService(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockTransactionalService := mocks.NewMockTransactionalNotificationService(ctrl)
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 
 	service := NewContactService(
 		mockRepo,
 		mockWorkspaceRepo,
 		mockAuthService,
-		mockListService,
-		mockListRepo,
-		mockContactListService,
-		mockContactListRepo,
-		mockTransactionalService,
-		mockTransactionalRepo,
 		mockLogger,
 	)
 
@@ -167,23 +143,11 @@ func TestContactService_GetContacts(t *testing.T) {
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockListService := mocks.NewMockListService(ctrl)
-	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockContactListService := mocks.NewMockContactListService(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockTransactionalService := mocks.NewMockTransactionalNotificationService(ctrl)
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 
 	service := NewContactService(
 		mockRepo,
 		mockWorkspaceRepo,
 		mockAuthService,
-		mockListService,
-		mockListRepo,
-		mockContactListService,
-		mockContactListRepo,
-		mockTransactionalService,
-		mockTransactionalRepo,
 		mockLogger,
 	)
 
@@ -235,23 +199,11 @@ func TestContactService_DeleteContact(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	mockListService := mocks.NewMockListService(ctrl)
-	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockContactListService := mocks.NewMockContactListService(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockTransactionalService := mocks.NewMockTransactionalNotificationService(ctrl)
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 
 	service := NewContactService(
 		mockContactRepo,
 		mockWorkspaceRepo,
 		mockAuthService,
-		mockListService,
-		mockListRepo,
-		mockContactListService,
-		mockContactListRepo,
-		mockTransactionalService,
-		mockTransactionalRepo,
 		mockLogger,
 	)
 
@@ -295,23 +247,11 @@ func TestContactService_UpsertContact(t *testing.T) {
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockListService := mocks.NewMockListService(ctrl)
-	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockContactListService := mocks.NewMockContactListService(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockTransactionalService := mocks.NewMockTransactionalNotificationService(ctrl)
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 
 	service := NewContactService(
 		mockRepo,
 		mockWorkspaceRepo,
 		mockAuthService,
-		mockListService,
-		mockListRepo,
-		mockContactListService,
-		mockContactListRepo,
-		mockTransactionalService,
-		mockTransactionalRepo,
 		mockLogger,
 	)
 
@@ -383,23 +323,11 @@ func TestContactService_UpsertContactWithPartialUpdates(t *testing.T) {
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockListService := mocks.NewMockListService(ctrl)
-	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockContactListService := mocks.NewMockContactListService(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockTransactionalService := mocks.NewMockTransactionalNotificationService(ctrl)
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 
 	service := NewContactService(
 		mockRepo,
 		mockWorkspaceRepo,
 		mockAuthService,
-		mockListService,
-		mockListRepo,
-		mockContactListService,
-		mockContactListRepo,
-		mockTransactionalService,
-		mockTransactionalRepo,
 		mockLogger,
 	)
 
@@ -529,23 +457,11 @@ func TestContactService_BatchImportContacts(t *testing.T) {
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockListService := mocks.NewMockListService(ctrl)
-	mockListRepo := mocks.NewMockListRepository(ctrl)
-	mockContactListService := mocks.NewMockContactListService(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockTransactionalService := mocks.NewMockTransactionalNotificationService(ctrl)
-	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
 
 	service := NewContactService(
 		mockRepo,
 		mockWorkspaceRepo,
 		mockAuthService,
-		mockListService,
-		mockListRepo,
-		mockContactListService,
-		mockContactListRepo,
-		mockTransactionalService,
-		mockTransactionalRepo,
 		mockLogger,
 	)
 

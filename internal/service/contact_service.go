@@ -11,41 +11,23 @@ import (
 )
 
 type ContactService struct {
-	repo                 domain.ContactRepository
-	workspaceRepo        domain.WorkspaceRepository
-	authService          domain.AuthService
-	listService          domain.ListService
-	listRepo             domain.ListRepository
-	contactListService   domain.ContactListService
-	contactListRepo      domain.ContactListRepository
-	transactionalService domain.TransactionalNotificationService
-	transactionalRepo    domain.TransactionalNotificationRepository
-	logger               logger.Logger
+	repo          domain.ContactRepository
+	workspaceRepo domain.WorkspaceRepository
+	authService   domain.AuthService
+	logger        logger.Logger
 }
 
 func NewContactService(
 	repo domain.ContactRepository,
 	workspaceRepo domain.WorkspaceRepository,
 	authService domain.AuthService,
-	listService domain.ListService,
-	listRepo domain.ListRepository,
-	contactListService domain.ContactListService,
-	contactListRepo domain.ContactListRepository,
-	transactionalService domain.TransactionalNotificationService,
-	transactionalRepo domain.TransactionalNotificationRepository,
 	logger logger.Logger,
 ) *ContactService {
 	return &ContactService{
-		repo:                 repo,
-		workspaceRepo:        workspaceRepo,
-		authService:          authService,
-		listService:          listService,
-		listRepo:             listRepo,
-		contactListService:   contactListService,
-		contactListRepo:      contactListRepo,
-		transactionalService: transactionalService,
-		transactionalRepo:    transactionalRepo,
-		logger:               logger,
+		repo:          repo,
+		workspaceRepo: workspaceRepo,
+		authService:   authService,
+		logger:        logger,
 	}
 }
 
