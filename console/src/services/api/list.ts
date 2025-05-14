@@ -9,7 +9,9 @@ import type {
   GetListResponse,
   CreateListResponse,
   UpdateListResponse,
-  DeleteListResponse
+  DeleteListResponse,
+  GetListStatsRequest,
+  GetListStatsResponse
 } from './types'
 
 export const listsApi = {
@@ -42,5 +44,15 @@ export const listsApi = {
 
   delete: async (params: DeleteListRequest): Promise<DeleteListResponse> => {
     return api.post('/api/lists.delete', params)
+  },
+
+  stats: async (params: GetListStatsRequest): Promise<GetListStatsResponse> => {
+    const searchParams = new URLSearchParams()
+
+    // Add required params
+    searchParams.append('workspace_id', params.workspace_id)
+    searchParams.append('list_id', params.list_id)
+
+    return api.get<GetListStatsResponse>(`/api/lists.stats?${searchParams.toString()}`)
   }
 }

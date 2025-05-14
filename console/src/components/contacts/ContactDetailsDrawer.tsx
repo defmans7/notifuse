@@ -78,14 +78,27 @@ export function ContactDetailsDrawer({
   const [subscribeForm] = Form.useForm()
 
   // Keep track of the currently displayed contact
+  // Use this contactRef to track the currently displayed contact email for comparison
+  const contactRef = React.useRef<string | null>(null)
   const [displayContact, setDisplayContact] = React.useState<Contact>(contact)
 
   // Update the display contact whenever the input contact changes
+  // This effect runs when:
+  // 1. The drawer becomes visible (to ensure fresh data)
+  // 2. The contact prop changes (checked via email reference)
   React.useEffect(() => {
-    if (contact) {
+    // Only process if we have a contact
+    if (!contact) return
+
+    // Check if this is a different contact than what we're currently showing
+    const isNewContact = contactRef.current !== contact.email
+
+    // Always update the display contact if it's a new contact
+    if (isNewContact) {
       setDisplayContact(contact)
+      contactRef.current = contact.email
     }
-  }, [contact])
+  }, [contact, visible, contact?.email])
 
   // Load message history for this contact
   const { data: messageHistory, isLoading: loadingMessages } = useQuery({
@@ -123,6 +136,13 @@ export function ContactDetailsDrawer({
       }
     }
   }, [refreshedContact, onContactUpdated])
+
+  // When the drawer is closed, reset the contact reference to ensure fresh load on next open
+  React.useEffect(() => {
+    if (!visible) {
+      contactRef.current = null
+    }
+  }, [visible])
 
   // Mutation for updating subscription status
   const updateStatusMutation = useMutation({

@@ -130,6 +130,10 @@ type WorkspaceSettings struct {
 	FileManager                  FileManagerSettings `json:"file_manager,omitempty"`
 	TransactionalEmailProviderID string              `json:"transactional_email_provider_id,omitempty"`
 	MarketingEmailProviderID     string              `json:"marketing_email_provider_id,omitempty"`
+	EncryptedSecretKey           string              `json:"encrypted_secret_key,omitempty"`
+
+	// decoded secret key, not stored in the database
+	SecretKey string `json:"-"`
 }
 
 // Validate validates workspace settings
@@ -242,6 +246,13 @@ func (w *Workspace) BeforeSave(secretkey string) error {
 		w.Settings.FileManager.SecretKey = ""
 	}
 
+	// Encrypt the secret key
+	encryptedSecretKey, err := crypto.EncryptString(w.Settings.SecretKey, secretkey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt secret key: %w", err)
+	}
+	w.Settings.EncryptedSecretKey = encryptedSecretKey
+
 	// Process all integrations
 	for i := range w.Integrations {
 		if err := w.Integrations[i].BeforeSave(secretkey); err != nil {
@@ -259,6 +270,13 @@ func (w *Workspace) AfterLoad(secretkey string) error {
 			return fmt.Errorf("failed to decrypt secret key: %w", err)
 		}
 	}
+
+	// Decrypt the secret key
+	decryptedSecretKey, err := crypto.DecryptFromHexString(w.Settings.EncryptedSecretKey, secretkey)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt secret key: %w", err)
+	}
+	w.Settings.SecretKey = decryptedSecretKey
 
 	// Process all integrations
 	for i := range w.Integrations {

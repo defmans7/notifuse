@@ -203,12 +203,6 @@ export function TransactionalNotificationsPage() {
       )
     },
     {
-      title: 'Public',
-      dataIndex: 'is_public',
-      key: 'is_public',
-      render: (isPublic: boolean) => (isPublic ? 'Yes' : 'No')
-    },
-    {
       title: '',
       key: 'actions',
       width: 100,

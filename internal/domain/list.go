@@ -19,11 +19,6 @@ type List struct {
 	IsDoubleOptin       bool               `json:"is_double_optin" db:"is_double_optin"`
 	IsPublic            bool               `json:"is_public" db:"is_public"`
 	Description         string             `json:"description,omitempty"`
-	TotalActive         int                `json:"total_active" db:"total_active"`
-	TotalPending        int                `json:"total_pending" db:"total_pending"`
-	TotalUnsubscribed   int                `json:"total_unsubscribed" db:"total_unsubscribed"`
-	TotalBounced        int                `json:"total_bounced" db:"total_bounced"`
-	TotalComplained     int                `json:"total_complained" db:"total_complained"`
 	DoubleOptInTemplate *TemplateReference `json:"double_optin_template,omitempty"`
 	WelcomeTemplate     *TemplateReference `json:"welcome_template,omitempty"`
 	UnsubscribeTemplate *TemplateReference `json:"unsubscribe_template,omitempty"`
@@ -80,11 +75,6 @@ type dbList struct {
 	IsDoubleOptin       bool
 	IsPublic            bool
 	Description         string
-	TotalActive         int
-	TotalPending        int
-	TotalUnsubscribed   int
-	TotalBounced        int
-	TotalComplained     int
 	DoubleOptInTemplate *TemplateReference
 	WelcomeTemplate     *TemplateReference
 	UnsubscribeTemplate *TemplateReference
@@ -104,11 +94,6 @@ func ScanList(scanner interface {
 		&dbl.IsDoubleOptin,
 		&dbl.IsPublic,
 		&dbl.Description,
-		&dbl.TotalActive,
-		&dbl.TotalPending,
-		&dbl.TotalUnsubscribed,
-		&dbl.TotalBounced,
-		&dbl.TotalComplained,
 		&dbl.DoubleOptInTemplate,
 		&dbl.WelcomeTemplate,
 		&dbl.UnsubscribeTemplate,
@@ -125,11 +110,6 @@ func ScanList(scanner interface {
 		IsDoubleOptin:       dbl.IsDoubleOptin,
 		IsPublic:            dbl.IsPublic,
 		Description:         dbl.Description,
-		TotalActive:         dbl.TotalActive,
-		TotalPending:        dbl.TotalPending,
-		TotalUnsubscribed:   dbl.TotalUnsubscribed,
-		TotalBounced:        dbl.TotalBounced,
-		TotalComplained:     dbl.TotalComplained,
 		DoubleOptInTemplate: dbl.DoubleOptInTemplate,
 		WelcomeTemplate:     dbl.WelcomeTemplate,
 		UnsubscribeTemplate: dbl.UnsubscribeTemplate,
@@ -344,25 +324,12 @@ func (r *DeleteListRequest) Validate() (workspaceID string, err error) {
 	return r.WorkspaceID, nil
 }
 
-// ContactListTotalType represents the type of total to increment/decrement
-type ContactListTotalType string
-
-const (
-	TotalTypePending      ContactListTotalType = "pending"
-	TotalTypeUnsubscribed ContactListTotalType = "unsubscribed"
-	TotalTypeBounced      ContactListTotalType = "bounced"
-	TotalTypeComplained   ContactListTotalType = "complained"
-	TotalTypeActive       ContactListTotalType = "active"
-)
-
-// Validate checks if the total type is valid
-func (ct ContactListTotalType) Validate() error {
-	switch ct {
-	case TotalTypePending, TotalTypeUnsubscribed, TotalTypeBounced, TotalTypeComplained, TotalTypeActive:
-		return nil
-	default:
-		return fmt.Errorf("invalid total type: %s", ct)
-	}
+type ListStats struct {
+	TotalActive       int `json:"total_active"`
+	TotalPending      int `json:"total_pending"`
+	TotalUnsubscribed int `json:"total_unsubscribed"`
+	TotalBounced      int `json:"total_bounced"`
+	TotalComplained   int `json:"total_complained"`
 }
 
 // ListService provides operations for managing lists
@@ -381,6 +348,8 @@ type ListService interface {
 
 	// DeleteList deletes a list by ID
 	DeleteList(ctx context.Context, workspaceID string, id string) error
+
+	GetListStats(ctx context.Context, workspaceID string, id string) (*ListStats, error)
 }
 
 type ListRepository interface {
@@ -399,11 +368,7 @@ type ListRepository interface {
 	// DeleteList deletes a list
 	DeleteList(ctx context.Context, workspaceID string, id string) error
 
-	// IncrementTotal increments the specified total type for a list
-	IncrementTotal(ctx context.Context, workspaceID string, listID string, totalType ContactListTotalType) error
-
-	// DecrementTotal decrements the specified total type for a list
-	DecrementTotal(ctx context.Context, workspaceID string, listID string, totalType ContactListTotalType) error
+	GetListStats(ctx context.Context, workspaceID string, id string) (*ListStats, error)
 }
 
 // ErrListNotFound is returned when a list is not found

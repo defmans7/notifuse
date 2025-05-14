@@ -326,6 +326,24 @@ export interface DeleteListResponse {
   status: string
 }
 
+export interface ListStats {
+  total_active: number
+  total_pending: number
+  total_unsubscribed: number
+  total_bounced: number
+  total_complained: number
+}
+
+export interface GetListStatsRequest {
+  workspace_id: string
+  list_id: string
+}
+
+export interface GetListStatsResponse {
+  list_id: string
+  stats: ListStats
+}
+
 export type ContactListTotalType = 'pending' | 'unsubscribed' | 'bounced' | 'complained' | 'active'
 
 // Template types

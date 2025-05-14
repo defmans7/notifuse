@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -14,6 +16,18 @@ import (
 func TestNewRootHandler(t *testing.T) {
 	handler := NewRootHandler()
 	assert.NotNil(t, handler, "Root handler should not be nil")
+}
+
+func TestNewRootHandlerWithConsoleAndNotificationCenter(t *testing.T) {
+	// Create a test logger
+	testLogger := logger.NewLogger()
+
+	// Create handler with both console and notification center
+	handler := NewRootHandlerWithConsoleAndNotificationCenter("test_console_dir", "test_notification_center_dir", testLogger, "https://api.example.com")
+
+	// Assert fields are set correctly
+	assert.Equal(t, "test_console_dir", handler.consoleDir)
+	assert.Equal(t, "test_notification_center_dir", handler.notificationCenterDir)
 }
 
 func TestRootHandler_Handle(t *testing.T) {
@@ -65,6 +79,30 @@ func TestRootHandler_RegisterRoutes(t *testing.T) {
 
 	// Assert response content
 	assert.Equal(t, "api running", response["status"])
+}
+
+func TestRootHandler_RegisterRoutesWithNotificationCenter(t *testing.T) {
+	// Create a test logger
+	testLogger := logger.NewLogger()
+
+	// Create handler with both console and notification center
+	handler := NewRootHandlerWithConsoleAndNotificationCenter("test_console_dir", "test_notification_center_dir", testLogger, "https://api.example.com")
+
+	mux := http.NewServeMux()
+
+	// Register routes
+	handler.RegisterRoutes(mux)
+
+	// Test that routes were registered (we can't directly check the mux routes)
+	// but we can check that the handler handles the routes correctly
+	req := httptest.NewRequest("GET", "/notification-center/", nil)
+	rr := httptest.NewRecorder()
+
+	mux.ServeHTTP(rr, req)
+
+	// We expect a 404 because the directory doesn't exist in the test environment
+	// but this confirms the route is registered
+	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func TestRootHandler_ServeConfigJS(t *testing.T) {
@@ -122,4 +160,60 @@ func TestRootHandler_Handle_ConfigJS(t *testing.T) {
 	// Check the body contains the expected JavaScript
 	expectedJS := `window.API_ENDPOINT = "https://api.example.com";`
 	assert.Equal(t, expectedJS, rr.Body.String())
+}
+
+func TestRootHandler_ServeNotificationCenter(t *testing.T) {
+	// Create a temporary directory for test notification center files
+	tempDir, err := os.MkdirTemp("", "notification_center_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create a test index.html file
+	indexContent := "<html><body>Notification Center Test</body></html>"
+	err = os.WriteFile(filepath.Join(tempDir, "index.html"), []byte(indexContent), 0644)
+	require.NoError(t, err)
+
+	// Create a test logger
+	testLogger := logger.NewLogger()
+
+	// Create handler with notification center directory
+	handler := NewRootHandlerWithConsoleAndNotificationCenter("", tempDir, testLogger, "https://api.example.com")
+
+	t.Run("ServeExactPath", func(t *testing.T) {
+		// Create a request to /notification-center/
+		req := httptest.NewRequest("GET", "/notification-center/", nil)
+		rr := httptest.NewRecorder()
+
+		// Call the handler
+		handler.Handle(rr, req)
+
+		// Check status code and content
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Notification Center Test")
+	})
+
+	t.Run("ServeSPAFallback", func(t *testing.T) {
+		// Create a request to a non-existent path
+		req := httptest.NewRequest("GET", "/notification-center/non-existent-path", nil)
+		rr := httptest.NewRecorder()
+
+		// Call the handler
+		handler.Handle(rr, req)
+
+		// Check it falls back to index.html for SPA routing
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Notification Center Test")
+	})
+
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		// Create a POST request which should not be allowed
+		req := httptest.NewRequest("POST", "/notification-center/", nil)
+		rr := httptest.NewRecorder()
+
+		// Call the handler
+		handler.Handle(rr, req)
+
+		// Check method not allowed
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
 }

@@ -49,20 +49,6 @@ func (mr *MockListRepositoryMockRecorder) CreateList(arg0, arg1, arg2 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateList", reflect.TypeOf((*MockListRepository)(nil).CreateList), arg0, arg1, arg2)
 }
 
-// DecrementTotal mocks base method.
-func (m *MockListRepository) DecrementTotal(arg0 context.Context, arg1, arg2 string, arg3 domain.ContactListTotalType) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DecrementTotal", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DecrementTotal indicates an expected call of DecrementTotal.
-func (mr *MockListRepositoryMockRecorder) DecrementTotal(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementTotal", reflect.TypeOf((*MockListRepository)(nil).DecrementTotal), arg0, arg1, arg2, arg3)
-}
-
 // DeleteList mocks base method.
 func (m *MockListRepository) DeleteList(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -92,6 +78,21 @@ func (mr *MockListRepositoryMockRecorder) GetListByID(arg0, arg1, arg2 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetListByID", reflect.TypeOf((*MockListRepository)(nil).GetListByID), arg0, arg1, arg2)
 }
 
+// GetListStats mocks base method.
+func (m *MockListRepository) GetListStats(arg0 context.Context, arg1, arg2 string) (*domain.ListStats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetListStats", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.ListStats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetListStats indicates an expected call of GetListStats.
+func (mr *MockListRepositoryMockRecorder) GetListStats(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetListStats", reflect.TypeOf((*MockListRepository)(nil).GetListStats), arg0, arg1, arg2)
+}
+
 // GetLists mocks base method.
 func (m *MockListRepository) GetLists(arg0 context.Context, arg1 string) ([]*domain.List, error) {
 	m.ctrl.T.Helper()
@@ -105,20 +106,6 @@ func (m *MockListRepository) GetLists(arg0 context.Context, arg1 string) ([]*dom
 func (mr *MockListRepositoryMockRecorder) GetLists(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLists", reflect.TypeOf((*MockListRepository)(nil).GetLists), arg0, arg1)
-}
-
-// IncrementTotal mocks base method.
-func (m *MockListRepository) IncrementTotal(arg0 context.Context, arg1, arg2 string, arg3 domain.ContactListTotalType) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IncrementTotal", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// IncrementTotal indicates an expected call of IncrementTotal.
-func (mr *MockListRepositoryMockRecorder) IncrementTotal(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementTotal", reflect.TypeOf((*MockListRepository)(nil).IncrementTotal), arg0, arg1, arg2, arg3)
 }
 
 // UpdateList mocks base method.

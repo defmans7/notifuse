@@ -61,7 +61,6 @@ type TransactionalNotification struct {
 	Description      string                `json:"description"`
 	Channels         ChannelTemplates      `json:"channels"`
 	TrackingSettings mjml.TrackingSettings `json:"tracking_settings"`
-	IsPublic         bool                  `json:"is_public"` // Indicates if the notification is publicly accessible
 	Metadata         MapOfAny              `json:"metadata,omitempty"`
 
 	// System timestamps
@@ -94,7 +93,6 @@ type TransactionalNotificationCreateParams struct {
 	Name           string           `json:"name" validate:"required"`
 	Description    string           `json:"description"`
 	Channels       ChannelTemplates `json:"channels" validate:"required,min=1"`
-	IsPublic       bool             `json:"is_public"`
 	EnableTracking bool             `json:"enable_tracking"`
 	Metadata       MapOfAny         `json:"metadata,omitempty"`
 }
@@ -104,7 +102,6 @@ type TransactionalNotificationUpdateParams struct {
 	Name           string           `json:"name,omitempty"`
 	Description    string           `json:"description,omitempty"`
 	Channels       ChannelTemplates `json:"channels,omitempty"`
-	IsPublic       *bool            `json:"is_public,omitempty"`
 	EnableTracking *bool            `json:"enable_tracking,omitempty"`
 	Metadata       MapOfAny         `json:"metadata,omitempty"`
 }

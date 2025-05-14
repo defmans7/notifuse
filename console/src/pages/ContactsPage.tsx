@@ -681,6 +681,7 @@ export function ContactsPage() {
         lists={listsData?.lists || []}
         onContactUpdated={handleContactUpdated}
         workspaceTimezone={workspaceTimezone}
+        key={selectedContact?.email}
       />
     </div>
   )

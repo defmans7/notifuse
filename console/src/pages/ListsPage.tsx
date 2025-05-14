@@ -21,14 +21,7 @@ import { templatesApi } from '../services/api/template'
 import type { List, TemplateReference } from '../services/api/types'
 import { CreateListDrawer } from '../components/lists/ListDrawer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faCircleCheck,
-  faPenToSquare,
-  faTrashCan,
-  faFaceFrown,
-  faHourglass
-} from '@fortawesome/free-regular-svg-icons'
-import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faPenToSquare, faTrashCan } from '@fortawesome/free-regular-svg-icons'
 import { Check, X } from 'lucide-react'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
@@ -36,6 +29,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ImportContactsToListButton } from '../components/lists/ImportContactsToListButton'
+import { ListStats } from '../components/lists/ListStats'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -196,88 +190,17 @@ export function ListsPage() {
               }
               key={list.id}
             >
-              <Row gutter={[16, 16]} wrap={false}>
-                <Col flex="1">
-                  <Statistic
-                    title={
-                      <Space>
-                        <FontAwesomeIcon
-                          icon={faCircleCheck}
-                          className="text-green-500"
-                          style={{ opacity: 0.7 }}
-                        />{' '}
-                        Active
-                      </Space>
-                    }
-                    value={list.total_active}
-                    valueStyle={{ fontSize: '16px' }}
-                  />
-                </Col>
-                <Col flex="1">
-                  <Statistic
-                    title={
-                      <Space>
-                        <FontAwesomeIcon
-                          icon={faHourglass}
-                          className="text-blue-500"
-                          style={{ opacity: 0.7 }}
-                        />{' '}
-                        Pending
-                      </Space>
-                    }
-                    value={list.total_pending}
-                    valueStyle={{ fontSize: '16px' }}
-                  />
-                </Col>
-                <Col flex="1">
-                  <Statistic
-                    title={
-                      <Space>
-                        <FontAwesomeIcon
-                          icon={faBan}
-                          className="text-gray-500"
-                          style={{ opacity: 0.7 }}
-                        />{' '}
-                        Unsub
-                      </Space>
-                    }
-                    value={list.total_unsubscribed}
-                    valueStyle={{ fontSize: '16px' }}
-                  />
-                </Col>
-                <Col flex="1">
-                  <Statistic
-                    title={
-                      <Space>
-                        <FontAwesomeIcon
-                          icon={faTriangleExclamation}
-                          className="text-yellow-500"
-                          style={{ opacity: 0.7 }}
-                        />{' '}
-                        Bounced
-                      </Space>
-                    }
-                    value={list.total_bounced}
-                    valueStyle={{ fontSize: '16px' }}
-                  />
-                </Col>
-                <Col flex="1">
-                  <Statistic
-                    title={
-                      <Space>
-                        <FontAwesomeIcon
-                          icon={faFaceFrown}
-                          className="text-red-500"
-                          style={{ opacity: 0.7 }}
-                        />{' '}
-                        Complaints
-                      </Space>
-                    }
-                    value={list.total_complained}
-                    valueStyle={{ fontSize: '16px' }}
-                  />
-                </Col>
-              </Row>
+              <ListStats
+                workspaceId={workspaceId}
+                listId={list.id}
+                initialStats={{
+                  total_active: list.total_active,
+                  total_pending: list.total_pending,
+                  total_unsubscribed: list.total_unsubscribed,
+                  total_bounced: list.total_bounced,
+                  total_complained: list.total_complained
+                }}
+              />
 
               <Divider />
 

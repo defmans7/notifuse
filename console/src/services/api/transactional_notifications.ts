@@ -19,7 +19,6 @@ export interface TransactionalNotification {
   name: string
   description: string
   channels: ChannelTemplates
-  is_public: boolean
   metadata?: Record<string, any>
   created_at: string
   updated_at: string
@@ -33,7 +32,6 @@ export interface CreateTransactionalNotificationRequest {
     name: string
     description?: string
     channels: ChannelTemplates
-    is_public?: boolean
     metadata?: Record<string, any>
   }
 }
@@ -45,7 +43,6 @@ export interface UpdateTransactionalNotificationRequest {
     name?: string
     description?: string
     channels?: ChannelTemplates
-    is_public?: boolean
     metadata?: Record<string, any>
   }
 }

@@ -43,14 +43,6 @@ func setupContactHandlerTest(t *testing.T) (*mocks.MockContactService, *pkgmocks
 	return mockService, mockLogger, handler
 }
 
-// Helper function to unmarshal JSON response
-func decodeContactJSONResponse(body *bytes.Buffer, v interface{}) error {
-	decoder := json.NewDecoder(body)
-	// Use UseNumber for more precise number handling
-	decoder.UseNumber()
-	return decoder.Decode(v)
-}
-
 func TestContactHandler_RegisterRoutes(t *testing.T) {
 	_, _, handler := setupContactHandlerTest(t)
 	mux := http.NewServeMux()

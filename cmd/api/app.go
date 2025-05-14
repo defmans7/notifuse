@@ -86,6 +86,7 @@ type App struct {
 	webhookEventService              *service.WebhookEventService
 	webhookRegistrationService       *service.WebhookRegistrationService
 	messageHistoryService            *service.MessageHistoryService
+	notificationCenterService        *service.NotificationCenterService
 	// providers
 	postmarkService  *service.PostmarkService
 	mailgunService   *service.MailgunService
@@ -471,6 +472,15 @@ func (a *App) InitServices() error {
 	// Initialize message history service
 	a.messageHistoryService = service.NewMessageHistoryService(a.messageHistoryRepo, a.logger)
 
+	// Initialize notification center service
+	a.notificationCenterService = service.NewNotificationCenterService(
+		a.contactRepo,
+		a.workspaceRepo,
+		a.listRepo,
+		a.contactListRepo,
+		a.logger,
+	)
+
 	return nil
 }
 
@@ -514,6 +524,10 @@ func (a *App) InitHandlers() error {
 		a.config.Security.PasetoPublicKey,
 		a.logger,
 	)
+	notificationCenterHandler := httpHandler.NewNotificationCenterHandler(
+		a.notificationCenterService,
+		a.logger,
+	)
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
@@ -530,6 +544,7 @@ func (a *App) InitHandlers() error {
 	webhookEventHandler.RegisterRoutes(a.mux)
 	webhookRegistrationHandler.RegisterRoutes(a.mux)
 	messageHistoryHandler.RegisterRoutes(a.mux)
+	notificationCenterHandler.RegisterRoutes(a.mux)
 	a.mux.HandleFunc("/api/detect-favicon", faviconHandler.DetectFavicon)
 
 	return nil

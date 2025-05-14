@@ -9,3 +9,5 @@
 - add email hmac in unsubscribe links for auth
 - test webhooks for email providers
 - test the docker compose
+- public subscription : skip doubleoptin if we have hmac
+- add event to contact list service to trigger the welcome email etc..;

@@ -36,6 +36,7 @@ func (h *ListHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/lists.create", requireAuth(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("/api/lists.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("/api/lists.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
+	mux.Handle("/api/lists.stats", requireAuth(http.HandlerFunc(h.handleStats)))
 }
 
 func (h *ListHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -185,5 +186,36 @@ func (h *ListHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
+	})
+}
+
+func (h *ListHandler) handleStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	listID := r.URL.Query().Get("list_id")
+	if listID == "" {
+		WriteJSONError(w, "list_id is required", http.StatusBadRequest)
+		return
+	}
+
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID == "" {
+		WriteJSONError(w, "workspace_id is required", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.service.GetListStats(r.Context(), workspaceID, listID)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to get stats")
+		WriteJSONError(w, "Failed to get stats", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"list_id": listID,
+		"stats":   stats,
 	})
 }

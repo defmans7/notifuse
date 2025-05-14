@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"testing"
 	"time"
@@ -262,27 +263,17 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 			Name:  "Test User",
 		}
 
-		expectedWorkspace := &domain.Workspace{
-			ID:   workspaceID,
-			Name: "Test Workspace",
-			Settings: domain.WorkspaceSettings{
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				CoverURL:   "https://example.com/cover.png",
-				Timezone:   "UTC",
-				FileManager: domain.FileManagerSettings{
-					Endpoint:  "https://s3.amazonaws.com",
-					Bucket:    "my-bucket",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
-		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
+		mockRepo.EXPECT().Create(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Instead of expecting an exact value, verify it's not empty and has expected format
+			assert.NotEmpty(t, workspace.Settings.SecretKey, "Secret key should not be empty")
+			assert.Equal(t, 64, len(workspace.Settings.SecretKey), "Secret key should be 64 hex characters (32 bytes)")
+			// Verify hex encoding
+			_, err := hex.DecodeString(workspace.Settings.SecretKey)
+			assert.NoError(t, err, "Secret key should be valid hex")
+			return nil
+		})
 		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
 		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
@@ -299,9 +290,20 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 			AccessKey: "AKIAIOSFODNN7EXAMPLE",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, expectedWorkspace.ID, workspace.ID)
-		assert.Equal(t, expectedWorkspace.Name, workspace.Name)
-		assert.Equal(t, expectedWorkspace.Settings, workspace.Settings)
+		assert.Equal(t, workspaceID, workspace.ID)
+		assert.Equal(t, "Test Workspace", workspace.Name)
+
+		// Verify the structure of settings but don't check the exact SecretKey value
+		assert.Equal(t, "https://example.com", workspace.Settings.WebsiteURL)
+		assert.Equal(t, "https://example.com/logo.png", workspace.Settings.LogoURL)
+		assert.Equal(t, "https://example.com/cover.png", workspace.Settings.CoverURL)
+		assert.Equal(t, "UTC", workspace.Settings.Timezone)
+
+		// Verify SecretKey format but not exact value
+		assert.NotEmpty(t, workspace.Settings.SecretKey)
+		assert.Equal(t, 64, len(workspace.Settings.SecretKey))
+		_, err = hex.DecodeString(workspace.Settings.SecretKey)
+		assert.NoError(t, err, "Secret key should be valid hex")
 	})
 
 	t.Run("validation error", func(t *testing.T) {
@@ -425,24 +427,6 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 			Name:  "Test User",
 		}
 
-		expectedWorkspace := &domain.Workspace{
-			ID:   workspaceID,
-			Name: "Test Workspace",
-			Settings: domain.WorkspaceSettings{
-				WebsiteURL: "https://example.com",
-				LogoURL:    "https://example.com/logo.png",
-				CoverURL:   "https://example.com/cover.png",
-				Timezone:   "UTC",
-				FileManager: domain.FileManagerSettings{
-					Endpoint:  "https://s3.amazonaws.com",
-					Bucket:    "my-bucket",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
 		mockAuthService.EXPECT().AuthenticateUserFromContext(ctx).Return(expectedUser, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(nil, nil)
 		mockRepo.EXPECT().Create(ctx, gomock.Any()).Return(nil)
@@ -464,7 +448,7 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 
 		// Should still succeed despite template error
 		require.NoError(t, err)
-		assert.Equal(t, expectedWorkspace.ID, workspace.ID)
+		assert.Equal(t, workspaceID, workspace.ID)
 	})
 
 	t.Run("workspace already exists", func(t *testing.T) {
@@ -1316,8 +1300,6 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 					Password: "smtp_password",
 					UseTLS:   true,
 				},
-				DefaultSenderEmail: "test@example.com",
-				DefaultSenderName:  "Test Sender",
 			},
 		}
 
@@ -1520,5 +1502,47 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 
 		err := service.DeleteIntegration(ctx, workspaceID, integrationID)
 		require.NoError(t, err)
+	})
+}
+
+func TestGenerateSecureKey(t *testing.T) {
+	t.Run("generates key of expected length", func(t *testing.T) {
+		// Test with different byte lengths
+		byteLengths := []int{16, 32, 64}
+
+		for _, byteLen := range byteLengths {
+			// Each byte becomes 2 hex chars
+			expectedHexLen := byteLen * 2
+
+			// Generate the key
+			key, err := GenerateSecureKey(byteLen)
+
+			// Verify results
+			require.NoError(t, err)
+			assert.Len(t, key, expectedHexLen)
+
+			// Verify it's valid hex
+			_, err = hex.DecodeString(key)
+			require.NoError(t, err, "Generated key is not valid hex")
+		}
+	})
+
+	t.Run("generates unique keys", func(t *testing.T) {
+		// Generate multiple keys to ensure uniqueness
+		iterations := 10
+		keys := make([]string, iterations)
+
+		for i := 0; i < iterations; i++ {
+			key, err := GenerateSecureKey(32)
+			require.NoError(t, err)
+			keys[i] = key
+		}
+
+		// Check for duplicates
+		seen := make(map[string]bool)
+		for _, key := range keys {
+			assert.False(t, seen[key], "Duplicate key generated")
+			seen[key] = true
+		}
 	})
 }

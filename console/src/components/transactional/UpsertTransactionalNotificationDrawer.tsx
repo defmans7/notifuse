@@ -97,7 +97,6 @@ export function UpsertTransactionalNotificationDrawer({
         id: notification.id,
         name: notification.name,
         description: notification.description,
-        is_public: notification.is_public,
         channels: notification.channels,
         metadata: notification.metadata || undefined
       })
@@ -110,7 +109,6 @@ export function UpsertTransactionalNotificationDrawer({
         id: '',
         name: '',
         description: '',
-        is_public: false,
         channels: {
           email: {
             template_id: '',
@@ -209,7 +207,6 @@ export function UpsertTransactionalNotificationDrawer({
                   updates: {
                     name: values.name,
                     description: values.description,
-                    is_public: values.is_public,
                     channels: values.channels,
                     metadata: values.metadata
                   }
@@ -223,7 +220,6 @@ export function UpsertTransactionalNotificationDrawer({
                     id: values.id,
                     name: values.name,
                     description: values.description,
-                    is_public: values.is_public,
                     channels: values.channels,
                     metadata: values.metadata
                   }
@@ -285,29 +281,15 @@ export function UpsertTransactionalNotificationDrawer({
                 />
               </Form.Item>
 
-              <Row>
-                <Col span={12}>
-                  <Form.Item
-                    name="is_public"
-                    label="User Visible"
-                    valuePropName="checked"
-                    tooltip="When enabled, users can view and mute this notification in their notification center"
-                  >
-                    <Switch />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name={['channels', 'email', 'enable_tracking']}
-                    label="Enable Link Tracking"
-                    valuePropName="checked"
-                    initialValue={true}
-                    tooltip="When enabled, links in the email will be tracked for opens and clicks"
-                  >
-                    <Switch />
-                  </Form.Item>
-                </Col>
-              </Row>
+              <Form.Item
+                name={['channels', 'email', 'enable_tracking']}
+                label="Enable Link Tracking"
+                valuePropName="checked"
+                initialValue={true}
+                tooltip="When enabled, links in the email will be tracked for opens and clicks"
+              >
+                <Switch />
+              </Form.Item>
 
               <p className="text-sm text-gray-500 pt-8">
                 Define UTM parameters for links in your email for better campaign tracking.

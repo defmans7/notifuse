@@ -225,7 +225,7 @@ export function CreateListDrawer({
             label={
               <span>
                 Public &nbsp;
-                <Tooltip title="Public lists are visible in the subscription center for users to subscribe to">
+                <Tooltip title="Public lists are visible in the Notification Center for users to subscribe to">
                   <InfoCircleOutlined />
                 </Tooltip>
               </span>

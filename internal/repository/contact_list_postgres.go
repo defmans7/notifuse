@@ -48,6 +48,7 @@ func (r *contactListRepository) AddContactToList(ctx context.Context, workspaceI
 	if err != nil {
 		return fmt.Errorf("failed to add contact to list: %w", err)
 	}
+
 	return nil
 }
 

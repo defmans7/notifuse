@@ -117,40 +117,17 @@ func (s *ListService) DeleteList(ctx context.Context, workspaceID string, id str
 	return nil
 }
 
-func (s *ListService) IncrementTotal(ctx context.Context, workspaceID string, listID string, totalType domain.ContactListTotalType) error {
+func (s *ListService) GetListStats(ctx context.Context, workspaceID string, id string) (*domain.ListStats, error) {
 	var err error
 	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
-	if err := totalType.Validate(); err != nil {
-		return err
-	}
-
-	if err := s.repo.IncrementTotal(ctx, workspaceID, listID, totalType); err != nil {
-		s.logger.WithField("list_id", listID).WithField("total_type", totalType).Error(fmt.Sprintf("Failed to increment total: %v", err))
-		return fmt.Errorf("failed to increment total: %w", err)
-	}
-
-	return nil
-}
-
-func (s *ListService) DecrementTotal(ctx context.Context, workspaceID string, listID string, totalType domain.ContactListTotalType) error {
-	var err error
-	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	stats, err := s.repo.GetListStats(ctx, workspaceID, id)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate user: %w", err)
+		return nil, fmt.Errorf("failed to get list stats: %w", err)
 	}
 
-	if err := totalType.Validate(); err != nil {
-		return err
-	}
-
-	if err := s.repo.DecrementTotal(ctx, workspaceID, listID, totalType); err != nil {
-		s.logger.WithField("list_id", listID).WithField("total_type", totalType).Error(fmt.Sprintf("Failed to decrement total: %v", err))
-		return fmt.Errorf("failed to decrement total: %w", err)
-	}
-
-	return nil
+	return stats, nil
 }

@@ -163,11 +163,6 @@ func TestScanList(t *testing.T) {
 			true,             // IsDoubleOptin
 			true,             // IsPublic
 			"This is a list", // Description
-			10,               // TotalActive
-			5,                // TotalPending
-			2,                // TotalUnsubscribed
-			1,                // TotalBounced
-			0,                // TotalComplained
 			nil,              // DoubleOptInTemplate
 			nil,              // WelcomeTemplate
 			nil,              // UnsubscribeTemplate
@@ -185,11 +180,6 @@ func TestScanList(t *testing.T) {
 	assert.Equal(t, true, list.IsDoubleOptin)
 	assert.Equal(t, true, list.IsPublic)
 	assert.Equal(t, "This is a list", list.Description)
-	assert.Equal(t, 10, list.TotalActive)
-	assert.Equal(t, 5, list.TotalPending)
-	assert.Equal(t, 2, list.TotalUnsubscribed)
-	assert.Equal(t, 1, list.TotalBounced)
-	assert.Equal(t, 0, list.TotalComplained)
 	assert.Nil(t, list.DoubleOptInTemplate)
 	assert.Nil(t, list.WelcomeTemplate)
 	assert.Nil(t, list.UnsubscribeTemplate)
@@ -997,72 +987,6 @@ func TestDeleteListRequest_Validate(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.wantID, workspaceID)
-			}
-		})
-	}
-}
-
-func TestContactListTotalType_Validate(t *testing.T) {
-	tests := []struct {
-		name      string
-		totalType ContactListTotalType
-		wantErr   bool
-	}{
-		{
-			name:      "valid type - pending",
-			totalType: TotalTypePending,
-			wantErr:   false,
-		},
-		{
-			name:      "valid type - active",
-			totalType: TotalTypeActive,
-			wantErr:   false,
-		},
-		{
-			name:      "valid type - unsubscribed",
-			totalType: TotalTypeUnsubscribed,
-			wantErr:   false,
-		},
-		{
-			name:      "valid type - bounced",
-			totalType: TotalTypeBounced,
-			wantErr:   false,
-		},
-		{
-			name:      "valid type - complained",
-			totalType: TotalTypeComplained,
-			wantErr:   false,
-		},
-		{
-			name:      "invalid type - empty",
-			totalType: ContactListTotalType(""),
-			wantErr:   true,
-		},
-		{
-			name:      "invalid type - arbitrary string",
-			totalType: ContactListTotalType("invalid"),
-			wantErr:   true,
-		},
-		{
-			name:      "invalid type - mixed case",
-			totalType: ContactListTotalType("Active"),
-			wantErr:   true,
-		},
-		{
-			name:      "invalid type - similar but not exact",
-			totalType: ContactListTotalType("actives"),
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.totalType.Validate()
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid total type")
-			} else {
-				assert.NoError(t, err)
 			}
 		})
 	}

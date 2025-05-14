@@ -698,3 +698,116 @@ func TestListHandler_HandleDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestListHandler_HandleStats(t *testing.T) {
+	testCases := []struct {
+		name           string
+		method         string
+		queryParams    url.Values
+		setupMock      func(*mocks.MockListService)
+		expectedStatus int
+		expectedStats  bool
+	}{
+		{
+			name:   "Get List Stats Success",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+				"list_id":      []string{"list1"},
+			},
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().GetListStats(gomock.Any(), "workspace123", "list1").Return(&domain.ListStats{
+					TotalActive:       10,
+					TotalPending:      5,
+					TotalUnsubscribed: 3,
+					TotalBounced:      1,
+					TotalComplained:   0,
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedStats:  true,
+		},
+		{
+			name:   "Get List Stats Service Error",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+				"list_id":      []string{"list1"},
+			},
+			setupMock: func(m *mocks.MockListService) {
+				m.EXPECT().GetListStats(gomock.Any(), "workspace123", "list1").Return(nil, errors.New("service error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedStats:  false,
+		},
+		{
+			name:   "Missing List ID",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+			},
+			setupMock: func(m *mocks.MockListService) {
+				// No setup needed
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedStats:  false,
+		},
+		{
+			name:   "Missing Workspace ID",
+			method: http.MethodGet,
+			queryParams: url.Values{
+				"list_id": []string{"list1"},
+			},
+			setupMock: func(m *mocks.MockListService) {
+				// No setup needed
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedStats:  false,
+		},
+		{
+			name:   "Method Not Allowed",
+			method: http.MethodPost,
+			queryParams: url.Values{
+				"workspace_id": []string{"workspace123"},
+				"list_id":      []string{"list1"},
+			},
+			setupMock: func(m *mocks.MockListService) {
+				// No setup needed
+			},
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedStats:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockService, _, handler := setupListHandlerTest(t)
+			tc.setupMock(mockService)
+
+			req := httptest.NewRequest(tc.method, "/api/lists.stats?"+tc.queryParams.Encode(), nil)
+			rr := httptest.NewRecorder()
+
+			handler.handleStats(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+
+			if tc.expectedStatus == http.StatusOK {
+				var response map[string]interface{}
+				err := json.NewDecoder(rr.Body).Decode(&response)
+				assert.NoError(t, err)
+				assert.Contains(t, response, "list_id")
+				assert.Contains(t, response, "stats")
+
+				if tc.expectedStats {
+					stats, ok := response["stats"].(map[string]interface{})
+					assert.True(t, ok)
+					assert.Contains(t, stats, "total_active")
+					assert.Contains(t, stats, "total_pending")
+					assert.Contains(t, stats, "total_unsubscribed")
+					assert.Contains(t, stats, "total_bounced")
+					assert.Contains(t, stats, "total_complained")
+				}
+			}
+		})
+	}
+}

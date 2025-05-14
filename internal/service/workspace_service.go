@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -126,6 +128,17 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
+	randomSecretKey, err := GenerateSecureKey(32) // 32 bytes = 256 bits
+	if err != nil {
+		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to generate secure key")
+		return nil, err
+	}
+
+	// For development environments, use a fixed secret key
+	if s.config.IsDevelopment() {
+		randomSecretKey = "secret_key_for_dev_env"
+	}
+
 	workspace := &domain.Workspace{
 		ID:   id,
 		Name: name,
@@ -135,6 +148,7 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 			CoverURL:    coverURL,
 			Timezone:    timezone,
 			FileManager: fileManager,
+			SecretKey:   randomSecretKey,
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -1084,4 +1098,15 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 	}
 
 	return nil
+}
+
+// GenerateSecureKey generates a cryptographically secure random key
+// with the specified byte length and returns it as a hex-encoded string
+func GenerateSecureKey(byteLength int) (string, error) {
+	key := make([]byte, byteLength)
+	_, err := rand.Read(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate secure key: %w", err)
+	}
+	return hex.EncodeToString(key), nil
 }

@@ -50,7 +50,6 @@ func createSampleTransactionalNotification() *domain.TransactionalNotification {
 				},
 			},
 		},
-		IsPublic: true,
 		TrackingSettings: mjml.TrackingSettings{
 			EnableTracking: true,
 			UTMSource:      "notifuse",
@@ -85,7 +84,6 @@ func TestTransactionalNotificationRepository_Create(t *testing.T) {
 				notification.Name,
 				notification.Description,
 				sqlmock.AnyArg(), // channels (complex type)
-				notification.IsPublic,
 				sqlmock.AnyArg(), // tracking_settings (complex type)
 				sqlmock.AnyArg(), // metadata (complex type)
 				sqlmock.AnyArg(), // created_at
@@ -118,7 +116,6 @@ func TestTransactionalNotificationRepository_Create(t *testing.T) {
 				notification.Name,
 				notification.Description,
 				sqlmock.AnyArg(), // channels (complex type)
-				notification.IsPublic,
 				sqlmock.AnyArg(), // tracking_settings (complex type)
 				sqlmock.AnyArg(), // metadata (complex type)
 				sqlmock.AnyArg(), // created_at
@@ -150,7 +147,6 @@ func TestTransactionalNotificationRepository_Update(t *testing.T) {
 				notification.Name,
 				notification.Description,
 				sqlmock.AnyArg(), // channels (complex type)
-				notification.IsPublic,
 				sqlmock.AnyArg(), // tracking_settings (complex type)
 				sqlmock.AnyArg(), // metadata (complex type)
 				sqlmock.AnyArg(), // updated_at
@@ -182,7 +178,6 @@ func TestTransactionalNotificationRepository_Update(t *testing.T) {
 				notification.Name,
 				notification.Description,
 				sqlmock.AnyArg(), // channels (complex type)
-				notification.IsPublic,
 				sqlmock.AnyArg(), // tracking_settings (complex type)
 				sqlmock.AnyArg(), // metadata (complex type)
 				sqlmock.AnyArg(), // updated_at
@@ -205,7 +200,6 @@ func TestTransactionalNotificationRepository_Update(t *testing.T) {
 				notification.Name,
 				notification.Description,
 				sqlmock.AnyArg(), // channels (complex type)
-				notification.IsPublic,
 				sqlmock.AnyArg(), // tracking_settings (complex type)
 				sqlmock.AnyArg(), // metadata (complex type)
 				sqlmock.AnyArg(), // updated_at
@@ -231,7 +225,6 @@ func TestTransactionalNotificationRepository_Update(t *testing.T) {
 				notification.Name,
 				notification.Description,
 				sqlmock.AnyArg(), // channels (complex type)
-				notification.IsPublic,
 				sqlmock.AnyArg(), // tracking_settings (complex type)
 				sqlmock.AnyArg(), // metadata (complex type)
 				sqlmock.AnyArg(), // updated_at
@@ -268,14 +261,13 @@ func TestTransactionalNotificationRepository_Get(t *testing.T) {
 		require.NoError(t, err)
 
 		rows := sqlmock.NewRows([]string{
-			"id", "name", "description", "channels", "is_public", "tracking_settings",
+			"id", "name", "description", "channels", "tracking_settings",
 			"metadata", "created_at", "updated_at", "deleted_at",
 		}).AddRow(
 			notification.ID,
 			notification.Name,
 			notification.Description,
 			channelsJSON,
-			notification.IsPublic,
 			trackingSettingsJSON,
 			metadataJSON,
 			notification.CreatedAt,
@@ -293,7 +285,6 @@ func TestTransactionalNotificationRepository_Get(t *testing.T) {
 		assert.Equal(t, notification.ID, result.ID)
 		assert.Equal(t, notification.Name, result.Name)
 		assert.Equal(t, notification.Description, result.Description)
-		assert.Equal(t, notification.IsPublic, result.IsPublic)
 		assert.Equal(t, notification.TrackingSettings.EnableTracking, result.TrackingSettings.EnableTracking)
 	})
 
@@ -369,14 +360,13 @@ func TestTransactionalNotificationRepository_List(t *testing.T) {
 
 		// Set up data query
 		dataRows := sqlmock.NewRows([]string{
-			"id", "name", "description", "channels", "is_public", "tracking_settings",
+			"id", "name", "description", "channels", "tracking_settings",
 			"metadata", "created_at", "updated_at", "deleted_at",
 		}).AddRow(
 			notification.ID,
 			notification.Name,
 			notification.Description,
 			channelsJSON,
-			notification.IsPublic,
 			trackingSettingsJSON,
 			metadataJSON,
 			notification.CreatedAt,
@@ -421,14 +411,13 @@ func TestTransactionalNotificationRepository_List(t *testing.T) {
 
 		// Set up data query with search param
 		dataRows := sqlmock.NewRows([]string{
-			"id", "name", "description", "channels", "is_public", "tracking_settings",
+			"id", "name", "description", "channels", "tracking_settings",
 			"metadata", "created_at", "updated_at", "deleted_at",
 		}).AddRow(
 			notification.ID,
 			notification.Name,
 			notification.Description,
 			channelsJSON,
-			notification.IsPublic,
 			trackingSettingsJSON,
 			metadataJSON,
 			notification.CreatedAt,
@@ -539,14 +528,13 @@ func TestTransactionalNotificationRepository_List(t *testing.T) {
 
 		// Create rows with an error during iteration
 		dataRows := sqlmock.NewRows([]string{
-			"id", "name", "description", "channels", "is_public", "tracking_settings",
+			"id", "name", "description", "channels", "tracking_settings",
 			"metadata", "created_at", "updated_at", "deleted_at",
 		}).AddRow(
 			notification.ID,
 			notification.Name,
 			notification.Description,
 			channelsJSON,
-			notification.IsPublic,
 			trackingSettingsJSON,
 			metadataJSON,
 			notification.CreatedAt,

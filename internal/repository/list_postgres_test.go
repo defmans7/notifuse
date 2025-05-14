@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -28,11 +27,6 @@ func TestListRepository(t *testing.T) {
 		IsDoubleOptin:       true,
 		IsPublic:            true,
 		Description:         "This is a test list",
-		TotalActive:         0,
-		TotalPending:        0,
-		TotalUnsubscribed:   0,
-		TotalBounced:        0,
-		TotalComplained:     0,
 		DoubleOptInTemplate: nil,
 		WelcomeTemplate:     nil,
 		UnsubscribeTemplate: nil,
@@ -102,8 +96,7 @@ func TestListRepository(t *testing.T) {
 	t.Run("GetListByID", func(t *testing.T) {
 		t.Run("list found", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
-				"id", "name", "is_double_optin", "is_public", "description", "total_active", "total_pending",
-				"total_unsubscribed", "total_bounced", "total_complained", "double_optin_template",
+				"id", "name", "is_double_optin", "is_public", "description", "double_optin_template",
 				"welcome_template", "unsubscribe_template", "created_at", "updated_at",
 				"deleted_at",
 			}).AddRow(
@@ -112,11 +105,6 @@ func TestListRepository(t *testing.T) {
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
-				testList.TotalActive,
-				testList.TotalPending,
-				testList.TotalUnsubscribed,
-				testList.TotalBounced,
-				testList.TotalComplained,
 				testList.DoubleOptInTemplate,
 				testList.WelcomeTemplate,
 				testList.UnsubscribeTemplate,
@@ -126,8 +114,7 @@ func TestListRepository(t *testing.T) {
 			)
 
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
-				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
 				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
 				FROM lists
 				WHERE id = $1 AND deleted_at IS NULL
@@ -144,8 +131,7 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("list not found", func(t *testing.T) {
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
-				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
 				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
 				FROM lists
 				WHERE id = $1 AND deleted_at IS NULL
@@ -159,8 +145,7 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
-				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
 				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
 				FROM lists
 				WHERE id = $1 AND deleted_at IS NULL
@@ -176,8 +161,8 @@ func TestListRepository(t *testing.T) {
 	t.Run("GetLists", func(t *testing.T) {
 		t.Run("successful retrieval", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
-				"id", "name", "is_double_optin", "is_public", "description", "total_active", "total_pending",
-				"total_unsubscribed", "total_bounced", "total_complained", "double_optin_template",
+				"id", "name", "is_double_optin", "is_public", "description",
+				"double_optin_template",
 				"welcome_template", "unsubscribe_template", "created_at", "updated_at",
 				"deleted_at",
 			}).AddRow(
@@ -186,11 +171,6 @@ func TestListRepository(t *testing.T) {
 				testList.IsDoubleOptin,
 				testList.IsPublic,
 				testList.Description,
-				testList.TotalActive,
-				testList.TotalPending,
-				testList.TotalUnsubscribed,
-				testList.TotalBounced,
-				testList.TotalComplained,
 				testList.DoubleOptInTemplate,
 				testList.WelcomeTemplate,
 				testList.UnsubscribeTemplate,
@@ -200,8 +180,7 @@ func TestListRepository(t *testing.T) {
 			)
 
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
-				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
 				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
 				FROM lists
 				WHERE deleted_at IS NULL
@@ -220,8 +199,7 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, total_active, total_pending, 
-				total_unsubscribed, total_bounced, total_complained, double_optin_template, 
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
 				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
 				FROM lists
 				WHERE deleted_at IS NULL
@@ -379,6 +357,77 @@ func TestListRepository(t *testing.T) {
 			assert.Contains(t, err.Error(), "list not found or already deleted")
 		})
 	})
+
+	t.Run("GetListStats", func(t *testing.T) {
+		t.Run("successful retrieval", func(t *testing.T) {
+			rows := sqlmock.NewRows([]string{
+				"total_active", "total_pending", "total_unsubscribed", "total_bounced", "total_complained",
+			}).AddRow(10, 5, 3, 1, 0)
+
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT 
+					SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active,
+					SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as total_pending,
+					SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed,
+					SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
+					SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained
+				FROM contact_lists
+				WHERE list_id = $1 AND deleted_at IS NULL
+			`)).WithArgs(testList.ID).WillReturnRows(rows)
+
+			stats, err := repo.GetListStats(context.Background(), "workspace123", testList.ID)
+			require.NoError(t, err)
+			assert.Equal(t, 10, stats.TotalActive)
+			assert.Equal(t, 5, stats.TotalPending)
+			assert.Equal(t, 3, stats.TotalUnsubscribed)
+			assert.Equal(t, 1, stats.TotalBounced)
+			assert.Equal(t, 0, stats.TotalComplained)
+		})
+
+		t.Run("list not found or no contacts", func(t *testing.T) {
+			// When the list exists but has no contacts, the database will return 0s for all counts, not an error
+			rows := sqlmock.NewRows([]string{
+				"total_active", "total_pending", "total_unsubscribed", "total_bounced", "total_complained",
+			}).AddRow(0, 0, 0, 0, 0)
+
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT 
+					SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active,
+					SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as total_pending,
+					SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed,
+					SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
+					SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained
+				FROM contact_lists
+				WHERE list_id = $1 AND deleted_at IS NULL
+			`)).WithArgs("nonexistent-list").WillReturnRows(rows)
+
+			stats, err := repo.GetListStats(context.Background(), "workspace123", "nonexistent-list")
+			require.NoError(t, err)
+			assert.Equal(t, 0, stats.TotalActive)
+			assert.Equal(t, 0, stats.TotalPending)
+			assert.Equal(t, 0, stats.TotalUnsubscribed)
+			assert.Equal(t, 0, stats.TotalBounced)
+			assert.Equal(t, 0, stats.TotalComplained)
+		})
+
+		t.Run("database error", func(t *testing.T) {
+			sqlMock.ExpectQuery(regexp.QuoteMeta(`
+				SELECT 
+					SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active,
+					SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as total_pending,
+					SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed,
+					SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
+					SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained
+				FROM contact_lists
+				WHERE list_id = $1 AND deleted_at IS NULL
+			`)).WithArgs(testList.ID).WillReturnError(errors.New("database error"))
+
+			stats, err := repo.GetListStats(context.Background(), "workspace123", testList.ID)
+			require.Error(t, err)
+			assert.Nil(t, stats)
+			assert.Contains(t, err.Error(), "failed to get list stats")
+		})
+	})
 }
 
 func setupListRepositoryTest(t *testing.T) (*listRepository, sqlmock.Sqlmock, *mocks.MockWorkspaceRepository) {
@@ -387,238 +436,4 @@ func setupListRepositoryTest(t *testing.T) (*listRepository, sqlmock.Sqlmock, *m
 
 	repo := NewListRepository(mockWorkspaceRepo).(*listRepository)
 	return repo, nil, mockWorkspaceRepo
-}
-
-func TestListRepository_IncrementTotal_InvalidType(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewListRepository(mockWorkspaceRepo)
-
-	err := repo.IncrementTotal(context.Background(), "workspace123", "list123", "invalid_type")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid total type")
-}
-
-func TestListRepository_DecrementTotal_InvalidType(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewListRepository(mockWorkspaceRepo)
-
-	err := repo.DecrementTotal(context.Background(), "workspace123", "list123", "invalid_type")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid total type")
-}
-
-func TestListRepository_IncrementTotal(t *testing.T) {
-	tests := []struct {
-		name      string
-		totalType domain.ContactListTotalType
-		column    string
-		mockSetup func(mock sqlmock.Sqlmock)
-		wantErr   bool
-	}{
-		{
-			name:      "increment active total",
-			totalType: domain.TotalTypeActive,
-			column:    "total_active",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_active = total_active \\+ 1 WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "increment pending total",
-			totalType: domain.TotalTypePending,
-			column:    "total_pending",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_pending = total_pending \\+ 1 WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "increment unsubscribed total",
-			totalType: domain.TotalTypeUnsubscribed,
-			column:    "total_unsubscribed",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_unsubscribed = total_unsubscribed \\+ 1 WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "increment bounced total",
-			totalType: domain.TotalTypeBounced,
-			column:    "total_bounced",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_bounced = total_bounced \\+ 1 WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "increment complained total",
-			totalType: domain.TotalTypeComplained,
-			column:    "total_complained",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_complained = total_complained \\+ 1 WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "workspace connection error",
-			totalType: domain.TotalTypeActive,
-			mockSetup: nil,
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-			repo := NewListRepository(mockWorkspaceRepo)
-
-			if tt.mockSetup != nil {
-				db, mock, err := sqlmock.New()
-				require.NoError(t, err)
-				defer db.Close()
-
-				tt.mockSetup(mock)
-
-				mockWorkspaceRepo.EXPECT().
-					GetConnection(gomock.Any(), "workspace123").
-					Return(db, nil)
-			} else {
-				mockWorkspaceRepo.EXPECT().
-					GetConnection(gomock.Any(), "workspace123").
-					Return(nil, fmt.Errorf("workspace connection error"))
-			}
-
-			err := repo.IncrementTotal(context.Background(), "workspace123", "list123", tt.totalType)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestListRepository_DecrementTotal(t *testing.T) {
-	tests := []struct {
-		name      string
-		totalType domain.ContactListTotalType
-		column    string
-		mockSetup func(mock sqlmock.Sqlmock)
-		wantErr   bool
-	}{
-		{
-			name:      "decrement active total",
-			totalType: domain.TotalTypeActive,
-			column:    "total_active",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_active = GREATEST\\(total_active - 1, 0\\) WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "decrement pending total",
-			totalType: domain.TotalTypePending,
-			column:    "total_pending",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_pending = GREATEST\\(total_pending - 1, 0\\) WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "decrement unsubscribed total",
-			totalType: domain.TotalTypeUnsubscribed,
-			column:    "total_unsubscribed",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_unsubscribed = GREATEST\\(total_unsubscribed - 1, 0\\) WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "decrement bounced total",
-			totalType: domain.TotalTypeBounced,
-			column:    "total_bounced",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_bounced = GREATEST\\(total_bounced - 1, 0\\) WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "decrement complained total",
-			totalType: domain.TotalTypeComplained,
-			column:    "total_complained",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE lists SET total_complained = GREATEST\\(total_complained - 1, 0\\) WHERE id = \\$1 AND deleted_at IS NULL").
-					WithArgs("list123").
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			wantErr: false,
-		},
-		{
-			name:      "workspace connection error",
-			totalType: domain.TotalTypeActive,
-			mockSetup: nil,
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-			repo := NewListRepository(mockWorkspaceRepo)
-
-			if tt.mockSetup != nil {
-				db, mock, err := sqlmock.New()
-				require.NoError(t, err)
-				defer db.Close()
-
-				tt.mockSetup(mock)
-
-				mockWorkspaceRepo.EXPECT().
-					GetConnection(gomock.Any(), "workspace123").
-					Return(db, nil)
-			} else {
-				mockWorkspaceRepo.EXPECT().
-					GetConnection(gomock.Any(), "workspace123").
-					Return(nil, fmt.Errorf("workspace connection error"))
-			}
-
-			err := repo.DecrementTotal(context.Background(), "workspace123", "list123", tt.totalType)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
 }

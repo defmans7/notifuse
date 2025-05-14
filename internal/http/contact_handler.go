@@ -40,9 +40,6 @@ func (h *ContactHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/contacts.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 	mux.Handle("/api/contacts.import", requireAuth(http.HandlerFunc(h.handleImport)))
 	mux.Handle("/api/contacts.upsert", requireAuth(http.HandlerFunc(h.handleUpsert)))
-
-	// Register public routes
-	mux.HandleFunc("/notification-center", h.handleNotificationCenter)
 }
 
 func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -259,49 +256,4 @@ func (h *ContactHandler) handleUpsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
-}
-
-func (h *ContactHandler) handleNotificationCenter(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get required parameters from query
-	workspaceID := r.URL.Query().Get("workspace_id")
-	if workspaceID == "" {
-		WriteJSONError(w, "Missing workspace ID", http.StatusBadRequest)
-		return
-	}
-
-	email := r.URL.Query().Get("email")
-	if email == "" {
-		WriteJSONError(w, "Missing email parameter", http.StatusBadRequest)
-		return
-	}
-
-	emailHMAC := r.URL.Query().Get("email_hmac")
-	if emailHMAC == "" {
-		WriteJSONError(w, "Missing email_hmac parameter", http.StatusBadRequest)
-		return
-	}
-
-	// Get notification center data for the contact
-	response, err := h.service.GetNotificationCenter(r.Context(), email, workspaceID, emailHMAC)
-	if err != nil {
-		if strings.Contains(err.Error(), "invalid email verification") {
-			WriteJSONError(w, "Unauthorized: invalid verification", http.StatusUnauthorized)
-			return
-		}
-		if strings.Contains(err.Error(), "contact not found") {
-			WriteJSONError(w, "Contact not found", http.StatusNotFound)
-			return
-		}
-		h.logger.WithField("error", err.Error()).Error("Failed to get notification center data")
-		WriteJSONError(w, "Failed to get notification center data", http.StatusInternalServerError)
-		return
-	}
-
-	// Write the response
-	writeJSON(w, http.StatusOK, response)
 }
