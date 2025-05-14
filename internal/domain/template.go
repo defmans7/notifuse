@@ -3,7 +3,10 @@ package domain
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql/driver"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -625,7 +628,7 @@ func (e *ErrTemplateNotFound) Error() string {
 }
 
 // BuildTemplateData creates a template data map with flexible options
-func BuildTemplateData(workspaceID string, contactWithList ContactWithList, messageID string, apiEndpoint string, broadcast *Broadcast) (MapOfAny, error) {
+func BuildTemplateData(workspaceID string, secretKey string, contactWithList ContactWithList, messageID string, apiEndpoint string, broadcast *Broadcast) (MapOfAny, error) {
 	templateData := MapOfAny{}
 
 	if contactWithList.Contact != nil {
@@ -674,11 +677,18 @@ func BuildTemplateData(workspaceID string, contactWithList ContactWithList, mess
 		listName := url.QueryEscape(contactWithList.ListName)
 		workspaceID := url.QueryEscape(workspaceID)
 
-		// Note: In a real implementation, you would add a signature token for security
-		unsubscribeURL := fmt.Sprintf("%s/unsubscribe?email=%s&list=%s&list_name=%s&workspace=%s&message=%s",
-			apiEndpoint, email, listID, listName, workspaceID, messageID)
-
+		// generate hmac for unsubscribe link
+		hmac := hmac.New(sha256.New, []byte(secretKey))
+		hmac.Write([]byte(fmt.Sprintf("%s:%s:%s:%s:%s", email, listID, listName, workspaceID, messageID)))
+		signature := base64.StdEncoding.EncodeToString(hmac.Sum(nil))
+		unsubscribeURL := fmt.Sprintf("%s/unsubscribe?lid=%s&lname=%s&wid=%s&mid=%s&email=%s&hmac=%s",
+			apiEndpoint, listID, listName, workspaceID, messageID, email, signature)
 		templateData["unsubscribe_url"] = unsubscribeURL
+
+		// oneclick unsubscribe link
+		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?email=%s&lids=%s&wid=%s&message=%s",
+			apiEndpoint, email, listID, workspaceID, messageID)
+		templateData["oneclick_unsubscribe_url"] = oneclickUnsubscribeURL
 	}
 
 	// Add tracking data

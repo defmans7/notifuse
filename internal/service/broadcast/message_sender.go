@@ -21,7 +21,7 @@ type MessageSender interface {
 		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error
 
 	// SendBatch sends messages to a batch of recipients
-	SendBatch(ctx context.Context, workspaceID, broadcastID string, recipients []*domain.ContactWithList,
+	SendBatch(ctx context.Context, workspaceID, broadcastID string, workspaceSecretKey string, recipients []*domain.ContactWithList,
 		templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error)
 }
 
@@ -293,7 +293,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 }
 
 // SendBatch sends messages to a batch of recipients
-func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID string, recipients []*domain.ContactWithList,
+func (s *messageSender) SendBatch(ctx context.Context, workspaceID, workspaceSecretKey, broadcastID string, recipients []*domain.ContactWithList,
 	templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error) {
 
 	startTime := time.Now()
@@ -391,7 +391,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID, broadcastID 
 		messageID := generateMessageID(workspaceID)
 
 		// Build the template data with all options
-		recipientData, err := domain.BuildTemplateData(workspaceID, *contactWithList, messageID, apiEndpoint, broadcast)
+		recipientData, err := domain.BuildTemplateData(workspaceID, workspaceSecretKey, *contactWithList, messageID, apiEndpoint, broadcast)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,

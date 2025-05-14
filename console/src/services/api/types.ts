@@ -494,3 +494,44 @@ export interface TestTemplateResponse {
   success: boolean
   error?: string
 }
+
+// Notification Center types
+export interface NotificationCenterRequest {
+  workspace_id: string
+  email: string
+  email_hmac: string
+}
+
+export interface NotificationCenterResponse {
+  contact: {
+    email: string
+    first_name?: string
+    last_name?: string
+  }
+  lists: {
+    id: string
+    name: string
+    description?: string
+    status: string
+  }[]
+  workspace: {
+    id: string
+    name: string
+    logo_url?: string
+    website_url?: string
+  }
+}
+
+export interface SubscribeToListsRequest {
+  workspace_id: string
+  email: string
+  email_hmac: string
+  list_ids: string[]
+}
+
+export interface UnsubscribeFromListsRequest {
+  workspace_id: string
+  email: string
+  email_hmac: string
+  list_ids: string[]
+}

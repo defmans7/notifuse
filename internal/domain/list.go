@@ -355,10 +355,10 @@ func (r *SubscribeToListsRequest) Validate() (err error) {
 }
 
 type UnsubscribeFromListsRequest struct {
-	WorkspaceID string   `json:"workspace_id"`
+	WorkspaceID string   `json:"wid"`
 	Email       string   `json:"email"`
-	EmailHMAC   string   `json:"email_hmac"`
-	ListIDs     []string `json:"list_ids"`
+	EmailHMAC   string   `json:"hmac"`
+	ListIDs     []string `json:"lids"`
 }
 
 // from url params

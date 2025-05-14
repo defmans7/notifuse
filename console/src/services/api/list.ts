@@ -11,7 +11,8 @@ import type {
   UpdateListResponse,
   DeleteListResponse,
   GetListStatsRequest,
-  GetListStatsResponse
+  GetListStatsResponse,
+  SubscribeToListsRequest
 } from './types'
 
 export const listsApi = {
@@ -54,5 +55,9 @@ export const listsApi = {
     searchParams.append('list_id', params.list_id)
 
     return api.get<GetListStatsResponse>(`/api/lists.stats?${searchParams.toString()}`)
+  },
+
+  subscribe: async (params: SubscribeToListsRequest): Promise<{ success: boolean }> => {
+    return api.post('/api/lists.subscribe', params)
   }
 }

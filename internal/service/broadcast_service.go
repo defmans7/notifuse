@@ -14,21 +14,23 @@ import (
 
 // BroadcastService handles all broadcast-related operations
 type BroadcastService struct {
-	logger      logger.Logger
-	repo        domain.BroadcastRepository
-	contactRepo domain.ContactRepository
-	emailSvc    domain.EmailServiceInterface
-	templateSvc domain.TemplateService
-	taskService domain.TaskService
-	authService domain.AuthService
-	eventBus    domain.EventBus
-	apiEndpoint string
+	logger        logger.Logger
+	repo          domain.BroadcastRepository
+	workspaceRepo domain.WorkspaceRepository
+	contactRepo   domain.ContactRepository
+	emailSvc      domain.EmailServiceInterface
+	templateSvc   domain.TemplateService
+	taskService   domain.TaskService
+	authService   domain.AuthService
+	eventBus      domain.EventBus
+	apiEndpoint   string
 }
 
 // NewBroadcastService creates a new broadcast service
 func NewBroadcastService(
 	logger logger.Logger,
 	repository domain.BroadcastRepository,
+	workspaceRepository domain.WorkspaceRepository,
 	emailService domain.EmailServiceInterface,
 	contactRepository domain.ContactRepository,
 	templateService domain.TemplateService,
@@ -38,15 +40,16 @@ func NewBroadcastService(
 	apiEndpoint string,
 ) *BroadcastService {
 	return &BroadcastService{
-		logger:      logger,
-		repo:        repository,
-		emailSvc:    emailService,
-		contactRepo: contactRepository,
-		templateSvc: templateService,
-		taskService: taskService,
-		authService: authService,
-		eventBus:    eventBus,
-		apiEndpoint: apiEndpoint,
+		logger:        logger,
+		repo:          repository,
+		workspaceRepo: workspaceRepository,
+		emailSvc:      emailService,
+		contactRepo:   contactRepository,
+		templateSvc:   templateService,
+		taskService:   taskService,
+		authService:   authService,
+		eventBus:      eventBus,
+		apiEndpoint:   apiEndpoint,
 	}
 }
 
@@ -706,6 +709,13 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return err
 	}
 
+	// get workspace
+	workspace, err := s.workspaceRepo.GetByID(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.Error("Failed to get workspace for individual sending")
+		return err
+	}
+
 	// Retrieve the broadcast
 	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.BroadcastID)
 	if err != nil {
@@ -763,7 +773,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 
 	messageID := uuid.New().String()
 
-	templateData, err := domain.BuildTemplateData(request.WorkspaceID, domain.ContactWithList{
+	templateData, err := domain.BuildTemplateData(request.WorkspaceID, workspace.Settings.SecretKey, domain.ContactWithList{
 		Contact:  contact,
 		ListID:   "",
 		ListName: "",

@@ -458,7 +458,7 @@ func (s *TransactionalNotificationService) SendNotification(
 			Contact: contact,
 		}
 
-		templateData, err := domain.BuildTemplateData(workspace.ID, contactWithList, messageID, apiEndpoint, nil)
+		templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, contactWithList, messageID, apiEndpoint, nil)
 		if err != nil {
 			tracing.MarkSpanError(childCtx, err)
 			childSpan.End()

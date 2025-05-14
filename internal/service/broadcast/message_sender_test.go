@@ -267,6 +267,7 @@ func TestWithMockMessageSender(t *testing.T) {
 	// Setup test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
+	workspaceSecretKey := "secret-key"
 	broadcast := &domain.Broadcast{
 		ID: "broadcast-123",
 		UTMParameters: &domain.UTMParameters{
@@ -312,11 +313,11 @@ func TestWithMockMessageSender(t *testing.T) {
 
 	// Set up expectations with specific return values
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, broadcast.ID, mockContacts, mockTemplates, nil).
+		SendBatch(ctx, workspaceID, workspaceSecretKey, broadcast.ID, mockContacts, mockTemplates, nil).
 		Return(1, 0, nil)
 
 	// Use the mock
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, broadcast.ID, mockContacts, mockTemplates, nil)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, broadcast.ID, mockContacts, mockTemplates, nil)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -336,6 +337,7 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	// Setup test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
+	workspaceSecretKey := "secret-key"
 	broadcast := &domain.Broadcast{
 		ID: "broadcast-123",
 		UTMParameters: &domain.UTMParameters{
@@ -384,10 +386,10 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	batchError := errors.New("batch processing failed")
 
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, broadcast.ID, mockContacts, mockTemplates, nil).
+		SendBatch(ctx, workspaceID, workspaceSecretKey, broadcast.ID, mockContacts, mockTemplates, nil).
 		Return(0, 0, batchError)
 
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, broadcast.ID, mockContacts, mockTemplates, nil)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, broadcast.ID, mockContacts, mockTemplates, nil)
 	assert.Error(t, err)
 	assert.Equal(t, batchError, err)
 	assert.Equal(t, 0, sent)
@@ -416,6 +418,7 @@ func TestSendBatch(t *testing.T) {
 	// Setup test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
+	workspaceSecretKey := "secret-key"
 	broadcastID := "broadcast-456"
 	apiEndpoint := "https://api.example.com"
 
@@ -561,7 +564,7 @@ func TestSendBatch(t *testing.T) {
 	)
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, recipients, templates, nil)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, broadcastID, recipients, templates, nil)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -588,6 +591,7 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 	// Setup test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
+	workspaceSecretKey := "secret-key"
 	broadcastID := "broadcast-456"
 
 	// Create message sender
@@ -601,7 +605,7 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 	)
 
 	// Call the method being tested with empty recipients
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, []*domain.ContactWithList{},
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, broadcastID, []*domain.ContactWithList{},
 		map[string]*domain.Template{}, nil)
 
 	// Verify results
@@ -630,6 +634,7 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 	// Setup test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
+	workspaceSecretKey := "secret-key"
 	broadcastID := "broadcast-456"
 	recipients := []*domain.ContactWithList{
 		{
@@ -656,7 +661,7 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 	messageSenderImpl.circuitBreaker.RecordFailure()
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, recipients,
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, broadcastID, recipients,
 		map[string]*domain.Template{}, nil)
 
 	// Verify results
@@ -712,6 +717,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	// Setup test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
+	workspaceSecretKey := "secret-key"
 	broadcastID := "broadcast-456"
 	apiEndpoint := "https://api.example.com"
 
@@ -851,7 +857,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	)
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, recipients, templates, nil)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, broadcastID, recipients, templates, nil)
 
 	// Verify results
 	assert.NoError(t, err) // The overall operation shouldn't fail even if individual sends fail
@@ -881,6 +887,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	// Setup test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
+	workspaceSecretKey := "secret-key"
 	broadcastID := "broadcast-456"
 	apiEndpoint := "https://api.example.com"
 
@@ -997,7 +1004,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	)
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, broadcastID, recipients, templates, nil)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, broadcastID, recipients, templates, nil)
 
 	// Verify results - the SendBatch should still succeed even if recording failed
 	assert.NoError(t, err)

@@ -44,6 +44,7 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
@@ -57,7 +58,7 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -225,6 +226,7 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
@@ -237,7 +239,7 @@ func TestBroadcastService_GetBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -313,6 +315,7 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
@@ -325,7 +328,7 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -523,6 +526,7 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -537,7 +541,7 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -757,6 +761,7 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -771,7 +776,7 @@ func TestBroadcastService_CancelBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Then manually set the repositories needed for testing
 	service.repo = mockRepo
@@ -921,7 +926,7 @@ func TestBroadcastService_RecordMessageSent(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -936,7 +941,7 @@ func TestBroadcastService_RecordMessageSent(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Test when repository supports CreateMessageHistory
 	t.Run("RepositorySupportsMessageHistory", func(t *testing.T) {
@@ -1063,7 +1068,7 @@ func TestBroadcastService_UpdateMessageStatus(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -1078,7 +1083,7 @@ func TestBroadcastService_UpdateMessageStatus(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Test when repository supports UpdateMessageStatus
 	t.Run("RepositorySupportsMessageHistoryUpdate", func(t *testing.T) {
@@ -1177,10 +1182,10 @@ func TestBroadcastService_GetAPIEndpoint(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	expectedEndpoint := "https://api.example.com"
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, expectedEndpoint)
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, expectedEndpoint)
 
 	// Test GetAPIEndpoint
 	t.Run("ReturnsConfiguredEndpoint", func(t *testing.T) {
@@ -1201,7 +1206,7 @@ func TestBroadcastService_GetTemplateByID(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -1216,7 +1221,7 @@ func TestBroadcastService_GetTemplateByID(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -1281,11 +1286,11 @@ func TestBroadcastService_SetTaskService(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Create a new task service to set
 	newTaskService := mocks.NewMockTaskService(ctrl)
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	// Verify that the task service is initially what we set
 	assert.Equal(t, mockTaskService, service.taskService)
@@ -1309,7 +1314,7 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -1324,7 +1329,7 @@ func TestBroadcastService_DeleteBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -1526,7 +1531,7 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
@@ -1539,7 +1544,7 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -1791,7 +1796,7 @@ func TestBroadcastService_PauseBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -1806,7 +1811,7 @@ func TestBroadcastService_PauseBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	t.Run("Success", func(t *testing.T) {
 		ctx := context.Background()
@@ -2034,7 +2039,7 @@ func TestBroadcastService_ResumeBroadcast(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
-
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	// Set up logger mock to return itself for chaining
 	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
@@ -2049,7 +2054,7 @@ func TestBroadcastService_ResumeBroadcast(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
 
 	t.Run("ResumeToSendingStatus", func(t *testing.T) {
 		ctx := context.Background()
@@ -2354,35 +2359,36 @@ func timePtr(t time.Time) *time.Time {
 }
 
 func TestBroadcastService_SendToIndividual(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
-	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockContactRepo := mocks.NewMockContactRepository(ctrl)
-	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
-	mockAuthSvc := mocks.NewMockAuthService(ctrl)
-	mockTaskService := mocks.NewMockTaskService(ctrl)
-	mockEventBus := mocks.NewMockEventBus(ctrl)
-
-	// Set up logger mock to return itself for chaining
-	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
-	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-	// Add direct logger method expectations
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
-
-	service := NewBroadcastService(mockLogger, mockRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
-
 	t.Run("Success", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		// Add direct logger method expectations
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
 		ctx := context.Background()
 		workspaceID := "ws123"
 		broadcastID := "bcast123"
@@ -2422,6 +2428,18 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
 			Return(broadcast, nil)
+
+		// Mock workspace repository to return a workspace
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				TransactionalEmailProviderID: "email-provider-123",
+			},
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
 
 		// Mock contact repository to return a contact
 		contact := &domain.Contact{
@@ -2491,6 +2509,28 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	})
 
 	t.Run("AuthenticationError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
 		ctx := context.Background()
 		workspaceID := "ws123"
 		broadcastID := "bcast123"
@@ -2518,6 +2558,29 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	})
 
 	t.Run("GetBroadcastError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
 		ctx := context.Background()
 		workspaceID := "ws123"
 		broadcastID := "bcast123"
@@ -2535,6 +2598,15 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, &domain.User{ID: "user123"}, nil)
 
+		// Mock workspace repository
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
 		// Mock repository to return an error
 		expectedErr := errors.New("broadcast not found")
 		mockRepo.EXPECT().
@@ -2550,6 +2622,30 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	})
 
 	t.Run("NoVariationsError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
 		ctx := context.Background()
 		workspaceID := "ws123"
 		broadcastID := "bcast123"
@@ -2583,6 +2679,15 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		mockRepo.EXPECT().
 			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
 			Return(broadcast, nil)
+
+		// Mock workspace repository to return a workspace
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
 
 		// Call the service
 		err := service.SendToIndividual(ctx, request)

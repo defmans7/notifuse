@@ -1098,7 +1098,7 @@ func TestBuildTemplateData(t *testing.T) {
 		}
 
 		// Call the function
-		data, err := BuildTemplateData(workspaceID, contactWithList, messageID, apiEndpoint, broadcast)
+		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, apiEndpoint, broadcast)
 
 		// Assertions
 		assert.NoError(t, err)
@@ -1135,10 +1135,10 @@ func TestBuildTemplateData(t *testing.T) {
 		assert.True(t, ok)
 		assert.Contains(t, unsubscribeURL, "https://api.example.com/unsubscribe")
 		assert.Contains(t, unsubscribeURL, "email=test%40example.com")
-		assert.Contains(t, unsubscribeURL, "list=list-789")
-		assert.Contains(t, unsubscribeURL, "list_name=Newsletter")
-		assert.Contains(t, unsubscribeURL, "workspace=ws-123")
-		assert.Contains(t, unsubscribeURL, "message=msg-456")
+		assert.Contains(t, unsubscribeURL, "lid=list-789")
+		assert.Contains(t, unsubscribeURL, "lname=Newsletter")
+		assert.Contains(t, unsubscribeURL, "wid=ws-123")
+		assert.Contains(t, unsubscribeURL, "mid=msg-456")
 
 		// Check tracking data
 		assert.Equal(t, messageID, data["message_id"])
@@ -1161,7 +1161,7 @@ func TestBuildTemplateData(t *testing.T) {
 		}
 
 		// Call the function
-		data, err := BuildTemplateData(workspaceID, contactWithList, messageID, "", nil)
+		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, "", nil)
 
 		// Assertions
 		assert.NoError(t, err)

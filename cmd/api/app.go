@@ -437,6 +437,7 @@ func (a *App) InitServices() error {
 	a.broadcastService = service.NewBroadcastService(
 		a.logger,
 		a.broadcastRepo,
+		a.workspaceRepo,
 		a.emailService,
 		a.contactRepo,
 		a.templateService,

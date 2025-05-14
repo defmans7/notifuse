@@ -9,13 +9,6 @@ export interface ContactList {
   updated_at: string
 }
 
-export interface AddContactToListRequest {
-  workspace_id: string
-  email: string
-  list_id: string
-  status: 'active' | 'pending'
-}
-
 export interface GetContactListRequest {
   workspace_id: string
   email: string
@@ -36,9 +29,11 @@ export interface GetListsByContactRequest {
 
 export interface UpdateContactListStatusRequest {
   workspace_id: string
-  email: string
-  list_id: string
-  status: string
+  contact_list: {
+    email: string
+    list_id: string
+    status: string
+  }
 }
 
 export interface RemoveContactFromListRequest {
@@ -62,11 +57,6 @@ export interface SuccessResponse {
 
 // API client for contact list operations
 export const contactListApi = {
-  // Add a contact to a list
-  addContact: async (params: AddContactToListRequest): Promise<ContactListResponse> => {
-    return api.post<ContactListResponse>('/api/contactLists.addContact', params)
-  },
-
   // Get a specific contact-list relationship by IDs
   getByIDs: async (params: GetContactListRequest): Promise<ContactListResponse> => {
     const searchParams = new URLSearchParams()

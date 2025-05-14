@@ -583,6 +583,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		sent, failed, err := o.messageSender.SendBatch(
 			ctx,
 			task.WorkspaceID,
+			workspace.Settings.SecretKey,
 			broadcastState.BroadcastID,
 			recipients,
 			templates,
