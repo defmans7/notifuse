@@ -11,7 +11,7 @@ import {
   Alert,
   InputNumber,
   DatePicker,
-  message,
+  App,
   Popconfirm
 } from 'antd'
 import type { InputProps } from 'antd/es/input'
@@ -162,7 +162,7 @@ const optionalFields = [
 interface ContactUpsertDrawerProps {
   workspaceId: string
   contact?: Contact
-  onSuccess?: () => void
+  onSuccess?: (updatedContact: Contact) => void
   buttonProps?: {
     type?: 'primary' | 'default' | 'dashed' | 'link' | 'text'
     icon?: React.ReactNode
@@ -190,6 +190,7 @@ export function ContactUpsertDrawer({
   const [form] = Form.useForm()
   const [loading, setLoading] = React.useState(false)
   const queryClient = useQueryClient()
+  const { message } = App.useApp()
 
   React.useEffect(() => {
     if (drawerVisible && contact) {
@@ -284,11 +285,21 @@ export function ContactUpsertDrawer({
       setDrawerVisible(false)
       form.resetFields()
       setSelectedFields([])
-
-      // Invalidate and refetch contacts query
-      await queryClient.invalidateQueries({ queryKey: ['contacts', workspaceId] })
-
-      onSuccess?.()
+      if (onSuccess) {
+        // After successful addition, fetch the latest contact data to pass to the parent
+        contactsApi
+          .list({
+            workspace_id: workspaceId,
+            email: contact?.email,
+            with_contact_lists: true,
+            limit: 1
+          })
+          .then((response) => {
+            if (response.contacts && response.contacts.length > 0 && onSuccess) {
+              onSuccess(response.contacts[0])
+            }
+          })
+      }
     } catch (error) {
       console.error('Failed to upsert contact:', error)
       message.error('Failed to save contact. Please try again.')

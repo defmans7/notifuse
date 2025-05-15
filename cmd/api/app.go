@@ -329,16 +329,6 @@ func (a *App) InitServices() error {
 		a.logger,
 	)
 
-	// Initialize list service
-	a.listService = service.NewListService(
-		a.listRepo,
-		a.workspaceRepo,
-		a.contactListRepo,
-		a.contactRepo,
-		a.authService,
-		a.logger,
-	)
-
 	// Initialize contact list service
 	a.contactListService = service.NewContactListService(
 		a.contactListRepo,
@@ -392,6 +382,18 @@ func (a *App) InitServices() error {
 		a.sesService,
 		a.logger,
 		a.config.WebhookEndpoint,
+	)
+
+	// Initialize list service after webhook registration service
+	a.listService = service.NewListService(
+		a.listRepo,
+		a.workspaceRepo,
+		a.contactListRepo,
+		a.contactRepo,
+		a.authService,
+		a.emailService,
+		a.logger,
+		a.config.APIEndpoint,
 	)
 
 	// Initialize workspace service

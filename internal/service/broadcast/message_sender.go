@@ -204,6 +204,8 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeRateLimitExceeded, "rate limiting interrupted", true, err)
 	}
 
+	broadcast.SetDefaultUTMParameters(template.UTMSource, template.UTMMedium, template.UTMCampaign, &template.ID)
+
 	// Compile template with the provided data
 	compiledTemplate, err := s.templateService.CompileTemplate(
 		ctx,
@@ -212,7 +214,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 			MessageID:        messageID,
 			VisualEditorTree: template.Email.VisualEditorTree,
 			TemplateData:     data,
-			EnableTracking:   broadcast.TestSettings.Enabled,
+			TrackingEnabled:  broadcast.TrackingEnabled,
 			UTMSource:        &broadcast.UTMParameters.Source,
 			UTMMedium:        &broadcast.UTMParameters.Medium,
 			UTMCampaign:      &broadcast.UTMParameters.Campaign,

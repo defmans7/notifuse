@@ -27,6 +27,7 @@ import { Contact } from '../../services/api/contacts'
 import { contactsApi } from '../../services/api/contacts'
 import { contactListApi } from '../../services/api/contact_list'
 import { List } from '../../services/api/types'
+import { listsApi } from '../../services/api/list'
 
 const { Text } = Typography
 const { Option } = Select
@@ -479,27 +480,19 @@ export function ContactsCsvUploadDrawer({
           }
 
           try {
-            await contactsApi.upsert({
-              workspace_id: workspaceId,
-              contact
-            })
-
-            // Add contact to selected lists if any
-            const listsToAdd = selectedListIds || []
-            for (const listId of listsToAdd) {
-              if (processingCancelled) break
-
-              try {
-                await contactListApi.addContact({
-                  workspace_id: workspaceId,
-                  email: contact.email!,
-                  list_id: listId,
-                  status: 'active'
-                })
-              } catch (listError) {
-                console.error(`Error adding contact to list ${listId}:`, listError)
-                // Continue with next list - don't interrupt the process
-              }
+            if (selectedListIds && selectedListIds.length > 0) {
+              // Use the single subscribe endpoint that handles both contact upsert and list subscription
+              await listsApi.subscribe({
+                workspace_id: workspaceId,
+                contact: contact as Contact,
+                list_ids: selectedListIds
+              })
+            } else {
+              // If no lists selected, just do a contact upsert
+              await contactsApi.upsert({
+                workspace_id: workspaceId,
+                contact
+              })
             }
 
             successCount++

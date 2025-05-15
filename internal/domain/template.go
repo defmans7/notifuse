@@ -482,7 +482,7 @@ type CompileTemplateRequest struct {
 	MessageID        string          `json:"message_id"`
 	VisualEditorTree mjml.EmailBlock `json:"visual_editor_tree"` // Use the struct from pkg/mjml
 	TemplateData     MapOfAny        `json:"test_data,omitempty"`
-	EnableTracking   bool            `json:"enable_tracking,omitempty"`
+	TrackingEnabled  bool            `json:"tracking_enabled,omitempty"`
 	UTMSource        *string         `json:"utm_source,omitempty"`
 	UTMMedium        *string         `json:"utm_medium,omitempty"`
 	UTMCampaign      *string         `json:"utm_campaign,omitempty"`
@@ -647,14 +647,13 @@ func BuildTemplateData(workspaceID string, secretKey string, contactWithList Con
 
 	// Add broadcast data if available
 	if broadcast != nil {
-
 		templateData["broadcast"] = MapOfAny{
 			"id":   broadcast.ID,
 			"name": broadcast.Name,
 		}
 
-		// Add UTM parameters if tracking is enabled
-		if broadcast.TrackingEnabled && broadcast.UTMParameters != nil {
+		// Add UTM parameters from broadcast if available
+		if broadcast.UTMParameters != nil {
 			templateData["utm_source"] = broadcast.UTMParameters.Source
 			templateData["utm_medium"] = broadcast.UTMParameters.Medium
 			templateData["utm_campaign"] = broadcast.UTMParameters.Campaign

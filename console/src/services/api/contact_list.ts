@@ -29,11 +29,9 @@ export interface GetListsByContactRequest {
 
 export interface UpdateContactListStatusRequest {
   workspace_id: string
-  contact_list: {
-    email: string
-    list_id: string
-    status: string
-  }
+  email: string
+  list_id: string
+  status: string
 }
 
 export interface RemoveContactFromListRequest {

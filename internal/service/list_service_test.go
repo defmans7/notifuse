@@ -22,8 +22,10 @@ func TestListService_CreateList(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockLogger)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -119,8 +121,10 @@ func TestListService_GetListByID(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockLogger)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -185,8 +189,10 @@ func TestListService_GetLists(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockLogger)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -236,8 +242,10 @@ func TestListService_UpdateList(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockLogger)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -332,8 +340,10 @@ func TestListService_DeleteList(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockLogger)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"

@@ -1,4 +1,5 @@
 import type { BlockInterface } from '../../components/email_editor/Block'
+import { Contact } from './contacts'
 
 // Authentication types
 export interface SignInRequest {
@@ -454,7 +455,7 @@ export interface CompileTemplateRequest {
   message_id: string
   visual_editor_tree: BlockInterface
   test_data?: Record<string, any> | null
-  enable_tracking?: boolean
+  tracking_enabled?: boolean
   utm_source?: string
   utm_medium?: string
   utm_campaign?: string
@@ -524,8 +525,7 @@ export interface NotificationCenterResponse {
 
 export interface SubscribeToListsRequest {
   workspace_id: string
-  email: string
-  email_hmac: string
+  contact: Contact
   list_ids: string[]
 }
 

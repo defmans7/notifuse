@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
+	mjml "github.com/Notifuse/notifuse/pkg/mjml"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -61,6 +62,20 @@ func (m *MockEmailServiceInterface) SendEmail(arg0 context.Context, arg1 string,
 func (mr *MockEmailServiceInterfaceMockRecorder) SendEmail(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEmail", reflect.TypeOf((*MockEmailServiceInterface)(nil).SendEmail), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
+}
+
+// SendEmailForTemplate mocks base method.
+func (m *MockEmailServiceInterface) SendEmailForTemplate(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 domain.ChannelTemplate, arg5 domain.MessageData, arg6 mjml.TrackingSettings, arg7 *domain.EmailProvider, arg8, arg9 []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendEmailForTemplate", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendEmailForTemplate indicates an expected call of SendEmailForTemplate.
+func (mr *MockEmailServiceInterfaceMockRecorder) SendEmailForTemplate(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEmailForTemplate", reflect.TypeOf((*MockEmailServiceInterface)(nil).SendEmailForTemplate), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
 }
 
 // TestEmailProvider mocks base method.

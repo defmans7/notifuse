@@ -1022,14 +1022,21 @@ func TestEmailService_OpenEmail(t *testing.T) {
 			SetOpened(ctx, workspaceID, messageID, gomock.Any()).
 			Return(assert.AnError)
 
-		// Should log the error
-		mockLogger.EXPECT().Error(gomock.Any())
+		// Setup logger mock to expect Error call
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().
+			WithFields(gomock.Any()).
+			Return(mockLoggerWithFields).
+			AnyTimes()
+		mockLoggerWithFields.EXPECT().
+			Error(gomock.Any()).
+			AnyTimes()
 
 		// Call method under test
 		err := emailService.OpenEmail(ctx, messageID, workspaceID)
 
 		// Assertions
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to set opened")
+		assert.Contains(t, err.Error(), "failed to update message opened")
 	})
 }

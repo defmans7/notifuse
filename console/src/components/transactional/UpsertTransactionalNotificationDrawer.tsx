@@ -57,7 +57,7 @@ export function UpsertTransactionalNotificationDrawer({
       form.setFieldValue('id', apiId)
 
       // Also update utm_content with the same pattern
-      // UTM parameters are independent of enable_tracking
+      // UTM parameters are independent of tracking_enabled
       form.setFieldValue(['channels', 'email', 'utm_params', 'content'], apiId)
     }
   }, [notificationName, form, isOpen, notification])
@@ -112,7 +112,7 @@ export function UpsertTransactionalNotificationDrawer({
         channels: {
           email: {
             template_id: '',
-            enable_tracking: true,
+            tracking_enabled: true,
             utm_params: {
               source: domain || '',
               medium: 'email',
@@ -282,7 +282,7 @@ export function UpsertTransactionalNotificationDrawer({
               </Form.Item>
 
               <Form.Item
-                name={['channels', 'email', 'enable_tracking']}
+                name={['channels', 'email', 'tracking_enabled']}
                 label="Enable Link Tracking"
                 valuePropName="checked"
                 initialValue={true}

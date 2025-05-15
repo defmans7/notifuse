@@ -243,14 +243,6 @@ export function ContactsPage() {
     workspaceId
   ])
 
-  // Handle contact updates from the drawer
-  const handleContactUpdated = (updatedContact: Contact) => {
-    // Update the contact in the contacts list only
-    setAllContacts((prevContacts) =>
-      prevContacts.map((c) => (c.email === updatedContact.email ? updatedContact : c))
-    )
-  }
-
   const columns: ColumnsType<Contact> = [
     {
       title: 'Email',
@@ -582,11 +574,18 @@ export function ContactsPage() {
         <Space size="small">
           <ContactDetailsDrawer
             workspaceId={workspaceId}
-            contact={record}
+            contactEmail={record.email}
             lists={listsData?.lists || []}
-            onContactUpdated={handleContactUpdated}
             workspaceTimezone={workspaceTimezone}
             key={record.email}
+            onContactUpdate={(updatedContact) => {
+              // Update the contact in the allContacts array
+              setAllContacts((prev) =>
+                prev.map((contact) =>
+                  contact.email === updatedContact.email ? updatedContact : contact
+                )
+              )
+            }}
             buttonProps={{
               icon: <FontAwesomeIcon icon={faEye} />,
               type: 'text'

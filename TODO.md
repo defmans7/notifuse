@@ -8,4 +8,4 @@
 - generate unsubscribe link with hmac for templateData
 - test webhooks for email providers
 - test the docker compose
-- add event to contact list service to trigger the welcome email etc..;
+- put open / click tracking setting in workspace settings

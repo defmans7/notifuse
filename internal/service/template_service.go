@@ -197,7 +197,7 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.Co
 	}
 
 	trackingSettings := notifusemjml.TrackingSettings{
-		EnableTracking: payload.EnableTracking,
+		EnableTracking: payload.TrackingEnabled,
 		Endpoint:       domain.GenerateEmailRedirectionEndpoint(payload.WorkspaceID, payload.MessageID, s.apiEndpoint),
 	}
 
@@ -218,7 +218,7 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.Co
 	}
 
 	// inject tracking pixel in tree
-	if payload.EnableTracking {
+	if payload.TrackingEnabled {
 		payload.VisualEditorTree.Children = append(payload.VisualEditorTree.Children, notifusemjml.NewOpenTrackingBlock())
 	}
 

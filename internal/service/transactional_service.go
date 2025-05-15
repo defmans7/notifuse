@@ -3,13 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/Notifuse/notifuse/pkg/tracing"
 	"go.opencensus.io/trace"
 )
@@ -504,7 +502,7 @@ func (s *TransactionalNotificationService) SendNotification(
 				trace.StringAttribute("provider.kind", string(emailProvider.Kind)),
 			)
 
-			err = s.DoSendEmailNotification(
+			err = s.emailService.SendEmailForTemplate(
 				childCtx,
 				workspaceID,
 				messageID,
@@ -547,185 +545,4 @@ func (s *TransactionalNotificationService) SendNotification(
 	)
 
 	return messageID, nil
-}
-
-// DoSendEmailNotification handles sending through the email channel
-func (s *TransactionalNotificationService) DoSendEmailNotification(
-	ctx context.Context,
-	workspace string,
-	messageID string,
-	contact *domain.Contact,
-	templateConfig domain.ChannelTemplate,
-	messageData domain.MessageData,
-	trackingSettings mjml.TrackingSettings,
-	emailProvider *domain.EmailProvider,
-	cc []string,
-	bcc []string,
-) error {
-	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "DoSendEmailNotification")
-	defer span.End()
-
-	span.AddAttributes(
-		trace.StringAttribute("workspace", workspace),
-		trace.StringAttribute("message_id", messageID),
-		trace.StringAttribute("contact.email", contact.Email),
-		trace.StringAttribute("template_id", templateConfig.TemplateID),
-	)
-
-	s.logger.WithFields(map[string]interface{}{
-		"workspace":   workspace,
-		"message_id":  messageID,
-		"contact":     contact.Email,
-		"template_id": templateConfig.TemplateID,
-	}).Debug("Preparing to send email notification")
-
-	// Get the template
-	template, err := s.templateService.GetTemplateByID(ctx, workspace, templateConfig.TemplateID, int64(0))
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":       err.Error(),
-			"template_id": templateConfig.TemplateID,
-		}).Error("Failed to get template")
-
-		tracing.MarkSpanError(ctx, err)
-		return fmt.Errorf("failed to get template: %w", err)
-	}
-
-	span.AddAttributes(
-		trace.StringAttribute("template.subject", template.Email.Subject),
-		trace.StringAttribute("template.from_email", template.Email.FromAddress),
-	)
-
-	compileTemplateRequest := domain.CompileTemplateRequest{
-		WorkspaceID:      workspace,
-		MessageID:        messageID,
-		VisualEditorTree: template.Email.VisualEditorTree,
-		TemplateData:     messageData.Data,
-		EnableTracking:   trackingSettings.EnableTracking,
-		UTMSource:        &trackingSettings.UTMSource,
-		UTMMedium:        &trackingSettings.UTMMedium,
-		UTMCampaign:      &trackingSettings.UTMCampaign,
-		UTMContent:       &trackingSettings.UTMContent,
-		UTMTerm:          &trackingSettings.UTMTerm,
-	}
-
-	// Compile the template with the message data
-	compiledTemplate, err := s.templateService.CompileTemplate(ctx, compileTemplateRequest)
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":       err.Error(),
-			"template_id": templateConfig.TemplateID,
-		}).Error("Failed to compile template")
-
-		tracing.MarkSpanError(ctx, err)
-		return fmt.Errorf("failed to compile template: %w", err)
-	}
-
-	tracing.AddAttribute(ctx, "template.compilation_success", compiledTemplate.Success)
-
-	if !compiledTemplate.Success || compiledTemplate.HTML == nil {
-		errMsg := "Unknown error"
-		if compiledTemplate.Error != nil {
-			errMsg = compiledTemplate.Error.Message
-		}
-		s.logger.WithField("error", errMsg).Error("Template compilation failed")
-
-		err := fmt.Errorf("template compilation failed: %s", errMsg)
-		tracing.MarkSpanError(ctx, err)
-		return err
-	}
-
-	// Get necessary email information from the template
-	fromEmail := template.Email.FromAddress
-	fromName := template.Email.FromName
-	subject := template.Email.Subject
-	htmlContent := *compiledTemplate.HTML
-
-	// Create message history record
-	messageHistory := &domain.MessageHistory{
-		ID:           messageID,
-		ContactEmail: contact.Email,
-		TemplateID:   templateConfig.TemplateID,
-		Channel:      "email",
-		Status:       domain.MessageStatusSent,
-		MessageData:  messageData,
-		SentAt:       time.Now().UTC(),
-		CreatedAt:    time.Now().UTC(),
-		UpdatedAt:    time.Now().UTC(),
-	}
-
-	// Save to message history
-	if err := s.messageHistoryRepo.Create(ctx, workspace, messageHistory); err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"message_id": messageID,
-		}).Error("Failed to create message history")
-
-		tracing.MarkSpanError(ctx, err)
-		return fmt.Errorf("failed to create message history: %w", err)
-	}
-
-	tracing.AddAttribute(ctx, "message_history.created", true)
-
-	// Send the email using the email service
-	s.logger.WithFields(map[string]interface{}{
-		"to":         contact.Email,
-		"from":       fromEmail,
-		"subject":    subject,
-		"message_id": messageID,
-	}).Debug("Sending email")
-
-	tracing.AddAttribute(ctx, "email.sending", true)
-
-	err = s.emailService.SendEmail(
-		ctx,
-		workspace,
-		false, // Use transactional provider type
-		fromEmail,
-		fromName,
-		contact.Email, // To address
-		subject,
-		htmlContent,
-		emailProvider,
-		template.Email.ReplyTo,
-		cc,
-		bcc,
-	)
-
-	if err != nil {
-		// Update message history with error status
-		messageHistory.Status = domain.MessageStatusFailed
-		messageHistory.UpdatedAt = time.Now().UTC()
-		errorMsg := err.Error()
-		messageHistory.Error = &errorMsg
-
-		// Attempt to update the message history record
-		updateErr := s.messageHistoryRepo.Update(ctx, workspace, messageHistory)
-		if updateErr != nil {
-			s.logger.WithFields(map[string]interface{}{
-				"error":      updateErr.Error(),
-				"message_id": messageID,
-			}).Error("Failed to update message history with error status")
-
-			tracing.AddAttribute(ctx, "message_history.update_error", updateErr.Error())
-		}
-
-		s.logger.WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"message_id": messageID,
-			"to":         contact.Email,
-		}).Error("Failed to send email")
-
-		tracing.MarkSpanError(ctx, err)
-		tracing.AddAttribute(ctx, "email.error", err.Error())
-		return fmt.Errorf("failed to send email: %w", err)
-	}
-
-	s.logger.WithFields(map[string]interface{}{
-		"message_id": messageID,
-		"to":         contact.Email,
-	}).Info("Email sent successfully")
-
-	tracing.AddAttribute(ctx, "email.sent", true)
-	return nil
 }

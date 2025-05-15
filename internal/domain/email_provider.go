@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/asaskevich/govalidator"
 )
 
@@ -207,6 +208,18 @@ type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
 	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string, cc []string, bcc []string, replyTo string) error
 	SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, replyTo string, cc []string, bcc []string) error
+	SendEmailForTemplate(
+		ctx context.Context,
+		workspaceID string,
+		messageID string,
+		contact *Contact,
+		templateConfig ChannelTemplate,
+		messageData MessageData,
+		trackingSettings mjml.TrackingSettings,
+		emailProvider *EmailProvider,
+		cc []string,
+		bcc []string,
+	) error
 	VisitLink(ctx context.Context, messageID string, workspaceID string) error
 	OpenEmail(ctx context.Context, messageID string, workspaceID string) error
 }

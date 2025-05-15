@@ -13,8 +13,8 @@ import {
   Modal,
   Select,
   Form,
-  message,
-  Popover
+  Popover,
+  App
 } from 'antd'
 import { Contact } from '../../services/api/contacts'
 import { List } from '../../services/api/types'
@@ -33,22 +33,20 @@ import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { listMessages, MessageStatus } from '../../services/api/messages_history'
 import { contactsApi } from '../../services/api/contacts'
-import {
-  contactListApi,
-  UpdateContactListStatusRequest,
-  AddContactToListRequest
-} from '../../services/api/contact_list'
+import { contactListApi, UpdateContactListStatusRequest } from '../../services/api/contact_list'
+import { listsApi } from '../../services/api/list'
+import { SubscribeToListsRequest } from '../../services/api/types'
 
 const { Title, Text } = Typography
 
 interface ContactDetailsDrawerProps {
   workspaceId: string
-  contact?: Contact
+  contactEmail: string
   visible?: boolean
   onClose?: () => void
   lists?: List[]
-  onContactUpdated?: (updatedContact: Contact) => void
   workspaceTimezone?: string
+  onContactUpdate?: (contact: Contact) => void
   buttonProps?: {
     type?: 'primary' | 'default' | 'dashed' | 'link' | 'text'
     icon?: React.ReactNode
@@ -74,18 +72,19 @@ interface ContactListWithName {
 
 export function ContactDetailsDrawer({
   workspaceId,
-  contact,
+  contactEmail,
   visible: externalVisible,
   onClose: externalOnClose,
   lists = [],
-  onContactUpdated,
   workspaceTimezone = 'UTC',
+  onContactUpdate,
   buttonProps
 }: ContactDetailsDrawerProps) {
-  if (!contact) return null
+  if (!contactEmail) return null
 
   // Internal drawer visibility state
   const [internalVisible, setInternalVisible] = React.useState(false)
+  const { message: messageApi } = App.useApp()
 
   // Determine if drawer is visible (either controlled externally or internally)
   const isVisible = externalVisible !== undefined ? externalVisible : internalVisible
@@ -111,105 +110,99 @@ export function ContactDetailsDrawer({
   const [statusForm] = Form.useForm()
   const [subscribeForm] = Form.useForm()
 
-  // Keep track of the currently displayed contact
-  // Use this contactRef to track the currently displayed contact email for comparison
-  const contactRef = React.useRef<string | null>(null)
-  const [displayContact, setDisplayContact] = React.useState<Contact>(contact)
-
-  // Update the display contact whenever the input contact changes
-  // This effect runs when:
-  // 1. The drawer becomes visible (to ensure fresh data)
-  // 2. The contact prop changes (checked via email reference)
-  React.useEffect(() => {
-    // Only process if we have a contact
-    if (!contact) return
-
-    // Check if this is a different contact than what we're currently showing
-    const isNewContact = contactRef.current !== contact.email
-
-    // Always update the display contact if it's a new contact
-    if (isNewContact) {
-      setDisplayContact(contact)
-      contactRef.current = contact.email
-    }
-  }, [contact, isVisible, contact?.email])
-
   // Load message history for this contact
   const { data: messageHistory, isLoading: loadingMessages } = useQuery({
-    queryKey: ['message_history', workspaceId, contact.email],
+    queryKey: ['message_history', workspaceId, contactEmail],
     queryFn: () =>
       listMessages(workspaceId, {
-        contact_email: contact.email,
+        contact_email: contactEmail,
         limit: 50
       }),
-    enabled: isVisible && !!contact
+    enabled: isVisible && !!contactEmail
   })
 
   // Fetch the single contact to ensure we have the latest data
-  const { data: refreshedContact, isLoading: isLoadingContact } = useQuery({
-    queryKey: ['contact_details', workspaceId, contact.email],
+  const { data: contact, isLoading: isLoadingContact } = useQuery({
+    queryKey: ['contact_details', workspaceId, contactEmail],
     queryFn: async () => {
       const response = await contactsApi.list({
         workspace_id: workspaceId,
-        email: contact.email,
+        email: contactEmail,
         with_contact_lists: true,
         limit: 1
       })
       return response.contacts[0]
     },
-    enabled: isVisible && !!contact,
+    enabled: isVisible && !!contactEmail,
     refetchOnWindowFocus: true
   })
-
-  // Update displayed contact and parent component when contact is refreshed
-  React.useEffect(() => {
-    if (refreshedContact) {
-      setDisplayContact(refreshedContact)
-      if (onContactUpdated) {
-        onContactUpdated(refreshedContact)
-      }
-    }
-  }, [refreshedContact, onContactUpdated])
-
-  // When the drawer is closed, reset the contact reference to ensure fresh load on next open
-  React.useEffect(() => {
-    if (!isVisible) {
-      contactRef.current = null
-    }
-  }, [isVisible])
 
   // Mutation for updating subscription status
   const updateStatusMutation = useMutation({
     mutationFn: (params: UpdateContactListStatusRequest) => contactListApi.updateStatus(params),
     onSuccess: () => {
-      message.success('Subscription status updated successfully')
-      queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contact.email] })
+      messageApi.success('Subscription status updated successfully')
+      queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contactEmail] })
+      queryClient.invalidateQueries({ queryKey: ['contacts', workspaceId] })
       setStatusModalVisible(false)
       statusForm.resetFields()
+
+      // After successful update, fetch the latest contact data to pass to the parent
+      contactsApi
+        .list({
+          workspace_id: workspaceId,
+          email: contactEmail,
+          with_contact_lists: true,
+          limit: 1
+        })
+        .then((response) => {
+          if (response.contacts && response.contacts.length > 0 && onContactUpdate) {
+            onContactUpdate(response.contacts[0])
+          }
+        })
     },
     onError: (error) => {
-      message.error(`Failed to update status: ${error}`)
+      messageApi.error(`Failed to update status: ${error}`)
     }
   })
 
   // Mutation for adding contact to a list
   const addToListMutation = useMutation({
-    mutationFn: (params: AddContactToListRequest) => contactListApi.addContact(params),
+    mutationFn: (params: SubscribeToListsRequest) => listsApi.subscribe(params),
     onSuccess: () => {
-      message.success('Contact added to list successfully')
-      queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contact.email] })
+      messageApi.success('Contact added to list successfully')
+      queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contactEmail] })
       setSubscribeModalVisible(false)
       subscribeForm.resetFields()
+
+      // After successful addition, fetch the latest contact data to pass to the parent
+      contactsApi
+        .list({
+          workspace_id: workspaceId,
+          email: contactEmail,
+          with_contact_lists: true,
+          limit: 1
+        })
+        .then((response) => {
+          if (response.contacts && response.contacts.length > 0 && onContactUpdate) {
+            onContactUpdate(response.contacts[0])
+          }
+        })
     },
     onError: (error) => {
-      message.error(`Failed to add to list: ${error}`)
+      messageApi.error(`Failed to add to list: ${error}`)
     }
   })
 
-  const handleContactUpdated = () => {
-    // Invalidate both the contact details and the contacts list queries
-    queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contact.email] })
-    queryClient.invalidateQueries({ queryKey: ['contacts', workspaceId] })
+  const handleContactUpdated = async (updatedContact: Contact) => {
+    // Invalidate both the contact details
+    await queryClient.invalidateQueries({
+      queryKey: ['contact_details', workspaceId, contactEmail]
+    })
+    // Call the onContactUpdate prop if it exists and we have the contact data
+    if (onContactUpdate && updatedContact) {
+      onContactUpdate(updatedContact)
+    }
   }
 
   // Find list names based on list IDs
@@ -233,7 +226,7 @@ export function ContactDetailsDrawer({
 
     updateStatusMutation.mutate({
       workspace_id: workspaceId,
-      email: displayContact.email,
+      email: contactEmail,
       list_id: selectedList.list_id,
       status: values.status
     })
@@ -249,15 +242,15 @@ export function ContactDetailsDrawer({
   const handleSubscribe = (values: { list_id: string; status: string }) => {
     addToListMutation.mutate({
       workspace_id: workspaceId,
-      email: displayContact.email,
-      list_id: values.list_id,
-      status: values.status as 'active' | 'pending'
+      contact: {
+        email: contactEmail
+      } as Contact,
+      list_ids: [values.list_id]
     })
   }
 
   // Create name from first and last name
-  const fullName =
-    [displayContact.first_name, displayContact.last_name].filter(Boolean).join(' ') || 'Unknown'
+  const fullName = [contact?.first_name, contact?.last_name].filter(Boolean).join(' ') || 'Unknown'
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return '-'
@@ -445,136 +438,134 @@ export function ContactDetailsDrawer({
 
   // Field display definitions without icons
   const contactFields = [
-    { key: 'first_name', label: 'First Name', value: displayContact.first_name },
-    { key: 'last_name', label: 'Last Name', value: displayContact.last_name },
-    { key: 'email', label: 'Email', value: displayContact.email },
-    { key: 'phone', label: 'Phone', value: displayContact.phone },
+    { key: 'first_name', label: 'First Name', value: contact?.first_name },
+    { key: 'last_name', label: 'Last Name', value: contact?.last_name },
+    { key: 'email', label: 'Email', value: contact?.email },
+    { key: 'phone', label: 'Phone', value: contact?.phone },
     {
       key: 'address',
       label: 'Address',
       value: [
-        displayContact.address_line_1,
-        displayContact.address_line_2,
-        [displayContact.state, displayContact.postcode, displayContact.country]
-          .filter(Boolean)
-          .join(', ')
+        contact?.address_line_1,
+        contact?.address_line_2,
+        [contact?.state, contact?.postcode, contact?.country].filter(Boolean).join(', ')
       ]
         .filter(Boolean)
         .join(', '),
       show: !!(
-        displayContact.address_line_1 ||
-        displayContact.address_line_2 ||
-        displayContact.country ||
-        displayContact.state ||
-        displayContact.postcode
+        contact?.address_line_1 ||
+        contact?.address_line_2 ||
+        contact?.country ||
+        contact?.state ||
+        contact?.postcode
       )
     },
-    { key: 'job_title', label: 'Job Title', value: displayContact.job_title },
-    { key: 'timezone', label: 'Timezone', value: displayContact.timezone },
-    { key: 'language', label: 'Language', value: displayContact.language },
-    { key: 'external_id', label: 'External ID', value: displayContact.external_id },
+    { key: 'job_title', label: 'Job Title', value: contact?.job_title },
+    { key: 'timezone', label: 'Timezone', value: contact?.timezone },
+    { key: 'language', label: 'Language', value: contact?.language },
+    { key: 'external_id', label: 'External ID', value: contact?.external_id },
     {
       key: 'lifetime_value',
       label: 'Lifetime Value',
-      value: displayContact.lifetime_value
+      value: contact?.lifetime_value
     },
     {
       key: 'orders_count',
       label: 'Orders Count',
-      value: displayContact.orders_count
+      value: contact?.orders_count
     },
     {
       key: 'last_order_at',
       label: 'Last Order At',
-      value: formatDate(displayContact.last_order_at)
+      value: formatDate(contact?.last_order_at)
     },
     {
       key: 'created_at',
       label: 'Created At',
-      value: formatDate(displayContact.created_at)
+      value: formatDate(contact?.created_at)
     },
     {
       key: 'updated_at',
       label: 'Updated At',
-      value: formatDate(displayContact.updated_at)
+      value: formatDate(contact?.updated_at)
     },
     // Custom string fields
     {
       key: 'custom_string_1',
       label: 'Custom String 1',
-      value: displayContact.custom_string_1
+      value: contact?.custom_string_1
     },
     {
       key: 'custom_string_2',
       label: 'Custom String 2',
-      value: displayContact.custom_string_2
+      value: contact?.custom_string_2
     },
     {
       key: 'custom_string_3',
       label: 'Custom String 3',
-      value: displayContact.custom_string_3
+      value: contact?.custom_string_3
     },
     {
       key: 'custom_string_4',
       label: 'Custom String 4',
-      value: displayContact.custom_string_4
+      value: contact?.custom_string_4
     },
     {
       key: 'custom_string_5',
       label: 'Custom String 5',
-      value: displayContact.custom_string_5
+      value: contact?.custom_string_5
     },
     // Custom number fields
     {
       key: 'custom_number_1',
       label: 'Custom Number 1',
-      value: displayContact.custom_number_1
+      value: contact?.custom_number_1
     },
     {
       key: 'custom_number_2',
       label: 'Custom Number 2',
-      value: displayContact.custom_number_2
+      value: contact?.custom_number_2
     },
     {
       key: 'custom_number_3',
       label: 'Custom Number 3',
-      value: displayContact.custom_number_3
+      value: contact?.custom_number_3
     },
     {
       key: 'custom_number_4',
       label: 'Custom Number 4',
-      value: displayContact.custom_number_4
+      value: contact?.custom_number_4
     },
     {
       key: 'custom_number_5',
       label: 'Custom Number 5',
-      value: displayContact.custom_number_5
+      value: contact?.custom_number_5
     },
     // Custom date fields
     {
       key: 'custom_datetime_1',
       label: 'Custom Date 1',
-      value: formatDate(displayContact.custom_datetime_1)
+      value: formatDate(contact?.custom_datetime_1)
     },
     {
       key: 'custom_datetime_2',
       label: 'Custom Date 2',
-      value: formatDate(displayContact.custom_datetime_2)
+      value: formatDate(contact?.custom_datetime_2)
     },
     {
       key: 'custom_datetime_3',
       label: 'Custom Date 3',
-      value: formatDate(displayContact.custom_datetime_3)
+      value: formatDate(contact?.custom_datetime_3)
     },
     {
       key: 'custom_datetime_4',
       label: 'Custom Date 4',
-      value: formatDate(displayContact.custom_datetime_4)
+      value: formatDate(contact?.custom_datetime_4)
     },
     {
       key: 'custom_datetime_5',
       label: 'Custom Date 5',
-      value: formatDate(displayContact.custom_datetime_5)
+      value: formatDate(contact?.custom_datetime_5)
     }
   ]
 
@@ -583,32 +574,32 @@ export function ContactDetailsDrawer({
     {
       key: 'custom_json_1',
       label: 'Custom JSON 1',
-      value: displayContact.custom_json_1,
-      show: !!displayContact.custom_json_1
+      value: contact?.custom_json_1,
+      show: !!contact?.custom_json_1
     },
     {
       key: 'custom_json_2',
       label: 'Custom JSON 2',
-      value: displayContact.custom_json_2,
-      show: !!displayContact.custom_json_2
+      value: contact?.custom_json_2,
+      show: !!contact?.custom_json_2
     },
     {
       key: 'custom_json_3',
       label: 'Custom JSON 3',
-      value: displayContact.custom_json_3,
-      show: !!displayContact.custom_json_3
+      value: contact?.custom_json_3,
+      show: !!contact?.custom_json_3
     },
     {
       key: 'custom_json_4',
       label: 'Custom JSON 4',
-      value: displayContact.custom_json_4,
-      show: !!displayContact.custom_json_4
+      value: contact?.custom_json_4,
+      show: !!contact?.custom_json_4
     },
     {
       key: 'custom_json_5',
       label: 'Custom JSON 5',
-      value: displayContact.custom_json_5,
-      show: !!displayContact.custom_json_5
+      value: contact?.custom_json_5,
+      show: !!contact?.custom_json_5
     }
   ]
 
@@ -616,14 +607,14 @@ export function ContactDetailsDrawer({
   const hasJsonFields = jsonFields.some((field) => field.show)
 
   // Prepare contact lists with enhanced information
-  const contactListsWithNames = displayContact.contact_lists.map((list) => ({
+  const contactListsWithNames = contact?.contact_lists.map((list) => ({
     ...list,
     name: getListName(list.list_id)
   }))
 
   // Get lists that the contact is not subscribed to
   const availableLists = lists.filter(
-    (list) => !displayContact.contact_lists.some((cl) => cl.list_id === list.id)
+    (list) => !contact?.contact_lists.some((cl) => cl.list_id === list.id)
   )
 
   // Status options for dropdown
@@ -678,7 +669,7 @@ export function ContactDetailsDrawer({
           extra={
             <ContactUpsertDrawer
               workspaceId={workspaceId}
-              contact={displayContact}
+              contact={contact}
               onSuccess={handleContactUpdated}
               buttonProps={{
                 icon: <FontAwesomeIcon icon={faPenToSquare} />,
@@ -697,7 +688,7 @@ export function ContactDetailsDrawer({
                 <Title level={4} style={{ margin: 0, marginBottom: '4px' }}>
                   {fullName}
                 </Title>
-                <Text type="secondary">{displayContact.email}</Text>
+                <Text type="secondary">{contact?.email}</Text>
               </div>
 
               <div className="contact-details">
@@ -764,9 +755,7 @@ export function ContactDetailsDrawer({
                 {/* Lifetime Value */}
                 <Tooltip
                   title={
-                    displayContact.lifetime_value
-                      ? formatCurrency(displayContact.lifetime_value)
-                      : '$0.00'
+                    contact?.lifetime_value ? formatCurrency(contact?.lifetime_value) : '$0.00'
                   }
                 >
                   <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
@@ -777,13 +766,13 @@ export function ContactDetailsDrawer({
                       </span>
                     </div>
                     <div className="text-2xl font-semibold">
-                      {formatAverage(displayContact.lifetime_value || 0)}
+                      {formatAverage(contact?.lifetime_value || 0)}
                     </div>
                   </div>
                 </Tooltip>
 
                 {/* Orders Count */}
-                <Tooltip title={`${formatNumber(displayContact.orders_count || 0)} orders`}>
+                <Tooltip title={`${formatNumber(contact?.orders_count || 0)} orders`}>
                   <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
                     <div className="text-sm text-gray-500 mb-2">
                       <span className="flex items-center cursor-help">
@@ -792,7 +781,7 @@ export function ContactDetailsDrawer({
                       </span>
                     </div>
                     <div className="text-2xl font-semibold">
-                      {formatAverage(displayContact.orders_count || 0)}
+                      {formatAverage(contact?.orders_count || 0)}
                     </div>
                   </div>
                 </Tooltip>
@@ -800,8 +789,8 @@ export function ContactDetailsDrawer({
                 {/* Last Order */}
                 <Tooltip
                   title={
-                    displayContact.last_order_at
-                      ? `${dayjs(displayContact.last_order_at).format('LLLL')} in ${workspaceTimezone}`
+                    contact?.last_order_at
+                      ? `${dayjs(contact?.last_order_at).format('LLLL')} in ${workspaceTimezone}`
                       : 'No orders yet'
                   }
                 >
@@ -813,9 +802,7 @@ export function ContactDetailsDrawer({
                       </span>
                     </div>
                     <div className="text-lg font-semibold">
-                      {displayContact.last_order_at
-                        ? dayjs(displayContact.last_order_at).fromNow()
-                        : 'Never'}
+                      {contact?.last_order_at ? dayjs(contact?.last_order_at).fromNow() : 'Never'}
                     </div>
                   </div>
                 </Tooltip>
@@ -838,7 +825,7 @@ export function ContactDetailsDrawer({
                 </Button>
               </div>
 
-              {contactListsWithNames.length > 0 ? (
+              {contactListsWithNames && contactListsWithNames.length > 0 ? (
                 <Table
                   dataSource={contactListsWithNames}
                   rowKey={(record) => `${record.list_id}_${record.status}`}
@@ -1037,7 +1024,7 @@ export function ContactDetailsDrawer({
       extra={
         <ContactUpsertDrawer
           workspaceId={workspaceId}
-          contact={displayContact}
+          contact={contact}
           onSuccess={handleContactUpdated}
           buttonProps={{
             icon: <FontAwesomeIcon icon={faPenToSquare} />,
@@ -1056,7 +1043,7 @@ export function ContactDetailsDrawer({
             <Title level={4} style={{ margin: 0, marginBottom: '4px' }}>
               {fullName}
             </Title>
-            <Text type="secondary">{displayContact.email}</Text>
+            <Text type="secondary">{contact?.email}</Text>
           </div>
 
           <div className="contact-details">
@@ -1122,11 +1109,7 @@ export function ContactDetailsDrawer({
           <div className="grid grid-cols-3 gap-4 mb-6">
             {/* Lifetime Value */}
             <Tooltip
-              title={
-                displayContact.lifetime_value
-                  ? formatCurrency(displayContact.lifetime_value)
-                  : '$0.00'
-              }
+              title={contact?.lifetime_value ? formatCurrency(contact?.lifetime_value) : '$0.00'}
             >
               <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
                 <div className="text-sm text-gray-500 mb-2">
@@ -1136,13 +1119,13 @@ export function ContactDetailsDrawer({
                   </span>
                 </div>
                 <div className="text-2xl font-semibold">
-                  {formatAverage(displayContact.lifetime_value || 0)}
+                  {formatAverage(contact?.lifetime_value || 0)}
                 </div>
               </div>
             </Tooltip>
 
             {/* Orders Count */}
-            <Tooltip title={`${formatNumber(displayContact.orders_count || 0)} orders`}>
+            <Tooltip title={`${formatNumber(contact?.orders_count || 0)} orders`}>
               <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
                 <div className="text-sm text-gray-500 mb-2">
                   <span className="flex items-center cursor-help">
@@ -1151,7 +1134,7 @@ export function ContactDetailsDrawer({
                   </span>
                 </div>
                 <div className="text-2xl font-semibold">
-                  {formatAverage(displayContact.orders_count || 0)}
+                  {formatAverage(contact?.orders_count || 0)}
                 </div>
               </div>
             </Tooltip>
@@ -1159,8 +1142,8 @@ export function ContactDetailsDrawer({
             {/* Last Order */}
             <Tooltip
               title={
-                displayContact.last_order_at
-                  ? `${dayjs(displayContact.last_order_at).format('LLLL')} in ${workspaceTimezone}`
+                contact?.last_order_at
+                  ? `${dayjs(contact?.last_order_at).format('LLLL')} in ${workspaceTimezone}`
                   : 'No orders yet'
               }
             >
@@ -1172,9 +1155,7 @@ export function ContactDetailsDrawer({
                   </span>
                 </div>
                 <div className="text-lg font-semibold">
-                  {displayContact.last_order_at
-                    ? dayjs(displayContact.last_order_at).fromNow()
-                    : 'Never'}
+                  {contact?.last_order_at ? dayjs(contact?.last_order_at).fromNow() : 'Never'}
                 </div>
               </div>
             </Tooltip>
@@ -1197,7 +1178,7 @@ export function ContactDetailsDrawer({
             </Button>
           </div>
 
-          {contactListsWithNames.length > 0 ? (
+          {contactListsWithNames && contactListsWithNames.length > 0 ? (
             <Table
               dataSource={contactListsWithNames}
               rowKey={(record) => `${record.list_id}_${record.status}`}

@@ -7,6 +7,8 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/google/uuid"
 )
 
 type ListService struct {
@@ -15,17 +17,21 @@ type ListService struct {
 	contactListRepo domain.ContactListRepository
 	contactRepo     domain.ContactRepository
 	authService     domain.AuthService
+	emailService    domain.EmailServiceInterface
 	logger          logger.Logger
+	apiEndpoint     string
 }
 
-func NewListService(repo domain.ListRepository, workspaceRepo domain.WorkspaceRepository, contactListRepo domain.ContactListRepository, contactRepo domain.ContactRepository, authService domain.AuthService, logger logger.Logger) *ListService {
+func NewListService(repo domain.ListRepository, workspaceRepo domain.WorkspaceRepository, contactListRepo domain.ContactListRepository, contactRepo domain.ContactRepository, authService domain.AuthService, emailService domain.EmailServiceInterface, logger logger.Logger, apiEndpoint string) *ListService {
 	return &ListService{
 		repo:            repo,
 		workspaceRepo:   workspaceRepo,
 		contactListRepo: contactListRepo,
 		contactRepo:     contactRepo,
 		authService:     authService,
+		emailService:    emailService,
 		logger:          logger,
+		apiEndpoint:     apiEndpoint,
 	}
 }
 
@@ -201,6 +207,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 
 	// get the list
 	for _, listID := range payload.ListIDs {
+
 		var list *domain.List
 		for _, l := range lists {
 			if l.ID == listID {
@@ -241,7 +248,71 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 				Error(fmt.Sprintf("Failed to subscribe to list: %v", err))
 			return fmt.Errorf("failed to subscribe to list: %w", err)
 		}
+
+		marketingEmailProvider, err := workspace.GetEmailProvider(true)
+		if err != nil {
+			s.logger.WithField("workspace_id", workspace.ID).Error(fmt.Sprintf("Failed to get marketing email provider: %v", err))
+			return fmt.Errorf("failed to get marketing email provider: %w", err)
+		}
+
+		// if the marketing email provider is not set, we don't need to send the welcome email
+		if marketingEmailProvider == nil {
+			continue
+		}
+
+		// get contact
+		contact, err := s.contactRepo.GetContactByEmail(ctx, workspace.ID, contactList.Email)
+		if err != nil {
+			s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to get contact: %v", err))
+			return fmt.Errorf("failed to get contact: %w", err)
+		}
+
+		messageID := uuid.New().String()
+
+		templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, domain.ContactWithList{
+			Contact:  contact,
+			ListID:   listID,
+			ListName: list.Name,
+		}, messageID, s.apiEndpoint, nil)
+
+		if err != nil {
+			s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to build template data: %v", err))
+			return fmt.Errorf("failed to build template data: %w", err)
+		}
+
+		// send welcome email
+		if contactList.Status == domain.ContactListStatusActive && list.WelcomeTemplate != nil {
+
+			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
+				TemplateID: list.WelcomeTemplate.ID,
+			}, domain.MessageData{Data: templateData}, mjml.TrackingSettings{
+				Endpoint:       s.apiEndpoint,
+				EnableTracking: true, // by default activate tracking for welcome emails
+			}, marketingEmailProvider, nil, nil)
+
+			if err != nil {
+				s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to send welcome email: %v", err))
+				return fmt.Errorf("failed to send welcome email: %w", err)
+			}
+		}
+
+		// double optin
+		if contactList.Status == domain.ContactListStatusPending && list.DoubleOptInTemplate != nil {
+
+			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
+				TemplateID: list.DoubleOptInTemplate.ID,
+			}, domain.MessageData{Data: templateData}, mjml.TrackingSettings{
+				Endpoint:       s.apiEndpoint,
+				EnableTracking: true, // by default activate tracking for double optin emails
+			}, marketingEmailProvider, nil, nil)
+
+			if err != nil {
+				s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to send double optin email: %v", err))
+				return fmt.Errorf("failed to send double optin email: %w", err)
+			}
+		}
 	}
+
 	return nil
 }
 
