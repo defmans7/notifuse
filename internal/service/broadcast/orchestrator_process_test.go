@@ -36,7 +36,7 @@ func setupTestEnvironment(t *testing.T) (
 
 	// Ensure mock message sender implements the correct interface
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 
@@ -158,6 +158,7 @@ func TestProcess_HappyPath(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "integration-1",
 			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
 		},
 		Integrations: []domain.Integration{
 			{
@@ -241,6 +242,7 @@ func TestProcess_NilTaskState(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "integration-1",
 			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
 		},
 		Integrations: []domain.Integration{
 			{
@@ -326,6 +328,7 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "integration-1",
 			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
 		},
 		Integrations: []domain.Integration{
 			{
@@ -413,6 +416,7 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "integration-1",
 			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
 		},
 		Integrations: []domain.Integration{
 			{
@@ -488,6 +492,7 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "integration-1",
 			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
 		},
 		Integrations: []domain.Integration{
 			{
@@ -575,6 +580,7 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "integration-1",
 			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
 		},
 		Integrations: []domain.Integration{
 			{
@@ -664,6 +670,7 @@ func TestProcess_LoadTemplatesError(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "integration-1",
 			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
 		},
 		Integrations: []domain.Integration{
 			{

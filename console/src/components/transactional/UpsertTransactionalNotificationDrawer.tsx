@@ -281,16 +281,6 @@ export function UpsertTransactionalNotificationDrawer({
                 />
               </Form.Item>
 
-              <Form.Item
-                name={['channels', 'email', 'tracking_enabled']}
-                label="Enable Link Tracking"
-                valuePropName="checked"
-                initialValue={true}
-                tooltip="When enabled, links in the email will be tracked for opens and clicks"
-              >
-                <Switch />
-              </Form.Item>
-
               <p className="text-sm text-gray-500 pt-8">
                 Define UTM parameters for links in your email for better campaign tracking.
               </p>

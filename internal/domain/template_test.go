@@ -1085,9 +1085,8 @@ func TestBuildTemplateData(t *testing.T) {
 		}
 
 		broadcast := &Broadcast{
-			ID:              "broadcast-001",
-			Name:            "Test Broadcast",
-			TrackingEnabled: true,
+			ID:   "broadcast-001",
+			Name: "Test Broadcast",
 			UTMParameters: &UTMParameters{
 				Source:   "newsletter",
 				Medium:   "email",

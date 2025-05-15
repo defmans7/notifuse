@@ -24,7 +24,7 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
@@ -80,7 +80,7 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
@@ -183,7 +183,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
@@ -315,7 +315,7 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
@@ -383,7 +383,7 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
@@ -624,7 +624,7 @@ func TestSaveProgressState(t *testing.T) {
 
 	mockMessageSender := mocks.NewMockMessageSender(ctrl)
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)

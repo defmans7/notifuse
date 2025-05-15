@@ -254,7 +254,6 @@ type Broadcast struct {
 	Audience          AudienceSettings      `json:"audience"`
 	Schedule          ScheduleSettings      `json:"schedule"`
 	TestSettings      BroadcastTestSettings `json:"test_settings"`
-	TrackingEnabled   bool                  `json:"tracking_enabled"`
 	UTMParameters     *UTMParameters        `json:"utm_parameters,omitempty"`
 	Metadata          MapOfAny              `json:"metadata,omitempty"`
 	TotalSent         int                   `json:"total_sent"`
@@ -355,11 +354,6 @@ func (b *Broadcast) Validate() error {
 			if b.TestSettings.TestDurationHours <= 0 {
 				return fmt.Errorf("test duration must be greater than 0 hours")
 			}
-
-			// Tracking must be enabled to use auto-send winner feature
-			if !b.TrackingEnabled {
-				return fmt.Errorf("tracking must be enabled to use auto-send winner feature")
-			}
 		}
 
 		// Validate variations
@@ -448,17 +442,16 @@ type CreateBroadcastRequest struct {
 // Validate validates the create broadcast request
 func (r *CreateBroadcastRequest) Validate() (*Broadcast, error) {
 	broadcast := &Broadcast{
-		WorkspaceID:     r.WorkspaceID,
-		Name:            r.Name,
-		Status:          BroadcastStatusDraft,
-		Audience:        r.Audience,
-		Schedule:        r.Schedule,
-		TestSettings:    r.TestSettings,
-		TrackingEnabled: r.TrackingEnabled,
-		UTMParameters:   r.UTMParameters,
-		Metadata:        r.Metadata,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
+		WorkspaceID:   r.WorkspaceID,
+		Name:          r.Name,
+		Status:        BroadcastStatusDraft,
+		Audience:      r.Audience,
+		Schedule:      r.Schedule,
+		TestSettings:  r.TestSettings,
+		UTMParameters: r.UTMParameters,
+		Metadata:      r.Metadata,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	// Set status to scheduled if the broadcast is scheduled
@@ -508,7 +501,6 @@ func (r *UpdateBroadcastRequest) Validate(existingBroadcast *Broadcast) (*Broadc
 	existingBroadcast.Audience = r.Audience
 	existingBroadcast.Schedule = r.Schedule
 	existingBroadcast.TestSettings = r.TestSettings
-	existingBroadcast.TrackingEnabled = r.TrackingEnabled
 	existingBroadcast.UTMParameters = r.UTMParameters
 	existingBroadcast.Metadata = r.Metadata
 	existingBroadcast.UpdatedAt = time.Now()

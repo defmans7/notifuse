@@ -17,11 +17,11 @@ import (
 // MessageSender is the interface for sending messages to recipients
 type MessageSender interface {
 	// SendToRecipient sends a message to a single recipient
-	SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, messageID string, email string,
+	SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error
 
 	// SendBatch sends messages to a batch of recipients
-	SendBatch(ctx context.Context, workspaceID, broadcastID string, workspaceSecretKey string, recipients []*domain.ContactWithList,
+	SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
 		templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error)
 }
 
@@ -170,7 +170,7 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 }
 
 // SendToRecipient sends a message to a single recipient
-func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, broadcast *domain.Broadcast, messageID string, email string,
+func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
 
 	startTime := time.Now()
@@ -214,7 +214,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 			MessageID:        messageID,
 			VisualEditorTree: template.Email.VisualEditorTree,
 			TemplateData:     data,
-			TrackingEnabled:  broadcast.TrackingEnabled,
+			TrackingEnabled:  trackingEnabled,
 			UTMSource:        &broadcast.UTMParameters.Source,
 			UTMMedium:        &broadcast.UTMParameters.Medium,
 			UTMCampaign:      &broadcast.UTMParameters.Campaign,
@@ -295,7 +295,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 }
 
 // SendBatch sends messages to a batch of recipients
-func (s *messageSender) SendBatch(ctx context.Context, workspaceID, workspaceSecretKey, broadcastID string, recipients []*domain.ContactWithList,
+func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
 	templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error) {
 
 	startTime := time.Now()
@@ -406,7 +406,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID, workspaceSec
 		}
 
 		// Send to the recipient
-		err = s.SendToRecipient(ctx, workspaceID, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider)
+		err = s.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider)
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++

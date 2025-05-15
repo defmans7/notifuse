@@ -83,7 +83,6 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
 			},
-			TrackingEnabled: true,
 		}
 
 		// Mock auth service to authenticate the user
@@ -102,7 +101,6 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 				assert.Equal(t, request.Audience, broadcast.Audience)
 				assert.Equal(t, request.Schedule, broadcast.Schedule)
 				assert.Equal(t, request.TestSettings, broadcast.TestSettings)
-				assert.Equal(t, request.TrackingEnabled, broadcast.TrackingEnabled)
 				assert.NotEmpty(t, broadcast.ID)
 				assert.WithinDuration(t, now, broadcast.CreatedAt, 2*time.Second)
 				return nil
@@ -190,7 +188,6 @@ func TestBroadcastService_CreateBroadcast(t *testing.T) {
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
 			},
-			TrackingEnabled: true,
 		}
 
 		// Mock auth service to authenticate the user
@@ -379,7 +376,6 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled: false,
 			},
-			TrackingEnabled: true,
 		}
 
 		// Mock authentication
@@ -401,7 +397,7 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 				assert.Equal(t, workspaceID, broadcast.WorkspaceID)
 				assert.Equal(t, updateRequest.Name, broadcast.Name)
 				assert.Equal(t, domain.BroadcastStatusDraft, broadcast.Status)
-				assert.Equal(t, updateRequest.TrackingEnabled, broadcast.TrackingEnabled)
+
 				// Just verify that updated time isn't zero
 				assert.False(t, broadcast.UpdatedAt.IsZero())
 				return nil
@@ -414,7 +410,7 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, updateRequest.Name, result.Name)
-		assert.Equal(t, updateRequest.TrackingEnabled, result.TrackingEnabled)
+
 		// Verify that updated time is later than creation time
 		assert.True(t, result.UpdatedAt.After(result.CreatedAt))
 	})

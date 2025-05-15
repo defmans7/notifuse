@@ -502,6 +502,8 @@ func (s *TransactionalNotificationService) SendNotification(
 				trace.StringAttribute("provider.kind", string(emailProvider.Kind)),
 			)
 
+			notification.TrackingSettings.EnableTracking = workspace.Settings.EmailTrackingEnabled
+
 			err = s.emailService.SendEmailForTemplate(
 				childCtx,
 				workspaceID,

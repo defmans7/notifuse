@@ -584,6 +584,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			ctx,
 			task.WorkspaceID,
 			workspace.Settings.SecretKey,
+			workspace.Settings.EmailTrackingEnabled,
 			broadcastState.BroadcastID,
 			recipients,
 			templates,

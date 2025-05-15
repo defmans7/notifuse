@@ -131,6 +131,7 @@ type WorkspaceSettings struct {
 	TransactionalEmailProviderID string              `json:"transactional_email_provider_id,omitempty"`
 	MarketingEmailProviderID     string              `json:"marketing_email_provider_id,omitempty"`
 	EncryptedSecretKey           string              `json:"encrypted_secret_key,omitempty"`
+	EmailTrackingEnabled         bool                `json:"email_tracking_enabled"`
 
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`

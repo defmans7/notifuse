@@ -46,7 +46,6 @@ func createValidBroadcast() domain.Broadcast {
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled: false,
 		},
-		TrackingEnabled:   true,
 		TotalSent:         100,
 		TotalDelivered:    95,
 		TotalFailed:       2,
@@ -305,16 +304,6 @@ func TestBroadcast_Validate(t *testing.T) {
 			errMsg:  "template_id is required for variation",
 		},
 		{
-			name: "tracking must be enabled for auto-send winner",
-			broadcast: func() domain.Broadcast {
-				b := createValidBroadcastWithTest()
-				b.TrackingEnabled = false
-				return b
-			}(),
-			wantErr: true,
-			errMsg:  "tracking must be enabled to use auto-send winner feature",
-		},
-		{
 			name: "valid scheduled broadcast",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcast()
@@ -367,7 +356,6 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 				TestSettings: domain.BroadcastTestSettings{
 					Enabled: false,
 				},
-				TrackingEnabled: true,
 			},
 			wantErr: false,
 		},

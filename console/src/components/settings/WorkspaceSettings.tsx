@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Button, Form, Input, Select, App } from 'antd'
+import { Button, Form, Input, Select, App, Switch } from 'antd'
 import { Workspace } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
-import { useNavigate } from '@tanstack/react-router'
 import { Section } from './Section'
 import { TimezonesFormOptions } from '../utils/countries_timezones'
 import { LogoInput } from './LogoInput'
-
-const { Option } = Select
 
 interface WorkspaceSettingsProps {
   workspace: Workspace | null
@@ -29,7 +26,8 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
       name: workspace?.name || '',
       website_url: workspace?.settings.website_url || '',
       logo_url: workspace?.settings.logo_url || '',
-      timezone: workspace?.settings.timezone || 'UTC'
+      timezone: workspace?.settings.timezone || 'UTC',
+      email_tracking_enabled: workspace?.settings.email_tracking_enabled || false
     })
     setFormTouched(false)
   }, [workspace, form])
@@ -47,7 +45,8 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
           website_url: values.website_url,
           logo_url: values.logo_url || null,
           cover_url: workspace?.settings.cover_url || null,
-          timezone: values.timezone
+          timezone: values.timezone,
+          email_tracking_enabled: values.email_tracking_enabled
         }
       })
 
@@ -104,6 +103,14 @@ export function WorkspaceSettings({ workspace, onWorkspaceUpdate }: WorkspaceSet
             rules={[{ required: true, message: 'Please select a timezone' }]}
           >
             <Select options={TimezonesFormOptions} showSearch optionFilterProp="label" />
+          </Form.Item>
+
+          <Form.Item
+            name="email_tracking_enabled"
+            label="Email Opens and Clicks Tracking"
+            tooltip="When enabled, links in the email will be tracked for opens and clicks"
+          >
+            <Switch />
           </Form.Item>
 
           <Form.Item>

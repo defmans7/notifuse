@@ -38,6 +38,7 @@ export interface WorkspaceSettings {
   file_manager?: FileManagerSettings
   transactional_email_provider_id?: string
   marketing_email_provider_id?: string
+  email_tracking_enabled: boolean
 }
 
 export interface FileManagerSettings {

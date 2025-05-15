@@ -161,44 +161,6 @@ func TestBroadcastRepository_GetBroadcast_NotFound(t *testing.T) {
 	assert.ErrorAs(t, err, &notFoundErr)
 }
 
-// TestBroadcastRepository_ListBroadcasts_Success tests that the repository
-// successfully lists broadcasts with pagination and total count.
-func TestBroadcastRepository_ListBroadcasts_Success(t *testing.T) {
-	// Skip test due to complex JSONB column scanning limitations in sqlmock
-	t.Skip("Skipping full scan test due to complex JSONB column scanning limitations in sqlmock")
-
-	// The test would normally verify:
-	// 1. Connection to the workspace database is established
-	// 2. A count query is executed to get the total number of broadcasts
-	// 3. A data query is executed with proper LIMIT and OFFSET clauses
-	// 4. The response includes both the broadcasts and the total count
-}
-
-// TestBroadcastRepository_ListBroadcasts_EmptyList tests that the repository
-// handles empty result sets correctly.
-func TestBroadcastRepository_ListBroadcasts_EmptyList(t *testing.T) {
-	// Skip test due to complex JSONB column scanning limitations in sqlmock
-	t.Skip("Skipping empty list test due to complex JSONB column scanning limitations in sqlmock")
-
-	// The test would normally verify:
-	// 1. Connection to the workspace database is established
-	// 2. A count query returns zero for the total count
-	// 3. The data query returns an empty result set
-	// 4. The response includes an empty broadcasts array and zero total count
-}
-
-// TestBroadcastRepository_ListBroadcasts_CountError tests that the repository
-// handles errors in the count query.
-func TestBroadcastRepository_ListBroadcasts_CountError(t *testing.T) {
-	// Skip test due to complex JSONB column scanning limitations in sqlmock
-	t.Skip("Skipping count error test due to complex JSONB column scanning limitations in sqlmock")
-
-	// The test would normally verify:
-	// 1. Connection to the workspace database is established
-	// 2. An error occurs when executing the count query
-	// 3. The error is propagated correctly and the method returns nil for the response
-}
-
 // TestBroadcastRepository_ListBroadcasts_CountQueryError tests handling of count query errors
 func TestBroadcastRepository_ListBroadcasts_CountQueryError(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -434,11 +396,10 @@ func TestBroadcastRepository_CreateBroadcast_Success(t *testing.T) {
 	workspaceID := "ws123"
 
 	testBroadcast := &domain.Broadcast{
-		ID:              "bc123",
-		WorkspaceID:     workspaceID,
-		Name:            "Test Broadcast",
-		Status:          domain.BroadcastStatusDraft,
-		TrackingEnabled: true,
+		ID:          "bc123",
+		WorkspaceID: workspaceID,
+		Name:        "Test Broadcast",
+		Status:      domain.BroadcastStatusDraft,
 	}
 
 	mockWorkspaceRepo.EXPECT().
@@ -458,7 +419,7 @@ func TestBroadcastRepository_CreateBroadcast_Success(t *testing.T) {
 			sqlmock.AnyArg(), // audience
 			sqlmock.AnyArg(), // schedule
 			sqlmock.AnyArg(), // test_settings
-			testBroadcast.TrackingEnabled,
+
 			sqlmock.AnyArg(), // utm_parameters
 			sqlmock.AnyArg(), // metadata
 			sqlmock.AnyArg(), // total_sent
@@ -556,7 +517,7 @@ func TestBroadcastRepository_GetBroadcast_Success(t *testing.T) {
 	// Create mock rows for the broadcast
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
-		"test_settings", "tracking_enabled", "utm_parameters", "metadata",
+		"test_settings", "utm_parameters", "metadata",
 		"total_sent", "total_delivered", "total_bounced", "total_complained",
 		"total_failed", "total_opens", "total_clicks", "winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
@@ -564,7 +525,7 @@ func TestBroadcastRepository_GetBroadcast_Success(t *testing.T) {
 	}).
 		AddRow(
 			broadcastID, workspaceID, "Test Broadcast", domain.BroadcastStatusDraft,
-			[]byte("{}"), []byte("{}"), []byte("{}"), true, []byte("{}"), []byte("{}"),
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			0, 0, 0, 0,
 			0, 0, 0, "", // Use empty string instead of nil for winning_variation
 			nil, nil, time.Now(), time.Now(),
@@ -609,7 +570,7 @@ func TestBroadcastRepository_GetBroadcast_ScanError(t *testing.T) {
 	// Create mock rows with incorrect types to cause a scan error
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
-		"test_settings", "tracking_enabled", "utm_parameters", "metadata",
+		"test_settings", "utm_parameters", "metadata",
 		"total_sent", "total_delivered", "total_bounced", "total_complained",
 		"total_failed", "total_opens", "total_clicks", "winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
@@ -618,7 +579,7 @@ func TestBroadcastRepository_GetBroadcast_ScanError(t *testing.T) {
 		// Add a row with an invalid value for status (should be a string but using int)
 		AddRow(
 			broadcastID, workspaceID, "Test Broadcast", 123, // Invalid type for status
-			nil, nil, nil, true, nil, nil,
+			nil, nil, nil, nil, nil,
 			0, 0, 0, 0,
 			0, 0, 0, nil,
 			nil, nil, time.Now(), time.Now(),
@@ -687,11 +648,10 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 
 	// Create a test broadcast with updated values
 	testBroadcast := &domain.Broadcast{
-		ID:              broadcastID,
-		WorkspaceID:     workspaceID,
-		Name:            "Updated Broadcast",
-		Status:          domain.BroadcastStatusDraft,
-		TrackingEnabled: true,
+		ID:          broadcastID,
+		WorkspaceID: workspaceID,
+		Name:        "Updated Broadcast",
+		Status:      domain.BroadcastStatusDraft,
 	}
 
 	mockWorkspaceRepo.EXPECT().
@@ -711,7 +671,7 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 			sqlmock.AnyArg(), // audience
 			sqlmock.AnyArg(), // schedule
 			sqlmock.AnyArg(), // test_settings
-			testBroadcast.TrackingEnabled,
+
 			sqlmock.AnyArg(), // utm_parameters
 			sqlmock.AnyArg(), // metadata
 			sqlmock.AnyArg(), // total_sent
@@ -949,14 +909,14 @@ func TestBroadcastRepository_ListBroadcasts_RowsIterationError(t *testing.T) {
 	iterationErr := errors.New("iteration error")
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
-		"test_settings", "tracking_enabled", "utm_parameters", "metadata",
+		"test_settings", "utm_parameters", "metadata",
 		"total_sent", "total_delivered", "total_bounced", "total_complained",
 		"total_failed", "total_opens", "total_clicks", "winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
 		AddRow(
-			"bc123", workspaceID, "Broadcast 1", "draft", "{}", "{}", "{}", true, "{}", "{}",
+			"bc123", workspaceID, "Broadcast 1", "draft", "{}", "{}", "{}", "{}", "{}",
 			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
 		).
 		RowError(0, iterationErr) // Set error on the first row
@@ -1065,18 +1025,18 @@ func TestBroadcastRepository_ListBroadcasts_WithStatus(t *testing.T) {
 	// Setup mock rows
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
-		"test_settings", "tracking_enabled", "utm_parameters", "metadata",
+		"test_settings", "utm_parameters", "metadata",
 		"total_sent", "total_delivered", "total_bounced", "total_complained",
 		"total_failed", "total_opens", "total_clicks", "winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
 		AddRow(
-			"bc123", workspaceID, "Broadcast 1", status, []byte("{}"), []byte("{}"), []byte("{}"), true, []byte("{}"), []byte("{}"),
+			"bc123", workspaceID, "Broadcast 1", status, []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
 		).
 		AddRow(
-			"bc456", workspaceID, "Broadcast 2", status, []byte("{}"), []byte("{}"), []byte("{}"), true, []byte("{}"), []byte("{}"),
+			"bc456", workspaceID, "Broadcast 2", status, []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
 		)
 
@@ -1104,90 +1064,6 @@ func TestBroadcastRepository_ListBroadcasts_WithStatus(t *testing.T) {
 	assert.Equal(t, "bc123", result.Broadcasts[0].ID)
 	assert.Equal(t, "bc456", result.Broadcasts[1].ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-// TestScanBroadcast tests the scanBroadcast function
-func TestScanBroadcast(t *testing.T) {
-	// Skip test due to limitations in mocking database types and scan
-	t.Skip("Skipping scanBroadcast test due to limitations in mocking database scan operations")
-
-	// Setup test cases
-	testCases := []struct {
-		name          string
-		setupScanner  func() *mockScanner
-		expectedError bool
-		errorContains string
-	}{
-		{
-			name: "successful scan",
-			setupScanner: func() *mockScanner {
-				now := time.Now()
-				return &mockScanner{
-					values: []interface{}{
-						"bc123",          // id
-						"ws123",          // workspace_id
-						"Test Broadcast", // name
-						"draft",          // status
-						[]byte("{}"),     // audience (JSON)
-						[]byte("{}"),     // schedule (JSON)
-						[]byte("{}"),     // test_settings (JSON)
-						true,             // tracking_enabled
-						[]byte("{}"),     // utm_parameters (JSON)
-						[]byte("{}"),     // metadata (JSON)
-						0,                // total_sent
-						0,                // total_delivered
-						0,                // total_bounced
-						0,                // total_complained
-						0,                // total_failed
-						0,                // total_opens
-						0,                // total_clicks
-						"",               // winning_variation
-						nil,              // test_sent_at
-						nil,              // winner_sent_at
-						now,              // created_at
-						now,              // updated_at
-						nil,              // started_at
-						nil,              // completed_at
-						nil,              // cancelled_at
-					},
-				}
-			},
-			expectedError: false,
-		},
-		{
-			name: "scan error",
-			setupScanner: func() *mockScanner {
-				return &mockScanner{
-					err: errors.New("scan error"),
-				}
-			},
-			expectedError: true,
-			errorContains: "scan error",
-		},
-	}
-
-	// Run test cases
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			scanner := tc.setupScanner()
-			broadcast, err := scanBroadcast(scanner)
-
-			if tc.expectedError {
-				assert.Error(t, err)
-				if tc.errorContains != "" {
-					assert.Contains(t, err.Error(), tc.errorContains)
-				}
-				assert.Nil(t, broadcast)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, broadcast)
-				assert.Equal(t, "bc123", broadcast.ID)
-				assert.Equal(t, "ws123", broadcast.WorkspaceID)
-				assert.Equal(t, "Test Broadcast", broadcast.Name)
-				assert.Equal(t, domain.BroadcastStatusDraft, broadcast.Status)
-			}
-		})
-	}
 }
 
 // mockScanner is a mock implementation of the scanner interface used by scanBroadcast

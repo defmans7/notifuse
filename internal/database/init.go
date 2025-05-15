@@ -155,7 +155,6 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			audience JSONB NOT NULL,
 			schedule JSONB NOT NULL,
 			test_settings JSONB NOT NULL,
-			tracking_enabled BOOLEAN NOT NULL DEFAULT TRUE,
 			utm_parameters JSONB,
 			metadata JSONB,
 			total_sent INTEGER NOT NULL DEFAULT 0,
