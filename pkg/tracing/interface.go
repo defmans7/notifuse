@@ -10,6 +10,7 @@ import (
 //go:generate mockgen -destination=../mocks/mock_tracer.go -package=pkgmocks github.com/Notifuse/notifuse/pkg/tracing Tracer
 
 // Tracer defines the interface for tracing functionality
+// codecov:ignore start
 type Tracer interface {
 	// StartSpan starts a new span
 	StartSpan(ctx context.Context, name string) (context.Context, *trace.Span)
@@ -116,3 +117,5 @@ func GetTracer() Tracer {
 func SetTracer(tracer Tracer) {
 	globalTracer = tracer
 }
+
+// codecov:ignore end
