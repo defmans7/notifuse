@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func TestContact_Validate(t *testing.T) {
@@ -1720,4 +1721,772 @@ func TestContact_MergeContactLists(t *testing.T) {
 		assert.Equal(t, "list-123", contact.ContactLists[0].ListID)
 		assert.Equal(t, ContactListStatusUnsubscribed, contact.ContactLists[0].Status)
 	})
+}
+
+func TestFromJSON_ParseFunctions(t *testing.T) {
+	t.Run("parseNullableString", func(t *testing.T) {
+		// Test cases for parseNullableString
+		testCases := []struct {
+			name     string
+			json     string
+			field    string
+			expected *NullableString
+			wantErr  bool
+		}{
+			{
+				name:     "valid string",
+				json:     `{"test_field": "test value"}`,
+				field:    "test_field",
+				expected: &NullableString{String: "test value", IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "explicit null",
+				json:     `{"test_field": null}`,
+				field:    "test_field",
+				expected: &NullableString{IsNull: true},
+				wantErr:  false,
+			},
+			{
+				name:     "field doesn't exist",
+				json:     `{"other_field": "value"}`,
+				field:    "test_field",
+				expected: nil,
+				wantErr:  false,
+			},
+			{
+				name:     "wrong type",
+				json:     `{"test_field": 123}`,
+				field:    "test_field",
+				expected: nil,
+				wantErr:  true,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				result := gjson.Parse(tc.json)
+				var target *NullableString
+				err := parseNullableString(result, tc.field, &target)
+
+				if tc.wantErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+					if tc.expected == nil {
+						assert.Nil(t, target)
+					} else {
+						assert.NotNil(t, target)
+						assert.Equal(t, tc.expected.IsNull, target.IsNull)
+						if !tc.expected.IsNull {
+							assert.Equal(t, tc.expected.String, target.String)
+						}
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("parseNullableFloat", func(t *testing.T) {
+		// Test cases for parseNullableFloat
+		testCases := []struct {
+			name     string
+			json     string
+			field    string
+			expected *NullableFloat64
+			wantErr  bool
+		}{
+			{
+				name:     "valid number",
+				json:     `{"test_field": 42.5}`,
+				field:    "test_field",
+				expected: &NullableFloat64{Float64: 42.5, IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "explicit null",
+				json:     `{"test_field": null}`,
+				field:    "test_field",
+				expected: &NullableFloat64{IsNull: true},
+				wantErr:  false,
+			},
+			{
+				name:     "field doesn't exist",
+				json:     `{"other_field": 123}`,
+				field:    "test_field",
+				expected: nil,
+				wantErr:  false,
+			},
+			{
+				name:     "wrong type",
+				json:     `{"test_field": "not a number"}`,
+				field:    "test_field",
+				expected: nil,
+				wantErr:  true,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				result := gjson.Parse(tc.json)
+				var target *NullableFloat64
+				err := parseNullableFloat(result, tc.field, &target)
+
+				if tc.wantErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+					if tc.expected == nil {
+						assert.Nil(t, target)
+					} else {
+						assert.NotNil(t, target)
+						assert.Equal(t, tc.expected.IsNull, target.IsNull)
+						if !tc.expected.IsNull {
+							assert.Equal(t, tc.expected.Float64, target.Float64)
+						}
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("parseNullableTime", func(t *testing.T) {
+		// Valid RFC3339 time
+		validTimeStr := "2023-01-15T14:30:45Z"
+		validTime, _ := time.Parse(time.RFC3339, validTimeStr)
+
+		// Test cases for parseNullableTime
+		testCases := []struct {
+			name     string
+			json     string
+			field    string
+			expected *NullableTime
+			wantErr  bool
+		}{
+			{
+				name:     "valid time",
+				json:     `{"test_field": "2023-01-15T14:30:45Z"}`,
+				field:    "test_field",
+				expected: &NullableTime{Time: validTime, IsNull: false},
+				wantErr:  false,
+			},
+			{
+				name:     "explicit null",
+				json:     `{"test_field": null}`,
+				field:    "test_field",
+				expected: &NullableTime{IsNull: true},
+				wantErr:  false,
+			},
+			{
+				name:     "field doesn't exist",
+				json:     `{"other_field": "2023-01-15T14:30:45Z"}`,
+				field:    "test_field",
+				expected: nil,
+				wantErr:  false,
+			},
+			{
+				name:     "invalid time format",
+				json:     `{"test_field": "not a valid time"}`,
+				field:    "test_field",
+				expected: nil,
+				wantErr:  true,
+			},
+			{
+				name:     "wrong type",
+				json:     `{"test_field": 123}`,
+				field:    "test_field",
+				expected: nil,
+				wantErr:  true,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				result := gjson.Parse(tc.json)
+				var target *NullableTime
+				err := parseNullableTime(result, tc.field, &target)
+
+				if tc.wantErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+					if tc.expected == nil {
+						assert.Nil(t, target)
+					} else {
+						assert.NotNil(t, target)
+						assert.Equal(t, tc.expected.IsNull, target.IsNull)
+						if !tc.expected.IsNull {
+							assert.Equal(t, tc.expected.Time.UTC().Format(time.RFC3339), target.Time.UTC().Format(time.RFC3339))
+						}
+					}
+				}
+			})
+		}
+	})
+}
+
+func TestFromJSON_Comprehensive(t *testing.T) {
+	// Test cases for FromJSON with various input types and content
+	validTime := "2023-01-15T14:30:45Z"
+
+	// Basic valid JSON with only required fields
+	t.Run("minimal valid contact", func(t *testing.T) {
+		jsonStr := `{"email": "test@example.com"}`
+		contact, err := FromJSON(jsonStr)
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+	})
+
+	// JSON with all field types
+	t.Run("comprehensive contact with all fields", func(t *testing.T) {
+		jsonStr := fmt.Sprintf(`{
+			"email": "test@example.com",
+			"external_id": "ext123",
+			"timezone": "Europe/Paris",
+			"language": "fr",
+			"first_name": "John",
+			"last_name": "Doe",
+			"phone": "+33612345678",
+			"address_line_1": "123 Main St",
+			"address_line_2": "Apt 4B",
+			"country": "France",
+			"postcode": "75001",
+			"state": "Paris",
+			"job_title": "Engineer",
+			"lifetime_value": 500.50,
+			"orders_count": 5,
+			"last_order_at": "%s",
+			"custom_string_1": "Custom Value 1",
+			"custom_string_2": "Custom Value 2",
+			"custom_number_1": 42.5,
+			"custom_number_2": 99,
+			"custom_datetime_1": "%s",
+			"custom_datetime_2": "%s",
+			"custom_json_1": {"preferences": {"theme": "dark"}},
+			"custom_json_2": ["item1", "item2"]
+		}`, validTime, validTime, validTime)
+
+		contact, err := FromJSON(jsonStr)
+		require.NoError(t, err)
+
+		// Check required fields
+		assert.Equal(t, "test@example.com", contact.Email)
+
+		// Check optional fields
+		assert.Equal(t, "ext123", contact.ExternalID.String)
+		assert.Equal(t, "Europe/Paris", contact.Timezone.String)
+		assert.Equal(t, "fr", contact.Language.String)
+		assert.Equal(t, "John", contact.FirstName.String)
+		assert.Equal(t, "Doe", contact.LastName.String)
+		assert.Equal(t, "+33612345678", contact.Phone.String)
+		assert.Equal(t, "123 Main St", contact.AddressLine1.String)
+		assert.Equal(t, "Apt 4B", contact.AddressLine2.String)
+		assert.Equal(t, "France", contact.Country.String)
+		assert.Equal(t, "75001", contact.Postcode.String)
+		assert.Equal(t, "Paris", contact.State.String)
+		assert.Equal(t, "Engineer", contact.JobTitle.String)
+
+		// Check commerce fields
+		assert.Equal(t, 500.50, contact.LifetimeValue.Float64)
+		assert.Equal(t, 5.0, contact.OrdersCount.Float64)
+
+		// Check custom fields
+		assert.Equal(t, "Custom Value 1", contact.CustomString1.String)
+		assert.Equal(t, "Custom Value 2", contact.CustomString2.String)
+		assert.Equal(t, 42.5, contact.CustomNumber1.Float64)
+		assert.Equal(t, 99.0, contact.CustomNumber2.Float64)
+
+		// Check custom JSON fields
+		assert.NotNil(t, contact.CustomJSON1)
+		assert.NotNil(t, contact.CustomJSON2)
+	})
+
+	// Test with byte array input
+	t.Run("JSON from byte array", func(t *testing.T) {
+		jsonBytes := []byte(`{"email": "test@example.com", "first_name": "Jane"}`)
+		contact, err := FromJSON(jsonBytes)
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+		assert.Equal(t, "Jane", contact.FirstName.String)
+	})
+
+	// Test with gjson.Result input
+	t.Run("JSON from gjson.Result", func(t *testing.T) {
+		jsonResult := gjson.Parse(`{"email": "test@example.com", "last_name": "Smith"}`)
+		contact, err := FromJSON(jsonResult)
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+		assert.Equal(t, "Smith", contact.LastName.String)
+	})
+
+	// Test failures
+	t.Run("missing required email", func(t *testing.T) {
+		jsonStr := `{"first_name": "John"}`
+		contact, err := FromJSON(jsonStr)
+		assert.Error(t, err)
+		assert.Nil(t, contact)
+		assert.Contains(t, err.Error(), "email is required")
+	})
+
+	t.Run("invalid email format", func(t *testing.T) {
+		jsonStr := `{"email": "not-an-email"}`
+		contact, err := FromJSON(jsonStr)
+		assert.Error(t, err)
+		assert.Nil(t, contact)
+		assert.Contains(t, err.Error(), "invalid email format")
+	})
+
+	t.Run("unsupported data type", func(t *testing.T) {
+		contact, err := FromJSON(123) // Invalid type
+		assert.Error(t, err)
+		assert.Nil(t, contact)
+		assert.Contains(t, err.Error(), "unsupported data type")
+	})
+
+	// Test JSON with null fields
+	t.Run("JSON with explicit null fields", func(t *testing.T) {
+		jsonStr := `{
+			"email": "test@example.com",
+			"first_name": null,
+			"custom_number_1": null,
+			"custom_datetime_1": null,
+			"custom_json_1": null
+		}`
+		contact, err := FromJSON(jsonStr)
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+		assert.True(t, contact.FirstName.IsNull)
+		assert.True(t, contact.CustomNumber1.IsNull)
+		assert.True(t, contact.CustomDatetime1.IsNull)
+		assert.True(t, contact.CustomJSON1.IsNull)
+	})
+
+	// Test custom JSON fields with various types
+	t.Run("custom JSON fields with different valid types", func(t *testing.T) {
+		jsonStr := `{
+			"email": "test@example.com",
+			"custom_json_1": {"object": true},
+			"custom_json_2": [1, 2, 3],
+			"custom_json_3": "invalid" 
+		}`
+		_, err := FromJSON(jsonStr)
+		assert.Error(t, err) // Should fail due to invalid JSON in custom_json_3
+		assert.Contains(t, err.Error(), "invalid JSON value for custom_json_3")
+	})
+}
+
+func TestVerifyEmailHMAC(t *testing.T) {
+	email := "test@example.com"
+	secretKey := "super-secret-key"
+
+	// Compute a valid HMAC
+	validHMAC := ComputeEmailHMAC(email, secretKey)
+
+	// Test correct verification
+	t.Run("valid HMAC verification", func(t *testing.T) {
+		result := VerifyEmailHMAC(email, validHMAC, secretKey)
+		assert.True(t, result)
+	})
+
+	// Test invalid HMAC
+	t.Run("invalid HMAC verification", func(t *testing.T) {
+		invalidHMAC := "invalid-hmac-value"
+		result := VerifyEmailHMAC(email, invalidHMAC, secretKey)
+		assert.False(t, result)
+	})
+
+	// Test different email
+	t.Run("different email HMAC verification", func(t *testing.T) {
+		differentEmail := "other@example.com"
+		result := VerifyEmailHMAC(differentEmail, validHMAC, secretKey)
+		assert.False(t, result)
+	})
+
+	// Test different secret key
+	t.Run("different secret key HMAC verification", func(t *testing.T) {
+		differentKey := "different-secret-key"
+		result := VerifyEmailHMAC(email, validHMAC, differentKey)
+		assert.False(t, result)
+	})
+}
+
+// TestFromJSON_AllTypesParser tests the FromJSON function with all possible input types
+func TestFromJSON_AllTypesParser(t *testing.T) {
+	// Test different input types
+	t.Run("string input", func(t *testing.T) {
+		input := `{"email": "test@example.com"}`
+		contact, err := FromJSON(input)
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+	})
+
+	t.Run("byte array input", func(t *testing.T) {
+		input := []byte(`{"email": "test@example.com"}`)
+		contact, err := FromJSON(input)
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+	})
+
+	t.Run("gjson.Result input", func(t *testing.T) {
+		input := gjson.Parse(`{"email": "test@example.com"}`)
+		contact, err := FromJSON(input)
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", contact.Email)
+	})
+
+	t.Run("unsupported type input", func(t *testing.T) {
+		input := 123 // integers are not supported
+		contact, err := FromJSON(input)
+		assert.Error(t, err)
+		assert.Nil(t, contact)
+		assert.Contains(t, err.Error(), "unsupported data type")
+	})
+}
+
+// TestFromJSON_ErrorCases tests various error cases for FromJSON
+func TestFromJSON_ErrorCases(t *testing.T) {
+	t.Run("missing email", func(t *testing.T) {
+		input := `{"first_name": "John"}`
+		contact, err := FromJSON(input)
+		assert.Error(t, err)
+		assert.Nil(t, contact)
+		assert.Contains(t, err.Error(), "email is required")
+	})
+
+	t.Run("invalid email format", func(t *testing.T) {
+		input := `{"email": "invalid-email"}`
+		contact, err := FromJSON(input)
+		assert.Error(t, err)
+		assert.Nil(t, contact)
+		assert.Contains(t, err.Error(), "invalid email format")
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		// The gjson library is very forgiving with malformed JSON
+		// We need a clearly broken JSON to make this fail
+		input := `{not-valid-json`
+		contact, err := FromJSON(input)
+		assert.Nil(t, contact)
+		// Even if no error, the contact should be nil because
+		// the email field will be missing from the invalid JSON
+		if err == nil {
+			t.Log("gjson was able to parse invalid JSON but couldn't find email field")
+		}
+	})
+}
+
+// TestParseNullableString tests the parseNullableString function with various inputs
+func TestParseNullableString(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		field    string
+		expected *NullableString
+		wantErr  bool
+	}{
+		{
+			name:     "valid string",
+			json:     `{"test_field": "test value"}`,
+			field:    "test_field",
+			expected: &NullableString{String: "test value", IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "explicit null",
+			json:     `{"test_field": null}`,
+			field:    "test_field",
+			expected: &NullableString{IsNull: true},
+			wantErr:  false,
+		},
+		{
+			name:     "empty string",
+			json:     `{"test_field": ""}`,
+			field:    "test_field",
+			expected: &NullableString{String: "", IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "field doesn't exist",
+			json:     `{"other_field": "value"}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  false,
+		},
+		{
+			name:     "wrong type - number",
+			json:     `{"test_field": 123}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong type - boolean",
+			json:     `{"test_field": true}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong type - object",
+			json:     `{"test_field": {"nested": "object"}}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong type - array",
+			json:     `{"test_field": ["array", "values"]}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := gjson.Parse(tc.json)
+			var target *NullableString
+			err := parseNullableString(result, tc.field, &target)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid type for")
+			} else {
+				assert.NoError(t, err)
+				if tc.expected == nil {
+					assert.Nil(t, target)
+				} else {
+					assert.NotNil(t, target)
+					assert.Equal(t, tc.expected.IsNull, target.IsNull)
+					if !tc.expected.IsNull {
+						assert.Equal(t, tc.expected.String, target.String)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestParseNullableFloat tests the parseNullableFloat function with various inputs
+func TestParseNullableFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		field    string
+		expected *NullableFloat64
+		wantErr  bool
+	}{
+		{
+			name:     "valid integer",
+			json:     `{"test_field": 42}`,
+			field:    "test_field",
+			expected: &NullableFloat64{Float64: 42, IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "valid float",
+			json:     `{"test_field": 42.5}`,
+			field:    "test_field",
+			expected: &NullableFloat64{Float64: 42.5, IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "zero value",
+			json:     `{"test_field": 0}`,
+			field:    "test_field",
+			expected: &NullableFloat64{Float64: 0, IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "negative value",
+			json:     `{"test_field": -42.5}`,
+			field:    "test_field",
+			expected: &NullableFloat64{Float64: -42.5, IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "explicit null",
+			json:     `{"test_field": null}`,
+			field:    "test_field",
+			expected: &NullableFloat64{IsNull: true},
+			wantErr:  false,
+		},
+		{
+			name:     "field doesn't exist",
+			json:     `{"other_field": 123}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  false,
+		},
+		{
+			name:     "wrong type - string",
+			json:     `{"test_field": "not a number"}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong type - boolean",
+			json:     `{"test_field": true}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong type - object",
+			json:     `{"test_field": {"nested": "object"}}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong type - array",
+			json:     `{"test_field": [1, 2, 3]}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := gjson.Parse(tc.json)
+			var target *NullableFloat64
+			err := parseNullableFloat(result, tc.field, &target)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid type for")
+			} else {
+				assert.NoError(t, err)
+				if tc.expected == nil {
+					assert.Nil(t, target)
+				} else {
+					assert.NotNil(t, target)
+					assert.Equal(t, tc.expected.IsNull, target.IsNull)
+					if !tc.expected.IsNull {
+						assert.Equal(t, tc.expected.Float64, target.Float64)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestParseNullableTime tests the parseNullableTime function with various inputs
+func TestParseNullableTime(t *testing.T) {
+	// Valid RFC3339 time
+	validTimeStr := "2023-01-15T14:30:45Z"
+	validTime, _ := time.Parse(time.RFC3339, validTimeStr)
+
+	tests := []struct {
+		name     string
+		json     string
+		field    string
+		expected *NullableTime
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name:     "valid RFC3339 time",
+			json:     `{"test_field": "2023-01-15T14:30:45Z"}`,
+			field:    "test_field",
+			expected: &NullableTime{Time: validTime, IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "valid RFC3339Nano time",
+			json:     `{"test_field": "2023-01-15T14:30:45.123456789Z"}`,
+			field:    "test_field",
+			expected: &NullableTime{Time: time.Date(2023, 1, 15, 14, 30, 45, 123456789, time.UTC), IsNull: false},
+			wantErr:  false,
+		},
+		{
+			name:     "valid RFC3339 with timezone",
+			json:     `{"test_field": "2023-01-15T14:30:45+01:00"}`,
+			field:    "test_field",
+			expected: &NullableTime{Time: time.Date(2023, 1, 15, 13, 30, 45, 0, time.UTC), IsNull: false}, // Converted to UTC
+			wantErr:  false,
+		},
+		{
+			name:     "explicit null",
+			json:     `{"test_field": null}`,
+			field:    "test_field",
+			expected: &NullableTime{IsNull: true},
+			wantErr:  false,
+		},
+		{
+			name:     "field doesn't exist",
+			json:     `{"other_field": "2023-01-15T14:30:45Z"}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  false,
+		},
+		{
+			name:     "invalid time format",
+			json:     `{"test_field": "not a valid time"}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+			errMsg:   "invalid time format",
+		},
+		{
+			name:     "wrong type - number",
+			json:     `{"test_field": 123}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+			errMsg:   "invalid type for",
+		},
+		{
+			name:     "wrong type - boolean",
+			json:     `{"test_field": true}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+			errMsg:   "invalid type for",
+		},
+		{
+			name:     "wrong type - object",
+			json:     `{"test_field": {"date": "2023-01-15"}}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+			errMsg:   "invalid type for",
+		},
+		{
+			name:     "wrong type - array",
+			json:     `{"test_field": ["2023", "01", "15"]}`,
+			field:    "test_field",
+			expected: nil,
+			wantErr:  true,
+			errMsg:   "invalid type for",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := gjson.Parse(tc.json)
+			var target *NullableTime
+			err := parseNullableTime(result, tc.field, &target)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.errMsg != "" {
+					assert.Contains(t, err.Error(), tc.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				if tc.expected == nil {
+					assert.Nil(t, target)
+				} else {
+					assert.NotNil(t, target)
+					assert.Equal(t, tc.expected.IsNull, target.IsNull)
+					if !tc.expected.IsNull {
+						assert.Equal(t, tc.expected.Time.UTC().Format(time.RFC3339), target.Time.UTC().Format(time.RFC3339))
+					}
+				}
+			}
+		})
+	}
 }

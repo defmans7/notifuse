@@ -1040,3 +1040,465 @@ func TestEmailService_OpenEmail(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to update message opened")
 	})
 }
+
+func TestEmailService_SendEmailForTemplate(t *testing.T) {
+	// Setup the controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Setup mocks
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+	mockMessageRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+
+	// Email provider services
+	mockSMTPService := &mockEmailProviderService{ctrl: ctrl}
+	mockSESService := &mockEmailProviderService{ctrl: ctrl}
+	mockSparkPostService := &mockEmailProviderService{ctrl: ctrl}
+	mockPostmarkService := &mockEmailProviderService{ctrl: ctrl}
+	mockMailgunService := &mockEmailProviderService{ctrl: ctrl}
+	mockMailjetService := &mockEmailProviderService{ctrl: ctrl}
+
+	// Create the email service
+	emailService := EmailService{
+		logger:           mockLogger,
+		authService:      mockAuthService,
+		workspaceRepo:    mockWorkspaceRepo,
+		templateRepo:     mockTemplateRepo,
+		templateService:  mockTemplateService,
+		httpClient:       mockHTTPClient,
+		messageRepo:      mockMessageRepo,
+		webhookEndpoint:  "https://webhook.test",
+		smtpService:      mockSMTPService,
+		sesService:       mockSESService,
+		sparkPostService: mockSparkPostService,
+		postmarkService:  mockPostmarkService,
+		mailgunService:   mockMailgunService,
+		mailjetService:   mockMailjetService,
+	}
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	messageID := "message-456"
+
+	// Create a contact
+	contact := &domain.Contact{
+		Email:     "test@example.com",
+		FirstName: &domain.NullableString{String: "Test", IsNull: false},
+		LastName:  &domain.NullableString{String: "User", IsNull: false},
+	}
+
+	// Create template config
+	templateConfig := domain.ChannelTemplate{
+		TemplateID: "template-789",
+	}
+
+	// Create message data
+	messageData := domain.MessageData{
+		Data: map[string]interface{}{
+			"name": "Test User",
+			"link": "https://example.com/test",
+		},
+	}
+
+	// Create tracking settings
+	trackingSettings := mjml.TrackingSettings{
+		Endpoint:       "https://track.example.com",
+		EnableTracking: true,
+		UTMSource:      "newsletter",
+		UTMMedium:      "email",
+		UTMCampaign:    "welcome",
+		UTMContent:     "template-789",
+		UTMTerm:        "new-user",
+	}
+
+	// Create email provider
+	emailProvider := &domain.EmailProvider{
+		Kind:               domain.EmailProviderKindSES,
+		DefaultSenderEmail: "sender@example.com",
+		DefaultSenderName:  "Sender Name",
+		SES: &domain.AmazonSESSettings{
+			Region:    "us-east-1",
+			AccessKey: "access-key",
+			SecretKey: "secret-key",
+		},
+	}
+
+	// Set up common mock expectations for logger
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	// Create email template
+	emailTemplate := &domain.Template{
+		ID:   "template-789",
+		Name: "Welcome Email",
+		Email: &domain.EmailTemplate{
+			Subject:          "Welcome to Our Service",
+			FromAddress:      "welcome@example.com",
+			FromName:         "Welcome Team",
+			ReplyTo:          "support@example.com",
+			VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
+		},
+		UTMSource:   createStringPtr("custom-source"),
+		UTMMedium:   createStringPtr("custom-medium"),
+		UTMCampaign: createStringPtr("custom-campaign"),
+	}
+
+	// Create compile template result
+	compiledHTML := "<h1>Welcome!</h1><p>Hello Test User, welcome to our service!</p>"
+	compileResult := &domain.CompileTemplateResponse{
+		Success: true,
+		HTML:    &compiledHTML,
+	}
+
+	t.Run("Successfully sends email template", func(t *testing.T) {
+		// Setup template service mock
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).
+			Return(emailTemplate, nil)
+
+		// Setup compile template mock
+		mockTemplateService.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req domain.CompileTemplateRequest) (*domain.CompileTemplateResponse, error) {
+				// Verify the compile template request parameters
+				assert.Equal(t, workspaceID, req.WorkspaceID)
+				assert.Equal(t, messageID, req.MessageID)
+				assert.Equal(t, emailTemplate.Email.VisualEditorTree, req.VisualEditorTree)
+
+				// Just check that template data has the expected keys
+				assert.Contains(t, req.TemplateData, "name")
+				assert.Contains(t, req.TemplateData, "link")
+
+				assert.Equal(t, trackingSettings.EnableTracking, req.TrackingEnabled)
+
+				// Check that UTM parameters are set (don't check exact values as they may be overridden)
+				assert.NotNil(t, req.UTMSource)
+				assert.NotNil(t, req.UTMMedium)
+				assert.NotNil(t, req.UTMCampaign)
+				assert.NotNil(t, req.UTMContent)
+
+				return compileResult, nil
+			})
+
+		// Setup message repository mock
+		mockMessageRepo.EXPECT().
+			Create(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, wsID string, msgHistory *domain.MessageHistory) error {
+				// Verify message history properties
+				assert.Equal(t, messageID, msgHistory.ID)
+				assert.Equal(t, contact.Email, msgHistory.ContactEmail)
+				assert.Equal(t, templateConfig.TemplateID, msgHistory.TemplateID)
+				assert.Equal(t, "email", msgHistory.Channel)
+				assert.Equal(t, domain.MessageStatusSent, msgHistory.Status)
+				assert.Equal(t, messageData, msgHistory.MessageData)
+
+				return nil
+			})
+
+		// Setup email provider mock
+		mockSESService.expectSendEmailWithOptions(
+			ctx,
+			workspaceID,
+			emailTemplate.Email.FromAddress,
+			emailTemplate.Email.FromName,
+			contact.Email,
+			emailTemplate.Email.Subject,
+			compiledHTML,
+			emailProvider,
+			emailTemplate.Email.ReplyTo,
+			nil, // cc
+			nil, // bcc
+			nil, // no error
+		)
+
+		// Call method under test
+		err := emailService.SendEmailForTemplate(
+			ctx,
+			workspaceID,
+			messageID,
+			contact,
+			templateConfig,
+			messageData,
+			trackingSettings,
+			emailProvider,
+			nil, // cc
+			nil, // bcc
+		)
+
+		// Assertions
+		require.NoError(t, err)
+	})
+
+	t.Run("Error getting template", func(t *testing.T) {
+		// Setup template service mock to return an error
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).
+			Return(nil, assert.AnError)
+
+		// Logger should log the error
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Call method under test
+		err := emailService.SendEmailForTemplate(
+			ctx,
+			workspaceID,
+			messageID,
+			contact,
+			templateConfig,
+			messageData,
+			trackingSettings,
+			emailProvider,
+			nil, // cc
+			nil, // bcc
+		)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get template")
+	})
+
+	t.Run("Error compiling template", func(t *testing.T) {
+		// Setup template service mock
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).
+			Return(emailTemplate, nil)
+
+		// Setup compile template mock to return an error
+		mockTemplateService.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(nil, assert.AnError)
+
+		// Logger should log the error
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Call method under test
+		err := emailService.SendEmailForTemplate(
+			ctx,
+			workspaceID,
+			messageID,
+			contact,
+			templateConfig,
+			messageData,
+			trackingSettings,
+			emailProvider,
+			nil, // cc
+			nil, // bcc
+		)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to compile template")
+	})
+
+	t.Run("Template compilation unsuccessful", func(t *testing.T) {
+		// Setup template service mock
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).
+			Return(emailTemplate, nil)
+
+		// Create unsuccessful compile result
+		unsuccessfulResult := &domain.CompileTemplateResponse{
+			Success: false,
+			Error: &mjmlgo.Error{
+				Message: "Template compilation error",
+			},
+		}
+
+		// Setup compile template mock to return unsuccessful result
+		mockTemplateService.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(unsuccessfulResult, nil)
+
+		// Logger should log the error
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Call method under test
+		err := emailService.SendEmailForTemplate(
+			ctx,
+			workspaceID,
+			messageID,
+			contact,
+			templateConfig,
+			messageData,
+			trackingSettings,
+			emailProvider,
+			nil, // cc
+			nil, // bcc
+		)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "template compilation failed")
+	})
+
+	t.Run("Error creating message history", func(t *testing.T) {
+		// Setup template service mock
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).
+			Return(emailTemplate, nil)
+
+		// Setup compile template mock
+		mockTemplateService.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(compileResult, nil)
+
+		// Setup message repository mock to return an error
+		mockMessageRepo.EXPECT().
+			Create(gomock.Any(), workspaceID, gomock.Any()).
+			Return(assert.AnError)
+
+		// Logger should log the error
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Call method under test
+		err := emailService.SendEmailForTemplate(
+			ctx,
+			workspaceID,
+			messageID,
+			contact,
+			templateConfig,
+			messageData,
+			trackingSettings,
+			emailProvider,
+			nil, // cc
+			nil, // bcc
+		)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create message history")
+	})
+
+	t.Run("Error sending email", func(t *testing.T) {
+		// Setup template service mock
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).
+			Return(emailTemplate, nil)
+
+		// Setup compile template mock
+		mockTemplateService.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(compileResult, nil)
+
+		// Setup message repository mock
+		mockMessageRepo.EXPECT().
+			Create(gomock.Any(), workspaceID, gomock.Any()).
+			Return(nil)
+
+		// Setup email provider mock to return an error
+		mockSESService.expectSendEmailWithOptions(
+			ctx,
+			workspaceID,
+			emailTemplate.Email.FromAddress,
+			emailTemplate.Email.FromName,
+			contact.Email,
+			emailTemplate.Email.Subject,
+			compiledHTML,
+			emailProvider,
+			emailTemplate.Email.ReplyTo,
+			nil, // cc
+			nil, // bcc
+			assert.AnError,
+		)
+
+		// Setup message repository mock to update with error status
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, wsID string, msgHistory *domain.MessageHistory) error {
+				// Verify message history error properties
+				assert.Equal(t, messageID, msgHistory.ID)
+				assert.Equal(t, domain.MessageStatusFailed, msgHistory.Status)
+				assert.NotNil(t, msgHistory.Error)
+
+				return nil
+			})
+
+		// Logger should log the error
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Call method under test
+		err := emailService.SendEmailForTemplate(
+			ctx,
+			workspaceID,
+			messageID,
+			contact,
+			templateConfig,
+			messageData,
+			trackingSettings,
+			emailProvider,
+			nil, // cc
+			nil, // bcc
+		)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to send email")
+	})
+
+	t.Run("Error updating message history after failed email", func(t *testing.T) {
+		// Setup template service mock
+		mockTemplateService.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).
+			Return(emailTemplate, nil)
+
+		// Setup compile template mock
+		mockTemplateService.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(compileResult, nil)
+
+		// Setup message repository mock
+		mockMessageRepo.EXPECT().
+			Create(gomock.Any(), workspaceID, gomock.Any()).
+			Return(nil)
+
+		// Setup email provider mock to return an error
+		mockSESService.expectSendEmailWithOptions(
+			ctx,
+			workspaceID,
+			emailTemplate.Email.FromAddress,
+			emailTemplate.Email.FromName,
+			contact.Email,
+			emailTemplate.Email.Subject,
+			compiledHTML,
+			emailProvider,
+			emailTemplate.Email.ReplyTo,
+			nil, // cc
+			nil, // bcc
+			assert.AnError,
+		)
+
+		// Setup message repository mock to fail updating with error status
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(assert.AnError)
+
+		// Logger should log both errors
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Call method under test
+		err := emailService.SendEmailForTemplate(
+			ctx,
+			workspaceID,
+			messageID,
+			contact,
+			templateConfig,
+			messageData,
+			trackingSettings,
+			emailProvider,
+			nil, // cc
+			nil, // bcc
+		)
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to send email")
+	})
+}
