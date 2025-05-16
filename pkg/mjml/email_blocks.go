@@ -368,13 +368,13 @@ type Columns6666BlockData struct {
 }
 
 type TrackingSettings struct {
-	EnableTracking bool   `json:"enableTracking"`
-	Endpoint       string `json:"endpoint"`
-	UTMSource      string `json:"utmSource"`
-	UTMMedium      string `json:"utmMedium"`
-	UTMCampaign    string `json:"utmCampaign"`
-	UTMContent     string `json:"utmContent"`
-	UTMTerm        string `json:"utmTerm"`
+	EnableTracking bool   `json:"enable_tracking"`
+	Endpoint       string `json:"endpoint,omitempty"`
+	UTMSource      string `json:"utm_source,omitempty"`
+	UTMMedium      string `json:"utm_medium,omitempty"`
+	UTMCampaign    string `json:"utm_campaign,omitempty"`
+	UTMContent     string `json:"utm_content,omitempty"`
+	UTMTerm        string `json:"utm_term,omitempty"`
 }
 
 // Value implements the driver.Valuer interface for database storage

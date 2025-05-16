@@ -103,6 +103,10 @@ export function TransactionalNotificationsPage() {
     null
   )
 
+  // Move ref and usePrismjs hook before any conditional returns
+  const preRef = useRef<HTMLPreElement>(null)
+  usePrismjs(preRef, ['line-numbers'])
+
   // Fetch notifications
   const {
     data: notificationsData,
@@ -246,9 +250,6 @@ export function TransactionalNotificationsPage() {
       )
     }
   ]
-
-  const preRef = useRef<HTMLPreElement>(null)
-  usePrismjs(preRef, ['line-numbers'])
 
   return (
     <div className="p-6">

@@ -70,11 +70,12 @@ func (s *TransactionalNotificationService) CreateNotification(
 
 	// Create the notification object
 	notification := &domain.TransactionalNotification{
-		ID:          params.ID,
-		Name:        params.Name,
-		Description: params.Description,
-		Channels:    params.Channels,
-		Metadata:    params.Metadata,
+		ID:               params.ID,
+		Name:             params.Name,
+		Description:      params.Description,
+		Channels:         params.Channels,
+		TrackingSettings: params.TrackingSettings,
+		Metadata:         params.Metadata,
 	}
 
 	// Validate the notification templates exist
@@ -146,24 +147,15 @@ func (s *TransactionalNotificationService) UpdateNotification(
 		return nil, fmt.Errorf("failed to get notification: %w", err)
 	}
 
-	// Add existing details to span
-	span.AddAttributes(
-		trace.StringAttribute("notification.name", notification.Name),
-	)
-
 	// Update fields if provided
 	if params.Name != "" {
-		tracing.AddAttribute(ctx, "update.name", params.Name)
 		notification.Name = params.Name
 	}
 	if params.Description != "" {
-		tracing.AddAttribute(ctx, "update.description", "updated")
 		notification.Description = params.Description
 	}
+	// Validate the updated templates exist
 	if params.Channels != nil {
-		tracing.AddAttribute(ctx, "update.channels", "updated")
-
-		// Validate the updated templates exist
 		for channel, template := range params.Channels {
 			tracing.AddAttribute(ctx, fmt.Sprintf("channel.%s.template_id", channel), template.TemplateID)
 
@@ -179,12 +171,10 @@ func (s *TransactionalNotificationService) UpdateNotification(
 				return nil, fmt.Errorf("invalid template for channel %s: %w", channel, err)
 			}
 		}
-		notification.Channels = params.Channels
 	}
-	if params.Metadata != nil {
-		tracing.AddAttribute(ctx, "update.metadata", "updated")
-		notification.Metadata = params.Metadata
-	}
+	notification.Channels = params.Channels
+	notification.TrackingSettings = params.TrackingSettings
+	notification.Metadata = params.Metadata
 
 	// Save the updated notification
 	if err := s.transactionalRepo.Update(ctx, workspace, notification); err != nil {

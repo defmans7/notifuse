@@ -89,21 +89,21 @@ type TransactionalNotificationRepository interface {
 
 // TransactionalNotificationCreateParams contains the parameters for creating a new transactional notification
 type TransactionalNotificationCreateParams struct {
-	ID              string           `json:"id" validate:"required"` // Unique identifier for API triggering
-	Name            string           `json:"name" validate:"required"`
-	Description     string           `json:"description"`
-	Channels        ChannelTemplates `json:"channels" validate:"required,min=1"`
-	TrackingEnabled bool             `json:"tracking_enabled"`
-	Metadata        MapOfAny         `json:"metadata,omitempty"`
+	ID               string                `json:"id" validate:"required"` // Unique identifier for API triggering
+	Name             string                `json:"name" validate:"required"`
+	Description      string                `json:"description"`
+	Channels         ChannelTemplates      `json:"channels" validate:"required,min=1"`
+	TrackingSettings mjml.TrackingSettings `json:"tracking_settings"`
+	Metadata         MapOfAny              `json:"metadata,omitempty"`
 }
 
 // TransactionalNotificationUpdateParams contains the parameters for updating an existing transactional notification
 type TransactionalNotificationUpdateParams struct {
-	Name            string           `json:"name,omitempty"`
-	Description     string           `json:"description,omitempty"`
-	Channels        ChannelTemplates `json:"channels,omitempty"`
-	TrackingEnabled *bool            `json:"tracking_enabled,omitempty"`
-	Metadata        MapOfAny         `json:"metadata,omitempty"`
+	Name             string                `json:"name,omitempty"`
+	Description      string                `json:"description,omitempty"`
+	Channels         ChannelTemplates      `json:"channels,omitempty"`
+	TrackingSettings mjml.TrackingSettings `json:"tracking_settings,omitempty"`
+	Metadata         MapOfAny              `json:"metadata,omitempty"`
 }
 
 // TransactionalNotificationSendParams contains the parameters for sending a transactional notification

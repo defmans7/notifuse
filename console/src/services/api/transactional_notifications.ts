@@ -5,7 +5,6 @@ export type TransactionalChannel = 'email'
 
 export interface ChannelTemplate {
   template_id: string
-  version: number
   settings?: Record<string, any>
 }
 
@@ -14,11 +13,22 @@ export interface ChannelTemplates {
   // Other channel templates in the future
 }
 
+export interface TrackingSettings {
+  enable_tracking?: boolean
+  endpoint?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  utm_content?: string
+  utm_term?: string
+}
+
 export interface TransactionalNotification {
   id: string
   name: string
   description: string
   channels: ChannelTemplates
+  tracking_settings: TrackingSettings
   metadata?: Record<string, any>
   created_at: string
   updated_at: string
@@ -32,6 +42,7 @@ export interface CreateTransactionalNotificationRequest {
     name: string
     description?: string
     channels: ChannelTemplates
+    tracking_settings: TrackingSettings
     metadata?: Record<string, any>
   }
 }
@@ -43,6 +54,7 @@ export interface UpdateTransactionalNotificationRequest {
     name?: string
     description?: string
     channels?: ChannelTemplates
+    tracking_settings?: TrackingSettings
     metadata?: Record<string, any>
   }
 }

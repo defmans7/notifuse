@@ -39,7 +39,7 @@ func (r *TransactionalNotificationRepository) Create(ctx context.Context, worksp
 		INSERT INTO transactional_notifications (
 			id, name, description, channels, tracking_settings, metadata, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9
+			$1, $2, $3, $4, $5, $6, $7, $8
 		)
 	`
 

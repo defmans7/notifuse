@@ -58,7 +58,7 @@ export function UpsertTransactionalNotificationDrawer({
 
       // Also update utm_content with the same pattern
       // UTM parameters are independent of tracking_enabled
-      form.setFieldValue(['channels', 'email', 'utm_params', 'content'], apiId)
+      form.setFieldValue(['tracking_settings', 'utm_content'], apiId)
     }
   }, [notificationName, form, isOpen, notification])
 
@@ -98,6 +98,7 @@ export function UpsertTransactionalNotificationDrawer({
         name: notification.name,
         description: notification.description,
         channels: notification.channels,
+        tracking_settings: notification.tracking_settings,
         metadata: notification.metadata || undefined
       })
     } else {
@@ -111,17 +112,14 @@ export function UpsertTransactionalNotificationDrawer({
         description: '',
         channels: {
           email: {
-            template_id: '',
-            tracking_enabled: true,
-            utm_params: {
-              source: domain || '',
-              medium: 'email',
-              campaign: 'transactional',
-              content: ''
-            },
-            cc_enabled: false,
-            bcc_enabled: false
+            template_id: ''
           }
+        },
+        tracking_settings: {
+          utm_source: domain || '',
+          utm_medium: 'email',
+          utm_campaign: 'transactional',
+          utm_content: ''
         }
       })
     }
@@ -208,6 +206,7 @@ export function UpsertTransactionalNotificationDrawer({
                     name: values.name,
                     description: values.description,
                     channels: values.channels,
+                    tracking_settings: values.tracking_settings,
                     metadata: values.metadata
                   }
                 }
@@ -221,6 +220,7 @@ export function UpsertTransactionalNotificationDrawer({
                     name: values.name,
                     description: values.description,
                     channels: values.channels,
+                    tracking_settings: values.tracking_settings,
                     metadata: values.metadata
                   }
                 }
@@ -288,7 +288,7 @@ export function UpsertTransactionalNotificationDrawer({
               <Row gutter={16}>
                 <Col span={12}>
                   <Form.Item
-                    name={['channels', 'email', 'utm_params', 'source']}
+                    name={['tracking_settings', 'utm_source']}
                     label="utm_source"
                     tooltip="Identifies which site sent the traffic (e.g. google, newsletter)"
                   >
@@ -296,7 +296,7 @@ export function UpsertTransactionalNotificationDrawer({
                   </Form.Item>
 
                   <Form.Item
-                    name={['channels', 'email', 'utm_params', 'medium']}
+                    name={['tracking_settings', 'utm_medium']}
                     label="utm_medium"
                     tooltip="Identifies what type of link was used (e.g. email, cpc, banner)"
                   >
@@ -306,7 +306,7 @@ export function UpsertTransactionalNotificationDrawer({
 
                 <Col span={12}>
                   <Form.Item
-                    name={['channels', 'email', 'utm_params', 'campaign']}
+                    name={['tracking_settings', 'utm_campaign']}
                     label="utm_campaign"
                     tooltip="Identifies a specific product promotion or strategic campaign"
                   >
@@ -314,7 +314,7 @@ export function UpsertTransactionalNotificationDrawer({
                   </Form.Item>
 
                   <Form.Item
-                    name={['channels', 'email', 'utm_params', 'content']}
+                    name={['tracking_settings', 'utm_content']}
                     label="utm_content"
                     tooltip="Identifies what specifically was clicked (e.g. header_link, body_link)"
                   >
