@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/disposable_emails"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/google/uuid"
@@ -152,6 +153,11 @@ func (s *ListService) GetListStats(ctx context.Context, workspaceID string, id s
 func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.SubscribeToListsRequest, hasBearerToken bool) error {
 	var err error
 
+	// fail silently if the email is disposable
+	if disposable_emails.IsDisposableEmail(payload.Contact.Email) {
+		return nil
+	}
+
 	workspace, err := s.workspaceRepo.GetByID(ctx, payload.WorkspaceID)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to get workspace: %v", err))
@@ -243,9 +249,11 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 		// Subscribe to the list
 		err = s.contactListRepo.AddContactToList(ctx, workspace.ID, contactList)
 		if err != nil {
+			// codecov:ignore:start
 			s.logger.WithField("email", contactList.Email).
 				WithField("list_id", contactList.ListID).
 				Error(fmt.Sprintf("Failed to subscribe to list: %v", err))
+			// codecov:ignore:end
 			return fmt.Errorf("failed to subscribe to list: %w", err)
 		}
 
