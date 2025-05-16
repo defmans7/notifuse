@@ -277,7 +277,6 @@ export function UpsertTransactionalNotificationDrawer({
                   workspaceId={workspace.id}
                   placeholder="Select email template"
                   category="transactional"
-                  utmDisabled={false}
                 />
               </Form.Item>
 

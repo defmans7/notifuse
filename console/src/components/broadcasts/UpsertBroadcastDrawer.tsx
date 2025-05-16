@@ -11,7 +11,8 @@ import {
   Col,
   Switch,
   InputNumber,
-  Popconfirm
+  Popconfirm,
+  Alert
 } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -27,15 +28,8 @@ import React from 'react'
 import extractTLD from '../utils/tld'
 
 // Custom component to handle A/B testing configuration
-const ABTestingConfig = ({ form }: { form: any }) => {
+const ABTestingConfig = ({ form, trackingEnabled }: { form: any; trackingEnabled: boolean }) => {
   const autoSendWinner = Form.useWatch(['test_settings', 'auto_send_winner'], form)
-
-  // When auto-send winner is enabled, ensure tracking is enabled
-  useEffect(() => {
-    if (autoSendWinner) {
-      form.setFieldValue('tracking_enabled', true)
-    }
-  }, [autoSendWinner, form])
 
   if (!autoSendWinner) return null
 
@@ -68,26 +62,6 @@ const ABTestingConfig = ({ form }: { form: any }) => {
   )
 }
 
-// Custom component to handle tracking enabled with disabled state
-const TrackingEnabledField = ({ form }: { form: any }) => {
-  const autoSendWinner = Form.useWatch(['test_settings', 'auto_send_winner'], form)
-  const abTestingEnabled = Form.useWatch(['test_settings', 'enabled'], form)
-
-  // Disable tracking toggle when either A/B testing or auto-send winner is enabled
-  const isDisabled = autoSendWinner || abTestingEnabled
-
-  return (
-    <Form.Item
-      name="tracking_enabled"
-      label="Enable tracking"
-      valuePropName="checked"
-      tooltip="Automatically enabled with A/B testing or auto-send winner feature"
-    >
-      <Switch disabled={isDisabled} />
-    </Form.Item>
-  )
-}
-
 interface UpsertBroadcastDrawerProps {
   workspace: Workspace
   broadcast?: Broadcast
@@ -111,6 +85,7 @@ export function UpsertBroadcastDrawer({
   const [loading, setLoading] = useState(false)
   const { message, modal } = App.useApp()
   const [formTouched, setFormTouched] = useState(false)
+  const trackingEnabled = workspace.settings?.email_tracking_enabled || false
 
   // Watch campaign name changes using Form.useWatch
   const campaignName = Form.useWatch('name', form)
@@ -426,20 +401,22 @@ export function UpsertBroadcastDrawer({
                     Template
                   </div>
 
-                  <Row gutter={24}>
-                    <Col span={12}>
-                      <TrackingEnabledField form={form} />
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item
-                        name={['test_settings', 'enabled']}
-                        label="Enable A/B Testing"
-                        valuePropName="checked"
-                      >
-                        <Switch />
-                      </Form.Item>
-                    </Col>
-                  </Row>
+                  {!trackingEnabled && (
+                    <Alert
+                      description="Tracking (opens & clicks) must be enabled in workspace settings to use A/B testing features."
+                      type="info"
+                      showIcon
+                      className="!mb-4"
+                    />
+                  )}
+
+                  <Form.Item
+                    name={['test_settings', 'enabled']}
+                    label="Enable A/B Testing"
+                    valuePropName="checked"
+                  >
+                    <Switch disabled={!trackingEnabled} />
+                  </Form.Item>
 
                   <Form.Item
                     noStyle
@@ -470,14 +447,14 @@ export function UpsertBroadcastDrawer({
                                   name={['test_settings', 'auto_send_winner']}
                                   label="Automatically send winner"
                                   valuePropName="checked"
-                                  tooltip="Requires tracking to be enabled"
+                                  tooltip="Tracking (opens & clicks) should be enabled in your workspace settings to use this feature"
                                 >
-                                  <Switch />
+                                  <Switch disabled={!trackingEnabled} />
                                 </Form.Item>
                               </Col>
                             </Row>
 
-                            <ABTestingConfig form={form} />
+                            <ABTestingConfig form={form} trackingEnabled={trackingEnabled} />
 
                             {/* Variations management will be added here */}
                             <div className="text-xs mt-4 mb-4 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">
@@ -529,7 +506,6 @@ export function UpsertBroadcastDrawer({
                                               workspaceId={workspace.id}
                                               placeholder="Select template"
                                               category="marketing"
-                                              utmDisabled={true}
                                             />
                                           </Form.Item>
                                         </Col>
@@ -590,7 +566,6 @@ export function UpsertBroadcastDrawer({
                               workspaceId={workspace.id}
                               placeholder="Select template"
                               category="marketing"
-                              utmDisabled={true}
                             />
                           </Form.Item>
                         </div>

@@ -22,7 +22,6 @@ interface TemplateSelectorInputProps {
     | 'blocklist'
     | 'other'
   placeholder?: string
-  utmDisabled?: boolean
 }
 
 const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
@@ -30,8 +29,7 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
   onChange,
   workspaceId,
   category,
-  placeholder = 'Select a template',
-  utmDisabled = false
+  placeholder = 'Select a template'
 }) => {
   const [open, setOpen] = useState<boolean>(false)
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
@@ -154,7 +152,6 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
             <CreateTemplateDrawer
               workspace={currentWorkspace}
               category={category}
-              utmDisabled={utmDisabled}
               buttonProps={{
                 type: 'primary',
                 icon: <PlusOutlined />,
@@ -187,7 +184,6 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
                       workspace={currentWorkspace}
                       fromTemplate={template}
                       category={category}
-                      utmDisabled={utmDisabled}
                       buttonProps={{
                         type: 'link',
                         title: 'Clone'
@@ -225,7 +221,6 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
               <CreateTemplateDrawer
                 workspace={currentWorkspace}
                 category={category}
-                utmDisabled={utmDisabled}
                 buttonProps={{
                   type: 'primary',
                   icon: <PlusOutlined />,

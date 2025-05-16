@@ -1087,17 +1087,19 @@ func TestBuildTemplateData(t *testing.T) {
 		broadcast := &Broadcast{
 			ID:   "broadcast-001",
 			Name: "Test Broadcast",
-			UTMParameters: &UTMParameters{
-				Source:   "newsletter",
-				Medium:   "email",
-				Campaign: "welcome",
-				Term:     "new-users",
-				Content:  "button-1",
-			},
+		}
+
+		trackingSettings := mjml.TrackingSettings{
+			Endpoint:    apiEndpoint,
+			UTMSource:   "newsletter",
+			UTMMedium:   "email",
+			UTMCampaign: "welcome",
+			UTMTerm:     "new-users",
+			UTMContent:  "button-1",
 		}
 
 		// Call the function
-		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, apiEndpoint, broadcast)
+		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, trackingSettings, broadcast)
 
 		// Assertions
 		assert.NoError(t, err)
@@ -1158,9 +1160,16 @@ func TestBuildTemplateData(t *testing.T) {
 		contactWithList := ContactWithList{
 			Contact: nil,
 		}
-
+		trackingSettings := mjml.TrackingSettings{
+			Endpoint:    "https://api.example.com",
+			UTMSource:   "newsletter",
+			UTMMedium:   "email",
+			UTMCampaign: "welcome",
+			UTMTerm:     "new-users",
+			UTMContent:  "button-1",
+		}
 		// Call the function
-		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, "", nil)
+		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, trackingSettings, nil)
 
 		// Assertions
 		assert.NoError(t, err)

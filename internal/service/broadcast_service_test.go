@@ -2384,7 +2384,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+		apiEndpoint := "https://api.example.com"
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, apiEndpoint)
 
 		ctx := context.Background()
 		workspaceID := "ws123"
@@ -2419,6 +2420,12 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 					},
 				},
 			},
+			UTMParameters: &domain.UTMParameters{
+				Source:   "test_source",
+				Medium:   "test_medium",
+				Campaign: "test_campaign",
+				Content:  "test_content",
+			},
 		}
 
 		// Mock repository to return the broadcast
@@ -2432,6 +2439,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			Name: "Test Workspace",
 			Settings: domain.WorkspaceSettings{
 				TransactionalEmailProviderID: "email-provider-123",
+				EmailTrackingEnabled:         true,
+				SecretKey:                    "test-secret-key",
 			},
 		}
 		mockWorkspaceRepo.EXPECT().
@@ -2997,7 +3006,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
-		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+		apiEndpoint := "https://api.example.com"
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, apiEndpoint)
 
 		ctx := context.Background()
 		workspaceID := "ws123"
@@ -3033,6 +3043,12 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 					},
 				},
 			},
+			UTMParameters: &domain.UTMParameters{
+				Source:   "test_source",
+				Medium:   "test_medium",
+				Campaign: "test_campaign",
+				Content:  "test_content",
+			},
 		}
 
 		// Mock repository to return the broadcast
@@ -3045,7 +3061,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			ID:   workspaceID,
 			Name: "Test Workspace",
 			Settings: domain.WorkspaceSettings{
-				SecretKey: "test-secret-key",
+				SecretKey:            "test-secret-key",
+				EmailTrackingEnabled: true,
 			},
 		}
 		mockWorkspaceRepo.EXPECT().
@@ -3149,6 +3166,12 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 					},
 				},
 			},
+			UTMParameters: &domain.UTMParameters{
+				Source:   "test_source",
+				Medium:   "test_medium",
+				Campaign: "test_campaign",
+				Content:  "test_content",
+			},
 		}
 
 		// Mock repository to return the broadcast
@@ -3161,7 +3184,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			ID:   workspaceID,
 			Name: "Test Workspace",
 			Settings: domain.WorkspaceSettings{
-				SecretKey: "test-secret-key",
+				SecretKey:            "test-secret-key",
+				EmailTrackingEnabled: true,
 			},
 		}
 		mockWorkspaceRepo.EXPECT().
@@ -3235,7 +3259,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
-		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+		apiEndpoint := "https://api.example.com"
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, apiEndpoint)
 
 		ctx := context.Background()
 		workspaceID := "ws123"
@@ -3283,7 +3308,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			ID:   workspaceID,
 			Name: "Test Workspace",
 			Settings: domain.WorkspaceSettings{
-				SecretKey: "test-secret-key",
+				SecretKey:            "test-secret-key",
+				EmailTrackingEnabled: true,
 			},
 		}
 		mockWorkspaceRepo.EXPECT().

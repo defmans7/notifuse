@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Button, Drawer, Form, Input, Select, Space, App, Tabs, Row, Col, Tag, Alert } from 'antd'
+import { Button, Drawer, Form, Input, Select, Space, App, Tabs, Row, Col, Tag } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
 import type { Template, Workspace, FileManagerSettings } from '../../services/api/types'
@@ -38,7 +38,6 @@ interface CreateTemplateDrawerProps {
   buttonContent?: React.ReactNode
   onClose?: () => void
   category?: string
-  utmDisabled?: boolean
 }
 
 // Combine default block definitions with any custom ones
@@ -164,8 +163,7 @@ export function CreateTemplateDrawer({
   buttonProps = {},
   buttonContent,
   onClose,
-  category,
-  utmDisabled = false
+  category
 }: CreateTemplateDrawerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
@@ -273,10 +271,7 @@ export function CreateTemplateDrawer({
           content: template.email?.mjml || '',
           visual_editor_tree: template.email?.visual_editor_tree || createDefaultBlocks()
         },
-        test_data: template.test_data || defaultTestData,
-        utm_source: template.utm_source || undefined,
-        utm_medium: template.utm_medium || 'email',
-        utm_campaign: template.utm_campaign || undefined
+        test_data: template.test_data || defaultTestData
       })
     } else if (fromTemplate) {
       // Clone template functionality - append "copy" as suffix instead of "Copy of" prefix
@@ -293,10 +288,7 @@ export function CreateTemplateDrawer({
           content: fromTemplate.email?.mjml || '',
           visual_editor_tree: fromTemplate.email?.visual_editor_tree || createDefaultBlocks()
         },
-        test_data: fromTemplate.test_data || defaultTestData,
-        utm_source: fromTemplate.utm_source || undefined,
-        utm_medium: fromTemplate.utm_medium || 'email',
-        utm_campaign: fromTemplate.utm_campaign || undefined
+        test_data: fromTemplate.test_data || defaultTestData
       })
 
       // Update the visual editor tree
@@ -443,9 +435,6 @@ export function CreateTemplateDrawer({
             initialValues={{
               'email.visual_editor_tree': visualEditorTree,
               category: category || undefined,
-              utm_source: '',
-              utm_medium: 'email',
-              utm_campaign: '',
               test_data: defaultTestData
             }}
           >
@@ -495,6 +484,7 @@ export function CreateTemplateDrawer({
                       <Form.Item
                         name="id"
                         label="Template ID (utm_content)"
+                        tooltip="This is the ID that will be used as the utm_content parameter in the links URL to track the template"
                         rules={[
                           {
                             required: true,
@@ -503,7 +493,7 @@ export function CreateTemplateDrawer({
                             message: 'ID must contain only lowercase letters, numbers, and hyphens'
                           },
                           {
-                            validator: async (rule, value) => {
+                            validator: async (_rule, value) => {
                               if (value && !template) {
                                 try {
                                   await templatesApi.get({ workspace_id: workspace.id, id: value })
@@ -626,60 +616,12 @@ export function CreateTemplateDrawer({
                       </div>
                     </Col>
                   </Row>
-
-                  {!utmDisabled && (
-                    <>
-                      <div className="text-lg mt-4 mb-8 font-bold">URL Tracking</div>
-
-                      <Alert
-                        type="info"
-                        className="!mb-6"
-                        message="The utm parameters will be automatically added to your email links."
-                      />
-
-                      <Row gutter={24}>
-                        <Col span={8}>
-                          <Form.Item
-                            name="utm_source"
-                            label="utm_source"
-                            rules={[{ required: false, type: 'string' }]}
-                          >
-                            <Input placeholder="business.com" />
-                          </Form.Item>
-                        </Col>
-
-                        <Col span={8}>
-                          <Form.Item
-                            name="utm_medium"
-                            label="utm_medium"
-                            rules={[{ required: false, type: 'string' }]}
-                          >
-                            <Input placeholder="email" />
-                          </Form.Item>
-                        </Col>
-
-                        <Col span={8}>
-                          <Form.Item
-                            name="utm_campaign"
-                            label="utm_campaign"
-                            rules={[{ required: false, type: 'string' }]}
-                          >
-                            <Input />
-                          </Form.Item>
-                        </Col>
-                      </Row>
-                    </>
-                  )}
                 </div>
               </div>
 
               <div style={{ display: tab === 'template' ? 'block' : 'none' }}>
-                <Form.Item dependencies={['utm_source', 'utm_medium', 'utm_campaign', 'id']}>
+                <Form.Item dependencies={['id']}>
                   {(form) => {
-                    const utmSourceValue = form.getFieldValue('utm_source')
-                    const utmMediumValue = form.getFieldValue('utm_medium')
-                    const utmCampaignValue = form.getFieldValue('utm_campaign')
-                    const templateID = form.getFieldValue('id')
                     const testData = form.getFieldValue('test_data')
 
                     return (
@@ -694,13 +636,7 @@ export function CreateTemplateDrawer({
                           <SelectedBlockButtons {...props} />
                         )}
                         deviceWidth={DesktopWidth}
-                        urlParams={{
-                          utm_source: utmSourceValue || '',
-                          utm_medium: utmMediumValue || 'email',
-                          utm_campaign: utmCampaignValue || '',
-                          utm_content: templateID || '',
-                          utm_id: '{{notifuse_utm_id}}'
-                        }}
+                        urlParams={{}}
                         fileManagerSettings={workspace?.settings.file_manager}
                         onUpdateFileManagerSettings={handleUpdateWorkspaceSettings}
                         templateDataValue={JSON.stringify(testData, null, 2)}

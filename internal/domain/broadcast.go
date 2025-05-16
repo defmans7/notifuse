@@ -404,29 +404,6 @@ func (b *Broadcast) Validate() error {
 	return nil
 }
 
-// SetDefaultUTMParameters sets the default UTM parameters for the broadcast
-func (b *Broadcast) SetDefaultUTMParameters(source, medium, campaign, content *string) {
-	if b.UTMParameters == nil {
-		b.UTMParameters = &UTMParameters{}
-	}
-
-	if b.UTMParameters.Source == "" && source != nil {
-		b.UTMParameters.Source = *source
-	}
-
-	if b.UTMParameters.Medium == "" && medium != nil {
-		b.UTMParameters.Medium = *medium
-	}
-
-	if b.UTMParameters.Campaign == "" && campaign != nil {
-		b.UTMParameters.Campaign = *campaign
-	}
-
-	if b.UTMParameters.Content == "" && content != nil {
-		b.UTMParameters.Content = *content
-	}
-}
-
 // CreateBroadcastRequest defines the request to create a new broadcast
 type CreateBroadcastRequest struct {
 	WorkspaceID     string                `json:"workspace_id"`

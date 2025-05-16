@@ -314,16 +314,7 @@ func (s *EmailService) SendEmailForTemplate(
 		trace.StringAttribute("template.from_email", template.Email.FromAddress),
 	)
 
-	// override tracking settings with template settings if not set
-	if trackingSettings.UTMSource == "" && template.UTMSource != nil {
-		trackingSettings.UTMSource = *template.UTMSource
-	}
-	if trackingSettings.UTMMedium == "" && template.UTMMedium != nil {
-		trackingSettings.UTMMedium = *template.UTMMedium
-	}
-	if trackingSettings.UTMCampaign == "" && template.UTMCampaign != nil {
-		trackingSettings.UTMCampaign = *template.UTMCampaign
-	}
+	// set utm_content to the template id if not set
 	if trackingSettings.UTMContent == "" {
 		trackingSettings.UTMContent = template.ID
 	}

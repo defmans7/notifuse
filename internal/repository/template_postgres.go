@@ -46,15 +46,12 @@ func (r *templateRepository) CreateTemplate(ctx context.Context, workspaceID str
 			email, 
 			category, 
 			template_macro_id, 
-			utm_source, 
-			utm_medium, 
-			utm_campaign, 
 			test_data, 
 			settings, 
 			created_at, 
 			updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err = workspaceDB.ExecContext(ctx, query,
 		template.ID,
@@ -64,9 +61,6 @@ func (r *templateRepository) CreateTemplate(ctx context.Context, workspaceID str
 		template.Email,
 		template.Category,
 		template.TemplateMacroID,
-		template.UTMSource,
-		template.UTMMedium,
-		template.UTMCampaign,
 		template.TestData,
 		template.Settings,
 		template.CreatedAt,
@@ -100,9 +94,6 @@ func (r *templateRepository) GetTemplateByID(ctx context.Context, workspaceID st
 				email, 
 				category, 
 				template_macro_id, 
-				utm_source, 
-				utm_medium, 
-				utm_campaign, 
 				test_data, 
 				settings, 
 				created_at, 
@@ -122,9 +113,6 @@ func (r *templateRepository) GetTemplateByID(ctx context.Context, workspaceID st
 				email, 
 				category, 
 				template_macro_id, 
-				utm_source, 
-				utm_medium, 
-				utm_campaign, 
 				test_data, 
 				settings, 
 				created_at, 
@@ -201,9 +189,6 @@ func (r *templateRepository) GetTemplates(ctx context.Context, workspaceID strin
 		"t.email",
 		"t.category",
 		"t.template_macro_id",
-		"t.utm_source",
-		"t.utm_medium",
-		"t.utm_campaign",
 		"t.test_data",
 		"t.settings",
 		"t.created_at",
@@ -272,15 +257,12 @@ func (r *templateRepository) UpdateTemplate(ctx context.Context, workspaceID str
 			email, 
 			category, 
 			template_macro_id, 
-			utm_source, 
-			utm_medium, 
-			utm_campaign, 
 			test_data, 
 			settings, 
 			created_at, 
 			updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err = workspaceDB.ExecContext(ctx, query,
 		template.ID,
@@ -290,9 +272,6 @@ func (r *templateRepository) UpdateTemplate(ctx context.Context, workspaceID str
 		template.Email,
 		template.Category,
 		template.TemplateMacroID,
-		template.UTMSource,
-		template.UTMMedium,
-		template.UTMCampaign,
 		template.TestData,
 		template.Settings,
 		template.CreatedAt,
@@ -337,8 +316,8 @@ func scanTemplate(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*domain.Template, error) {
 	var (
-		template                                           domain.Template
-		templateMacroID, utmSource, utmMedium, utmCampaign sql.NullString
+		template        domain.Template
+		templateMacroID sql.NullString
 	)
 
 	err := scanner.Scan(
@@ -349,9 +328,6 @@ func scanTemplate(scanner interface {
 		&template.Email,
 		&template.Category,
 		&templateMacroID,
-		&utmSource,
-		&utmMedium,
-		&utmCampaign,
 		&template.TestData,
 		&template.Settings,
 		&template.CreatedAt,
@@ -364,15 +340,6 @@ func scanTemplate(scanner interface {
 	// Handle nullable fields
 	if templateMacroID.Valid {
 		template.TemplateMacroID = &templateMacroID.String
-	}
-	if utmSource.Valid {
-		template.UTMSource = &utmSource.String
-	}
-	if utmMedium.Valid {
-		template.UTMMedium = &utmMedium.String
-	}
-	if utmCampaign.Valid {
-		template.UTMCampaign = &utmCampaign.String
 	}
 
 	return &template, nil

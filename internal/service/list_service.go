@@ -277,11 +277,20 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 
 		messageID := uuid.New().String()
 
+		trackingSettings := mjml.TrackingSettings{
+			Endpoint:       s.apiEndpoint,
+			EnableTracking: workspace.Settings.EmailTrackingEnabled,
+			UTMSource:      workspace.Settings.WebsiteURL,
+			UTMMedium:      "email",
+			UTMCampaign:    list.Name,
+			UTMContent:     messageID,
+		}
+
 		templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, domain.ContactWithList{
 			Contact:  contact,
 			ListID:   listID,
 			ListName: list.Name,
-		}, messageID, s.apiEndpoint, nil)
+		}, messageID, trackingSettings, nil)
 
 		if err != nil {
 			s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to build template data: %v", err))
@@ -293,10 +302,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 
 			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
 				TemplateID: list.WelcomeTemplate.ID,
-			}, domain.MessageData{Data: templateData}, mjml.TrackingSettings{
-				Endpoint:       s.apiEndpoint,
-				EnableTracking: true, // by default activate tracking for welcome emails
-			}, marketingEmailProvider, nil, nil)
+			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, nil, nil)
 
 			if err != nil {
 				s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to send welcome email: %v", err))
@@ -309,10 +315,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 
 			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
 				TemplateID: list.DoubleOptInTemplate.ID,
-			}, domain.MessageData{Data: templateData}, mjml.TrackingSettings{
-				Endpoint:       s.apiEndpoint,
-				EnableTracking: true, // by default activate tracking for double optin emails
-			}, marketingEmailProvider, nil, nil)
+			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, nil, nil)
 
 			if err != nil {
 				s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to send double optin email: %v", err))
@@ -404,11 +407,20 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 		if list.UnsubscribeTemplate != nil && marketingEmailProvider != nil {
 			messageID := uuid.New().String()
 
+			trackingSettings := mjml.TrackingSettings{
+				Endpoint:       s.apiEndpoint,
+				EnableTracking: workspace.Settings.EmailTrackingEnabled,
+				UTMSource:      workspace.Settings.WebsiteURL,
+				UTMMedium:      "email",
+				UTMCampaign:    list.Name,
+				UTMContent:     messageID,
+			}
+
 			templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, domain.ContactWithList{
 				Contact:  contact,
 				ListID:   listID,
 				ListName: list.Name,
-			}, messageID, s.apiEndpoint, nil)
+			}, messageID, trackingSettings, nil)
 
 			if err != nil {
 				s.logger.WithField("email", payload.Email).Error(fmt.Sprintf("Failed to build template data: %v", err))
@@ -417,10 +429,7 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 
 			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
 				TemplateID: list.UnsubscribeTemplate.ID,
-			}, domain.MessageData{Data: templateData}, mjml.TrackingSettings{
-				Endpoint:       s.apiEndpoint,
-				EnableTracking: true, // Enable tracking for unsubscribe confirmation emails
-			}, marketingEmailProvider, nil, nil)
+			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, nil, nil)
 
 			if err != nil {
 				s.logger.WithField("email", payload.Email).Error(fmt.Sprintf("Failed to send unsubscribe confirmation email: %v", err))

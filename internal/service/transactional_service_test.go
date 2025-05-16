@@ -8,6 +8,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
@@ -890,7 +891,10 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				contact,
 				notification.Channels[domain.TransactionalChannelEmail],
 				gomock.Any(), // messageData
-				notification.TrackingSettings,
+				mjml.TrackingSettings{
+					Endpoint:       "https://api.example.com",
+					EnableTracking: workspaceObj.Settings.EmailTrackingEnabled,
+				},
 				gomock.Not(gomock.Nil()), // Ensure we expect a non-nil provider
 				gomock.Any(),             // cc
 				gomock.Any(),             // bcc

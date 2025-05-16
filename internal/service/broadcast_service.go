@@ -9,6 +9,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/google/uuid"
 )
 
@@ -773,11 +774,25 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 
 	messageID := uuid.New().String()
 
+	trackingSettings := mjml.TrackingSettings{
+		Endpoint:       s.apiEndpoint,
+		EnableTracking: workspace.Settings.EmailTrackingEnabled,
+	}
+
+	// Add UTM parameters if available
+	if broadcast.UTMParameters != nil {
+		trackingSettings.UTMSource = broadcast.UTMParameters.Source
+		trackingSettings.UTMMedium = broadcast.UTMParameters.Medium
+		trackingSettings.UTMCampaign = broadcast.UTMParameters.Campaign
+		trackingSettings.UTMContent = broadcast.UTMParameters.Content
+		trackingSettings.UTMTerm = broadcast.UTMParameters.Term
+	}
+
 	templateData, err := domain.BuildTemplateData(request.WorkspaceID, workspace.Settings.SecretKey, domain.ContactWithList{
 		Contact:  contact,
 		ListID:   "",
 		ListName: "",
-	}, messageID, s.apiEndpoint, broadcast)
+	}, messageID, trackingSettings, broadcast)
 	if err != nil {
 		s.logger.Error("Failed to build template data for broadcast")
 		return err

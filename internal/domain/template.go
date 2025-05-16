@@ -50,9 +50,6 @@ type Template struct {
 	Email           *EmailTemplate `json:"email"`
 	Category        string         `json:"category"`
 	TemplateMacroID *string        `json:"template_macro_id,omitempty"`
-	UTMSource       *string        `json:"utm_source,omitempty"`
-	UTMMedium       *string        `json:"utm_medium,omitempty"`
-	UTMCampaign     *string        `json:"utm_campaign,omitempty"`
 	TestData        MapOfAny       `json:"test_data,omitempty"`
 	Settings        MapOfAny       `json:"settings,omitempty"` // Channels specific 3rd-party settings
 	CreatedAt       time.Time      `json:"created_at"`
@@ -264,9 +261,6 @@ type CreateTemplateRequest struct {
 	Email           *EmailTemplate `json:"email"`
 	Category        string         `json:"category"`
 	TemplateMacroID *string        `json:"template_macro_id,omitempty"`
-	UTMSource       *string        `json:"utm_source,omitempty"`
-	UTMMedium       *string        `json:"utm_medium,omitempty"`
-	UTMCampaign     *string        `json:"utm_campaign,omitempty"`
 	TestData        MapOfAny       `json:"test_data,omitempty"`
 	Settings        MapOfAny       `json:"settings,omitempty"`
 }
@@ -319,9 +313,6 @@ func (r *CreateTemplateRequest) Validate() (template *Template, workspaceID stri
 		Email:           r.Email,
 		Category:        r.Category,
 		TemplateMacroID: r.TemplateMacroID,
-		UTMSource:       r.UTMSource,
-		UTMMedium:       r.UTMMedium,
-		UTMCampaign:     r.UTMCampaign,
 		TestData:        r.TestData,
 		Settings:        r.Settings,
 	}, r.WorkspaceID, nil
@@ -393,9 +384,6 @@ type UpdateTemplateRequest struct {
 	Email           *EmailTemplate `json:"email"`
 	Category        string         `json:"category"`
 	TemplateMacroID *string        `json:"template_macro_id,omitempty"`
-	UTMSource       *string        `json:"utm_source,omitempty"`
-	UTMMedium       *string        `json:"utm_medium,omitempty"`
-	UTMCampaign     *string        `json:"utm_campaign,omitempty"`
 	TestData        MapOfAny       `json:"test_data,omitempty"`
 	Settings        MapOfAny       `json:"settings,omitempty"`
 }
@@ -447,9 +435,6 @@ func (r *UpdateTemplateRequest) Validate() (template *Template, workspaceID stri
 		Email:           r.Email,
 		Category:        r.Category,
 		TemplateMacroID: r.TemplateMacroID,
-		UTMSource:       r.UTMSource,
-		UTMMedium:       r.UTMMedium,
-		UTMCampaign:     r.UTMCampaign,
 		TestData:        r.TestData,
 		Settings:        r.Settings,
 	}, r.WorkspaceID, nil
@@ -628,7 +613,7 @@ func (e *ErrTemplateNotFound) Error() string {
 }
 
 // BuildTemplateData creates a template data map with flexible options
-func BuildTemplateData(workspaceID string, secretKey string, contactWithList ContactWithList, messageID string, apiEndpoint string, broadcast *Broadcast) (MapOfAny, error) {
+func BuildTemplateData(workspaceID string, secretKey string, contactWithList ContactWithList, messageID string, trackingSettings mjml.TrackingSettings, broadcast *Broadcast) (MapOfAny, error) {
 	templateData := MapOfAny{}
 
 	if contactWithList.Contact != nil {
@@ -653,17 +638,25 @@ func BuildTemplateData(workspaceID string, secretKey string, contactWithList Con
 		}
 
 		// Add UTM parameters from broadcast if available
-		if broadcast.UTMParameters != nil {
-			templateData["utm_source"] = broadcast.UTMParameters.Source
-			templateData["utm_medium"] = broadcast.UTMParameters.Medium
-			templateData["utm_campaign"] = broadcast.UTMParameters.Campaign
-			templateData["utm_term"] = broadcast.UTMParameters.Term
-			templateData["utm_content"] = broadcast.UTMParameters.Content
+		if trackingSettings.UTMSource != "" {
+			templateData["utm_source"] = trackingSettings.UTMSource
+		}
+		if trackingSettings.UTMMedium != "" {
+			templateData["utm_medium"] = trackingSettings.UTMMedium
+		}
+		if trackingSettings.UTMCampaign != "" {
+			templateData["utm_campaign"] = trackingSettings.UTMCampaign
+		}
+		if trackingSettings.UTMTerm != "" {
+			templateData["utm_term"] = trackingSettings.UTMTerm
+		}
+		if trackingSettings.UTMContent != "" {
+			templateData["utm_content"] = trackingSettings.UTMContent
 		}
 	}
 
 	// Add list data and unsubscribe link if available
-	if contactWithList.ListID != "" && apiEndpoint != "" && workspaceID != "" {
+	if contactWithList.ListID != "" && workspaceID != "" {
 
 		templateData["list"] = MapOfAny{
 			"id":   contactWithList.ListID,
@@ -681,12 +674,12 @@ func BuildTemplateData(workspaceID string, secretKey string, contactWithList Con
 		hmac.Write([]byte(fmt.Sprintf("%s:%s:%s:%s:%s", email, listID, listName, workspaceID, messageID)))
 		signature := base64.StdEncoding.EncodeToString(hmac.Sum(nil))
 		unsubscribeURL := fmt.Sprintf("%s/unsubscribe?lid=%s&lname=%s&wid=%s&mid=%s&email=%s&hmac=%s",
-			apiEndpoint, listID, listName, workspaceID, messageID, email, signature)
+			trackingSettings.Endpoint, listID, listName, workspaceID, messageID, email, signature)
 		templateData["unsubscribe_url"] = unsubscribeURL
 
 		// oneclick unsubscribe link
 		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?email=%s&lids=%s&wid=%s&message=%s",
-			apiEndpoint, email, listID, workspaceID, messageID)
+			trackingSettings.Endpoint, email, listID, workspaceID, messageID)
 		templateData["oneclick_unsubscribe_url"] = oneclickUnsubscribeURL
 	}
 
@@ -701,7 +694,7 @@ func BuildTemplateData(workspaceID string, secretKey string, contactWithList Con
 
 	// Tracking pixel for opens
 	trackingPixelURL := fmt.Sprintf("%s/opens?mid=%s&wid=%s",
-		apiEndpoint, messageID, workspaceID)
+		trackingSettings.Endpoint, messageID, workspaceID)
 
 	templateData["tracking_opens_url"] = trackingPixelURL
 

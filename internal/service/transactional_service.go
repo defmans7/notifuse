@@ -440,13 +440,14 @@ func (s *TransactionalNotificationService) SendNotification(
 		)
 
 		// Prepare message data with contact and custom data
-		apiEndpoint := s.apiEndpoint // Use the service's configured API endpoint
+		notification.TrackingSettings.EnableTracking = workspace.Settings.EmailTrackingEnabled
+		notification.TrackingSettings.Endpoint = s.apiEndpoint
 
 		contactWithList := domain.ContactWithList{
 			Contact: contact,
 		}
 
-		templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, contactWithList, messageID, apiEndpoint, nil)
+		templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, contactWithList, messageID, notification.TrackingSettings, nil)
 		if err != nil {
 			tracing.MarkSpanError(childCtx, err)
 			childSpan.End()

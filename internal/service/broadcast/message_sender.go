@@ -8,6 +8,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/google/uuid"
 	"golang.org/x/sync/semaphore"
 )
@@ -204,7 +205,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeRateLimitExceeded, "rate limiting interrupted", true, err)
 	}
 
-	broadcast.SetDefaultUTMParameters(template.UTMSource, template.UTMMedium, template.UTMCampaign, &template.ID)
+	if broadcast.UTMParameters.Content == "" {
+		broadcast.UTMParameters.Content = template.ID
+	}
 
 	// Compile template with the provided data
 	compiledTemplate, err := s.templateService.CompileTemplate(
@@ -392,8 +395,21 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		// Generate a unique message ID for tracking
 		messageID := generateMessageID(workspaceID)
 
+		trackingSettings := mjml.TrackingSettings{
+			Endpoint:       apiEndpoint,
+			EnableTracking: trackingEnabled,
+			UTMSource:      broadcast.UTMParameters.Source,
+			UTMMedium:      broadcast.UTMParameters.Medium,
+			UTMCampaign:    broadcast.UTMParameters.Campaign,
+			UTMContent:     broadcast.UTMParameters.Content,
+		}
+
+		if broadcast.UTMParameters.Content == "" {
+			broadcast.UTMParameters.Content = templateID
+		}
+
 		// Build the template data with all options
-		recipientData, err := domain.BuildTemplateData(workspaceID, workspaceSecretKey, *contactWithList, messageID, apiEndpoint, broadcast)
+		recipientData, err := domain.BuildTemplateData(workspaceID, workspaceSecretKey, *contactWithList, messageID, trackingSettings, broadcast)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,

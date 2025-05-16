@@ -1146,9 +1146,6 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ReplyTo:          "support@example.com",
 			VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
 		},
-		UTMSource:   createStringPtr("custom-source"),
-		UTMMedium:   createStringPtr("custom-medium"),
-		UTMCampaign: createStringPtr("custom-campaign"),
 	}
 
 	// Create compile template result
