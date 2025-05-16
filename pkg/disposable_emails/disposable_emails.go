@@ -2,6 +2,7 @@ package disposable_emails
 
 import "slices"
 
+// list from: https://github.com/tompec/disposable-email-domains/blob/main/index.json
 var disposableEmails = []string{
 	"0-180.com",
 	"0-30-24.com",
