@@ -22,12 +22,12 @@ import { ItemFilter, StorageObject } from '../../../file_manager/interfaces'
 import { FileManagerSettings } from '../../../../services/api/types'
 import { useEditorContext } from '../../Editor'
 
-interface ImageURLProps {
+interface ImageProps {
   block: BlockInterface
   updateTree: any
 }
 
-const ImageURL = (props: ImageURLProps) => {
+const AlternativeText = (props: ImageProps) => {
   const altInputRef = useRef<any>(null)
   const [alt, setAlt] = useState(props.block.data.image.alt)
   const [altModalVisible, setAltModalVisible] = useState(false)
@@ -94,7 +94,7 @@ const ImageURL = (props: ImageURLProps) => {
   )
 }
 
-const ClickURL = (props: ImageURLProps) => {
+const ClickURL = (props: ImageProps) => {
   const hrefInputRef = useRef<any>(null)
   const [href, setHref] = useState(props.block.data.image.href)
   const [disableTracking, setDisableTracking] = useState(props.block.data.image.disable_tracking)
@@ -194,9 +194,22 @@ interface UploadButtonProps {
 
 const UploadButton = (props: UploadButtonProps) => {
   const [fileManagerVisible, setFileManagerVisible] = useState(false)
-  const [selectedImageURL, setSelectedImageURL] = useState<string | undefined>(undefined)
+  const [selectedImageURL, setSelectedImageURL] = useState<string | undefined>(
+    props.block.data.image.src
+  )
 
   const filters: ItemFilter[] = []
+
+  const handleURLChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedImageURL(e.target.value)
+  }
+
+  const applyImageURL = () => {
+    if (selectedImageURL && selectedImageURL !== props.block.data.image.src) {
+      props.block.data.image.src = selectedImageURL
+      props.updateTree(props.block.path, props.block)
+    }
+  }
 
   return (
     <>
@@ -253,6 +266,14 @@ const UploadButton = (props: UploadButtonProps) => {
           </div>
         </Modal>
       )}
+      <Input
+        value={selectedImageURL}
+        onChange={handleURLChange}
+        onPressEnter={applyImageURL}
+        onBlur={applyImageURL}
+        placeholder="Enter image URL"
+        style={{ marginBottom: 8 }}
+      />
       <Button type="primary" size="small" block onClick={() => setFileManagerVisible(true)}>
         Select or upload
       </Button>
@@ -310,7 +331,7 @@ const ImageBlockDefinition: BlockDefinitionInterface = {
           />
         </Form.Item>
 
-        <ImageURL block={props.block} updateTree={props.updateTree} />
+        <AlternativeText block={props.block} updateTree={props.updateTree} />
 
         <ClickURL block={props.block} updateTree={props.updateTree} />
 
@@ -332,13 +353,13 @@ const ImageBlockDefinition: BlockDefinitionInterface = {
             size="small"
           >
             <Radio.Button style={{ width: '33.33%', textAlign: 'center' }} value="left">
-              <AlignLeft size={16} style={{ marginTop: '3px' }} />
+              <AlignLeft size={16} style={{ display: 'inline-block' }} />
             </Radio.Button>
             <Radio.Button style={{ width: '33.33%', textAlign: 'center' }} value="center">
-              <AlignCenter size={16} style={{ marginTop: '3px' }} />
+              <AlignCenter size={16} style={{ display: 'inline-block' }} />
             </Radio.Button>
             <Radio.Button style={{ width: '33.33%', textAlign: 'center' }} value="right">
-              <AlignRight size={16} style={{ marginTop: '3px' }} />
+              <AlignRight size={16} style={{ display: 'inline-block' }} />
             </Radio.Button>
           </Radio.Group>
         </Form.Item>

@@ -620,7 +620,7 @@ export function CreateTemplateDrawer({
               </div>
 
               <div style={{ display: tab === 'template' ? 'block' : 'none' }}>
-                <Form.Item dependencies={['id']}>
+                <Form.Item dependencies={['id']} style={{ margin: 0 }}>
                   {(form) => {
                     const testData = form.getFieldValue('test_data')
 
