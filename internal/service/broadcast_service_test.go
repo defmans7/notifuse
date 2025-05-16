@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	mjmlgo "github.com/Boostport/mjml-go"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/mjml"
@@ -2691,6 +2692,663 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		// Verify results
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "broadcast has no variations")
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		// Create an invalid request (missing recipient email)
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: "", // Empty email should fail validation
+		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "required") // The actual error message is likely "recipient_email is required"
+	})
+
+	t.Run("GetWorkspaceError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		recipientEmail := "test@example.com"
+
+		// Create the request
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock workspace repository to return an error
+		expectedErr := errors.New("workspace not found")
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(nil, expectedErr)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, expectedErr, err)
+	})
+
+	t.Run("VariationNotFoundError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		recipientEmail := "test@example.com"
+		requestedVariationID := "variation999" // Different from what we have in the broadcast
+
+		// Create the request
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+			VariationID:    requestedVariationID,
+		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Create a broadcast with a different variation ID
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         "variation123", // Different from requested ID
+						TemplateID: "template123",
+					},
+				},
+			},
+		}
+
+		// Mock repository to return the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock workspace repository to return a workspace
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found in broadcast")
+	})
+
+	t.Run("GetTemplateError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes() // For "Contact not found" message
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		recipientEmail := "test@example.com"
+		variationID := "variation123"
+		templateID := "template123"
+
+		// Create the request
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+			VariationID:    variationID,
+		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Create a broadcast with the test variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Mock repository to return the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock workspace repository to return a workspace
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		// Mock contact repository to return a contact, or error (doesn't matter which)
+		mockContactRepo.EXPECT().
+			GetContactByEmail(gomock.Any(), workspaceID, recipientEmail).
+			Return(nil, errors.New("contact not found"))
+
+		// Mock template service to return error
+		expectedErr := errors.New("template not found")
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(nil, expectedErr)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, expectedErr, err)
+	})
+
+	t.Run("CompileTemplateError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		recipientEmail := "test@example.com"
+		variationID := "variation123"
+		templateID := "template123"
+
+		// Create the request
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+			VariationID:    variationID,
+		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Create a broadcast with the test variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Mock repository to return the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock workspace repository to return a workspace
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				SecretKey: "test-secret-key",
+			},
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		// Mock contact repository to return a contact
+		contact := &domain.Contact{
+			Email: recipientEmail,
+		}
+		mockContactRepo.EXPECT().
+			GetContactByEmail(gomock.Any(), workspaceID, recipientEmail).
+			Return(contact, nil)
+
+		// Mock template service to return a template
+		emailBlock := getTestEmailBlock()
+		template := &domain.Template{
+			ID:   templateID,
+			Name: "Test Template",
+			Email: &domain.EmailTemplate{
+				Subject:          "Test Subject",
+				FromName:         "Test Sender",
+				FromAddress:      "sender@example.com",
+				VisualEditorTree: emailBlock,
+			},
+		}
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(template, nil)
+
+		// Mock template service to return error on compile
+		expectedErr := errors.New("compilation error")
+		mockTemplateSvc.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(nil, expectedErr)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, expectedErr, err)
+	})
+
+	t.Run("CompilationFailedError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		recipientEmail := "test@example.com"
+		variationID := "variation123"
+		templateID := "template123"
+
+		// Create the request
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+			VariationID:    variationID,
+		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Create a broadcast with the test variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Mock repository to return the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock workspace repository to return a workspace
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				SecretKey: "test-secret-key",
+			},
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		// Mock contact repository to return a contact
+		contact := &domain.Contact{
+			Email: recipientEmail,
+		}
+		mockContactRepo.EXPECT().
+			GetContactByEmail(gomock.Any(), workspaceID, recipientEmail).
+			Return(contact, nil)
+
+		// Mock template service to return a template
+		emailBlock := getTestEmailBlock()
+		template := &domain.Template{
+			ID:   templateID,
+			Name: "Test Template",
+			Email: &domain.EmailTemplate{
+				Subject:          "Test Subject",
+				FromName:         "Test Sender",
+				FromAddress:      "sender@example.com",
+				VisualEditorTree: emailBlock,
+			},
+		}
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(template, nil)
+
+		// Mock template service to return unsuccessful compilation
+		compiledResult := &domain.CompileTemplateResponse{
+			Success: false, // Compilation failed
+			HTML:    nil,
+			Error: &mjmlgo.Error{
+				Message: "Custom compilation error message",
+			},
+		}
+		mockTemplateSvc.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(compiledResult, nil)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Custom compilation error message")
+	})
+
+	t.Run("SendEmailError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockContactRepo := mocks.NewMockContactRepository(ctrl)
+		mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+		mockAuthSvc := mocks.NewMockAuthService(ctrl)
+		mockTaskService := mocks.NewMockTaskService(ctrl)
+		mockEventBus := mocks.NewMockEventBus(ctrl)
+		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+		// Set up logger mock to return itself for chaining
+		mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+		mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+		recipientEmail := "test@example.com"
+		variationID := "variation123"
+		templateID := "template123"
+
+		// Create the request
+		request := &domain.SendToIndividualRequest{
+			WorkspaceID:    workspaceID,
+			BroadcastID:    broadcastID,
+			RecipientEmail: recipientEmail,
+			VariationID:    variationID,
+		}
+
+		// Mock auth service to authenticate the user
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Create a broadcast with the test variation
+		broadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			TestSettings: domain.BroadcastTestSettings{
+				Variations: []domain.BroadcastVariation{
+					{
+						ID:         variationID,
+						TemplateID: templateID,
+					},
+				},
+			},
+		}
+
+		// Mock repository to return the broadcast
+		mockRepo.EXPECT().
+			GetBroadcast(gomock.Any(), workspaceID, broadcastID).
+			Return(broadcast, nil)
+
+		// Mock workspace repository to return a workspace
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+			Settings: domain.WorkspaceSettings{
+				SecretKey: "test-secret-key",
+			},
+		}
+		mockWorkspaceRepo.EXPECT().
+			GetByID(gomock.Any(), workspaceID).
+			Return(workspace, nil)
+
+		// Mock contact repository to return a contact
+		contact := &domain.Contact{
+			Email: recipientEmail,
+		}
+		mockContactRepo.EXPECT().
+			GetContactByEmail(gomock.Any(), workspaceID, recipientEmail).
+			Return(contact, nil)
+
+		// Mock template service to return a template
+		emailBlock := getTestEmailBlock()
+		template := &domain.Template{
+			ID:   templateID,
+			Name: "Test Template",
+			Email: &domain.EmailTemplate{
+				Subject:          "Test Subject",
+				FromName:         "Test Sender",
+				FromAddress:      "sender@example.com",
+				VisualEditorTree: emailBlock,
+			},
+		}
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+			Return(template, nil)
+
+		// Mock template service to compile template successfully
+		compiledHTML := "<html><body>Test Content</body></html>"
+		compiledResult := &domain.CompileTemplateResponse{
+			Success: true,
+			HTML:    &compiledHTML,
+		}
+		mockTemplateSvc.EXPECT().
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(compiledResult, nil)
+
+		// Mock email service to return an error
+		expectedErr := errors.New("failed to send email")
+		mockEmailSvc.EXPECT().
+			SendEmail(
+				gomock.Any(),
+				workspaceID,
+				true, // isMarketing
+				template.Email.FromAddress,
+				template.Email.FromName,
+				recipientEmail,
+				template.Email.Subject,
+				*compiledResult.HTML,
+				nil,
+				"",
+				nil,
+				nil,
+			).
+			Return(expectedErr)
+
+		// Call the service
+		err := service.SendToIndividual(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Same(t, expectedErr, err)
 	})
 }
 
