@@ -450,18 +450,18 @@ func (r *MessageHistoryRepository) SetOpened(ctx context.Context, workspaceID, i
 
 // ListMessages retrieves message history with cursor-based pagination and filtering
 func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID string, params domain.MessageListParams) ([]*domain.MessageHistory, string, error) {
-	// codecov:ignore start
+	// codecov:ignore:start
 	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "ListMessages")
 	defer tracing.EndSpan(span, nil)
 	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
-	// codecov:ignore end
+	// codecov:ignore:end
 
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		tracing.MarkSpanError(ctx, err)
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, "", fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
@@ -531,9 +531,9 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		// Decode the base64 cursor
 		decodedCursor, err := base64.StdEncoding.DecodeString(params.Cursor)
 		if err != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			tracing.MarkSpanError(ctx, err)
-			// codecov:ignore end
+			// codecov:ignore:end
 			return nil, "", fmt.Errorf("invalid cursor encoding: %w", err)
 		}
 
@@ -541,17 +541,17 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		cursorStr := string(decodedCursor)
 		cursorParts := strings.Split(cursorStr, "~")
 		if len(cursorParts) != 2 {
-			// codecov:ignore start
+			// codecov:ignore:start
 			tracing.MarkSpanError(ctx, fmt.Errorf("invalid cursor format"))
-			// codecov:ignore end
+			// codecov:ignore:end
 			return nil, "", fmt.Errorf("invalid cursor format: expected timestamp~id")
 		}
 
 		cursorTime, err := time.Parse(time.RFC3339, cursorParts[0])
 		if err != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			tracing.MarkSpanError(ctx, err)
-			// codecov:ignore end
+			// codecov:ignore:end
 			return nil, "", fmt.Errorf("invalid cursor timestamp format: %w", err)
 		}
 
@@ -581,17 +581,17 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	// Execute the query
 	query, args, err := queryBuilder.ToSql()
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		tracing.MarkSpanError(ctx, err)
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, "", fmt.Errorf("failed to build query: %w", err)
 	}
 
 	rows, err := workspaceDB.QueryContext(ctx, query, args...)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		tracing.MarkSpanError(ctx, err)
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, "", fmt.Errorf("failed to query message history: %w", err)
 	}
 	defer rows.Close()
@@ -612,9 +612,9 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		)
 
 		if err != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			tracing.MarkSpanError(ctx, err)
-			// codecov:ignore end
+			// codecov:ignore:end
 			return nil, "", fmt.Errorf("failed to scan message history row: %w", err)
 		}
 
@@ -659,9 +659,9 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	}
 
 	if err = rows.Err(); err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		tracing.MarkSpanError(ctx, err)
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, "", fmt.Errorf("error iterating message history rows: %w", err)
 	}
 

@@ -64,14 +64,14 @@ func (h *MessageHistoryHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // handleList handles requests to list message history with pagination and filtering
 func (h *MessageHistoryHandler) handleList(w http.ResponseWriter, r *http.Request) {
-	// codecov:ignore start
+	// codecov:ignore:start
 	ctx, span := h.tracer.StartSpan(r.Context(), "MessageHistoryHandler.handleList")
 	defer func() {
 		if span != nil {
 			h.tracer.EndSpan(span, nil)
 		}
 	}()
-	// codecov:ignore end
+	// codecov:ignore:end
 
 	// Only accept GET requests
 	if r.Method != http.MethodGet {
@@ -90,12 +90,12 @@ func (h *MessageHistoryHandler) handleList(w http.ResponseWriter, r *http.Reques
 	var err error
 	ctx, _, err = h.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		h.logger.Error(err.Error())
 		if span != nil {
 			h.tracer.MarkSpanError(ctx, err)
 		}
-		// codecov:ignore end
+		// codecov:ignore:end
 		WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -110,12 +110,12 @@ func (h *MessageHistoryHandler) handleList(w http.ResponseWriter, r *http.Reques
 	// Call service to get the messages with pagination and filtering
 	result, err := h.service.ListMessages(ctx, workspaceID, params)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		h.logger.Error(err.Error())
 		if span != nil {
 			h.tracer.MarkSpanError(ctx, err)
 		}
-		// codecov:ignore end
+		// codecov:ignore:end
 		WriteJSONError(w, "Failed to list messages", http.StatusInternalServerError)
 		return
 	}

@@ -23,7 +23,7 @@ import (
 )
 
 // InitTracing initializes OpenCensus tracing with the given configuration
-// codecov:ignore start
+// codecov:ignore:start
 func InitTracing(tracingConfig *config.TracingConfig) error {
 	if !tracingConfig.Enabled {
 		return nil
@@ -402,4 +402,4 @@ func StartSpanWithAttributes(ctx context.Context, name string, attrs ...trace.At
 	return ctx, span
 }
 
-// codecov:ignore end
+// codecov:ignore:end

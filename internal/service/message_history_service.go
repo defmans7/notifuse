@@ -25,22 +25,22 @@ func NewMessageHistoryService(repo domain.MessageHistoryRepository, logger logge
 
 // ListMessages retrieves messages for a workspace with cursor-based pagination and filters
 func (s *MessageHistoryService) ListMessages(ctx context.Context, workspaceID string, params domain.MessageListParams) (*domain.MessageListResult, error) {
-	// codecov:ignore start
+	// codecov:ignore:start
 	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryService", "ListMessages")
 	defer tracing.EndSpan(span, nil)
 	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
-	// codecov:ignore end
+	// codecov:ignore:end
 
 	// Call repository method with pagination and filtering parameters
 	messages, nextCursor, err := s.repo.ListMessages(ctx, workspaceID, params)
 
-	// codecov:ignore start
+	// codecov:ignore:start
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to list messages: %v", err))
 		tracing.MarkSpanError(ctx, err)
 		return nil, err
 	}
-	// codecov:ignore end
+	// codecov:ignore:end
 
 	return &domain.MessageListResult{
 		Messages:   messages,

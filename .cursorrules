@@ -126,8 +126,8 @@
 - Ignore tracing patterns: 'ctx, span := tracing.StartSpan', 'defer tracing.EndSpan', 'tracing.AddAttribute', 'tracing.MarkSpanError', 'tracing.TraceMethod', 'tracing.GetTracer()', 'tracing.WrapHTTPClient', 'tracing.StartServiceSpan'
 - Annotation format: `// codecov:ignore`
 - Block annotation:
-  - Start: `// codecov:ignore start`
-  - End: `// codecov:ignore end`
+  - Start: `// codecov:ignore:start`
+  - End: `// codecov:ignore:end`
 - Always surround tracing and logging with codecov ignore comments
 
 ## Project Structure Folders

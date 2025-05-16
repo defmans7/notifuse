@@ -89,25 +89,25 @@ func (o *BroadcastOrchestrator) CanProcess(taskType string) bool {
 func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, workspaceID, broadcastID string) (map[string]*domain.Template, error) {
 	startTime := time.Now()
 	defer func() {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"duration_ms":  time.Since(startTime).Milliseconds(),
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 		}).Debug("Template loading completed")
-		// codecov:ignore end
+		// codecov:ignore:end
 	}()
 
 	// Get the broadcast to access its template variations
 	broadcast, err := o.broadcastService.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 			"error":        err.Error(),
 		}).Error("Failed to get broadcast for templates")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, NewBroadcastError(ErrCodeBroadcastNotFound, "broadcast not found", false, err)
 	}
 
@@ -118,12 +118,12 @@ func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, w
 	}
 
 	if len(templateIDs) == 0 {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 		}).Error("No template variations found in broadcast")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, NewBroadcastError(ErrCodeTemplateMissing, "no template variations found in broadcast", false, nil)
 	}
 
@@ -132,14 +132,14 @@ func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, w
 	for templateID := range templateIDs {
 		template, err := o.templateService.GetTemplateByID(ctx, workspaceID, templateID, 0) // Always use version 0
 		if err != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
 				"workspace_id": workspaceID,
 				"template_id":  templateID,
 				"error":        err.Error(),
 			}).Error("Failed to load template for broadcast")
-			// codecov:ignore end
+			// codecov:ignore:end
 			continue // Don't fail the whole broadcast for one template
 		}
 		templates[templateID] = template
@@ -147,23 +147,23 @@ func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, w
 
 	// Validate that we found at least one template
 	if len(templates) == 0 {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 		}).Error("No valid templates found for broadcast")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, NewBroadcastError(ErrCodeTemplateMissing, "no valid templates found for broadcast", false, nil)
 	}
 
-	// codecov:ignore start
+	// codecov:ignore:start
 	o.logger.WithFields(map[string]interface{}{
 		"broadcast_id":    broadcastID,
 		"workspace_id":    workspaceID,
 		"template_count":  len(templates),
 		"variation_count": len(broadcast.TestSettings.Variations),
 	}).Info("Templates loaded for broadcast")
-	// codecov:ignore end
+	// codecov:ignore:end
 
 	return templates, nil
 }
@@ -182,30 +182,30 @@ func (o *BroadcastOrchestrator) ValidateTemplates(templates map[string]*domain.T
 
 		// Ensure the template has the required fields for sending emails
 		if template.Email == nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithField("template_id", id).Error("Template missing email configuration")
-			// codecov:ignore end
+			// codecov:ignore:end
 			return NewBroadcastError(ErrCodeTemplateInvalid, "template missing email configuration", false, nil)
 		}
 
 		if template.Email.FromAddress == "" {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithField("template_id", id).Error("Template missing from address")
-			// codecov:ignore end
+			// codecov:ignore:end
 			return NewBroadcastError(ErrCodeTemplateInvalid, "template missing from address", false, nil)
 		}
 
 		if template.Email.Subject == "" {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithField("template_id", id).Error("Template missing subject")
-			// codecov:ignore end
+			// codecov:ignore:end
 			return NewBroadcastError(ErrCodeTemplateInvalid, "template missing subject", false, nil)
 		}
 
 		if template.Email.VisualEditorTree.Kind == "" {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithField("template_id", id).Error("Template missing content")
-			// codecov:ignore end
+			// codecov:ignore:end
 			return NewBroadcastError(ErrCodeTemplateInvalid, "template missing content", false, nil)
 		}
 	}
@@ -217,42 +217,42 @@ func (o *BroadcastOrchestrator) ValidateTemplates(templates map[string]*domain.T
 func (o *BroadcastOrchestrator) GetTotalRecipientCount(ctx context.Context, workspaceID, broadcastID string) (int, error) {
 	startTime := time.Now()
 	defer func() {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"duration_ms":  time.Since(startTime).Milliseconds(),
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 		}).Debug("Recipient count completed")
-		// codecov:ignore end
+		// codecov:ignore:end
 	}()
 
 	// Get the broadcast to access audience settings
 	broadcast, err := o.broadcastService.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 			"error":        err.Error(),
 		}).Error("Failed to get broadcast for recipient count")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return 0, NewBroadcastError(ErrCodeBroadcastNotFound, "broadcast not found", false, err)
 	}
 
 	// Use the contact repository to count recipients
 	count, err := o.contactRepo.CountContactsForBroadcast(ctx, workspaceID, broadcast.Audience)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 			"error":        err.Error(),
 		}).Error("Failed to count recipients for broadcast")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return 0, NewBroadcastError(ErrCodeRecipientFetch, "failed to count recipients", true, err)
 	}
 
-	// codecov:ignore start
+	// codecov:ignore:start
 	o.logger.WithFields(map[string]interface{}{
 		"broadcast_id":      broadcastID,
 		"workspace_id":      workspaceID,
@@ -260,7 +260,7 @@ func (o *BroadcastOrchestrator) GetTotalRecipientCount(ctx context.Context, work
 		"audience_lists":    len(broadcast.Audience.Lists),
 		"audience_segments": len(broadcast.Audience.Segments),
 	}).Info("Got recipient count for broadcast")
-	// codecov:ignore end
+	// codecov:ignore:end
 
 	return count, nil
 }
@@ -269,7 +269,7 @@ func (o *BroadcastOrchestrator) GetTotalRecipientCount(ctx context.Context, work
 func (o *BroadcastOrchestrator) FetchBatch(ctx context.Context, workspaceID, broadcastID string, offset, limit int) ([]*domain.ContactWithList, error) {
 	startTime := time.Now()
 	defer func() {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"duration_ms":  time.Since(startTime).Milliseconds(),
 			"broadcast_id": broadcastID,
@@ -277,19 +277,19 @@ func (o *BroadcastOrchestrator) FetchBatch(ctx context.Context, workspaceID, bro
 			"offset":       offset,
 			"limit":        limit,
 		}).Debug("Recipient batch fetch completed")
-		// codecov:ignore end
+		// codecov:ignore:end
 	}()
 
 	// Get the broadcast to access audience settings
 	broadcast, err := o.broadcastService.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 			"error":        err.Error(),
 		}).Error("Failed to get broadcast for recipient fetch")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, NewBroadcastError(ErrCodeBroadcastNotFound, "broadcast not found", false, err)
 	}
 
@@ -301,7 +301,7 @@ func (o *BroadcastOrchestrator) FetchBatch(ctx context.Context, workspaceID, bro
 	// Fetch contacts based on broadcast audience
 	contactsWithList, err := o.contactRepo.GetContactsForBroadcast(ctx, workspaceID, broadcast.Audience, limit, offset)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
@@ -309,11 +309,11 @@ func (o *BroadcastOrchestrator) FetchBatch(ctx context.Context, workspaceID, bro
 			"limit":        limit,
 			"error":        err.Error(),
 		}).Error("Failed to fetch recipients for broadcast")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return nil, NewBroadcastError(ErrCodeRecipientFetch, "failed to fetch recipients", true, err)
 	}
 
-	// codecov:ignore start
+	// codecov:ignore:start
 	o.logger.WithFields(map[string]interface{}{
 		"broadcast_id":     broadcastID,
 		"workspace_id":     workspaceID,
@@ -411,18 +411,18 @@ func (o *BroadcastOrchestrator) SaveProgressState(
 	// Save state
 	err := o.taskRepo.SaveState(ctx, workspaceID, taskID, progress, state)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"task_id":      taskID,
 			"workspace_id": workspaceID,
 			"error":        err.Error(),
 		}).Error("Failed to save progress state")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return lastSaveTime, NewBroadcastError(ErrCodeTaskStateInvalid, "failed to save task state", true, err)
 	}
 
 	// Log progress
-	// codecov:ignore start
+	// codecov:ignore:start
 	o.logger.WithFields(map[string]interface{}{
 		"task_id":      taskID,
 		"workspace_id": workspaceID,
@@ -491,13 +491,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	if broadcastState.TotalRecipients == 0 {
 		count, err := o.GetTotalRecipientCount(ctx, task.WorkspaceID, broadcastState.BroadcastID)
 		if err != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"error":        err.Error(),
 			}).Error("Failed to get recipient count for broadcast")
-			// codecov:ignore end
+			// codecov:ignore:end
 			return false, err
 		}
 
@@ -507,14 +507,14 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		task.State.Message = "Preparing to send broadcast"
 		task.Progress = 0
 
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"task_id":          task.ID,
 			"broadcast_id":     broadcastState.BroadcastID,
 			"total_recipients": broadcastState.TotalRecipients,
 			"channel_type":     broadcastState.ChannelType,
 		}).Info("Broadcast sending initialized")
-		// codecov:ignore end
+		// codecov:ignore:end
 
 		// If there are no recipients, we can mark as completed immediately
 		if broadcastState.TotalRecipients == 0 {
@@ -522,12 +522,12 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			task.Progress = 100.0
 			task.State.Progress = 100.0
 
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 			}).Info("Broadcast completed with no recipients")
-			// codecov:ignore end
+			// codecov:ignore:end
 
 			return true, nil
 		}
@@ -556,25 +556,25 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	// Phase 2: Load templates
 	templates, err := o.LoadTemplatesForBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
 	if err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"task_id":      task.ID,
 			"broadcast_id": broadcastState.BroadcastID,
 			"error":        err.Error(),
 		}).Error("Failed to load templates for broadcast")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return false, err
 	}
 
 	// Validate templates
 	if err := o.ValidateTemplates(templates); err != nil {
-		// codecov:ignore start
+		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"task_id":      task.ID,
 			"broadcast_id": broadcastState.BroadcastID,
 			"error":        err.Error(),
 		}).Error("Templates validation failed")
-		// codecov:ignore end
+		// codecov:ignore:end
 		return false, err
 	}
 
@@ -607,26 +607,26 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			o.config.FetchBatchSize,
 		)
 		if err != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"offset":       currentOffset,
 				"error":        err.Error(),
 			}).Error("Failed to fetch recipients for broadcast")
-			// codecov:ignore end
+			// codecov:ignore:end
 			return false, err
 		}
 
 		// If no more recipients, we're done
 		if len(recipients) == 0 {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"offset":       currentOffset,
 			}).Info("No more recipients to process")
-			// codecov:ignore end
+			// codecov:ignore:end
 			allDone = true
 			break
 		}
@@ -645,14 +645,14 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 		// Handle errors during sending
 		if err != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"offset":       currentOffset,
 				"error":        err.Error(),
 			}).Error("Error sending batch")
-			// codecov:ignore end
+			// codecov:ignore:end
 			// Continue despite errors as we want to make progress
 		}
 
@@ -663,7 +663,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 		// Log progress at regular intervals
 		if o.timeProvider.Since(lastLogTime) >= o.config.ProgressLogInterval {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":         task.ID,
 				"broadcast_id":    broadcastState.BroadcastID,
@@ -674,7 +674,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				"progress":        CalculateProgress(processedCount, broadcastState.TotalRecipients),
 				"elapsed":         o.timeProvider.Since(startTime).String(),
 			}).Info("Broadcast progress update")
-			// codecov:ignore end
+			// codecov:ignore:end
 			lastLogTime = o.timeProvider.Now()
 		}
 
@@ -693,13 +693,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			startTime,
 		)
 		if saveErr != nil {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"error":        saveErr.Error(),
 			}).Error("Failed to save progress state")
-			// codecov:ignore end
+			// codecov:ignore:end
 			// Continue processing despite save error
 		}
 
@@ -710,14 +710,14 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 		// If we processed fewer recipients than requested, we're done
 		if len(recipients) < o.config.FetchBatchSize {
-			// codecov:ignore start
+			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"offset":       currentOffset,
 				"count":        len(recipients),
 			}).Info("Reached end of recipient list")
-			// codecov:ignore end
+			// codecov:ignore:end
 			allDone = true
 			break
 		}
@@ -731,7 +731,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	task.State.Message = message
 	task.Progress = progress
 
-	// codecov:ignore start
+	// codecov:ignore:start
 	o.logger.WithFields(map[string]interface{}{
 		"task_id":          task.ID,
 		"broadcast_id":     broadcastState.BroadcastID,
@@ -741,6 +741,6 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		"progress":         task.Progress,
 		"all_done":         allDone,
 	}).Info("Broadcast processing cycle completed")
-	// codecov:ignore end
+	// codecov:ignore:end
 	return allDone, nil
 }
