@@ -346,6 +346,21 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 		}
 	}
 
+	// Get contact
+	contact, err := s.contactRepo.GetContactByEmail(ctx, workspace.ID, payload.Email)
+	if err != nil {
+		s.logger.WithField("email", payload.Email).Error(fmt.Sprintf("Failed to get contact: %v", err))
+		return fmt.Errorf("failed to get contact: %w", err)
+	}
+
+	// Get email provider for sending confirmation emails
+	marketingEmailProvider, err := workspace.GetEmailProvider(true)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspace.ID).Error(fmt.Sprintf("Failed to get marketing email provider: %v", err))
+		// We'll continue even if we can't get the email provider
+		// This allows unsubscribe to work even if we can't send confirmation emails
+	}
+
 	// get the lists
 	lists, err := s.repo.GetLists(ctx, workspace.ID)
 	if err != nil {
@@ -353,7 +368,7 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 		return fmt.Errorf("failed to get lists: %w", err)
 	}
 
-	// get the list
+	// Process each list for unsubscription
 	for _, listID := range payload.ListIDs {
 		var list *domain.List
 		for _, l := range lists {
@@ -368,13 +383,41 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 			return fmt.Errorf("list not found")
 		}
 
-		// Subscribe to the list
+		// Update contact's status to unsubscribed for this list
 		err = s.contactListRepo.UpdateContactListStatus(ctx, workspace.ID, payload.Email, listID, domain.ContactListStatusUnsubscribed)
 		if err != nil {
 			s.logger.WithField("email", payload.Email).
 				WithField("list_id", listID).
 				Error(fmt.Sprintf("Failed to unsubscribe from list: %v", err))
 			return fmt.Errorf("failed to unsubscribe from list: %w", err)
+		}
+
+		// Send unsubscribe confirmation email if template is set and email provider exists
+		if list.UnsubscribeTemplate != nil && marketingEmailProvider != nil {
+			messageID := uuid.New().String()
+
+			templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, domain.ContactWithList{
+				Contact:  contact,
+				ListID:   listID,
+				ListName: list.Name,
+			}, messageID, s.apiEndpoint, nil)
+
+			if err != nil {
+				s.logger.WithField("email", payload.Email).Error(fmt.Sprintf("Failed to build template data: %v", err))
+				return fmt.Errorf("failed to build template data: %w", err)
+			}
+
+			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
+				TemplateID: list.UnsubscribeTemplate.ID,
+			}, domain.MessageData{Data: templateData}, mjml.TrackingSettings{
+				Endpoint:       s.apiEndpoint,
+				EnableTracking: true, // Enable tracking for unsubscribe confirmation emails
+			}, marketingEmailProvider, nil, nil)
+
+			if err != nil {
+				s.logger.WithField("email", payload.Email).Error(fmt.Sprintf("Failed to send unsubscribe confirmation email: %v", err))
+				return fmt.Errorf("failed to send unsubscribe confirmation email: %w", err)
+			}
 		}
 	}
 	return nil

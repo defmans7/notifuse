@@ -787,10 +787,25 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		ListIDs:     []string{listID},
 	}
 
+	contact := &domain.Contact{
+		Email: email,
+		FirstName: &domain.NullableString{
+			String: "Test",
+			IsNull: false,
+		},
+		LastName: &domain.NullableString{
+			String: "User",
+			IsNull: false,
+		},
+	}
+
 	t.Run("unsubscribe with API authentication", func(t *testing.T) {
 		// Set up expectations
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, nil)
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
+		mockWorkspace := workspace
+		mockWorkspace.Settings.MarketingEmailProviderID = ""
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
 			{
 				ID:        listID,
@@ -815,6 +830,9 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 	t.Run("unsubscribe with HMAC authentication", func(t *testing.T) {
 		// Set up expectations
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
+		mockWorkspace := workspace
+		mockWorkspace.Settings.MarketingEmailProviderID = ""
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
 			{
 				ID:        listID,
@@ -836,8 +854,172 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("unsubscribe with confirmation email - using workspace.GetEmailProvider", func(t *testing.T) {
+		// Setup workspace with marketing email provider
+		mockWorkspace := &domain.Workspace{
+			ID: workspaceID,
+			Settings: domain.WorkspaceSettings{
+				SecretKey:                "test-secret-key",
+				MarketingEmailProviderID: "marketing-provider",
+			},
+			Integrations: domain.Integrations{
+				{
+					ID:   "marketing-provider",
+					Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind:               domain.EmailProviderKindSparkPost,
+						DefaultSenderEmail: "test@example.com",
+						DefaultSenderName:  "Test Sender",
+						SparkPost: &domain.SparkPostSettings{
+							APIKey: "test-api-key",
+						},
+					},
+				},
+			},
+		}
+
+		// Test email provider
+		testEmailProvider := &domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSparkPost,
+			DefaultSenderEmail: "test@example.com",
+			DefaultSenderName:  "Test Sender",
+			SparkPost: &domain.SparkPostSettings{
+				APIKey: "test-api-key",
+			},
+		}
+
+		// List with unsubscribe template
+		listWithTemplate := &domain.List{
+			ID:       listID,
+			Name:     "Test List",
+			IsPublic: true,
+			UnsubscribeTemplate: &domain.TemplateReference{
+				ID:      "unsub-template",
+				Version: 1,
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		// Set up expectations
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(mockWorkspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{listWithTemplate}, nil)
+		mockContactListRepo.EXPECT().UpdateContactListStatus(
+			gomock.Any(),
+			workspaceID,
+			email,
+			listID,
+			domain.ContactListStatusUnsubscribed,
+		).Return(nil)
+
+		// Email sending expectations
+		mockEmailService.EXPECT().SendEmailForTemplate(
+			gomock.Any(),
+			workspaceID,
+			gomock.Any(), // messageID
+			contact,      // Contact
+			domain.ChannelTemplate{
+				TemplateID: "unsub-template",
+			},
+			gomock.Any(),      // MessageData
+			gomock.Any(),      // TrackingSettings
+			testEmailProvider, // Email provider will now be validated
+			nil,
+			nil,
+		).Return(nil)
+
+		err := service.UnsubscribeFromLists(ctx, payload, false)
+		assert.NoError(t, err)
+	})
+
+	t.Run("error - get contact failure", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(nil, errors.New("contact not found"))
+		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
+		mockLogger.EXPECT().Error(gomock.Any())
+
+		err := service.UnsubscribeFromLists(ctx, payload, false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get contact")
+	})
+
+	t.Run("error - send unsubscribe email failure", func(t *testing.T) {
+		// Setup workspace with marketing email provider
+		mockWorkspace := &domain.Workspace{
+			ID: workspaceID,
+			Settings: domain.WorkspaceSettings{
+				SecretKey:                "test-secret-key",
+				MarketingEmailProviderID: "marketing-provider",
+			},
+			Integrations: domain.Integrations{
+				{
+					ID:   "marketing-provider",
+					Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind:               domain.EmailProviderKindSparkPost,
+						DefaultSenderEmail: "test@example.com",
+						DefaultSenderName:  "Test Sender",
+						SparkPost: &domain.SparkPostSettings{
+							APIKey: "test-api-key",
+						},
+					},
+				},
+			},
+		}
+
+		// List with unsubscribe template
+		listWithTemplate := &domain.List{
+			ID:       listID,
+			Name:     "Test List",
+			IsPublic: true,
+			UnsubscribeTemplate: &domain.TemplateReference{
+				ID:      "unsub-template",
+				Version: 1,
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		// Set up expectations
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(mockWorkspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{listWithTemplate}, nil)
+		mockContactListRepo.EXPECT().UpdateContactListStatus(
+			gomock.Any(),
+			workspaceID,
+			email,
+			listID,
+			domain.ContactListStatusUnsubscribed,
+		).Return(nil)
+
+		// Email sending expectations - returns error
+		mockEmailService.EXPECT().SendEmailForTemplate(
+			gomock.Any(),
+			workspaceID,
+			gomock.Any(), // messageID
+			contact,      // Contact
+			domain.ChannelTemplate{
+				TemplateID: "unsub-template",
+			},
+			gomock.Any(), // MessageData
+			gomock.Any(), // TrackingSettings
+			gomock.Any(), // Match any provider since we're testing the error path
+			nil,
+			nil,
+		).Return(errors.New("email sending error"))
+
+		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
+		mockLogger.EXPECT().Error(gomock.Any())
+
+		err := service.UnsubscribeFromLists(ctx, payload, false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to send unsubscribe confirmation email")
+	})
+
 	t.Run("error - get lists failure", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return(nil, errors.New("get lists error"))
 		mockLogger.EXPECT().WithField("list_ids", payload.ListIDs).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -849,6 +1031,7 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 
 	t.Run("error - update status failure", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
 			{
 				ID:        listID,
@@ -924,6 +1107,7 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 
 	t.Run("error - list not found", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{}, nil)
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -931,5 +1115,47 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		err := service.UnsubscribeFromLists(ctx, payload, false)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "list not found")
+	})
+
+	t.Run("unsubscribe with template but no email provider configured", func(t *testing.T) {
+		// Setup workspace with NO marketing email provider
+		mockWorkspace := &domain.Workspace{
+			ID: workspaceID,
+			Settings: domain.WorkspaceSettings{
+				SecretKey: "test-secret-key",
+				// MarketingEmailProviderID not set intentionally
+			},
+		}
+
+		// List with unsubscribe template
+		listWithTemplate := &domain.List{
+			ID:       listID,
+			Name:     "Test List",
+			IsPublic: true,
+			UnsubscribeTemplate: &domain.TemplateReference{
+				ID:      "unsub-template",
+				Version: 1,
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		// Set up expectations
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(mockWorkspace, nil)
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{listWithTemplate}, nil)
+		mockContactListRepo.EXPECT().UpdateContactListStatus(
+			gomock.Any(),
+			workspaceID,
+			email,
+			listID,
+			domain.ContactListStatusUnsubscribed,
+		).Return(nil)
+
+		// Email service should not be called when no provider is configured
+		// Even though template exists, email won't be sent
+
+		err := service.UnsubscribeFromLists(ctx, payload, false)
+		assert.NoError(t, err)
 	})
 }
