@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -68,6 +69,27 @@ func (s *MessageHistoryService) GetBroadcastStats(ctx context.Context, workspace
 	stats, err := s.repo.GetBroadcastStats(ctx, workspaceID, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get broadcast stats: %w", err)
+	}
+
+	return stats, nil
+}
+
+// GetBroadcastVariationStats retrieves statistics for a specific variation of a broadcast
+func (s *MessageHistoryService) GetBroadcastVariationStats(ctx context.Context, workspaceID, broadcastID, variationID string) (*domain.MessageHistoryStatusSum, error) {
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Validate input parameters
+	if variationID == "" {
+		return nil, errors.New("variation ID cannot be empty")
+	}
+
+	stats, err := s.repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get broadcast variation stats: %w", err)
 	}
 
 	return stats, nil

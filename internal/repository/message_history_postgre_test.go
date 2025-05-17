@@ -949,3 +949,230 @@ func addRowFromMessage(rows *sqlmock.Rows, message *domain.MessageHistory) {
 		message.UpdatedAt,
 	)
 }
+
+func TestMessageHistoryRepository_GetBroadcastStats(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-123"
+
+	t.Run("successful retrieval", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		rows := sqlmock.NewRows([]string{
+			"total_sent", "total_delivered", "total_failed", "total_opened",
+			"total_clicked", "total_bounced", "total_complained", "total_unsubscribed",
+		}).AddRow(10, 8, 2, 5, 3, 1, 0, 1)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnRows(rows)
+
+		stats, err := repo.GetBroadcastStats(ctx, workspaceID, broadcastID)
+
+		require.NoError(t, err)
+		require.NotNil(t, stats)
+		assert.Equal(t, 10, stats.TotalSent)
+		assert.Equal(t, 8, stats.TotalDelivered)
+		assert.Equal(t, 2, stats.TotalFailed)
+		assert.Equal(t, 5, stats.TotalOpened)
+		assert.Equal(t, 3, stats.TotalClicked)
+		assert.Equal(t, 1, stats.TotalBounced)
+		assert.Equal(t, 0, stats.TotalComplained)
+		assert.Equal(t, 1, stats.TotalUnsubscribed)
+	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		stats, err := repo.GetBroadcastStats(ctx, workspaceID, broadcastID)
+		require.Error(t, err)
+		require.Nil(t, stats)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("sql error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnError(errors.New("sql error"))
+
+		stats, err := repo.GetBroadcastStats(ctx, workspaceID, broadcastID)
+		require.Error(t, err)
+		require.Nil(t, stats)
+		require.Contains(t, err.Error(), "failed to get broadcast stats")
+	})
+
+	t.Run("no rows", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnError(sql.ErrNoRows)
+
+		stats, err := repo.GetBroadcastStats(ctx, workspaceID, broadcastID)
+		require.NoError(t, err)
+		require.NotNil(t, stats)
+		assert.Equal(t, 0, stats.TotalSent)
+		assert.Equal(t, 0, stats.TotalDelivered)
+		assert.Equal(t, 0, stats.TotalFailed)
+		assert.Equal(t, 0, stats.TotalOpened)
+		assert.Equal(t, 0, stats.TotalClicked)
+		assert.Equal(t, 0, stats.TotalBounced)
+		assert.Equal(t, 0, stats.TotalComplained)
+		assert.Equal(t, 0, stats.TotalUnsubscribed)
+	})
+
+	t.Run("null values", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// Create mock rows with some NULL values
+		rows := sqlmock.NewRows([]string{
+			"total_sent", "total_delivered", "total_failed", "total_opened",
+			"total_clicked", "total_bounced", "total_complained", "total_unsubscribed",
+		}).AddRow(10, nil, 2, nil, 3, nil, nil, 1)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1`).
+			WithArgs(broadcastID).
+			WillReturnRows(rows)
+
+		stats, err := repo.GetBroadcastStats(ctx, workspaceID, broadcastID)
+		require.NoError(t, err)
+		require.NotNil(t, stats)
+		assert.Equal(t, 10, stats.TotalSent)
+		assert.Equal(t, 0, stats.TotalDelivered) // Should be 0 for NULL
+		assert.Equal(t, 2, stats.TotalFailed)
+		assert.Equal(t, 0, stats.TotalOpened) // Should be 0 for NULL
+		assert.Equal(t, 3, stats.TotalClicked)
+		assert.Equal(t, 0, stats.TotalBounced)    // Should be 0 for NULL
+		assert.Equal(t, 0, stats.TotalComplained) // Should be 0 for NULL
+		assert.Equal(t, 1, stats.TotalUnsubscribed)
+	})
+}
+
+func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-123"
+	variationID := "variation-123"
+
+	t.Run("successful retrieval", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		rows := sqlmock.NewRows([]string{
+			"total_sent", "total_delivered", "total_failed", "total_opened",
+			"total_clicked", "total_bounced", "total_complained", "total_unsubscribed",
+		}).AddRow(10, 8, 2, 5, 3, 1, 0, 1)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
+			WithArgs(broadcastID, variationID).
+			WillReturnRows(rows)
+
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+
+		require.NoError(t, err)
+		require.NotNil(t, stats)
+		assert.Equal(t, 10, stats.TotalSent)
+		assert.Equal(t, 8, stats.TotalDelivered)
+		assert.Equal(t, 2, stats.TotalFailed)
+		assert.Equal(t, 5, stats.TotalOpened)
+		assert.Equal(t, 3, stats.TotalClicked)
+		assert.Equal(t, 1, stats.TotalBounced)
+		assert.Equal(t, 0, stats.TotalComplained)
+		assert.Equal(t, 1, stats.TotalUnsubscribed)
+	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		require.Error(t, err)
+		require.Nil(t, stats)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("sql error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
+			WithArgs(broadcastID, variationID).
+			WillReturnError(errors.New("sql error"))
+
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		require.Error(t, err)
+		require.Nil(t, stats)
+		require.Contains(t, err.Error(), "failed to get broadcast variation stats")
+	})
+
+	t.Run("no rows", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
+			WithArgs(broadcastID, variationID).
+			WillReturnError(sql.ErrNoRows)
+
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		require.NoError(t, err)
+		require.NotNil(t, stats)
+		assert.Equal(t, 0, stats.TotalSent)
+		assert.Equal(t, 0, stats.TotalDelivered)
+		assert.Equal(t, 0, stats.TotalFailed)
+		assert.Equal(t, 0, stats.TotalOpened)
+		assert.Equal(t, 0, stats.TotalClicked)
+		assert.Equal(t, 0, stats.TotalBounced)
+		assert.Equal(t, 0, stats.TotalComplained)
+		assert.Equal(t, 0, stats.TotalUnsubscribed)
+	})
+
+	t.Run("null values", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// Create mock rows with some NULL values
+		rows := sqlmock.NewRows([]string{
+			"total_sent", "total_delivered", "total_failed", "total_opened",
+			"total_clicked", "total_bounced", "total_complained", "total_unsubscribed",
+		}).AddRow(10, nil, 2, nil, 3, nil, nil, 1)
+
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
+			WithArgs(broadcastID, variationID).
+			WillReturnRows(rows)
+
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		require.NoError(t, err)
+		require.NotNil(t, stats)
+		assert.Equal(t, 10, stats.TotalSent)
+		assert.Equal(t, 0, stats.TotalDelivered) // Should be 0 for NULL
+		assert.Equal(t, 2, stats.TotalFailed)
+		assert.Equal(t, 0, stats.TotalOpened) // Should be 0 for NULL
+		assert.Equal(t, 3, stats.TotalClicked)
+		assert.Equal(t, 0, stats.TotalBounced)    // Should be 0 for NULL
+		assert.Equal(t, 0, stats.TotalComplained) // Should be 0 for NULL
+		assert.Equal(t, 1, stats.TotalUnsubscribed)
+	})
+}

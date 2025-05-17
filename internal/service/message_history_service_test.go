@@ -595,6 +595,126 @@ func TestMessageHistoryService_GetBroadcastStats(t *testing.T) {
 	}
 }
 
+func TestMessageHistoryService_GetBroadcastVariationStats(t *testing.T) {
+	testCases := []struct {
+		name          string
+		workspaceID   string
+		broadcastID   string
+		variationID   string
+		setupMocks    func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService)
+		expectedStats *domain.MessageHistoryStatusSum
+		expectedError error
+	}{
+		{
+			name:        "Success with variation stats",
+			workspaceID: "workspace-123",
+			broadcastID: "broadcast-123",
+			variationID: "variation-abc",
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
+				// Let's assume the mock repository has a GetBroadcastVariationStats method
+				mockRepo.EXPECT().
+					GetBroadcastVariationStats(gomock.Any(), "workspace-123", "broadcast-123", "variation-abc").
+					Return(&domain.MessageHistoryStatusSum{
+						TotalSent:         50,
+						TotalDelivered:    48,
+						TotalBounced:      1,
+						TotalComplained:   0,
+						TotalFailed:       1,
+						TotalOpened:       40,
+						TotalClicked:      30,
+						TotalUnsubscribed: 2,
+					}, nil)
+			},
+			expectedStats: &domain.MessageHistoryStatusSum{
+				TotalSent:         50,
+				TotalDelivered:    48,
+				TotalBounced:      1,
+				TotalComplained:   0,
+				TotalFailed:       1,
+				TotalOpened:       40,
+				TotalClicked:      30,
+				TotalUnsubscribed: 2,
+			},
+			expectedError: nil,
+		},
+		{
+			name:        "Authentication error",
+			workspaceID: "workspace-123",
+			broadcastID: "broadcast-123",
+			variationID: "variation-abc",
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(nil, nil, errors.New("authentication failed"))
+			},
+			expectedStats: nil,
+			expectedError: errors.New("failed to authenticate user: authentication failed"),
+		},
+		{
+			name:        "Repository error",
+			workspaceID: "workspace-123",
+			broadcastID: "broadcast-123",
+			variationID: "variation-abc",
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
+				mockRepo.EXPECT().
+					GetBroadcastVariationStats(gomock.Any(), "workspace-123", "broadcast-123", "variation-abc").
+					Return(nil, errors.New("database error"))
+			},
+			expectedStats: nil,
+			expectedError: errors.New("failed to get broadcast variation stats: database error"),
+		},
+		{
+			name:        "Invalid variation ID",
+			workspaceID: "workspace-123",
+			broadcastID: "broadcast-123",
+			variationID: "",
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+			},
+			expectedStats: nil,
+			expectedError: errors.New("variation ID cannot be empty"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mocks
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+			mockLogger := pkgmocks.NewMockLogger(ctrl)
+			mockAuthService := mocks.NewMockAuthService(ctrl)
+			tc.setupMocks(mockRepo, mockAuthService)
+
+			// Create service with mocks
+			service := NewMessageHistoryService(mockRepo, mockLogger, mockAuthService)
+
+			// Call the method under test
+			stats, err := service.GetBroadcastVariationStats(context.Background(), tc.workspaceID, tc.broadcastID, tc.variationID)
+
+			// Verify expectations
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedStats, stats)
+			}
+		})
+	}
+}
+
 func strPtr(s string) *string {
 	return &s
 }
