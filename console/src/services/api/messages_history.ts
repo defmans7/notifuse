@@ -93,3 +93,40 @@ export function listMessages(
 
   return api.get<MessageListResult>(`/api/messages.list?${queryParams.toString()}`)
 }
+
+/**
+ * Stats for each message status in a broadcast
+ * Matches MessageHistoryStatusSum from the backend
+ */
+export interface MessageHistoryStatusSum {
+  total_sent: number
+  total_delivered: number
+  total_bounced: number
+  total_complained: number
+  total_failed: number
+  total_opened: number
+  total_clicked: number
+  total_unsubscribed: number
+}
+
+/**
+ * Response from the broadcast stats endpoint
+ */
+export interface BroadcastStatsResult {
+  broadcast_id: string
+  stats: MessageHistoryStatusSum
+}
+
+/**
+ * Gets statistics for a specific broadcast
+ */
+export function getBroadcastStats(
+  workspaceId: string,
+  broadcastId: string
+): Promise<BroadcastStatsResult> {
+  const queryParams = new URLSearchParams()
+  queryParams.append('workspace_id', workspaceId)
+  queryParams.append('broadcast_id', broadcastId)
+
+  return api.get<BroadcastStatsResult>(`/api/messages.broadcastStats?${queryParams.toString()}`)
+}

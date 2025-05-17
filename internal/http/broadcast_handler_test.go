@@ -35,16 +35,8 @@ func createTestBroadcast() *domain.Broadcast {
 		Schedule: domain.ScheduleSettings{
 			IsScheduled: false,
 		},
-		TotalSent:         100,
-		TotalDelivered:    95,
-		TotalFailed:       2,
-		TotalBounced:      3,
-		TotalComplained:   1,
-		TotalOpens:        80,
-		TotalClicks:       50,
-		TotalUnsubscribed: 5,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 }
 

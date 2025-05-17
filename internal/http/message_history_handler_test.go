@@ -637,3 +637,193 @@ func TestMessageHistoryHandler_handleList_TracerErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Failed to list messages", response["error"])
 }
+
+func TestMessageHistoryHandler_handleBroadcastStats_MethodNotAllowed(t *testing.T) {
+	handler, _, _, mockTracer, _ := setupMessageHistoryHandlerTest(t)
+
+	// Create a non-GET request
+	req := httptest.NewRequest(http.MethodPost, "/api/messages.broadcastStats", nil)
+	w := httptest.NewRecorder()
+
+	// Mock the tracer
+	mockSpan := &trace.Span{}
+	mockTracer.EXPECT().
+		StartSpan(gomock.Any(), "MessageHistoryHandler.handleBroadcastStats").
+		Return(context.Background(), mockSpan)
+	mockTracer.EXPECT().
+		EndSpan(mockSpan, nil)
+
+	// Call the handler
+	handler.handleBroadcastStats(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Method not allowed", response["error"])
+}
+
+func TestMessageHistoryHandler_handleBroadcastStats_MissingBroadcastID(t *testing.T) {
+	handler, _, _, mockTracer, _ := setupMessageHistoryHandlerTest(t)
+
+	// Create a request with no broadcast_id
+	req := httptest.NewRequest(http.MethodGet, "/api/messages.broadcastStats?workspace_id=ws123", nil)
+	w := httptest.NewRecorder()
+
+	// Mock the tracer
+	mockSpan := &trace.Span{}
+	mockTracer.EXPECT().
+		StartSpan(gomock.Any(), "MessageHistoryHandler.handleBroadcastStats").
+		Return(context.Background(), mockSpan)
+	mockTracer.EXPECT().
+		EndSpan(mockSpan, nil)
+
+	// Call the handler
+	handler.handleBroadcastStats(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "broadcast_id is required", response["error"])
+}
+
+func TestMessageHistoryHandler_handleBroadcastStats_MissingWorkspaceID(t *testing.T) {
+	handler, _, _, mockTracer, _ := setupMessageHistoryHandlerTest(t)
+
+	// Create a request with no workspace_id
+	req := httptest.NewRequest(http.MethodGet, "/api/messages.broadcastStats?broadcast_id=bc123", nil)
+	w := httptest.NewRecorder()
+
+	// Mock the tracer
+	mockSpan := &trace.Span{}
+	mockTracer.EXPECT().
+		StartSpan(gomock.Any(), "MessageHistoryHandler.handleBroadcastStats").
+		Return(context.Background(), mockSpan)
+	mockTracer.EXPECT().
+		EndSpan(mockSpan, nil)
+
+	// Call the handler
+	handler.handleBroadcastStats(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "workspace_id is required", response["error"])
+}
+
+func TestMessageHistoryHandler_handleBroadcastStats_ServiceError(t *testing.T) {
+	// Setup test with controller that doesn't finish early
+	ctrl := gomock.NewController(t)
+	mockService := mocks.NewMockMessageHistoryService(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTracer := pkgmocks.NewMockTracer(ctrl)
+
+	// Create key pair for testing
+	secretKey := paseto.NewV4AsymmetricSecretKey()
+	publicKey := secretKey.Public()
+
+	handler := NewMessageHistoryHandlerWithTracer(
+		mockService,
+		mockAuthService,
+		publicKey,
+		mockLogger,
+		mockTracer,
+	)
+
+	// Create a request with valid parameters
+	req := httptest.NewRequest(http.MethodGet, "/api/messages.broadcastStats?workspace_id=ws123&broadcast_id=bc123", nil)
+	w := httptest.NewRecorder()
+
+	// Mock the tracer
+	mockSpan := &trace.Span{}
+	mockTracer.EXPECT().
+		StartSpan(gomock.Any(), "MessageHistoryHandler.handleBroadcastStats").
+		Return(context.Background(), mockSpan)
+	mockTracer.EXPECT().
+		EndSpan(mockSpan, nil)
+
+	// Set up logger mock to expect error call
+	mockLogger.EXPECT().WithField("error", gomock.Any()).Return(mockLogger)
+	mockLogger.EXPECT().Error("Failed to get stats").Times(1)
+
+	// Mock message history service to return error
+	mockService.EXPECT().
+		GetBroadcastStats(gomock.Any(), "ws123", "bc123").
+		Return(nil, errors.New("service error"))
+
+	// Call the handler
+	handler.handleBroadcastStats(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Failed to get stats", response["error"])
+}
+
+func TestMessageHistoryHandler_handleBroadcastStats_Success(t *testing.T) {
+	handler, mockService, _, mockTracer, _ := setupMessageHistoryHandlerTest(t)
+
+	// Create a request with valid parameters
+	req := httptest.NewRequest(http.MethodGet, "/api/messages.broadcastStats?workspace_id=ws123&broadcast_id=bc123", nil)
+	w := httptest.NewRecorder()
+
+	// Mock the stats result
+	stats := &domain.MessageHistoryStatusSum{
+		TotalSent:         100,
+		TotalDelivered:    90,
+		TotalBounced:      5,
+		TotalComplained:   1,
+		TotalFailed:       4,
+		TotalOpened:       50,
+		TotalClicked:      30,
+		TotalUnsubscribed: 2,
+	}
+
+	// Mock the tracer
+	mockSpan := &trace.Span{}
+	mockTracer.EXPECT().
+		StartSpan(gomock.Any(), "MessageHistoryHandler.handleBroadcastStats").
+		Return(context.Background(), mockSpan)
+	mockTracer.EXPECT().
+		EndSpan(mockSpan, nil)
+
+	// Mock message history service
+	mockService.EXPECT().
+		GetBroadcastStats(gomock.Any(), "ws123", "bc123").
+		Return(stats, nil)
+
+	// Call the handler
+	handler.handleBroadcastStats(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "bc123", response["broadcast_id"])
+
+	// Check stats in response
+	statsMap, ok := response["stats"].(map[string]interface{})
+	require.True(t, ok, "Stats should be a map")
+	assert.Equal(t, float64(100), statsMap["total_sent"])
+	assert.Equal(t, float64(90), statsMap["total_delivered"])
+	assert.Equal(t, float64(5), statsMap["total_bounced"])
+	assert.Equal(t, float64(1), statsMap["total_complained"])
+	assert.Equal(t, float64(4), statsMap["total_failed"])
+	assert.Equal(t, float64(50), statsMap["total_opened"])
+	assert.Equal(t, float64(30), statsMap["total_clicked"])
+	assert.Equal(t, float64(2), statsMap["total_unsubscribed"])
+}

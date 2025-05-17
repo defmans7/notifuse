@@ -46,16 +46,16 @@ func createValidBroadcast() domain.Broadcast {
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled: false,
 		},
-		TotalSent:         100,
-		TotalDelivered:    95,
-		TotalFailed:       2,
-		TotalBounced:      3,
-		TotalComplained:   1,
-		TotalOpens:        80,
-		TotalClicks:       50,
-		TotalUnsubscribed: 5,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		// TotalSent:         100,
+		// TotalDelivered:    95,
+		// TotalFailed:       2,
+		// TotalBounced:      3,
+		// TotalComplained:   1,
+		// TotalOpens:        80,
+		// TotalClicks:       50,
+		// TotalUnsubscribed: 5,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 }
 

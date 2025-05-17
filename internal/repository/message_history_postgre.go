@@ -684,3 +684,100 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 
 	return messages, nextCursor, nil
 }
+
+func (r *MessageHistoryRepository) GetBroadcastStats(ctx context.Context, workspaceID string, id string) (*domain.MessageHistoryStatusSum, error) {
+	// codecov:ignore:start
+	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "GetBroadcastStats")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	tracing.AddAttribute(ctx, "broadcastID", id)
+	// codecov:ignore:end
+
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// MessageStatusSent         MessageStatus = "sent"
+	// MessageStatusDelivered    MessageStatus = "delivered"
+	// MessageStatusFailed       MessageStatus = "failed"
+	// MessageStatusOpened       MessageStatus = "opened"
+	// MessageStatusClicked      MessageStatus = "clicked"
+	// MessageStatusBounced      MessageStatus = "bounced"
+	// MessageStatusComplained   MessageStatus = "complained"
+	// MessageStatusUnsubscribed MessageStatus = "unsubscribed"
+
+	query := `
+		SELECT 
+			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as total_sent,
+			SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as total_delivered,
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as total_failed,
+			SUM(CASE WHEN status = 'opened' THEN 1 ELSE 0 END) as total_opened,
+			SUM(CASE WHEN status = 'clicked' THEN 1 ELSE 0 END) as total_clicked,
+			SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
+			SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained,
+			SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed
+		FROM message_history
+		WHERE broadcast_id = $1
+	`
+
+	row := workspaceDB.QueryRowContext(ctx, query, id)
+	stats := &domain.MessageHistoryStatusSum{}
+
+	// Use NullInt64 to handle NULL values from database
+	var totalSent, totalDelivered, totalFailed, totalOpened sql.NullInt64
+	var totalClicked, totalBounced, totalComplained, totalUnsubscribed sql.NullInt64
+
+	err = row.Scan(
+		&totalSent,
+		&totalDelivered,
+		&totalFailed,
+		&totalOpened,
+		&totalClicked,
+		&totalBounced,
+		&totalComplained,
+		&totalUnsubscribed,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return stats, nil // Return empty stats (all zeros)
+		}
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("failed to get broadcast stats: %w", err)
+	}
+
+	// Convert nullable values to integers (use 0 for NULL values)
+	if totalSent.Valid {
+		stats.TotalSent = int(totalSent.Int64)
+	}
+	if totalDelivered.Valid {
+		stats.TotalDelivered = int(totalDelivered.Int64)
+	}
+	if totalFailed.Valid {
+		stats.TotalFailed = int(totalFailed.Int64)
+	}
+	if totalOpened.Valid {
+		stats.TotalOpened = int(totalOpened.Int64)
+	}
+	if totalClicked.Valid {
+		stats.TotalClicked = int(totalClicked.Int64)
+	}
+	if totalBounced.Valid {
+		stats.TotalBounced = int(totalBounced.Int64)
+	}
+	if totalComplained.Valid {
+		stats.TotalComplained = int(totalComplained.Int64)
+	}
+	if totalUnsubscribed.Valid {
+		stats.TotalUnsubscribed = int(totalUnsubscribed.Int64)
+	}
+
+	return stats, nil
+}

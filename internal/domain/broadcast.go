@@ -246,34 +246,26 @@ func (s *ScheduleSettings) SetScheduledDateTime(t time.Time, timezone string) er
 
 // Broadcast represents a broadcast message campaign
 type Broadcast struct {
-	ID                string                `json:"id"`
-	WorkspaceID       string                `json:"workspace_id"`
-	Name              string                `json:"name"`
-	ChannelType       string                `json:"channel_type"` // email, sms, push, etc.
-	Status            BroadcastStatus       `json:"status"`       // pending, sending, completed, failed
-	Audience          AudienceSettings      `json:"audience"`
-	Schedule          ScheduleSettings      `json:"schedule"`
-	TestSettings      BroadcastTestSettings `json:"test_settings"`
-	UTMParameters     *UTMParameters        `json:"utm_parameters,omitempty"`
-	Metadata          MapOfAny              `json:"metadata,omitempty"`
-	TotalSent         int                   `json:"total_sent"`
-	TotalDelivered    int                   `json:"total_delivered"`
-	TotalBounced      int                   `json:"total_bounced"`
-	TotalComplained   int                   `json:"total_complained"`
-	TotalFailed       int                   `json:"total_failed"`
-	TotalOpens        int                   `json:"total_opens"`
-	TotalClicks       int                   `json:"total_clicks"`
-	TotalUnsubscribed int                   `json:"total_unsubscribed"`
-	WinningVariation  string                `json:"winning_variation,omitempty"`
-	TestSentAt        *time.Time            `json:"test_sent_at,omitempty"`
-	WinnerSentAt      *time.Time            `json:"winner_sent_at,omitempty"`
-	CreatedAt         time.Time             `json:"created_at"`
-	UpdatedAt         time.Time             `json:"updated_at"`
-	StartedAt         *time.Time            `json:"started_at,omitempty"`
-	CompletedAt       *time.Time            `json:"completed_at,omitempty"`
-	CancelledAt       *time.Time            `json:"cancelled_at,omitempty"`
-	PausedAt          *time.Time            `json:"paused_at,omitempty"`
-	SentAt            *time.Time            `json:"sent_at,omitempty"`
+	ID               string                `json:"id"`
+	WorkspaceID      string                `json:"workspace_id"`
+	Name             string                `json:"name"`
+	ChannelType      string                `json:"channel_type"` // email, sms, push, etc.
+	Status           BroadcastStatus       `json:"status"`       // pending, sending, completed, failed
+	Audience         AudienceSettings      `json:"audience"`
+	Schedule         ScheduleSettings      `json:"schedule"`
+	TestSettings     BroadcastTestSettings `json:"test_settings"`
+	UTMParameters    *UTMParameters        `json:"utm_parameters,omitempty"`
+	Metadata         MapOfAny              `json:"metadata,omitempty"`
+	WinningVariation string                `json:"winning_variation,omitempty"`
+	TestSentAt       *time.Time            `json:"test_sent_at,omitempty"`
+	WinnerSentAt     *time.Time            `json:"winner_sent_at,omitempty"`
+	CreatedAt        time.Time             `json:"created_at"`
+	UpdatedAt        time.Time             `json:"updated_at"`
+	StartedAt        *time.Time            `json:"started_at,omitempty"`
+	CompletedAt      *time.Time            `json:"completed_at,omitempty"`
+	CancelledAt      *time.Time            `json:"cancelled_at,omitempty"`
+	PausedAt         *time.Time            `json:"paused_at,omitempty"`
+	SentAt           *time.Time            `json:"sent_at,omitempty"`
 }
 
 // UTMParameters contains UTM tracking parameters for the broadcast

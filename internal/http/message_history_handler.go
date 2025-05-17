@@ -60,6 +60,7 @@ func (h *MessageHistoryHandler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Register RPC-style endpoints with dot notation
 	mux.Handle("/api/messages.list", requireAuth(http.HandlerFunc(h.handleList)))
+	mux.Handle("/api/messages.broadcastStats", requireAuth(http.HandlerFunc(h.handleBroadcastStats)))
 }
 
 // handleList handles requests to list message history with pagination and filtering
@@ -122,4 +123,44 @@ func (h *MessageHistoryHandler) handleList(w http.ResponseWriter, r *http.Reques
 
 	// Return JSON response
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *MessageHistoryHandler) handleBroadcastStats(w http.ResponseWriter, r *http.Request) {
+	// codecov:ignore:start
+	ctx, span := h.tracer.StartSpan(r.Context(), "MessageHistoryHandler.handleBroadcastStats")
+	defer func() {
+		if span != nil {
+			h.tracer.EndSpan(span, nil)
+		}
+	}()
+	// codecov:ignore:end
+
+	if r.Method != http.MethodGet {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	broadcastID := r.URL.Query().Get("broadcast_id")
+	if broadcastID == "" {
+		WriteJSONError(w, "broadcast_id is required", http.StatusBadRequest)
+		return
+	}
+
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID == "" {
+		WriteJSONError(w, "workspace_id is required", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.service.GetBroadcastStats(ctx, workspaceID, broadcastID)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to get stats")
+		WriteJSONError(w, "Failed to get stats", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"broadcast_id": broadcastID,
+		"stats":        stats,
+	})
 }

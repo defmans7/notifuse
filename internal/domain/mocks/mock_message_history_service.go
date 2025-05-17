@@ -35,6 +35,21 @@ func (m *MockMessageHistoryService) EXPECT() *MockMessageHistoryServiceMockRecor
 	return m.recorder
 }
 
+// GetBroadcastStats mocks base method.
+func (m *MockMessageHistoryService) GetBroadcastStats(arg0 context.Context, arg1, arg2 string) (*domain.MessageHistoryStatusSum, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBroadcastStats", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.MessageHistoryStatusSum)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBroadcastStats indicates an expected call of GetBroadcastStats.
+func (mr *MockMessageHistoryServiceMockRecorder) GetBroadcastStats(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBroadcastStats", reflect.TypeOf((*MockMessageHistoryService)(nil).GetBroadcastStats), arg0, arg1, arg2)
+}
+
 // ListMessages mocks base method.
 func (m *MockMessageHistoryService) ListMessages(arg0 context.Context, arg1 string, arg2 domain.MessageListParams) (*domain.MessageListResult, error) {
 	m.ctrl.T.Helper()

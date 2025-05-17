@@ -86,6 +86,17 @@ type MessageHistory struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type MessageHistoryStatusSum struct {
+	TotalSent         int `json:"total_sent"`
+	TotalDelivered    int `json:"total_delivered"`
+	TotalBounced      int `json:"total_bounced"`
+	TotalComplained   int `json:"total_complained"`
+	TotalFailed       int `json:"total_failed"`
+	TotalOpened       int `json:"total_opened"`
+	TotalClicked      int `json:"total_clicked"`
+	TotalUnsubscribed int `json:"total_unsubscribed"`
+}
+
 // MessageHistoryRepository defines methods for message history persistence
 type MessageHistoryRepository interface {
 	// Create adds a new message history record
@@ -114,12 +125,18 @@ type MessageHistoryRepository interface {
 
 	// SetOpened sets the opened_at timestamp if not already set
 	SetOpened(ctx context.Context, workspaceID, id string, timestamp time.Time) error
+
+	// GetBroadcastStats retrieves statistics for a broadcast
+	GetBroadcastStats(ctx context.Context, workspaceID, broadcastID string) (*MessageHistoryStatusSum, error)
 }
 
 // MessageHistoryService defines methods for interacting with message history
 type MessageHistoryService interface {
 	// ListMessages retrieves messages for a workspace with cursor-based pagination and filters
 	ListMessages(ctx context.Context, workspaceID string, params MessageListParams) (*MessageListResult, error)
+
+	// GetBroadcastStats retrieves statistics for a broadcast
+	GetBroadcastStats(ctx context.Context, workspaceID, broadcastID string) (*MessageHistoryStatusSum, error)
 }
 
 // MessageListParams contains parameters for listing messages with pagination and filtering

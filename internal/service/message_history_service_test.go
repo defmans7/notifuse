@@ -23,7 +23,7 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 		name           string
 		workspaceID    string
 		params         domain.MessageListParams
-		setupMocks     func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger)
+		setupMocks     func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService)
 		expectedResult *domain.MessageListResult
 		expectedError  error
 	}{
@@ -33,7 +33,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 			params: domain.MessageListParams{
 				Limit: 10,
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				messages := []*domain.MessageHistory{
 					{
 						ID:           "msg-1",
@@ -83,7 +87,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 			params: domain.MessageListParams{
 				Limit: 10,
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				mockRepo.EXPECT().
 					ListMessages(gomock.Any(), "workspace-123", gomock.Any()).
 					Return([]*domain.MessageHistory{}, "", nil)
@@ -96,12 +104,30 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 			expectedError: nil,
 		},
 		{
+			name:        "Authentication error",
+			workspaceID: "workspace-123",
+			params: domain.MessageListParams{
+				Limit: 10,
+			},
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(nil, nil, errors.New("authentication failed"))
+			},
+			expectedResult: nil,
+			expectedError:  errors.New("failed to authenticate user: authentication failed"),
+		},
+		{
 			name:        "Repository error",
 			workspaceID: "workspace-123",
 			params: domain.MessageListParams{
 				Limit: 10,
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				mockRepo.EXPECT().
 					ListMessages(gomock.Any(), "workspace-123", gomock.Any()).
 					Return(nil, "", errors.New("database error"))
@@ -122,7 +148,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 				Status:       domain.MessageStatusSent,
 				ContactEmail: "user@example.com",
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				messages := []*domain.MessageHistory{
 					{
 						ID:           "msg-1",
@@ -168,7 +198,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 				Cursor: "previous-cursor",
 				Limit:  10,
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				messages := []*domain.MessageHistory{
 					{
 						ID:           "msg-3",
@@ -228,7 +262,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 				SentAfter:  &twoHoursAgo,
 				SentBefore: &now,
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				messages := []*domain.MessageHistory{
 					{
 						ID:           "msg-5",
@@ -275,7 +313,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 				Limit:    10,
 				HasError: boolPtr(true),
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				errMsg := "failed to send email"
 				messages := []*domain.MessageHistory{
 					{
@@ -326,7 +368,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 				TemplateID:  "template-5",
 				HasError:    boolPtr(true),
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				broadcastID := "broadcast-123"
 				errMsg := "template error"
 				messages := []*domain.MessageHistory{
@@ -380,7 +426,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 				Cursor: "last-page-cursor",
 				Limit:  10,
 			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger) {
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
 				messages := []*domain.MessageHistory{
 					{
 						ID:           "msg-8",
@@ -421,10 +471,11 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 
 			mockRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 			mockLogger := pkgmocks.NewMockLogger(ctrl)
-			tc.setupMocks(mockRepo, mockLogger)
+			mockAuthService := mocks.NewMockAuthService(ctrl)
+			tc.setupMocks(mockRepo, mockLogger, mockAuthService)
 
 			// Create service with mocks
-			service := NewMessageHistoryService(mockRepo, mockLogger)
+			service := NewMessageHistoryService(mockRepo, mockLogger, mockAuthService)
 
 			// Call the method under test
 			result, err := service.ListMessages(context.Background(), tc.workspaceID, tc.params)
@@ -436,6 +487,109 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedResult, result)
+			}
+		})
+	}
+}
+
+func TestMessageHistoryService_GetBroadcastStats(t *testing.T) {
+	testCases := []struct {
+		name          string
+		workspaceID   string
+		broadcastID   string
+		setupMocks    func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService)
+		expectedStats *domain.MessageHistoryStatusSum
+		expectedError error
+	}{
+		{
+			name:        "Success with stats",
+			workspaceID: "workspace-123",
+			broadcastID: "broadcast-123",
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
+				stats := &domain.MessageHistoryStatusSum{
+					TotalSent:         100,
+					TotalDelivered:    95,
+					TotalBounced:      2,
+					TotalComplained:   1,
+					TotalFailed:       2,
+					TotalOpened:       80,
+					TotalClicked:      60,
+					TotalUnsubscribed: 3,
+				}
+				mockRepo.EXPECT().
+					GetBroadcastStats(gomock.Any(), "workspace-123", "broadcast-123").
+					Return(stats, nil)
+			},
+			expectedStats: &domain.MessageHistoryStatusSum{
+				TotalSent:         100,
+				TotalDelivered:    95,
+				TotalBounced:      2,
+				TotalComplained:   1,
+				TotalFailed:       2,
+				TotalOpened:       80,
+				TotalClicked:      60,
+				TotalUnsubscribed: 3,
+			},
+			expectedError: nil,
+		},
+		{
+			name:        "Authentication error",
+			workspaceID: "workspace-123",
+			broadcastID: "broadcast-123",
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(nil, nil, errors.New("authentication failed"))
+			},
+			expectedStats: nil,
+			expectedError: errors.New("failed to authenticate user: authentication failed"),
+		},
+		{
+			name:        "Repository error",
+			workspaceID: "workspace-123",
+			broadcastID: "broadcast-123",
+			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
+					Return(context.Background(), nil, nil)
+
+				mockRepo.EXPECT().
+					GetBroadcastStats(gomock.Any(), "workspace-123", "broadcast-123").
+					Return(nil, errors.New("database error"))
+			},
+			expectedStats: nil,
+			expectedError: errors.New("failed to get broadcast stats: database error"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup mocks
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+			mockLogger := pkgmocks.NewMockLogger(ctrl)
+			mockAuthService := mocks.NewMockAuthService(ctrl)
+			tc.setupMocks(mockRepo, mockAuthService)
+
+			// Create service with mocks
+			service := NewMessageHistoryService(mockRepo, mockLogger, mockAuthService)
+
+			// Call the method under test
+			stats, err := service.GetBroadcastStats(context.Background(), tc.workspaceID, tc.broadcastID)
+
+			// Verify expectations
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedStats, stats)
 			}
 		})
 	}

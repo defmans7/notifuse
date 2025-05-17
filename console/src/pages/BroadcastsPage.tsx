@@ -3,7 +3,6 @@ import {
   Card,
   Row,
   Col,
-  Statistic,
   Typography,
   Space,
   Tooltip,
@@ -29,7 +28,6 @@ import { listsApi } from '../services/api/list'
 import { taskApi } from '../services/api/task'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faPaperPlane,
   faCirclePause,
   faCircleCheck,
   faCircleXmark,
@@ -38,7 +36,6 @@ import {
   faCirclePlay,
   faCopy,
   faEye,
-  faFaceFrown,
   faCircleQuestion
 } from '@fortawesome/free-regular-svg-icons'
 import {
@@ -46,7 +43,6 @@ import {
   faBan,
   faChevronDown,
   faChevronUp,
-  faTriangleExclamation,
   faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import React, { useState } from 'react'
@@ -55,6 +51,7 @@ import { UpsertBroadcastDrawer } from '../components/broadcasts/UpsertBroadcastD
 import { SendOrScheduleModal } from '../components/broadcasts/SendOrScheduleModal'
 import { useAuth } from '../contexts/AuthContext'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
+import { BroadcastStats } from '../components/broadcasts/BroadcastStats'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -302,6 +299,11 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
 
   return (
     <Card
+      styles={{
+        body: {
+          padding: 0
+        }
+      }}
       title={
         <Space size="large">
           <div>{broadcast.name}</div>
@@ -359,364 +361,240 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
       key={broadcast.id}
       className="!mb-6"
     >
-      <Row gutter={[16, 16]} wrap className="flex-nowrap overflow-x-auto">
-        <Col span={3}>
-          <Tooltip title={`${broadcast.sent_count} total emails sent`}>
-            <Statistic
-              title={
-                <Space className="text-blue-500 font-medium">
-                  <FontAwesomeIcon icon={faPaperPlane} style={{ opacity: 0.7 }} /> Sent
-                </Space>
-              }
-              value={broadcast.sent_count || '-'}
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip title={`${broadcast.delivered_count} emails successfully delivered`}>
-            <Statistic
-              title={
-                <Space className="text-green-500 font-medium">
-                  <FontAwesomeIcon icon={faCircleCheck} style={{ opacity: 0.7 }} /> Delivered
-                </Space>
-              }
-              value={
-                broadcast.sent_count > 0
-                  ? `${((broadcast.delivered_count / broadcast.sent_count) * 100).toFixed(1)}%`
-                  : '-'
-              }
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip title={`${broadcast.total_opens ?? 0} total opens`}>
-            <Statistic
-              title={
-                <Space className="text-purple-500 font-medium">
-                  <FontAwesomeIcon icon={faEye} style={{ opacity: 0.7 }} /> Opens
-                </Space>
-              }
-              value={
-                broadcast.sent_count > 0
-                  ? `${(((broadcast.total_opens ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                  : '-'
-              }
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip title={`${broadcast.total_clicks ?? 0} total clicks`}>
-            <Statistic
-              title={
-                <Space className="text-cyan-500 font-medium">
-                  <FontAwesomeIcon
-                    icon={faArrowPointer}
-                    style={{ opacity: 0.7 }}
-                    className="mr-1"
-                  />{' '}
-                  Clicks
-                </Space>
-              }
-              value={
-                broadcast.sent_count > 0
-                  ? `${(((broadcast.total_clicks ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                  : '-'
-              }
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip title={`${broadcast.failed_count ?? 0} emails failed to send`}>
-            <Statistic
-              title={
-                <Space className="text-orange-500 font-medium">
-                  <FontAwesomeIcon icon={faCircleXmark} style={{ opacity: 0.7 }} /> Failed
-                </Space>
-              }
-              value={
-                broadcast.sent_count > 0
-                  ? `${(((broadcast.failed_count ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                  : '-'
-              }
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip title={`${broadcast.total_bounced ?? 0} emails bounced back`}>
-            <Statistic
-              title={
-                <Space className="text-orange-500 font-medium">
-                  <FontAwesomeIcon icon={faTriangleExclamation} style={{ opacity: 0.7 }} /> Bounced
-                </Space>
-              }
-              value={
-                broadcast.sent_count > 0
-                  ? `${(((broadcast.total_bounced ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                  : '-'
-              }
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip title={`${broadcast.total_complained ?? 0} total complaints`}>
-            <Statistic
-              title={
-                <Space className="text-orange-500 font-medium">
-                  <FontAwesomeIcon icon={faFaceFrown} style={{ opacity: 0.7 }} /> Complaints
-                </Space>
-              }
-              value={
-                broadcast.sent_count > 0
-                  ? `${(((broadcast.total_complained ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                  : '-'
-              }
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip title={`${broadcast.total_unsubscribed ?? 0} total unsubscribes`}>
-            <Statistic
-              title={
-                <Space className="text-orange-500 font-medium">
-                  <FontAwesomeIcon icon={faBan} style={{ opacity: 0.7 }} /> Unsub.
-                </Space>
-              }
-              value={
-                broadcast.sent_count > 0
-                  ? `${(((broadcast.total_unsubscribed ?? 0) / broadcast.sent_count) * 100).toFixed(1)}%`
-                  : '-'
-              }
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Tooltip>
-        </Col>
-      </Row>
-
-      <div className="mt-2 text-center">
-        <Button type="link" onClick={() => setShowDetails(!showDetails)}>
-          {showDetails ? (
-            <Space size="small">
-              <FontAwesomeIcon icon={faChevronUp} style={{ opacity: 0.7 }} className="mr-1" /> Hide
-              Details
-            </Space>
-          ) : (
-            <Space size="small">
-              <FontAwesomeIcon icon={faChevronDown} style={{ opacity: 0.7 }} className="mr-1" />{' '}
-              Show Details
-            </Space>
-          )}
-        </Button>
+      <div className="p-6">
+        <BroadcastStats workspaceId={workspaceId} broadcastId={broadcast.id} />
       </div>
 
-      {showDetails && (
-        <>
-          <Divider />
-
-          <Descriptions
-            bordered={false}
-            size="small"
-            column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
-          >
-            {broadcast.started_at && (
-              <Descriptions.Item label="Started">
-                {dayjs(broadcast.started_at).fromNow()}
-              </Descriptions.Item>
+      <div className="bg-gray-50">
+        <div className="text-center py-2">
+          <Button type="link" onClick={() => setShowDetails(!showDetails)}>
+            {showDetails ? (
+              <Space size="small">
+                <FontAwesomeIcon icon={faChevronUp} style={{ opacity: 0.7 }} className="mr-1" />{' '}
+                Hide Details
+              </Space>
+            ) : (
+              <Space size="small">
+                <FontAwesomeIcon icon={faChevronDown} style={{ opacity: 0.7 }} className="mr-1" />{' '}
+                Show Details
+              </Space>
             )}
+          </Button>
+        </div>
 
-            {broadcast.completed_at && (
-              <Descriptions.Item label="Completed">
-                {dayjs(broadcast.completed_at).fromNow()}
-              </Descriptions.Item>
-            )}
+        {showDetails && (
+          <div className="p-6">
+            {/* <Divider /> */}
 
-            {broadcast.paused_at && (
-              <Descriptions.Item label="Paused">
-                {dayjs(broadcast.paused_at).fromNow()}
-              </Descriptions.Item>
-            )}
-
-            {broadcast.cancelled_at && (
-              <Descriptions.Item label="Cancelled">
-                {dayjs(broadcast.cancelled_at).fromNow()}
-              </Descriptions.Item>
-            )}
-
-            {/* Audience Information */}
-            {broadcast.audience.segments && broadcast.audience.segments.length > 0 && (
-              <Descriptions.Item label="Segments">
-                {broadcast.audience.segments.length} segments
-              </Descriptions.Item>
-            )}
-
-            {broadcast.audience.lists && broadcast.audience.lists.length > 0 && (
-              <Descriptions.Item label="Lists">
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  {broadcast.audience.lists.map((listId) => {
-                    const list = lists.find((l) => l.id === listId)
-                    return list ? (
-                      <div key={list.id}>
-                        {list.name} ({(list.total_active ?? 0).toLocaleString()} subscribers)
-                      </div>
-                    ) : (
-                      <div key={listId}>Unknown list ({listId})</div>
-                    )
-                  })}
-                </Space>
-              </Descriptions.Item>
-            )}
-
-            <Descriptions.Item label="Skip Duplicates">
-              {broadcast.audience.skip_duplicate_emails ? (
-                <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 opacity-70 mt-1" />
-              ) : (
-                <FontAwesomeIcon icon={faCircleXmark} className="text-orange-500 opacity-70 mt-1" />
-              )}
-            </Descriptions.Item>
-
-            <Descriptions.Item label="Exclude Unsubscribed">
-              {broadcast.audience.exclude_unsubscribed ? (
-                <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 opacity-70 mt-1" />
-              ) : (
-                <FontAwesomeIcon icon={faCircleXmark} className="text-orange-500 opacity-70 mt-1" />
-              )}
-            </Descriptions.Item>
-
-            {broadcast.audience.rate_limit_per_minute && (
-              <Descriptions.Item label="Rate Limit">
-                {broadcast.audience.rate_limit_per_minute}/min
-              </Descriptions.Item>
-            )}
-
-            {broadcast.utm_parameters && Object.values(broadcast.utm_parameters).some((v) => v) && (
-              <Descriptions.Item label="UTM Parameters">
-                <Tooltip title="utm_source / utm_medium / utm_campaign">
-                  <div>
-                    {broadcast.utm_parameters.source &&
-                      broadcast.utm_parameters.medium &&
-                      broadcast.utm_parameters.campaign && (
-                        <Text>
-                          {broadcast.utm_parameters.source} / {broadcast.utm_parameters.medium} /{' '}
-                          {broadcast.utm_parameters.campaign}
-                        </Text>
-                      )}
-                  </div>
-                </Tooltip>
-              </Descriptions.Item>
-            )}
-
-            {/* Schedule Information */}
-            {broadcast.schedule.is_scheduled &&
-              broadcast.schedule.scheduled_date &&
-              broadcast.schedule.scheduled_time && (
-                <Descriptions.Item label="Scheduled">
-                  {dayjs(
-                    `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
-                  ).format('lll')}
-                  {' in '}
-                  {broadcast.schedule.use_recipient_timezone
-                    ? 'recipients timezone'
-                    : broadcast.schedule.timezone}
-                </Descriptions.Item>
-              )}
-
-            <Descriptions.Item label="Task Status">
-              {task && (
-                <Popover
-                  content={taskPopoverContent}
-                  title="Task Status"
-                  placement="left"
-                  trigger="hover"
-                >
-                  <span className="text-xs font-normal cursor-help">
-                    {getTaskStatusBadge(task.status)}
-                    <FontAwesomeIcon
-                      icon={faCircleQuestion}
-                      style={{ opacity: 0.7 }}
-                      className="ml-2"
-                    />
-                  </span>
-                </Popover>
-              )}
-
-              {isTaskLoading && ['scheduled', 'sending', 'paused'].includes(broadcast.status) && (
-                <span className="text-xs font-normal text-gray-400">
-                  <FontAwesomeIcon icon={faSpinner} spin /> Loading task...
-                </span>
-              )}
-            </Descriptions.Item>
-          </Descriptions>
-
-          <div className="mt-8">
-            <Divider orientation="left">
-              <Text strong>Templates</Text>
-            </Divider>
             <Descriptions
               bordered={false}
               size="small"
               column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
-              className="mb-4"
             >
-              {!broadcast.test_settings.enabled && (
-                <Descriptions.Item label="Test Sample">
-                  <Badge status="warning" text="A/B Test Disabled" />
-                </Descriptions.Item>
-              )}
-              {broadcast.test_settings.enabled && (
-                <Descriptions.Item label="Test Sample">
-                  {broadcast.test_settings.sample_percentage}%
+              {broadcast.started_at && (
+                <Descriptions.Item label="Started">
+                  {dayjs(broadcast.started_at).fromNow()}
                 </Descriptions.Item>
               )}
 
-              {broadcast.test_settings.auto_send_winner &&
-                broadcast.test_settings.auto_send_winner_metric &&
-                broadcast.test_settings.test_duration_hours && (
-                  <Descriptions.Item label="Auto-send Winner">
-                    <div className="flex items-center">
-                      <FontAwesomeIcon
-                        icon={faCircleCheck}
-                        className="text-green-500 mr-2"
-                        size="sm"
-                        style={{ opacity: 0.7 }}
-                      />
-                      <span>
-                        After {broadcast.test_settings.test_duration_hours} hours based on highest{' '}
-                        {broadcast.test_settings.auto_send_winner_metric === 'open_rate'
-                          ? 'opens'
-                          : 'clicks'}
-                      </span>
-                    </div>
+              {broadcast.completed_at && (
+                <Descriptions.Item label="Completed">
+                  {dayjs(broadcast.completed_at).fromNow()}
+                </Descriptions.Item>
+              )}
+
+              {broadcast.paused_at && (
+                <Descriptions.Item label="Paused">
+                  {dayjs(broadcast.paused_at).fromNow()}
+                </Descriptions.Item>
+              )}
+
+              {broadcast.cancelled_at && (
+                <Descriptions.Item label="Cancelled">
+                  {dayjs(broadcast.cancelled_at).fromNow()}
+                </Descriptions.Item>
+              )}
+
+              {/* Audience Information */}
+              {broadcast.audience.segments && broadcast.audience.segments.length > 0 && (
+                <Descriptions.Item label="Segments">
+                  {broadcast.audience.segments.length} segments
+                </Descriptions.Item>
+              )}
+
+              {broadcast.audience.lists && broadcast.audience.lists.length > 0 && (
+                <Descriptions.Item label="Lists">
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    {broadcast.audience.lists.map((listId) => {
+                      const list = lists.find((l) => l.id === listId)
+                      return list ? (
+                        <div key={list.id}>
+                          {list.name} ({(list.total_active ?? 0).toLocaleString()} subscribers)
+                        </div>
+                      ) : (
+                        <div key={listId}>Unknown list ({listId})</div>
+                      )
+                    })}
+                  </Space>
+                </Descriptions.Item>
+              )}
+
+              <Descriptions.Item label="Skip Duplicates">
+                {broadcast.audience.skip_duplicate_emails ? (
+                  <FontAwesomeIcon
+                    icon={faCircleCheck}
+                    className="text-green-500 opacity-70 mt-1"
+                  />
+                ) : (
+                  <FontAwesomeIcon
+                    icon={faCircleXmark}
+                    className="text-orange-500 opacity-70 mt-1"
+                  />
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Exclude Unsubscribed">
+                {broadcast.audience.exclude_unsubscribed ? (
+                  <FontAwesomeIcon
+                    icon={faCircleCheck}
+                    className="text-green-500 opacity-70 mt-1"
+                  />
+                ) : (
+                  <FontAwesomeIcon
+                    icon={faCircleXmark}
+                    className="text-orange-500 opacity-70 mt-1"
+                  />
+                )}
+              </Descriptions.Item>
+
+              {broadcast.audience.rate_limit_per_minute && (
+                <Descriptions.Item label="Rate Limit">
+                  {broadcast.audience.rate_limit_per_minute}/min
+                </Descriptions.Item>
+              )}
+
+              {broadcast.utm_parameters &&
+                Object.values(broadcast.utm_parameters).some((v) => v) && (
+                  <Descriptions.Item label="UTM Parameters">
+                    <Tooltip title="utm_source / utm_medium / utm_campaign">
+                      <div>
+                        {broadcast.utm_parameters.source &&
+                          broadcast.utm_parameters.medium &&
+                          broadcast.utm_parameters.campaign && (
+                            <Text>
+                              {broadcast.utm_parameters.source} / {broadcast.utm_parameters.medium}{' '}
+                              / {broadcast.utm_parameters.campaign}
+                            </Text>
+                          )}
+                      </div>
+                    </Tooltip>
                   </Descriptions.Item>
                 )}
+
+              {/* Schedule Information */}
+              {broadcast.schedule.is_scheduled &&
+                broadcast.schedule.scheduled_date &&
+                broadcast.schedule.scheduled_time && (
+                  <Descriptions.Item label="Scheduled">
+                    {dayjs(
+                      `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
+                    ).format('lll')}
+                    {' in '}
+                    {broadcast.schedule.use_recipient_timezone
+                      ? 'recipients timezone'
+                      : broadcast.schedule.timezone}
+                  </Descriptions.Item>
+                )}
+
+              <Descriptions.Item label="Task Status">
+                {task && (
+                  <Popover
+                    content={taskPopoverContent}
+                    title="Task Status"
+                    placement="left"
+                    trigger="hover"
+                  >
+                    <span className="text-xs font-normal cursor-help">
+                      {getTaskStatusBadge(task.status)}
+                      <FontAwesomeIcon
+                        icon={faCircleQuestion}
+                        style={{ opacity: 0.7 }}
+                        className="ml-2"
+                      />
+                    </span>
+                  </Popover>
+                )}
+
+                {isTaskLoading && ['scheduled', 'sending', 'paused'].includes(broadcast.status) && (
+                  <span className="text-xs font-normal text-gray-400">
+                    <FontAwesomeIcon icon={faSpinner} spin /> Loading task...
+                  </span>
+                )}
+              </Descriptions.Item>
             </Descriptions>
 
-            <Row gutter={[16, 16]} className="mt-4">
-              {broadcast.test_settings.variations.map((variation, index) => {
-                // Calculate column width based on number of variations
-                // Ensure columns are at least 6 units wide (4 per row maximum)
-                const variationsCount = broadcast.test_settings.variations.length
-                const colSpan = Math.max(6, Math.floor(24 / variationsCount))
+            <div className="mt-2">
+              <Descriptions
+                bordered={false}
+                size="small"
+                column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
+                className="mb-4"
+              >
+                {!broadcast.test_settings.enabled && (
+                  <Descriptions.Item label="Test Sample">
+                    <Badge status="warning" text="A/B Test Disabled" />
+                  </Descriptions.Item>
+                )}
+                {broadcast.test_settings.enabled && (
+                  <Descriptions.Item label="Test Sample">
+                    {broadcast.test_settings.sample_percentage}%
+                  </Descriptions.Item>
+                )}
 
-                return (
-                  <VariationCard
-                    key={index}
-                    variation={variation}
-                    workspaceId={workspaceId}
-                    colSpan={colSpan}
-                    index={index}
-                  />
-                )
-              })}
-            </Row>
+                {broadcast.test_settings.auto_send_winner &&
+                  broadcast.test_settings.auto_send_winner_metric &&
+                  broadcast.test_settings.test_duration_hours && (
+                    <Descriptions.Item label="Auto-send Winner">
+                      <div className="flex items-center">
+                        <FontAwesomeIcon
+                          icon={faCircleCheck}
+                          className="text-green-500 mr-2"
+                          size="sm"
+                          style={{ opacity: 0.7 }}
+                        />
+                        <span>
+                          After {broadcast.test_settings.test_duration_hours} hours based on highest{' '}
+                          {broadcast.test_settings.auto_send_winner_metric === 'open_rate'
+                            ? 'opens'
+                            : 'clicks'}
+                        </span>
+                      </div>
+                    </Descriptions.Item>
+                  )}
+              </Descriptions>
+
+              <Row gutter={[16, 16]} className="mt-4">
+                {broadcast.test_settings.variations.map((variation, index) => {
+                  // Calculate column width based on number of variations
+                  // Ensure columns are at least 6 units wide (4 per row maximum)
+                  const variationsCount = broadcast.test_settings.variations.length
+                  const colSpan = Math.max(6, Math.floor(24 / variationsCount))
+
+                  return (
+                    <VariationCard
+                      key={index}
+                      variation={variation}
+                      workspaceId={workspaceId}
+                      colSpan={colSpan}
+                      index={index}
+                    />
+                  )
+                })}
+              </Row>
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </Card>
   )
 }

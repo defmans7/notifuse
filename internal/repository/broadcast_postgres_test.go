@@ -422,13 +422,6 @@ func TestBroadcastRepository_CreateBroadcast_Success(t *testing.T) {
 
 			sqlmock.AnyArg(), // utm_parameters
 			sqlmock.AnyArg(), // metadata
-			sqlmock.AnyArg(), // total_sent
-			sqlmock.AnyArg(), // total_delivered
-			sqlmock.AnyArg(), // total_bounced
-			sqlmock.AnyArg(), // total_complained
-			sqlmock.AnyArg(), // total_failed
-			sqlmock.AnyArg(), // total_opens
-			sqlmock.AnyArg(), // total_clicks
 			sqlmock.AnyArg(), // winning_variation
 			sqlmock.AnyArg(), // test_sent_at
 			sqlmock.AnyArg(), // winner_sent_at
@@ -518,16 +511,14 @@ func TestBroadcastRepository_GetBroadcast_Success(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"total_sent", "total_delivered", "total_bounced", "total_complained",
-		"total_failed", "total_opens", "total_clicks", "winning_variation",
+		"winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
 		AddRow(
 			broadcastID, workspaceID, "Test Broadcast", domain.BroadcastStatusDraft,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
-			0, 0, 0, 0,
-			0, 0, 0, "", // Use empty string instead of nil for winning_variation
+			"", // Use empty string instead of nil for winning_variation
 			nil, nil, time.Now(), time.Now(),
 			nil, nil, nil,
 		)
@@ -571,8 +562,7 @@ func TestBroadcastRepository_GetBroadcast_ScanError(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"total_sent", "total_delivered", "total_bounced", "total_complained",
-		"total_failed", "total_opens", "total_clicks", "winning_variation",
+		"winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
@@ -580,9 +570,8 @@ func TestBroadcastRepository_GetBroadcast_ScanError(t *testing.T) {
 		AddRow(
 			broadcastID, workspaceID, "Test Broadcast", 123, // Invalid type for status
 			nil, nil, nil, nil, nil,
-			0, 0, 0, 0,
-			0, 0, 0, nil,
-			nil, nil, time.Now(), time.Now(),
+			"", nil, nil,
+			time.Now(), time.Now(),
 			nil, nil, nil,
 		)
 
@@ -674,13 +663,6 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 
 			sqlmock.AnyArg(), // utm_parameters
 			sqlmock.AnyArg(), // metadata
-			sqlmock.AnyArg(), // total_sent
-			sqlmock.AnyArg(), // total_delivered
-			sqlmock.AnyArg(), // total_bounced
-			sqlmock.AnyArg(), // total_complained
-			sqlmock.AnyArg(), // total_failed
-			sqlmock.AnyArg(), // total_opens
-			sqlmock.AnyArg(), // total_clicks
 			sqlmock.AnyArg(), // winning_variation
 			sqlmock.AnyArg(), // test_sent_at
 			sqlmock.AnyArg(), // winner_sent_at
@@ -910,14 +892,13 @@ func TestBroadcastRepository_ListBroadcasts_RowsIterationError(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"total_sent", "total_delivered", "total_bounced", "total_complained",
-		"total_failed", "total_opens", "total_clicks", "winning_variation",
+		"winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
 		AddRow(
 			"bc123", workspaceID, "Broadcast 1", "draft", "{}", "{}", "{}", "{}", "{}",
-			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
+			"", nil, nil, time.Now(), time.Now(), nil, nil, nil,
 		).
 		RowError(0, iterationErr) // Set error on the first row
 
@@ -1026,18 +1007,17 @@ func TestBroadcastRepository_ListBroadcasts_WithStatus(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"total_sent", "total_delivered", "total_bounced", "total_complained",
-		"total_failed", "total_opens", "total_clicks", "winning_variation",
+		"winning_variation",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
 		AddRow(
 			"bc123", workspaceID, "Broadcast 1", status, []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
-			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
+			"", nil, nil, time.Now(), time.Now(), nil, nil, nil,
 		).
 		AddRow(
 			"bc456", workspaceID, "Broadcast 2", status, []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
-			0, 0, 0, 0, 0, 0, 0, "", nil, nil, time.Now(), time.Now(), nil, nil, nil,
+			"", nil, nil, time.Now(), time.Now(), nil, nil, nil,
 		)
 
 	// Expect query with limit/offset
