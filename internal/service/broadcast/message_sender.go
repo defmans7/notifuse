@@ -260,6 +260,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	err = s.emailService.SendEmail(
 		ctx,
 		workspaceID,
+		messageID,
 		true, // is marketing
 		template.Email.FromAddress,
 		template.Email.FromName,

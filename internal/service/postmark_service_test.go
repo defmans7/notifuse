@@ -1533,6 +1533,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		err := service.SendEmail(
 			context.Background(),
 			workspaceID,
+			"test-message-id",
 			fromAddress,
 			fromName,
 			to,
@@ -1557,6 +1558,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		err := service.SendEmail(
 			context.Background(),
 			workspaceID,
+			"test-message-id",
 			"sender@example.com",
 			"Sender",
 			"recipient@example.com",
@@ -1592,6 +1594,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		err := service.SendEmail(
 			context.Background(),
 			workspaceID,
+			"test-message-id",
 			"sender@example.com",
 			"Sender",
 			"recipient@example.com",
@@ -1630,6 +1633,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		err := service.SendEmail(
 			context.Background(),
 			workspaceID,
+			"test-message-id",
 			"sender@example.com",
 			"Sender",
 			"recipient@example.com",
@@ -1668,6 +1672,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		err := service.SendEmail(
 			context.Background(),
 			workspaceID,
+			"test-message-id",
 			"sender@example.com",
 			"Sender",
 			"recipient@example.com",
@@ -1712,6 +1717,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		err := service.SendEmail(
 			context.Background(),
 			workspaceID,
+			"test-message-id",
 			"sender@example.com",
 			"Sender",
 			"recipient@example.com",

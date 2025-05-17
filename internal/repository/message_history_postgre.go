@@ -385,6 +385,80 @@ func (r *MessageHistoryRepository) UpdateStatus(ctx context.Context, workspaceID
 	return nil
 }
 
+// SetStatusIfNotSet sets a status only if it hasn't been set before (the field is NULL)
+func (r *MessageHistoryRepository) SetStatusIfNotSet(ctx context.Context, workspaceID, id string, status domain.MessageStatus, timestamp time.Time) error {
+	// codecov:ignore:start
+	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "SetStatusIfNotSet")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	tracing.AddAttribute(ctx, "messageID", id)
+	tracing.AddAttribute(ctx, "status", string(status))
+	// codecov:ignore:end
+
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// Determine which field to check and update based on status
+	var field string
+	switch status {
+	case domain.MessageStatusDelivered:
+		field = "delivered_at"
+	case domain.MessageStatusFailed:
+		field = "failed_at"
+	case domain.MessageStatusOpened:
+		field = "opened_at"
+	case domain.MessageStatusClicked:
+		field = "clicked_at"
+	case domain.MessageStatusBounced:
+		field = "bounced_at"
+	case domain.MessageStatusComplained:
+		field = "complained_at"
+	case domain.MessageStatusUnsubscribed:
+		field = "unsubscribed_at"
+	default:
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, fmt.Errorf("invalid status: %s", status))
+		// codecov:ignore:end
+		return fmt.Errorf("invalid status: %s", status)
+	}
+
+	// Only update if there's no existing timestamp (field IS NULL)
+	updateQuery := fmt.Sprintf(`
+		UPDATE message_history 
+		SET status = $1, %s = $2, updated_at = $3
+		WHERE id = $4 AND %s IS NULL
+	`, field, field)
+
+	result, err := workspaceDB.ExecContext(ctx, updateQuery, status, timestamp, time.Now(), id)
+	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return fmt.Errorf("failed to update message status: %w", err)
+	}
+
+	// Check if any rows were affected (meaning the update happened)
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	// codecov:ignore:start
+	tracing.AddAttribute(ctx, "rowsAffected", rowsAffected)
+	// codecov:ignore:end
+
+	return nil
+}
+
 func (r *MessageHistoryRepository) SetClicked(ctx context.Context, workspaceID, id string, timestamp time.Time) error {
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)

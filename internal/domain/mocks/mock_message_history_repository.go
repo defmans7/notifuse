@@ -171,6 +171,20 @@ func (mr *MockMessageHistoryRepositoryMockRecorder) SetOpened(arg0, arg1, arg2, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOpened", reflect.TypeOf((*MockMessageHistoryRepository)(nil).SetOpened), arg0, arg1, arg2, arg3)
 }
 
+// SetStatusIfNotSet mocks base method.
+func (m *MockMessageHistoryRepository) SetStatusIfNotSet(arg0 context.Context, arg1, arg2 string, arg3 domain.MessageStatus, arg4 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetStatusIfNotSet", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetStatusIfNotSet indicates an expected call of SetStatusIfNotSet.
+func (mr *MockMessageHistoryRepositoryMockRecorder) SetStatusIfNotSet(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStatusIfNotSet", reflect.TypeOf((*MockMessageHistoryRepository)(nil).SetStatusIfNotSet), arg0, arg1, arg2, arg3, arg4)
+}
+
 // Update mocks base method.
 func (m *MockMessageHistoryRepository) Update(arg0 context.Context, arg1 string, arg2 *domain.MessageHistory) error {
 	m.ctrl.T.Helper()

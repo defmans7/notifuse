@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
@@ -80,12 +81,23 @@ func TestProcessWebhook_Success(t *testing.T) {
 				return nil
 			})
 
+		// Expect message history to be updated with the bounce status
+		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+		messageHistoryRepo.EXPECT().SetStatusIfNotSet(
+			gomock.Any(),
+			workspaceID,
+			"message1",
+			domain.MessageStatusBounced,
+			gomock.Any(),
+		).Return(nil)
+
 		// Create service
 		service := &WebhookEventService{
-			repo:          repo,
-			authService:   authService,
-			logger:        log,
-			workspaceRepo: workspaceRepo,
+			repo:               repo,
+			authService:        authService,
+			logger:             log,
+			workspaceRepo:      workspaceRepo,
+			messageHistoryRepo: messageHistoryRepo,
 		}
 
 		// Call method
@@ -134,12 +146,23 @@ func TestProcessWebhook_Success(t *testing.T) {
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
 		repo.EXPECT().StoreEvent(gomock.Any(), gomock.Any()).Return(nil)
 
+		// Expect message history to be updated with the delivery status
+		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+		messageHistoryRepo.EXPECT().SetStatusIfNotSet(
+			gomock.Any(),
+			workspaceID,
+			"message1",
+			domain.MessageStatusDelivered,
+			gomock.Any(),
+		).Return(nil)
+
 		// Create service
 		service := &WebhookEventService{
-			repo:          repo,
-			authService:   authService,
-			logger:        log,
-			workspaceRepo: workspaceRepo,
+			repo:               repo,
+			authService:        authService,
+			logger:             log,
+			workspaceRepo:      workspaceRepo,
+			messageHistoryRepo: messageHistoryRepo,
 		}
 
 		// Call method
@@ -163,11 +186,13 @@ func TestProcessWebhook_Success(t *testing.T) {
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
 
 		// Create service
+		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 		service := &WebhookEventService{
-			repo:          repo,
-			authService:   authService,
-			logger:        log,
-			workspaceRepo: workspaceRepo,
+			repo:               repo,
+			authService:        authService,
+			logger:             log,
+			workspaceRepo:      workspaceRepo,
+			messageHistoryRepo: messageHistoryRepo,
 		}
 
 		// Call method
@@ -210,11 +235,13 @@ func TestProcessWebhook_Success(t *testing.T) {
 		repo.EXPECT().StoreEvent(gomock.Any(), gomock.Any()).Return(errors.New("database error"))
 
 		// Create service
+		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 		service := &WebhookEventService{
-			repo:          repo,
-			authService:   authService,
-			logger:        log,
-			workspaceRepo: workspaceRepo,
+			repo:               repo,
+			authService:        authService,
+			logger:             log,
+			workspaceRepo:      workspaceRepo,
+			messageHistoryRepo: messageHistoryRepo,
 		}
 
 		// Call method
@@ -251,11 +278,13 @@ func TestProcessWebhook_WorkspaceNotFound(t *testing.T) {
 	workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(nil, workspaceError)
 
 	// Create service
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	// Call method
@@ -267,7 +296,6 @@ func TestProcessWebhook_WorkspaceNotFound(t *testing.T) {
 }
 
 func TestNewWebhookEventService(t *testing.T) {
-	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -275,16 +303,16 @@ func TestNewWebhookEventService(t *testing.T) {
 	authService := mocks.NewMockAuthService(ctrl)
 	log := pkgmocks.NewMockLogger(ctrl)
 	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 
-	// Call the function
-	service := NewWebhookEventService(repo, authService, log, workspaceRepo)
+	service := NewWebhookEventService(repo, authService, log, workspaceRepo, messageHistoryRepo)
 
-	// Assert
 	assert.NotNil(t, service)
 	assert.Equal(t, repo, service.repo)
 	assert.Equal(t, authService, service.authService)
-	assert.Equal(t, log, service.logger)
+	assert.NotNil(t, service.logger)
 	assert.Equal(t, workspaceRepo, service.workspaceRepo)
+	assert.Equal(t, messageHistoryRepo, service.messageHistoryRepo)
 }
 
 func TestGetEventByID(t *testing.T) {
@@ -302,11 +330,13 @@ func TestGetEventByID(t *testing.T) {
 	log.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create service
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	t.Run("Success case", func(t *testing.T) {
@@ -382,11 +412,13 @@ func TestGetEventsByType(t *testing.T) {
 	log.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create service
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	// Create test data
@@ -484,7 +516,14 @@ func TestGetEventsByMessageID(t *testing.T) {
 	log.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create service
-	service := NewWebhookEventService(repo, authService, log, workspaceRepo)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	service := &WebhookEventService{
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
+	}
 
 	t.Run("Success case", func(t *testing.T) {
 		// Create test data
@@ -575,7 +614,14 @@ func TestGetEventsByTransactionalID(t *testing.T) {
 	log.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create service
-	service := NewWebhookEventService(repo, authService, log, workspaceRepo)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	service := &WebhookEventService{
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
+	}
 
 	t.Run("Success case", func(t *testing.T) {
 		// Create test data
@@ -669,7 +715,14 @@ func TestGetEventsByBroadcastID(t *testing.T) {
 	log.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create service
-	service := NewWebhookEventService(repo, authService, log, workspaceRepo)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	service := &WebhookEventService{
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
+	}
 
 	t.Run("Success case", func(t *testing.T) {
 		// Create test data
@@ -776,11 +829,13 @@ func TestGetEventCount(t *testing.T) {
 	log.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create service
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	// Create test data
@@ -881,11 +936,13 @@ func TestProcessSESWebhook(t *testing.T) {
 	log := pkgmocks.NewMockLogger(ctrl)
 	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	integrationID := "integration1"
@@ -923,11 +980,13 @@ func TestProcessPostmarkWebhook(t *testing.T) {
 	log := pkgmocks.NewMockLogger(ctrl)
 	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	integrationID := "integration1"
@@ -1049,11 +1108,13 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 	log := pkgmocks.NewMockLogger(ctrl)
 	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	integrationID := "integration1"
@@ -1185,11 +1246,13 @@ func TestProcessMailgunWebhook(t *testing.T) {
 	log := pkgmocks.NewMockLogger(ctrl)
 	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	integrationID := "integration1"
@@ -1368,11 +1431,13 @@ func TestProcessMailjetWebhook(t *testing.T) {
 	log := pkgmocks.NewMockLogger(ctrl)
 	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	integrationID := "integration1"
@@ -1498,11 +1563,13 @@ func TestProcessSMTPWebhook(t *testing.T) {
 	log := pkgmocks.NewMockLogger(ctrl)
 	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	service := &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        log,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 
 	integrationID := "integration1"
@@ -1616,4 +1683,81 @@ func TestProcessSMTPWebhook(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, event)
 	})
+}
+
+// TestProcessWebhook_UpdatesMessageHistory tests that the ProcessWebhook method updates message history
+func TestProcessWebhook_UpdatesMessageHistory(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockWebhookEventRepository(ctrl)
+	authService := mocks.NewMockAuthService(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().Error(gomock.Any()).AnyTimes()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+
+	// Create service
+	service := &WebhookEventService{
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
+	}
+
+	// Test data
+	workspaceID := "workspace1"
+	integrationID := "integration1"
+	messageID := "message123"
+
+	// Setup workspace with integration
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindPostmark,
+				},
+			},
+		},
+	}
+
+	// Create a map for Postmark payload since we don't know the exact struct fields
+	postmarkPayload := map[string]interface{}{
+		"RecordType":  "Delivery",
+		"MessageID":   messageID,
+		"Recipient":   "test@example.com",
+		"DeliveredAt": time.Now().Format(time.RFC3339),
+	}
+
+	rawPayload, err := json.Marshal(postmarkPayload)
+	require.NoError(t, err)
+
+	// Setup expectations
+	workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+	repo.EXPECT().StoreEvent(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, event *domain.WebhookEvent) error {
+			assert.Equal(t, domain.EmailEventDelivered, event.Type)
+			assert.Equal(t, messageID, event.MessageID)
+			return nil
+		})
+
+	// Expect message history to be updated with the delivery status
+	messageHistoryRepo.EXPECT().SetStatusIfNotSet(
+		gomock.Any(),
+		workspaceID,
+		messageID,
+		domain.MessageStatusDelivered,
+		gomock.Any(),
+	).Return(nil)
+
+	// Call the method
+	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+
+	// Verify
+	assert.NoError(t, err)
 }

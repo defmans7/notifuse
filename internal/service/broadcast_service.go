@@ -862,6 +862,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	err = s.emailSvc.SendEmail(
 		ctx,
 		request.WorkspaceID,
+		messageID,
 		true, // is marketing
 		template.Email.FromAddress,
 		template.Email.FromName,

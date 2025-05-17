@@ -8,32 +8,51 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/tracing"
 	"github.com/google/uuid"
 )
 
 // WebhookEventService implements the domain.WebhookEventServiceInterface
 type WebhookEventService struct {
-	repo          domain.WebhookEventRepository
-	authService   domain.AuthService
-	logger        logger.Logger
-	workspaceRepo domain.WorkspaceRepository
+	repo               domain.WebhookEventRepository
+	authService        domain.AuthService
+	logger             logger.Logger
+	workspaceRepo      domain.WorkspaceRepository
+	messageHistoryRepo domain.MessageHistoryRepository
 }
 
 // NewWebhookEventService creates a new WebhookEventService
-func NewWebhookEventService(repo domain.WebhookEventRepository, authService domain.AuthService, logger logger.Logger, workspaceRepo domain.WorkspaceRepository) *WebhookEventService {
+func NewWebhookEventService(
+	repo domain.WebhookEventRepository,
+	authService domain.AuthService,
+	logger logger.Logger,
+	workspaceRepo domain.WorkspaceRepository,
+	messageHistoryRepo domain.MessageHistoryRepository,
+) *WebhookEventService {
 	return &WebhookEventService{
-		repo:          repo,
-		authService:   authService,
-		logger:        logger,
-		workspaceRepo: workspaceRepo,
+		repo:               repo,
+		authService:        authService,
+		logger:             logger,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
 	}
 }
 
 // ProcessWebhook processes a webhook event from an email provider
 func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID string, integrationID string, rawPayload []byte) error {
-	// TODO get workspace and integration
+	// codecov:ignore:start
+	ctx, span := tracing.StartServiceSpan(ctx, "WebhookEventService", "ProcessWebhook")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	tracing.AddAttribute(ctx, "integrationID", integrationID)
+	// codecov:ignore:end
+
+	// get workspace and integration
 	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
 	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 	var integration domain.Integration
@@ -58,10 +77,16 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 	case domain.EmailProviderKindSMTP:
 		event, err = s.processSMTPWebhook(integration.ID, rawPayload)
 	default:
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, fmt.Errorf("unsupported email provider kind: %s", integration.EmailProvider.Kind))
+		// codecov:ignore:end
 		return fmt.Errorf("unsupported email provider kind: %s", integration.EmailProvider.Kind)
 	}
 
 	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
 		return fmt.Errorf("failed to process webhook: %w", err)
 	}
 
@@ -72,7 +97,37 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 			WithField("event_type", event.Type).
 			WithField("provider", event.EmailProviderKind).
 			Error(fmt.Sprintf("Failed to store webhook event: %v", err))
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
 		return fmt.Errorf("failed to store webhook event: %w", err)
+	}
+
+	// Update message history status if we have a message ID
+	if event.MessageID != "" {
+		var status domain.MessageStatus
+		switch event.Type {
+		case domain.EmailEventDelivered:
+			status = domain.MessageStatusDelivered
+		case domain.EmailEventBounce:
+			status = domain.MessageStatusBounced
+		case domain.EmailEventComplaint:
+			status = domain.MessageStatusComplained
+		default:
+			// Skip other event types
+			return nil
+		}
+
+		// Update the message status with the timestamp from the event
+		err = s.messageHistoryRepo.SetStatusIfNotSet(ctx, workspaceID, event.MessageID, status, event.Timestamp)
+		if err != nil {
+			s.logger.WithField("event_id", event.ID).
+				WithField("message_id", event.MessageID).
+				WithField("status", status).
+				Error(fmt.Sprintf("Failed to update message status: %v", err))
+			// We don't fail the webhook processing if status update fails
+			// Just log the error and continue
+		}
 	}
 
 	return nil
@@ -174,6 +229,7 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 	var recipientEmail, messageID string
 	var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
 	var timestamp time.Time
+	var notifuseMessageID string
 
 	// Try to unmarshal as bounce notification
 	var bounceNotification domain.SESBounceNotification
@@ -186,6 +242,13 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 		messageID = bounceNotification.Mail.MessageID
 		bounceType = bounceNotification.Bounce.BounceType
 		bounceCategory = bounceNotification.Bounce.BounceSubType
+
+		// Check for notifuse_message_id in tags
+		if len(bounceNotification.Mail.Tags) > 0 {
+			if id, ok := bounceNotification.Mail.Tags["notifuse_message_id"]; ok {
+				notifuseMessageID = id
+			}
+		}
 
 		// Parse timestamp
 		if t, err := time.Parse(time.RFC3339, bounceNotification.Bounce.Timestamp); err == nil {
@@ -204,6 +267,13 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 			messageID = complaintNotification.Mail.MessageID
 			complaintFeedbackType = complaintNotification.Complaint.ComplaintFeedbackType
 
+			// Check for notifuse_message_id in tags
+			if len(complaintNotification.Mail.Tags) > 0 {
+				if id, ok := complaintNotification.Mail.Tags["notifuse_message_id"]; ok {
+					notifuseMessageID = id
+				}
+			}
+
 			// Parse timestamp
 			if t, err := time.Parse(time.RFC3339, complaintNotification.Complaint.Timestamp); err == nil {
 				timestamp = t
@@ -220,6 +290,13 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 				}
 				messageID = deliveryNotification.Mail.MessageID
 
+				// Check for notifuse_message_id in tags
+				if len(deliveryNotification.Mail.Tags) > 0 {
+					if id, ok := deliveryNotification.Mail.Tags["notifuse_message_id"]; ok {
+						notifuseMessageID = id
+					}
+				}
+
 				// Parse timestamp
 				if t, err := time.Parse(time.RFC3339, deliveryNotification.Delivery.Timestamp); err == nil {
 					timestamp = t
@@ -230,6 +307,11 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 				return nil, fmt.Errorf("unrecognized SES notification type")
 			}
 		}
+	}
+
+	// Use notifuseMessageID if available, otherwise fallback to provider's messageID
+	if notifuseMessageID != "" {
+		messageID = notifuseMessageID
 	}
 
 	// Create the webhook event
@@ -272,6 +354,20 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 	var recipientEmail, messageID string
 	var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
 	var timestamp time.Time
+	var notifuseMessageID string
+
+	// Check for custom Message-ID header in the Headers field
+	if headersData, ok := jsonData["Headers"].([]interface{}); ok {
+		for _, header := range headersData {
+			if headerMap, ok := header.(map[string]interface{}); ok {
+				if name, ok := headerMap["Name"].(string); ok && name == "Message-ID" {
+					if value, ok := headerMap["Value"].(string); ok {
+						notifuseMessageID = value
+					}
+				}
+			}
+		}
+	}
 
 	// Determine the event type based on RecordType
 	switch payload.RecordType {
@@ -348,6 +444,11 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 
 	messageID = payload.MessageID
 
+	// Use notifuseMessageID if available, otherwise fallback to provider's messageID
+	if notifuseMessageID != "" {
+		messageID = notifuseMessageID
+	}
+
 	// Create the webhook event
 	event := domain.NewWebhookEvent(
 		uuid.New().String(),
@@ -372,6 +473,12 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 
 // processMailgunWebhook processes a webhook event from Mailgun
 func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+	// First unmarshal into a map to access all fields
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(rawPayload, &jsonData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Mailgun webhook payload: %w", err)
+	}
+
 	var payload domain.MailgunWebhookPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Mailgun webhook payload: %w", err)
@@ -381,9 +488,19 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 	var recipientEmail, messageID string
 	var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
 	var timestamp time.Time
+	var notifuseMessageID string
 
 	// Set timestamp from event data
 	timestamp = time.Unix(int64(payload.EventData.Timestamp), 0)
+
+	// Check for notifuse_message_id in the custom variables
+	if eventData, ok := jsonData["event-data"].(map[string]interface{}); ok {
+		if userVariables, ok := eventData["user-variables"].(map[string]interface{}); ok {
+			if id, ok := userVariables["notifuse_message_id"]; ok {
+				notifuseMessageID = fmt.Sprintf("%v", id)
+			}
+		}
+	}
 
 	// Map Mailgun event types to our event types
 	switch payload.EventData.Event {
@@ -413,6 +530,11 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 		return nil, fmt.Errorf("unsupported Mailgun event type: %s", payload.EventData.Event)
 	}
 
+	// Use notifuseMessageID if available, otherwise fallback to provider's messageID
+	if notifuseMessageID != "" {
+		messageID = notifuseMessageID
+	}
+
 	// Create the webhook event
 	event := domain.NewWebhookEvent(
 		uuid.New().String(),
@@ -437,6 +559,12 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 
 // processSparkPostWebhook processes a webhook event from SparkPost
 func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+	// First, unmarshal into a map to extract all fields including metadata
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(rawPayload, &jsonData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal SparkPost webhook payload: %w", err)
+	}
+
 	var payload domain.SparkPostWebhookPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal SparkPost webhook payload: %w", err)
@@ -446,6 +574,37 @@ func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawP
 	var recipientEmail, messageID string
 	var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
 	var timestamp time.Time
+	var notifuseMessageID string
+
+	// Extract notifuse_message_id from metadata in the raw JSON
+	if msys, ok := jsonData["msys"].(map[string]interface{}); ok {
+		// Check delivery event
+		if delivery, ok := msys["delivery_event"].(map[string]interface{}); ok {
+			if metadata, ok := delivery["metadata"].(map[string]interface{}); ok {
+				if id, ok := metadata["notifuse_message_id"]; ok {
+					notifuseMessageID = fmt.Sprintf("%v", id)
+				}
+			}
+		}
+
+		// Check bounce event
+		if bounce, ok := msys["bounce_event"].(map[string]interface{}); ok {
+			if metadata, ok := bounce["metadata"].(map[string]interface{}); ok {
+				if id, ok := metadata["notifuse_message_id"]; ok {
+					notifuseMessageID = fmt.Sprintf("%v", id)
+				}
+			}
+		}
+
+		// Check spam complaint event
+		if complaint, ok := msys["spam_complaint"].(map[string]interface{}); ok {
+			if metadata, ok := complaint["metadata"].(map[string]interface{}); ok {
+				if id, ok := metadata["notifuse_message_id"]; ok {
+					notifuseMessageID = fmt.Sprintf("%v", id)
+				}
+			}
+		}
+	}
 
 	// Check which event type is present in the payload
 	if delivery := payload.MSys.DeliveryEvent; delivery != nil {
@@ -488,6 +647,11 @@ func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawP
 		return nil, fmt.Errorf("no supported event type found in SparkPost webhook")
 	}
 
+	// Use notifuseMessageID if available, otherwise fallback to provider's messageID
+	if notifuseMessageID != "" {
+		messageID = notifuseMessageID
+	}
+
 	// Create the webhook event
 	event := domain.NewWebhookEvent(
 		uuid.New().String(),
@@ -521,6 +685,7 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 	var recipientEmail, messageID string
 	var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
 	var timestamp time.Time
+	var notifuseMessageID string
 
 	// Set timestamp from Unix timestamp
 	timestamp = time.Unix(payload.Time, 0)
@@ -528,6 +693,11 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 	// Convert message ID to string
 	messageID = fmt.Sprintf("%d", payload.MessageID)
 	recipientEmail = payload.Email
+
+	// Check for X-MJ-CustomID in the custom variables
+	if payload.CustomID != "" {
+		notifuseMessageID = payload.CustomID
+	}
 
 	// Map Mailjet event types to our event types
 	switch payload.Event {
@@ -557,6 +727,11 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 		complaintFeedbackType = "abuse"
 	default:
 		return nil, fmt.Errorf("unsupported Mailjet event type: %s", payload.Event)
+	}
+
+	// Use notifuseMessageID if available, otherwise fallback to provider's messageID
+	if notifuseMessageID != "" {
+		messageID = notifuseMessageID
 	}
 
 	// Create the webhook event

@@ -761,7 +761,7 @@ func (s *SparkPostService) directDeleteWebhook(ctx context.Context, settings *do
 }
 
 // SendEmail sends an email using SparkPost
-func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.SparkPost == nil {
 		return fmt.Errorf("SparkPost provider is not configured")
 	}
@@ -788,8 +788,9 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fr
 			Name  string `json:"name,omitempty"`
 			Email string `json:"email"`
 		} `json:"from"`
-		Subject string `json:"subject"`
-		ReplyTo string `json:"reply_to,omitempty"`
+		Subject  string                 `json:"subject"`
+		ReplyTo  string                 `json:"reply_to,omitempty"`
+		Metadata map[string]interface{} `json:"metadata,omitempty"`
 	}
 
 	// Set up the email payload
@@ -836,6 +837,11 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, fr
 				Type:    "bcc",
 			})
 		}
+	}
+
+	// Add message ID to metadata
+	emailReq.Metadata = map[string]interface{}{
+		"notifuse_message_id": messageID,
 	}
 
 	// Convert to JSON

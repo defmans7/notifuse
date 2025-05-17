@@ -50,7 +50,7 @@ func NewSMTPService(logger logger.Logger) *SMTPService {
 }
 
 // SendEmail sends an email using SMTP
-func (s *SMTPService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.SMTP == nil {
 		return fmt.Errorf("SMTP settings required")
 	}
@@ -97,8 +97,11 @@ func (s *SMTPService) SendEmail(ctx context.Context, workspaceID string, fromAdd
 
 	// Add Reply-To if specified
 	if replyTo != "" {
-		msg.SetHeader("Reply-To", replyTo)
+		msg.SetAddrHeader("Reply-To", replyTo, "")
 	}
+
+	// Add message ID tracking header
+	msg.SetGenHeader("X-Message-ID", messageID)
 
 	msg.Subject(subject)
 	msg.SetBodyString(mail.TypeTextHTML, content)

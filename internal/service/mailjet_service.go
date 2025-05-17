@@ -452,7 +452,7 @@ func (s *MailjetService) TestWebhook(ctx context.Context, config domain.MailjetS
 }
 
 // SendEmail sends an email using Mailjet
-func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.Mailjet == nil {
 		return fmt.Errorf("Mailjet provider is not configured")
 	}
@@ -521,11 +521,16 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, from
 		}
 	}
 
+	// Initialize headers map if not already initialized
+	if message.Headers == nil {
+		message.Headers = make(map[string]string)
+	}
+
+	// Add messageID as X-MJ-CustomID
+	message.Headers["X-MJ-CustomID"] = messageID
+
 	// Add Reply-To if specified
 	if replyTo != "" {
-		if message.Headers == nil {
-			message.Headers = make(map[string]string)
-		}
 		message.Headers["Reply-To"] = replyTo
 	}
 

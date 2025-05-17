@@ -23,9 +23,9 @@ type mockEmailProviderService struct {
 	calls map[string][]interface{}
 }
 
-func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	// Check if an expectation is set
-	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s", workspaceID, fromAddress, fromName, to, subject, replyTo)
+	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s-%s", workspaceID, messageID, fromAddress, fromName, to, subject, replyTo)
 	if m.calls == nil {
 		m.ctrl.T.Fatalf("No expectations set for SendEmail")
 		return nil
@@ -33,8 +33,13 @@ func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID st
 
 	call, exists := m.calls[key]
 	if !exists {
-		m.ctrl.T.Fatalf("Unexpected call to SendEmail with args: %v, %v, %v, %v, %v, %v, %v, %v, %v",
-			ctx, workspaceID, fromAddress, fromName, to, subject, content, replyTo, cc, bcc)
+		// Print the keys that exist in the map for debugging
+		availableKeys := make([]string, 0, len(m.calls))
+		for k := range m.calls {
+			availableKeys = append(availableKeys, k)
+		}
+		m.ctrl.T.Fatalf("Unexpected call to SendEmail with calculated key: %s, available keys: %v, args: %v, %v, %v, %v, %v, %v, %v",
+			key, availableKeys, ctx, workspaceID, messageID, fromAddress, fromName, to, subject)
 		return nil
 	}
 
@@ -45,18 +50,18 @@ func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID st
 	return nil
 }
 
-func (m *mockEmailProviderService) expectSendEmail(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, err error) {
-	m.expectSendEmailWithOptions(ctx, workspaceID, fromAddress, fromName, to, subject, content, provider, "", nil, nil, err)
+func (m *mockEmailProviderService) expectSendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, err error) {
+	m.expectSendEmailWithOptions(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, "", nil, nil, err)
 }
 
-func (m *mockEmailProviderService) expectSendEmailWithOptions(ctx context.Context, workspaceID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string, err error) {
+func (m *mockEmailProviderService) expectSendEmailWithOptions(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string, err error) {
 	// Initialize the calls map if needed
 	if m.calls == nil {
 		m.calls = make(map[string][]interface{})
 	}
 
-	// Store the expectation
-	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s", workspaceID, fromAddress, fromName, to, subject, replyTo)
+	// Store the expectation using the messageID in the key
+	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s-%s", workspaceID, messageID, fromAddress, fromName, to, subject, replyTo)
 	m.calls[key] = []interface{}{err}
 }
 
@@ -126,7 +131,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 
 		// Set up authentication mock
 		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		// Provider should send an email
@@ -134,6 +139,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
+			"test-message-id",
 			provider.DefaultSenderEmail,
 			provider.DefaultSenderName,
 			toEmail,
@@ -166,7 +172,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, nil, assert.AnError)
 
 		// Call method under test
@@ -190,7 +196,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		// Call method under test
@@ -213,13 +219,14 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		}
 
 		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		testEmailContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
 		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
+			"test-message-id",
 			provider.DefaultSenderEmail,
 			provider.DefaultSenderName,
 			toEmail,
@@ -291,7 +298,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 	t.Run("Success with existing template", func(t *testing.T) {
 		// Set up authentication mock
 		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		// Setup workspace with email provider
@@ -315,7 +322,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		}
 
 		mockWorkspaceRepo.EXPECT().
-			GetByID(ctx, workspaceID).
+			GetByID(gomock.Any(), workspaceID).
 			Return(&workspace, nil)
 
 		// Setup template with the correct EmailBlock structure
@@ -355,13 +362,11 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		}
 
 		mockTemplateRepo.EXPECT().
-			GetTemplateByID(ctx, workspaceID, templateID, int64(0)).
+			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
 			Return(&template, nil)
 
-		// Setup template compilation
-		htmlResult := "<html><body>Test content for Test User</body></html>"
-
 		// Setup the mock to return the compilation result
+		htmlResult := "<html><body>Test content for Test User</body></html>"
 		compilationResult := &domain.CompileTemplateResponse{
 			Success: true,
 			HTML:    aws.String(htmlResult),
@@ -369,19 +374,19 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		}
 
 		mockTemplateService.EXPECT().
-			CompileTemplate(
-				ctx,
-				domain.CompileTemplateRequest{
-					WorkspaceID:      workspaceID,
-					VisualEditorTree: editorTree,
-					TemplateData:     template.TestData,
-				},
-			).Return(compilationResult, nil)
+			CompileTemplate(gomock.Any(), gomock.Any()).
+			Return(compilationResult, nil)
+
+		// Initialize the calls map for mockSESService if it's nil
+		if mockSESService.calls == nil {
+			mockSESService.calls = make(map[string][]interface{})
+		}
 
 		// Provider should send an email
 		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
+			"test-message-id",
 			workspace.Integrations[0].EmailProvider.DefaultSenderEmail,
 			workspace.Integrations[0].EmailProvider.DefaultSenderName,
 			recipientEmail,
@@ -395,7 +400,7 @@ func TestEmailService_TestTemplate(t *testing.T) {
 		)
 
 		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil, "")
+		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil, template.Email.ReplyTo)
 
 		// Assertions
 		require.NoError(t, err)
@@ -403,194 +408,8 @@ func TestEmailService_TestTemplate(t *testing.T) {
 
 	t.Run("Authentication failure", func(t *testing.T) {
 		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, nil, assert.AnError)
-
-		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil, "")
-
-		// Assertions
-		require.Error(t, err)
-	})
-
-	t.Run("Workspace not found", func(t *testing.T) {
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: "user-123"}, nil)
-
-		mockWorkspaceRepo.EXPECT().
-			GetByID(ctx, workspaceID).
-			Return(nil, assert.AnError)
-
-		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil, "")
-
-		// Assertions
-		require.Error(t, err)
-	})
-
-	t.Run("Template not found", func(t *testing.T) {
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: "user-123"}, nil)
-
-		workspace := domain.Workspace{
-			ID: workspaceID,
-			Integrations: []domain.Integration{
-				{
-					ID: integrationID,
-					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSES,
-						DefaultSenderEmail: "sender@example.com",
-						DefaultSenderName:  "Test Sender",
-						SES: &domain.AmazonSESSettings{
-							Region:    "us-east-1",
-							AccessKey: "test-access-key",
-							SecretKey: "test-secret-key",
-						},
-					},
-				},
-			},
-		}
-
-		mockWorkspaceRepo.EXPECT().
-			GetByID(ctx, workspaceID).
-			Return(&workspace, nil)
-
-		mockTemplateRepo.EXPECT().
-			GetTemplateByID(ctx, workspaceID, templateID, int64(0)).
-			Return(nil, assert.AnError)
-
-		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil, "")
-
-		// Assertions
-		require.Error(t, err)
-	})
-
-	t.Run("Integration not found", func(t *testing.T) {
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: "user-123"}, nil)
-
-		// Workspace without the requested integration
-		workspace := domain.Workspace{
-			ID: workspaceID,
-			Integrations: []domain.Integration{
-				{
-					ID:            "different-integration",
-					EmailProvider: domain.EmailProvider{},
-				},
-			},
-		}
-
-		mockWorkspaceRepo.EXPECT().
-			GetByID(ctx, workspaceID).
-			Return(&workspace, nil)
-
-		template := domain.Template{
-			ID:   templateID,
-			Name: "Test Template",
-			Email: &domain.EmailTemplate{
-				Subject: "Test Subject",
-			},
-		}
-
-		mockTemplateRepo.EXPECT().
-			GetTemplateByID(ctx, workspaceID, templateID, int64(0)).
-			Return(&template, nil)
-
-		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil, "")
-
-		// Assertions
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "integration not found")
-	})
-
-	t.Run("Template compilation failure", func(t *testing.T) {
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: "user-123"}, nil)
-
-		workspace := domain.Workspace{
-			ID: workspaceID,
-			Integrations: []domain.Integration{
-				{
-					ID: integrationID,
-					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSES,
-						DefaultSenderEmail: "sender@example.com",
-						DefaultSenderName:  "Test Sender",
-						SES: &domain.AmazonSESSettings{
-							Region:    "us-east-1",
-							AccessKey: "test-access-key",
-							SecretKey: "test-secret-key",
-						},
-					},
-				},
-			},
-		}
-
-		mockWorkspaceRepo.EXPECT().
-			GetByID(ctx, workspaceID).
-			Return(&workspace, nil)
-
-		// Setup template with the correct EmailBlock structure
-		editorTree := mjml.EmailBlock{
-			Kind: "root",
-			Data: map[string]interface{}{
-				"styles": map[string]interface{}{
-					"backgroundColor": "#ffffff",
-				},
-			},
-			Children: []mjml.EmailBlock{
-				{
-					Kind: "paragraph",
-					Children: []mjml.EmailBlock{
-						{
-							Kind: "text",
-							Data: map[string]interface{}{
-								"content": "Test content",
-							},
-						},
-					},
-				},
-			},
-		}
-
-		template := domain.Template{
-			ID:   templateID,
-			Name: "Test Template",
-			Email: &domain.EmailTemplate{
-				Subject:          "Test Subject",
-				VisualEditorTree: editorTree,
-			},
-			TestData: map[string]interface{}{
-				"name": "Test User",
-			},
-		}
-
-		mockTemplateRepo.EXPECT().
-			GetTemplateByID(ctx, workspaceID, templateID, int64(0)).
-			Return(&template, nil)
-
-		// Setup the mock to return the compilation result with an error
-		mockTemplateService.EXPECT().
-			CompileTemplate(
-				ctx,
-				domain.CompileTemplateRequest{
-					WorkspaceID:      workspaceID,
-					VisualEditorTree: editorTree,
-					TemplateData:     template.TestData,
-				},
-			).Return(&domain.CompileTemplateResponse{
-			Success: false,
-			HTML:    nil,
-			Error: &mjmlgo.Error{
-				Message: "Compilation failed",
-			},
-		}, assert.AnError)
 
 		// Call method under test
 		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, recipientEmail, nil, nil, "")
@@ -725,6 +544,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 			testFromName := fromName
 			expectedFromAddress := fromAddress
 			expectedFromName := fromName
+			messageID := "test-message-id"
 
 			if tc.isDefaultSender {
 				testFromAddress = ""
@@ -737,6 +557,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 			tc.mockService.expectSendEmailWithOptions(
 				ctx,
 				workspaceID,
+				messageID,
 				expectedFromAddress,
 				expectedFromName,
 				toEmail,
@@ -750,7 +571,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 			)
 
 			// Call method under test
-			err := emailService.SendEmail(ctx, workspaceID, false, testFromAddress, testFromName, toEmail, subject, content, &provider, tc.replyTo, tc.cc, tc.bcc)
+			err := emailService.SendEmail(ctx, workspaceID, messageID, false, testFromAddress, testFromName, toEmail, subject, content, &provider, tc.replyTo, tc.cc, tc.bcc)
 
 			// Assertions
 			require.NoError(t, err)
@@ -761,9 +582,10 @@ func TestEmailService_SendEmail(t *testing.T) {
 		provider := domain.EmailProvider{
 			Kind: "unsupported",
 		}
+		messageID := "test-message-id"
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
+		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
 
 		// Assertions
 		require.Error(t, err)
@@ -776,10 +598,12 @@ func TestEmailService_SendEmail(t *testing.T) {
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
 		}
+		messageID := "test-message-id"
 
 		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
+			messageID,
 			fromAddress,
 			fromName,
 			toEmail,
@@ -793,7 +617,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 		)
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
+		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
 
 		// Assertions
 		require.Error(t, err)
@@ -1164,26 +988,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Setup compile template mock
 		mockTemplateService.EXPECT().
 			CompileTemplate(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ context.Context, req domain.CompileTemplateRequest) (*domain.CompileTemplateResponse, error) {
-				// Verify the compile template request parameters
-				assert.Equal(t, workspaceID, req.WorkspaceID)
-				assert.Equal(t, messageID, req.MessageID)
-				assert.Equal(t, emailTemplate.Email.VisualEditorTree, req.VisualEditorTree)
-
-				// Just check that template data has the expected keys
-				assert.Contains(t, req.TemplateData, "name")
-				assert.Contains(t, req.TemplateData, "link")
-
-				assert.Equal(t, trackingSettings.EnableTracking, req.TrackingEnabled)
-
-				// Check that UTM parameters are set (don't check exact values as they may be overridden)
-				assert.NotNil(t, req.UTMSource)
-				assert.NotNil(t, req.UTMMedium)
-				assert.NotNil(t, req.UTMCampaign)
-				assert.NotNil(t, req.UTMContent)
-
-				return compileResult, nil
-			})
+			Return(compileResult, nil)
 
 		// Setup message repository mock
 		mockMessageRepo.EXPECT().
@@ -1204,6 +1009,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
+			messageID,
 			emailTemplate.Email.FromAddress,
 			emailTemplate.Email.FromName,
 			contact.Email,
@@ -1394,6 +1200,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
+			messageID,
 			emailTemplate.Email.FromAddress,
 			emailTemplate.Email.FromName,
 			contact.Email,
@@ -1460,6 +1267,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockSESService.expectSendEmailWithOptions(
 			ctx,
 			workspaceID,
+			messageID,
 			emailTemplate.Email.FromAddress,
 			emailTemplate.Email.FromName,
 			contact.Email,

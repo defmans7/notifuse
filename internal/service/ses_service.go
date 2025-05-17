@@ -700,7 +700,7 @@ func (s *SESService) UnregisterWebhooks(
 }
 
 // SendEmail sends an email using AWS SES
-func (s *SESService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.SES == nil {
 		return fmt.Errorf("SES provider is not configured")
 	}
@@ -779,6 +779,28 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, fromAddr
 	// Add ReplyTo if provided
 	if replyTo != "" {
 		input.ReplyToAddresses = []*string{aws.String(replyTo)}
+	}
+
+	// Add configuration set if it exists
+	configSetName := fmt.Sprintf("notifuse-%s", workspaceID)
+	configSets, err := s.ListConfigurationSets(ctx, *provider.SES)
+	if err == nil {
+		for _, set := range configSets {
+			if set == configSetName {
+				input.ConfigurationSetName = aws.String(configSetName)
+				break
+			}
+		}
+	}
+
+	// Add custom messageID as a tag
+	if messageID != "" {
+		input.Tags = []*ses.MessageTag{
+			{
+				Name:  aws.String("notifuse_message_id"),
+				Value: aws.String(messageID),
+			},
+		}
 	}
 
 	// Send the email

@@ -139,7 +139,8 @@ func TestSendToRecipientSuccess(t *testing.T) {
 		SendEmail(
 			ctx,
 			workspaceID,
-			true, // isMarketing
+			gomock.Any(), // messageID (will match the generated UUID)
+			true,         // isMarketing
 			template.Email.FromAddress,
 			template.Email.FromName,
 			recipientEmail,
@@ -526,7 +527,8 @@ func TestSendBatch(t *testing.T) {
 			SendEmail(
 				ctx,
 				workspaceID,
-				true, // isMarketing
+				gomock.Any(), // messageID (will match the generated UUID)
+				true,         // isMarketing
 				template.Email.FromAddress,
 				template.Email.FromName,
 				recipient.Contact.Email,
@@ -829,7 +831,8 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		SendEmail(
 			ctx,
 			workspaceID,
-			true, // isMarketing
+			gomock.Any(), // messageID (will match the generated UUID)
+			true,         // isMarketing
 			template.Email.FromAddress,
 			template.Email.FromName,
 			recipients[0].Contact.Email,
@@ -997,7 +1000,8 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 		SendEmail(
 			ctx,
 			workspaceID,
-			true, // isMarketing
+			gomock.Any(), // messageID (will match the generated UUID)
+			true,         // isMarketing
 			template.Email.FromAddress,
 			template.Email.FromName,
 			recipients[0].Contact.Email,

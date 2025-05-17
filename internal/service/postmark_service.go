@@ -526,7 +526,7 @@ func (s *PostmarkService) filterPostmarkWebhooks(
 }
 
 // SendEmail sends an email using Postmark
-func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 	if provider.Postmark == nil {
 		return fmt.Errorf("Postmark provider is not configured")
 	}
@@ -546,6 +546,12 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, fro
 		"To":       to,
 		"Subject":  subject,
 		"HtmlBody": content,
+		"Headers": []map[string]string{
+			{
+				"Name":  "Message-ID",
+				"Value": messageID,
+			},
+		},
 	}
 
 	// Add CC if specified
