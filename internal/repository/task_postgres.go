@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -483,7 +484,7 @@ func (r *TaskRepository) List(ctx context.Context, workspace string, filter doma
 
 // GetNextBatch retrieves tasks that are ready to be processed
 func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain.Task, error) {
-	now := time.Now().UTC()
+	now := time.Now()
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 	// We want tasks that are:
@@ -523,6 +524,9 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 	if err != nil {
 		return nil, fmt.Errorf("failed to build next batch query: %w", err)
 	}
+
+	log.Println("sqlQuery", sqlQuery)
+	log.Println("args", args)
 
 	rows, err := r.systemDB.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {

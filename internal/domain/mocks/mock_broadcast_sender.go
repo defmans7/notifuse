@@ -36,20 +36,6 @@ func (m *MockBroadcastSender) EXPECT() *MockBroadcastSenderMockRecorder {
 	return m.recorder
 }
 
-// GetAPIEndpoint mocks base method.
-func (m *MockBroadcastSender) GetAPIEndpoint() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAPIEndpoint")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// GetAPIEndpoint indicates an expected call of GetAPIEndpoint.
-func (mr *MockBroadcastSenderMockRecorder) GetAPIEndpoint() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAPIEndpoint", reflect.TypeOf((*MockBroadcastSender)(nil).GetAPIEndpoint))
-}
-
 // GetBroadcast mocks base method.
 func (m *MockBroadcastSender) GetBroadcast(arg0 context.Context, arg1, arg2 string) (*domain.Broadcast, error) {
 	m.ctrl.T.Helper()

@@ -102,11 +102,6 @@ export interface SectionBlockData {
   } & BaseStyles
 }
 
-// Open tracking block data
-// export interface OpenTrackingBlockData {
-//   // No specific data structure
-// }
-
 // Text block data
 export interface TextBlockData {
   align: 'left' | 'center' | 'right'

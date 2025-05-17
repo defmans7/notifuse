@@ -135,11 +135,6 @@ type SectionBlockData struct {
 	} `json:"styles"`
 }
 
-// OpenTrackingBlockData represents the data structure for an open tracking block
-type OpenTrackingBlockData struct {
-	// No specific data structure
-}
-
 // TextBlockData represents the data structure for a text block
 type TextBlockData struct {
 	Align           string `json:"align"` // "left", "center", "right"

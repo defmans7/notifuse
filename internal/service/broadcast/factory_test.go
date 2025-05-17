@@ -15,7 +15,8 @@ func TestNewFactory(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Mock dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
@@ -41,7 +42,8 @@ func TestNewFactory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			factory := NewFactory(
-				mockBroadcastService,
+				mockBroadcastRepository,
+				mockMessageHistoryRepo,
 				mockTemplateService,
 				mockEmailService,
 				mockContactRepo,
@@ -49,10 +51,11 @@ func TestNewFactory(t *testing.T) {
 				mockWorkspaceRepo,
 				mockLogger,
 				tt.config,
+				"https://api.notifuse.com",
 			)
 
 			assert.NotNil(t, factory)
-			assert.Equal(t, mockBroadcastService, factory.broadcastService)
+			assert.Equal(t, mockBroadcastRepository, factory.broadcastRepo)
 			assert.Equal(t, mockTemplateService, factory.templateService)
 			assert.Equal(t, mockEmailService, factory.emailService)
 			assert.Equal(t, mockContactRepo, factory.contactRepo)
@@ -75,7 +78,8 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Mock dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
@@ -85,7 +89,8 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 	config := DefaultConfig()
 
 	factory := NewFactory(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockContactRepo,
@@ -93,6 +98,7 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 		mockWorkspaceRepo,
 		mockLogger,
 		config,
+		"https://api.notifuse.com",
 	)
 
 	// Test CreateMessageSender
@@ -110,7 +116,8 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Mock dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
@@ -120,7 +127,8 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 	config := DefaultConfig()
 
 	factory := NewFactory(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockContactRepo,
@@ -128,6 +136,7 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 		mockWorkspaceRepo,
 		mockLogger,
 		config,
+		"https://api.notifuse.com",
 	)
 
 	// Test CreateOrchestrator
@@ -145,7 +154,8 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Mock dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
@@ -160,7 +170,8 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 	mockLogger.EXPECT().Info(gomock.Any()).Return()
 
 	factory := NewFactory(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockContactRepo,
@@ -168,6 +179,7 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 		mockWorkspaceRepo,
 		mockLogger,
 		config,
+		"https://api.notifuse.com",
 	)
 
 	// Test RegisterWithTaskService

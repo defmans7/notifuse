@@ -13,7 +13,10 @@ import {
   Input,
   message,
   Badge,
-  Descriptions
+  Descriptions,
+  Progress,
+  Popover,
+  Alert
 } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import {
@@ -23,6 +26,7 @@ import {
   BroadcastVariation
 } from '../services/api/broadcast'
 import { listsApi } from '../services/api/list'
+import { taskApi, Task } from '../services/api/task'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPaperPlane,
@@ -41,7 +45,9 @@ import {
   faBan,
   faChevronDown,
   faChevronUp,
-  faTriangleExclamation
+  faTriangleExclamation,
+  faSpinner,
+  faGears
 } from '@fortawesome/free-solid-svg-icons'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
@@ -206,13 +212,169 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
   isFirst = false
 }) => {
   const [showDetails, setShowDetails] = useState(isFirst)
-  console.log(broadcast)
+
+  // Fetch task associated with this broadcast
+  const { data: task, isLoading: isTaskLoading } = useQuery({
+    queryKey: ['task', workspaceId, broadcast.id],
+    queryFn: () => {
+      return taskApi.findByBroadcastId(workspaceId, broadcast.id)
+    },
+    // Only fetch task data if the broadcast status indicates a task might exist
+    enabled: ['scheduled', 'sending', 'paused'].includes(broadcast.status),
+    refetchInterval:
+      broadcast.status === 'sending'
+        ? 5000 // Refetch every 5 seconds for sending broadcasts
+        : broadcast.status === 'scheduled'
+          ? 30000 // Refetch every 30 seconds for scheduled broadcasts
+          : false // Don't auto-refetch for other statuses
+  })
+
+  // Helper function to render task status badge
+  const getTaskStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge status="processing" text="Pending" />
+      case 'running':
+        return <Badge status="processing" text="Running" />
+      case 'completed':
+        return <Badge status="success" text="Completed" />
+      case 'failed':
+        return <Badge status="error" text="Failed" />
+      case 'cancelled':
+        return <Badge status="warning" text="Cancelled" />
+      case 'paused':
+        return <Badge status="warning" text="Paused" />
+      default:
+        return <Badge status="default" text={status} />
+    }
+  }
+
+  // Create popover content for task details
+  const taskPopoverContent = () => {
+    if (!task) return null
+
+    return (
+      <div className="max-w-xs">
+        <div className="font-medium mb-2">Task Details</div>
+        <div className="mb-2">
+          <div className="font-medium text-gray-500">Status</div>
+          <div>{getTaskStatusBadge(task.status)}</div>
+        </div>
+
+        {task.progress > 0 && (
+          <div className="mb-2">
+            <div className="font-medium text-gray-500">Progress</div>
+            <Progress percent={Math.round(task.progress * 100)} size="small" />
+          </div>
+        )}
+
+        {task.state?.message && (
+          <div className="mb-2">
+            <div className="font-medium text-gray-500">Message</div>
+            <div>{task.state.message}</div>
+          </div>
+        )}
+
+        {task.state?.send_broadcast && (
+          <div className="mb-2">
+            <div className="font-medium text-gray-500">Broadcast Progress</div>
+            <div className="text-sm">
+              Sent: {task.state.send_broadcast.sent_count} of{' '}
+              {task.state.send_broadcast.total_recipients}
+              {task.state.send_broadcast.failed_count > 0 && (
+                <div className="text-red-500">Failed: {task.state.send_broadcast.failed_count}</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {task.error_message && (
+          <div className="mb-2">
+            <div className="font-medium text-gray-500">Error</div>
+            <div className="text-red-500 text-sm">{task.error_message}</div>
+          </div>
+        )}
+
+        {task.type && <div className="text-xs text-gray-500 mt-2">Task type: {task.type}</div>}
+      </div>
+    )
+  }
+
+  // Render task state details for the details section
+  const renderTaskStateDetails = (task: Task | null) => {
+    if (!task || !task.state) return null
+
+    if (task.state.send_broadcast) {
+      const broadcastState = task.state.send_broadcast
+      return (
+        <>
+          <Descriptions.Item label="Task Details">
+            <div className="grid grid-cols-1 gap-2">
+              {task.state.message && (
+                <div className="text-gray-700">Message: {task.state.message}</div>
+              )}
+              {broadcastState.total_recipients > 0 && (
+                <div className="flex justify-between">
+                  <span>Processing recipients:</span>
+                  <span className="font-medium">
+                    {broadcastState.sent_count + broadcastState.failed_count} of{' '}
+                    {broadcastState.total_recipients}
+                  </span>
+                </div>
+              )}
+              {broadcastState.sent_count > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Successfully sent:</span>
+                  <span className="font-medium">{broadcastState.sent_count}</span>
+                </div>
+              )}
+              {broadcastState.failed_count > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Failed sends:</span>
+                  <span className="font-medium">{broadcastState.failed_count}</span>
+                </div>
+              )}
+            </div>
+          </Descriptions.Item>
+        </>
+      )
+    }
+
+    // Default state display if no specific type
+    return (
+      task.state.message && (
+        <Descriptions.Item label="Task Status Message">{task.state.message}</Descriptions.Item>
+      )
+    )
+  }
+
   return (
     <Card
       title={
         <Space size="large">
           <div>{broadcast.name}</div>
-          <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
+
+            {task && (
+              <Popover
+                content={taskPopoverContent}
+                title="Task Status"
+                placement="right"
+                trigger="hover"
+              >
+                <div className="text-xs font-normal cursor-help">
+                  {getTaskStatusBadge(task.status)}
+                </div>
+              </Popover>
+            )}
+
+            {isTaskLoading && ['scheduled', 'sending', 'paused'].includes(broadcast.status) && (
+              <div className="text-xs font-normal text-gray-400">
+                <FontAwesomeIcon icon={faSpinner} spin /> Loading task...
+              </div>
+            )}
+          </div>
         </Space>
       }
       extra={
@@ -469,7 +631,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                     const list = lists.find((l) => l.id === listId)
                     return list ? (
                       <div key={list.id}>
-                        {list.name} ({list.total_active.toLocaleString()} subscribers)
+                        {list.name} ({(list.total_active ?? 0).toLocaleString()} subscribers)
                       </div>
                     ) : (
                       <div key={listId}>Unknown list ({listId})</div>
@@ -521,25 +683,6 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
               </Descriptions.Item>
             )}
 
-            {/* Tracking Information */}
-            <Descriptions.Item label="Open & Click Tracking">
-              {broadcast.tracking_enabled ? (
-                <FontAwesomeIcon
-                  icon={faCircleCheck}
-                  className="text-green-500"
-                  size="sm"
-                  style={{ opacity: 0.7 }}
-                />
-              ) : (
-                <FontAwesomeIcon
-                  icon={faCircleXmark}
-                  className="text-orange-500"
-                  size="sm"
-                  style={{ opacity: 0.7 }}
-                />
-              )}
-            </Descriptions.Item>
-
             {broadcast.utm_parameters && Object.values(broadcast.utm_parameters).some((v) => v) && (
               <Descriptions.Item label="UTM Parameters">
                 <Tooltip title="utm_source / utm_medium / utm_campaign">
@@ -573,9 +716,9 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
               )}
           </Descriptions>
 
-          <div className="my-8">
+          <div className="mt-8">
             <Divider orientation="left">
-              <Text strong>A/B Test </Text>
+              <Text strong>Templates</Text>
             </Divider>
             <Descriptions
               bordered={false}
@@ -585,7 +728,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
             >
               {!broadcast.test_settings.enabled && (
                 <Descriptions.Item label="Test Sample">
-                  <Badge status="warning" text="disabled" />
+                  <Badge status="warning" text="A/B Test Disabled" />
                 </Descriptions.Item>
               )}
               {broadcast.test_settings.enabled && (
@@ -762,6 +905,7 @@ export function BroadcastsPage() {
   }
 
   const hasBroadcasts = !isLoading && data?.broadcasts && data.broadcasts.length > 0
+  const hasMarketingEmailProvider = currentWorkspace?.settings?.marketing_email_provider_id
 
   return (
     <div className="p-6">
@@ -775,6 +919,25 @@ export function BroadcastsPage() {
           />
         )}
       </div>
+
+      {!hasMarketingEmailProvider && (
+        <Alert
+          message="Email Provider Required"
+          description="You don't have a marketing email provider configured. Please set up an email provider in your workspace settings to send broadcasts."
+          type="warning"
+          showIcon
+          className="!mb-6"
+          action={
+            <Button
+              type="primary"
+              size="small"
+              href={`/workspace/${workspaceId}/settings/integrations`}
+            >
+              Configure Provider
+            </Button>
+          }
+        />
+      )}
 
       {isLoading ? (
         <Row gutter={[16, 16]}>

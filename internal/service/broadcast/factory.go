@@ -7,19 +7,22 @@ import (
 
 // Factory creates and wires together all the broadcast components
 type Factory struct {
-	broadcastService domain.BroadcastSender
-	templateService  domain.TemplateService
-	emailService     domain.EmailServiceInterface
-	contactRepo      domain.ContactRepository
-	taskRepo         domain.TaskRepository
-	workspaceRepo    domain.WorkspaceRepository
-	logger           logger.Logger
-	config           *Config
+	broadcastRepo      domain.BroadcastRepository
+	messageHistoryRepo domain.MessageHistoryRepository
+	templateService    domain.TemplateService
+	emailService       domain.EmailServiceInterface
+	contactRepo        domain.ContactRepository
+	taskRepo           domain.TaskRepository
+	workspaceRepo      domain.WorkspaceRepository
+	logger             logger.Logger
+	config             *Config
+	apiEndpoint        string
 }
 
 // NewFactory creates a new factory for broadcast components
 func NewFactory(
-	broadcastService domain.BroadcastSender,
+	broadcastRepo domain.BroadcastRepository,
+	messageHistoryRepo domain.MessageHistoryRepository,
 	templateService domain.TemplateService,
 	emailService domain.EmailServiceInterface,
 	contactRepo domain.ContactRepository,
@@ -27,31 +30,36 @@ func NewFactory(
 	workspaceRepo domain.WorkspaceRepository,
 	logger logger.Logger,
 	config *Config,
+	apiEndpoint string,
 ) *Factory {
 	if config == nil {
 		config = DefaultConfig()
 	}
 
 	return &Factory{
-		broadcastService: broadcastService,
-		templateService:  templateService,
-		emailService:     emailService,
-		contactRepo:      contactRepo,
-		taskRepo:         taskRepo,
-		workspaceRepo:    workspaceRepo,
-		logger:           logger,
-		config:           config,
+		broadcastRepo:      broadcastRepo,
+		messageHistoryRepo: messageHistoryRepo,
+		templateService:    templateService,
+		emailService:       emailService,
+		contactRepo:        contactRepo,
+		taskRepo:           taskRepo,
+		workspaceRepo:      workspaceRepo,
+		logger:             logger,
+		config:             config,
+		apiEndpoint:        apiEndpoint,
 	}
 }
 
 // CreateMessageSender creates a new message sender
 func (f *Factory) CreateMessageSender() MessageSender {
 	return NewMessageSender(
-		f.broadcastService,
+		f.broadcastRepo,
+		f.messageHistoryRepo,
 		f.templateService,
 		f.emailService,
 		f.logger,
 		f.config,
+		f.apiEndpoint,
 	)
 }
 
@@ -62,7 +70,7 @@ func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 
 	return NewBroadcastOrchestrator(
 		messageSender,
-		f.broadcastService,
+		f.broadcastRepo,
 		f.templateService,
 		f.contactRepo,
 		f.taskRepo,

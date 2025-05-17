@@ -217,11 +217,6 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.Co
 		trackingSettings.UTMTerm = *payload.UTMTerm
 	}
 
-	// inject tracking pixel in tree
-	if payload.TrackingEnabled {
-		payload.VisualEditorTree.Children = append(payload.VisualEditorTree.Children, notifusemjml.NewOpenTrackingBlock())
-	}
-
 	// Compile tree to MJML using our pkg/mjml function
 	mjmlResult, err := notifusemjml.TreeToMjml(rootStyles, payload.VisualEditorTree, templateDataStr, trackingSettings, 0, nil)
 	if err != nil {

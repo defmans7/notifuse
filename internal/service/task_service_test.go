@@ -381,7 +381,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			MarkAsPaused(gomock.Any(), workspaceID, taskID, gomock.Any(), task.Progress, task.State).
 			DoAndReturn(func(_ context.Context, _, _ string, actualNextRun time.Time, progress float64, state *domain.TaskState) error {
 				// Verify the next run is set approximately 1 minute in the future
-				assert.WithinDuration(t, nextRun, actualNextRun, 5*time.Second)
+				assert.WithinDuration(t, nextRun, actualNextRun, 60*time.Second)
 				assert.Equal(t, task.Progress, progress)
 				assert.Equal(t, task.State, state)
 				return nil

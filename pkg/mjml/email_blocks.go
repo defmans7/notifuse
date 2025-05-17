@@ -95,8 +95,6 @@ func (n *EmailBlock) GetBlockData() any {
 		return n.Data.(DividerBlockData)
 	case "section":
 		return n.Data.(SectionBlockData)
-	case "openTracking":
-		return n.Data.(OpenTrackingBlockData)
 	case "text":
 		return n.Data.(TextBlockData)
 	default:
@@ -263,11 +261,6 @@ type SectionBlockData struct {
 		BackgroundSize   string `json:"backgroundSize,omitempty"` // "cover" or "contain"
 		BaseStyles
 	} `json:"styles"`
-}
-
-// OpenTrackingBlockData represents the data structure for an open tracking block
-type OpenTrackingBlockData struct {
-	// No specific data structure
 }
 
 // TextBlockData represents the data structure for a text block
@@ -1400,14 +1393,6 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		applyPaddingFromStruct(dividerData.PaddingControl, dividerData.Padding, dividerData.PaddingTop, dividerData.PaddingRight, dividerData.PaddingBottom, dividerData.PaddingLeft, dividerAttrs)
 
 		attributes = dividerAttrs
-		children = nil
-
-	case "openTracking":
-		// No data struct needed, logic remains the same
-		tagName = "mj-raw"
-		attributes = nil // Not needed for mj-raw content
-		// Note: Using single quotes within the style attribute for the Go string literal.
-		content = `<img src="{{ tracking_opens_url }}" alt="" height="1" width="1" style="display:block; max-height:1px; max-width:1px; visibility:hidden; mso-hide:all; border:0; padding:0;" />`
 		children = nil
 
 	case "liquid":

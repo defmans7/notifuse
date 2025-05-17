@@ -45,7 +45,8 @@ func (h *TaskHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/tasks.list", requireAuth(http.HandlerFunc(h.ListTasks)))
 	mux.Handle("/api/tasks.get", requireAuth(http.HandlerFunc(h.GetTask)))
 	mux.Handle("/api/tasks.delete", requireAuth(http.HandlerFunc(h.DeleteTask)))
-	mux.Handle("/api/tasks.executePending", http.HandlerFunc(h.ExecutePendingTasks))
+	// public route for cron to execute pending tasks
+	mux.Handle("/api/cron", http.HandlerFunc(h.ExecutePendingTasks))
 	mux.Handle("/api/tasks.execute", http.HandlerFunc(h.ExecuteTask))
 }
 
@@ -163,7 +164,7 @@ func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 
 // ExecutePendingTasks handles the cron-triggered task execution
 func (h *TaskHandler) ExecutePendingTasks(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}

@@ -22,18 +22,21 @@ func TestMessageSenderCreation(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	// Test creating message sender with default config
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		nil, // Passing nil config to test the default config behavior
+		"",
 	)
 
 	// Assert the sender was created and implements the interface
@@ -52,11 +55,13 @@ func TestMessageSenderCreation(t *testing.T) {
 	}
 
 	customSender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		customConfig,
+		"",
 	)
 
 	assert.NotNil(t, customSender, "Message sender with custom config should not be nil")
@@ -71,7 +76,8 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -150,11 +156,13 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	config := DefaultConfig()
 	config.EnableCircuitBreaker = false
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		config,
+		"",
 	)
 
 	// Call the method being tested
@@ -172,7 +180,8 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -241,11 +250,13 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 	config := DefaultConfig()
 	config.EnableCircuitBreaker = false
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		config,
+		"",
 	)
 
 	// Call the method being tested
@@ -409,7 +420,8 @@ func TestSendBatch(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -488,13 +500,9 @@ func TestSendBatch(t *testing.T) {
 	}
 
 	// Set up expectations for GetBroadcast and GetAPIEndpoint
-	mockBroadcastService.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(ctx, workspaceID, broadcastID).
 		Return(broadcast, nil)
-
-	mockBroadcastService.EXPECT().
-		GetAPIEndpoint().
-		Return(apiEndpoint)
 
 	// Setup compiled template result
 	compiledHTML := "<html><body>Hello User</body></html>"
@@ -532,8 +540,8 @@ func TestSendBatch(t *testing.T) {
 			Return(nil)
 
 		// Expect message history recording
-		mockBroadcastService.EXPECT().
-			RecordMessageSent(ctx, workspaceID, gomock.Any()).
+		mockMessageHistoryRepo.EXPECT().
+			Create(ctx, workspaceID, gomock.Any()).
 			Do(func(_ context.Context, _ string, message *domain.MessageHistory) {
 				// Verify the message history is correct
 				assert.Equal(t, recipient.Contact.Email, message.ContactEmail)
@@ -564,11 +572,13 @@ func TestSendBatch(t *testing.T) {
 	config := DefaultConfig()
 	config.EnableCircuitBreaker = false
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		config,
+		apiEndpoint,
 	)
 
 	// Call the method being tested
@@ -587,7 +597,8 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -606,11 +617,13 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 	// Create message sender
 	config := DefaultConfig()
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		config,
+		"",
 	)
 
 	// Call the method being tested with empty recipients
@@ -630,7 +643,8 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -659,11 +673,13 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 	config.EnableCircuitBreaker = true
 	config.CircuitBreakerThreshold = 1
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		config,
+		"",
 	)
 
 	// Force circuit breaker to open
@@ -712,7 +728,8 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -784,13 +801,9 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	}
 
 	// Set up expectations for GetBroadcast and GetAPIEndpoint
-	mockBroadcastService.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(ctx, workspaceID, broadcastID).
 		Return(broadcast, nil)
-
-	mockBroadcastService.EXPECT().
-		GetAPIEndpoint().
-		Return(apiEndpoint)
 
 	// Setup compiled template result
 	compiledHTML := "<html><body>Hello User</body></html>"
@@ -830,8 +843,8 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		Return(sendError)
 
 	// Expect message history recording with failed status
-	mockBroadcastService.EXPECT().
-		RecordMessageSent(ctx, workspaceID, gomock.Any()).
+	mockMessageHistoryRepo.EXPECT().
+		Create(ctx, workspaceID, gomock.Any()).
 		Do(func(_ context.Context, _ string, message *domain.MessageHistory) {
 			// Verify the message history is correct
 			assert.Equal(t, recipients[0].Contact.Email, message.ContactEmail)
@@ -861,11 +874,13 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	config := DefaultConfig()
 	config.EnableCircuitBreaker = false
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		config,
+		apiEndpoint,
 	)
 
 	// Call the method being tested
@@ -884,7 +899,8 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create mocks for all dependencies
-	mockBroadcastService := mocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -956,13 +972,9 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	}
 
 	// Set up expectations for GetBroadcast and GetAPIEndpoint
-	mockBroadcastService.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(ctx, workspaceID, broadcastID).
 		Return(broadcast, nil)
-
-	mockBroadcastService.EXPECT().
-		GetAPIEndpoint().
-		Return(apiEndpoint)
 
 	// Setup compiled template result
 	compiledHTML := "<html><body>Hello User</body></html>"
@@ -1002,19 +1014,21 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	recordError := errors.New("database connection error")
 
 	// Expect message history recording to fail
-	mockBroadcastService.EXPECT().
-		RecordMessageSent(ctx, workspaceID, gomock.Any()).
+	mockMessageHistoryRepo.EXPECT().
+		Create(ctx, workspaceID, gomock.Any()).
 		Return(recordError)
 
 	// Create message sender
 	config := DefaultConfig()
 	config.EnableCircuitBreaker = false
 	sender := NewMessageSender(
-		mockBroadcastService,
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
 		mockTemplateService,
 		mockEmailService,
 		mockLogger,
 		config,
+		apiEndpoint,
 	)
 
 	// Call the method being tested

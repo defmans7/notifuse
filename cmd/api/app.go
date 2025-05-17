@@ -452,7 +452,8 @@ func (a *App) InitServices() error {
 	// Create broadcast factory with refactored components
 	broadcastConfig := broadcast.DefaultConfig()
 	broadcastFactory := broadcast.NewFactory(
-		a.broadcastService,
+		a.broadcastRepo,
+		a.messageHistoryRepo,
 		a.templateService,
 		a.emailService,
 		a.contactRepo,
@@ -460,6 +461,7 @@ func (a *App) InitServices() error {
 		a.workspaceRepo,
 		a.logger,
 		broadcastConfig,
+		a.config.APIEndpoint,
 	)
 
 	// Register the broadcast factory with the task service

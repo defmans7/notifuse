@@ -232,6 +232,25 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 		return err
 	}
 
+	// Get workspace to check for email provider configuration
+	workspace, err := s.workspaceRepo.GetByID(ctx, request.WorkspaceID)
+	if err != nil {
+		s.logger.Error("Failed to get workspace for scheduling broadcast")
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	// Check if workspace has a marketing email provider configured
+	emailProvider, err := workspace.GetEmailProvider(true) // true for marketing emails
+	if err != nil {
+		s.logger.Error("Failed to get email provider configuration")
+		return fmt.Errorf("failed to get email provider: %w", err)
+	}
+
+	if emailProvider == nil {
+		s.logger.Error("Cannot schedule broadcast: no marketing email provider configured for workspace")
+		return fmt.Errorf("no marketing email provider configured for this workspace")
+	}
+
 	// Using a channel to wait for the event callback
 	done := make(chan error, 1)
 
@@ -717,6 +736,18 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return err
 	}
 
+	// Check if workspace has a marketing email provider configured
+	emailProvider, err := workspace.GetEmailProvider(true) // true for marketing emails
+	if err != nil {
+		s.logger.Error("Failed to get email provider configuration")
+		return fmt.Errorf("failed to get email provider: %w", err)
+	}
+
+	if emailProvider == nil {
+		s.logger.Error("Cannot send broadcast: no marketing email provider configured for workspace")
+		return fmt.Errorf("no marketing email provider configured for this workspace")
+	}
+
 	// Retrieve the broadcast
 	broadcast, err := s.repo.GetBroadcast(ctx, request.WorkspaceID, request.BroadcastID)
 	if err != nil {
@@ -856,41 +887,4 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 func (s *BroadcastService) GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*domain.Template, error) {
 	// Simply delegate to the template service, version 0 is the latest version
 	return s.templateSvc.GetTemplateByID(ctx, workspaceID, templateID, 0)
-}
-
-// RecordMessageSent records a message sent event in the message history
-func (s *BroadcastService) RecordMessageSent(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
-	// Check if message history repository is available
-	messageHistoryRepo, ok := s.repo.(interface {
-		CreateMessageHistory(ctx context.Context, workspaceID string, message *domain.MessageHistory) error
-	})
-
-	if !ok {
-		s.logger.Error("Repository does not support message history")
-		// Don't fail the broadcast if message history tracking is not available
-		return nil
-	}
-
-	return messageHistoryRepo.CreateMessageHistory(ctx, workspaceID, message)
-}
-
-// UpdateMessageStatus updates the status of a message in the message history
-func (s *BroadcastService) UpdateMessageStatus(ctx context.Context, workspaceID string, messageID string, status domain.MessageStatus, timestamp time.Time) error {
-	// Check if message history repository is available
-	messageHistoryRepo, ok := s.repo.(interface {
-		UpdateMessageStatus(ctx context.Context, workspaceID string, messageID string, status domain.MessageStatus, timestamp time.Time) error
-	})
-
-	if !ok {
-		s.logger.Error("Repository does not support message history")
-		// Don't fail the broadcast if message history tracking is not available
-		return nil
-	}
-
-	return messageHistoryRepo.UpdateMessageStatus(ctx, workspaceID, messageID, status, timestamp)
-}
-
-// GetAPIEndpoint returns the API endpoint for the broadcast service
-func (s *BroadcastService) GetAPIEndpoint() string {
-	return s.apiEndpoint
 }

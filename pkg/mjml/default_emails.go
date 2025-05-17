@@ -1,14 +1,5 @@
 package mjml
 
-func NewOpenTrackingBlock() EmailBlock {
-	return EmailBlock{
-		ID:       "openTracking",
-		Kind:     "openTracking",
-		Data:     map[string]interface{}{},
-		Children: []EmailBlock{},
-	}
-}
-
 // DeepCopyBlock creates a deep copy of an EmailBlock to prevent modifying original blocks by reference
 func DeepCopyBlock(block EmailBlock) EmailBlock {
 	// Create a new block with the same ID and Kind
@@ -58,7 +49,7 @@ func DefaultTemplateStructure() EmailBlock {
 	// Add standard logo
 	logoBlock := DeepCopyBlock(blocks["image"])
 	logoBlock.ID = "logo"
-	logoBlock.Data.(map[string]interface{})["image"].(map[string]interface{})["src"] = "https://placehold.co/100x50?text=Your+Logo"
+	logoBlock.Data.(map[string]interface{})["image"].(map[string]interface{})["src"] = "https://www.notifuse.com/images/logo.png"
 	logoBlock.Data.(map[string]interface{})["image"].(map[string]interface{})["alt"] = "Logo"
 	logoBlock.Data.(map[string]interface{})["image"].(map[string]interface{})["width"] = "100px"
 	logoBlock.Data.(map[string]interface{})["wrapper"].(map[string]interface{})["align"] = "center"
@@ -92,11 +83,6 @@ func DefaultTemplateStructure() EmailBlock {
 	}
 	newChildren = append(newChildren, footerBlock)
 
-	// Add tracking pixel
-	openTrackingBlock := DeepCopyBlock(blocks["openTracking"])
-	openTrackingBlock.ID = "open-tracking"
-	newChildren = append(newChildren, openTrackingBlock)
-
 	// Create a new column with the children properly set
 	updatedColumn := DeepCopyBlock(contentColumn)
 	updatedColumn.Children = newChildren
@@ -104,6 +90,8 @@ func DefaultTemplateStructure() EmailBlock {
 	// Create a new section with the updated column
 	updatedSection := DeepCopyBlock(emailTemplate.Children[0])
 	updatedSection.Children = []EmailBlock{updatedColumn}
+	updatedSection.Data.(map[string]interface{})["styles"].(map[string]interface{})["backgroundColor"] = "#ffffff"
+	updatedSection.Data.(map[string]interface{})["styles"].(map[string]interface{})["borderRadius"] = "5px"
 
 	// Create a new root with the updated section
 	updatedRoot := DeepCopyBlock(emailTemplate)
@@ -138,7 +126,7 @@ func DefaultOptinConfirmationEmail() EmailBlock {
 	headingBlock := DeepCopyBlock(blocks["heading"])
 	headingBlock.ID = "heading"
 	headingBlock.Data.(map[string]interface{})["type"] = "h2"
-	headingBlock.Data.(map[string]interface{})["align"] = "center"
+	headingBlock.Data.(map[string]interface{})["align"] = "left"
 	headingBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "h2",
@@ -152,7 +140,7 @@ func DefaultOptinConfirmationEmail() EmailBlock {
 	// Add text content
 	textBlock := DeepCopyBlock(blocks["text"])
 	textBlock.ID = "text"
-	textBlock.Data.(map[string]interface{})["align"] = "center"
+	textBlock.Data.(map[string]interface{})["align"] = "left"
 	textBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "paragraph",
@@ -235,7 +223,7 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 	headingBlock := DeepCopyBlock(blocks["heading"])
 	headingBlock.ID = "heading"
 	headingBlock.Data.(map[string]interface{})["type"] = "h2"
-	headingBlock.Data.(map[string]interface{})["align"] = "center"
+	headingBlock.Data.(map[string]interface{})["align"] = "left"
 	headingBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "h2",
@@ -249,7 +237,7 @@ func DefaultUnsubscribeConfirmationEmail() EmailBlock {
 	// Add text content
 	textBlock := DeepCopyBlock(blocks["text"])
 	textBlock.ID = "text"
-	textBlock.Data.(map[string]interface{})["align"] = "center"
+	textBlock.Data.(map[string]interface{})["align"] = "left"
 	textBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "paragraph",
@@ -328,7 +316,7 @@ func DefaultSubscriptionConfirmationEmail() EmailBlock {
 	headingBlock := DeepCopyBlock(blocks["heading"])
 	headingBlock.ID = "heading"
 	headingBlock.Data.(map[string]interface{})["type"] = "h2"
-	headingBlock.Data.(map[string]interface{})["align"] = "center"
+	headingBlock.Data.(map[string]interface{})["align"] = "left"
 	headingBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "h2",
@@ -342,7 +330,7 @@ func DefaultSubscriptionConfirmationEmail() EmailBlock {
 	// Add text content
 	textBlock := DeepCopyBlock(blocks["text"])
 	textBlock.ID = "text"
-	textBlock.Data.(map[string]interface{})["align"] = "center"
+	textBlock.Data.(map[string]interface{})["align"] = "left"
 	textBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "paragraph",
@@ -451,12 +439,12 @@ func DefaultTransactionalEmail() EmailBlock {
 	headingBlock := DeepCopyBlock(blocks["heading"])
 	headingBlock.ID = "heading"
 	headingBlock.Data.(map[string]interface{})["type"] = "h2"
-	headingBlock.Data.(map[string]interface{})["align"] = "center"
+	headingBlock.Data.(map[string]interface{})["align"] = "left"
 	headingBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "h2",
 			"children": []map[string]interface{}{
-				{"text": "{{ heading }}"},
+				{"text": "Hi {{contact.first_name}}!"},
 			},
 		},
 	}
@@ -465,12 +453,12 @@ func DefaultTransactionalEmail() EmailBlock {
 	// Add main content
 	textBlock := DeepCopyBlock(blocks["text"])
 	textBlock.ID = "main-content"
-	textBlock.Data.(map[string]interface{})["align"] = "center"
+	textBlock.Data.(map[string]interface{})["align"] = "left"
 	textBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
 		{
 			"type": "paragraph",
 			"children": []map[string]interface{}{
-				{"text": "{{ message }}"},
+				{"text": "This is an example transactional email."},
 			},
 		},
 	}
@@ -480,26 +468,9 @@ func DefaultTransactionalEmail() EmailBlock {
 	buttonBlock := DeepCopyBlock(blocks["button"])
 	buttonBlock.ID = "cta-button"
 	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["backgroundColor"] = "#4e6cff"
-	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["href"] = "{{ cta_url }}"
-	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["text"] = "{{ cta_text }}"
+	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["href"] = "https://www.notifuse.com"
+	buttonBlock.Data.(map[string]interface{})["button"].(map[string]interface{})["text"] = "Confirm email"
 	newChildren = append(newChildren, buttonBlock)
-
-	// Add additional information text
-	additionalBlock := DeepCopyBlock(blocks["text"])
-	additionalBlock.ID = "additional-info"
-	additionalBlock.Data.(map[string]interface{})["align"] = "center"
-	additionalBlock.Data.(map[string]interface{})["editorData"] = []map[string]interface{}{
-		{
-			"type": "paragraph",
-			"children": []map[string]interface{}{
-				{
-					"text":     "{{ additional_info }}",
-					"fontSize": "14px",
-				},
-			},
-		},
-	}
-	newChildren = append(newChildren, additionalBlock)
 
 	// Add back the standard blocks (divider, footer, tracking) if they exist
 	if len(standardBlocks) > 1 {
@@ -556,11 +527,11 @@ func DefaultBlocks() map[string]EmailBlock {
 				"body": map[string]interface{}{
 					"width":           "600px",
 					"margin":          "0 auto",
-					"backgroundColor": "#FFFFFF",
+					"backgroundColor": "#F4F7FA",
 				},
 				"h1": map[string]interface{}{
-					"color":          "#000000",
-					"fontSize":       "34px",
+					"color":          "#111111",
+					"fontSize":       "22px",
 					"fontStyle":      "normal",
 					"fontWeight":     400,
 					"paddingControl": "separate",
@@ -570,11 +541,11 @@ func DefaultBlocks() map[string]EmailBlock {
 					"paddingBottom":  "60px",
 					"paddingLeft":    "0px",
 					"margin":         0,
-					"fontFamily":     "Helvetica, sans-serif",
+					"fontFamily":     "Arial, sans-serif",
 				},
 				"h2": map[string]interface{}{
-					"color":          "#000000",
-					"fontSize":       "28px",
+					"color":          "#111111",
+					"fontSize":       "20px",
 					"fontStyle":      "normal",
 					"fontWeight":     400,
 					"paddingControl": "separate",
@@ -584,11 +555,11 @@ func DefaultBlocks() map[string]EmailBlock {
 					"paddingBottom":  "40px",
 					"paddingLeft":    "0px",
 					"margin":         0,
-					"fontFamily":     "Helvetica, sans-serif",
+					"fontFamily":     "Arial, sans-serif",
 				},
 				"h3": map[string]interface{}{
-					"color":          "#000000",
-					"fontSize":       "22px",
+					"color":          "#111111",
+					"fontSize":       "18px",
 					"fontStyle":      "normal",
 					"fontWeight":     400,
 					"paddingControl": "separate",
@@ -598,7 +569,7 @@ func DefaultBlocks() map[string]EmailBlock {
 					"paddingBottom":  "20px",
 					"paddingLeft":    "0px",
 					"margin":         0,
-					"fontFamily":     "Helvetica, sans-serif",
+					"fontFamily":     "Arial, sans-serif",
 				},
 				"paragraph": map[string]interface{}{
 					"color":          "#000000",
@@ -612,12 +583,12 @@ func DefaultBlocks() map[string]EmailBlock {
 					"paddingBottom":  "20px",
 					"paddingLeft":    "0px",
 					"margin":         0,
-					"fontFamily":     "Helvetica, sans-serif",
+					"fontFamily":     "Arial, sans-serif",
 				},
 				"hyperlink": map[string]interface{}{
 					"color":          "#4e6cff",
 					"textDecoration": "none",
-					"fontFamily":     "Helvetica, sans-serif",
+					"fontFamily":     "Arial, sans-serif",
 					"fontSize":       "16px",
 					"fontWeight":     400,
 					"fontStyle":      "normal",
@@ -651,7 +622,7 @@ func DefaultBlocks() map[string]EmailBlock {
 				"borderRadius":           "8px",
 				"width":                  "auto",
 				"color":                  "#FFFFFF",
-				"fontFamily":             "Helvetica, sans-serif",
+				"fontFamily":             "Arial, sans-serif",
 				"fontWeight":             600,
 				"fontSize":               "15px",
 				"fontStyle":              "normal",
@@ -671,7 +642,7 @@ func DefaultBlocks() map[string]EmailBlock {
 			"hyperlinkStyles": map[string]interface{}{
 				"color":          "#4e6cff",
 				"textDecoration": "none",
-				"fontFamily":     "Helvetica, sans-serif",
+				"fontFamily":     "Arial, sans-serif",
 				"fontSize":       "16px",
 				"fontWeight":     400,
 				"fontStyle":      "normal",
@@ -736,9 +707,9 @@ func DefaultBlocks() map[string]EmailBlock {
 				"padding":        "20px",
 			},
 			"image": map[string]interface{}{
-				"src":               "https://placehold.co/600x400",
+				"src":               "https://www.notifuse.com/images/logo.png",
 				"alt":               "Image description",
-				"width":             "300px",
+				"width":             "100px",
 				"height":            "auto",
 				"href":              "",
 				"borderControl":     "all",
@@ -779,9 +750,6 @@ func DefaultBlocks() map[string]EmailBlock {
 		},
 		Children: []EmailBlock{},
 	}
-
-	// OpenTracking block
-	blocks["openTracking"] = NewOpenTrackingBlock()
 
 	// Section block
 	blocks["section"] = EmailBlock{

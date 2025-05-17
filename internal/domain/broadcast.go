@@ -791,9 +791,6 @@ type BroadcastSender interface {
 	// Message history tracking methods
 	RecordMessageSent(ctx context.Context, workspaceID string, message *MessageHistory) error
 	UpdateMessageStatus(ctx context.Context, workspaceID string, messageID string, status MessageStatus, timestamp time.Time) error
-
-	// Configuration method
-	GetAPIEndpoint() string
 }
 
 // BroadcastRepository defines the data access layer for broadcasts

@@ -106,7 +106,6 @@ export interface Broadcast {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
-  tracking_enabled: boolean
   utm_parameters?: UTMParameters
   metadata?: Record<string, any>
   sent_count: number
@@ -134,7 +133,6 @@ export interface CreateBroadcastRequest {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
-  tracking_enabled: boolean
   utm_parameters?: UTMParameters
   metadata?: Record<string, any>
 }
@@ -146,7 +144,6 @@ export interface UpdateBroadcastRequest {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
-  tracking_enabled: boolean
   utm_parameters?: UTMParameters
   metadata?: Record<string, any>
 }

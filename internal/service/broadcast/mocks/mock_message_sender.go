@@ -36,9 +36,9 @@ func (m *MockMessageSender) EXPECT() *MockMessageSenderMockRecorder {
 }
 
 // SendBatch mocks base method.
-func (m *MockMessageSender) SendBatch(ctx context.Context, workspaceID, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList, templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (int, int, error) {
+func (m *MockMessageSender) SendBatch(arg0 context.Context, arg1, arg2 string, arg3 bool, arg4 string, arg5 []*domain.ContactWithList, arg6 map[string]*domain.Template, arg7 *domain.EmailProvider) (int, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendBatch", ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, emailProvider)
+	ret := m.ctrl.Call(m, "SendBatch", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -46,21 +46,21 @@ func (m *MockMessageSender) SendBatch(ctx context.Context, workspaceID, workspac
 }
 
 // SendBatch indicates an expected call of SendBatch.
-func (mr *MockMessageSenderMockRecorder) SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, emailProvider interface{}) *gomock.Call {
+func (mr *MockMessageSenderMockRecorder) SendBatch(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendBatch", reflect.TypeOf((*MockMessageSender)(nil).SendBatch), ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, emailProvider)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendBatch", reflect.TypeOf((*MockMessageSender)(nil).SendBatch), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 }
 
 // SendToRecipient mocks base method.
-func (m *MockMessageSender) SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID, email string, template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
+func (m *MockMessageSender) SendToRecipient(arg0 context.Context, arg1 string, arg2 bool, arg3 *domain.Broadcast, arg4, arg5 string, arg6 *domain.Template, arg7 map[string]interface{}, arg8 *domain.EmailProvider) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendToRecipient", ctx, workspaceID, trackingEnabled, broadcast, messageID, email, template, data, emailProvider)
+	ret := m.ctrl.Call(m, "SendToRecipient", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendToRecipient indicates an expected call of SendToRecipient.
-func (mr *MockMessageSenderMockRecorder) SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, email, template, data, emailProvider interface{}) *gomock.Call {
+func (mr *MockMessageSenderMockRecorder) SendToRecipient(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToRecipient", reflect.TypeOf((*MockMessageSender)(nil).SendToRecipient), ctx, workspaceID, trackingEnabled, broadcast, messageID, email, template, data, emailProvider)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToRecipient", reflect.TypeOf((*MockMessageSender)(nil).SendToRecipient), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 }

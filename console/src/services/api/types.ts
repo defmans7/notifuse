@@ -536,3 +536,55 @@ export interface UnsubscribeFromListsRequest {
   email_hmac: string
   list_ids: string[]
 }
+
+// Task related types
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+export interface SendBroadcastState {
+  broadcast_id: string
+  total_recipients: number
+  sent_count: number
+  failed_count: number
+  channel_type: string
+  recipient_offset: number
+  end_offset: number
+}
+
+export interface TaskState {
+  progress?: number
+  message?: string
+  send_broadcast?: SendBroadcastState
+}
+
+export interface Task {
+  id: string
+  workspace_id: string
+  type: string
+  status: TaskStatus
+  progress: number
+  state?: TaskState
+  error_message?: string
+  created_at: string
+  updated_at: string
+  last_run_at?: string
+  completed_at?: string
+  next_run_after?: string
+  timeout_after?: string
+  max_runtime: number
+  max_retries: number
+  retry_count: number
+  retry_interval: number
+  broadcast_id?: string
+}
+
+export interface GetTaskResponse {
+  task: Task
+}
+
+export interface ListTasksResponse {
+  tasks: Task[]
+  total_count: number
+  limit: number
+  offset: number
+  has_more: boolean
+}

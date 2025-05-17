@@ -728,7 +728,7 @@ func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
 			Return(nil)
 
 		// Call handler
-		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending?max_tasks=10", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.executePending?max_tasks=10", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ExecutePendingTasks(rec, req)
@@ -745,7 +745,7 @@ func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
 
 	t.Run("Method not allowed", func(t *testing.T) {
 		// Call handler with wrong method
-		req := httptest.NewRequest(http.MethodGet, "/api/tasks.executePending", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ExecutePendingTasks(rec, req)
@@ -756,7 +756,7 @@ func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
 
 	t.Run("Invalid max_tasks parameter", func(t *testing.T) {
 		// Call handler with invalid max_tasks parameter
-		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending?max_tasks=invalid", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.executePending?max_tasks=invalid", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ExecutePendingTasks(rec, req)
@@ -772,7 +772,7 @@ func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
 			Return(nil)
 
 		// Call handler without max_tasks
-		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.executePending", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ExecutePendingTasks(rec, req)
@@ -788,7 +788,7 @@ func TestTaskHandler_ExecutePendingTasks(t *testing.T) {
 			Return(errors.New("service error"))
 
 		// Call handler
-		req := httptest.NewRequest(http.MethodPost, "/api/tasks.executePending?max_tasks=10", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/tasks.executePending?max_tasks=10", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ExecutePendingTasks(rec, req)

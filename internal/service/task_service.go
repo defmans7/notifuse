@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -249,6 +250,11 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 			// Create HTTP client with timeout
 			httpClient := &http.Client{
 				Timeout: 53 * time.Second, // 53 seconds timeout as requested
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true, // Skip TLS verification
+					},
+				},
 			}
 
 			// Wrap with OpenCensus tracing
@@ -256,7 +262,7 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 
 			// Create request with tracing context
 			endpoint := fmt.Sprintf("%s/api/tasks.execute", s.apiEndpoint)
-			req, err := http.NewRequestWithContext(taskCtx, http.MethodPost, endpoint, bytes.NewBuffer(reqBody))
+			req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(reqBody))
 			if err != nil {
 				tracing.MarkSpanError(taskCtx, err)
 				s.logger.WithField("task_id", t.ID).
@@ -546,7 +552,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			tracing.AddAttribute(pauseCtx, "task_id", taskID)
 			tracing.AddAttribute(pauseCtx, "workspace_id", workspace)
 
-			nextRun := time.Now().Add(1 * time.Minute)
+			nextRun := time.Now()
 			tracing.AddAttribute(pauseCtx, "next_run", nextRun.Format(time.RFC3339))
 			tracing.AddAttribute(pauseCtx, "progress", task.Progress)
 

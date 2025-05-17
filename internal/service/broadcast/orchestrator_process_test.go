@@ -22,7 +22,7 @@ import (
 func setupTestEnvironment(t *testing.T) (
 	*gomock.Controller,
 	*mocks.MockMessageSender,
-	*domainmocks.MockBroadcastSender,
+	*domainmocks.MockBroadcastRepository,
 	*domainmocks.MockTemplateService,
 	*domainmocks.MockContactRepository,
 	*domainmocks.MockTaskRepository,
@@ -40,7 +40,7 @@ func setupTestEnvironment(t *testing.T) (
 		Return(nil).
 		AnyTimes()
 
-	mockBroadcastSender := domainmocks.NewMockBroadcastSender(ctrl)
+	mockBroadcastRepository := domainmocks.NewMockBroadcastRepository(ctrl)
 	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
@@ -56,7 +56,7 @@ func setupTestEnvironment(t *testing.T) (
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	return ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	return ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider
 }
 
@@ -139,7 +139,7 @@ func createTask(
 // TestProcess_HappyPath tests the successful processing of a broadcast
 func TestProcess_HappyPath(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -186,7 +186,7 @@ func TestProcess_HappyPath(t *testing.T) {
 
 	// Mock broadcast to return 0 recipients for quick completion
 	testBroadcast := createMockBroadcast(broadcastID, []string{"template-1"})
-	mockBroadcastSender.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(gomock.Any(), "workspace-123", broadcastID).
 		Return(testBroadcast, nil).
 		AnyTimes()
@@ -200,7 +200,7 @@ func TestProcess_HappyPath(t *testing.T) {
 	config := createTestConfig()
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockBroadcastSender,
+		mockBroadcastRepository,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -225,7 +225,7 @@ func TestProcess_HappyPath(t *testing.T) {
 // TestProcess_NilTaskState tests initialization of nil task state
 func TestProcess_NilTaskState(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -270,7 +270,7 @@ func TestProcess_NilTaskState(t *testing.T) {
 
 	// Mock broadcast
 	mockBroadcast := createMockBroadcast(broadcastID, []string{"template-1"})
-	mockBroadcastSender.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(gomock.Any(), "workspace-123", broadcastID).
 		Return(mockBroadcast, nil).
 		AnyTimes()
@@ -283,7 +283,7 @@ func TestProcess_NilTaskState(t *testing.T) {
 	config := createTestConfig()
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockBroadcastSender,
+		mockBroadcastRepository,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -311,7 +311,7 @@ func TestProcess_NilTaskState(t *testing.T) {
 // TestProcess_NilSendBroadcastState tests initialization of nil send broadcast state
 func TestProcess_NilSendBroadcastState(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -361,7 +361,7 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 
 	// Mock broadcast
 	mockBroadcast := createMockBroadcast(broadcastID, []string{"template-1"})
-	mockBroadcastSender.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(gomock.Any(), "workspace-123", broadcastID).
 		Return(mockBroadcast, nil).
 		AnyTimes()
@@ -374,7 +374,7 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 	config := createTestConfig()
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockBroadcastSender,
+		mockBroadcastRepository,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -400,7 +400,7 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 // TestProcess_MissingBroadcastID tests error handling when broadcast ID is missing
 func TestProcess_MissingBroadcastID(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -451,7 +451,7 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 	config := createTestConfig()
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockBroadcastSender,
+		mockBroadcastRepository,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -475,7 +475,7 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 // TestProcess_ZeroRecipients tests early completion when there are no recipients
 func TestProcess_ZeroRecipients(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -526,7 +526,7 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 
 	// Mock broadcast
 	mockBroadcast := createMockBroadcast(broadcastID, []string{"template-1"})
-	mockBroadcastSender.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(gomock.Any(), "workspace-123", broadcastID).
 		Return(mockBroadcast, nil).
 		AnyTimes()
@@ -539,7 +539,7 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 	config := createTestConfig()
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockBroadcastSender,
+		mockBroadcastRepository,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -564,7 +564,7 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 // TestProcess_GetTotalRecipientCountError tests error handling when getting recipient count fails
 func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -614,7 +614,7 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 
 	// Mock broadcast
 	mockBroadcast := createMockBroadcast(broadcastID, []string{"template-1"})
-	mockBroadcastSender.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(gomock.Any(), "workspace-123", broadcastID).
 		Return(mockBroadcast, nil).
 		AnyTimes()
@@ -629,7 +629,7 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 	config := createTestConfig()
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockBroadcastSender,
+		mockBroadcastRepository,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -653,7 +653,7 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 // TestProcess_LoadTemplatesError tests error handling when template loading fails
 func TestProcess_LoadTemplatesError(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastSender, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -703,7 +703,7 @@ func TestProcess_LoadTemplatesError(t *testing.T) {
 
 	// Set up error for GetBroadcast during template loading
 	expectedErr := errors.New("broadcast not found")
-	mockBroadcastSender.EXPECT().
+	mockBroadcastRepository.EXPECT().
 		GetBroadcast(gomock.Any(), "workspace-123", broadcastID).
 		Return(nil, expectedErr).
 		Times(1)
@@ -717,7 +717,7 @@ func TestProcess_LoadTemplatesError(t *testing.T) {
 	config := createTestConfig()
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
-		mockBroadcastSender,
+		mockBroadcastRepository,
 		mockTemplateService,
 		mockContactRepo,
 		mockTaskRepo,

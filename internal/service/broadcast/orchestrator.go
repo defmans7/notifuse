@@ -37,21 +37,21 @@ type BroadcastOrchestratorInterface interface {
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
 type BroadcastOrchestrator struct {
-	messageSender    MessageSender
-	broadcastService domain.BroadcastSender
-	templateService  domain.TemplateService
-	contactRepo      domain.ContactRepository
-	taskRepo         domain.TaskRepository
-	workspaceRepo    domain.WorkspaceRepository
-	logger           logger.Logger
-	config           *Config
-	timeProvider     TimeProvider
+	messageSender   MessageSender
+	broadcastRepo   domain.BroadcastRepository
+	templateService domain.TemplateService
+	contactRepo     domain.ContactRepository
+	taskRepo        domain.TaskRepository
+	workspaceRepo   domain.WorkspaceRepository
+	logger          logger.Logger
+	config          *Config
+	timeProvider    TimeProvider
 }
 
 // NewBroadcastOrchestrator creates a new broadcast orchestrator
 func NewBroadcastOrchestrator(
 	messageSender MessageSender,
-	broadcastService domain.BroadcastSender,
+	broadcastRepo domain.BroadcastRepository,
 	templateService domain.TemplateService,
 	contactRepo domain.ContactRepository,
 	taskRepo domain.TaskRepository,
@@ -69,14 +69,15 @@ func NewBroadcastOrchestrator(
 	}
 
 	return &BroadcastOrchestrator{
-		messageSender:    messageSender,
-		broadcastService: broadcastService,
-		templateService:  templateService,
-		contactRepo:      contactRepo,
-		taskRepo:         taskRepo,
-		logger:           logger,
-		config:           config,
-		timeProvider:     timeProvider,
+		messageSender:   messageSender,
+		broadcastRepo:   broadcastRepo,
+		templateService: templateService,
+		contactRepo:     contactRepo,
+		taskRepo:        taskRepo,
+		workspaceRepo:   workspaceRepo,
+		logger:          logger,
+		config:          config,
+		timeProvider:    timeProvider,
 	}
 }
 
@@ -99,7 +100,7 @@ func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, w
 	}()
 
 	// Get the broadcast to access its template variations
-	broadcast, err := o.broadcastService.GetBroadcast(ctx, workspaceID, broadcastID)
+	broadcast, err := o.broadcastRepo.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
@@ -227,7 +228,7 @@ func (o *BroadcastOrchestrator) GetTotalRecipientCount(ctx context.Context, work
 	}()
 
 	// Get the broadcast to access audience settings
-	broadcast, err := o.broadcastService.GetBroadcast(ctx, workspaceID, broadcastID)
+	broadcast, err := o.broadcastRepo.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
@@ -281,7 +282,7 @@ func (o *BroadcastOrchestrator) FetchBatch(ctx context.Context, workspaceID, bro
 	}()
 
 	// Get the broadcast to access audience settings
-	broadcast, err := o.broadcastService.GetBroadcast(ctx, workspaceID, broadcastID)
+	broadcast, err := o.broadcastRepo.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
@@ -531,6 +532,9 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 			return true, nil
 		}
+
+		// Update the task state with the broadcast state
+		task.State.SendBroadcast = broadcastState
 
 		// Early return to save state before processing
 		return false, nil

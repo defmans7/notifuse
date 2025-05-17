@@ -149,15 +149,6 @@ func TestEmailBlock_GetBlockData(t *testing.T) {
 			wantType: "mjml.SectionBlockData",
 		},
 		{
-			name: "openTracking block",
-			block: EmailBlock{
-				ID:   "test-openTracking",
-				Kind: "openTracking",
-				Data: OpenTrackingBlockData{},
-			},
-			wantType: "mjml.OpenTrackingBlockData",
-		},
-		{
 			name: "text block",
 			block: EmailBlock{
 				ID:   "test-text",
@@ -371,39 +362,6 @@ func TestTreeToMjml_HeadingWithFormatting(t *testing.T) {
 
 	if !strings.Contains(mjml, "utm_source=test") {
 		t.Error("Expected tracking parameters in URL but not found")
-	}
-}
-
-func TestTreeToMjml_OpenTracking(t *testing.T) {
-	rootStyles := map[string]interface{}{}
-
-	openTrackingBlock := EmailBlock{
-		ID:   "tracking1",
-		Kind: "openTracking",
-		Data: OpenTrackingBlockData{},
-	}
-
-	trackingSettings := TrackingSettings{}
-	mjml, err := TreeToMjml(rootStyles, openTrackingBlock, "", trackingSettings, 0, nil)
-	if err != nil {
-		t.Fatalf("TreeToMjml failed unexpectedly for openTracking block: %v", err)
-	}
-
-	// Check for expected elements
-	if !strings.Contains(mjml, "<mj-raw>") {
-		t.Error("Expected <mj-raw> tag but not found")
-	}
-
-	if !strings.Contains(mjml, "<img src=\"{{ tracking_opens_url }}\"") {
-		t.Error("Expected image tag with tracking pixel but not found")
-	}
-
-	if !strings.Contains(mjml, "height=\"1\" width=\"1\"") {
-		t.Error("Expected 1x1 pixel dimensions but not found")
-	}
-
-	if !strings.Contains(mjml, "style=\"display:block; max-height:1px; max-width:1px; visibility:hidden;") {
-		t.Error("Expected hidden style attributes but not found")
 	}
 }
 

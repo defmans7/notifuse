@@ -33,27 +33,27 @@ func TestTemplateStructure(t *testing.T) {
 		{
 			"DefaultOptinConfirmationEmail",
 			DefaultOptinConfirmationEmail,
-			[]string{"logo", "heading", "text", "button", "disclaimer", "divider", "footer", "open-tracking"},
+			[]string{"logo", "heading", "text", "button", "disclaimer", "divider", "footer"},
 		},
 		{
 			"DefaultUnsubscribeConfirmationEmail",
 			DefaultUnsubscribeConfirmationEmail,
-			[]string{"logo", "heading", "text", "resub-text", "button", "divider", "footer", "open-tracking"},
+			[]string{"logo", "heading", "text", "resub-text", "button", "divider", "footer"},
 		},
 		{
 			"DefaultSubscriptionConfirmationEmail",
 			DefaultSubscriptionConfirmationEmail,
-			[]string{"logo", "heading", "text", "welcome-text", "unsub-text", "unsub-link", "divider", "footer", "open-tracking"},
+			[]string{"logo", "heading", "text", "welcome-text", "unsub-text", "unsub-link", "divider", "footer"},
 		},
 		{
 			"DefaultTransactionalEmail",
 			DefaultTransactionalEmail,
-			[]string{"logo", "heading", "main-content", "cta-button", "additional-info", "divider", "footer", "open-tracking"},
+			[]string{"logo", "heading", "main-content", "cta-button", "divider", "footer"},
 		},
 		{
 			"DefaultTemplateStructure",
 			DefaultTemplateStructure,
-			[]string{"logo", "divider", "footer", "open-tracking"},
+			[]string{"logo", "divider", "footer"},
 		},
 		{
 			"DefaultEmailStyles",
@@ -122,7 +122,7 @@ func TestDefaultBlocks(t *testing.T) {
 	// Verify we have all expected blocks
 	expectedBlocks := []string{
 		"root", "button", "text", "heading", "divider", "image",
-		"liquid", "openTracking", "section", "column", "oneColumn",
+		"liquid", "section", "column", "oneColumn",
 		"columns1212", "columns168", "columns204", "columns420",
 		"columns816", "columns888", "columns6666",
 	}

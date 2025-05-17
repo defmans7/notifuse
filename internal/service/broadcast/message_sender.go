@@ -89,20 +89,22 @@ func (cb *CircuitBreaker) RecordFailure() {
 
 // messageSender implements the MessageSender interface
 type messageSender struct {
-	broadcastService domain.BroadcastSender
-	templateService  domain.TemplateService
-	emailService     domain.EmailServiceInterface
-	logger           logger.Logger
-	config           *Config
-	circuitBreaker   *CircuitBreaker
-	rateLimiter      *semaphore.Weighted
-	lastSendTime     time.Time
-	sendMutex        sync.Mutex
+	broadcastRepo      domain.BroadcastRepository
+	messageHistoryRepo domain.MessageHistoryRepository
+	templateService    domain.TemplateService
+	emailService       domain.EmailServiceInterface
+	logger             logger.Logger
+	config             *Config
+	circuitBreaker     *CircuitBreaker
+	rateLimiter        *semaphore.Weighted
+	lastSendTime       time.Time
+	sendMutex          sync.Mutex
+	apiEndpoint        string
 }
 
 // NewMessageSender creates a new message sender
-func NewMessageSender(broadcastService domain.BroadcastSender, templateService domain.TemplateService,
-	emailService domain.EmailServiceInterface, logger logger.Logger, config *Config) MessageSender {
+func NewMessageSender(broadcastRepo domain.BroadcastRepository, messageHistoryRepo domain.MessageHistoryRepository, templateService domain.TemplateService,
+	emailService domain.EmailServiceInterface, logger logger.Logger, config *Config, apiEndpoint string) MessageSender {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -119,14 +121,16 @@ func NewMessageSender(broadcastService domain.BroadcastSender, templateService d
 	}
 
 	return &messageSender{
-		broadcastService: broadcastService,
-		templateService:  templateService,
-		emailService:     emailService,
-		logger:           logger,
-		config:           config,
-		circuitBreaker:   cb,
-		rateLimiter:      semaphore.NewWeighted(permitsPerSecond),
-		lastSendTime:     time.Now(),
+		broadcastRepo:      broadcastRepo,
+		messageHistoryRepo: messageHistoryRepo,
+		templateService:    templateService,
+		emailService:       emailService,
+		logger:             logger,
+		config:             config,
+		circuitBreaker:     cb,
+		rateLimiter:        semaphore.NewWeighted(permitsPerSecond),
+		lastSendTime:       time.Now(),
+		apiEndpoint:        apiEndpoint,
 	}
 }
 
@@ -252,7 +256,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeTemplateCompile, errMsg, true, nil)
 	}
 
-	// Now send email directly using compiled HTML rather than passing template to broadcastService
+	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
 	err = s.emailService.SendEmail(
 		ctx,
 		workspaceID,
@@ -329,7 +333,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 	}
 
 	// Get the broadcast to determine variations and templates
-	broadcast, err := s.broadcastService.GetBroadcast(ctx, workspaceID, broadcastID)
+	broadcast, err := s.broadcastRepo.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
@@ -338,9 +342,6 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		}).Error("Failed to get broadcast for sending")
 		return 0, 0, NewBroadcastError(ErrCodeBroadcastNotFound, "broadcast not found", false, err)
 	}
-
-	// Get API endpoint for tracking and unsubscribe links
-	apiEndpoint := s.broadcastService.GetAPIEndpoint()
 
 	// Send to each recipient
 	for _, contactWithList := range recipients {
@@ -396,7 +397,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		messageID := generateMessageID(workspaceID)
 
 		trackingSettings := mjml.TrackingSettings{
-			Endpoint:       apiEndpoint,
+			Endpoint:       s.apiEndpoint,
 			EnableTracking: trackingEnabled,
 			UTMSource:      broadcast.UTMParameters.Source,
 			UTMMedium:      broadcast.UTMParameters.Medium,
@@ -457,7 +458,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		}
 
 		// Record the message
-		if err := s.broadcastService.RecordMessageSent(ctx, workspaceID, message); err != nil {
+		if err := s.messageHistoryRepo.Create(ctx, workspaceID, message); err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
 				"workspace_id": workspaceID,
