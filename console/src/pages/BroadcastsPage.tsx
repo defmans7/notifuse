@@ -26,7 +26,7 @@ import {
   BroadcastVariation
 } from '../services/api/broadcast'
 import { listsApi } from '../services/api/list'
-import { taskApi, Task } from '../services/api/task'
+import { taskApi } from '../services/api/task'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPaperPlane,
@@ -38,7 +38,8 @@ import {
   faCirclePlay,
   faCopy,
   faEye,
-  faFaceFrown
+  faFaceFrown,
+  faCircleQuestion
 } from '@fortawesome/free-regular-svg-icons'
 import {
   faArrowPointer,
@@ -46,8 +47,7 @@ import {
   faChevronDown,
   faChevronUp,
   faTriangleExclamation,
-  faSpinner,
-  faGears
+  faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
@@ -220,7 +220,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
       return taskApi.findByBroadcastId(workspaceId, broadcast.id)
     },
     // Only fetch task data if the broadcast status indicates a task might exist
-    enabled: ['scheduled', 'sending', 'paused'].includes(broadcast.status),
+    enabled: ['scheduled', 'sending', 'paused', 'failed'].includes(broadcast.status),
     refetchInterval:
       broadcast.status === 'sending'
         ? 5000 // Refetch every 5 seconds for sending broadcasts
@@ -249,7 +249,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
     }
   }
 
-  // Create popover content for task details
+  // Create popover content for details
   const taskPopoverContent = () => {
     if (!task) return null
 
@@ -300,81 +300,12 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
     )
   }
 
-  // Render task state details for the details section
-  const renderTaskStateDetails = (task: Task | null) => {
-    if (!task || !task.state) return null
-
-    if (task.state.send_broadcast) {
-      const broadcastState = task.state.send_broadcast
-      return (
-        <>
-          <Descriptions.Item label="Task Details">
-            <div className="grid grid-cols-1 gap-2">
-              {task.state.message && (
-                <div className="text-gray-700">Message: {task.state.message}</div>
-              )}
-              {broadcastState.total_recipients > 0 && (
-                <div className="flex justify-between">
-                  <span>Processing recipients:</span>
-                  <span className="font-medium">
-                    {broadcastState.sent_count + broadcastState.failed_count} of{' '}
-                    {broadcastState.total_recipients}
-                  </span>
-                </div>
-              )}
-              {broadcastState.sent_count > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span>Successfully sent:</span>
-                  <span className="font-medium">{broadcastState.sent_count}</span>
-                </div>
-              )}
-              {broadcastState.failed_count > 0 && (
-                <div className="flex justify-between text-red-600">
-                  <span>Failed sends:</span>
-                  <span className="font-medium">{broadcastState.failed_count}</span>
-                </div>
-              )}
-            </div>
-          </Descriptions.Item>
-        </>
-      )
-    }
-
-    // Default state display if no specific type
-    return (
-      task.state.message && (
-        <Descriptions.Item label="Task Status Message">{task.state.message}</Descriptions.Item>
-      )
-    )
-  }
-
   return (
     <Card
       title={
         <Space size="large">
           <div>{broadcast.name}</div>
-          <div className="flex items-center gap-2">
-            <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
-
-            {task && (
-              <Popover
-                content={taskPopoverContent}
-                title="Task Status"
-                placement="right"
-                trigger="hover"
-              >
-                <div className="text-xs font-normal cursor-help">
-                  {getTaskStatusBadge(task.status)}
-                </div>
-              </Popover>
-            )}
-
-            {isTaskLoading && ['scheduled', 'sending', 'paused'].includes(broadcast.status) && (
-              <div className="text-xs font-normal text-gray-400">
-                <FontAwesomeIcon icon={faSpinner} spin /> Loading task...
-              </div>
-            )}
-          </div>
+          <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
         </Space>
       }
       extra={
@@ -643,37 +574,17 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
 
             <Descriptions.Item label="Skip Duplicates">
               {broadcast.audience.skip_duplicate_emails ? (
-                <FontAwesomeIcon
-                  icon={faCircleCheck}
-                  className="text-green-500"
-                  size="sm"
-                  style={{ opacity: 0.7 }}
-                />
+                <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 opacity-70 mt-1" />
               ) : (
-                <FontAwesomeIcon
-                  icon={faCircleXmark}
-                  className="text-orange-500"
-                  size="sm"
-                  style={{ opacity: 0.7 }}
-                />
+                <FontAwesomeIcon icon={faCircleXmark} className="text-orange-500 opacity-70 mt-1" />
               )}
             </Descriptions.Item>
 
             <Descriptions.Item label="Exclude Unsubscribed">
               {broadcast.audience.exclude_unsubscribed ? (
-                <FontAwesomeIcon
-                  icon={faCircleCheck}
-                  className="text-green-500"
-                  size="sm"
-                  style={{ opacity: 0.7 }}
-                />
+                <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 opacity-70 mt-1" />
               ) : (
-                <FontAwesomeIcon
-                  icon={faCircleXmark}
-                  className="text-orange-500"
-                  size="sm"
-                  style={{ opacity: 0.7 }}
-                />
+                <FontAwesomeIcon icon={faCircleXmark} className="text-orange-500 opacity-70 mt-1" />
               )}
             </Descriptions.Item>
 
@@ -714,6 +625,32 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                     : broadcast.schedule.timezone}
                 </Descriptions.Item>
               )}
+
+            <Descriptions.Item label="Task Status">
+              {task && (
+                <Popover
+                  content={taskPopoverContent}
+                  title="Task Status"
+                  placement="left"
+                  trigger="hover"
+                >
+                  <span className="text-xs font-normal cursor-help">
+                    {getTaskStatusBadge(task.status)}
+                    <FontAwesomeIcon
+                      icon={faCircleQuestion}
+                      style={{ opacity: 0.7 }}
+                      className="ml-2"
+                    />
+                  </span>
+                </Popover>
+              )}
+
+              {isTaskLoading && ['scheduled', 'sending', 'paused'].includes(broadcast.status) && (
+                <span className="text-xs font-normal text-gray-400">
+                  <FontAwesomeIcon icon={faSpinner} spin /> Loading task...
+                </span>
+              )}
+            </Descriptions.Item>
           </Descriptions>
 
           <div className="mt-8">

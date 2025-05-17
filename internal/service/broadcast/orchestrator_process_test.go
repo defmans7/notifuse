@@ -11,7 +11,6 @@ import (
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/service/broadcast"
 	"github.com/Notifuse/notifuse/internal/service/broadcast/mocks"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -85,23 +84,7 @@ func createMockBroadcast(broadcastID string, variations []string) *domain.Broadc
 		TestSettings: domain.BroadcastTestSettings{
 			Variations: broadcastVariations,
 		},
-	}
-}
-
-// createMockTemplate creates a mock template for testing
-func createMockTemplate(templateID string) *domain.Template {
-	return &domain.Template{
-		ID: templateID,
-		Email: &domain.EmailTemplate{
-			Subject:     "Test Subject",
-			FromAddress: "test@example.com",
-			VisualEditorTree: mjml.EmailBlock{
-				Kind: "container",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{},
-				},
-			},
-		},
+		Status: domain.BroadcastStatusSending,
 	}
 }
 
@@ -110,12 +93,15 @@ func createTask(
 	taskID, workspaceID, broadcastID string,
 	totalRecipients, sentCount, failedCount int,
 	offset int64,
+	retryCount, maxRetries int,
 ) *domain.Task {
 	task := &domain.Task{
 		ID:          taskID,
 		WorkspaceID: workspaceID,
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
+		RetryCount:  retryCount,
+		MaxRetries:  maxRetries,
 	}
 
 	// If broadcastID is provided, create a state
@@ -175,13 +161,15 @@ func TestProcess_HappyPath(t *testing.T) {
 	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-123").Return(mockWorkspace, nil).AnyTimes()
 
 	// Create task with nil state to test basic initialization case
+	broadcastID := "broadcast-123"
 	task := &domain.Task{
 		ID:          "task-123",
 		WorkspaceID: "workspace-123",
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
+		RetryCount:  0,
+		MaxRetries:  3,
 	}
-	broadcastID := "broadcast-123"
 	task.BroadcastID = &broadcastID
 
 	// Mock broadcast to return 0 recipients for quick completion
@@ -264,6 +252,8 @@ func TestProcess_NilTaskState(t *testing.T) {
 		WorkspaceID: "workspace-123",
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
+		RetryCount:  0,
+		MaxRetries:  3,
 	}
 	broadcastID := "broadcast-123"
 	task.BroadcastID = &broadcastID
@@ -351,6 +341,8 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 		WorkspaceID: "workspace-123",
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
+		RetryCount:  0,
+		MaxRetries:  3,
 		BroadcastID: &broadcastID,
 		State: &domain.TaskState{
 			Progress:      0,
@@ -438,7 +430,8 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 		WorkspaceID: "workspace-123",
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
-		BroadcastID: nil, // No broadcast ID in task
+		RetryCount:  0,
+		MaxRetries:  3,
 		State: &domain.TaskState{
 			Progress: 0,
 			Message:  "Initial state",
@@ -515,7 +508,8 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 		WorkspaceID: "workspace-123",
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
-		BroadcastID: &broadcastID,
+		RetryCount:  0,
+		MaxRetries:  3,
 		State: &domain.TaskState{
 			SendBroadcast: &domain.SendBroadcastState{
 				BroadcastID:     broadcastID,
@@ -603,6 +597,8 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 		WorkspaceID: "workspace-123",
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
+		RetryCount:  0,
+		MaxRetries:  3,
 		BroadcastID: &broadcastID,
 		State: &domain.TaskState{
 			SendBroadcast: &domain.SendBroadcastState{
@@ -650,6 +646,108 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 	assert.Contains(t, err.Error(), "database error")
 }
 
+// TestProcess_LastRetryError tests marking broadcasts as failed on the last retry
+func TestProcess_LastRetryError(t *testing.T) {
+	// Setup
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
+	defer ctrl.Finish()
+
+	// Set fixed times for testing
+	testStartTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+	mockTimeProvider.EXPECT().Now().Return(testStartTime).AnyTimes()
+
+	// Setup a mock workspace
+	mockWorkspace := &domain.Workspace{
+		ID:   "workspace-123",
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			Timezone:                     "UTC",
+			TransactionalEmailProviderID: "integration-1",
+			MarketingEmailProviderID:     "integration-1",
+			EmailTrackingEnabled:         true,
+		},
+		Integrations: []domain.Integration{
+			{
+				ID:   "integration-1",
+				Name: "Test Email Provider",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					DefaultSenderEmail: "default@example.com",
+					DefaultSenderName:  "Default Sender",
+				},
+			},
+		},
+	}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-123").Return(mockWorkspace, nil).AnyTimes()
+
+	// Create a task with RetryCount = MaxRetries-1 (last retry)
+	broadcastID := "broadcast-123"
+	task := &domain.Task{
+		ID:          "task-123",
+		WorkspaceID: "workspace-123",
+		Type:        "send_broadcast",
+		Status:      domain.TaskStatusRunning,
+		RetryCount:  2, // Last retry (MaxRetries-1)
+		MaxRetries:  3,
+		BroadcastID: &broadcastID,
+		State: &domain.TaskState{
+			SendBroadcast: &domain.SendBroadcastState{
+				BroadcastID:     broadcastID,
+				TotalRecipients: 0, // 0 recipients will trigger count fetch
+			},
+		},
+	}
+
+	// Mock broadcast
+	mockBroadcast := createMockBroadcast(broadcastID, []string{"template-1"})
+	mockBroadcastRepository.EXPECT().
+		GetBroadcast(gomock.Any(), "workspace-123", broadcastID).
+		Return(mockBroadcast, nil).
+		AnyTimes()
+
+	// Mock recipient count with error to trigger defer function for marking broadcast as failed
+	expectedErr := errors.New("recipient count error")
+	mockContactRepo.EXPECT().
+		CountContactsForBroadcast(gomock.Any(), "workspace-123", mockBroadcast.Audience).
+		Return(0, expectedErr).
+		Times(1)
+
+	// Mock broadcast update to verify broadcast is marked as failed
+	updatedBroadcast := gomock.AssignableToTypeOf(&domain.Broadcast{})
+	mockBroadcastRepository.EXPECT().
+		UpdateBroadcast(gomock.Any(), updatedBroadcast).
+		DoAndReturn(func(_ context.Context, broadcast *domain.Broadcast) error {
+			// Verify the broadcast is marked as failed
+			assert.Equal(t, domain.BroadcastStatusFailed, broadcast.Status)
+			return nil
+		}).
+		Times(1)
+
+	config := createTestConfig()
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastRepository,
+		mockTemplateService,
+		mockContactRepo,
+		mockTaskRepo,
+		mockWorkspaceRepo,
+		mockLogger,
+		config,
+		mockTimeProvider,
+	)
+
+	ctx := context.Background()
+
+	// Execute
+	completed, err := orchestrator.Process(ctx, task)
+
+	// Verify
+	require.Error(t, err)
+	assert.False(t, completed)
+	assert.Contains(t, err.Error(), "recipient count error")
+}
+
 // TestProcess_LoadTemplatesError tests error handling when template loading fails
 func TestProcess_LoadTemplatesError(t *testing.T) {
 	// Setup
@@ -693,6 +791,8 @@ func TestProcess_LoadTemplatesError(t *testing.T) {
 		WorkspaceID: "workspace-123",
 		Type:        "send_broadcast",
 		Status:      domain.TaskStatusRunning,
+		RetryCount:  0,
+		MaxRetries:  3,
 		BroadcastID: &broadcastID,
 		State: &domain.TaskState{
 			SendBroadcast: &domain.SendBroadcastState{

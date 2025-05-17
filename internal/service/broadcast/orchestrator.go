@@ -439,6 +439,58 @@ func (o *BroadcastOrchestrator) SaveProgressState(
 func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) (bool, error) {
 	o.logger.WithField("task_id", task.ID).Info("Processing send_broadcast task")
 
+	// Store initial state for use in the defer function
+	var broadcastID string
+	isLastRetry := task.RetryCount >= task.MaxRetries-1 // Current attempt is the last one before max
+
+	// Create a deferred function to update broadcast status to failed if we're returning an error on the last retry
+	var err error
+	var allDone bool
+
+	// Defer function to mark broadcast as failed if we're returning an error on the last retry
+	defer func() {
+		if err != nil && isLastRetry && broadcastID != "" {
+			o.logger.WithFields(map[string]interface{}{
+				"task_id":      task.ID,
+				"broadcast_id": broadcastID,
+				"retry_count":  task.RetryCount,
+				"max_retries":  task.MaxRetries,
+				"error":        err.Error(),
+			}).Info("Task failed on last retry attempt, marking broadcast as failed")
+
+			// Get the broadcast
+			broadcast, getBroadcastErr := o.broadcastRepo.GetBroadcast(ctx, task.WorkspaceID, broadcastID)
+			if getBroadcastErr != nil {
+				o.logger.WithFields(map[string]interface{}{
+					"task_id":      task.ID,
+					"broadcast_id": broadcastID,
+					"error":        getBroadcastErr.Error(),
+				}).Error("Failed to get broadcast for status update on last retry")
+				return
+			}
+
+			// Update broadcast status to failed
+			broadcast.Status = domain.BroadcastStatusFailed
+			broadcast.UpdatedAt = time.Now().UTC()
+
+			// Save the updated broadcast
+			updateErr := o.broadcastRepo.UpdateBroadcast(ctx, broadcast)
+			if updateErr != nil {
+				o.logger.WithFields(map[string]interface{}{
+					"task_id":      task.ID,
+					"broadcast_id": broadcastID,
+					"error":        updateErr.Error(),
+				}).Error("Failed to update broadcast status to failed")
+			} else {
+				o.logger.WithFields(map[string]interface{}{
+					"task_id":      task.ID,
+					"broadcast_id": broadcastID,
+				}).Info("Broadcast marked as failed due to max retries reached")
+			}
+
+		}
+	}()
+
 	// Initialize structured state if needed
 	if task.State == nil {
 		// Initialize a new state for the broadcast task
@@ -471,14 +523,18 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 	if broadcastState.BroadcastID == "" {
 		// In a real implementation, we'd expect the broadcast ID to be set when creating the task
-		return false, NewBroadcastErrorWithTask(
+		err = NewBroadcastErrorWithTask(
 			ErrCodeTaskStateInvalid,
 			"broadcast ID is missing in task state",
 			task.ID,
 			false,
 			nil,
 		)
+		return false, err
 	}
+
+	// Store the broadcast ID for the defer function
+	broadcastID = broadcastState.BroadcastID
 
 	// Track progress
 	sentCount := broadcastState.SentCount
@@ -490,15 +546,16 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 	// Phase 1: Get recipient count if not already set
 	if broadcastState.TotalRecipients == 0 {
-		count, err := o.GetTotalRecipientCount(ctx, task.WorkspaceID, broadcastState.BroadcastID)
-		if err != nil {
+		count, countErr := o.GetTotalRecipientCount(ctx, task.WorkspaceID, broadcastState.BroadcastID)
+		if countErr != nil {
 			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
-				"error":        err.Error(),
+				"error":        countErr.Error(),
 			}).Error("Failed to get recipient count for broadcast")
 			// codecov:ignore:end
+			err = countErr
 			return false, err
 		}
 
@@ -530,55 +587,62 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			}).Info("Broadcast completed with no recipients")
 			// codecov:ignore:end
 
-			return true, nil
+			allDone = true
+			return allDone, err
 		}
 
 		// Update the task state with the broadcast state
 		task.State.SendBroadcast = broadcastState
 
 		// Early return to save state before processing
-		return false, nil
+		allDone = false
+		return allDone, err
 	}
 
 	// Get the workspace to retrieve email provider settings
-	workspace, err := o.workspaceRepo.GetByID(ctx, task.WorkspaceID)
-	if err != nil {
-		return false, fmt.Errorf("failed to get workspace: %w", err)
+	workspace, workspaceErr := o.workspaceRepo.GetByID(ctx, task.WorkspaceID)
+	if workspaceErr != nil {
+		err = fmt.Errorf("failed to get workspace: %w", workspaceErr)
+		return false, err
 	}
 
 	// Get the email provider using the workspace's GetEmailProvider method
-	emailProvider, err := workspace.GetEmailProvider(true)
-	if err != nil {
+	emailProvider, providerErr := workspace.GetEmailProvider(true)
+	if providerErr != nil {
+		err = providerErr
 		return false, err
 	}
 
 	// Validate that the provider is configured
 	if emailProvider == nil || emailProvider.Kind == "" {
-		return false, fmt.Errorf("no email provider configured for marketing emails")
+		err = fmt.Errorf("no email provider configured for marketing emails")
+		return false, err
 	}
 
 	// Phase 2: Load templates
-	templates, err := o.LoadTemplatesForBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
-	if err != nil {
+	templates, templatesErr := o.LoadTemplatesForBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
+	if templatesErr != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"task_id":      task.ID,
 			"broadcast_id": broadcastState.BroadcastID,
-			"error":        err.Error(),
+			"error":        templatesErr.Error(),
 		}).Error("Failed to load templates for broadcast")
 		// codecov:ignore:end
+		err = templatesErr
 		return false, err
 	}
 
 	// Validate templates
-	if err := o.ValidateTemplates(templates); err != nil {
+	if validateErr := o.ValidateTemplates(templates); validateErr != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
 			"task_id":      task.ID,
 			"broadcast_id": broadcastState.BroadcastID,
-			"error":        err.Error(),
+			"error":        validateErr.Error(),
 		}).Error("Templates validation failed")
 		// codecov:ignore:end
+		err = validateErr
 		return false, err
 	}
 
@@ -587,7 +651,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	defer cancel()
 
 	// Whether we've processed all recipients
-	allDone := false
+	allDone = false
 
 	// Process until timeout or completion
 	for {
@@ -603,22 +667,23 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 
 		// Fetch the next batch of recipients
 		currentOffset := int(broadcastState.RecipientOffset)
-		recipients, err := o.FetchBatch(
+		recipients, batchErr := o.FetchBatch(
 			ctx,
 			task.WorkspaceID,
 			broadcastState.BroadcastID,
 			currentOffset,
 			o.config.FetchBatchSize,
 		)
-		if err != nil {
+		if batchErr != nil {
 			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"offset":       currentOffset,
-				"error":        err.Error(),
+				"error":        batchErr.Error(),
 			}).Error("Failed to fetch recipients for broadcast")
 			// codecov:ignore:end
+			err = batchErr
 			return false, err
 		}
 
@@ -636,7 +701,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		}
 
 		// Process this batch of recipients
-		sent, failed, err := o.messageSender.SendBatch(
+		sent, failed, sendErr := o.messageSender.SendBatch(
 			ctx,
 			task.WorkspaceID,
 			workspace.Settings.SecretKey,
@@ -648,13 +713,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		)
 
 		// Handle errors during sending
-		if err != nil {
+		if sendErr != nil {
 			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"offset":       currentOffset,
-				"error":        err.Error(),
+				"error":        sendErr.Error(),
 			}).Error("Error sending batch")
 			// codecov:ignore:end
 			// Continue despite errors as we want to make progress
@@ -746,5 +811,5 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		"all_done":         allDone,
 	}).Info("Broadcast processing cycle completed")
 	// codecov:ignore:end
-	return allDone, nil
+	return allDone, err
 }
