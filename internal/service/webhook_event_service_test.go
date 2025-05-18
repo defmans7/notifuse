@@ -1123,7 +1123,8 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 		// Create test delivery payload
 		payload := domain.SparkPostWebhookPayload{
 			MSys: domain.SparkPostMSys{
-				DeliveryEvent: &domain.SparkPostDeliveryEvent{
+				MessageEvent: &domain.SparkPostMessageEvent{
+					Type:        "delivery",
 					RecipientTo: "test@example.com",
 					MessageID:   "message1",
 					Timestamp:   "2023-01-01T12:00:00Z",
@@ -1150,7 +1151,8 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 		// Create test bounce payload
 		payload := domain.SparkPostWebhookPayload{
 			MSys: domain.SparkPostMSys{
-				BounceEvent: &domain.SparkPostBounceEvent{
+				MessageEvent: &domain.SparkPostMessageEvent{
+					Type:        "bounce",
 					RecipientTo: "test@example.com",
 					MessageID:   "message1",
 					BounceClass: "21", // Hard bounce
@@ -1182,7 +1184,8 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 		// Create test complaint payload
 		payload := domain.SparkPostWebhookPayload{
 			MSys: domain.SparkPostMSys{
-				SpamComplaint: &domain.SparkPostSpamComplaint{
+				MessageEvent: &domain.SparkPostMessageEvent{
+					Type:         "spam_complaint",
 					RecipientTo:  "test@example.com",
 					MessageID:    "message1",
 					FeedbackType: "abuse",

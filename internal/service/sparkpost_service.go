@@ -773,59 +773,76 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	}
 
 	// Prepare the request payload
+	type Address struct {
+		Email string `json:"email"`
+		Name  string `json:"name,omitempty"`
+	}
+
 	type Recipient struct {
-		Address string `json:"address"`
-		Type    string `json:"type,omitempty"`
+		Address Address `json:"address"`
+	}
+
+	type From struct {
+		Name  string `json:"name,omitempty"`
+		Email string `json:"email"`
 	}
 
 	type Content struct {
-		HTML string `json:"html"`
+		From    From   `json:"from"`
+		Subject string `json:"subject"`
+		ReplyTo string `json:"reply_to,omitempty"`
+		HTML    string `json:"html"`
 	}
 
 	type EmailRequest struct {
-		Recipients []Recipient `json:"recipients"`
-		Content    Content     `json:"content"`
-		From       struct {
-			Name  string `json:"name,omitempty"`
-			Email string `json:"email"`
-		} `json:"from"`
-		Subject  string                 `json:"subject"`
-		ReplyTo  string                 `json:"reply_to,omitempty"`
-		Metadata map[string]interface{} `json:"metadata,omitempty"`
+		Options struct {
+			OpenTracking  bool `json:"open_tracking"`
+			ClickTracking bool `json:"click_tracking"`
+		} `json:"options"`
+		Recipients []Recipient            `json:"recipients"`
+		Content    Content                `json:"content"`
+		Metadata   map[string]interface{} `json:"metadata,omitempty"`
 	}
 
 	// Set up the email payload
 	emailReq := EmailRequest{
 		Recipients: []Recipient{
 			{
-				Address: to,
-				Type:    "to",
+				Address: Address{
+					Email: to,
+					Name:  "", // We don't have recipient name in the current function signature
+				},
 			},
 		},
 		Content: Content{
-			HTML: content,
+			From: From{
+				Name:  fromName,
+				Email: fromAddress,
+			},
+			Subject: subject,
+			HTML:    content,
 		},
-		From: struct {
-			Name  string `json:"name,omitempty"`
-			Email string `json:"email"`
-		}{
-			Name:  fromName,
-			Email: fromAddress,
+		Metadata: map[string]interface{}{
+			"notifuse_message_id": messageID,
 		},
-		Subject: subject,
 	}
+
+	// Tracking should be disabled as we already do it
+	emailReq.Options.OpenTracking = false
+	emailReq.Options.ClickTracking = false
 
 	// Add replyTo if specified
 	if replyTo != "" {
-		emailReq.ReplyTo = replyTo
+		emailReq.Content.ReplyTo = replyTo
 	}
 
 	// Add CC recipients if specified
 	for _, ccAddress := range cc {
 		if ccAddress != "" {
 			emailReq.Recipients = append(emailReq.Recipients, Recipient{
-				Address: ccAddress,
-				Type:    "cc",
+				Address: Address{
+					Email: ccAddress,
+				},
 			})
 		}
 	}
@@ -834,15 +851,11 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	for _, bccAddress := range bcc {
 		if bccAddress != "" {
 			emailReq.Recipients = append(emailReq.Recipients, Recipient{
-				Address: bccAddress,
-				Type:    "bcc",
+				Address: Address{
+					Email: bccAddress,
+				},
 			})
 		}
-	}
-
-	// Add message ID to metadata
-	emailReq.Metadata = map[string]interface{}{
-		"notifuse_message_id": messageID,
 	}
 
 	// Convert to JSON

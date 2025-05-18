@@ -559,12 +559,6 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 
 // processSparkPostWebhook processes a webhook event from SparkPost
 func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
-	// First, unmarshal into a map to extract all fields including metadata
-	var jsonData map[string]interface{}
-	if err := json.Unmarshal(rawPayload, &jsonData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal SparkPost webhook payload: %w", err)
-	}
-
 	var payload domain.SparkPostWebhookPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal SparkPost webhook payload: %w", err)
@@ -576,75 +570,42 @@ func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawP
 	var timestamp time.Time
 	var notifuseMessageID string
 
-	// Extract notifuse_message_id from metadata in the raw JSON
-	if msys, ok := jsonData["msys"].(map[string]interface{}); ok {
-		// Check delivery event
-		if delivery, ok := msys["delivery_event"].(map[string]interface{}); ok {
-			if metadata, ok := delivery["metadata"].(map[string]interface{}); ok {
-				if id, ok := metadata["notifuse_message_id"]; ok {
-					notifuseMessageID = fmt.Sprintf("%v", id)
-				}
-			}
-		}
-
-		// Check bounce event
-		if bounce, ok := msys["bounce_event"].(map[string]interface{}); ok {
-			if metadata, ok := bounce["metadata"].(map[string]interface{}); ok {
-				if id, ok := metadata["notifuse_message_id"]; ok {
-					notifuseMessageID = fmt.Sprintf("%v", id)
-				}
-			}
-		}
-
-		// Check spam complaint event
-		if complaint, ok := msys["spam_complaint"].(map[string]interface{}); ok {
-			if metadata, ok := complaint["metadata"].(map[string]interface{}); ok {
-				if id, ok := metadata["notifuse_message_id"]; ok {
-					notifuseMessageID = fmt.Sprintf("%v", id)
-				}
-			}
-		}
+	if payload.MSys.MessageEvent == nil {
+		return nil, fmt.Errorf("no message_event found in SparkPost webhook payload")
 	}
 
-	// Check which event type is present in the payload
-	if delivery := payload.MSys.DeliveryEvent; delivery != nil {
-		eventType = domain.EmailEventDelivered
-		recipientEmail = delivery.RecipientTo
-		messageID = delivery.MessageID
+	if id, ok := payload.MSys.MessageEvent.RecipientMeta["notifuse_message_id"]; ok {
+		notifuseMessageID = fmt.Sprintf("%v", id)
+	}
 
-		if t, err := time.Parse(time.RFC3339, delivery.Timestamp); err == nil {
-			timestamp = t
-		} else {
-			timestamp = time.Now()
-		}
-	} else if bounce := payload.MSys.BounceEvent; bounce != nil {
-		eventType = domain.EmailEventBounce
-		recipientEmail = bounce.RecipientTo
-		messageID = bounce.MessageID
+	// Set common fields
+	recipientEmail = payload.MSys.MessageEvent.RecipientTo
+	messageID = payload.MSys.MessageEvent.MessageID
 
-		bounceType = "Bounce"
-		bounceCategory = bounce.BounceClass
-		bounceDiagnostic = bounce.Reason
-
-		if t, err := time.Parse(time.RFC3339, bounce.Timestamp); err == nil {
-			timestamp = t
-		} else {
-			timestamp = time.Now()
-		}
-	} else if complaint := payload.MSys.SpamComplaint; complaint != nil {
-		eventType = domain.EmailEventComplaint
-		recipientEmail = complaint.RecipientTo
-		messageID = complaint.MessageID
-
-		complaintFeedbackType = complaint.FeedbackType
-
-		if t, err := time.Parse(time.RFC3339, complaint.Timestamp); err == nil {
-			timestamp = t
-		} else {
-			timestamp = time.Now()
-		}
+	// Parse timestamp
+	if t, err := time.Parse(time.RFC3339, payload.MSys.MessageEvent.Timestamp); err == nil {
+		timestamp = t
 	} else {
-		return nil, fmt.Errorf("no supported event type found in SparkPost webhook")
+		timestamp = time.Now()
+	}
+
+	// Determine event type based on the type field
+	switch payload.MSys.MessageEvent.Type {
+	case "delivery":
+		eventType = domain.EmailEventDelivered
+
+	case "bounce":
+		eventType = domain.EmailEventBounce
+		bounceType = "Bounce"
+		bounceCategory = payload.MSys.MessageEvent.BounceClass
+		bounceDiagnostic = payload.MSys.MessageEvent.Reason
+
+	case "spam_complaint":
+		eventType = domain.EmailEventComplaint
+		complaintFeedbackType = payload.MSys.MessageEvent.FeedbackType
+
+	default:
+		return nil, fmt.Errorf("unsupported SparkPost event type: %s", payload.MSys.MessageEvent.Type)
 	}
 
 	// Use notifuseMessageID if available, otherwise fallback to provider's messageID

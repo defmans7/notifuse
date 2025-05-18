@@ -932,21 +932,30 @@ func TestSparkPostService_SendEmail(t *testing.T) {
 				recipients, ok := emailReq["recipients"].([]interface{})
 				assert.True(t, ok)
 				assert.Len(t, recipients, 1)
-				assert.Equal(t, to, recipients[0].(map[string]interface{})["address"])
 
-				// Check from field
-				from, ok := emailReq["from"].(map[string]interface{})
+				// Check the address structure matches what the API is sending
+				recipientObj, ok := recipients[0].(map[string]interface{})
 				assert.True(t, ok)
-				assert.Equal(t, fromAddress, from["email"])
-				assert.Equal(t, fromName, from["name"])
-
-				// Check subject
-				assert.Equal(t, subject, emailReq["subject"])
+				address, ok := recipientObj["address"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, to, address["email"])
 
 				// Check content
 				contentMap, ok := emailReq["content"].(map[string]interface{})
 				assert.True(t, ok)
 				assert.Equal(t, content, contentMap["html"])
+
+				// Check subject and from are inside content map
+				fromMap, ok := contentMap["from"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, fromAddress, fromMap["email"])
+				assert.Equal(t, fromName, fromMap["name"])
+				assert.Equal(t, subject, contentMap["subject"])
+
+				// Check that metadata contains our message ID
+				metadata, ok := emailReq["metadata"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, "test-message-id", metadata["notifuse_message_id"])
 
 				return mockHTTPResponse(http.StatusOK, `{"results":{"id":"test-transmission-id"}}`), nil
 			})
