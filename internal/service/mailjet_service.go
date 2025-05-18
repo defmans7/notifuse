@@ -481,7 +481,8 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	type EmailRequest struct {
-		Messages []EmailMessage `json:"Messages"`
+		Messages    []EmailMessage `json:"Messages"`
+		SandboxMode bool           `json:"SandboxMode,omitempty"`
 	}
 
 	// Create the email message
@@ -500,7 +501,7 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 		},
 		Subject:  subject,
 		HTMLPart: content,
-		CustomID: workspaceID,
+		CustomID: messageID,
 	}
 
 	// Add CC recipients if specified
@@ -526,9 +527,6 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 		message.Headers = make(map[string]string)
 	}
 
-	// Add messageID as X-MJ-CustomID
-	message.Headers["X-MJ-CustomID"] = messageID
-
 	// Add Reply-To if specified
 	if replyTo != "" {
 		message.Headers["Reply-To"] = replyTo
@@ -536,7 +534,8 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 
 	// Set up the email payload
 	emailReq := EmailRequest{
-		Messages: []EmailMessage{message},
+		Messages:    []EmailMessage{message},
+		SandboxMode: provider.Mailjet.SandboxMode,
 	}
 
 	// Convert to JSON

@@ -163,7 +163,6 @@ type AmazonSESSettings struct {
 	Region             string `json:"region"`
 	AccessKey          string `json:"access_key"`
 	EncryptedSecretKey string `json:"encrypted_secret_key,omitempty"`
-	SandboxMode        bool   `json:"sandbox_mode"`
 
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"secret_key,omitempty"`

@@ -50,10 +50,6 @@ func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID st
 	return nil
 }
 
-func (m *mockEmailProviderService) expectSendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, err error) {
-	m.expectSendEmailWithOptions(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, "", nil, nil, err)
-}
-
 func (m *mockEmailProviderService) expectSendEmailWithOptions(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string, err error) {
 	// Initialize the calls map if needed
 	if m.calls == nil {
@@ -63,11 +59,6 @@ func (m *mockEmailProviderService) expectSendEmailWithOptions(ctx context.Contex
 	// Store the expectation using the messageID in the key
 	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s-%s", workspaceID, messageID, fromAddress, fromName, to, subject, replyTo)
 	m.calls[key] = []interface{}{err}
-}
-
-// Helper function to create string pointer
-func createStringPtr(s string) *string {
-	return &s
 }
 
 func TestEmailService_TestEmailProvider(t *testing.T) {

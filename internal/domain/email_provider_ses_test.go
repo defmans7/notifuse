@@ -63,10 +63,9 @@ func TestAmazonSESSettings_Validate(t *testing.T) {
 
 	t.Run("Valid settings", func(t *testing.T) {
 		settings := domain.AmazonSESSettings{
-			Region:      "us-east-1",
-			AccessKey:   "test-access-key",
-			SecretKey:   "test-secret-key",
-			SandboxMode: false,
+			Region:    "us-east-1",
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
 		}
 
 		err := settings.Validate(passphrase)
@@ -82,9 +81,8 @@ func TestAmazonSESSettings_Validate(t *testing.T) {
 
 	t.Run("Missing region", func(t *testing.T) {
 		settings := domain.AmazonSESSettings{
-			AccessKey:   "test-access-key",
-			SecretKey:   "test-secret-key",
-			SandboxMode: false,
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
 		}
 
 		err := settings.Validate(passphrase)
@@ -94,9 +92,8 @@ func TestAmazonSESSettings_Validate(t *testing.T) {
 
 	t.Run("Missing access key", func(t *testing.T) {
 		settings := domain.AmazonSESSettings{
-			Region:      "us-east-1",
-			SecretKey:   "test-secret-key",
-			SandboxMode: false,
+			Region:    "us-east-1",
+			SecretKey: "test-secret-key",
 		}
 
 		err := settings.Validate(passphrase)
@@ -106,9 +103,8 @@ func TestAmazonSESSettings_Validate(t *testing.T) {
 
 	t.Run("No secret key to encrypt", func(t *testing.T) {
 		settings := domain.AmazonSESSettings{
-			Region:      "us-east-1",
-			AccessKey:   "test-access-key",
-			SandboxMode: false,
+			Region:    "us-east-1",
+			AccessKey: "test-access-key",
 		}
 
 		err := settings.Validate(passphrase)
@@ -134,10 +130,9 @@ func TestSESServiceInterface(t *testing.T) {
 	ctx := context.Background()
 
 	config := domain.AmazonSESSettings{
-		Region:      "us-east-1",
-		AccessKey:   "test-access-key",
-		SecretKey:   "test-secret-key",
-		SandboxMode: false,
+		Region:    "us-east-1",
+		AccessKey: "test-access-key",
+		SecretKey: "test-secret-key",
 	}
 
 	configSetName := "test-config-set"
@@ -299,10 +294,9 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
 			SES: &domain.AmazonSESSettings{
-				Region:      "us-east-1",
-				AccessKey:   "test-access-key",
-				SecretKey:   "test-secret-key",
-				SandboxMode: false,
+				Region:    "us-east-1",
+				AccessKey: "test-access-key",
+				SecretKey: "test-secret-key",
 			},
 		}
 
@@ -325,10 +319,9 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
 			SES: &domain.AmazonSESSettings{
-				Region:      "us-east-1",
-				AccessKey:   "test-access-key",
-				SecretKey:   "test-secret-key",
-				SandboxMode: false,
+				Region:    "us-east-1",
+				AccessKey: "test-access-key",
+				SecretKey: "test-secret-key",
 			},
 		}
 
@@ -356,9 +349,8 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
 			SES: &domain.AmazonSESSettings{
-				AccessKey:   "test-access-key",
-				SecretKey:   "test-secret-key",
-				SandboxMode: false,
+				AccessKey: "test-access-key",
+				SecretKey: "test-secret-key",
 			},
 		}
 
@@ -374,9 +366,8 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 			DefaultSenderEmail: "default@example.com",
 			DefaultSenderName:  "Default Sender",
 			SES: &domain.AmazonSESSettings{
-				Region:      "us-east-1",
-				SecretKey:   "test-secret-key",
-				SandboxMode: false,
+				Region:    "us-east-1",
+				SecretKey: "test-secret-key",
 			},
 		}
 

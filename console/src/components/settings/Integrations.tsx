@@ -18,7 +18,9 @@ import {
   Popconfirm,
   Card,
   Spin,
-  Tooltip
+  Tooltip,
+  Row,
+  Col
 } from 'antd'
 import {
   EmailProvider,
@@ -720,17 +722,72 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         <Form.Item name="name" label="Integration Name" rules={[{ required: true }]}>
           <Input placeholder="Enter a name for this integration" disabled={!isOwner} />
         </Form.Item>
-        <Form.Item name="default_sender_email" label="Sender Email" rules={[{ required: true }]}>
-          <Input placeholder="noreply@yourdomain.com" disabled={!isOwner} />
-        </Form.Item>
-        <Form.Item name="default_sender_name" label="Sender Name" rules={[{ required: true }]}>
-          <Input placeholder="Your Company Name" disabled={!isOwner} />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              name="default_sender_email"
+              label="Sender Email"
+              rules={[{ required: true }]}
+            >
+              <Input placeholder="noreply@yourdomain.com" disabled={!isOwner} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="default_sender_name" label="Sender Name" rules={[{ required: true }]}>
+              <Input placeholder="Your Company Name" disabled={!isOwner} />
+            </Form.Item>
+          </Col>
+        </Row>
 
         {providerType === 'ses' && (
           <>
             <Form.Item name={['ses', 'region']} label="AWS Region" rules={[{ required: true }]}>
-              <Input placeholder="us-east-1" disabled={!isOwner} />
+              <Select placeholder="Select AWS Region" disabled={!isOwner}>
+                <Select.Option value="us-east-2">US East (Ohio) - us-east-2</Select.Option>
+                <Select.Option value="us-east-1">US East (N. Virginia) - us-east-1</Select.Option>
+                <Select.Option value="us-west-1">US West (N. California) - us-west-1</Select.Option>
+                <Select.Option value="us-west-2">US West (Oregon) - us-west-2</Select.Option>
+                <Select.Option value="af-south-1">Africa (Cape Town) - af-south-1</Select.Option>
+                <Select.Option value="ap-southeast-3">
+                  Asia Pacific (Jakarta) - ap-southeast-3
+                </Select.Option>
+                <Select.Option value="ap-south-1">Asia Pacific (Mumbai) - ap-south-1</Select.Option>
+                <Select.Option value="ap-northeast-3">
+                  Asia Pacific (Osaka) - ap-northeast-3
+                </Select.Option>
+                <Select.Option value="ap-northeast-2">
+                  Asia Pacific (Seoul) - ap-northeast-2
+                </Select.Option>
+                <Select.Option value="ap-southeast-1">
+                  Asia Pacific (Singapore) - ap-southeast-1
+                </Select.Option>
+                <Select.Option value="ap-southeast-2">
+                  Asia Pacific (Sydney) - ap-southeast-2
+                </Select.Option>
+                <Select.Option value="ap-northeast-1">
+                  Asia Pacific (Tokyo) - ap-northeast-1
+                </Select.Option>
+                <Select.Option value="ca-central-1">Canada (Central) - ca-central-1</Select.Option>
+                <Select.Option value="eu-central-1">
+                  Europe (Frankfurt) - eu-central-1
+                </Select.Option>
+                <Select.Option value="eu-west-1">Europe (Ireland) - eu-west-1</Select.Option>
+                <Select.Option value="eu-west-2">Europe (London) - eu-west-2</Select.Option>
+                <Select.Option value="eu-south-1">Europe (Milan) - eu-south-1</Select.Option>
+                <Select.Option value="eu-west-3">Europe (Paris) - eu-west-3</Select.Option>
+                <Select.Option value="eu-north-1">Europe (Stockholm) - eu-north-1</Select.Option>
+                <Select.Option value="il-central-1">Israel (Tel Aviv) - il-central-1</Select.Option>
+                <Select.Option value="me-south-1">Middle East (Bahrain) - me-south-1</Select.Option>
+                <Select.Option value="sa-east-1">
+                  South America (São Paulo) - sa-east-1
+                </Select.Option>
+                <Select.Option value="us-gov-east-1">
+                  AWS GovCloud (US-East) - us-gov-east-1
+                </Select.Option>
+                <Select.Option value="us-gov-west-1">
+                  AWS GovCloud (US-West) - us-gov-west-1
+                </Select.Option>
+              </Select>
             </Form.Item>
             <Form.Item
               name={['ses', 'access_key']}
@@ -742,33 +799,44 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             <Form.Item name={['ses', 'secret_key']} label="AWS Secret Key">
               <Input.Password placeholder="Secret Key" disabled={!isOwner} />
             </Form.Item>
-            <Form.Item name={['ses', 'sandbox_mode']} valuePropName="checked" label="Sandbox Mode">
-              <Switch disabled={!isOwner} />
-            </Form.Item>
           </>
         )}
 
         {providerType === 'smtp' && (
           <>
-            <Form.Item name={['smtp', 'host']} label="SMTP Host" rules={[{ required: true }]}>
-              <Input placeholder="smtp.yourdomain.com" disabled={!isOwner} />
-            </Form.Item>
-            <Form.Item name={['smtp', 'port']} label="SMTP Port" rules={[{ required: true }]}>
-              <InputNumber min={1} max={65535} placeholder="587" disabled={!isOwner} />
-            </Form.Item>
-            <Form.Item
-              name={['smtp', 'username']}
-              label="SMTP Username"
-              rules={[{ required: true }]}
-            >
-              <Input placeholder="Username" disabled={!isOwner} />
-            </Form.Item>
-            <Form.Item name={['smtp', 'password']} label="SMTP Password">
-              <Input.Password placeholder="Password" disabled={!isOwner} />
-            </Form.Item>
-            <Form.Item name={['smtp', 'use_tls']} valuePropName="checked" label="Use TLS">
-              <Switch defaultChecked disabled={!isOwner} />
-            </Form.Item>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name={['smtp', 'host']} label="SMTP Host" rules={[{ required: true }]}>
+                  <Input placeholder="smtp.yourdomain.com" disabled={!isOwner} />
+                </Form.Item>
+              </Col>
+              <Col span={6}>
+                <Form.Item name={['smtp', 'port']} label="SMTP Port" rules={[{ required: true }]}>
+                  <InputNumber min={1} max={65535} placeholder="587" disabled={!isOwner} />
+                </Form.Item>
+              </Col>
+              <Col span={6}>
+                <Form.Item name={['smtp', 'use_tls']} valuePropName="checked" label="Use TLS">
+                  <Switch defaultChecked disabled={!isOwner} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name={['smtp', 'username']}
+                  label="SMTP Username"
+                  rules={[{ required: true }]}
+                >
+                  <Input placeholder="Username" disabled={!isOwner} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name={['smtp', 'password']} label="SMTP Password">
+                  <Input.Password placeholder="Password" disabled={!isOwner} />
+                </Form.Item>
+              </Col>
+            </Row>
           </>
         )}
 
@@ -967,14 +1035,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             <Form.Item name="kind" hidden>
               <Input />
             </Form.Item>
-
-            <Alert
-              message="Configure Email Provider"
-              description="Give your integration a descriptive name and configure the email provider settings. This integration will allow Notifuse to send emails through your email provider."
-              type="info"
-              showIcon
-              style={{ marginBottom: 24 }}
-            />
 
             {renderEmailProviderForm(selectedProviderType)}
           </Form>

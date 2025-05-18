@@ -769,6 +769,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	// Check for sandbox mode
 	if provider.SparkPost.SandboxMode {
 		s.logger.Info("SparkPost is in sandbox mode, email will be accepted but not delivered")
+		to = to + ".sink.sparkpostmail.com"
 	}
 
 	// Prepare the request payload

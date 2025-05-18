@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -714,7 +716,11 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	awsConfig := &aws.Config{
 		Region:      aws.String(provider.SES.Region),
 		Credentials: credentials.NewStaticCredentials(provider.SES.AccessKey, provider.SES.SecretKey, ""),
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
+
 	awsSession, err := session.NewSession(awsConfig)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
