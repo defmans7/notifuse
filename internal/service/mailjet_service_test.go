@@ -419,6 +419,7 @@ func TestMailjetService_SendEmail(t *testing.T) {
 
 	// Test data
 	workspaceID := "workspace-123"
+	messageID := "message-123"
 	fromAddress := "sender@example.com"
 	fromName := "Test Sender"
 	to := "recipient@example.com"
@@ -448,6 +449,7 @@ func TestMailjetService_SendEmail(t *testing.T) {
 							"MessageUUID": "uuid-123",
 						},
 					},
+					"CustomID": messageID,
 				},
 			},
 		}
@@ -490,13 +492,13 @@ func TestMailjetService_SendEmail(t *testing.T) {
 
 				assert.Equal(t, subject, message["Subject"])
 				assert.Equal(t, content, message["HTMLPart"])
-				assert.Equal(t, workspaceID, message["CustomID"])
+				assert.Equal(t, messageID, message["CustomID"])
 
 				return mockHTTPResponse(t, http.StatusOK, expectedResponse), nil
 			})
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
 		// Assertions
 		require.NoError(t, err)
