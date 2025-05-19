@@ -595,18 +595,13 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   // Handle provider selection and open drawer
   const handleSelectProviderType = (provider: EmailProviderKind) => {
     setSelectedProviderType(provider)
-    // Initialize with a default sender
-    const defaultSender = {
-      id: uuidv4(),
-      name: 'Default Sender',
-      email: ''
-    }
-    setSenders([defaultSender])
+    // Initialize with empty senders array
+    setSenders([])
     emailProviderForm.setFieldsValue({
       kind: provider,
       type: 'email',
       name: provider.charAt(0).toUpperCase() + provider.slice(1),
-      senders: [defaultSender]
+      senders: []
     })
     setProviderDrawerVisible(true)
   }
@@ -625,7 +620,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
     // Make sure we have at least one sender
     if (!values.senders || values.senders.length === 0) {
-      message.error('At least one sender is required')
+      message.error('Please add at least one sender before saving')
       return
     }
 
@@ -1045,33 +1040,32 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         required
         tooltip="Add one or more email senders. The first sender will be used as the default."
       >
-        <div className="border rounded-md p-4 mb-4">
-          <div className="mb-2 flex justify-between items-center">
-            <div className="text-sm font-medium">
-              Sender List{' '}
-              {senders.length > 0 && <Tag color="blue">Default: {senders[0]?.name}</Tag>}
+        {senders.length > 0 ? (
+          <div className="border rounded-md p-4 mb-4">
+            <div className="mb-2 flex justify-between items-center">
+              <div className="text-sm font-medium">
+                Sender List{' '}
+                {senders.length > 0 && <Tag color="blue">Default: {senders[0]?.name}</Tag>}
+              </div>
+              <Button type="default" size="small" onClick={addSender} disabled={!isOwner}>
+                <FontAwesomeIcon icon={faPlus} className="mr-1" /> Add Sender
+              </Button>
             </div>
-            <Button type="default" size="small" onClick={addSender} disabled={!isOwner}>
+            <Table
+              dataSource={senders}
+              columns={columns}
+              size="small"
+              pagination={false}
+              rowKey={(record) => record.id || Math.random().toString()}
+            />
+          </div>
+        ) : (
+          <div className="flex justify-center py-6">
+            <Button type="primary" onClick={addSender} disabled={!isOwner}>
               <FontAwesomeIcon icon={faPlus} className="mr-1" /> Add Sender
             </Button>
           </div>
-          <Table
-            dataSource={senders}
-            columns={columns}
-            size="small"
-            pagination={false}
-            rowKey={(record) => record.id || Math.random().toString()}
-          />
-          {senders.length === 0 && (
-            <Alert
-              message="No senders defined"
-              description="Add at least one sender to proceed"
-              type="warning"
-              showIcon
-              className="mt-2"
-            />
-          )}
-        </div>
+        )}
         <Form.Item name="senders" hidden>
           <Input />
         </Form.Item>
