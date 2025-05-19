@@ -3,7 +3,6 @@ import {
   Button,
   Drawer,
   Upload,
-  Form,
   Select,
   Progress,
   Space,
@@ -119,8 +118,15 @@ export function ContactsCsvUploadDrawer({
   isVisible,
   onClose
 }: ContactsCsvUploadDrawerProps) {
-  const [form] = Form.useForm()
+  // Replace form with direct state management
+  const [mappings, setMappings] = useState<Record<string, string>>({})
+  const [selectedListIds, setSelectedListIds] = useState<string[]>(
+    selectedList ? [selectedList] : []
+  )
+
   const [csvData, setCsvData] = useState<CsvData | null>(null)
+  // Add a ref to store parsed CSV data temporarily during parsing/restoration
+  const parsedCsvDataRef = useRef<CsvData | null>(null)
   const [fileName, setFileName] = useState<string>('')
   const [uploading, setUploading] = useState<boolean>(false)
   const [uploadProgress, setUploadProgress] = useState<number>(0)
@@ -132,9 +138,6 @@ export function ContactsCsvUploadDrawer({
   const [processingCancelled, setProcessingCancelled] = useState<boolean>(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [savedProgressExists, setSavedProgressExists] = useState<boolean>(false)
-  const [selectedListIds, setSelectedListIds] = useState<string[]>(
-    selectedList ? [selectedList] : []
-  )
   const [uploadComplete, setUploadComplete] = useState<boolean>(false)
   const [successCount, setSuccessCount] = useState<number>(0)
   const [failureCount, setFailureCount] = useState<number>(0)
@@ -152,44 +155,18 @@ export function ContactsCsvUploadDrawer({
     isPaused: false
   })
 
-  // Initialize form with selectedList when provided
+  // Initialize with selectedList when provided
   useEffect(() => {
     if (selectedList) {
-      form.setFieldsValue({ selectedListIds: [selectedList] })
+      setSelectedListIds([selectedList])
     }
-  }, [selectedList, form])
-
-  // Check for saved progress
-  const checkForSavedProgress = (filename: string) => {
-    try {
-      const savedData = localStorage.getItem(getProgressStorageKey(workspaceId, filename))
-      if (savedData) {
-        const savedProgress: SavedProgress = JSON.parse(savedData)
-
-        // Check if the filename matches and it's recent (within 7 days)
-        const isRecent = Date.now() - savedProgress.timestamp < 7 * 24 * 60 * 60 * 1000
-
-        if (savedProgress.fileName === filename && isRecent) {
-          setSavedProgressExists(true)
-          return savedProgress
-        }
-      }
-    } catch (error) {
-      console.error('Error checking for saved progress:', error)
-    }
-
-    setSavedProgressExists(false)
-    return null
-  }
+  }, [selectedList])
 
   // Save progress to localStorage
   const saveProgress = () => {
-    if (!fileName || !csvData || !form) return
+    if (!fileName || !csvData) return
 
     try {
-      const mappings = form.getFieldValue('mappings') || {}
-      const selectedListIds = form.getFieldValue('selectedListIds') || []
-
       const progressData: SavedProgress = {
         fileName,
         currentRow,
@@ -210,61 +187,106 @@ export function ContactsCsvUploadDrawer({
     }
   }
 
-  // Clear saved progress
-  const clearSavedProgress = () => {
+  // Check for saved progress
+  const checkForSavedProgress = (filename: string) => {
     try {
-      localStorage.removeItem(getProgressStorageKey(workspaceId, fileName))
-      setSavedProgressExists(false)
-    } catch (error) {
-      console.error('Error clearing saved progress:', error)
-    }
-  }
+      const savedData = localStorage.getItem(getProgressStorageKey(workspaceId, filename))
+      if (savedData) {
+        const savedProgress: SavedProgress = JSON.parse(savedData)
 
-  // Start progress auto-save interval
-  const startProgressSaveInterval = () => {
-    if (progressSaveInterval.current) {
-      clearInterval(progressSaveInterval.current)
-    }
+        // Check if the filename matches and it's recent (within 7 days)
+        const isRecent = Date.now() - savedProgress.timestamp < 7 * 24 * 60 * 60 * 1000
 
-    progressSaveInterval.current = setInterval(() => {
-      if (uploading && !processingCancelled) {
-        saveProgress()
+        // Validate the saved progress data
+        const isValid =
+          savedProgress &&
+          typeof savedProgress.fileName === 'string' &&
+          typeof savedProgress.currentRow === 'number' &&
+          typeof savedProgress.totalRows === 'number' &&
+          typeof savedProgress.currentBatch === 'number' &&
+          typeof savedProgress.totalBatches === 'number' &&
+          typeof savedProgress.mappings === 'object' &&
+          Array.isArray(savedProgress.selectedListIds)
+
+        if (savedProgress.fileName === filename && isRecent && isValid) {
+          // Additional validation: ensure the currentRow is within bounds
+          if (savedProgress.currentRow >= 0 && savedProgress.currentRow < savedProgress.totalRows) {
+            setSavedProgressExists(true)
+            return savedProgress
+          }
+        }
       }
-    }, PROGRESS_SAVE_INTERVAL)
+    } catch (error) {
+      console.error('Error checking for saved progress:', error)
+    }
+
+    setSavedProgressExists(false)
+    return null
   }
 
-  // Stop progress auto-save interval
-  const stopProgressSaveInterval = () => {
-    if (progressSaveInterval.current) {
-      clearInterval(progressSaveInterval.current)
-      progressSaveInterval.current = null
+  // Handle restore progress with direct CSV data parameter
+  const handleRestoreProgress = (savedProgress: SavedProgress, directCsvData?: CsvData) => {
+    // console.log('handleRestoreProgress csvData state', csvData)
+    // console.log('handleRestoreProgress parsedCsvDataRef', parsedCsvDataRef.current)
+    // console.log('handleRestoreProgress directCsvData', directCsvData)
+    // console.log('handleRestoreProgress savedProgress', savedProgress)
+
+    // Use data from parameter, ref, or state in that order of preference
+    const dataToUse = directCsvData || parsedCsvDataRef.current || csvData
+
+    // Safety check
+    if (!dataToUse) {
+      console.error('Cannot restore progress: CSV data is not available from any source')
+      message.error('Cannot restore progress: CSV data is not available')
+      return
     }
-  }
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopProgressSaveInterval()
+    if (!savedProgress) {
+      console.error('Cannot restore progress: No saved progress data')
+      return
     }
-  }, [])
 
-  // Handle restore progress
-  const handleRestoreProgress = (savedProgress: SavedProgress) => {
-    if (!csvData) return
+    // Validate mappings against current CSV headers
+    const validMappings: Record<string, string> = {}
+    if (savedProgress.mappings) {
+      Object.entries(savedProgress.mappings).forEach(([field, column]) => {
+        // Ensure the column exists in the current CSV file
+        if (column && typeof column === 'string' && dataToUse.headers.includes(column)) {
+          validMappings[field] = column
+        }
+      })
+    }
 
-    // Restore form mappings
-    form.setFieldsValue({
-      mappings: savedProgress.mappings,
-      selectedListIds: savedProgress.selectedListIds || []
-    })
+    // Ensure email mapping is still valid
+    if (!validMappings.email) {
+      message.warning(
+        'Email mapping from previous session is invalid for this CSV. Please map fields manually.'
+      )
+      // Set minimal valid state for continuation
+      setCurrentRow(0)
+      setTotalRows(dataToUse.rows.length)
+      setCurrentBatch(1)
+      setTotalBatches(Math.ceil(dataToUse.rows.length / BATCH_SIZE))
+      setUploadProgress(0)
+      return
+    }
+
+    // Update state with validated mappings
+    setMappings(validMappings)
+    setSelectedListIds(savedProgress.selectedListIds || [])
+
+    // Validate current row is within bounds
+    const startRow =
+      savedProgress.currentRow >= 0 && savedProgress.currentRow < dataToUse.rows.length
+        ? savedProgress.currentRow
+        : 0
 
     // Set state for resuming
-    setCurrentRow(savedProgress.currentRow)
-    setTotalRows(savedProgress.totalRows)
-    setCurrentBatch(savedProgress.currentBatch)
-    setTotalBatches(savedProgress.totalBatches)
-    setUploadProgress(Math.round((savedProgress.currentRow / savedProgress.totalRows) * 100))
-    setSelectedListIds(savedProgress.selectedListIds || [])
+    setCurrentRow(startRow)
+    setTotalRows(dataToUse.rows.length)
+    setCurrentBatch(savedProgress.currentBatch > 0 ? savedProgress.currentBatch : 1)
+    setTotalBatches(Math.ceil(dataToUse.rows.length / BATCH_SIZE))
+    setUploadProgress(Math.round((startRow / dataToUse.rows.length) * 100))
 
     message.success('Previous upload progress restored')
   }
@@ -284,6 +306,10 @@ export function ContactsCsvUploadDrawer({
         }
       })
     } else {
+      // If upload is complete, make sure to clear saved progress
+      if (uploadComplete && fileName) {
+        clearSavedProgress(fileName)
+      }
       onClose()
     }
   }
@@ -297,10 +323,7 @@ export function ContactsCsvUploadDrawer({
 
     setFileName(file.name)
 
-    // Check for saved progress
-    const savedProgress = checkForSavedProgress(file.name)
-
-    // Parse CSV file
+    // Parse CSV file first
     Papa.parse<string[]>(file, {
       header: false,
       complete: (results: ParseResult<string[]>) => {
@@ -309,11 +332,15 @@ export function ContactsCsvUploadDrawer({
           const rows = results.data.slice(1)
           const preview = rows.slice(0, PREVIEW_ROWS)
 
-          setCsvData({
+          const csvDataObj = {
             headers,
             rows,
             preview
-          })
+          }
+
+          // Store data in both state and ref
+          setCsvData(csvDataObj)
+          parsedCsvDataRef.current = csvDataObj
 
           // Set total rows
           setTotalRows(rows.length)
@@ -331,11 +358,12 @@ export function ContactsCsvUploadDrawer({
             }
           })
 
-          // If we have saved progress and the user hasn't chosen to restore yet,
-          // we'll wait for their decision before setting field values
-          if (!savedProgress || savedProgressExists) {
-            form.setFieldsValue({ mappings: initialMappings })
-          }
+          // Apply initial mappings first
+          setMappings(initialMappings)
+
+          // Now that CSV data is available in the ref, check for saved progress
+          const savedProgress = checkForSavedProgress(file.name)
+          // console.log('savedProgress', savedProgress)
 
           // If there's saved progress, show modal to ask user
           if (savedProgress && !savedProgressExists) {
@@ -345,12 +373,19 @@ export function ContactsCsvUploadDrawer({
               okText: 'Resume',
               cancelText: 'Start New',
               onOk: () => {
-                handleRestoreProgress(savedProgress)
+                if (savedProgress) {
+                  handleRestoreProgress(savedProgress, csvDataObj)
+                }
               },
               onCancel: () => {
                 // Start fresh - clear saved progress
-                clearSavedProgress()
-                form.setFieldsValue({ mappings: initialMappings })
+                // console.log('Starting fresh, clearing progress for:', file.name)
+
+                // Use our improved clearSavedProgress function
+                clearSavedProgress(file.name)
+
+                // Set the initial mappings
+                setMappings(initialMappings)
               }
             })
           }
@@ -374,18 +409,70 @@ export function ContactsCsvUploadDrawer({
     beforeUpload
   }
 
+  // Clear saved progress
+  const clearSavedProgress = (specificFileName?: string) => {
+    try {
+      const fileToUse = specificFileName || fileName
+
+      if (!fileToUse) {
+        console.warn('No filename provided to clearSavedProgress')
+        return
+      }
+
+      // console.log('Clearing progress for:', fileToUse)
+      localStorage.removeItem(getProgressStorageKey(workspaceId, fileToUse))
+      setSavedProgressExists(false)
+
+      // Reset progress-related state
+      setCurrentRow(0)
+      const dataToUse = csvData || parsedCsvDataRef.current
+      if (dataToUse) {
+        setTotalRows(dataToUse.rows.length)
+        setTotalBatches(Math.ceil(dataToUse.rows.length / BATCH_SIZE))
+      }
+      setCurrentBatch(1)
+      setUploadProgress(0)
+
+      // console.log('Successfully cleared progress')
+    } catch (error) {
+      console.error('Error clearing saved progress:', error)
+    }
+  }
+
+  useEffect(() => {
+    // If CSV data is updated after initial processing, sync the ref
+    if (csvData) {
+      parsedCsvDataRef.current = csvData
+    }
+  }, [csvData])
+
   const startUpload = async () => {
     try {
-      const mappings = form.getFieldValue('mappings')
-
       // Validate email mapping is set
       if (!mappings.email) {
         message.error('Email field mapping is required')
         return
       }
 
-      if (!csvData) {
+      // Use data from either state or ref
+      const dataToUse = csvData || parsedCsvDataRef.current
+
+      if (!dataToUse) {
         message.error('No CSV data available')
+        return
+      }
+
+      // Ensure mappings use valid headers from the current CSV data
+      const validMappings: Record<string, string> = {}
+      Object.entries(mappings).forEach(([field, column]) => {
+        if (column && dataToUse.headers.includes(column)) {
+          validMappings[field] = column
+        }
+      })
+
+      // Check if email mapping is still valid
+      if (!validMappings.email) {
+        message.error('Email mapping is missing or invalid')
         return
       }
 
@@ -401,8 +488,8 @@ export function ContactsCsvUploadDrawer({
       // Calculate total rows and batches if starting fresh
       let startRow = currentRow
       if (startRow === 0) {
-        const totalBatches = Math.ceil(csvData.rows.length / BATCH_SIZE)
-        setTotalRows(csvData.rows.length)
+        const totalBatches = Math.ceil(dataToUse.rows.length / BATCH_SIZE)
+        setTotalRows(dataToUse.rows.length)
         setTotalBatches(totalBatches)
       }
 
@@ -424,17 +511,27 @@ export function ContactsCsvUploadDrawer({
         }
 
         setCurrentBatch(batch)
-        const end = Math.min(rowIndex + BATCH_SIZE, totalRows)
-        const batchRows = csvData.rows.slice(rowIndex, end)
+        const end = Math.min(rowIndex + BATCH_SIZE, dataToUse.rows.length)
+
+        // Safeguard against out-of-bounds access
+        if (rowIndex >= dataToUse.rows.length) {
+          setUploadComplete(true)
+          setUploading(false)
+          stopProgressSaveInterval()
+          clearSavedProgress(fileName) // Clear progress when reaching the end
+          return
+        }
+
+        const batchRows = dataToUse.rows.slice(rowIndex, end)
 
         const contacts: Partial<Contact>[] = batchRows.map((row) => {
           const contact: Partial<Contact> = {}
 
-          // Map CSV columns to contact fields
-          Object.entries(mappings).forEach(([contactField, csvColumn]) => {
+          // Map CSV columns to contact fields using validated mappings
+          Object.entries(validMappings).forEach(([contactField, csvColumn]) => {
             if (csvColumn) {
-              const columnIndex = csvData.headers.indexOf(csvColumn as string)
-              if (columnIndex !== -1) {
+              const columnIndex = dataToUse.headers.indexOf(csvColumn)
+              if (columnIndex !== -1 && row[columnIndex] !== undefined) {
                 let value = row[columnIndex]
 
                 // Handle special field types
@@ -450,8 +547,10 @@ export function ContactsCsvUploadDrawer({
                   contactField === 'lifetime_value' ||
                   contactField === 'orders_count'
                 ) {
-                  if (value && value.trim() !== '') {
+                  if (value && value.trim && value.trim() !== '') {
                     value = Number(value)
+                    // Handle NaN values
+                    if (isNaN(value)) value = null
                   } else {
                     value = null
                   }
@@ -525,13 +624,23 @@ export function ContactsCsvUploadDrawer({
 
         if (rowIndex < totalRows && !processingCancelled) {
           batch++
-          setTimeout(processNextBatch, 0) // Continue with next batch
+          // Use a try/catch here to prevent unhandled errors during batch processing
+          try {
+            setTimeout(processNextBatch, 0) // Continue with next batch
+          } catch (batchError) {
+            console.error('Error processing batch:', batchError)
+            setUploadError(
+              `Batch processing error: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`
+            )
+            setUploading(false)
+            stopProgressSaveInterval()
+          }
         } else {
           // Upload is complete
           setUploadComplete(true)
           setUploading(false)
           stopProgressSaveInterval()
-          clearSavedProgress() // Clear progress as it's now complete
+          clearSavedProgress(fileName) // Clear progress as it's now complete
 
           // Call onSuccess callback if provided
           if (onSuccess) {
@@ -572,8 +681,18 @@ export function ContactsCsvUploadDrawer({
         isPaused: false
       }
 
-      await processNextBatch()
+      try {
+        await processNextBatch()
+      } catch (batchError) {
+        console.error('Error starting batch processing:', batchError)
+        setUploadError(
+          `Batch processing error: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`
+        )
+        setUploading(false)
+        stopProgressSaveInterval()
+      }
     } catch (error) {
+      console.error('CSV upload failed:', error)
       stopProgressSaveInterval()
       setUploading(false)
       setUploadError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -598,13 +717,46 @@ export function ContactsCsvUploadDrawer({
     stopProgressSaveInterval()
   }
 
+  // Start progress auto-save interval
+  const startProgressSaveInterval = () => {
+    if (progressSaveInterval.current) {
+      clearInterval(progressSaveInterval.current)
+    }
+
+    progressSaveInterval.current = setInterval(() => {
+      if (uploading && !processingCancelled) {
+        saveProgress()
+      }
+    }, PROGRESS_SAVE_INTERVAL)
+  }
+
+  // Stop progress auto-save interval
+  const stopProgressSaveInterval = () => {
+    if (progressSaveInterval.current) {
+      clearInterval(progressSaveInterval.current)
+      progressSaveInterval.current = null
+    }
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopProgressSaveInterval()
+
+      // Clear saved progress on unmount if upload was completed
+      if (uploadComplete && fileName) {
+        clearSavedProgress(fileName)
+      }
+    }
+  }, [uploadComplete, fileName])
+
   return (
     <Drawer
       title="Import Contacts from CSV"
       placement="right"
       onClose={handleCloseDrawer}
       open={isVisible}
-      width="90%"
+      width={700}
       maskClosable={false}
       styles={{
         body: {
@@ -637,6 +789,9 @@ export function ContactsCsvUploadDrawer({
             <Button
               type="primary"
               onClick={() => {
+                // Ensure progress is cleared from localStorage
+                clearSavedProgress(fileName)
+
                 // Dispatch event when closing after successful import
                 document.dispatchEvent(
                   new CustomEvent('contactsImported', {
@@ -678,7 +833,13 @@ export function ContactsCsvUploadDrawer({
           showIcon
           style={{ marginBottom: 24 }}
           action={
-            <Button size="small" danger onClick={clearSavedProgress}>
+            <Button
+              size="small"
+              danger
+              onClick={() => {
+                clearSavedProgress()
+              }}
+            >
               Start Fresh
             </Button>
           }
@@ -781,13 +942,7 @@ export function ContactsCsvUploadDrawer({
       )}
 
       {csvData && !uploading && !uploadComplete && (
-        <Form
-          form={form}
-          layout="horizontal"
-          labelCol={{ span: 6 }}
-          wrapperCol={{ span: 18 }}
-          labelAlign="left"
-          className="csv-mapping-form"
+        <div
           style={
             {
               '--form-item-margin-bottom': '12px',
@@ -817,21 +972,22 @@ export function ContactsCsvUploadDrawer({
                 marginBottom: '24px'
               }}
             >
-              <Form.Item
-                name="selectedListIds"
-                label={
-                  <span>
-                    <UserAddOutlined /> Add to Lists
-                  </span>
-                }
-                help="Contacts will be added to these lists on import (optional)"
-                initialValue={selectedListIds}
-              >
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontWeight: 500
+                  }}
+                >
+                  <UserAddOutlined /> Add to Lists
+                </label>
                 <Select
                   mode="multiple"
                   placeholder="Select lists to add contacts to"
                   style={{ width: '100%' }}
                   allowClear
+                  value={selectedListIds}
                   onChange={(values) => setSelectedListIds(values)}
                   optionFilterProp="children"
                   tagRender={(props) => {
@@ -854,7 +1010,10 @@ export function ContactsCsvUploadDrawer({
                     </Option>
                   ))}
                 </Select>
-              </Form.Item>
+                <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '4px' }}>
+                  Contacts will be added to these lists on import (optional)
+                </div>
+              </div>
             </div>
           )}
 
@@ -873,9 +1032,13 @@ export function ContactsCsvUploadDrawer({
               </Text>
             </p>
 
+            {/* Validation indicator for email field */}
+            {!mappings.email && (
+              <Alert message="Email mapping required" type="warning" showIcon className="!mb-4" />
+            )}
+
             {csvData.headers.map((header, headerIndex) => {
               // Check if this header is currently mapped to the email field
-              const mappings = form.getFieldValue('mappings') || {}
               const isEmailMapped = mappings.email === header
 
               // Find contact field this header is mapped to (if any)
@@ -891,19 +1054,21 @@ export function ContactsCsvUploadDrawer({
 
               return (
                 <div key={header} style={{ marginBottom: '16px' }}>
-                  <Form.Item
-                    label={
-                      <span>
-                        <Text strong>{header}</Text>
-                        {isEmailMapped && (
-                          <Tag color="red" style={{ marginLeft: 8 }}>
-                            Email (Required)
-                          </Tag>
-                        )}
-                      </span>
-                    }
-                    style={{ marginBottom: '8px' }}
-                  >
+                  <div style={{ marginBottom: '8px' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontWeight: 500,
+                        marginBottom: '8px'
+                      }}
+                    >
+                      <Text strong>{header}</Text>
+                      {isEmailMapped && (
+                        <Tag color="red" style={{ marginLeft: 8 }}>
+                          Email (Required)
+                        </Tag>
+                      )}
+                    </label>
                     <div
                       style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}
                     >
@@ -927,7 +1092,7 @@ export function ContactsCsvUploadDrawer({
                             currentMappings[value] = header
                           }
 
-                          form.setFieldsValue({ mappings: currentMappings })
+                          setMappings(currentMappings)
                         }}
                         allowClear
                       >
@@ -1013,20 +1178,12 @@ export function ContactsCsvUploadDrawer({
                         )}
                       </div>
                     </div>
-                  </Form.Item>
+                  </div>
                 </div>
               )
             })}
-
-            <Form.Item
-              hidden
-              name={['mappings', 'email']}
-              rules={[{ required: true, message: 'Email mapping is required' }]}
-            >
-              <input type="hidden" />
-            </Form.Item>
           </div>
-        </Form>
+        </div>
       )}
     </Drawer>
   )
