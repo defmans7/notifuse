@@ -57,6 +57,7 @@ export interface Sender {
   id: string
   email: string
   name: string
+  is_default: boolean
 }
 
 export interface EmailProvider {
@@ -367,8 +368,7 @@ export interface Template {
 }
 
 export interface EmailTemplate {
-  from_address: string
-  from_name: string
+  sender_id: string
   reply_to?: string
   subject: string
   subject_preview?: string
@@ -491,6 +491,7 @@ export interface TestTemplateRequest {
   workspace_id: string
   template_id: string
   integration_id: string
+  sender_id: string
   recipient_email: string
   cc?: string[]
   bcc?: string[]

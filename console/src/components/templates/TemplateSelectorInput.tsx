@@ -151,7 +151,7 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
           {currentWorkspace && (
             <CreateTemplateDrawer
               workspace={currentWorkspace}
-              category={category}
+              forceCategory={category}
               buttonProps={{
                 type: 'primary',
                 icon: <PlusOutlined />,
@@ -183,7 +183,7 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
                       key="clone"
                       workspace={currentWorkspace}
                       fromTemplate={template}
-                      category={category}
+                      forceCategory={category}
                       buttonProps={{
                         type: 'link',
                         title: 'Clone'
@@ -220,7 +220,7 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
             {currentWorkspace && (
               <CreateTemplateDrawer
                 workspace={currentWorkspace}
-                category={category}
+                forceCategory={category}
                 buttonProps={{
                   type: 'primary',
                   icon: <PlusOutlined />,

@@ -72,7 +72,7 @@ const ChannelsList: React.FC<{ channels: ChannelTemplates; workspaceId?: string 
     <Space direction="vertical" size="small">
       {channels.email && (
         <div className="flex items-center justify-between w-full">
-          <Tag color="blue">
+          <Tag bordered={false} color="blue">
             <FontAwesomeIcon icon={faEnvelope} style={{ opacity: 0.7 }} /> Email
           </Tag>
           {channels.email.template_id && workspaceId && (

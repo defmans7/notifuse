@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button, Drawer, Form, Input, Select, Space, App, Tabs, Row, Col, Tag } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
@@ -37,7 +37,7 @@ interface CreateTemplateDrawerProps {
   buttonProps?: any
   buttonContent?: React.ReactNode
   onClose?: () => void
-  category?: string
+  forceCategory?: string
 }
 
 // Combine default block definitions with any custom ones
@@ -150,7 +150,7 @@ export const renderCategoryTag = (category: string) => {
   }
 
   return (
-    <Tag color={color}>
+    <Tag bordered={false} color={color}>
       {category.charAt(0).toUpperCase() + category.slice(1).replace('_', '-')}
     </Tag>
   )
@@ -163,7 +163,7 @@ export function CreateTemplateDrawer({
   buttonProps = {},
   buttonContent,
   onClose,
-  category
+  forceCategory
 }: CreateTemplateDrawerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
@@ -195,9 +195,25 @@ export function CreateTemplateDrawer({
   })
 
   // Add Form.useWatch for the email fields
-  const fromName = Form.useWatch(['email', 'from_name'], form)
+  const senderID = Form.useWatch(['email', 'sender_id'], form)
   const emailSubject = Form.useWatch(['email', 'subject'], form)
   const emailPreview = Form.useWatch(['email', 'subject_preview'], form)
+  const categoryValue = forceCategory || Form.useWatch(['category'], form)
+
+  const emailProvider = useMemo(() => {
+    const providerId =
+      categoryValue === 'marketing'
+        ? workspace.settings.marketing_email_provider_id
+        : workspace.settings.transactional_email_provider_id
+    return workspace.integrations?.find((integration) => integration.id === providerId)
+  }, [workspace.integrations, categoryValue])
+
+  const emailSender = useMemo(() => {
+    if (emailProvider) {
+      return emailProvider.email_provider.senders.find((sender) => sender.id === senderID)
+    }
+    return null
+  }, [emailProvider, senderID])
 
   // Calculate editor height based on drawer dimensions
   useEffect(() => {
@@ -263,8 +279,7 @@ export function CreateTemplateDrawer({
         id: template.id || kebabCase(template.name),
         category: template.category || undefined,
         email: {
-          from_address: template.email?.from_address || '',
-          from_name: template.email?.from_name || '',
+          sender_id: template.email?.sender_id || '',
           reply_to: template.email?.reply_to || undefined,
           subject: template.email?.subject || '',
           subject_preview: template.email?.subject_preview || '',
@@ -278,10 +293,9 @@ export function CreateTemplateDrawer({
       form.setFieldsValue({
         name: `${fromTemplate.name} copy`,
         id: kebabCase(`${fromTemplate.name}-copy`),
-        category: fromTemplate.category || category || undefined,
+        category: fromTemplate.category || forceCategory || undefined,
         email: {
-          from_address: fromTemplate.email?.from_address || '',
-          from_name: fromTemplate.email?.from_name || '',
+          sender_id: fromTemplate.email?.sender_id || '',
           reply_to: fromTemplate.email?.reply_to || undefined,
           subject: fromTemplate.email?.subject || '',
           subject_preview: fromTemplate.email?.subject_preview || '',
@@ -419,8 +433,7 @@ export function CreateTemplateDrawer({
                       'name',
                       'id',
                       'category',
-                      'email.from_address',
-                      'email.from_name',
+                      'email.sender_id',
                       'email.subject',
                       'email.subject_preview',
                       'email.reply_to'
@@ -434,7 +447,7 @@ export function CreateTemplateDrawer({
             }}
             initialValues={{
               'email.visual_editor_tree': visualEditorTree,
-              category: category || undefined,
+              category: forceCategory || undefined,
               test_data: defaultTestData
             }}
           >
@@ -521,7 +534,7 @@ export function CreateTemplateDrawer({
                       >
                         <Select
                           placeholder="Select category"
-                          disabled={category ? true : false}
+                          disabled={forceCategory ? true : false}
                           options={[
                             {
                               value: 'marketing',
@@ -560,26 +573,18 @@ export function CreateTemplateDrawer({
                   <div className="text-lg my-8 font-bold">Sender</div>
                   <Row gutter={24}>
                     <Col span={12}>
-                      <Row gutter={24}>
-                        <Col span={12}>
-                          <Form.Item
-                            name={['email', 'from_address']}
-                            label="Sender email address"
-                            rules={[{ required: true, type: 'email' }]}
-                          >
-                            <Input />
-                          </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                          <Form.Item
-                            name={['email', 'from_name']}
-                            label="Sender name"
-                            rules={[{ required: true, type: 'string' }]}
-                          >
-                            <Input />
-                          </Form.Item>
-                        </Col>
-                      </Row>
+                      <Form.Item
+                        name={['email', 'sender_id']}
+                        label="Sender"
+                        rules={[{ required: true, type: 'string' }]}
+                      >
+                        <Select
+                          options={emailProvider?.email_provider.senders.map((sender) => ({
+                            value: sender.id,
+                            label: `${sender.name} <${sender.email}>`
+                          }))}
+                        />
+                      </Form.Item>
 
                       <Form.Item
                         name={['email', 'subject']}
@@ -607,7 +612,7 @@ export function CreateTemplateDrawer({
                     <Col span={12}>
                       <div className="flex justify-center">
                         <IphoneEmailPreview
-                          sender={fromName || 'Sender Name'}
+                          sender={emailSender?.name || 'Sender Name'}
                           subject={emailSubject || 'Email Subject'}
                           previewText={emailPreview || 'Preview text will appear here...'}
                           timestamp="Now"

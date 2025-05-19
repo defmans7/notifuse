@@ -68,10 +68,14 @@ export function WorkspaceMembers({
       key: 'role',
       render: (role: string, record: WorkspaceMember) => {
         if (record.type === 'api_key') {
-          return <Tag color="purple">API Key</Tag>
+          return (
+            <Tag bordered={false} color="purple">
+              API Key
+            </Tag>
+          )
         }
         return (
-          <Tag color={role === 'owner' ? 'gold' : 'blue'}>
+          <Tag bordered={false} color={role === 'owner' ? 'gold' : 'blue'}>
             {role.charAt(0).toUpperCase() + role.slice(1)}
           </Tag>
         )

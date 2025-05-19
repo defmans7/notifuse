@@ -199,9 +199,13 @@ export function ListsPage() {
                 <Descriptions.Item label="Description">{list.description}</Descriptions.Item>
                 <Descriptions.Item label="Visibility">
                   {list.is_public ? (
-                    <Tag color="green">Public</Tag>
+                    <Tag bordered={false} color="green">
+                      Public
+                    </Tag>
                   ) : (
-                    <Tag color="volcano">Private</Tag>
+                    <Tag bordered={false} color="volcano">
+                      Private
+                    </Tag>
                   )}
                 </Descriptions.Item>
 

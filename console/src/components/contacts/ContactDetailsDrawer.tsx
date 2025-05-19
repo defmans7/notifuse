@@ -848,7 +848,11 @@ export function ContactDetailsDrawer({
                       dataIndex: 'status',
                       key: 'status',
                       width: '20%',
-                      render: (status: string) => <Tag color={getStatusColor(status)}>{status}</Tag>
+                      render: (status: string) => (
+                        <Tag bordered={false} color={getStatusColor(status)}>
+                          {status}
+                        </Tag>
+                      )
                     },
                     {
                       title: 'Subscribed on',
@@ -1201,7 +1205,11 @@ export function ContactDetailsDrawer({
                   dataIndex: 'status',
                   key: 'status',
                   width: '20%',
-                  render: (status: string) => <Tag color={getStatusColor(status)}>{status}</Tag>
+                  render: (status: string) => (
+                    <Tag bordered={false} color={getStatusColor(status)}>
+                      {status}
+                    </Tag>
+                  )
                 },
                 {
                   title: 'Subscribed on',

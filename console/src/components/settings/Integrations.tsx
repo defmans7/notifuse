@@ -43,8 +43,7 @@ import {
   faEnvelope,
   faExclamationTriangle,
   faPlus,
-  faTerminal,
-  faTimes
+  faTerminal
 } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -170,15 +169,15 @@ const EmailIntegration = ({
       return (
         <Descriptions.Item label="Webhooks">
           <div className="mb-2">
-            <Tag color="orange">
+            <Tag bordered={false} color="orange">
               <FontAwesomeIcon icon={faExclamationTriangle} className="text-yellow-500 mr-1" />
               delivered
             </Tag>
-            <Tag color="orange">
+            <Tag bordered={false} color="orange">
               <FontAwesomeIcon icon={faExclamationTriangle} className="text-yellow-500 mr-1" />
               bounce
             </Tag>
-            <Tag color="orange">
+            <Tag bordered={false} color="orange">
               <FontAwesomeIcon icon={faExclamationTriangle} className="text-yellow-500 mr-1" />
               complaint
             </Tag>
@@ -206,7 +205,7 @@ const EmailIntegration = ({
               {webhookStatus.endpoints.map((endpoint, index) => (
                 <span key={index}>
                   <Tooltip title={endpoint.webhook_id + ' - ' + endpoint.url}>
-                    <Tag color={endpoint.active ? 'green' : 'orange'}>
+                    <Tag bordered={false} color={endpoint.active ? 'green' : 'orange'}>
                       {endpoint.active ? (
                         <FontAwesomeIcon icon={faCheck} className="text-green-500 mr-1" />
                       ) : (
@@ -300,8 +299,8 @@ const EmailIntegration = ({
               {provider.senders.map((sender, index) => (
                 <div key={sender.id || index} className="mb-1">
                   {sender.name} &lt;{sender.email}&gt;
-                  {index === 0 && (
-                    <Tag color="blue" className="ml-2">
+                  {sender.is_default && (
+                    <Tag bordered={false} color="blue" className="!ml-2">
                       Default
                     </Tag>
                   )}
@@ -317,19 +316,25 @@ const EmailIntegration = ({
             {isIntegrationInUse(integration.id) ? (
               <>
                 {purposes.includes('Marketing Emails') && (
-                  <Tag color="blue">
+                  <Tag bordered={false} color="blue">
                     <FontAwesomeIcon icon={faPaperPlane} className="mr-1" /> Marketing Emails
                   </Tag>
                 )}
                 {purposes.includes('Transactional Emails') && (
-                  <Tag color="purple">
+                  <Tag bordered={false} color="purple">
                     <FontAwesomeIcon icon={faTerminal} className="mr-1" /> Transactional Emails
                   </Tag>
                 )}
-                {purposes.length === 0 && <Tag color="red">Not assigned</Tag>}
+                {purposes.length === 0 && (
+                  <Tag bordered={false} color="red">
+                    Not assigned
+                  </Tag>
+                )}
               </>
             ) : (
-              <Tag color="red">Not assigned</Tag>
+              <Tag bordered={false} color="red">
+                Not assigned
+              </Tag>
             )}
             {isOwner && (
               <>
@@ -548,22 +553,41 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     emailProviderForm.setFieldsValue({ senders: newSenders })
   }
 
+  // Set a sender as default
+  const setDefaultSender = (index: number) => {
+    const newSenders = [...senders]
+    // Remove default flag from all senders
+    newSenders.forEach((sender) => {
+      sender.is_default = false
+    })
+    // Set the selected sender as default
+    newSenders[index].is_default = true
+    setSenders(newSenders)
+    emailProviderForm.setFieldsValue({ senders: newSenders })
+  }
+
   // Save sender form
   const handleSaveSender = () => {
     senderForm.validateFields().then((values) => {
       const newSenders = [...senders]
 
+      // Check if we need to set this as default (if it's the first sender or no default exists)
+      const needsDefault =
+        newSenders.length === 0 || !newSenders.some((sender) => sender.is_default)
+
       if (editingSenderIndex !== null) {
         // Update existing sender
         newSenders[editingSenderIndex] = {
           ...values,
-          id: newSenders[editingSenderIndex].id || uuidv4()
+          id: newSenders[editingSenderIndex].id || uuidv4(),
+          is_default: newSenders[editingSenderIndex].is_default || needsDefault
         }
       } else {
         // Add new sender
         newSenders.push({
           ...values,
-          id: uuidv4()
+          id: uuidv4(),
+          is_default: needsDefault
         })
       }
 
@@ -1009,7 +1033,17 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       {
         title: 'Name',
         dataIndex: 'name',
-        key: 'name'
+        key: 'name',
+        render: (text: string, record: any) => (
+          <span>
+            {text}
+            {record.is_default && (
+              <Tag bordered={false} color="blue" className="!ml-2">
+                Default
+              </Tag>
+            )}
+          </span>
+        )
       },
       {
         title: 'Email',
@@ -1025,9 +1059,16 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </div>
         ),
         key: 'actions',
-        render: (_: any, _record: any, index: number) => (
+        render: (_: any, record: any, index: number) => (
           <div className="flex justify-end">
             <Space>
+              {!record.is_default && (
+                <Tooltip title="Set as default sender">
+                  <Button size="small" type="text" onClick={() => setDefaultSender(index)}>
+                    <span className="text-blue-500">Default</span>
+                  </Button>
+                </Tooltip>
+              )}
               <Button size="small" type="text" onClick={() => editSender(index)}>
                 <FontAwesomeIcon icon={faPenToSquare} />
               </Button>
@@ -1039,7 +1080,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                   okText="Yes"
                   cancelText="No"
                 >
-                  <Button size="small" type="text" danger>
+                  <Button size="small" type="text">
                     <FontAwesomeIcon icon={faTrashCan} />
                   </Button>
                 </Popconfirm>

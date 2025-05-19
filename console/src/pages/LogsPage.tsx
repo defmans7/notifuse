@@ -383,7 +383,11 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
       dataIndex: 'status',
       key: 'status',
       render: (status: MessageStatus) => (
-        <Tag color={statusConfig[status]?.color || 'default'} icon={statusConfig[status]?.icon}>
+        <Tag
+          borderless
+          color={statusConfig[status]?.color || 'default'}
+          icon={statusConfig[status]?.icon}
+        >
           {statusConfig[status]?.label || status}
         </Tag>
       )
@@ -450,7 +454,9 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
       render: (error?: string) =>
         error ? (
           <Tooltip title={error}>
-            <Tag color="red">Error</Tag>
+            <Tag bordered={false} color="red">
+              Error
+            </Tag>
           </Tooltip>
         ) : null
     }
@@ -579,7 +585,9 @@ const WebhooksTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
       dataIndex: 'active',
       key: 'active',
       render: (active: boolean) => (
-        <Tag color={active ? 'green' : 'red'}>{active ? 'Active' : 'Inactive'}</Tag>
+        <Tag bordered={false} color={active ? 'green' : 'red'}>
+          {active ? 'Active' : 'Inactive'}
+        </Tag>
       )
     }
   ]
@@ -594,7 +602,7 @@ const WebhooksTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
           </div>
           <div>
             <Text strong>Status:</Text>{' '}
-            <Tag color={webhookStatus?.status.is_registered ? 'green' : 'orange'}>
+            <Tag bordered={false} color={webhookStatus?.status.is_registered ? 'green' : 'orange'}>
               {webhookStatus?.status.is_registered ? 'Registered' : 'Not Registered'}
             </Tag>
           </div>

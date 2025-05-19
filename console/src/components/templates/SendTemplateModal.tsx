@@ -27,6 +27,7 @@ export default function SendTemplateModal({
 }: SendTemplateModalProps) {
   const [email, setEmail] = useState('')
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>('')
+  const [selectedSenderId, setSelectedSenderId] = useState<string>('')
   const [sendLoading, setSendLoading] = useState(false)
   const [ccEmails, setCcEmails] = useState<string[]>([])
   const [bccEmails, setBccEmails] = useState<string[]>([])
@@ -54,6 +55,9 @@ export default function SendTemplateModal({
           ? defaultId
           : emailIntegrations[0]?.id || ''
       )
+
+      // set first sender from email integration
+      setSelectedSenderId(emailIntegrations[0]?.email_provider?.senders[0]?.id || '')
     }
   }, [isOpen, template, workspace, emailIntegrations, selectedIntegrationId])
 
@@ -78,6 +82,7 @@ export default function SendTemplateModal({
         workspace.id,
         template.id,
         selectedIntegrationId,
+        selectedSenderId,
         email,
         ccEmails.length > 0 ? ccEmails : undefined,
         bccEmails.length > 0 ? bccEmails : undefined,
@@ -111,6 +116,10 @@ export default function SendTemplateModal({
       </Option>
     )
   }
+
+  const selectedIntegration = emailIntegrations.find(
+    (integration) => integration.id === selectedIntegrationId
+  )
 
   return (
     <Modal
@@ -152,6 +161,19 @@ export default function SendTemplateModal({
                 No email integrations available. Please configure one in Settings.
               </Text>
             )}
+          </Form.Item>
+
+          <Form.Item label="Sender">
+            <Select
+              className="w-full"
+              placeholder="Select a sender"
+              value={selectedSenderId}
+              onChange={setSelectedSenderId}
+              options={selectedIntegration?.email_provider.senders.map((sender) => ({
+                label: `${sender.name} <${sender.email}>`,
+                value: sender.id
+              }))}
+            />
           </Form.Item>
 
           <Form.Item label="Recipient Email" required>

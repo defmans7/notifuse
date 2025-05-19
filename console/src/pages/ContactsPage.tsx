@@ -322,7 +322,7 @@ export function ContactsPage() {
 
               return (
                 <Tooltip key={list.list_id} title={tooltipTitle}>
-                  <Tag color={color} style={{ marginBottom: '2px' }}>
+                  <Tag bordered={false} color={color} style={{ marginBottom: '2px' }}>
                     {icon}
                     {listName}
                   </Tag>

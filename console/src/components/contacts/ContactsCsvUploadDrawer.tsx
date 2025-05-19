@@ -1064,7 +1064,7 @@ export function ContactsCsvUploadDrawer({
                     >
                       <Text strong>{header}</Text>
                       {isEmailMapped && (
-                        <Tag color="red" style={{ marginLeft: 8 }}>
+                        <Tag bordered={false} color="red" style={{ marginLeft: 8 }}>
                           Email (Required)
                         </Tag>
                       )}

@@ -34,17 +34,19 @@ const (
 
 // EmailSender represents an email sender with name and email address
 type EmailSender struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	IsDefault bool   `json:"is_default"`
 }
 
 // NewEmailSender creates a new sender with the given email and name
 func NewEmailSender(email, name string) EmailSender {
 	return EmailSender{
-		ID:    uuid.New().String(),
-		Email: email,
-		Name:  name,
+		ID:        uuid.New().String(),
+		Email:     email,
+		Name:      name,
+		IsDefault: true,
 	}
 }
 
