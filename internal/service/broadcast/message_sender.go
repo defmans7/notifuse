@@ -256,14 +256,33 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeTemplateCompile, errMsg, true, nil)
 	}
 
+	var emailSender *domain.EmailSender
+
+	for _, sender := range emailProvider.Senders {
+		if sender.ID == template.Email.SenderID {
+			emailSender = &sender
+			break
+		}
+	}
+
+	if emailSender == nil {
+		s.logger.WithFields(map[string]interface{}{
+			"broadcast_id": broadcast.ID,
+			"workspace_id": workspaceID,
+			"sender_id":    template.Email.SenderID,
+			"recipient":    email,
+		}).Error("Sender not found")
+		return NewBroadcastError(ErrCodeSenderNotFound, "sender not found", true, nil)
+	}
+
 	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
 	err = s.emailService.SendEmail(
 		ctx,
 		workspaceID,
 		messageID,
 		true, // is marketing
-		template.Email.FromAddress,
-		template.Email.FromName,
+		emailSender.Email,
+		emailSender.Name,
 		email,
 		template.Email.Subject,
 		*compiledTemplate.HTML,

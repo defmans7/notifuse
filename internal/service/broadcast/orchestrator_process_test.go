@@ -152,8 +152,9 @@ func TestProcess_HappyPath(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},
@@ -238,8 +239,9 @@ func TestProcess_NilTaskState(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},
@@ -326,8 +328,9 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},
@@ -416,8 +419,9 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},
@@ -493,8 +497,9 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},
@@ -582,8 +587,9 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},
@@ -673,8 +679,9 @@ func TestProcess_LastRetryError(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},
@@ -776,8 +783,9 @@ func TestProcess_LoadTemplatesError(t *testing.T) {
 				Name: "Test Email Provider",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					DefaultSenderEmail: "default@example.com",
-					DefaultSenderName:  "Default Sender",
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("default@example.com", "Default Sender"),
+					},
 				},
 			},
 		},

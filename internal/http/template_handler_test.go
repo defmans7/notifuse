@@ -58,8 +58,7 @@ func setupTemplateHandlerTest(t *testing.T) (*mocks.MockTemplateService, *pkgmoc
 
 func createTestEmailTemplate() *domain.EmailTemplate {
 	return &domain.EmailTemplate{
-		FromAddress:     "test@example.com",
-		FromName:        "Test Sender",
+		SenderID:        "sender123",
 		Subject:         "Test Email",
 		CompiledPreview: "<html><body>Test</body></html>",
 		VisualEditorTree: mjml.EmailBlock{

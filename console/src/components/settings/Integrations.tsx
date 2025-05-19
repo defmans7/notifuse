@@ -815,8 +815,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           <Input placeholder="Enter a name for this integration" disabled={!isOwner} />
         </Form.Item>
 
-        {renderSendersField()}
-
         {providerType === 'ses' && (
           <>
             <Form.Item name={['ses', 'region']} label="AWS Region" rules={[{ required: true }]}>
@@ -999,6 +997,8 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             </Form.Item>
           </>
         )}
+
+        {renderSendersField()}
       </>
     )
   }
@@ -1017,19 +1017,35 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         key: 'email'
       },
       {
-        title: 'Actions',
+        title: (
+          <div className="flex justify-end">
+            <Button type="primary" ghost size="small" onClick={addSender} disabled={!isOwner}>
+              Add Sender
+            </Button>
+          </div>
+        ),
         key: 'actions',
         render: (_: any, _record: any, index: number) => (
-          <Space>
-            <Button size="small" type="text" onClick={() => editSender(index)}>
-              <FontAwesomeIcon icon={faPenToSquare} />
-            </Button>
-            {senders.length > 1 && (
-              <Button size="small" type="text" onClick={() => deleteSender(index)} danger>
-                <FontAwesomeIcon icon={faTrashCan} />
+          <div className="flex justify-end">
+            <Space>
+              <Button size="small" type="text" onClick={() => editSender(index)}>
+                <FontAwesomeIcon icon={faPenToSquare} />
               </Button>
-            )}
-          </Space>
+              {senders.length > 1 && (
+                <Popconfirm
+                  title="Delete this sender?"
+                  description="Templates using this sender will need to be updated to use a different sender."
+                  onConfirm={() => deleteSender(index)}
+                  okText="Yes"
+                  cancelText="No"
+                >
+                  <Button size="small" type="text" danger>
+                    <FontAwesomeIcon icon={faTrashCan} />
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
+          </div>
         )
       }
     ]
@@ -1041,16 +1057,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         tooltip="Add one or more email senders. The first sender will be used as the default."
       >
         {senders.length > 0 ? (
-          <div className="border rounded-md p-4 mb-4">
-            <div className="mb-2 flex justify-between items-center">
-              <div className="text-sm font-medium">
-                Sender List{' '}
-                {senders.length > 0 && <Tag color="blue">Default: {senders[0]?.name}</Tag>}
-              </div>
-              <Button type="default" size="small" onClick={addSender} disabled={!isOwner}>
-                <FontAwesomeIcon icon={faPlus} className="mr-1" /> Add Sender
-              </Button>
-            </div>
+          <div className="border border-gray-200 rounded-md p-4 mb-4">
             <Table
               dataSource={senders}
               columns={columns}

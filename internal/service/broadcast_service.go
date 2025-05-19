@@ -796,12 +796,21 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return err
 	}
 
-	// Prepare template data
-	// templateData := domain.MapOfAny{
-	// 	"contact": domain.MapOfAny{
-	// 		"email": request.RecipientEmail,
-	// 	},
-	// }
+	var emailSender *domain.EmailSender
+
+	if template.Email.SenderID != "" {
+		for _, sender := range emailProvider.Senders {
+			if sender.ID == template.Email.SenderID {
+				emailSender = &sender
+				break
+			}
+		}
+	}
+
+	if emailSender == nil {
+		s.logger.Error("Failed to get sender for broadcast")
+		return fmt.Errorf("failed to get sender for broadcast")
+	}
 
 	messageID := uuid.New().String()
 
@@ -864,8 +873,8 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		request.WorkspaceID,
 		messageID,
 		true, // is marketing
-		template.Email.FromAddress,
-		template.Email.FromName,
+		emailSender.Email,
+		emailSender.Name,
 		request.RecipientEmail,
 		template.Email.Subject,
 		*compiledTemplate.HTML,

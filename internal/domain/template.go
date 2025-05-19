@@ -152,8 +152,7 @@ func (t TemplateReference) Value() (driver.Value, error) {
 }
 
 type EmailTemplate struct {
-	FromAddress      string          `json:"from_address"`
-	FromName         string          `json:"from_name"`
+	SenderID         string          `json:"sender_id"`
 	ReplyTo          string          `json:"reply_to,omitempty"`
 	Subject          string          `json:"subject"`
 	SubjectPreview   *string         `json:"subject_preview,omitempty"`
@@ -164,17 +163,8 @@ type EmailTemplate struct {
 
 func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	// Validate required fields
-	if e.FromAddress == "" {
-		return fmt.Errorf("invalid email template: from_address is required")
-	}
-	if !govalidator.IsEmail(e.FromAddress) {
-		return fmt.Errorf("invalid email template: from_address is not a valid email")
-	}
-	if e.FromName == "" {
-		return fmt.Errorf("invalid email template: from_name is required")
-	}
-	if len(e.FromName) > 32 {
-		return fmt.Errorf("invalid email template: from_name length must be between 1 and 32")
+	if e.SenderID == "" {
+		return fmt.Errorf("invalid email template: sender_id is required")
 	}
 	if e.Subject == "" {
 		return fmt.Errorf("invalid email template: subject is required")
@@ -507,34 +497,38 @@ type TestTemplateRequest struct {
 	WorkspaceID    string   `json:"workspace_id"`
 	TemplateID     string   `json:"template_id"`
 	IntegrationID  string   `json:"integration_id"`
+	SenderID       string   `json:"sender_id"`
 	RecipientEmail string   `json:"recipient_email"`
 	CC             []string `json:"cc,omitempty"`
 	BCC            []string `json:"bcc,omitempty"`
 	ReplyTo        string   `json:"reply_to,omitempty"`
 }
 
-func (r *TestTemplateRequest) Validate() (string, string, string, string, []string, []string, string, error) {
+func (r *TestTemplateRequest) Validate() error {
 	if r.WorkspaceID == "" {
-		return "", "", "", "", nil, nil, "", fmt.Errorf("workspace_id is required")
+		return fmt.Errorf("workspace_id is required")
 	}
 	if r.TemplateID == "" {
-		return "", "", "", "", nil, nil, "", fmt.Errorf("template_id is required")
+		return fmt.Errorf("template_id is required")
 	}
 	if r.IntegrationID == "" {
-		return "", "", "", "", nil, nil, "", fmt.Errorf("integration_id is required")
+		return fmt.Errorf("integration_id is required")
+	}
+	if r.SenderID == "" {
+		return fmt.Errorf("sender_id is required")
 	}
 	if r.RecipientEmail == "" {
-		return "", "", "", "", nil, nil, "", fmt.Errorf("recipient_email is required")
+		return fmt.Errorf("recipient_email is required")
 	}
 	if !govalidator.IsEmail(r.RecipientEmail) {
-		return "", "", "", "", nil, nil, "", fmt.Errorf("invalid recipient_email format")
+		return fmt.Errorf("invalid recipient_email format")
 	}
 
 	// Validate CC and BCC email addresses if provided
 	if r.CC != nil {
 		for _, email := range r.CC {
 			if !govalidator.IsEmail(email) {
-				return "", "", "", "", nil, nil, "", fmt.Errorf("invalid CC email format: %s", email)
+				return fmt.Errorf("invalid CC email format: %s", email)
 			}
 		}
 	}
@@ -542,17 +536,17 @@ func (r *TestTemplateRequest) Validate() (string, string, string, string, []stri
 	if r.BCC != nil {
 		for _, email := range r.BCC {
 			if !govalidator.IsEmail(email) {
-				return "", "", "", "", nil, nil, "", fmt.Errorf("invalid BCC email format: %s", email)
+				return fmt.Errorf("invalid BCC email format: %s", email)
 			}
 		}
 	}
 
 	// Validate ReplyTo if provided
 	if r.ReplyTo != "" && !govalidator.IsEmail(r.ReplyTo) {
-		return "", "", "", "", nil, nil, "", fmt.Errorf("invalid reply_to email format: %s", r.ReplyTo)
+		return fmt.Errorf("invalid reply_to email format: %s", r.ReplyTo)
 	}
 
-	return r.WorkspaceID, r.TemplateID, r.IntegrationID, r.RecipientEmail, r.CC, r.BCC, r.ReplyTo, nil
+	return nil
 }
 
 // TestTemplateResponse represents the response from testing a template

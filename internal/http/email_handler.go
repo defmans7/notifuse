@@ -92,13 +92,13 @@ func (h *EmailHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	workspaceID, templateID, integrationID, recipientEmail, cc, bcc, replyTo, err := req.Validate()
+	err := req.Validate()
 	if err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = h.emailService.TestTemplate(r.Context(), workspaceID, templateID, integrationID, recipientEmail, cc, bcc, replyTo)
+	err = h.emailService.TestTemplate(r.Context(), req.WorkspaceID, req.TemplateID, req.IntegrationID, req.SenderID, req.RecipientEmail, req.CC, req.BCC, req.ReplyTo)
 
 	// Create response
 	response := domain.TestTemplateResponse{
@@ -114,8 +114,8 @@ func (h *EmailHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request
 
 		h.logger.WithFields(map[string]interface{}{
 			"error":        err.Error(),
-			"workspace_id": workspaceID,
-			"template_id":  templateID,
+			"workspace_id": req.WorkspaceID,
+			"template_id":  req.TemplateID,
 		}).Error("Failed to test template")
 
 		response.Error = err.Error()

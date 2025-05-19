@@ -571,9 +571,10 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 					ID:   "email-provider-123",
 					Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSMTP,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: domain.EmailProviderKindSMTP,
+						Senders: []domain.EmailSender{
+							domain.NewEmailSender("test@example.com", "Test Sender"),
+						},
 					},
 				},
 			},
@@ -668,9 +669,10 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 					ID:   "email-provider-123",
 					Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSMTP,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: domain.EmailProviderKindSMTP,
+						Senders: []domain.EmailSender{
+							domain.NewEmailSender("test@example.com", "Test Sender"),
+						},
 					},
 				},
 			},
@@ -767,9 +769,10 @@ func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 					ID:   "email-provider-123",
 					Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSMTP,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: domain.EmailProviderKindSMTP,
+						Senders: []domain.EmailSender{
+							domain.NewEmailSender("test@example.com", "Test Sender"),
+						},
 					},
 				},
 			},
@@ -1051,6 +1054,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		broadcastID := "bcast123"
 		recipientEmail := "test@example.com"
 		variationID := "variation123"
+		emailSender := domain.NewEmailSender("test@example.com", "Test Sender")
 
 		// Create the request
 		request := &domain.SendToIndividualRequest{
@@ -1107,9 +1111,10 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 					ID:   "email-provider-123",
 					Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSMTP,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: domain.EmailProviderKindSMTP,
+						Senders: []domain.EmailSender{
+							emailSender,
+						},
 					},
 				},
 			},
@@ -1141,8 +1146,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			Name: "Test Template",
 			Email: &domain.EmailTemplate{
 				Subject:          "Test Subject",
-				FromName:         "Test Sender",
-				FromAddress:      "sender@example.com",
+				SenderID:         emailSender.ID,
 				VisualEditorTree: emailBlock,
 			},
 		}
@@ -1167,8 +1171,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 				workspaceID,
 				gomock.Any(), // messageID
 				true,         // isMarketing
-				template.Email.FromAddress,
-				template.Email.FromName,
+				emailSender.Email,
+				emailSender.Name,
 				recipientEmail,
 				template.Email.Subject,
 				*compiledResult.HTML,
@@ -1222,7 +1226,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		broadcastID := "bcast123"
 		recipientEmail := "test@example.com"
 		variationID := "variation123"
-
+		emailSender := domain.NewEmailSender("test@example.com", "Test Sender")
 		// Create the request
 		request := &domain.SendToIndividualRequest{
 			WorkspaceID:    workspaceID,
@@ -1250,9 +1254,10 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 					ID:   "email-provider-123",
 					Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSMTP,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: domain.EmailProviderKindSMTP,
+						Senders: []domain.EmailSender{
+							emailSender,
+						},
 					},
 				},
 			},

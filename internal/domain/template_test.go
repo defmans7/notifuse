@@ -86,8 +86,7 @@ func TestTemplate_Validate(t *testing.T) {
 			Version: 1,
 			Channel: "email",
 			Email: &EmailTemplate{
-				FromAddress:      "test@example.com",
-				FromName:         "Test Sender",
+				SenderID:         "test123",
 				Subject:          "Test Subject",
 				CompiledPreview:  "<html>Test content</html>",
 				VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -131,15 +130,6 @@ func TestTemplate_Validate(t *testing.T) {
 			template: func() *Template {
 				t := createValidTemplate()
 				t.Name = ""
-				return t
-			}(),
-			wantErr: true,
-		},
-		{
-			name: "invalid template - invalid email",
-			template: func() *Template {
-				t := createValidTemplate()
-				t.Email.FromAddress = "invalid-email"
 				return t
 			}(),
 			wantErr: true,
@@ -315,8 +305,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 		{
 			name: "valid template",
 			template: &EmailTemplate{
-				FromAddress:      "test@example.com",
-				FromName:         "Test Sender",
+				SenderID:         "test123",
 				Subject:          "Test Subject",
 				CompiledPreview:  "<html>Test content</html>",
 				VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -325,48 +314,15 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name: "invalid email template - missing from address",
+			name: "invalid email template - missing sender_id",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
 				}
-				e.FromAddress = ""
-				return e
-			}(),
-			testData: nil,
-			wantErr:  true,
-		},
-		{
-			name: "invalid email template - invalid email format",
-			template: func() *EmailTemplate {
-				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
-					Subject:          "Test Subject",
-					CompiledPreview:  "<html>Test content</html>",
-					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
-				}
-				e.FromAddress = "invalid-email"
-				return e
-			}(),
-			testData: nil,
-			wantErr:  true,
-		},
-		{
-			name: "invalid email template - missing from name",
-			template: func() *EmailTemplate {
-				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
-					Subject:          "Test Subject",
-					CompiledPreview:  "<html>Test content</html>",
-					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
-				}
-				e.FromName = ""
+				e.SenderID = ""
 				return e
 			}(),
 			testData: nil,
@@ -376,8 +332,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			name: "invalid email template - missing subject",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -392,8 +347,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			name: "invalid email template - missing compiled_preview but valid tree",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -407,8 +361,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			name: "invalid email template - missing compiled_preview and missing root data",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: nil},
@@ -422,8 +375,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			name: "invalid email template - missing compiled_preview and invalid root data type",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: "not a map"},
@@ -437,8 +389,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			name: "invalid email template - missing compiled_preview and missing styles in root data",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"other": "stuff"}},
@@ -452,8 +403,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			name: "invalid email template - invalid visual_editor_tree kind",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "not-root"},
@@ -482,8 +432,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 
 func TestEmailTemplate_Scan_Value(t *testing.T) {
 	email := &EmailTemplate{
-		FromAddress:      "test@example.com",
-		FromName:         "Test Sender",
+		SenderID:         "test123",
 		Subject:          "Test Subject",
 		CompiledPreview:  "<html>Test content</html>",
 		VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -501,16 +450,14 @@ func TestEmailTemplate_Scan_Value(t *testing.T) {
 	newEmail := &EmailTemplate{}
 	err = newEmail.Scan(bytes)
 	assert.NoError(t, err)
-	assert.Equal(t, email.FromAddress, newEmail.FromAddress)
-	assert.Equal(t, email.FromName, newEmail.FromName)
+	assert.Equal(t, email.SenderID, newEmail.SenderID)
 	assert.Equal(t, email.Subject, newEmail.Subject)
 	assert.Equal(t, email.CompiledPreview, newEmail.CompiledPreview)
 
 	// Test Scan() method with string
 	err = newEmail.Scan(string(bytes))
 	assert.NoError(t, err)
-	assert.Equal(t, email.FromAddress, newEmail.FromAddress)
-	assert.Equal(t, email.FromName, newEmail.FromName)
+	assert.Equal(t, email.SenderID, newEmail.SenderID)
 	assert.Equal(t, email.Subject, newEmail.Subject)
 	assert.Equal(t, email.CompiledPreview, newEmail.CompiledPreview)
 
@@ -533,8 +480,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -551,8 +497,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -569,8 +514,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -587,8 +531,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -605,8 +548,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -623,8 +565,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -641,8 +582,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -671,8 +611,7 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "invalid-email",
-					FromName:         "Test Sender",
+					SenderID:         "",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -833,8 +772,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -851,8 +789,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -869,8 +806,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -887,8 +823,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -905,8 +840,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				Name:        "",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -923,8 +857,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -941,8 +874,7 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					FromAddress:      "test@example.com",
-					FromName:         "Test Sender",
+					SenderID:         "test123",
 					Subject:          "Test Subject",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
@@ -970,14 +902,8 @@ func TestUpdateTemplateRequest_Validate(t *testing.T) {
 				ID:          "template123",
 				Name:        "Test Template",
 				Channel:     "email",
-				Email: &EmailTemplate{
-					FromAddress:      "invalid-email",
-					FromName:         "Test Sender",
-					Subject:          "Test Subject",
-					CompiledPreview:  "<html>Test content</html>",
-					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
-				},
-				Category: string(TemplateCategoryMarketing),
+				Email:       &EmailTemplate{},
+				Category:    string(TemplateCategoryMarketing),
 			},
 			wantErr: true,
 		},

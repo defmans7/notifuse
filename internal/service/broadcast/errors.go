@@ -10,6 +10,7 @@ const (
 	ErrCodeTemplateMissing ErrorCode = "TEMPLATE_MISSING"
 	ErrCodeTemplateInvalid ErrorCode = "TEMPLATE_INVALID"
 	ErrCodeTemplateCompile ErrorCode = "TEMPLATE_COMPILE_FAILED"
+	ErrCodeSenderNotFound  ErrorCode = "SENDER_NOT_FOUND"
 
 	// Recipient related errors
 	ErrCodeRecipientFetch ErrorCode = "RECIPIENT_FETCH_FAILED"

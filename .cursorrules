@@ -2,6 +2,7 @@
 
 ## General Principles
 
+- Never commit to github without asking
 - Never test tracing and logging - these are implementation details
 
 ## Go Backend Structure

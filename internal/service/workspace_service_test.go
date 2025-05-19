@@ -278,9 +278,6 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockUserService.EXPECT().GetUserByID(ctx, expectedUser.ID).Return(expectedUser, nil)
 		mockContactService.EXPECT().UpsertContact(ctx, workspaceID, gomock.Any()).Return(domain.UpsertContactOperation{Action: domain.UpsertContactOperationCreate})
 
-		// Mock template service expectations for createDefaultTemplates
-		mockTemplateService.EXPECT().CreateTemplate(ctx, workspaceID, gomock.Any()).Return(nil).Times(4)
-
 		mockListService.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
 		mockListService.EXPECT().SubscribeToLists(ctx, &domain.SubscribeToListsRequest{
 			WorkspaceID: workspaceID,
@@ -954,8 +951,9 @@ func TestWorkspaceService_CreateIntegration(t *testing.T) {
 			Password: "smtp_password",
 			UseTLS:   true,
 		},
-		DefaultSenderEmail: "test@example.com",
-		DefaultSenderName:  "Test Sender",
+		Senders: []domain.EmailSender{
+			domain.NewEmailSender("test@example.com", "Test Sender"),
+		},
 	}
 
 	t.Run("successful create integration", func(t *testing.T) {
@@ -1133,8 +1131,9 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 			Password: "updated_password",
 			UseTLS:   true,
 		},
-		DefaultSenderEmail: "updated@example.com",
-		DefaultSenderName:  "Updated Sender",
+		Senders: []domain.EmailSender{
+			domain.NewEmailSender("updated@example.com", "Updated Sender"),
+		},
 	}
 
 	t.Run("successful update integration", func(t *testing.T) {
@@ -1162,8 +1161,9 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 					Password: "smtp_password",
 					UseTLS:   true,
 				},
-				DefaultSenderEmail: "test@example.com",
-				DefaultSenderName:  "Test Sender",
+				Senders: []domain.EmailSender{
+					domain.NewEmailSender("test@example.com", "Test Sender"),
+				},
 			},
 			CreatedAt: time.Now().Add(-24 * time.Hour), // Created 24 hours ago
 			UpdatedAt: time.Now().Add(-24 * time.Hour),

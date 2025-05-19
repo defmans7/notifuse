@@ -13,6 +13,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
 	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -153,8 +154,7 @@ func createTestTemplate() *domain.Template {
 		Version: 1,
 		Channel: "email", // Use string "email"
 		Email: &domain.EmailTemplate{
-			FromAddress:      "test@example.com",
-			FromName:         "Test Sender",
+			SenderID:         uuid.New().String(),
 			Subject:          "Test Email",
 			CompiledPreview:  "<html><body>Test</body></html>",
 			VisualEditorTree: mjml.EmailBlock{}, // Add required field

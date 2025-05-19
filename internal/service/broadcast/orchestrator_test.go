@@ -129,8 +129,8 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 	template1 := &domain.Template{
 		ID: "template-1",
 		Email: &domain.EmailTemplate{
-			Subject:     "Test Subject 1",
-			FromAddress: "test@example.com",
+			Subject:  "Test Subject 1",
+			SenderID: "sender-123",
 			VisualEditorTree: mjml.EmailBlock{
 				Kind: "container",
 				Data: map[string]interface{}{
@@ -142,8 +142,8 @@ func TestBroadcastOrchestrator_LoadTemplatesForBroadcast(t *testing.T) {
 	template2 := &domain.Template{
 		ID: "template-2",
 		Email: &domain.EmailTemplate{
-			Subject:     "Test Subject 2",
-			FromAddress: "test@example.com",
+			Subject:  "Test Subject 2",
+			SenderID: "sender-123",
 			VisualEditorTree: mjml.EmailBlock{
 				Kind: "container",
 				Data: map[string]interface{}{
@@ -226,8 +226,8 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 				"template-1": {
 					ID: "template-1",
 					Email: &domain.EmailTemplate{
-						Subject:     "Test Subject",
-						FromAddress: "test@example.com",
+						Subject:  "Test Subject",
+						SenderID: "sender-123",
 						VisualEditorTree: mjml.EmailBlock{
 							Kind: "container",
 						},
@@ -271,7 +271,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 				"template-1": {
 					ID: "template-1",
 					Email: &domain.EmailTemplate{
-						FromAddress: "test@example.com",
+						SenderID: "sender-123",
 						VisualEditorTree: mjml.EmailBlock{
 							Kind: "container",
 						},
@@ -287,7 +287,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 					ID: "template-1",
 					Email: &domain.EmailTemplate{
 						Subject:          "Test Subject",
-						FromAddress:      "test@example.com",
+						SenderID:         "sender-123",
 						VisualEditorTree: mjml.EmailBlock{},
 					},
 				},

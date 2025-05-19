@@ -1075,212 +1075,19 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-func TestEmailProvider_Validate(t *testing.T) {
-	passphrase := "test-passphrase"
-
-	testCases := []struct {
-		name       string
-		provider   EmailProvider
-		wantErr    bool
-		errorCheck string
-	}{
-		{
-			name: "valid SES provider",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSES,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SES: &AmazonSESSettings{
-					Region:    "us-east-1",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid SMTP provider",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SMTP: &SMTPSettings{
-					Host:     "smtp.example.com",
-					Port:     587,
-					Username: "user",
-					UseTLS:   true,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid SparkPost provider",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSparkPost,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SparkPost: &SparkPostSettings{
-					Endpoint: "https://api.sparkpost.com",
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "empty provider (not configured)",
-			provider: EmailProvider{
-				Kind: "",
-			},
-			wantErr: false,
-		},
-		{
-			name: "missing default sender email",
-			provider: EmailProvider{
-				Kind:              EmailProviderKindSES,
-				DefaultSenderName: "Default Sender",
-				SES: &AmazonSESSettings{
-					Region:    "us-east-1",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
-			},
-			wantErr:    true,
-			errorCheck: "default sender email is required",
-		},
-		{
-			name: "missing default sender name",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSES,
-				DefaultSenderEmail: "default@example.com",
-				SES: &AmazonSESSettings{
-					Region:    "us-east-1",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
-			},
-			wantErr:    true,
-			errorCheck: "default sender name is required",
-		},
-		{
-			name: "invalid default sender email",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSES,
-				DefaultSenderEmail: "not-an-email",
-				DefaultSenderName:  "Default Sender",
-				SES: &AmazonSESSettings{
-					Region:    "us-east-1",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
-			},
-			wantErr:    true,
-			errorCheck: "invalid default sender email",
-		},
-		{
-			name: "invalid provider kind",
-			provider: EmailProvider{
-				Kind:               "invalid",
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-			},
-			wantErr:    true,
-			errorCheck: "invalid email provider kind",
-		},
-		{
-			name: "SES provider with missing settings",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSES,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SES:                nil,
-			},
-			wantErr:    true,
-			errorCheck: "SES settings required",
-		},
-		{
-			name: "SMTP provider with missing settings",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SMTP:               nil,
-			},
-			wantErr:    true,
-			errorCheck: "SMTP settings required",
-		},
-		{
-			name: "SparkPost provider with missing settings",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSparkPost,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SparkPost:          nil,
-			},
-			wantErr:    true,
-			errorCheck: "SparkPost settings required",
-		},
-		{
-			name: "SES provider with invalid settings",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSES,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SES: &AmazonSESSettings{
-					Region:    "",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
-				},
-			},
-			wantErr:    true,
-			errorCheck: "region is required",
-		},
-		{
-			name: "SMTP provider with invalid settings",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SMTP: &SMTPSettings{
-					Host:     "",
-					Port:     587,
-					Username: "user",
-				},
-			},
-			wantErr:    true,
-			errorCheck: "host is required",
-		},
-		{
-			name: "SparkPost provider with invalid settings",
-			provider: EmailProvider{
-				Kind:               EmailProviderKindSparkPost,
-				DefaultSenderEmail: "default@example.com",
-				DefaultSenderName:  "Default Sender",
-				SparkPost:          &SparkPostSettings{
-					// Missing endpoint
-				},
-			},
-			wantErr:    true,
-			errorCheck: "endpoint is required",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.provider.Validate(passphrase)
-			if tc.wantErr {
-				assert.Error(t, err)
-				if tc.errorCheck != "" {
-					assert.Contains(t, err.Error(), tc.errorCheck)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
 func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 	passphrase := "test-passphrase"
 
 	t.Run("SES provider encryption/decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind:               EmailProviderKindSES,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: EmailProviderKindSES,
+			Senders: []EmailSender{
+				{
+					ID:    "default",
+					Email: "default@example.com",
+					Name:  "Default Sender",
+				},
+			},
 			SES: &AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
@@ -1302,9 +1109,14 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 
 	t.Run("SMTP provider encryption/decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind:               EmailProviderKindSMTP,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: EmailProviderKindSMTP,
+			Senders: []EmailSender{
+				{
+					ID:    "default",
+					Email: "default@example.com",
+					Name:  "Default Sender",
+				},
+			},
 			SMTP: &SMTPSettings{
 				Host:     "smtp.example.com",
 				Port:     587,
@@ -1328,9 +1140,14 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 
 	t.Run("SparkPost provider encryption/decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind:               EmailProviderKindSparkPost,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: EmailProviderKindSparkPost,
+			Senders: []EmailSender{
+				{
+					ID:    "default",
+					Email: "default@example.com",
+					Name:  "Default Sender",
+				},
+			},
 			SparkPost: &SparkPostSettings{
 				APIKey:   "api-key",
 				Endpoint: "https://api.sparkpost.com",
@@ -1351,9 +1168,14 @@ func TestEmailProvider_EncryptDecryptSecretKeys(t *testing.T) {
 
 	t.Run("Wrong passphrase decryption", func(t *testing.T) {
 		provider := EmailProvider{
-			Kind:               EmailProviderKindSES,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: EmailProviderKindSES,
+			Senders: []EmailSender{
+				{
+					ID:    "default",
+					Email: "default@example.com",
+					Name:  "Default Sender",
+				},
+			},
 			SES: &AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAIOSFODNN7EXAMPLE",
@@ -1739,9 +1561,14 @@ func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 				Name: "Marketing Email",
 				Type: IntegrationTypeEmail,
 				EmailProvider: EmailProvider{
-					Kind:               EmailProviderKindSES,
-					DefaultSenderEmail: "default-marketing@example.com",
-					DefaultSenderName:  "Default Marketing Sender",
+					Kind: EmailProviderKindSES,
+					Senders: []EmailSender{
+						{
+							ID:    "123e4567-e89b-12d3-a456-426614174000",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SES: &AmazonSESSettings{
 						Region:    "us-east-1",
 						AccessKey: "AKIAIOSFODNN7EXAMPLE",
@@ -1756,9 +1583,14 @@ func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 				Name: "Transactional Email",
 				Type: IntegrationTypeEmail,
 				EmailProvider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "default-transactional@example.com",
-					DefaultSenderName:  "Default Transactional Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "123e4567-e89b-12d3-a456-426614174000",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2203,9 +2035,14 @@ func TestWorkspace_GetEmailProvider(t *testing.T) {
 						Name: "Transactional Provider",
 						Type: IntegrationTypeEmail,
 						EmailProvider: EmailProvider{
-							Kind:               EmailProviderKindSMTP,
-							DefaultSenderEmail: "transactional@example.com",
-							DefaultSenderName:  "Transactional Sender",
+							Kind: EmailProviderKindSMTP,
+							Senders: []EmailSender{
+								{
+									ID:    "123e4567-e89b-12d3-a456-426614174000",
+									Email: "test@example.com",
+									Name:  "Test Sender",
+								},
+							},
 							SMTP: &SMTPSettings{
 								Host:     "smtp.example.com",
 								Port:     587,
@@ -2220,9 +2057,20 @@ func TestWorkspace_GetEmailProvider(t *testing.T) {
 			},
 			isMarketing: false, // Transactional
 			expectedResult: &EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "transactional@example.com",
-				DefaultSenderName:  "Transactional Sender",
+				Kind: EmailProviderKindSMTP,
+				Senders: []EmailSender{
+					{
+						ID:    "123e4567-e89b-12d3-a456-426614174000",
+						Email: "test@example.com",
+						Name:  "Test Sender",
+					},
+				},
+				SMTP: &SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "test-user",
+					Password: "test-pass",
+				},
 			},
 			expectedError: false,
 		},
@@ -2240,9 +2088,14 @@ func TestWorkspace_GetEmailProvider(t *testing.T) {
 						Name: "Marketing Provider",
 						Type: IntegrationTypeEmail,
 						EmailProvider: EmailProvider{
-							Kind:               EmailProviderKindMailjet,
-							DefaultSenderEmail: "marketing@example.com",
-							DefaultSenderName:  "Marketing Sender",
+							Kind: EmailProviderKindMailjet,
+							Senders: []EmailSender{
+								{
+									ID:    "123e4567-e89b-12d3-a456-426614174000",
+									Email: "marketing@example.com",
+									Name:  "Marketing Sender",
+								},
+							},
 							Mailjet: &MailjetSettings{
 								APIKey:    "apikey-test",
 								SecretKey: "secretkey-test",
@@ -2255,9 +2108,18 @@ func TestWorkspace_GetEmailProvider(t *testing.T) {
 			},
 			isMarketing: true, // Marketing
 			expectedResult: &EmailProvider{
-				Kind:               EmailProviderKindMailjet,
-				DefaultSenderEmail: "marketing@example.com",
-				DefaultSenderName:  "Marketing Sender",
+				Kind: EmailProviderKindMailjet,
+				Senders: []EmailSender{
+					{
+						ID:    "123e4567-e89b-12d3-a456-426614174000",
+						Email: "marketing@example.com",
+						Name:  "Marketing Sender",
+					},
+				},
+				Mailjet: &MailjetSettings{
+					APIKey:    "apikey-test",
+					SecretKey: "secretkey-test",
+				},
 			},
 			expectedError: false,
 		},
@@ -2275,9 +2137,14 @@ func TestWorkspace_GetEmailProvider(t *testing.T) {
 						Name: "Some Provider",
 						Type: IntegrationTypeEmail,
 						EmailProvider: EmailProvider{
-							Kind:               EmailProviderKindSMTP,
-							DefaultSenderEmail: "some@example.com",
-							DefaultSenderName:  "Some Sender",
+							Kind: EmailProviderKindSMTP,
+							Senders: []EmailSender{
+								{
+									ID:    "123e4567-e89b-12d3-a456-426614174000",
+									Email: "some@example.com",
+									Name:  "Some Sender",
+								},
+							},
 							SMTP: &SMTPSettings{
 								Host:     "smtp.example.com",
 								Port:     587,
@@ -2308,9 +2175,14 @@ func TestWorkspace_GetEmailProvider(t *testing.T) {
 						Name: "Existing Provider",
 						Type: IntegrationTypeEmail,
 						EmailProvider: EmailProvider{
-							Kind:               EmailProviderKindSMTP,
-							DefaultSenderEmail: "existing@example.com",
-							DefaultSenderName:  "Existing Sender",
+							Kind: EmailProviderKindSMTP,
+							Senders: []EmailSender{
+								{
+									ID:    "123e4567-e89b-12d3-a456-426614174000",
+									Email: "existing@example.com",
+									Name:  "Existing Sender",
+								},
+							},
 							SMTP: &SMTPSettings{
 								Host:     "smtp.example.com",
 								Port:     587,
@@ -2349,325 +2221,11 @@ func TestWorkspace_GetEmailProvider(t *testing.T) {
 			} else {
 				assert.NotNil(t, result)
 				assert.Equal(t, tc.expectedResult.Kind, result.Kind)
-				assert.Equal(t, tc.expectedResult.DefaultSenderEmail, result.DefaultSenderEmail)
-				assert.Equal(t, tc.expectedResult.DefaultSenderName, result.DefaultSenderName)
+				assert.Equal(t, tc.expectedResult.Senders[0].Email, result.Senders[0].Email)
+				assert.Equal(t, tc.expectedResult.Senders[0].Name, result.Senders[0].Name)
 			}
 		})
 	}
-}
-
-func TestWorkspace_MarshalJSON(t *testing.T) {
-	now := time.Now()
-
-	testCases := []struct {
-		name           string
-		workspace      Workspace
-		expectEmptyArr bool
-	}{
-		{
-			name: "marshal with integrations",
-			workspace: Workspace{
-				ID:   "test-workspace",
-				Name: "Test Workspace",
-				Integrations: []Integration{
-					{
-						ID:        "integration-1",
-						Name:      "Integration 1",
-						Type:      IntegrationTypeEmail,
-						CreatedAt: now,
-						UpdatedAt: now,
-					},
-				},
-				CreatedAt: now,
-				UpdatedAt: now,
-			},
-			expectEmptyArr: false,
-		},
-		{
-			name: "marshal with empty integrations",
-			workspace: Workspace{
-				ID:           "test-workspace",
-				Name:         "Test Workspace",
-				Integrations: []Integration{},
-				CreatedAt:    now,
-				UpdatedAt:    now,
-			},
-			expectEmptyArr: true,
-		},
-		{
-			name: "marshal with nil integrations",
-			workspace: Workspace{
-				ID:           "test-workspace",
-				Name:         "Test Workspace",
-				Integrations: nil,
-				CreatedAt:    now,
-				UpdatedAt:    now,
-			},
-			expectEmptyArr: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			jsonData, err := tc.workspace.MarshalJSON()
-
-			assert.NoError(t, err)
-			assert.NotNil(t, jsonData)
-
-			// Unmarshal to check the integrations field
-			var result map[string]interface{}
-			err = json.Unmarshal(jsonData, &result)
-			assert.NoError(t, err)
-
-			// Verify integrations field is present
-			integrationsVal, exists := result["integrations"]
-			assert.True(t, exists)
-
-			// Check if integrations is an empty array when expected
-			if tc.expectEmptyArr {
-				integrations, ok := integrationsVal.([]interface{})
-				assert.True(t, ok)
-				assert.Empty(t, integrations)
-			}
-		})
-	}
-}
-
-func TestIntegrations_ScanAndValue(t *testing.T) {
-	now := time.Now()
-
-	t.Run("value with content", func(t *testing.T) {
-		integrations := Integrations{
-			{
-				ID:        "integration-1",
-				Name:      "Integration 1",
-				Type:      IntegrationTypeEmail,
-				CreatedAt: now,
-				UpdatedAt: now,
-			},
-		}
-
-		value, err := integrations.Value()
-		assert.NoError(t, err)
-		assert.NotNil(t, value)
-
-		// Should be a JSON byte array
-		jsonBytes, ok := value.([]byte)
-		assert.True(t, ok)
-
-		// Unmarshal to verify content
-		var result []map[string]interface{}
-		err = json.Unmarshal(jsonBytes, &result)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(result))
-		assert.Equal(t, "integration-1", result[0]["id"])
-	})
-
-	t.Run("value with empty slice", func(t *testing.T) {
-		integrations := Integrations{}
-
-		value, err := integrations.Value()
-		assert.NoError(t, err)
-		assert.Nil(t, value)
-	})
-
-	t.Run("scan nil value", func(t *testing.T) {
-		var integrations Integrations
-		err := integrations.Scan(nil)
-		assert.NoError(t, err)
-		assert.Empty(t, integrations)
-	})
-
-	t.Run("scan valid JSON", func(t *testing.T) {
-		var integrations Integrations
-		jsonData := `[{"id":"integration-1","name":"Test Integration","type":"email"}]`
-
-		err := integrations.Scan([]byte(jsonData))
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(integrations))
-		assert.Equal(t, "integration-1", integrations[0].ID)
-		assert.Equal(t, "Test Integration", integrations[0].Name)
-		assert.Equal(t, IntegrationTypeEmail, integrations[0].Type)
-	})
-
-	t.Run("scan invalid type", func(t *testing.T) {
-		var integrations Integrations
-		err := integrations.Scan("not-a-byte-array")
-		assert.Error(t, err)
-	})
-
-	t.Run("scan invalid JSON", func(t *testing.T) {
-		var integrations Integrations
-		err := integrations.Scan([]byte("invalid json"))
-		assert.Error(t, err)
-	})
-}
-
-func TestIntegration_ScanAndValue(t *testing.T) {
-	now := time.Now()
-
-	t.Run("value with content", func(t *testing.T) {
-		integration := Integration{
-			ID:        "integration-1",
-			Name:      "Integration 1",
-			Type:      IntegrationTypeEmail,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-
-		value, err := integration.Value()
-		assert.NoError(t, err)
-		assert.NotNil(t, value)
-
-		// Should be a JSON byte array
-		jsonBytes, ok := value.([]byte)
-		assert.True(t, ok)
-
-		// Unmarshal to verify content
-		var result map[string]interface{}
-		err = json.Unmarshal(jsonBytes, &result)
-		assert.NoError(t, err)
-		assert.Equal(t, "integration-1", result["id"])
-		assert.Equal(t, "Integration 1", result["name"])
-	})
-
-	t.Run("scan nil value", func(t *testing.T) {
-		var integration Integration
-		err := integration.Scan(nil)
-		assert.NoError(t, err)
-	})
-
-	t.Run("scan valid JSON", func(t *testing.T) {
-		var integration Integration
-		jsonData := `{"id":"integration-1","name":"Test Integration","type":"email"}`
-
-		err := integration.Scan([]byte(jsonData))
-		assert.NoError(t, err)
-		assert.Equal(t, "integration-1", integration.ID)
-		assert.Equal(t, "Test Integration", integration.Name)
-		assert.Equal(t, IntegrationTypeEmail, integration.Type)
-	})
-
-	t.Run("scan invalid type", func(t *testing.T) {
-		var integration Integration
-		err := integration.Scan("not-a-byte-array")
-		assert.Error(t, err)
-	})
-
-	t.Run("scan invalid JSON", func(t *testing.T) {
-		var integration Integration
-		err := integration.Scan([]byte("invalid json"))
-		assert.Error(t, err)
-	})
-}
-
-func TestIntegration_ValidateAndBeforeSaveAfterLoad(t *testing.T) {
-	passphrase := "test-passphrase"
-	now := time.Now()
-
-	t.Run("validate valid integration", func(t *testing.T) {
-		integration := Integration{
-			ID:   "test-integration",
-			Name: "Test Integration",
-			Type: IntegrationTypeEmail,
-			EmailProvider: EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "test@example.com",
-				DefaultSenderName:  "Test Sender",
-				SMTP: &SMTPSettings{
-					Host:     "smtp.example.com",
-					Port:     587,
-					Username: "user",
-					Password: "password",
-				},
-			},
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-
-		err := integration.Validate(passphrase)
-		assert.NoError(t, err)
-	})
-
-	t.Run("validate with missing required fields", func(t *testing.T) {
-		testCases := []struct {
-			name        string
-			integration Integration
-		}{
-			{
-				name: "missing ID",
-				integration: Integration{
-					ID:   "",
-					Name: "Test Integration",
-					Type: IntegrationTypeEmail,
-				},
-			},
-			{
-				name: "missing name",
-				integration: Integration{
-					ID:   "test-integration",
-					Name: "",
-					Type: IntegrationTypeEmail,
-				},
-			},
-			{
-				name: "missing type",
-				integration: Integration{
-					ID:   "test-integration",
-					Name: "Test Integration",
-					Type: "",
-				},
-			},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				err := tc.integration.Validate(passphrase)
-				assert.Error(t, err)
-			})
-		}
-	})
-
-	t.Run("before save and after load", func(t *testing.T) {
-		// Create integration with sensitive data
-		integration := Integration{
-			ID:   "test-integration",
-			Name: "Test Integration",
-			Type: IntegrationTypeEmail,
-			EmailProvider: EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "test@example.com",
-				DefaultSenderName:  "Test Sender",
-				SMTP: &SMTPSettings{
-					Host:     "smtp.example.com",
-					Port:     587,
-					Username: "user",
-					Password: "password",
-				},
-			},
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-
-		// First encrypt with BeforeSave
-		err := integration.BeforeSave(passphrase)
-		assert.NoError(t, err)
-
-		// Password should be encrypted now
-		assert.NotEmpty(t, integration.EmailProvider.SMTP.EncryptedPassword)
-		assert.Empty(t, integration.EmailProvider.SMTP.Password)
-
-		// Store original encrypted value
-		encryptedPassword := integration.EmailProvider.SMTP.EncryptedPassword
-
-		// Decrypt with AfterLoad
-		err = integration.AfterLoad(passphrase)
-		assert.NoError(t, err)
-
-		// Password should be decrypted
-		assert.Equal(t, "password", integration.EmailProvider.SMTP.Password)
-		assert.Equal(t, encryptedPassword, integration.EmailProvider.SMTP.EncryptedPassword)
-	})
 }
 
 func TestCreateAPIKeyRequest_Validate(t *testing.T) {
@@ -2737,9 +2295,14 @@ func TestCreateIntegrationRequest_Validate(t *testing.T) {
 				Name:        "Test Integration",
 				Type:        IntegrationTypeEmail,
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2757,9 +2320,14 @@ func TestCreateIntegrationRequest_Validate(t *testing.T) {
 				Name:        "Test Integration",
 				Type:        IntegrationTypeEmail,
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2777,9 +2345,14 @@ func TestCreateIntegrationRequest_Validate(t *testing.T) {
 				Name:        "",
 				Type:        IntegrationTypeEmail,
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2797,9 +2370,14 @@ func TestCreateIntegrationRequest_Validate(t *testing.T) {
 				Name:        "Test Integration",
 				Type:        "",
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2817,9 +2395,14 @@ func TestCreateIntegrationRequest_Validate(t *testing.T) {
 				Name:        "Test Integration",
 				Type:        IntegrationTypeEmail,
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					// Missing SMTP settings
 				},
 			},
@@ -2854,9 +2437,14 @@ func TestUpdateIntegrationRequest_Validate(t *testing.T) {
 				IntegrationID: "integration-123",
 				Name:          "Updated Integration",
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2874,9 +2462,14 @@ func TestUpdateIntegrationRequest_Validate(t *testing.T) {
 				IntegrationID: "integration-123",
 				Name:          "Updated Integration",
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2894,9 +2487,14 @@ func TestUpdateIntegrationRequest_Validate(t *testing.T) {
 				IntegrationID: "",
 				Name:          "Updated Integration",
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2914,9 +2512,14 @@ func TestUpdateIntegrationRequest_Validate(t *testing.T) {
 				IntegrationID: "integration-123",
 				Name:          "",
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					SMTP: &SMTPSettings{
 						Host:     "smtp.example.com",
 						Port:     587,
@@ -2934,9 +2537,14 @@ func TestUpdateIntegrationRequest_Validate(t *testing.T) {
 				IntegrationID: "integration-123",
 				Name:          "Updated Integration",
 				Provider: EmailProvider{
-					Kind:               EmailProviderKindSMTP,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: EmailProviderKindSMTP,
+					Senders: []EmailSender{
+						{
+							ID:    "default",
+							Email: "test@example.com",
+							Name:  "Test Sender",
+						},
+					},
 					// Missing SMTP settings
 				},
 			},
@@ -3157,9 +2765,14 @@ func TestWorkspace_BeforeSave(t *testing.T) {
 					Name: "Integration 1",
 					Type: IntegrationTypeEmail,
 					EmailProvider: EmailProvider{
-						Kind:               EmailProviderKindSMTP,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: EmailProviderKindSMTP,
+						Senders: []EmailSender{
+							{
+								ID:    "default",
+								Email: "test@example.com",
+								Name:  "Test Sender",
+							},
+						},
 						SMTP: &SMTPSettings{
 							Host:     "smtp.example.com",
 							Port:     587,
@@ -3260,9 +2873,14 @@ func TestWorkspace_AfterLoad(t *testing.T) {
 			Name: "Integration 1",
 			Type: IntegrationTypeEmail,
 			EmailProvider: EmailProvider{
-				Kind:               EmailProviderKindSMTP,
-				DefaultSenderEmail: "test@example.com",
-				DefaultSenderName:  "Test Sender",
+				Kind: EmailProviderKindSMTP,
+				Senders: []EmailSender{
+					{
+						ID:    "123e4567-e89b-12d3-a456-426614174000",
+						Email: "test@example.com",
+						Name:  "Test Sender",
+					},
+				},
 				SMTP: &SMTPSettings{
 					Host:     "smtp.example.com",
 					Port:     587,

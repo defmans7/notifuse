@@ -7,11 +7,13 @@ import (
 
 	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/asaskevich/govalidator"
+	"github.com/google/uuid"
 )
 
 //go:generate mockgen -destination mocks/mock_email_service.go -package mocks github.com/Notifuse/notifuse/internal/domain EmailServiceInterface
 //go:generate mockgen -destination mocks/mock_http_client.go -package mocks github.com/Notifuse/notifuse/internal/domain HTTPClient
 //go:generate mockgen -destination mocks/mock_ses_client.go -package mocks github.com/Notifuse/notifuse/internal/domain SESClient
+//go:generate mockgen -destination mocks/mock_email_provider_service.go -package mocks github.com/Notifuse/notifuse/internal/domain EmailProviderService
 
 // HTTPClient defines the interface for HTTP operations
 type HTTPClient interface {
@@ -30,11 +32,20 @@ const (
 	EmailProviderKindMailjet   EmailProviderKind = "mailjet"
 )
 
-// Sender represents an email sender with name and email address
-type Sender struct {
+// EmailSender represents an email sender with name and email address
+type EmailSender struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
+}
+
+// NewEmailSender creates a new sender with the given email and name
+func NewEmailSender(email, name string) EmailSender {
+	return EmailSender{
+		ID:    uuid.New().String(),
+		Email: email,
+		Name:  name,
+	}
 }
 
 // EmailProvider contains configuration for an email service provider
@@ -46,7 +57,7 @@ type EmailProvider struct {
 	Postmark  *PostmarkSettings  `json:"postmark,omitempty"`
 	Mailgun   *MailgunSettings   `json:"mailgun,omitempty"`
 	Mailjet   *MailjetSettings   `json:"mailjet,omitempty"`
-	Senders   []Sender           `json:"senders"`
+	Senders   []EmailSender      `json:"senders"`
 }
 
 // Validate validates the email provider settings
@@ -71,9 +82,10 @@ func (e *EmailProvider) Validate(passphrase string) error {
 		if sender.Name == "" {
 			return fmt.Errorf("sender name is required for sender at index %d", i)
 		}
-		// Validate UUID format if ID is provided
+		// If ID is set but not a valid UUID, generate a new one
 		if sender.ID != "" && !govalidator.IsUUID(sender.ID) {
-			return fmt.Errorf("invalid sender ID: %s at index %d. Must be a valid UUID", sender.ID, i)
+			newUUID := uuid.New().String()
+			e.Senders[i].ID = newUUID
 		}
 	}
 
@@ -222,7 +234,7 @@ func (e *EmailProvider) DecryptSecretKeys(passphrase string) error {
 // EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
-	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string, cc []string, bcc []string, replyTo string) error
+	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, cc []string, bcc []string, replyTo string) error
 	SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, replyTo string, cc []string, bcc []string) error
 	SendEmailForTemplate(
 		ctx context.Context,

@@ -69,8 +69,7 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 		Channel:  "email",
 		Category: "transactional",
 		Email: &domain.EmailTemplate{
-			FromAddress:     "test@example.com",
-			FromName:        "Test Sender",
+			SenderID:        "sender-123",
 			Subject:         "Test Email",
 			CompiledPreview: "<p>Test</p>",
 			VisualEditorTree: mjml.EmailBlock{
@@ -183,8 +182,7 @@ func TestTemplateService_GetTemplateByID(t *testing.T) {
 		CreatedAt: now,
 		UpdatedAt: now,
 		Email: &domain.EmailTemplate{
-			FromAddress:      "test@example.com",
-			FromName:         "Test Sender",
+			SenderID:         "sender-123",
 			Subject:          "Test Email",
 			CompiledPreview:  "<html><body>Test</body></html>",
 			VisualEditorTree: mjml.EmailBlock{},
@@ -354,8 +352,7 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 		Category:  "transactional",
 		CreatedAt: existingCreatedAt,
 		Email: &domain.EmailTemplate{
-			FromAddress:     "old@example.com",
-			FromName:        "Old Sender",
+			SenderID:        "sender-123",
 			Subject:         "Old Subject",
 			CompiledPreview: "<p>Old</p>",
 			VisualEditorTree: mjml.EmailBlock{
@@ -371,10 +368,9 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 		Channel:  "email",
 		Category: "transactional",
 		Email: &domain.EmailTemplate{
-			FromAddress:     "new@example.com", // Updated field
-			FromName:        "New Sender",      // Updated field
-			Subject:         "New Subject",     // Updated field
-			CompiledPreview: "<h1>New</h1>",    // Updated field
+			SenderID:        "sender-123",   // Updated field
+			Subject:         "New Subject",  // Updated field
+			CompiledPreview: "<h1>New</h1>", // Updated field
 			VisualEditorTree: mjml.EmailBlock{
 				Kind: "root",
 				Data: map[string]interface{}{"styles": map[string]interface{}{}},

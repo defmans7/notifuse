@@ -192,9 +192,10 @@ func TestEmailProvider_WithPostmarkSettings(t *testing.T) {
 
 	t.Run("Postmark provider encryption/decryption", func(t *testing.T) {
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindPostmark,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindPostmark,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 			Postmark: &domain.PostmarkSettings{
 				ServerToken: "test-server-token",
 			},
@@ -215,9 +216,10 @@ func TestEmailProvider_WithPostmarkSettings(t *testing.T) {
 	t.Run("Postmark provider validation", func(t *testing.T) {
 		// Valid provider
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindPostmark,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindPostmark,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 			Postmark: &domain.PostmarkSettings{
 				ServerToken: "test-server-token",
 			},
@@ -230,9 +232,10 @@ func TestEmailProvider_WithPostmarkSettings(t *testing.T) {
 
 		// Provider with missing Postmark settings
 		invalidProvider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindPostmark,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindPostmark,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 		}
 
 		// Should fail validation

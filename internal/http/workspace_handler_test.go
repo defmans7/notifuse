@@ -1538,9 +1538,10 @@ func TestWorkspaceHandler_HandleCreateIntegration(t *testing.T) {
 		Name:        "Test Integration",
 		Type:        domain.IntegrationTypeEmail,
 		Provider: domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "test@example.com",
-			DefaultSenderName:  "Test Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
 			SES: &domain.AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAEXAMPLE",
@@ -1653,9 +1654,10 @@ func TestWorkspaceHandler_HandleCreateIntegration_UnauthorizedError(t *testing.T
 		Name:        "Test Integration",
 		Type:        domain.IntegrationTypeEmail,
 		Provider: domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "test@example.com",
-			DefaultSenderName:  "Test Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
 			SES: &domain.AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAEXAMPLE",
@@ -1696,9 +1698,10 @@ func TestWorkspaceHandler_HandleCreateIntegration_ServiceError(t *testing.T) {
 		Name:        "Test Integration",
 		Type:        domain.IntegrationTypeEmail,
 		Provider: domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "test@example.com",
-			DefaultSenderName:  "Test Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
 			SES: &domain.AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "AKIAEXAMPLE",
@@ -1743,9 +1746,10 @@ func TestWorkspaceHandler_HandleUpdateIntegration(t *testing.T) {
 		IntegrationID: "integration-123",
 		Name:          "Updated Integration",
 		Provider: domain.EmailProvider{
-			Kind:               domain.EmailProviderKindMailgun,
-			DefaultSenderEmail: "test@example.com",
-			DefaultSenderName:  "Test Sender",
+			Kind: domain.EmailProviderKindMailgun,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
 			Mailgun: &domain.MailgunSettings{
 				Domain: "test.com",
 				APIKey: "api-key-example",
@@ -1859,9 +1863,10 @@ func TestWorkspaceHandler_HandleUpdateIntegration_UnauthorizedError(t *testing.T
 		IntegrationID: "integration-123",
 		Name:          "Updated Integration",
 		Provider: domain.EmailProvider{
-			Kind:               domain.EmailProviderKindMailgun,
-			DefaultSenderEmail: "test@example.com",
-			DefaultSenderName:  "Test Sender",
+			Kind: domain.EmailProviderKindMailgun,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
 			Mailgun: &domain.MailgunSettings{
 				Domain: "test.com",
 				APIKey: "api-key-example",
@@ -1901,9 +1906,10 @@ func TestWorkspaceHandler_HandleUpdateIntegration_ServiceError(t *testing.T) {
 		IntegrationID: "integration-123",
 		Name:          "Updated Integration",
 		Provider: domain.EmailProvider{
-			Kind:               domain.EmailProviderKindMailgun,
-			DefaultSenderEmail: "test@example.com",
-			DefaultSenderName:  "Test Sender",
+			Kind: domain.EmailProviderKindMailgun,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
 			Mailgun: &domain.MailgunSettings{
 				Domain: "test.com",
 				APIKey: "api-key-example",

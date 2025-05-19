@@ -206,12 +206,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "Valid SMTP provider",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSMTP,
-				Senders: []Sender{
-					{
-						ID:    "123e4567-e89b-12d3-a456-426614174000",
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", "Default Sender"),
 				},
 				SMTP: &SMTPSettings{
 					Host:     "smtp.example.com",
@@ -227,11 +223,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "Valid SES provider with empty ID",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSES,
-				Senders: []Sender{
-					{
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", "Default Sender"),
 				},
 				SES: &AmazonSESSettings{
 					Region:    "us-east-1",
@@ -242,35 +235,11 @@ func TestEmailProviderValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Invalid UUID",
-			provider: EmailProvider{
-				Kind: EmailProviderKindSMTP,
-				Senders: []Sender{
-					{
-						ID:    "invalid-uuid",
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
-				},
-				SMTP: &SMTPSettings{
-					Host:     "smtp.example.com",
-					Port:     587,
-					Username: "user@example.com",
-					Password: "password",
-				},
-			},
-			wantErr: true,
-			errMsg:  "invalid sender ID",
-		},
-		{
 			name: "Valid SparkPost provider",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSparkPost,
-				Senders: []Sender{
-					{
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", "Default Sender"),
 				},
 				SparkPost: &SparkPostSettings{
 					APIKey:   "test-api-key",
@@ -297,11 +266,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "Invalid sender email",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSMTP,
-				Senders: []Sender{
-					{
-						Email: "invalid-email",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("invalid-email", "Default Sender"),
 				},
 				SMTP: &SMTPSettings{
 					Host:     "smtp.example.com",
@@ -317,11 +283,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "Missing sender name",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSMTP,
-				Senders: []Sender{
-					{
-						Email: "default@example.com",
-						Name:  "",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", ""),
 				},
 				SMTP: &SMTPSettings{
 					Host:     "smtp.example.com",
@@ -337,11 +300,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "Invalid kind",
 			provider: EmailProvider{
 				Kind: "invalid",
-				Senders: []Sender{
-					{
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", "Default Sender"),
 				},
 			},
 			wantErr: true,
@@ -351,11 +311,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "SMTP provider with nil SMTP settings",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSMTP,
-				Senders: []Sender{
-					{
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", "Default Sender"),
 				},
 			},
 			wantErr: true,
@@ -365,11 +322,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "SES provider with nil SES settings",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSES,
-				Senders: []Sender{
-					{
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", "Default Sender"),
 				},
 			},
 			wantErr: true,
@@ -379,11 +333,8 @@ func TestEmailProviderValidation(t *testing.T) {
 			name: "SparkPost provider with nil SparkPost settings",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSparkPost,
-				Senders: []Sender{
-					{
-						Email: "default@example.com",
-						Name:  "Default Sender",
-					},
+				Senders: []EmailSender{
+					NewEmailSender("default@example.com", "Default Sender"),
 				},
 			},
 			wantErr: true,
@@ -617,11 +568,8 @@ func TestMailgunSettings_EncryptDecryptAPIKey(t *testing.T) {
 func TestEmailProvider_ValidateWithMailgun(t *testing.T) {
 	provider := EmailProvider{
 		Kind: EmailProviderKindMailgun,
-		Senders: []Sender{
-			{
-				Email: "sender@example.com",
-				Name:  "Test Sender",
-			},
+		Senders: []EmailSender{
+			NewEmailSender("sender@example.com", "Test Sender"),
 		},
 		Mailgun: &MailgunSettings{
 			Domain: "example.com",
@@ -731,11 +679,8 @@ func TestEmailProvider_ValidateWithMailjet(t *testing.T) {
 	// Valid provider with Mailjet
 	provider := EmailProvider{
 		Kind: EmailProviderKindMailjet,
-		Senders: []Sender{
-			{
-				Email: "from@example.com",
-				Name:  "Test Sender",
-			},
+		Senders: []EmailSender{
+			NewEmailSender("from@example.com", "Test Sender"),
 		},
 		Mailjet: &MailjetSettings{
 			APIKey:      "test-api-key",
@@ -751,11 +696,8 @@ func TestEmailProvider_ValidateWithMailjet(t *testing.T) {
 	// Provider with missing Mailjet settings
 	invalidProvider := EmailProvider{
 		Kind: EmailProviderKindMailjet,
-		Senders: []Sender{
-			{
-				Email: "from@example.com",
-				Name:  "Test Sender",
-			},
+		Senders: []EmailSender{
+			NewEmailSender("from@example.com", "Test Sender"),
 		},
 	}
 
@@ -907,11 +849,8 @@ func TestEmailProvider_ValidateWithPostmark(t *testing.T) {
 	// Valid provider with Postmark
 	provider := EmailProvider{
 		Kind: EmailProviderKindPostmark,
-		Senders: []Sender{
-			{
-				Email: "from@example.com",
-				Name:  "Test Sender",
-			},
+		Senders: []EmailSender{
+			NewEmailSender("from@example.com", "Test Sender"),
 		},
 		Postmark: &PostmarkSettings{
 			ServerToken: "test-server-token",
@@ -928,11 +867,8 @@ func TestEmailProvider_ValidateWithPostmark(t *testing.T) {
 	// Provider with missing Postmark settings
 	invalidProvider := EmailProvider{
 		Kind: EmailProviderKindPostmark,
-		Senders: []Sender{
-			{
-				Email: "from@example.com",
-				Name:  "Test Sender",
-			},
+		Senders: []EmailSender{
+			NewEmailSender("from@example.com", "Test Sender"),
 		},
 	}
 
@@ -1058,11 +994,8 @@ func TestEmailProvider_AdditionalValidation(t *testing.T) {
 	t.Run("Invalid kind with valid settings", func(t *testing.T) {
 		provider := EmailProvider{
 			Kind: "invalid",
-			Senders: []Sender{
-				{
-					Email: "default@example.com",
-					Name:  "Default Sender",
-				},
+			Senders: []EmailSender{
+				NewEmailSender("default@example.com", "Default Sender"),
 			},
 			// Add all possible settings to ensure they don't override kind validation
 			SMTP: &SMTPSettings{
@@ -1092,11 +1025,8 @@ func TestEmailProvider_AdditionalValidation(t *testing.T) {
 		// if the Kind doesn't match
 		provider := EmailProvider{
 			Kind: EmailProviderKindSMTP,
-			Senders: []Sender{
-				{
-					Email: "default@example.com",
-					Name:  "Default Sender",
-				},
+			Senders: []EmailSender{
+				NewEmailSender("default@example.com", "Default Sender"),
 			},
 			// Missing SMTP settings but have SES settings
 			SES: &AmazonSESSettings{

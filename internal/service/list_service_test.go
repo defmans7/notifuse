@@ -867,24 +867,15 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 					ID:   "marketing-provider",
 					Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSparkPost,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: domain.EmailProviderKindSparkPost,
+						Senders: []domain.EmailSender{
+							domain.NewEmailSender("test@example.com", "Test Sender"),
+						},
 						SparkPost: &domain.SparkPostSettings{
 							APIKey: "test-api-key",
 						},
 					},
 				},
-			},
-		}
-
-		// Test email provider
-		testEmailProvider := &domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSparkPost,
-			DefaultSenderEmail: "test@example.com",
-			DefaultSenderName:  "Test Sender",
-			SparkPost: &domain.SparkPostSettings{
-				APIKey: "test-api-key",
 			},
 		}
 
@@ -922,12 +913,20 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			domain.ChannelTemplate{
 				TemplateID: "unsub-template",
 			},
-			gomock.Any(),      // MessageData
-			gomock.Any(),      // TrackingSettings
-			testEmailProvider, // Email provider will now be validated
+			gomock.Any(), // MessageData
+			gomock.Any(), // TrackingSettings
+			gomock.Any(), // Use gomock.Any() instead of testEmailProvider
 			nil,
 			nil,
-		).Return(nil)
+		).Do(func(_ context.Context, _ string, _ string, _ *domain.Contact,
+			_ domain.ChannelTemplate, _ domain.MessageData, _ interface{},
+			provider *domain.EmailProvider, _, _ interface{}) {
+			assert.Equal(t, domain.EmailProviderKindSparkPost, provider.Kind)
+			assert.Len(t, provider.Senders, 1)
+			assert.Equal(t, "test@example.com", provider.Senders[0].Email)
+			assert.NotNil(t, provider.SparkPost)
+			assert.Equal(t, "test-api-key", provider.SparkPost.APIKey)
+		}).Return(nil)
 
 		err := service.UnsubscribeFromLists(ctx, payload, false)
 		assert.NoError(t, err)
@@ -957,9 +956,10 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 					ID:   "marketing-provider",
 					Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
-						Kind:               domain.EmailProviderKindSparkPost,
-						DefaultSenderEmail: "test@example.com",
-						DefaultSenderName:  "Test Sender",
+						Kind: domain.EmailProviderKindSparkPost,
+						Senders: []domain.EmailSender{
+							domain.NewEmailSender("test@example.com", "Test Sender"),
+						},
 						SparkPost: &domain.SparkPostSettings{
 							APIKey: "test-api-key",
 						},

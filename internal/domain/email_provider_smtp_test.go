@@ -271,8 +271,9 @@ func TestSMTPServiceInterface(t *testing.T) {
 			EncryptedPassword: "encrypted-password",
 			UseTLS:            true,
 		},
-		DefaultSenderEmail: "default@example.com",
-		DefaultSenderName:  "Default Sender",
+		Senders: []domain.EmailSender{
+			domain.NewEmailSender("default@example.com", "Default Sender"),
+		},
 	}
 
 	t.Run("SendEmail", func(t *testing.T) {

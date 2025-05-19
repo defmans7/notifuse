@@ -290,9 +290,10 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 
 	t.Run("SES provider encryption/decryption", func(t *testing.T) {
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 			SES: &domain.AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "test-access-key",
@@ -315,9 +316,10 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 	t.Run("SES provider validation", func(t *testing.T) {
 		// Valid provider
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 			SES: &domain.AmazonSESSettings{
 				Region:    "us-east-1",
 				AccessKey: "test-access-key",
@@ -332,9 +334,10 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 
 		// Provider with missing SES settings
 		invalidProvider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 		}
 
 		// Should fail validation
@@ -345,9 +348,14 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 
 	t.Run("SES provider with missing region", func(t *testing.T) {
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				{
+					ID:    "123e4567-e89b-12d3-a456-426614174000",
+					Email: "default@example.com",
+					Name:  "Default Sender",
+				},
+			},
 			SES: &domain.AmazonSESSettings{
 				AccessKey: "test-access-key",
 				SecretKey: "test-secret-key",
@@ -362,9 +370,10 @@ func TestEmailProvider_WithSESSettings(t *testing.T) {
 
 	t.Run("SES provider with missing access key", func(t *testing.T) {
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSES,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindSES,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 			SES: &domain.AmazonSESSettings{
 				Region:    "us-east-1",
 				SecretKey: "test-secret-key",

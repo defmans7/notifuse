@@ -143,7 +143,7 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 }
 
 // TestTemplate sends a test email with a template to verify it works
-func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, recipientEmail string, cc []string, bcc []string, replyTo string) error {
+func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, cc []string, bcc []string, replyTo string) error {
 	// Authenticate user
 	var err error
 	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
@@ -184,6 +184,19 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 		return fmt.Errorf("integration not found: %s", integrationID)
 	}
 
+	// Find the emailSender
+	var emailSender *domain.EmailSender
+	for _, sender := range emailProvider.Senders {
+		if sender.ID == senderID {
+			emailSender = &sender
+			break
+		}
+	}
+
+	if emailSender == nil {
+		return fmt.Errorf("sender not found: %s", senderID)
+	}
+
 	// Set up template data with a test user
 	data := map[string]interface{}{
 		"name": "Test User",
@@ -216,8 +229,8 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 		workspaceID,
 		messageID,
 		false, // Use transactional for testing
-		template.Email.FromAddress,
-		template.Email.FromName,
+		emailSender.Email,
+		emailSender.Name,
 		recipientEmail,
 		template.Email.Subject,
 		*compiledResult.HTML,
@@ -339,9 +352,22 @@ func (s *EmailService) SendEmailForTemplate(
 		return fmt.Errorf("failed to get template: %w", err)
 	}
 
+	// Find the emailSender
+	var emailSender *domain.EmailSender
+	for _, sender := range emailProvider.Senders {
+		if sender.ID == template.Email.SenderID {
+			emailSender = &sender
+			break
+		}
+	}
+
+	if emailSender == nil {
+		return fmt.Errorf("sender not found: %s", template.Email.SenderID)
+	}
+
 	span.AddAttributes(
 		trace.StringAttribute("template.subject", template.Email.Subject),
-		trace.StringAttribute("template.from_email", template.Email.FromAddress),
+		trace.StringAttribute("template.from_email", emailSender.Email),
 	)
 
 	// set utm_content to the template id if not set
@@ -389,8 +415,8 @@ func (s *EmailService) SendEmailForTemplate(
 	}
 
 	// Get necessary email information from the template
-	fromEmail := template.Email.FromAddress
-	fromName := template.Email.FromName
+	fromEmail := emailSender.Email
+	fromName := emailSender.Name
 	subject := template.Email.Subject
 	htmlContent := *compiledTemplate.HTML
 

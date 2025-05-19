@@ -794,9 +794,10 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				Name: "Test Integration",
 				Type: "email",
 				EmailProvider: domain.EmailProvider{
-					Kind:               domain.EmailProviderKindSparkPost,
-					DefaultSenderEmail: "test@example.com",
-					DefaultSenderName:  "Test Sender",
+					Kind: domain.EmailProviderKindSparkPost,
+					Senders: []domain.EmailSender{
+						domain.NewEmailSender("test@example.com", "Test Sender"),
+					},
 					SparkPost: &domain.SparkPostSettings{
 						EncryptedAPIKey: "encrypted-api-key",
 					},

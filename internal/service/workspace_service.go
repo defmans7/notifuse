@@ -12,7 +12,6 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/asaskevich/govalidator"
 	"github.com/google/uuid"
 )
@@ -216,30 +215,15 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, fmt.Errorf(operation.Error)
 	}
 
-	// create default templates:
-	// - double optin confirmation
-	// - subscription confirmation email
-	// - unsubscribe confirmation
-	// - transactional notification
-	if err := s.createDefaultTemplates(ctx, id, userDetails.Email); err != nil {
-		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create default templates")
-		// Continue with workspace creation even if template creation fails
-		// We don't want to fail the entire workspace creation just because templates failed
-		s.logger.WithField("workspace_id", id).Info("Continuing workspace creation despite template creation failure")
-	}
-
 	// create a default list for the workspace
 	list := &domain.List{
-		ID:                  "test",
-		Name:                "Test List",
-		IsDoubleOptin:       true,
-		IsPublic:            false,
-		Description:         "This is a test list",
-		DoubleOptInTemplate: &domain.TemplateReference{ID: "double-optin-confirmation"},
-		WelcomeTemplate:     &domain.TemplateReference{ID: "subscription-confirmation-email"},
-		UnsubscribeTemplate: &domain.TemplateReference{ID: "unsubscribe-confirmation"},
-		CreatedAt:           time.Now(),
-		UpdatedAt:           time.Now(),
+		ID:            "test",
+		Name:          "Test List",
+		IsDoubleOptin: false,
+		IsPublic:      false,
+		Description:   "This is a test list",
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	err = s.listService.CreateList(ctx, id, list)
@@ -261,126 +245,6 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 	}
 
 	return workspace, nil
-}
-
-// createDefaultTemplates creates the default email templates for a new workspace
-func (s *WorkspaceService) createDefaultTemplates(ctx context.Context, workspaceID string, fromEmail string) error {
-	// Common template settings
-	fromName := "Your Company"
-
-	// 1. Opt-in confirmation template
-	optinTemplate := &domain.Template{
-		ID:        "double-optin-confirmation",
-		Name:      "Double Opt-in Confirmation",
-		Version:   1, // Will be set in CreateTemplate
-		Channel:   "email",
-		Category:  string(domain.TemplateCategoryOptIn),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Email: &domain.EmailTemplate{
-			FromAddress:      fromEmail,
-			FromName:         fromName,
-			Subject:          "Please confirm your subscription",
-			SubjectPreview:   func() *string { s := "Please confirm your subscription"; return &s }(),
-			VisualEditorTree: mjml.DefaultOptinConfirmationEmail(),
-			CompiledPreview:  "", // Will be computed during validation
-		},
-		TestData: domain.MapOfAny{
-			"confirmation_url": "https://example.com/confirm?token=example_token",
-			"current_year":     time.Now().Year(),
-		},
-	}
-
-	if err := s.templateService.CreateTemplate(ctx, workspaceID, optinTemplate); err != nil {
-		return fmt.Errorf("failed to create opt-in confirmation template: %w", err)
-	}
-
-	// 2. Subscription confirmation email template
-	subscriptionTemplate := &domain.Template{
-		ID:        "subscription-confirmation-email",
-		Name:      "Subscription Confirmation Email",
-		Version:   1, // Will be set in CreateTemplate
-		Channel:   "email",
-		Category:  string(domain.TemplateCategoryWelcome),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Email: &domain.EmailTemplate{
-			FromAddress:      fromEmail,
-			FromName:         fromName,
-			Subject:          "Subscription Confirmed!",
-			SubjectPreview:   func() *string { s := "Subscription Confirmed!"; return &s }(),
-			VisualEditorTree: mjml.DefaultSubscriptionConfirmationEmail(),
-			CompiledPreview:  "", // Will be computed during validation
-		},
-		TestData: domain.MapOfAny{
-			"unsubscribe_url": "https://example.com/unsubscribe?token=example_token",
-			"current_year":    time.Now().Year(),
-		},
-	}
-
-	if err := s.templateService.CreateTemplate(ctx, workspaceID, subscriptionTemplate); err != nil {
-		return fmt.Errorf("failed to create subscription confirmation email template: %w", err)
-	}
-
-	// 3. Unsubscribe confirmation template
-	unsubscribeTemplate := &domain.Template{
-		ID:        "unsubscribe-confirmation",
-		Name:      "Unsubscribe Confirmation",
-		Version:   1, // Will be set in CreateTemplate
-		Channel:   "email",
-		Category:  string(domain.TemplateCategoryUnsubscribe),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Email: &domain.EmailTemplate{
-			FromAddress:      fromEmail,
-			FromName:         fromName,
-			Subject:          "You have been unsubscribed",
-			SubjectPreview:   func() *string { s := "You have been unsubscribed"; return &s }(),
-			VisualEditorTree: mjml.DefaultUnsubscribeConfirmationEmail(),
-			CompiledPreview:  "", // Will be computed during validation
-		},
-		TestData: domain.MapOfAny{
-			"current_year": time.Now().Year(),
-		},
-	}
-
-	if err := s.templateService.CreateTemplate(ctx, workspaceID, unsubscribeTemplate); err != nil {
-		return fmt.Errorf("failed to create unsubscribe confirmation template: %w", err)
-	}
-
-	// 4. Transactional notification template
-	transactionalTemplate := &domain.Template{
-		ID:        "transactional-notification",
-		Name:      "Transactional Notification",
-		Version:   1, // Will be set in CreateTemplate
-		Channel:   "email",
-		Category:  string(domain.TemplateCategoryTransactional),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Email: &domain.EmailTemplate{
-			FromAddress:      fromEmail,
-			FromName:         fromName,
-			Subject:          "Important subject",
-			SubjectPreview:   func() *string { s := "Important preview"; return &s }(),
-			VisualEditorTree: mjml.DefaultTransactionalEmail(),
-			CompiledPreview:  "", // Will be computed during validation
-		},
-		TestData: domain.MapOfAny{
-			"subject":         "Your order has been shipped",
-			"heading":         "Order Shipped!",
-			"message":         "Your order #12345 has been shipped and will arrive in 2-3 business days.",
-			"cta_text":        "TRACK PACKAGE",
-			"cta_url":         "https://example.com/track?id=12345",
-			"additional_info": "If you have any questions, please contact our support team.",
-			"current_year":    time.Now().Year(),
-		},
-	}
-
-	if err := s.templateService.CreateTemplate(ctx, workspaceID, transactionalTemplate); err != nil {
-		return fmt.Errorf("failed to create transactional notification template: %w", err)
-	}
-
-	return nil
 }
 
 // UpdateWorkspace updates a workspace if the user is an owner

@@ -83,17 +83,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 			Password: "password",
 			UseTLS:   true,
 		},
-		DefaultSenderEmail: "default@example.com",
-		DefaultSenderName:  "Default Sender",
+		Senders: []domain.EmailSender{
+			domain.NewEmailSender("default@example.com", "Default Sender"),
+		},
 	}
 
 	t.Run("missing SMTP settings", func(t *testing.T) {
 		// Create provider with missing SMTP settings
 		invalidProvider := &domain.EmailProvider{
-			Kind:               domain.EmailProviderKindSMTP,
-			SMTP:               nil,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: nil,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 		}
 
 		// Create mock factory

@@ -248,9 +248,10 @@ func TestEmailProvider_WithMailjetSettings(t *testing.T) {
 
 	t.Run("Mailjet provider encryption/decryption", func(t *testing.T) {
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindMailjet,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindMailjet,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 			Mailjet: &domain.MailjetSettings{
 				APIKey:      "test-api-key",
 				SecretKey:   "test-secret-key",
@@ -276,9 +277,10 @@ func TestEmailProvider_WithMailjetSettings(t *testing.T) {
 	t.Run("Mailjet provider validation", func(t *testing.T) {
 		// Valid provider
 		provider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindMailjet,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindMailjet,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 			Mailjet: &domain.MailjetSettings{
 				APIKey:      "test-api-key",
 				SecretKey:   "test-secret-key",
@@ -294,9 +296,10 @@ func TestEmailProvider_WithMailjetSettings(t *testing.T) {
 
 		// Provider with missing Mailjet settings
 		invalidProvider := domain.EmailProvider{
-			Kind:               domain.EmailProviderKindMailjet,
-			DefaultSenderEmail: "default@example.com",
-			DefaultSenderName:  "Default Sender",
+			Kind: domain.EmailProviderKindMailjet,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("default@example.com", "Default Sender"),
+			},
 		}
 
 		// Should fail validation

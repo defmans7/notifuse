@@ -246,8 +246,7 @@ func TestHandleGet(t *testing.T) {
 			Name:    "Test Template",
 			Channel: "email",
 			Email: &domain.EmailTemplate{
-				FromAddress:     "sender@example.com",
-				FromName:        "Sender Name",
+				SenderID:        "sender123",
 				Subject:         "Test Subject",
 				CompiledPreview: "<p>Test HTML content</p>",
 				VisualEditorTree: notifusemjml.EmailBlock{

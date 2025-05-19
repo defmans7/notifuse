@@ -101,14 +101,18 @@ func TestSendToRecipientSuccess(t *testing.T) {
 		},
 	}
 	recipientEmail := "test@example.com"
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+	}
 
 	// Use a simplified template without setting the VisualEditorTree field
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			FromAddress: "sender@example.com",
-			FromName:    "Sender",
-			Subject:     "Test Subject",
+			SenderID: emailSender.ID,
+			Subject:  "Test Subject",
 		},
 	}
 	templateData := domain.MapOfAny{
@@ -141,12 +145,12 @@ func TestSendToRecipientSuccess(t *testing.T) {
 			workspaceID,
 			gomock.Any(), // messageID (will match the generated UUID)
 			true,         // isMarketing
-			template.Email.FromAddress,
-			template.Email.FromName,
+			emailSender.Email,
+			emailSender.Name,
 			recipientEmail,
 			template.Email.Subject,
 			compiledHTML,
-			nil,
+			emailProvider,
 			"",  // replyTo
 			nil, // cc
 			nil, // bcc
@@ -168,7 +172,7 @@ func TestSendToRecipientSuccess(t *testing.T) {
 
 	// Call the method being tested
 	messageID := "test-message-id"
-	err := sender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil)
+	err := sender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, emailProvider)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -210,13 +214,13 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 	}
 	messageID := "test-message-id"
 	recipientEmail := "test@example.com"
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
 
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			FromAddress: "sender@example.com",
-			FromName:    "Sender",
-			Subject:     "Test Subject",
+			SenderID: emailSender.ID,
+			Subject:  "Test Subject",
 		},
 	}
 	templateData := domain.MapOfAny{
@@ -295,13 +299,13 @@ func TestWithMockMessageSender(t *testing.T) {
 			Term:     "test-term",
 		},
 	}
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
 	recipientEmail := "test@example.com"
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			FromAddress: "sender@example.com",
-			FromName:    "Sender",
-			Subject:     "Test Subject",
+			SenderID: emailSender.ID,
+			Subject:  "Test Subject",
 		},
 	}
 	templateData := domain.MapOfAny{
@@ -367,12 +371,12 @@ func TestErrorHandlingWithMock(t *testing.T) {
 		},
 	}
 	recipientEmail := "test@example.com"
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			FromAddress: "sender@example.com",
-			FromName:    "Sender",
-			Subject:     "Test Subject",
+			SenderID: emailSender.ID,
+			Subject:  "Test Subject",
 		},
 	}
 	templateData := domain.MapOfAny{
@@ -460,14 +464,19 @@ func TestSendBatch(t *testing.T) {
 		},
 	}
 
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+	}
+
 	// Create templates
 	template := &domain.Template{
 		ID:      "template-123",
 		Version: 2,
 		Email: &domain.EmailTemplate{
-			FromAddress: "sender@example.com",
-			FromName:    "Sender",
-			Subject:     "Test Subject",
+			SenderID: emailSender.ID,
+			Subject:  "Test Subject",
 		},
 	}
 	templates := map[string]*domain.Template{
@@ -529,12 +538,12 @@ func TestSendBatch(t *testing.T) {
 				workspaceID,
 				gomock.Any(), // messageID (will match the generated UUID)
 				true,         // isMarketing
-				template.Email.FromAddress,
-				template.Email.FromName,
+				emailSender.Email,
+				emailSender.Name,
 				recipient.Contact.Email,
 				template.Email.Subject,
 				compiledHTML,
-				nil,
+				emailProvider,
 				"",  // replyTo
 				nil, // cc
 				nil, // bcc
@@ -584,7 +593,7 @@ func TestSendBatch(t *testing.T) {
 	)
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, nil)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, emailProvider)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -615,7 +624,11 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 	workspaceSecretKey := "secret-key"
 	trackingEnabled := true
 	broadcastID := "broadcast-456"
-
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+	}
 	// Create message sender
 	config := DefaultConfig()
 	sender := NewMessageSender(
@@ -630,7 +643,7 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 
 	// Call the method being tested with empty recipients
 	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, []*domain.ContactWithList{},
-		map[string]*domain.Template{}, nil)
+		map[string]*domain.Template{}, emailProvider)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -750,6 +763,11 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	trackingEnabled := true
 	broadcastID := "broadcast-456"
 	apiEndpoint := "https://api.example.com"
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+	}
 
 	// Create a single contact with list
 	recipients := []*domain.ContactWithList{
@@ -767,9 +785,8 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		ID:      "template-123",
 		Version: 2,
 		Email: &domain.EmailTemplate{
-			FromAddress: "sender@example.com",
-			FromName:    "Sender",
-			Subject:     "Test Subject",
+			SenderID: emailSender.ID,
+			Subject:  "Test Subject",
 		},
 	}
 	templates := map[string]*domain.Template{
@@ -833,12 +850,12 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			workspaceID,
 			gomock.Any(), // messageID (will match the generated UUID)
 			true,         // isMarketing
-			template.Email.FromAddress,
-			template.Email.FromName,
+			emailSender.Email,
+			emailSender.Name,
 			recipients[0].Contact.Email,
 			template.Email.Subject,
 			compiledHTML,
-			nil,
+			emailProvider,
 			"",  // replyTo
 			nil, // cc
 			nil, // bcc
@@ -887,7 +904,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	)
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, nil)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, emailProvider)
 
 	// Verify results
 	assert.NoError(t, err) // The overall operation shouldn't fail even if individual sends fail
@@ -922,6 +939,11 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	trackingEnabled := true
 	broadcastID := "broadcast-456"
 	apiEndpoint := "https://api.example.com"
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+	}
 
 	// Create contact with list
 	recipients := []*domain.ContactWithList{
@@ -939,9 +961,8 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 		ID:      "template-123",
 		Version: 2,
 		Email: &domain.EmailTemplate{
-			FromAddress: "sender@example.com",
-			FromName:    "Sender",
-			Subject:     "Test Subject",
+			SenderID: emailSender.ID,
+			Subject:  "Test Subject",
 		},
 	}
 	templates := map[string]*domain.Template{
@@ -1002,12 +1023,12 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 			workspaceID,
 			gomock.Any(), // messageID (will match the generated UUID)
 			true,         // isMarketing
-			template.Email.FromAddress,
-			template.Email.FromName,
+			emailSender.Email,
+			emailSender.Name,
 			recipients[0].Contact.Email,
 			template.Email.Subject,
 			compiledHTML,
-			nil,
+			emailProvider,
 			"",  // replyTo
 			nil, // cc
 			nil, // bcc
@@ -1036,7 +1057,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	)
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, nil)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients, templates, emailProvider)
 
 	// Verify results - the SendBatch should still succeed even if recording failed
 	assert.NoError(t, err)
