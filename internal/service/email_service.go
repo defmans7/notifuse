@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
+	"github.com/google/uuid"
 	"go.opencensus.io/trace"
 )
 
@@ -102,6 +103,12 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 
 	// Use the first sender in the list
 	defaultSender := provider.Senders[0]
+
+	// Ensure sender has ID
+	if defaultSender.ID == "" {
+		defaultSender.ID = uuid.New().String()
+		provider.Senders[0] = defaultSender
+	}
 
 	// Generate email content
 	subject := "Notifuse: Test Email Provider"

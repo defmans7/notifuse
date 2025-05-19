@@ -32,6 +32,7 @@ const (
 
 // Sender represents an email sender with name and email address
 type Sender struct {
+	ID    string `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
 }
@@ -69,6 +70,10 @@ func (e *EmailProvider) Validate(passphrase string) error {
 		}
 		if sender.Name == "" {
 			return fmt.Errorf("sender name is required for sender at index %d", i)
+		}
+		// Validate UUID format if ID is provided
+		if sender.ID != "" && !govalidator.IsUUID(sender.ID) {
+			return fmt.Errorf("invalid sender ID: %s at index %d. Must be a valid UUID", sender.ID, i)
 		}
 	}
 

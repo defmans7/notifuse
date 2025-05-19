@@ -208,6 +208,7 @@ func TestEmailProviderValidation(t *testing.T) {
 				Kind: EmailProviderKindSMTP,
 				Senders: []Sender{
 					{
+						ID:    "123e4567-e89b-12d3-a456-426614174000",
 						Email: "default@example.com",
 						Name:  "Default Sender",
 					},
@@ -223,7 +224,7 @@ func TestEmailProviderValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Valid SES provider",
+			name: "Valid SES provider with empty ID",
 			provider: EmailProvider{
 				Kind: EmailProviderKindSES,
 				Senders: []Sender{
@@ -239,6 +240,27 @@ func TestEmailProviderValidation(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "Invalid UUID",
+			provider: EmailProvider{
+				Kind: EmailProviderKindSMTP,
+				Senders: []Sender{
+					{
+						ID:    "invalid-uuid",
+						Email: "default@example.com",
+						Name:  "Default Sender",
+					},
+				},
+				SMTP: &SMTPSettings{
+					Host:     "smtp.example.com",
+					Port:     587,
+					Username: "user@example.com",
+					Password: "password",
+				},
+			},
+			wantErr: true,
+			errMsg:  "invalid sender ID",
 		},
 		{
 			name: "Valid SparkPost provider",
