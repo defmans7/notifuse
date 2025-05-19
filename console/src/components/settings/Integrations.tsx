@@ -20,7 +20,8 @@ import {
   Spin,
   Tooltip,
   Row,
-  Col
+  Col,
+  Table
 } from 'antd'
 import {
   EmailProvider,
@@ -30,7 +31,8 @@ import {
   CreateIntegrationRequest,
   UpdateIntegrationRequest,
   DeleteIntegrationRequest,
-  IntegrationType
+  IntegrationType,
+  Sender
 } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
 import { emailService } from '../../services/api/email'
@@ -40,7 +42,9 @@ import {
   faChevronDown,
   faEnvelope,
   faExclamationTriangle,
-  faTerminal
+  faPlus,
+  faTerminal,
+  faTimes
 } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -50,6 +54,7 @@ import {
 } from '../../services/api/webhook_registration'
 import { faPaperPlane, faPenToSquare, faTrashCan } from '@fortawesome/free-regular-svg-icons'
 import { emailProviders } from '../integrations/EmailProviders'
+import { v4 as uuidv4 } from 'uuid'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = ['postmark', 'mailgun']
@@ -289,8 +294,23 @@ const EmailIntegration = ({
     >
       <Descriptions bordered size="small" column={1} className="mt-2">
         <Descriptions.Item label="Name">{integration.name}</Descriptions.Item>
-        <Descriptions.Item label="Sender">
-          {provider.default_sender_name} &lt;{provider.default_sender_email}&gt;
+        <Descriptions.Item label="Senders">
+          {provider.senders && provider.senders.length > 0 ? (
+            <div>
+              {provider.senders.map((sender, index) => (
+                <div key={sender.id || index} className="mb-1">
+                  {sender.name} &lt;{sender.email}&gt;
+                  {index === 0 && (
+                    <Tag color="blue" className="ml-2">
+                      Default
+                    </Tag>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span>No senders configured</span>
+          )}
         </Descriptions.Item>
         <Descriptions.Item label="Used for">
           <Space>
@@ -373,16 +393,14 @@ interface EmailProviderFormValues {
   postmark?: EmailProvider['postmark']
   mailgun?: EmailProvider['mailgun']
   mailjet?: EmailProvider['mailjet']
-  default_sender_email: string
-  default_sender_name: string
+  senders: Sender[]
   type?: IntegrationType
 }
 
 const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailProvider => {
   const provider: EmailProvider = {
     kind: formValues.kind,
-    default_sender_email: formValues.default_sender_email || '',
-    default_sender_name: formValues.default_sender_name || 'Default Sender'
+    senders: formValues.senders || []
   }
 
   // Add provider-specific settings
@@ -409,6 +427,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const [emailProviderForm] = Form.useForm()
   const [selectedProviderType, setSelectedProviderType] = useState<EmailProviderKind | null>(null)
   const [editingIntegrationId, setEditingIntegrationId] = useState<string | null>(null)
+  const [senders, setSenders] = useState<Sender[]>([])
+  const [senderFormVisible, setSenderFormVisible] = useState(false)
+  const [editingSenderIndex, setEditingSenderIndex] = useState<number | null>(null)
+  const [senderForm] = Form.useForm()
 
   // Drawer state
   const [providerDrawerVisible, setProviderDrawerVisible] = useState(false)
@@ -484,11 +506,71 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
     setEditingIntegrationId(integration.id)
     setSelectedProviderType(integration.email_provider.kind)
+
+    // Set senders
+    const integrationSenders = integration.email_provider.senders || []
+    setSenders(integrationSenders)
+
     emailProviderForm.setFieldsValue({
       name: integration.name,
-      ...integration.email_provider
+      kind: integration.email_provider.kind,
+      senders: integrationSenders,
+      ses: integration.email_provider.ses,
+      smtp: integration.email_provider.smtp,
+      sparkpost: integration.email_provider.sparkpost,
+      postmark: integration.email_provider.postmark,
+      mailgun: integration.email_provider.mailgun,
+      mailjet: integration.email_provider.mailjet
     })
     setProviderDrawerVisible(true)
+  }
+
+  // Add a new sender
+  const addSender = () => {
+    senderForm.resetFields()
+    setEditingSenderIndex(null)
+    setSenderFormVisible(true)
+  }
+
+  // Edit an existing sender
+  const editSender = (index: number) => {
+    const sender = senders[index]
+    senderForm.setFieldsValue(sender)
+    setEditingSenderIndex(index)
+    setSenderFormVisible(true)
+  }
+
+  // Delete a sender
+  const deleteSender = (index: number) => {
+    const newSenders = [...senders]
+    newSenders.splice(index, 1)
+    setSenders(newSenders)
+    emailProviderForm.setFieldsValue({ senders: newSenders })
+  }
+
+  // Save sender form
+  const handleSaveSender = () => {
+    senderForm.validateFields().then((values) => {
+      const newSenders = [...senders]
+
+      if (editingSenderIndex !== null) {
+        // Update existing sender
+        newSenders[editingSenderIndex] = {
+          ...values,
+          id: newSenders[editingSenderIndex].id || uuidv4()
+        }
+      } else {
+        // Add new sender
+        newSenders.push({
+          ...values,
+          id: uuidv4()
+        })
+      }
+
+      setSenders(newSenders)
+      emailProviderForm.setFieldsValue({ senders: newSenders })
+      setSenderFormVisible(false)
+    })
   }
 
   // Start testing an email provider
@@ -513,10 +595,18 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   // Handle provider selection and open drawer
   const handleSelectProviderType = (provider: EmailProviderKind) => {
     setSelectedProviderType(provider)
+    // Initialize with a default sender
+    const defaultSender = {
+      id: uuidv4(),
+      name: 'Default Sender',
+      email: ''
+    }
+    setSenders([defaultSender])
     emailProviderForm.setFieldsValue({
       kind: provider,
       type: 'email',
-      name: provider.charAt(0).toUpperCase() + provider.slice(1)
+      name: provider.charAt(0).toUpperCase() + provider.slice(1),
+      senders: [defaultSender]
     })
     setProviderDrawerVisible(true)
   }
@@ -525,12 +615,19 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const closeProviderDrawer = () => {
     setProviderDrawerVisible(false)
     setSelectedProviderType(null)
+    setSenders([])
     emailProviderForm.resetFields()
   }
 
   // Save new or edited integration
   const saveEmailProvider = async (values: EmailProviderFormValues & { name?: string }) => {
     if (!workspace) return
+
+    // Make sure we have at least one sender
+    if (!values.senders || values.senders.length === 0) {
+      message.error('At least one sender is required')
+      return
+    }
 
     try {
       const provider = constructProviderFromForm(values)
@@ -722,22 +819,8 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         <Form.Item name="name" label="Integration Name" rules={[{ required: true }]}>
           <Input placeholder="Enter a name for this integration" disabled={!isOwner} />
         </Form.Item>
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              name="default_sender_email"
-              label="Sender Email"
-              rules={[{ required: true }]}
-            >
-              <Input placeholder="noreply@yourdomain.com" disabled={!isOwner} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="default_sender_name" label="Sender Name" rules={[{ required: true }]}>
-              <Input placeholder="Your Company Name" disabled={!isOwner} />
-            </Form.Item>
-          </Col>
-        </Row>
+
+        {renderSendersField()}
 
         {providerType === 'ses' && (
           <>
@@ -925,6 +1008,77 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     )
   }
 
+  // Render sender list in the provider form
+  const renderSendersField = () => {
+    const columns = [
+      {
+        title: 'Name',
+        dataIndex: 'name',
+        key: 'name'
+      },
+      {
+        title: 'Email',
+        dataIndex: 'email',
+        key: 'email'
+      },
+      {
+        title: 'Actions',
+        key: 'actions',
+        render: (_: any, _record: any, index: number) => (
+          <Space>
+            <Button size="small" type="text" onClick={() => editSender(index)}>
+              <FontAwesomeIcon icon={faPenToSquare} />
+            </Button>
+            {senders.length > 1 && (
+              <Button size="small" type="text" onClick={() => deleteSender(index)} danger>
+                <FontAwesomeIcon icon={faTrashCan} />
+              </Button>
+            )}
+          </Space>
+        )
+      }
+    ]
+
+    return (
+      <Form.Item
+        label="Senders"
+        required
+        tooltip="Add one or more email senders. The first sender will be used as the default."
+      >
+        <div className="border rounded-md p-4 mb-4">
+          <div className="mb-2 flex justify-between items-center">
+            <div className="text-sm font-medium">
+              Sender List{' '}
+              {senders.length > 0 && <Tag color="blue">Default: {senders[0]?.name}</Tag>}
+            </div>
+            <Button type="default" size="small" onClick={addSender} disabled={!isOwner}>
+              <FontAwesomeIcon icon={faPlus} className="mr-1" /> Add Sender
+            </Button>
+          </div>
+          <Table
+            dataSource={senders}
+            columns={columns}
+            size="small"
+            pagination={false}
+            rowKey={(record) => record.id || Math.random().toString()}
+          />
+          {senders.length === 0 && (
+            <Alert
+              message="No senders defined"
+              description="Add at least one sender to proceed"
+              type="warning"
+              showIcon
+              className="mt-2"
+            />
+          )}
+        </div>
+        <Form.Item name="senders" hidden>
+          <Input />
+        </Form.Item>
+      </Form.Item>
+    )
+  }
+
   // Render provider specific details for the given provider
   const renderProviderSpecificDetails = (provider: EmailProvider) => {
     const items = []
@@ -1105,6 +1259,41 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
       {/* Provider Configuration Drawer */}
       {renderProviderDrawer()}
+
+      {/* Sender Form Modal */}
+      <Modal
+        title={editingSenderIndex !== null ? 'Edit Sender' : 'Add Sender'}
+        open={senderFormVisible}
+        onCancel={() => setSenderFormVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setSenderFormVisible(false)}>
+            Cancel
+          </Button>,
+          <Button key="save" type="primary" onClick={handleSaveSender}>
+            Save
+          </Button>
+        ]}
+      >
+        <Form form={senderForm} layout="vertical">
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Email is required' },
+              { type: 'email', message: 'Please enter a valid email' }
+            ]}
+          >
+            <Input placeholder="sender@example.com" disabled={!isOwner} />
+          </Form.Item>
+          <Form.Item
+            name="name"
+            label="Name"
+            rules={[{ required: true, message: 'Name is required' }]}
+          >
+            <Input placeholder="Sender Name" disabled={!isOwner} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Test email modal */}
       <Modal

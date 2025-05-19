@@ -53,6 +53,12 @@ export interface FileManagerSettings {
 
 export type EmailProviderKind = 'smtp' | 'ses' | 'sparkpost' | 'postmark' | 'mailgun' | 'mailjet'
 
+export interface Sender {
+  id: string
+  email: string
+  name: string
+}
+
 export interface EmailProvider {
   kind: EmailProviderKind
   ses?: AmazonSES
@@ -61,8 +67,7 @@ export interface EmailProvider {
   postmark?: PostmarkSettings
   mailgun?: MailgunSettings
   mailjet?: MailjetSettings
-  default_sender_email: string
-  default_sender_name: string
+  senders: Sender[]
 }
 
 export interface AmazonSES {
