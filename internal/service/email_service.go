@@ -96,9 +96,12 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 	}
 
 	// Validate the provider has the required fields
-	if provider.DefaultSenderEmail == "" {
-		return fmt.Errorf("sender email is required for the provider")
+	if len(provider.Senders) == 0 {
+		return fmt.Errorf("at least one sender is required for the provider")
 	}
+
+	// Use the first sender in the list
+	defaultSender := provider.Senders[0]
 
 	// Generate email content
 	subject := "Notifuse: Test Email Provider"
@@ -113,8 +116,8 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 		workspaceID,
 		messageID,
 		false, // Use transactional provider type
-		provider.DefaultSenderEmail,
-		provider.DefaultSenderName,
+		defaultSender.Email,
+		defaultSender.Name,
 		to,
 		subject,
 		content,
@@ -227,14 +230,14 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 // SendEmail sends an email using the specified provider
 func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
 
-	// If fromAddress is not provided, use the default sender email from the provider
-	if fromAddress == "" {
-		fromAddress = provider.DefaultSenderEmail
+	// If fromAddress is not provided, use the first sender's email from the provider
+	if fromAddress == "" && len(provider.Senders) > 0 {
+		fromAddress = provider.Senders[0].Email
 	}
 
-	// If fromName is not provided, use the default sender name from the provider
-	if fromName == "" {
-		fromName = provider.DefaultSenderName
+	// If fromName is not provided, use the first sender's name from the provider
+	if fromName == "" && len(provider.Senders) > 0 {
+		fromName = provider.Senders[0].Name
 	}
 
 	// Get the appropriate provider service

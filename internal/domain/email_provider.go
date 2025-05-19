@@ -30,17 +30,22 @@ const (
 	EmailProviderKindMailjet   EmailProviderKind = "mailjet"
 )
 
+// Sender represents an email sender with name and email address
+type Sender struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
 // EmailProvider contains configuration for an email service provider
 type EmailProvider struct {
-	Kind               EmailProviderKind  `json:"kind"`
-	SES                *AmazonSESSettings `json:"ses,omitempty"`
-	SMTP               *SMTPSettings      `json:"smtp,omitempty"`
-	SparkPost          *SparkPostSettings `json:"sparkpost,omitempty"`
-	Postmark           *PostmarkSettings  `json:"postmark,omitempty"`
-	Mailgun            *MailgunSettings   `json:"mailgun,omitempty"`
-	Mailjet            *MailjetSettings   `json:"mailjet,omitempty"`
-	DefaultSenderEmail string             `json:"default_sender_email"`
-	DefaultSenderName  string             `json:"default_sender_name"`
+	Kind      EmailProviderKind  `json:"kind"`
+	SES       *AmazonSESSettings `json:"ses,omitempty"`
+	SMTP      *SMTPSettings      `json:"smtp,omitempty"`
+	SparkPost *SparkPostSettings `json:"sparkpost,omitempty"`
+	Postmark  *PostmarkSettings  `json:"postmark,omitempty"`
+	Mailgun   *MailgunSettings   `json:"mailgun,omitempty"`
+	Mailjet   *MailjetSettings   `json:"mailjet,omitempty"`
+	Senders   []Sender           `json:"senders"`
 }
 
 // Validate validates the email provider settings
@@ -50,15 +55,21 @@ func (e *EmailProvider) Validate(passphrase string) error {
 		return nil
 	}
 
-	// Validate default sender fields
-	if e.DefaultSenderEmail == "" {
-		return fmt.Errorf("default sender email is required")
+	// Validate senders
+	if len(e.Senders) == 0 {
+		return fmt.Errorf("at least one sender is required")
 	}
-	if !govalidator.IsEmail(e.DefaultSenderEmail) {
-		return fmt.Errorf("invalid default sender email: %s", e.DefaultSenderEmail)
-	}
-	if e.DefaultSenderName == "" {
-		return fmt.Errorf("default sender name is required")
+
+	for i, sender := range e.Senders {
+		if sender.Email == "" {
+			return fmt.Errorf("sender email is required for sender at index %d", i)
+		}
+		if !govalidator.IsEmail(sender.Email) {
+			return fmt.Errorf("invalid sender email: %s at index %d", sender.Email, i)
+		}
+		if sender.Name == "" {
+			return fmt.Errorf("sender name is required for sender at index %d", i)
+		}
 	}
 
 	// Validate Kind value
