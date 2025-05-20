@@ -204,7 +204,7 @@ const Preview = (props: PreviewProps) => {
       {!isLoading && tab === 'mjml' && !apiError && (
         <div
           className="xpeditor-code-bg"
-          style={{ height: 'calc(100% - 50px)', overflowY: 'auto' }}
+          style={{ height: 'calc(100% - 52px)', overflowY: 'auto' }}
         >
           {mjmlError && (
             <Alert
@@ -233,13 +233,13 @@ const Preview = (props: PreviewProps) => {
               key={compiledMjml}
               className="language-xml line-numbers"
               style={{
-                margin: '10px',
-                borderRadius: '4px',
-                padding: '10px',
                 fontSize: '12px',
                 wordWrap: 'break-word',
                 whiteSpace: 'pre-wrap',
-                wordBreak: 'normal'
+                wordBreak: 'normal',
+                height: '100%',
+                margin: 0,
+                borderRadius: '0px'
               }}
             >
               <code className="language-xml">{compiledMjml}</code>
