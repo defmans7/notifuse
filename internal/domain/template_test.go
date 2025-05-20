@@ -1045,7 +1045,7 @@ func TestBuildTemplateData(t *testing.T) {
 		// Check unsubscribe URL
 		unsubscribeURL, ok := data["unsubscribe_url"].(string)
 		assert.True(t, ok)
-		assert.Contains(t, unsubscribeURL, "https://api.example.com/unsubscribe")
+		assert.Contains(t, unsubscribeURL, "https://api.example.com/notification-center?action=unsubscribe")
 		assert.Contains(t, unsubscribeURL, "email=test%40example.com")
 		assert.Contains(t, unsubscribeURL, "lid=list-789")
 		assert.Contains(t, unsubscribeURL, "lname=Newsletter")
