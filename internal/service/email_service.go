@@ -185,13 +185,7 @@ func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, tem
 	}
 
 	// Find the emailSender
-	var emailSender *domain.EmailSender
-	for _, sender := range emailProvider.Senders {
-		if sender.ID == senderID {
-			emailSender = &sender
-			break
-		}
-	}
+	emailSender := emailProvider.GetSender(senderID)
 
 	if emailSender == nil {
 		return fmt.Errorf("sender not found: %s", senderID)
@@ -353,13 +347,7 @@ func (s *EmailService) SendEmailForTemplate(
 	}
 
 	// Find the emailSender
-	var emailSender *domain.EmailSender
-	for _, sender := range emailProvider.Senders {
-		if sender.ID == template.Email.SenderID {
-			emailSender = &sender
-			break
-		}
-	}
+	emailSender := emailProvider.GetSender(template.Email.SenderID)
 
 	if emailSender == nil {
 		return fmt.Errorf("sender not found: %s", template.Email.SenderID)

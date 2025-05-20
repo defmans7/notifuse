@@ -256,14 +256,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeTemplateCompile, errMsg, true, nil)
 	}
 
-	var emailSender *domain.EmailSender
-
-	for _, sender := range emailProvider.Senders {
-		if sender.ID == template.Email.SenderID {
-			emailSender = &sender
-			break
-		}
-	}
+	emailSender := emailProvider.GetSender(template.Email.SenderID)
 
 	if emailSender == nil {
 		s.logger.WithFields(map[string]interface{}{

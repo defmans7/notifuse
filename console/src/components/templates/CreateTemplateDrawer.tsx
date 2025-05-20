@@ -279,7 +279,7 @@ export function CreateTemplateDrawer({
         id: template.id || kebabCase(template.name),
         category: template.category || undefined,
         email: {
-          sender_id: template.email?.sender_id || '',
+          sender_id: template.email?.sender_id || undefined,
           reply_to: template.email?.reply_to || undefined,
           subject: template.email?.subject || '',
           subject_preview: template.email?.subject_preview || '',
@@ -295,7 +295,7 @@ export function CreateTemplateDrawer({
         id: kebabCase(`${fromTemplate.name}-copy`),
         category: fromTemplate.category || forceCategory || undefined,
         email: {
-          sender_id: fromTemplate.email?.sender_id || '',
+          sender_id: fromTemplate.email?.sender_id || undefined,
           reply_to: fromTemplate.email?.reply_to || undefined,
           subject: fromTemplate.email?.subject || '',
           subject_preview: fromTemplate.email?.subject_preview || '',
@@ -574,19 +574,6 @@ export function CreateTemplateDrawer({
                   <Row gutter={24}>
                     <Col span={12}>
                       <Form.Item
-                        name={['email', 'sender_id']}
-                        label="Sender"
-                        rules={[{ required: true, type: 'string' }]}
-                      >
-                        <Select
-                          options={emailProvider?.email_provider.senders.map((sender) => ({
-                            value: sender.id,
-                            label: `${sender.name} <${sender.email}>`
-                          }))}
-                        />
-                      </Form.Item>
-
-                      <Form.Item
                         name={['email', 'subject']}
                         label="Email subject"
                         rules={[{ required: true, type: 'string' }]}
@@ -607,6 +594,21 @@ export function CreateTemplateDrawer({
                         rules={[{ required: false, type: 'email' }]}
                       >
                         <Input />
+                      </Form.Item>
+
+                      <Form.Item
+                        name={['email', 'sender_id']}
+                        label={`Custom sender (${
+                          categoryValue === 'marketing' ? 'marketing' : 'transactional'
+                        } email provider)`}
+                        rules={[{ required: false, type: 'string' }]}
+                      >
+                        <Select
+                          options={emailProvider?.email_provider.senders.map((sender) => ({
+                            value: sender.id,
+                            label: `${sender.name} <${sender.email}>`
+                          }))}
+                        />
                       </Form.Item>
                     </Col>
                     <Col span={12}>

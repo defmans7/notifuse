@@ -314,21 +314,6 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name: "invalid email template - missing sender_id",
-			template: func() *EmailTemplate {
-				e := &EmailTemplate{
-					SenderID:         "test123",
-					Subject:          "Test Subject",
-					CompiledPreview:  "<html>Test content</html>",
-					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
-				}
-				e.SenderID = ""
-				return e
-			}(),
-			testData: nil,
-			wantErr:  true,
-		},
-		{
 			name: "invalid email template - missing subject",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
@@ -611,8 +596,8 @@ func TestCreateTemplateRequest_Validate(t *testing.T) {
 				Name:        "Test Template",
 				Channel:     "email",
 				Email: &EmailTemplate{
-					SenderID:         "",
-					Subject:          "Test Subject",
+					// no subject
+					Subject:          "",
 					CompiledPreview:  "<html>Test content</html>",
 					VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
 				},

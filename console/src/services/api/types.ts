@@ -368,7 +368,7 @@ export interface Template {
 }
 
 export interface EmailTemplate {
-  sender_id: string
+  sender_id?: string
   reply_to?: string
   subject: string
   subject_preview?: string

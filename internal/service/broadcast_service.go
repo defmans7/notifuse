@@ -796,16 +796,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return err
 	}
 
-	var emailSender *domain.EmailSender
-
-	if template.Email.SenderID != "" {
-		for _, sender := range emailProvider.Senders {
-			if sender.ID == template.Email.SenderID {
-				emailSender = &sender
-				break
-			}
-		}
-	}
+	emailSender := emailProvider.GetSender(template.Email.SenderID)
 
 	if emailSender == nil {
 		s.logger.Error("Failed to get sender for broadcast")

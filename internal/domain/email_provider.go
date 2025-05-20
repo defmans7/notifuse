@@ -128,6 +128,25 @@ func (e *EmailProvider) Validate(passphrase string) error {
 	}
 }
 
+func (e *EmailProvider) GetSender(id string) *EmailSender {
+	if id != "" {
+		for _, sender := range e.Senders {
+			if sender.ID == id {
+				return &sender
+			}
+		}
+	}
+
+	// use default sender
+	for _, sender := range e.Senders {
+		if sender.IsDefault {
+			return &sender
+		}
+	}
+
+	return nil
+}
+
 // EncryptSecretKeys encrypts all secret keys in the email provider
 func (e *EmailProvider) EncryptSecretKeys(passphrase string) error {
 	if e.Kind == EmailProviderKindSES && e.SES != nil && e.SES.SecretKey != "" {

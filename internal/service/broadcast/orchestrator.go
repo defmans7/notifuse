@@ -189,13 +189,6 @@ func (o *BroadcastOrchestrator) ValidateTemplates(templates map[string]*domain.T
 			return NewBroadcastError(ErrCodeTemplateInvalid, "template missing email configuration", false, nil)
 		}
 
-		if template.Email.SenderID == "" {
-			// codecov:ignore:start
-			o.logger.WithField("template_id", id).Error("Template missing sender ID")
-			// codecov:ignore:end
-			return NewBroadcastError(ErrCodeTemplateInvalid, "template missing sender ID", false, nil)
-		}
-
 		if template.Email.Subject == "" {
 			// codecov:ignore:start
 			o.logger.WithField("template_id", id).Error("Template missing subject")

@@ -152,7 +152,7 @@ func (t TemplateReference) Value() (driver.Value, error) {
 }
 
 type EmailTemplate struct {
-	SenderID         string          `json:"sender_id"`
+	SenderID         string          `json:"sender_id,omitempty"`
 	ReplyTo          string          `json:"reply_to,omitempty"`
 	Subject          string          `json:"subject"`
 	SubjectPreview   *string         `json:"subject_preview,omitempty"`
@@ -163,9 +163,6 @@ type EmailTemplate struct {
 
 func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	// Validate required fields
-	if e.SenderID == "" {
-		return fmt.Errorf("invalid email template: sender_id is required")
-	}
 	if e.Subject == "" {
 		return fmt.Errorf("invalid email template: subject is required")
 	}
