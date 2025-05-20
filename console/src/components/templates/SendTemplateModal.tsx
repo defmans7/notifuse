@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Modal, Button, Input, Select, Typography, Form } from 'antd'
 import { Workspace, Template, Integration } from '../../services/api/types'
-import { emailService } from '../../services/api/email'
+import { transactionalNotificationsApi } from '../../services/api/transactional_notifications'
 import { message } from 'antd'
 import { emailProviders } from '../integrations/EmailProviders'
 
@@ -78,7 +78,7 @@ export default function SendTemplateModal({
 
     setSendLoading(true)
     try {
-      const response = await emailService.testTemplate(
+      const response = await transactionalNotificationsApi.testTemplate(
         workspace.id,
         template.id,
         selectedIntegrationId,

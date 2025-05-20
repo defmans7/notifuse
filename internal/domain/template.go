@@ -489,69 +489,6 @@ type CompileTemplateResponse struct {
 	Error   *mjmlgo.Error `json:"error,omitempty"` // Pointer, omit if nil
 }
 
-// TestTemplateRequest represents a request to test a template
-type TestTemplateRequest struct {
-	WorkspaceID    string   `json:"workspace_id"`
-	TemplateID     string   `json:"template_id"`
-	IntegrationID  string   `json:"integration_id"`
-	SenderID       string   `json:"sender_id"`
-	RecipientEmail string   `json:"recipient_email"`
-	CC             []string `json:"cc,omitempty"`
-	BCC            []string `json:"bcc,omitempty"`
-	ReplyTo        string   `json:"reply_to,omitempty"`
-}
-
-func (r *TestTemplateRequest) Validate() error {
-	if r.WorkspaceID == "" {
-		return fmt.Errorf("workspace_id is required")
-	}
-	if r.TemplateID == "" {
-		return fmt.Errorf("template_id is required")
-	}
-	if r.IntegrationID == "" {
-		return fmt.Errorf("integration_id is required")
-	}
-	if r.SenderID == "" {
-		return fmt.Errorf("sender_id is required")
-	}
-	if r.RecipientEmail == "" {
-		return fmt.Errorf("recipient_email is required")
-	}
-	if !govalidator.IsEmail(r.RecipientEmail) {
-		return fmt.Errorf("invalid recipient_email format")
-	}
-
-	// Validate CC and BCC email addresses if provided
-	if r.CC != nil {
-		for _, email := range r.CC {
-			if !govalidator.IsEmail(email) {
-				return fmt.Errorf("invalid CC email format: %s", email)
-			}
-		}
-	}
-
-	if r.BCC != nil {
-		for _, email := range r.BCC {
-			if !govalidator.IsEmail(email) {
-				return fmt.Errorf("invalid BCC email format: %s", email)
-			}
-		}
-	}
-
-	// Validate ReplyTo if provided
-	if r.ReplyTo != "" && !govalidator.IsEmail(r.ReplyTo) {
-		return fmt.Errorf("invalid reply_to email format: %s", r.ReplyTo)
-	}
-
-	return nil
-}
-
-// TestTemplateResponse represents the response from testing a template
-type TestTemplateResponse struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
-}
-
 // TemplateService provides operations for managing templates
 type TemplateService interface {
 	// CreateTemplate creates a new template

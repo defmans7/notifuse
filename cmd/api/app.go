@@ -369,6 +369,7 @@ func (a *App) InitServices() error {
 		a.messageHistoryRepo,
 		httpClient,
 		a.config.WebhookEndpoint,
+		a.config.APIEndpoint,
 	)
 
 	// Initialize webhook registration service
@@ -423,6 +424,7 @@ func (a *App) InitServices() error {
 		a.templateService,
 		a.contactService,
 		a.emailService,
+		a.authService,
 		a.logger,
 		a.workspaceRepo,
 		a.config.APIEndpoint,

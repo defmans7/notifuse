@@ -44,6 +44,7 @@ func (h *TransactionalNotificationHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/transactional.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("/api/transactional.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
 	mux.Handle("/api/transactional.send", requireAuth(http.HandlerFunc(h.handleSend)))
+	mux.Handle("/api/transactional.testTemplate", requireAuth(http.HandlerFunc(h.handleTestTemplate)))
 }
 
 // Handler methods
@@ -250,4 +251,50 @@ func (h *TransactionalNotificationHandler) handleSend(w http.ResponseWriter, r *
 		"message_id": messageID,
 		"success":    true,
 	})
+}
+
+// handleTestTemplate handles requests to test a template
+func (h *TransactionalNotificationHandler) handleTestTemplate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req domain.TestTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	err := req.Validate()
+	if err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = h.service.TestTemplate(r.Context(), req.WorkspaceID, req.TemplateID, req.IntegrationID, req.SenderID, req.RecipientEmail, req.CC, req.BCC, req.ReplyTo)
+
+	// Create response
+	response := domain.TestTemplateResponse{
+		Success: err == nil,
+	}
+
+	// If there's an error, include it in the response
+	if err != nil {
+		if _, ok := err.(*domain.ErrTemplateNotFound); ok {
+			WriteJSONError(w, "Template not found", http.StatusNotFound)
+			return
+		}
+
+		h.logger.WithFields(map[string]interface{}{
+			"error":        err.Error(),
+			"workspace_id": req.WorkspaceID,
+			"template_id":  req.TemplateID,
+		}).Error("Failed to test template")
+
+		response.Error = err.Error()
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }

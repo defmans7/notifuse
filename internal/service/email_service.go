@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -28,6 +27,7 @@ type EmailService struct {
 	messageRepo      domain.MessageHistoryRepository
 	httpClient       domain.HTTPClient
 	webhookEndpoint  string
+	apiEndpoint      string
 	smtpService      domain.EmailProviderService
 	sesService       domain.EmailProviderService
 	sparkPostService domain.EmailProviderService
@@ -47,6 +47,7 @@ func NewEmailService(
 	messageRepo domain.MessageHistoryRepository,
 	httpClient domain.HTTPClient,
 	webhookEndpoint string,
+	apiEndpoint string,
 ) *EmailService {
 	// Initialize provider services
 	smtpService := NewSMTPService(logger)
@@ -66,6 +67,7 @@ func NewEmailService(
 		messageRepo:      messageRepo,
 		httpClient:       httpClient,
 		webhookEndpoint:  webhookEndpoint,
+		apiEndpoint:      apiEndpoint,
 		smtpService:      smtpService,
 		sesService:       sesService,
 		sparkPostService: sparkPostService,
@@ -115,8 +117,7 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 	content := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
 
 	// Send email with the provider details
-	// Use a fixed message ID for testing (test-message-id)
-	messageID := "test-message-id"
+	messageID := uuid.New().String()
 
 	err = s.SendEmail(
 		ctx,
@@ -137,105 +138,6 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 	if err != nil {
 		tracing.MarkSpanError(ctx, err)
 		return fmt.Errorf("failed to test provider: %w", err)
-	}
-
-	return nil
-}
-
-// TestTemplate sends a test email with a template to verify it works
-func (s *EmailService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, cc []string, bcc []string, replyTo string) error {
-	// Authenticate user
-	var err error
-	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate user for workspace: %w", err)
-	}
-
-	// Get the template
-	template, err := s.templateRepo.GetTemplateByID(ctx, workspaceID, templateID, int64(0))
-	if err != nil {
-		return fmt.Errorf("failed to retrieve template: %w", err)
-	}
-
-	// Ensure the template has email content
-	if template.Email == nil {
-		return errors.New("template does not contain email content")
-	}
-
-	// Use fixed messageID for testing
-	messageID := "test-message-id"
-
-	// Get the email provider for the workspace
-	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to get workspace: %w", err)
-	}
-
-	// Find the integration
-	var emailProvider *domain.EmailProvider
-	for _, integration := range workspace.Integrations {
-		if integration.ID == integrationID {
-			emailProvider = &integration.EmailProvider
-			break
-		}
-	}
-
-	if emailProvider == nil {
-		return fmt.Errorf("integration not found: %s", integrationID)
-	}
-
-	// Find the emailSender
-	emailSender := emailProvider.GetSender(senderID)
-
-	if emailSender == nil {
-		return fmt.Errorf("sender not found: %s", senderID)
-	}
-
-	// Set up template data with a test user
-	data := map[string]interface{}{
-		"name": "Test User",
-	}
-
-	// Compile the template with the test data
-	compiledResult, err := s.templateService.CompileTemplate(ctx, domain.CompileTemplateRequest{
-		WorkspaceID:      workspaceID,
-		MessageID:        messageID,
-		VisualEditorTree: template.Email.VisualEditorTree,
-		TemplateData:     data,
-		TrackingEnabled:  false, // Don't track test emails
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to compile template: %w", err)
-	}
-
-	if !compiledResult.Success || compiledResult.HTML == nil {
-		errMsg := "Unknown error"
-		if compiledResult.Error != nil {
-			errMsg = compiledResult.Error.Message
-		}
-		return fmt.Errorf("template compilation failed: %s", errMsg)
-	}
-
-	// Send the email
-	err = s.SendEmail(
-		ctx,
-		workspaceID,
-		messageID,
-		false, // Use transactional for testing
-		emailSender.Email,
-		emailSender.Name,
-		recipientEmail,
-		template.Email.Subject,
-		*compiledResult.HTML,
-		emailProvider,
-		replyTo,
-		cc,
-		bcc,
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to send test email: %w", err)
 	}
 
 	return nil

@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	"github.com/Notifuse/notifuse/pkg/tracing"
 	"go.opencensus.io/trace"
 )
@@ -19,6 +22,7 @@ type TransactionalNotificationService struct {
 	templateService    domain.TemplateService
 	contactService     domain.ContactService
 	emailService       domain.EmailServiceInterface
+	authService        domain.AuthService
 	logger             logger.Logger
 	workspaceRepo      domain.WorkspaceRepository
 	apiEndpoint        string
@@ -31,6 +35,7 @@ func NewTransactionalNotificationService(
 	templateService domain.TemplateService,
 	contactService domain.ContactService,
 	emailService domain.EmailServiceInterface,
+	authService domain.AuthService,
 	logger logger.Logger,
 	workspaceRepo domain.WorkspaceRepository,
 	apiEndpoint string,
@@ -41,6 +46,7 @@ func NewTransactionalNotificationService(
 		templateService:    templateService,
 		contactService:     contactService,
 		emailService:       emailService,
+		authService:        authService,
 		logger:             logger,
 		workspaceRepo:      workspaceRepo,
 		apiEndpoint:        apiEndpoint,
@@ -61,6 +67,13 @@ func (s *TransactionalNotificationService) CreateNotification(
 		trace.StringAttribute("notification_id", params.ID),
 		trace.StringAttribute("notification_name", params.Name),
 	)
+
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user for workspace: %w", err)
+	}
 
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
@@ -128,6 +141,13 @@ func (s *TransactionalNotificationService) UpdateNotification(
 		trace.StringAttribute("workspace", workspace),
 		trace.StringAttribute("notification_id", id),
 	)
+
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user for workspace: %w", err)
+	}
 
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
@@ -203,6 +223,13 @@ func (s *TransactionalNotificationService) GetNotification(
 	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "GetNotification")
 	defer span.End()
 
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user for workspace: %w", err)
+	}
+
 	span.AddAttributes(
 		trace.StringAttribute("workspace", workspace),
 		trace.StringAttribute("notification_id", id),
@@ -243,6 +270,13 @@ func (s *TransactionalNotificationService) ListNotifications(
 ) ([]*domain.TransactionalNotification, int, error) {
 	ctx, span := tracing.StartServiceSpan(ctx, "TransactionalNotificationService", "ListNotifications")
 	defer span.End()
+
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspace)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to authenticate user for workspace: %w", err)
+	}
 
 	span.AddAttributes(
 		trace.StringAttribute("workspace", workspace),
@@ -304,6 +338,13 @@ func (s *TransactionalNotificationService) DeleteNotification(
 		trace.StringAttribute("notification_id", id),
 	)
 
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspace)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user for workspace: %w", err)
+	}
+
 	s.logger.WithFields(map[string]interface{}{
 		"workspace": workspace,
 		"id":        id,
@@ -340,6 +381,13 @@ func (s *TransactionalNotificationService) SendNotification(
 		trace.StringAttribute("workspace", workspaceID),
 		trace.StringAttribute("notification_id", params.ID),
 	)
+
+	// Authenticate user for workspace
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to authenticate user for workspace: %w", err)
+	}
 
 	// Add contact info to span if available
 	if params.Contact != nil {
@@ -538,4 +586,127 @@ func (s *TransactionalNotificationService) SendNotification(
 	)
 
 	return messageID, nil
+}
+
+// TestTemplate sends a test email with a template to verify it works
+func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, cc []string, bcc []string, replyTo string) error {
+	// Authenticate user
+	var err error
+	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user for workspace: %w", err)
+	}
+
+	// Get the template
+	template, err := s.templateService.GetTemplateByID(ctx, workspaceID, templateID, int64(0))
+	if err != nil {
+		return fmt.Errorf("failed to retrieve template: %w", err)
+	}
+
+	// Ensure the template has email content
+	if template.Email == nil {
+		return errors.New("template does not contain email content")
+	}
+
+	// Get the email provider for the workspace
+	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	// Find the integration
+	var emailProvider *domain.EmailProvider
+	for _, integration := range workspace.Integrations {
+		if integration.ID == integrationID {
+			emailProvider = &integration.EmailProvider
+			break
+		}
+	}
+
+	if emailProvider == nil {
+		return fmt.Errorf("integration not found: %s", integrationID)
+	}
+
+	// Find the emailSender
+	emailSender := emailProvider.GetSender(senderID)
+
+	if emailSender == nil {
+		return fmt.Errorf("sender not found: %s", senderID)
+	}
+
+	contactWithList := domain.ContactWithList{
+		Contact: &domain.Contact{
+			Email: recipientEmail,
+		},
+	}
+
+	// Use fixed messageID for testing
+	messageID := uuid.New().String()
+	trackingSettings := mjml.TrackingSettings{
+		EnableTracking: true,
+		Endpoint:       s.apiEndpoint,
+	}
+
+	messageData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, contactWithList, messageID, trackingSettings, nil)
+
+	if err != nil {
+		return fmt.Errorf("failed to build template data: %w", err)
+	}
+
+	// Compile the template with the test data
+	compiledResult, err := s.templateService.CompileTemplate(ctx, domain.CompileTemplateRequest{
+		WorkspaceID:      workspaceID,
+		MessageID:        messageID,
+		VisualEditorTree: template.Email.VisualEditorTree,
+		TemplateData:     messageData,
+		TrackingEnabled:  false, // Don't track test emails
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to compile template: %w", err)
+	}
+
+	if !compiledResult.Success || compiledResult.HTML == nil {
+		errMsg := "Unknown error"
+		if compiledResult.Error != nil {
+			errMsg = compiledResult.Error.Message
+		}
+		return fmt.Errorf("template compilation failed: %s", errMsg)
+	}
+
+	// Send the email
+	err = s.emailService.SendEmail(
+		ctx,
+		workspaceID,
+		messageID,
+		false, // Use transactional for testing
+		emailSender.Email,
+		emailSender.Name,
+		recipientEmail,
+		template.Email.Subject,
+		*compiledResult.HTML,
+		emailProvider,
+		replyTo,
+		cc,
+		bcc,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to send test email: %w", err)
+	}
+
+	// record the message history
+	return s.messageHistoryRepo.Create(ctx, workspaceID, &domain.MessageHistory{
+		ID:           messageID,
+		ContactEmail: recipientEmail,
+		TemplateID:   templateID,
+		Channel:      "email",
+		Status:       domain.MessageStatusSent,
+		MessageData: domain.MessageData{
+			Data: messageData,
+		},
+		SentAt:    time.Now().UTC(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	})
 }

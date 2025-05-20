@@ -1,4 +1,5 @@
 import { api } from './client'
+import { TestTemplateRequest, TestTemplateResponse } from './types'
 
 export type TransactionalChannel = 'email'
 // Add other channels in the future (sms, push, etc.)
@@ -156,5 +157,39 @@ export const transactionalNotificationsApi = {
     params: SendTransactionalNotificationRequest
   ): Promise<SendTransactionalNotificationResponse> => {
     return api.post<SendTransactionalNotificationResponse>('/api/transactional.send', params)
+  },
+
+  /**
+   * Test a template by sending a test email
+   * @param workspaceId The ID of the workspace
+   * @param templateId The ID of the template to test
+   * @param integrationId The ID of the integration to use
+   * @param recipientEmail The email address to send the test email to
+   * @param cc Optional array of CC email addresses
+   * @param bcc Optional array of BCC email addresses
+   * @param replyTo Optional Reply-To email address
+   * @returns A response indicating success or failure
+   */
+  testTemplate: (
+    workspaceId: string,
+    templateId: string,
+    integrationId: string,
+    senderId: string,
+    recipientEmail: string,
+    cc?: string[],
+    bcc?: string[],
+    replyTo?: string
+  ): Promise<TestTemplateResponse> => {
+    const request: TestTemplateRequest = {
+      workspace_id: workspaceId,
+      template_id: templateId,
+      integration_id: integrationId,
+      sender_id: senderId,
+      recipient_email: recipientEmail,
+      cc,
+      bcc,
+      reply_to: replyTo
+    }
+    return api.post<TestTemplateResponse>('/api/transactional.testTemplate', request)
   }
 }

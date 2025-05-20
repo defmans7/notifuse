@@ -43,6 +43,7 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -80,6 +81,11 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 				},
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Expect template service to validate the template exists
 				mockTemplateService.EXPECT().
 					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
@@ -120,6 +126,11 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 				},
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Expect template service to fail finding the template
 				mockTemplateService.EXPECT().
 					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
@@ -140,6 +151,11 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 				},
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Template exists
 				mockTemplateService.EXPECT().
 					GetTemplateByID(gomock.Any(), workspace, templateID, int64(0)).
@@ -170,6 +186,7 @@ func TestTransactionalNotificationService_CreateNotification(t *testing.T) {
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
 				apiEndpoint:        "https://api.example.com",
+				authService:        mockAuthService,
 			}
 
 			// Call the method being tested
@@ -201,6 +218,7 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -246,6 +264,11 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				Name: "Updated Name",
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Get existing notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -293,6 +316,11 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				},
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Get existing notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -336,6 +364,11 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				Name: "Updated Name",
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Get existing notification fails
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -355,6 +388,11 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				},
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Get existing notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -375,6 +413,11 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				Name: "Updated Name",
 			},
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				// Get existing notification
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
@@ -405,6 +448,7 @@ func TestTransactionalNotificationService_UpdateNotification(t *testing.T) {
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
 				apiEndpoint:        "https://api.example.com",
+				authService:        mockAuthService,
 			}
 
 			// Call the method being tested
@@ -444,6 +488,7 @@ func TestTransactionalNotificationService_GetNotification(t *testing.T) {
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -474,6 +519,11 @@ func TestTransactionalNotificationService_GetNotification(t *testing.T) {
 			name: "Success_GetNotification",
 			id:   notificationID,
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
 					Return(existingNotification, nil)
@@ -485,6 +535,11 @@ func TestTransactionalNotificationService_GetNotification(t *testing.T) {
 			name: "Error_NotificationNotFound",
 			id:   notificationID,
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				mockRepo.EXPECT().
 					Get(gomock.Any(), workspace, notificationID).
 					Return(nil, errors.New("notification not found"))
@@ -509,6 +564,7 @@ func TestTransactionalNotificationService_GetNotification(t *testing.T) {
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
 				apiEndpoint:        "https://api.example.com",
+				authService:        mockAuthService,
 			}
 
 			// Call the method being tested
@@ -536,6 +592,7 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -575,6 +632,11 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 			limit:  10,
 			offset: 0,
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				mockRepo.EXPECT().
 					List(gomock.Any(), workspace, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(notifications, 2, nil)
@@ -589,6 +651,11 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 			limit:  10,
 			offset: 0,
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				mockRepo.EXPECT().
 					List(gomock.Any(), workspace, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return([]*domain.TransactionalNotification{}, 0, nil)
@@ -603,6 +670,11 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 			limit:  10,
 			offset: 0,
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				mockRepo.EXPECT().
 					List(gomock.Any(), workspace, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil, 0, errors.New("repository error"))
@@ -628,6 +700,7 @@ func TestTransactionalNotificationService_ListNotifications(t *testing.T) {
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
 				apiEndpoint:        "https://api.example.com",
+				authService:        mockAuthService,
 			}
 
 			// Call the method being tested
@@ -656,6 +729,7 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 
 	// Create a stub logger that simply returns itself for chaining calls
 	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -680,6 +754,11 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 			name: "Success_DeleteNotification",
 			id:   notificationID,
 			mockSetup: func() {
+				// Expect auth service to authenticate the user
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				mockRepo.EXPECT().
 					Delete(gomock.Any(), workspace, notificationID).
 					Return(nil)
@@ -690,6 +769,10 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 			name: "Error_DeleteFailed",
 			id:   notificationID,
 			mockSetup: func() {
+				mockAuthService.EXPECT().
+					AuthenticateUserForWorkspace(gomock.Any(), workspace).
+					Return(ctx, &domain.User{ID: "user-123"}, nil)
+
 				mockRepo.EXPECT().
 					Delete(gomock.Any(), workspace, notificationID).
 					Return(errors.New("delete failed"))
@@ -713,6 +796,7 @@ func TestTransactionalNotificationService_DeleteNotification(t *testing.T) {
 				logger:             mockLogger,
 				workspaceRepo:      mockWorkspaceRepo,
 				apiEndpoint:        "https://api.example.com",
+				authService:        mockAuthService,
 			}
 
 			// Call the method being tested
@@ -737,6 +821,7 @@ func TestNewTransactionalNotificationService(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	apiEndpoint := "https://api.example.com"
@@ -747,6 +832,7 @@ func TestNewTransactionalNotificationService(t *testing.T) {
 		mockTemplateService,
 		mockContactService,
 		mockEmailService,
+		mockAuthService,
 		mockLogger,
 		mockWorkspaceRepo,
 		apiEndpoint,
@@ -758,6 +844,7 @@ func TestNewTransactionalNotificationService(t *testing.T) {
 	assert.Equal(t, mockTemplateService, service.templateService)
 	assert.Equal(t, mockContactService, service.contactService)
 	assert.Equal(t, mockEmailService, service.emailService)
+	assert.Equal(t, mockAuthService, service.authService)
 	assert.Equal(t, mockLogger, service.logger)
 	assert.Equal(t, mockWorkspaceRepo, service.workspaceRepo)
 	assert.Equal(t, apiEndpoint, service.apiEndpoint)
@@ -829,6 +916,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 		mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 		mockLogger := pkgmocks.NewMockLogger(ctrl)
 		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
 
 		// Create a stub logger that simply returns itself for chaining calls
 		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -846,6 +934,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 			logger:             mockLogger,
 			workspaceRepo:      mockWorkspaceRepo,
 			apiEndpoint:        "https://api.example.com",
+			authService:        mockAuthService,
 		}
 
 		params := domain.TransactionalNotificationSendParams{
@@ -859,6 +948,11 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				"source": "api",
 			},
 		}
+
+		// Expect auth service to authenticate the user
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspace).
+			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		// Get the workspace
 		mockWorkspaceRepo.EXPECT().
@@ -922,6 +1016,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 		mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 		mockLogger := pkgmocks.NewMockLogger(ctrl)
 		mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
 
 		// Create a stub logger that simply returns itself for chaining calls
 		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
@@ -939,12 +1034,18 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 			logger:             mockLogger,
 			workspaceRepo:      mockWorkspaceRepo,
 			apiEndpoint:        "https://api.example.com",
+			authService:        mockAuthService,
 		}
 
 		params := domain.TransactionalNotificationSendParams{
 			ID:      notificationID,
 			Contact: contact,
 		}
+
+		// Expect auth service to authenticate the user
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspace).
+			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		// Get the workspace
 		mockWorkspaceRepo.EXPECT().
@@ -966,4 +1067,147 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 	})
 
 	// Add more test cases following the same pattern
+}
+
+func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
+	mockMsgHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+
+	// Create a stub logger that simply returns itself for chaining calls
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	ctx := context.Background()
+	workspaceID := "test-workspace"
+	templateID := uuid.New().String()
+	integrationID := "integration-1"
+	senderID := "sender-1"
+	recipientEmail := "test@example.com"
+
+	// Setup workspace
+	workspace := &domain.Workspace{
+		ID:   workspaceID,
+		Name: "Test Workspace",
+		Settings: domain.WorkspaceSettings{
+			SecretKey: "test-secret-key",
+		},
+		Integrations: []domain.Integration{
+			{
+				ID:   integrationID,
+				Name: "Test Integration",
+				Type: "email",
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSparkPost,
+					Senders: []domain.EmailSender{
+						{
+							ID:    senderID,
+							Email: "sender@example.com",
+							Name:  "Test Sender",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Setup template
+	template := &domain.Template{
+		ID:   templateID,
+		Name: "Test Template",
+		Email: &domain.EmailTemplate{
+			Subject: "Test Subject",
+			VisualEditorTree: mjml.EmailBlock{
+				Kind: "root",
+				Data: map[string]interface{}{
+					"styles": map[string]interface{}{
+						"backgroundColor": "#ffffff",
+						"width":           "600px",
+					},
+				},
+				Children: []mjml.EmailBlock{},
+			},
+			ReplyTo: "",
+		},
+	}
+
+	// Setup HTML result
+	htmlResult := "<html><body>Test content</body></html>"
+	compilationResult := &domain.CompileTemplateResponse{
+		Success: true,
+		HTML:    &htmlResult,
+		Error:   nil,
+	}
+
+	service := &TransactionalNotificationService{
+		transactionalRepo:  mockRepo,
+		messageHistoryRepo: mockMsgHistoryRepo,
+		templateService:    mockTemplateService,
+		contactService:     mockContactService,
+		emailService:       mockEmailService,
+		logger:             mockLogger,
+		workspaceRepo:      mockWorkspaceRepo,
+		apiEndpoint:        "https://api.example.com",
+		authService:        mockAuthService,
+	}
+
+	// Expect authentication
+	mockAuthService.EXPECT().
+		AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+		Return(ctx, &domain.User{ID: "user-123"}, nil)
+
+	// Expect get template
+	mockTemplateService.EXPECT().
+		GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
+		Return(template, nil)
+
+	// Expect get workspace
+	mockWorkspaceRepo.EXPECT().
+		GetByID(gomock.Any(), workspaceID).
+		Return(workspace, nil)
+
+	// Expect compile template
+	mockTemplateService.EXPECT().
+		CompileTemplate(gomock.Any(), gomock.Any()).
+		Return(compilationResult, nil)
+
+	// Expect send email
+	mockEmailService.EXPECT().
+		SendEmail(
+			gomock.Any(),
+			gomock.Eq(workspaceID),
+			gomock.Any(),     // messageID
+			gomock.Eq(false), // isMarketing
+			gomock.Eq("sender@example.com"),
+			gomock.Eq("Test Sender"),
+			gomock.Eq(recipientEmail),
+			gomock.Eq(template.Email.Subject),
+			gomock.Eq(htmlResult),
+			gomock.Any(),  // emailProvider
+			gomock.Eq(""), // replyTo
+			gomock.Nil(),  // cc
+			gomock.Nil(),  // bcc
+		).Return(nil)
+
+	// Expect message history creation
+	mockMsgHistoryRepo.EXPECT().
+		Create(gomock.Any(), workspaceID, gomock.Any()).
+		Return(nil)
+
+	// Call the method
+	err := service.TestTemplate(ctx, workspaceID, templateID, integrationID, senderID, recipientEmail, nil, nil, "")
+
+	// Assertions
+	require.NoError(t, err)
 }

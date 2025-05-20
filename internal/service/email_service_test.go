@@ -11,7 +11,6 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -136,11 +135,12 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 
 		// Provider should send an email - use gomock's Any matcher to be flexible
 		testEmailContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
+
 		mockSESService.EXPECT().
 			SendEmail(
 				gomock.Any(),
 				gomock.Eq(workspaceID),
-				gomock.Eq("test-message-id"),
+				gomock.Any(),
 				gomock.Eq("sender@example.com"),
 				gomock.Eq("Test Sender"),
 				gomock.Eq(toEmail),
@@ -231,11 +231,12 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		testEmailContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
+
 		mockSESService.EXPECT().
 			SendEmail(
 				gomock.Any(),
 				gomock.Eq(workspaceID),
-				gomock.Eq("test-message-id"),
+				gomock.Any(),
 				gomock.Eq("sender@example.com"),
 				gomock.Eq("Test Sender"),
 				gomock.Eq(toEmail),
@@ -253,164 +254,6 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		// Assertions
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to test provider")
-	})
-}
-
-func TestEmailService_TestTemplate(t *testing.T) {
-	// Setup the controller
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Setup mocks
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
-	mockTemplateService := mocks.NewMockTemplateService(ctrl)
-	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
-	mockSESService := mocks.NewMockEmailProviderService(ctrl)
-
-	secretKey := "test-secret-key"
-	webhookEndpoint := "https://webhook.test"
-
-	// Create the email service
-	emailService := EmailService{
-		logger:          mockLogger,
-		authService:     mockAuthService,
-		secretKey:       secretKey,
-		workspaceRepo:   mockWorkspaceRepo,
-		templateRepo:    mockTemplateRepo,
-		templateService: mockTemplateService,
-		httpClient:      mockHTTPClient,
-		webhookEndpoint: webhookEndpoint,
-		sesService:      mockSESService,
-	}
-
-	ctx := context.Background()
-	workspaceID := "workspace-123"
-	templateID := "template-123"
-	integrationID := "integration-123"
-	recipientEmail := "recipient@example.com"
-	emailSender := domain.NewEmailSender("sender@example.com", "Test Sender")
-
-	t.Run("Success with existing template", func(t *testing.T) {
-		// Set up authentication mock
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
-			Return(ctx, &domain.User{ID: "user-123"}, nil)
-
-		// Setup workspace with email provider
-		workspace := domain.Workspace{
-			ID: workspaceID,
-			Integrations: []domain.Integration{
-				{
-					ID: integrationID,
-					EmailProvider: domain.EmailProvider{
-						Kind: domain.EmailProviderKindSES,
-						Senders: []domain.EmailSender{
-							emailSender,
-						},
-						SES: &domain.AmazonSESSettings{
-							Region:    "us-east-1",
-							AccessKey: "test-access-key",
-							SecretKey: "test-secret-key",
-						},
-					},
-				},
-			},
-		}
-
-		mockWorkspaceRepo.EXPECT().
-			GetByID(gomock.Any(), workspaceID).
-			Return(&workspace, nil)
-
-		// Setup template with the correct EmailBlock structure
-		editorTree := mjml.EmailBlock{
-			Kind: "root",
-			Data: map[string]interface{}{
-				"styles": map[string]interface{}{
-					"backgroundColor": "#ffffff",
-				},
-			},
-			Children: []mjml.EmailBlock{
-				{
-					Kind: "paragraph",
-					Children: []mjml.EmailBlock{
-						{
-							Kind: "text",
-							Data: map[string]interface{}{
-								"content": "Test content",
-							},
-						},
-					},
-				},
-			},
-		}
-
-		template := domain.Template{
-			ID:   templateID,
-			Name: "Test Template",
-			Email: &domain.EmailTemplate{
-				Subject:          "Test Subject",
-				SenderID:         emailSender.ID,
-				VisualEditorTree: editorTree,
-				ReplyTo:          "reply-to@example.com",
-			},
-			TestData: map[string]interface{}{
-				"name": "Test User",
-			},
-		}
-
-		mockTemplateRepo.EXPECT().
-			GetTemplateByID(gomock.Any(), workspaceID, templateID, int64(0)).
-			Return(&template, nil)
-
-		// Setup the mock to return the compilation result
-		htmlResult := "<html><body>Test content for Test User</body></html>"
-		compilationResult := &domain.CompileTemplateResponse{
-			Success: true,
-			HTML:    aws.String(htmlResult),
-			Error:   nil,
-		}
-
-		mockTemplateService.EXPECT().
-			CompileTemplate(gomock.Any(), gomock.Any()).
-			Return(compilationResult, nil)
-
-		// Provider should send an email - use gomock matchers
-		mockSESService.EXPECT().
-			SendEmail(
-				gomock.Any(),
-				gomock.Eq(workspaceID),
-				gomock.Eq("test-message-id"),
-				gomock.Eq(emailSender.Email),
-				gomock.Eq(emailSender.Name),
-				gomock.Eq(recipientEmail),
-				gomock.Eq(template.Email.Subject),
-				gomock.Eq(htmlResult),
-				gomock.Any(),
-				gomock.Eq(template.Email.ReplyTo),
-				gomock.Nil(),
-				gomock.Nil(),
-			).Return(nil)
-
-		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, emailSender.ID, recipientEmail, nil, nil, template.Email.ReplyTo)
-
-		// Assertions
-		require.NoError(t, err)
-	})
-
-	t.Run("Authentication failure", func(t *testing.T) {
-		mockAuthService.EXPECT().
-			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
-			Return(ctx, nil, assert.AnError)
-
-		// Call method under test
-		err := emailService.TestTemplate(ctx, workspaceID, templateID, integrationID, "", recipientEmail, nil, nil, "")
-
-		// Assertions
-		require.Error(t, err)
 	})
 }
 
@@ -450,7 +293,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 	toEmail := "recipient@example.com"
 	subject := "Test Subject"
 	content := "<html><body>Test content</body></html>"
-	messageID := "test-message-id"
+	messageID := uuid.New().String()
 
 	t.Run("Basic SES provider", func(t *testing.T) {
 		provider := domain.EmailProvider{
@@ -474,7 +317,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 			SendEmail(
 				gomock.Any(),
 				gomock.Eq(workspaceID),
-				gomock.Eq(messageID),
+				gomock.Any(),
 				gomock.Eq(fromAddress),
 				gomock.Eq(fromName),
 				gomock.Eq(toEmail),
