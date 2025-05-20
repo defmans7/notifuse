@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Typography, Button, Table, Tooltip, Space, Popconfirm, message, Segmented } from 'antd'
+import {
+  Typography,
+  Button,
+  Table,
+  Tooltip,
+  Space,
+  Popconfirm,
+  message,
+  Segmented,
+  Tag
+} from 'antd'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
 import type { Template, Workspace } from '../services/api/types'
@@ -109,6 +119,13 @@ export function TemplatesPage() {
     setTestModalOpen(true)
   }
 
+  const marketingEmailProvider = workspace?.integrations?.find(
+    (integration) => integration.id === workspace.settings.marketing_email_provider_id
+  )
+  const transactionalEmailProvider = workspace?.integrations?.find(
+    (integration) => integration.id === workspace.settings.transactional_email_provider_id
+  )
+
   const columns = [
     {
       title: 'Template',
@@ -129,22 +146,23 @@ export function TemplatesPage() {
     {
       title: 'Sender',
       key: 'sender',
-      render: (_: any, record: Template) => (
-        <div>
-          {record.email?.from_name && (
-            <div>
-              <Text>{record.email.from_name}</Text>
-            </div>
-          )}
-          {record.email?.from_address && (
-            <div>
-              <Text type="secondary" className="text-xs">
-                {record.email.from_address}
-              </Text>
-            </div>
-          )}
-        </div>
-      )
+      render: (_: any, record: Template) => {
+        if (workspace && record.email?.sender_id) {
+          const isMarketing = record.category === 'marketing'
+          const emailProvider = isMarketing ? marketingEmailProvider : transactionalEmailProvider
+          if (emailProvider) {
+            const sender = emailProvider.email_provider.senders.find(
+              (sender) => sender.id === record.email?.sender_id
+            )
+            return `${sender?.name} <${sender?.email}>`
+          }
+        }
+        return (
+          <Tag bordered={false} color="blue">
+            default
+          </Tag>
+        )
+      }
     },
     {
       title: 'Subject',
@@ -157,35 +175,6 @@ export function TemplatesPage() {
             <div>
               <Text type="secondary" className="text-xs">
                 {record.email.subject_preview}
-              </Text>
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      title: 'UTM',
-      key: 'utm',
-      render: (_: any, record: Template) => (
-        <div className="space-y-1">
-          {record.utm_source && (
-            <div>
-              <Text type="secondary" className="text-xs">
-                utm_source: {record.utm_source}
-              </Text>
-            </div>
-          )}
-          {record.utm_medium && (
-            <div>
-              <Text type="secondary" className="text-xs">
-                utm_medium: {record.utm_medium}
-              </Text>
-            </div>
-          )}
-          {record.utm_campaign && (
-            <div>
-              <Text type="secondary" className="text-xs">
-                utm_campaign: {record.utm_campaign}
               </Text>
             </div>
           )}
@@ -209,7 +198,7 @@ export function TemplatesPage() {
       )
     },
     {
-      title: 'Actions',
+      title: '',
       key: 'actions',
       render: (_: any, record: Template) => (
         <Space>
