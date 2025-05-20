@@ -41,8 +41,8 @@ func (h *EmailHandler) RegisterRoutes(mux *http.ServeMux) {
 	requireAuth := authMiddleware.RequireAuth()
 
 	// Register RPC-style endpoints with dot notation
-	mux.Handle("/visit", requireAuth(http.HandlerFunc(h.handleClickRedirection)))
-	mux.Handle("/opens", requireAuth(http.HandlerFunc(h.handleOpens)))
+	mux.Handle("/visit", http.HandlerFunc(h.handleClickRedirection))
+	mux.Handle("/opens", http.HandlerFunc(h.handleOpens))
 	mux.Handle("/api/email.testProvider", requireAuth(http.HandlerFunc(h.handleTestEmailProvider)))
 }
 

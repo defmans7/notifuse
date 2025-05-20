@@ -601,12 +601,12 @@ func BuildTemplateData(workspaceID string, secretKey string, contactWithList Con
 		hmac := hmac.New(sha256.New, []byte(secretKey))
 		hmac.Write([]byte(fmt.Sprintf("%s:%s:%s:%s:%s", email, listID, listName, workspaceID, messageID)))
 		signature := base64.StdEncoding.EncodeToString(hmac.Sum(nil))
-		unsubscribeURL := fmt.Sprintf("%s/unsubscribe?lid=%s&lname=%s&wid=%s&mid=%s&email=%s&hmac=%s",
+		unsubscribeURL := fmt.Sprintf("%s/notification-center?action=unsubscribe&lid=%s&lname=%s&wid=%s&mid=%s&email=%s&hmac=%s",
 			trackingSettings.Endpoint, listID, listName, workspaceID, messageID, email, signature)
 		templateData["unsubscribe_url"] = unsubscribeURL
 
 		// oneclick unsubscribe link
-		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?email=%s&lids=%s&wid=%s&message=%s",
+		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?email=%s&lids=%s&wid=%s&mid=%s",
 			trackingSettings.Endpoint, email, listID, workspaceID, messageID)
 		templateData["oneclick_unsubscribe_url"] = oneclickUnsubscribeURL
 	}

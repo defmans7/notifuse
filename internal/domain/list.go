@@ -359,6 +359,7 @@ type UnsubscribeFromListsRequest struct {
 	Email       string   `json:"email"`
 	EmailHMAC   string   `json:"hmac"`
 	ListIDs     []string `json:"lids"`
+	MessageID   string   `json:"mid"`
 }
 
 // from url params
@@ -367,6 +368,7 @@ func (r *UnsubscribeFromListsRequest) FromURLParams(queryParams url.Values) (err
 	r.Email = queryParams.Get("email")
 	r.EmailHMAC = queryParams.Get("email_hmac")
 	r.ListIDs = queryParams["list_ids"]
+	r.MessageID = queryParams.Get("mid")
 
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("workspace_id is required")
@@ -374,6 +376,10 @@ func (r *UnsubscribeFromListsRequest) FromURLParams(queryParams url.Values) (err
 
 	if r.Email == "" {
 		return fmt.Errorf("email is required")
+	}
+
+	if r.MessageID == "" {
+		return fmt.Errorf("message_id is required")
 	}
 
 	if len(r.ListIDs) == 0 {
