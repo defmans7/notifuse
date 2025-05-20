@@ -269,6 +269,7 @@ export function CreateListDrawer({
                     workspaceId={workspaceId}
                     category="opt_in"
                     placeholder="Select confirmation email template"
+                    clearable={false}
                   />
                 </Form.Item>
               ) : null
@@ -290,6 +291,7 @@ export function CreateListDrawer({
               workspaceId={workspaceId}
               category="welcome"
               placeholder="Select welcome email template"
+              clearable={true}
             />
           </Form.Item>
 
@@ -308,6 +310,7 @@ export function CreateListDrawer({
               workspaceId={workspaceId}
               category="unsubscribe"
               placeholder="Select unsubscribe email template"
+              clearable={true}
             />
           </Form.Item>
         </Form>

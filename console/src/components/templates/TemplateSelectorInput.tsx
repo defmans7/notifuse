@@ -9,8 +9,8 @@ import { CreateTemplateDrawer } from './CreateTemplateDrawer'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface TemplateSelectorInputProps {
-  value?: string
-  onChange?: (value: string) => void
+  value?: string | null
+  onChange?: (value: string | null) => void
   workspaceId: string
   category?:
     | 'marketing'
@@ -22,6 +22,7 @@ interface TemplateSelectorInputProps {
     | 'blocklist'
     | 'other'
   placeholder?: string
+  clearable?: boolean
 }
 
 const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
@@ -29,7 +30,8 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
   onChange,
   workspaceId,
   category,
-  placeholder = 'Select a template'
+  placeholder = 'Select a template',
+  clearable = true
 }) => {
   const [open, setOpen] = useState<boolean>(false)
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
@@ -120,8 +122,12 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
       <Input
         value={selectedTemplate?.name || ''}
         placeholder={placeholder}
-        readOnly
+        readOnly={!clearable}
         onClick={showDrawer}
+        onClear={() => {
+          setSelectedTemplate(null)
+          onChange?.(null)
+        }}
         addonAfter={
           selectedTemplate && (
             <TemplatePreviewPopover record={selectedTemplate} workspaceId={workspaceId}>
@@ -129,6 +135,7 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
             </TemplatePreviewPopover>
           )
         }
+        allowClear={clearable}
       />
 
       <Drawer
