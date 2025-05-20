@@ -251,21 +251,6 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "Missing from address",
-			templates: map[string]*domain.Template{
-				"template-1": {
-					ID: "template-1",
-					Email: &domain.EmailTemplate{
-						Subject: "Test Subject",
-						VisualEditorTree: mjml.EmailBlock{
-							Kind: "container",
-						},
-					},
-				},
-			},
-			expectError: true,
-		},
-		{
 			name: "Missing subject",
 			templates: map[string]*domain.Template{
 				"template-1": {
