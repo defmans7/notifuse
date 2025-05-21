@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react'
-import { getContactPreferences, parseNotificationCenterParams } from './api/notification_center'
+import {
+  getContactPreferences,
+  parseNotificationCenterParams,
+  subscribeToLists
+} from './api/notification_center'
 import type { ContactPreferencesResponse } from './api/notification_center'
 import { Switch } from './components/ui/switch'
+import { useToast } from './hooks/use-toast'
+import { Toaster } from './components/ui/toaster'
 
 function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notificationData, setNotificationData] = useState<ContactPreferencesResponse | null>(null)
   const [subscriptions, setSubscriptions] = useState<Record<string, boolean>>({})
+  const { toast } = useToast()
 
   useEffect(() => {
     async function loadNotificationData() {
@@ -50,14 +57,71 @@ function App() {
     loadNotificationData()
   }, [])
 
-  const handleSubscriptionToggle = (listId: string) => {
-    setSubscriptions((prev) => ({
-      ...prev,
-      [listId]: !prev[listId]
-    }))
+  // Set favicon when logo is available
+  useEffect(() => {
+    if (notificationData?.logo_url) {
+      const existingLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null
+      const link = existingLink || document.createElement('link')
+      link.type = 'image/x-icon'
+      link.rel = 'shortcut icon'
+      link.href = notificationData.logo_url
 
-    // In a real implementation, you would call an API to update the subscription
-    console.log(`Toggled subscription for list ${listId} to ${!subscriptions[listId]}`)
+      if (!existingLink) {
+        document.head.appendChild(link)
+      }
+    }
+  }, [notificationData?.logo_url])
+
+  // Update page title with contact information
+  useEffect(() => {
+    if (notificationData?.contact) {
+      document.title = `${notificationData.contact.email} | Notification Center`
+    }
+  }, [notificationData?.contact])
+
+  const handleSubscriptionToggle = async (listId: string) => {
+    const newSubscribed = !subscriptions[listId]
+
+    try {
+      // Update local state optimistically
+      setSubscriptions((prev) => ({
+        ...prev,
+        [listId]: newSubscribed
+      }))
+
+      if (notificationData?.contact) {
+        const params = parseNotificationCenterParams()
+
+        if (!params) {
+          throw new Error('Missing required parameters')
+        }
+
+        // Only include the listId if subscribing, not when unsubscribing
+        const listIds = newSubscribed ? [listId] : []
+
+        // Call API to update subscription
+        await subscribeToLists({
+          workspace_id: params.wid,
+          contact: notificationData.contact,
+          list_ids: listIds
+        })
+      }
+    } catch (err) {
+      // Revert local state on error
+      setSubscriptions((prev) => ({
+        ...prev,
+        [listId]: !newSubscribed
+      }))
+
+      console.error('Failed to update subscription:', err)
+
+      // Show error toast
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update your subscription. Please try again.'
+      })
+    }
   }
 
   if (loading) {
@@ -91,6 +155,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
+      <Toaster />
       {/* Topbar with bottom border */}
       <div className="bg-white border-b border-gray-200 w-full">
         <div className="flex items-center h-16 px-4 max-w-[600px] mx-auto">
@@ -143,7 +208,10 @@ function App() {
                         const isSubscribed = subscriptions[list.id] || false
 
                         return (
-                          <div key={list.id} className="p-4 border rounded-lg bg-white">
+                          <div
+                            key={list.id}
+                            className="p-4 border border-gray-400 rounded-lg bg-white"
+                          >
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <div className="font-medium">{list.name}</div>

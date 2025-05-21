@@ -102,3 +102,19 @@ export function parseNotificationCenterParams(): NotificationCenterParams | null
 
   return params as NotificationCenterParams
 }
+
+export interface SubscribeToListsRequest {
+  workspace_id: string
+  contact: Contact
+  list_ids: string[]
+}
+
+export interface SubscribeResponse {
+  success: boolean
+}
+
+export async function subscribeToLists(
+  request: SubscribeToListsRequest
+): Promise<SubscribeResponse> {
+  return api.post<SubscribeResponse>('/subscribe', request)
+}
