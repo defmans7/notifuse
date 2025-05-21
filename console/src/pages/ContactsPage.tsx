@@ -14,7 +14,7 @@ import { Languages } from '../components/utils/languages'
 import { FilterField } from '../components/filters/types'
 import { ContactColumnsSelector, JsonViewer } from '../components/contacts/ContactColumnsSelector'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPenToSquare, faEye, faHourglass } from '@fortawesome/free-regular-svg-icons'
+import { faEye, faHourglass } from '@fortawesome/free-regular-svg-icons'
 import { faCircleCheck, faFaceFrown } from '@fortawesome/free-regular-svg-icons'
 import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { ContactDetailsDrawer } from '../components/contacts/ContactDetailsDrawer'
@@ -588,15 +588,6 @@ export function ContactsPage() {
             }}
             buttonProps={{
               icon: <FontAwesomeIcon icon={faEye} />,
-              type: 'text'
-            }}
-          />
-          <ContactUpsertDrawer
-            workspaceId={workspaceId}
-            contact={record}
-            onSuccess={() => refetch()}
-            buttonProps={{
-              icon: <FontAwesomeIcon icon={faPenToSquare} />,
               type: 'text'
             }}
           />

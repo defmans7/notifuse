@@ -213,14 +213,14 @@ export function ListsPage() {
                 <Descriptions.Item label="Double Opt-in Template">
                   {list.double_optin_template ? (
                     <Space>
-                      <Check size={16} className="text-green-500" />
+                      <Check size={16} className="text-green-500 mt-1" />
                       <TemplatePreviewButton
                         templateRef={list.double_optin_template}
                         workspaceId={workspaceId}
                       />
                     </Space>
                   ) : (
-                    <X size={16} className="text-red-500" />
+                    <X size={16} className="text-slate-500 mt-1" />
                   )}
                 </Descriptions.Item>
 
@@ -228,14 +228,14 @@ export function ListsPage() {
                 <Descriptions.Item label="Welcome Template">
                   {list.welcome_template ? (
                     <Space>
-                      <Check size={16} className="text-green-500" />
+                      <Check size={16} className="text-green-500 mt-1" />
                       <TemplatePreviewButton
                         templateRef={list.welcome_template}
                         workspaceId={workspaceId}
                       />
                     </Space>
                   ) : (
-                    <X size={16} className="text-red-500" />
+                    <X size={16} className="text-slate-500 mt-1" />
                   )}
                 </Descriptions.Item>
 
@@ -243,14 +243,14 @@ export function ListsPage() {
                 <Descriptions.Item label="Unsubscribe Template">
                   {list.unsubscribe_template ? (
                     <Space>
-                      <Check size={16} className="text-green-500" />
+                      <Check size={16} className="text-green-500 mt-1" />
                       <TemplatePreviewButton
                         templateRef={list.unsubscribe_template}
                         workspaceId={workspaceId}
                       />
                     </Space>
                   ) : (
-                    <X size={16} className="text-red-500" />
+                    <X size={16} className="text-slate-500 mt-1" />
                   )}
                 </Descriptions.Item>
               </Descriptions>

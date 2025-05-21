@@ -27,11 +27,20 @@ import {
   faShoppingCart,
   faMoneyBillWave,
   faPlus,
-  faEllipsis
+  faEllipsis,
+  faExclamationTriangle,
+  faPaperPlane,
+  faCircleCheck,
+  faCircleXmark,
+  faEye,
+  faArrowPointer,
+  faBan,
+  faTriangleExclamation,
+  faCode
 } from '@fortawesome/free-solid-svg-icons'
-import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
+import { faFaceFrown, faPenToSquare } from '@fortawesome/free-regular-svg-icons'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { listMessages, MessageStatus } from '../../services/api/messages_history'
+import { listMessages, MessageHistory, MessageStatus } from '../../services/api/messages_history'
 import { contactsApi } from '../../services/api/contacts'
 import { contactListApi, UpdateContactListStatusRequest } from '../../services/api/contact_list'
 import { listsApi } from '../../services/api/list'
@@ -47,7 +56,7 @@ interface ContactDetailsDrawerProps {
   lists?: List[]
   workspaceTimezone?: string
   onContactUpdate?: (contact: Contact) => void
-  buttonProps?: {
+  buttonProps: {
     type?: 'primary' | 'default' | 'dashed' | 'link' | 'text'
     icon?: React.ReactNode
     buttonContent?: React.ReactNode
@@ -110,16 +119,49 @@ export function ContactDetailsDrawer({
   const [statusForm] = Form.useForm()
   const [subscribeForm] = Form.useForm()
 
+  // State for message history pagination
+  const [currentCursor, setCurrentCursor] = React.useState<string | undefined>(undefined)
+  const [allMessages, setAllMessages] = React.useState<MessageHistory[]>([])
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false)
+
   // Load message history for this contact
   const { data: messageHistory, isLoading: loadingMessages } = useQuery({
-    queryKey: ['message_history', workspaceId, contactEmail],
+    queryKey: ['message_history', workspaceId, contactEmail, currentCursor],
     queryFn: () =>
       listMessages(workspaceId, {
         contact_email: contactEmail,
-        limit: 50
+        limit: 5,
+        cursor: currentCursor
       }),
     enabled: isVisible && !!contactEmail
   })
+
+  // Update allMessages when data changes
+  React.useEffect(() => {
+    // If data is still loading or not available, don't update
+    if (loadingMessages || !messageHistory) return
+
+    if (messageHistory.messages) {
+      if (!currentCursor) {
+        // Initial load - replace all messages
+        setAllMessages(messageHistory.messages)
+      } else if (messageHistory.messages.length > 0) {
+        // If we have a cursor and new messages, append them
+        setAllMessages((prev) => [...prev, ...messageHistory.messages])
+      }
+    }
+
+    // Reset loading more flag
+    setIsLoadingMore(false)
+  }, [messageHistory, currentCursor, loadingMessages])
+
+  // Load more messages
+  const handleLoadMore = () => {
+    if (messageHistory?.next_cursor) {
+      setIsLoadingMore(true)
+      setCurrentCursor(messageHistory.next_cursor)
+    }
+  }
 
   // Fetch the single contact to ensure we have the latest data
   const { data: contact, isLoading: isLoadingContact } = useQuery({
@@ -250,7 +292,7 @@ export function ContactDetailsDrawer({
   }
 
   // Create name from first and last name
-  const fullName = [contact?.first_name, contact?.last_name].filter(Boolean).join(' ') || 'Unknown'
+  const fullName = [contact?.first_name, contact?.last_name].filter(Boolean).join(' ') || ''
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return '-'
@@ -402,37 +444,145 @@ export function ContactDetailsDrawer({
   // Table columns for message history
   const messageColumns = [
     {
-      title: 'Channel',
-      dataIndex: 'channel',
-      key: 'channel',
-      width: '15%'
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      render: (id: string) => {
+        return (
+          <Tooltip title={id}>
+            <span className="text-xs text-gray-500">{id.substring(0, 8) + '...'}</span>
+          </Tooltip>
+        )
+      }
     },
     {
       title: 'Template',
       dataIndex: 'template_id',
-      key: 'template_id',
-      width: '20%'
+      key: 'template_id'
+    },
+    {
+      title: 'Broadcast',
+      dataIndex: 'broadcast_id',
+      key: 'broadcast_id'
     },
     {
       title: 'Status',
-      dataIndex: 'status',
       key: 'status',
-      width: '15%',
-      render: (status: MessageStatus) => getStatusBadge(status)
+      render: (record: MessageHistory) => {
+        return (
+          <div className="flex items-center">
+            {getStatusBadge(record.status)}
+            {record.error && (
+              <Tooltip title={record.error}>
+                <FontAwesomeIcon icon={faExclamationTriangle} className="!ml-2" />
+              </Tooltip>
+            )}
+          </div>
+        )
+      }
     },
     {
-      title: 'Sent At',
-      dataIndex: 'sent_at',
-      key: 'sent_at',
-      width: '20%',
-      render: (date: string) => formatDate(date)
+      title: 'Events',
+      key: 'events',
+      render: (record: MessageHistory) => {
+        const events = []
+        if (record.sent_at)
+          events.push(
+            <Tooltip title={formatDate(record.sent_at)}>
+              <Tag bordered={false} color="blue">
+                <FontAwesomeIcon icon={faPaperPlane} /> Sent
+              </Tag>
+            </Tooltip>
+          )
+        if (record.delivered_at)
+          events.push(
+            <Tooltip title={formatDate(record.delivered_at)}>
+              <Tag bordered={false} color="green">
+                <FontAwesomeIcon icon={faCircleCheck} /> Delivered
+              </Tag>
+            </Tooltip>
+          )
+        if (record.failed_at)
+          events.push(
+            <Tooltip title={formatDate(record.failed_at)}>
+              <Tag bordered={false} color="red">
+                <FontAwesomeIcon icon={faCircleXmark} /> Failed
+              </Tag>
+            </Tooltip>
+          )
+        if (record.opened_at)
+          events.push(
+            <Tooltip title={formatDate(record.opened_at)}>
+              <Tag bordered={false} color="cyan">
+                <FontAwesomeIcon icon={faEye} /> Opened
+              </Tag>
+            </Tooltip>
+          )
+        if (record.clicked_at)
+          events.push(
+            <Tooltip title={formatDate(record.clicked_at)}>
+              <Tag bordered={false} color="geekblue">
+                <FontAwesomeIcon icon={faArrowPointer} /> Clicked
+              </Tag>
+            </Tooltip>
+          )
+        if (record.bounced_at)
+          events.push(
+            <Tooltip title={formatDate(record.bounced_at)}>
+              <Tag bordered={false} color="volcano">
+                <FontAwesomeIcon icon={faTriangleExclamation} /> Bounced
+              </Tag>
+            </Tooltip>
+          )
+        if (record.complained_at)
+          events.push(
+            <Tooltip title={formatDate(record.complained_at)}>
+              <Tag bordered={false} color="red">
+                <FontAwesomeIcon icon={faFaceFrown} /> Complained
+              </Tag>
+            </Tooltip>
+          )
+        if (record.unsubscribed_at)
+          events.push(
+            <Tooltip title={formatDate(record.unsubscribed_at)}>
+              <Tag bordered={false} color="red">
+                <FontAwesomeIcon icon={faBan} /> Unsubscribed
+              </Tag>
+            </Tooltip>
+          )
+        return <div className="flex items-center">{events.map((event) => event)}</div>
+      }
     },
     {
-      title: 'Last Update',
-      dataIndex: 'updated_at',
-      key: 'updated_at',
-      width: '20%',
-      render: (date: string) => formatDate(date)
+      title: 'Created At',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => {
+        return <Tooltip title={formatDate(date)}>{dayjs(date).fromNow()}</Tooltip>
+      }
+    },
+    {
+      title: 'Data',
+      key: 'json_data',
+      render: (record: MessageHistory) => {
+        return (
+          <Popover
+            placement="left"
+            content={
+              <div
+                className="p-2 bg-gray-50 rounded border border-gray-200 max-h-96 overflow-auto"
+                style={{ maxWidth: '500px' }}
+              >
+                <pre className="text-xs m-0 whitespace-pre-wrap break-all">
+                  {JSON.stringify(record.message_data.data, null, 2)}
+                </pre>
+              </div>
+            }
+          >
+            <Button type="text" className="opacity-70" icon={<FontAwesomeIcon icon={faCode} />} />
+          </Popover>
+        )
+      }
     }
   ]
 
@@ -626,745 +776,398 @@ export function ContactDetailsDrawer({
   ]
 
   // If buttonProps is provided, render a button that opens the drawer
-  if (buttonProps) {
-    const {
-      type = 'default',
-      icon,
-      buttonContent,
-      className,
-      style,
-      size,
-      disabled,
-      loading,
-      danger,
-      ghost,
-      block
-    } = buttonProps
-
-    return (
-      <>
-        <Button
-          type={type}
-          icon={icon}
-          className={className}
-          style={style}
-          size={size}
-          disabled={disabled}
-          loading={loading}
-          danger={danger}
-          ghost={ghost}
-          block={block}
-          onClick={handleOpen}
-        >
-          {buttonContent}
-        </Button>
-
-        <Drawer
-          title="Contact Details"
-          width="90%"
-          placement="right"
-          className="drawer-body-no-padding"
-          onClose={handleClose}
-          open={internalVisible}
-          extra={
-            <ContactUpsertDrawer
-              workspaceId={workspaceId}
-              contact={contact}
-              onSuccess={handleContactUpdated}
-              buttonProps={{
-                icon: <FontAwesomeIcon icon={faPenToSquare} />,
-                type: 'primary',
-                ghost: true,
-                buttonContent: 'Update'
-              }}
-            />
-          }
-        >
-          <div className="flex h-full">
-            {/* Left column - Contact Details (1/4 width) */}
-            <div className="w-1/3 bg-gray-50 overflow-y-auto h-full">
-              {/* Contact info at the top */}
-              <div className="p-6 pb-4 border-b border-gray-200 flex flex-col items-center text-center">
-                <Title level={4} style={{ margin: 0, marginBottom: '4px' }}>
-                  {fullName}
-                </Title>
-                <Text type="secondary">{contact?.email}</Text>
-              </div>
-
-              <div className="contact-details">
-                {isLoadingContact && (
-                  <div className="mb-4 p-2 bg-blue-50 text-blue-600 rounded text-center">
-                    <Spin size="small" className="mr-2" />
-                    <span>Refreshing contact data...</span>
-                  </div>
-                )}
-
-                {/* Display fields in a side-by-side layout */}
-                {contactFields
-                  .filter(
-                    (field) =>
-                      field.value !== undefined &&
-                      field.value !== null &&
-                      field.value !== '-' &&
-                      (field.show === undefined || field.show) &&
-                      // Skip email as it's already shown at the top
-                      field.key !== 'email' &&
-                      // Skip name fields as they're already shown at the top
-                      field.key !== 'first_name' &&
-                      field.key !== 'last_name' &&
-                      // Skip JSON fields as they'll be shown separately
-                      !field.key.startsWith('custom_json_')
-                  )
-                  .map((field) => (
-                    <div
-                      key={field.key}
-                      className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
-                    >
-                      <Tooltip title={`Field ID: ${field.key}`}>
-                        <span className="font-semibold text-slate-600">{field.label}</span>
-                      </Tooltip>
-                      <span>{formatValue(field.value)}</span>
-                    </div>
-                  ))}
-
-                {/* Custom JSON fields */}
-                {hasJsonFields && (
-                  <div>
-                    {jsonFields
-                      .filter((field) => field.show)
-                      .map((field) => (
-                        <div
-                          key={field.key}
-                          className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
-                        >
-                          <Tooltip title={`Field ID: ${field.key}`}>
-                            <span className="font-semibold text-slate-600">{field.label}</span>
-                          </Tooltip>
-                          {formatJson(field.value)}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right column - Message History (3/4 width) */}
-            <div className="w-2/3 p-6 overflow-y-auto h-full">
-              {/* E-commerce Stats (3-column grid) */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                {/* Lifetime Value */}
-                <Tooltip
-                  title={
-                    contact?.lifetime_value ? formatCurrency(contact?.lifetime_value) : '$0.00'
-                  }
-                >
-                  <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-                    <div className="text-sm text-gray-500 mb-2">
-                      <span className="flex items-center cursor-help">
-                        <FontAwesomeIcon icon={faMoneyBillWave} className="mr-2" />
-                        Lifetime Value
-                      </span>
-                    </div>
-                    <div className="text-2xl font-semibold">
-                      {formatAverage(contact?.lifetime_value || 0)}
-                    </div>
-                  </div>
-                </Tooltip>
-
-                {/* Orders Count */}
-                <Tooltip title={`${formatNumber(contact?.orders_count || 0)} orders`}>
-                  <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-                    <div className="text-sm text-gray-500 mb-2">
-                      <span className="flex items-center cursor-help">
-                        <FontAwesomeIcon icon={faShoppingCart} className="mr-2" />
-                        Orders Count
-                      </span>
-                    </div>
-                    <div className="text-2xl font-semibold">
-                      {formatAverage(contact?.orders_count || 0)}
-                    </div>
-                  </div>
-                </Tooltip>
-
-                {/* Last Order */}
-                <Tooltip
-                  title={
-                    contact?.last_order_at
-                      ? `${dayjs(contact?.last_order_at).format('LLLL')} in ${workspaceTimezone}`
-                      : 'No orders yet'
-                  }
-                >
-                  <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-                    <div className="text-sm text-gray-500 mb-2">
-                      <span className="flex items-center cursor-help">
-                        <FontAwesomeIcon icon={faCalendar} className="mr-2" />
-                        Last Order
-                      </span>
-                    </div>
-                    <div className="text-lg font-semibold">
-                      {contact?.last_order_at ? dayjs(contact?.last_order_at).fromNow() : 'Never'}
-                    </div>
-                  </div>
-                </Tooltip>
-              </div>
-
-              {/* List subscriptions with action buttons */}
-              <div className="flex justify-between items-center mb-3">
-                <Title level={5} style={{ margin: 0 }}>
-                  List Subscriptions
-                </Title>
-                <Button
-                  type="primary"
-                  ghost
-                  size="small"
-                  icon={<FontAwesomeIcon icon={faPlus} />}
-                  onClick={openSubscribeModal}
-                  disabled={availableLists.length === 0}
-                >
-                  Subscribe to List
-                </Button>
-              </div>
-
-              {contactListsWithNames && contactListsWithNames.length > 0 ? (
-                <Table
-                  dataSource={contactListsWithNames}
-                  rowKey={(record) => `${record.list_id}_${record.status}`}
-                  pagination={false}
-                  size="small"
-                  columns={[
-                    {
-                      title: 'Subscription list',
-                      dataIndex: 'name',
-                      key: 'name',
-                      width: '30%',
-                      render: (name: string, record: any) => (
-                        <Tooltip title={`List ID: ${record.list_id}`}>
-                          <span style={{ cursor: 'help' }}>{name}</span>
-                        </Tooltip>
-                      )
-                    },
-                    {
-                      title: 'Status',
-                      dataIndex: 'status',
-                      key: 'status',
-                      width: '20%',
-                      render: (status: string) => (
-                        <Tag bordered={false} color={getStatusColor(status)}>
-                          {status}
-                        </Tag>
-                      )
-                    },
-                    {
-                      title: 'Subscribed on',
-                      dataIndex: 'created_at',
-                      key: 'created_at',
-                      width: '30%',
-                      render: (date: string) => {
-                        if (!date) return '-'
-
-                        return (
-                          <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
-                            <span>{dayjs(date).fromNow()}</span>
-                          </Tooltip>
-                        )
-                      }
-                    },
-                    {
-                      title: '',
-                      key: 'actions',
-                      width: '20%',
-                      render: (_: any, record: ContactListWithName) => (
-                        <Button
-                          size="small"
-                          onClick={() => openStatusModal(record)}
-                          loading={
-                            updateStatusMutation.isPending &&
-                            selectedList?.list_id === record.list_id
-                          }
-                        >
-                          Change Status
-                        </Button>
-                      )
-                    }
-                  ]}
-                />
-              ) : (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="This contact is not subscribed to any lists"
-                  style={{ margin: '20px 0' }}
-                >
-                  <Button
-                    type="primary"
-                    onClick={openSubscribeModal}
-                    disabled={availableLists.length === 0}
-                    icon={<FontAwesomeIcon icon={faPlus} />}
-                  >
-                    Subscribe to List
-                  </Button>
-                </Empty>
-              )}
-
-              <div className="mt-6">
-                <div className="section-header">
-                  <Space>
-                    <Title level={5} style={{ margin: 0 }}>
-                      Message History
-                    </Title>
-                  </Space>
-                </div>
-
-                {loadingMessages ? (
-                  <div
-                    className="loading-container"
-                    style={{ padding: '40px 0', textAlign: 'center' }}
-                  >
-                    <Spin size="large" />
-                    <div style={{ marginTop: 16 }}>Loading message history...</div>
-                  </div>
-                ) : messageHistory && messageHistory.messages.length > 0 ? (
-                  <Table
-                    dataSource={messageHistory.messages}
-                    columns={messageColumns}
-                    rowKey="id"
-                    pagination={false}
-                    size="small"
-                    scroll={{ y: 600 }}
-                  />
-                ) : (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="No messages found for this contact"
-                    style={{ margin: '40px 0' }}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Change Status Modal */}
-          <Modal
-            title={`Change Status for ${selectedList?.name || 'List'}`}
-            open={statusModalVisible}
-            onCancel={() => setStatusModalVisible(false)}
-            footer={null}
-          >
-            <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
-              <Form.Item
-                name="status"
-                label="Subscription Status"
-                rules={[{ required: true, message: 'Please select a status' }]}
-              >
-                <Select options={statusOptions} />
-              </Form.Item>
-              <Form.Item>
-                <Space>
-                  <Button type="primary" htmlType="submit" loading={updateStatusMutation.isPending}>
-                    Update Status
-                  </Button>
-                  <Button onClick={() => setStatusModalVisible(false)}>Cancel</Button>
-                </Space>
-              </Form.Item>
-            </Form>
-          </Modal>
-
-          {/* Subscribe to List Modal */}
-          <Modal
-            title="Subscribe to List"
-            open={subscribeModalVisible}
-            onCancel={() => setSubscribeModalVisible(false)}
-            footer={null}
-          >
-            <Form form={subscribeForm} layout="vertical" onFinish={handleSubscribe}>
-              <Form.Item
-                name="list_id"
-                label="Select List"
-                rules={[{ required: true, message: 'Please select a list' }]}
-              >
-                <Select
-                  options={availableLists.map((list) => ({
-                    label: list.name,
-                    value: list.id
-                  }))}
-                  placeholder="Select a list"
-                />
-              </Form.Item>
-              <Form.Item
-                name="status"
-                label="Subscription Status"
-                initialValue="active"
-                rules={[{ required: true, message: 'Please select a status' }]}
-              >
-                <Select
-                  options={[
-                    { label: 'Active', value: 'active' },
-                    { label: 'Pending', value: 'pending' }
-                  ]}
-                />
-              </Form.Item>
-              <Form.Item>
-                <Space>
-                  <Button type="primary" htmlType="submit" loading={addToListMutation.isPending}>
-                    Subscribe
-                  </Button>
-                  <Button onClick={() => setSubscribeModalVisible(false)}>Cancel</Button>
-                </Space>
-              </Form.Item>
-            </Form>
-          </Modal>
-        </Drawer>
-      </>
-    )
-  }
+  const {
+    type = 'default',
+    icon,
+    buttonContent,
+    className,
+    style,
+    size,
+    disabled,
+    loading,
+    danger,
+    ghost,
+    block
+  } = buttonProps
 
   return (
-    <Drawer
-      title="Contact Details"
-      width="90%"
-      placement="right"
-      className="drawer-body-no-padding"
-      onClose={externalOnClose}
-      open={externalVisible}
-      extra={
-        <ContactUpsertDrawer
-          workspaceId={workspaceId}
-          contact={contact}
-          onSuccess={handleContactUpdated}
-          buttonProps={{
-            icon: <FontAwesomeIcon icon={faPenToSquare} />,
-            type: 'primary',
-            ghost: true,
-            buttonContent: 'Update'
-          }}
-        />
-      }
-    >
-      <div className="flex h-full">
-        {/* Left column - Contact Details (1/4 width) */}
-        <div className="w-1/3 bg-gray-50 overflow-y-auto h-full">
-          {/* Contact info at the top */}
-          <div className="p-6 pb-4 border-b border-gray-200 flex flex-col items-center text-center">
-            <Title level={4} style={{ margin: 0, marginBottom: '4px' }}>
-              {fullName}
-            </Title>
-            <Text type="secondary">{contact?.email}</Text>
-          </div>
+    <>
+      <Button
+        type={type}
+        icon={icon}
+        className={className}
+        style={style}
+        size={size}
+        disabled={disabled}
+        loading={loading}
+        danger={danger}
+        ghost={ghost}
+        block={block}
+        onClick={handleOpen}
+      >
+        {buttonContent}
+      </Button>
 
-          <div className="contact-details">
-            {isLoadingContact && (
-              <div className="mb-4 p-2 bg-blue-50 text-blue-600 rounded text-center">
-                <Spin size="small" className="mr-2" />
-                <span>Refreshing contact data...</span>
-              </div>
-            )}
+      <Drawer
+        title="Contact Details"
+        width="90%"
+        placement="right"
+        className="drawer-body-no-padding"
+        onClose={handleClose}
+        open={internalVisible}
+        extra={
+          <ContactUpsertDrawer
+            workspaceId={workspaceId}
+            contact={contact}
+            onSuccess={handleContactUpdated}
+            buttonProps={{
+              icon: <FontAwesomeIcon icon={faPenToSquare} />,
+              type: 'primary',
+              ghost: true,
+              buttonContent: 'Update'
+            }}
+          />
+        }
+      >
+        <div className="flex h-full">
+          {/* Left column - Contact Details (1/4 width) */}
+          <div className="w-1/3 bg-gray-50 overflow-y-auto h-full">
+            {/* Contact info at the top */}
+            <div className="p-6 pb-4 border-b border-gray-200 flex flex-col items-center text-center">
+              <Title level={4} style={{ margin: 0, marginBottom: '4px' }}>
+                {fullName}
+              </Title>
+              <Text type="secondary">{contact?.email}</Text>
+            </div>
 
-            {/* Display fields in a side-by-side layout */}
-            {contactFields
-              .filter(
-                (field) =>
-                  field.value !== undefined &&
-                  field.value !== null &&
-                  field.value !== '-' &&
-                  (field.show === undefined || field.show) &&
-                  // Skip email as it's already shown at the top
-                  field.key !== 'email' &&
-                  // Skip name fields as they're already shown at the top
-                  field.key !== 'first_name' &&
-                  field.key !== 'last_name' &&
-                  // Skip JSON fields as they'll be shown separately
-                  !field.key.startsWith('custom_json_')
-              )
-              .map((field) => (
-                <div
-                  key={field.key}
-                  className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
-                >
-                  <Tooltip title={`Field ID: ${field.key}`}>
-                    <span className="font-semibold text-slate-600">{field.label}</span>
-                  </Tooltip>
-                  <span>{formatValue(field.value)}</span>
+            <div className="contact-details">
+              {isLoadingContact && (
+                <div className="mb-4 p-2 bg-blue-50 text-blue-600 rounded text-center">
+                  <Spin size="small" className="mr-2" />
+                  <span>Refreshing contact data...</span>
                 </div>
-              ))}
+              )}
 
-            {/* Custom JSON fields */}
-            {hasJsonFields && (
-              <div>
-                {jsonFields
-                  .filter((field) => field.show)
-                  .map((field) => (
-                    <div
-                      key={field.key}
-                      className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
-                    >
-                      <Tooltip title={`Field ID: ${field.key}`}>
-                        <span className="font-semibold text-slate-600">{field.label}</span>
-                      </Tooltip>
-                      {formatJson(field.value)}
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right column - Message History (3/4 width) */}
-        <div className="w-2/3 p-6 overflow-y-auto h-full">
-          {/* E-commerce Stats (3-column grid) */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {/* Lifetime Value */}
-            <Tooltip
-              title={contact?.lifetime_value ? formatCurrency(contact?.lifetime_value) : '$0.00'}
-            >
-              <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-                <div className="text-sm text-gray-500 mb-2">
-                  <span className="flex items-center cursor-help">
-                    <FontAwesomeIcon icon={faMoneyBillWave} className="mr-2" />
-                    Lifetime Value
-                  </span>
-                </div>
-                <div className="text-2xl font-semibold">
-                  {formatAverage(contact?.lifetime_value || 0)}
-                </div>
-              </div>
-            </Tooltip>
-
-            {/* Orders Count */}
-            <Tooltip title={`${formatNumber(contact?.orders_count || 0)} orders`}>
-              <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-                <div className="text-sm text-gray-500 mb-2">
-                  <span className="flex items-center cursor-help">
-                    <FontAwesomeIcon icon={faShoppingCart} className="mr-2" />
-                    Orders Count
-                  </span>
-                </div>
-                <div className="text-2xl font-semibold">
-                  {formatAverage(contact?.orders_count || 0)}
-                </div>
-              </div>
-            </Tooltip>
-
-            {/* Last Order */}
-            <Tooltip
-              title={
-                contact?.last_order_at
-                  ? `${dayjs(contact?.last_order_at).format('LLLL')} in ${workspaceTimezone}`
-                  : 'No orders yet'
-              }
-            >
-              <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
-                <div className="text-sm text-gray-500 mb-2">
-                  <span className="flex items-center cursor-help">
-                    <FontAwesomeIcon icon={faCalendar} className="mr-2" />
-                    Last Order
-                  </span>
-                </div>
-                <div className="text-lg font-semibold">
-                  {contact?.last_order_at ? dayjs(contact?.last_order_at).fromNow() : 'Never'}
-                </div>
-              </div>
-            </Tooltip>
-          </div>
-
-          {/* List subscriptions with action buttons */}
-          <div className="flex justify-between items-center mb-3">
-            <Title level={5} style={{ margin: 0 }}>
-              List Subscriptions
-            </Title>
-            <Button
-              type="primary"
-              ghost
-              size="small"
-              icon={<FontAwesomeIcon icon={faPlus} />}
-              onClick={openSubscribeModal}
-              disabled={availableLists.length === 0}
-            >
-              Subscribe to List
-            </Button>
-          </div>
-
-          {contactListsWithNames && contactListsWithNames.length > 0 ? (
-            <Table
-              dataSource={contactListsWithNames}
-              rowKey={(record) => `${record.list_id}_${record.status}`}
-              pagination={false}
-              size="small"
-              columns={[
-                {
-                  title: 'Subscription list',
-                  dataIndex: 'name',
-                  key: 'name',
-                  width: '30%',
-                  render: (name: string, record: any) => (
-                    <Tooltip title={`List ID: ${record.list_id}`}>
-                      <span style={{ cursor: 'help' }}>{name}</span>
+              {/* Display fields in a side-by-side layout */}
+              {contactFields
+                .filter(
+                  (field) =>
+                    field.value !== undefined &&
+                    field.value !== null &&
+                    field.value !== '-' &&
+                    (field.show === undefined || field.show) &&
+                    // Skip email as it's already shown at the top
+                    field.key !== 'email' &&
+                    // Skip name fields as they're already shown at the top
+                    field.key !== 'first_name' &&
+                    field.key !== 'last_name' &&
+                    // Skip JSON fields as they'll be shown separately
+                    !field.key.startsWith('custom_json_')
+                )
+                .map((field) => (
+                  <div
+                    key={field.key}
+                    className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
+                  >
+                    <Tooltip title={`Field ID: ${field.key}`}>
+                      <span className="font-semibold text-slate-600">{field.label}</span>
                     </Tooltip>
-                  )
-                },
-                {
-                  title: 'Status',
-                  dataIndex: 'status',
-                  key: 'status',
-                  width: '20%',
-                  render: (status: string) => (
-                    <Tag bordered={false} color={getStatusColor(status)}>
-                      {status}
-                    </Tag>
-                  )
-                },
-                {
-                  title: 'Subscribed on',
-                  dataIndex: 'created_at',
-                  key: 'created_at',
-                  width: '30%',
-                  render: (date: string) => {
-                    if (!date) return '-'
+                    <span>{formatValue(field.value)}</span>
+                  </div>
+                ))}
 
-                    return (
-                      <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
-                        <span>{dayjs(date).fromNow()}</span>
-                      </Tooltip>
-                    )
-                  }
-                },
-                {
-                  title: '',
-                  key: 'actions',
-                  width: '20%',
-                  render: (_: any, record: ContactListWithName) => (
-                    <Button
-                      size="small"
-                      onClick={() => openStatusModal(record)}
-                      loading={
-                        updateStatusMutation.isPending && selectedList?.list_id === record.list_id
-                      }
-                    >
-                      Change Status
-                    </Button>
-                  )
+              {/* Custom JSON fields */}
+              {hasJsonFields && (
+                <div>
+                  {jsonFields
+                    .filter((field) => field.show)
+                    .map((field) => (
+                      <div
+                        key={field.key}
+                        className="py-2 px-4 grid grid-cols-2 text-xs gap-1 border-b border-dashed border-gray-300"
+                      >
+                        <Tooltip title={`Field ID: ${field.key}`}>
+                          <span className="font-semibold text-slate-600">{field.label}</span>
+                        </Tooltip>
+                        {formatJson(field.value)}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right column - Message History (3/4 width) */}
+          <div className="w-2/3 p-6 overflow-y-auto h-full">
+            {/* E-commerce Stats (3-column grid) */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              {/* Lifetime Value */}
+              <Tooltip
+                title={contact?.lifetime_value ? formatCurrency(contact?.lifetime_value) : '$0.00'}
+              >
+                <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                  <div className="text-sm text-gray-500 mb-2">
+                    <span className="flex items-center cursor-help">
+                      <FontAwesomeIcon icon={faMoneyBillWave} className="mr-2" />
+                      Lifetime Value
+                    </span>
+                  </div>
+                  <div className="text-2xl font-semibold">
+                    {formatAverage(contact?.lifetime_value || 0)}
+                  </div>
+                </div>
+              </Tooltip>
+
+              {/* Orders Count */}
+              <Tooltip title={`${formatNumber(contact?.orders_count || 0)} orders`}>
+                <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                  <div className="text-sm text-gray-500 mb-2">
+                    <span className="flex items-center cursor-help">
+                      <FontAwesomeIcon icon={faShoppingCart} className="mr-2" />
+                      Orders Count
+                    </span>
+                  </div>
+                  <div className="text-2xl font-semibold">
+                    {formatAverage(contact?.orders_count || 0)}
+                  </div>
+                </div>
+              </Tooltip>
+
+              {/* Last Order */}
+              <Tooltip
+                title={
+                  contact?.last_order_at
+                    ? `${dayjs(contact?.last_order_at).format('LLLL')} in ${workspaceTimezone}`
+                    : 'No orders yet'
                 }
-              ]}
-            />
-          ) : (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="This contact is not subscribed to any lists"
-              style={{ margin: '20px 0' }}
-            >
+              >
+                <div className="bg-white rounded-lg border border-gray-200 p-4 h-24 flex flex-col justify-between">
+                  <div className="text-sm text-gray-500 mb-2">
+                    <span className="flex items-center cursor-help">
+                      <FontAwesomeIcon icon={faCalendar} className="mr-2" />
+                      Last Order
+                    </span>
+                  </div>
+                  <div className="text-lg font-semibold">
+                    {contact?.last_order_at ? dayjs(contact?.last_order_at).fromNow() : 'Never'}
+                  </div>
+                </div>
+              </Tooltip>
+            </div>
+
+            {/* List subscriptions with action buttons */}
+            <div className="flex justify-between items-center mb-3">
+              <Title level={5} style={{ margin: 0 }}>
+                List Subscriptions
+              </Title>
               <Button
                 type="primary"
+                ghost
+                size="small"
+                icon={<FontAwesomeIcon icon={faPlus} />}
                 onClick={openSubscribeModal}
                 disabled={availableLists.length === 0}
-                icon={<FontAwesomeIcon icon={faPlus} />}
               >
                 Subscribe to List
               </Button>
-            </Empty>
-          )}
-
-          <div className="mt-6">
-            <div className="section-header">
-              <Space>
-                <Title level={5} style={{ margin: 0 }}>
-                  Message History
-                </Title>
-              </Space>
             </div>
 
-            {loadingMessages ? (
-              <div className="loading-container" style={{ padding: '40px 0', textAlign: 'center' }}>
-                <Spin size="large" />
-                <div style={{ marginTop: 16 }}>Loading message history...</div>
-              </div>
-            ) : messageHistory && messageHistory.messages.length > 0 ? (
+            {contactListsWithNames && contactListsWithNames.length > 0 ? (
               <Table
-                dataSource={messageHistory.messages}
-                columns={messageColumns}
-                rowKey="id"
+                dataSource={contactListsWithNames}
+                rowKey={(record) => `${record.list_id}_${record.status}`}
                 pagination={false}
                 size="small"
-                scroll={{ y: 600 }}
+                columns={[
+                  {
+                    title: 'Subscription list',
+                    dataIndex: 'name',
+                    key: 'name',
+                    width: '30%',
+                    render: (name: string, record: any) => (
+                      <Tooltip title={`List ID: ${record.list_id}`}>
+                        <span style={{ cursor: 'help' }}>{name}</span>
+                      </Tooltip>
+                    )
+                  },
+                  {
+                    title: 'Status',
+                    dataIndex: 'status',
+                    key: 'status',
+                    width: '20%',
+                    render: (status: string) => (
+                      <Tag bordered={false} color={getStatusColor(status)}>
+                        {status}
+                      </Tag>
+                    )
+                  },
+                  {
+                    title: 'Subscribed on',
+                    dataIndex: 'created_at',
+                    key: 'created_at',
+                    width: '30%',
+                    render: (date: string) => {
+                      if (!date) return '-'
+
+                      return (
+                        <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
+                          <span>{dayjs(date).fromNow()}</span>
+                        </Tooltip>
+                      )
+                    }
+                  },
+                  {
+                    title: '',
+                    key: 'actions',
+                    width: '20%',
+                    render: (_: any, record: ContactListWithName) => (
+                      <Button
+                        size="small"
+                        onClick={() => openStatusModal(record)}
+                        loading={
+                          updateStatusMutation.isPending && selectedList?.list_id === record.list_id
+                        }
+                      >
+                        Change Status
+                      </Button>
+                    )
+                  }
+                ]}
               />
             ) : (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="No messages found for this contact"
-                style={{ margin: '40px 0' }}
-              />
+                description="This contact is not subscribed to any lists"
+                style={{ margin: '20px 0' }}
+              >
+                <Button
+                  type="primary"
+                  onClick={openSubscribeModal}
+                  disabled={availableLists.length === 0}
+                  icon={<FontAwesomeIcon icon={faPlus} />}
+                >
+                  Subscribe to List
+                </Button>
+              </Empty>
             )}
+
+            <div className="mt-6">
+              <div className="my-4">
+                <Space>
+                  <Title level={5} style={{ margin: 0 }}>
+                    Message History
+                  </Title>
+                </Space>
+              </div>
+
+              {loadingMessages && !isLoadingMore ? (
+                <div
+                  className="loading-container"
+                  style={{ padding: '40px 0', textAlign: 'center' }}
+                >
+                  <Spin size="large" />
+                  <div style={{ marginTop: 16 }}>Loading message history...</div>
+                </div>
+              ) : allMessages && allMessages.length > 0 ? (
+                <>
+                  <Table
+                    dataSource={allMessages}
+                    columns={messageColumns}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                  />
+
+                  {messageHistory?.next_cursor && (
+                    <div className="flex justify-center mt-4 mb-8">
+                      <Button size="small" onClick={handleLoadMore} loading={isLoadingMore}>
+                        Load More
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="No messages found for this contact"
+                  style={{ margin: '40px 0' }}
+                />
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Change Status Modal */}
-      <Modal
-        title={`Change Status for ${selectedList?.name || 'List'}`}
-        open={statusModalVisible}
-        onCancel={() => setStatusModalVisible(false)}
-        footer={null}
-      >
-        <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
-          <Form.Item
-            name="status"
-            label="Subscription Status"
-            rules={[{ required: true, message: 'Please select a status' }]}
-          >
-            <Select options={statusOptions} />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={updateStatusMutation.isPending}>
-                Update Status
-              </Button>
-              <Button onClick={() => setStatusModalVisible(false)}>Cancel</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+        {/* Change Status Modal */}
+        <Modal
+          title={`Change Status for ${selectedList?.name || 'List'}`}
+          open={statusModalVisible}
+          onCancel={() => setStatusModalVisible(false)}
+          footer={null}
+        >
+          <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
+            <Form.Item
+              name="status"
+              label="Subscription Status"
+              rules={[{ required: true, message: 'Please select a status' }]}
+            >
+              <Select options={statusOptions} />
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button type="primary" htmlType="submit" loading={updateStatusMutation.isPending}>
+                  Update Status
+                </Button>
+                <Button onClick={() => setStatusModalVisible(false)}>Cancel</Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
 
-      {/* Subscribe to List Modal */}
-      <Modal
-        title="Subscribe to List"
-        open={subscribeModalVisible}
-        onCancel={() => setSubscribeModalVisible(false)}
-        footer={null}
-      >
-        <Form form={subscribeForm} layout="vertical" onFinish={handleSubscribe}>
-          <Form.Item
-            name="list_id"
-            label="Select List"
-            rules={[{ required: true, message: 'Please select a list' }]}
-          >
-            <Select
-              options={availableLists.map((list) => ({
-                label: list.name,
-                value: list.id
-              }))}
-              placeholder="Select a list"
-            />
-          </Form.Item>
-          <Form.Item
-            name="status"
-            label="Subscription Status"
-            initialValue="active"
-            rules={[{ required: true, message: 'Please select a status' }]}
-          >
-            <Select
-              options={[
-                { label: 'Active', value: 'active' },
-                { label: 'Pending', value: 'pending' }
-              ]}
-            />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={addToListMutation.isPending}>
-                Subscribe
-              </Button>
-              <Button onClick={() => setSubscribeModalVisible(false)}>Cancel</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </Drawer>
+        {/* Subscribe to List Modal */}
+        <Modal
+          title="Subscribe to List"
+          open={subscribeModalVisible}
+          onCancel={() => setSubscribeModalVisible(false)}
+          footer={null}
+        >
+          <Form form={subscribeForm} layout="vertical" onFinish={handleSubscribe}>
+            <Form.Item
+              name="list_id"
+              label="Select List"
+              rules={[{ required: true, message: 'Please select a list' }]}
+            >
+              <Select
+                options={availableLists.map((list) => ({
+                  label: list.name,
+                  value: list.id
+                }))}
+                placeholder="Select a list"
+              />
+            </Form.Item>
+            <Form.Item
+              name="status"
+              label="Subscription Status"
+              initialValue="active"
+              rules={[{ required: true, message: 'Please select a status' }]}
+            >
+              <Select
+                options={[
+                  { label: 'Active', value: 'active' },
+                  { label: 'Pending', value: 'pending' }
+                ]}
+              />
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button type="primary" htmlType="submit" loading={addToListMutation.isPending}>
+                  Subscribe
+                </Button>
+                <Button onClick={() => setSubscribeModalVisible(false)}>Cancel</Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
+      </Drawer>
+    </>
   )
 }
