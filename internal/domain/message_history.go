@@ -65,7 +65,7 @@ type MessageHistory struct {
 	ContactEmail    string        `json:"contact_email"`
 	BroadcastID     *string       `json:"broadcast_id,omitempty"`
 	TemplateID      string        `json:"template_id"`
-	TemplateVersion int           `json:"template_version"`
+	TemplateVersion int64         `json:"template_version"`
 	Channel         string        `json:"channel"` // email, sms, push, etc.
 	Status          MessageStatus `json:"status"`
 	Error           *string       `json:"error,omitempty"`

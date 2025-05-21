@@ -670,7 +670,7 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		MessageID:        messageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
 		TemplateData:     messageData,
-		TrackingEnabled:  false, // Don't track test emails
+		TrackingEnabled:  true,
 	})
 
 	if err != nil {
@@ -708,11 +708,12 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 
 	// record the message history
 	return s.messageHistoryRepo.Create(ctx, workspaceID, &domain.MessageHistory{
-		ID:           messageID,
-		ContactEmail: recipientEmail,
-		TemplateID:   templateID,
-		Channel:      "email",
-		Status:       domain.MessageStatusSent,
+		ID:              messageID,
+		ContactEmail:    recipientEmail,
+		TemplateID:      templateID,
+		TemplateVersion: template.Version,
+		Channel:         "email",
+		Status:          domain.MessageStatusSent,
 		MessageData: domain.MessageData{
 			Data: messageData,
 		},

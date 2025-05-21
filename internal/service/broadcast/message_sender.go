@@ -449,7 +449,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 			ContactEmail:    contact.Email,
 			BroadcastID:     &broadcastID,
 			TemplateID:      templateID,
-			TemplateVersion: int(templates[templateID].Version),
+			TemplateVersion: templates[templateID].Version,
 			Channel:         "email",
 			Status:          domain.MessageStatusSent,
 			MessageData: domain.MessageData{
