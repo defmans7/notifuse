@@ -1554,6 +1554,7 @@ func TestWorkspace_BeforeSaveAndAfterLoadWithEmailProviders(t *testing.T) {
 			Timezone:                     "UTC",
 			TransactionalEmailProviderID: "transactional-id",
 			MarketingEmailProviderID:     "marketing-id",
+			SecretKey:                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", // Add workspace secret key
 		},
 		Integrations: []Integration{
 			{
@@ -2710,6 +2711,7 @@ func TestWorkspace_BeforeSave(t *testing.T) {
 			Settings: WorkspaceSettings{
 				WebsiteURL: "https://example.com",
 				Timezone:   "UTC",
+				SecretKey:  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", // Add workspace secret key
 				FileManager: FileManagerSettings{
 					Endpoint:  "https://s3.amazonaws.com",
 					Bucket:    "my-bucket",
@@ -2734,6 +2736,7 @@ func TestWorkspace_BeforeSave(t *testing.T) {
 			Settings: WorkspaceSettings{
 				WebsiteURL: "https://example.com",
 				Timezone:   "UTC",
+				SecretKey:  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", // Add workspace secret key
 				FileManager: FileManagerSettings{
 					Endpoint:  "https://s3.amazonaws.com",
 					Bucket:    "my-bucket",
@@ -2758,6 +2761,7 @@ func TestWorkspace_BeforeSave(t *testing.T) {
 			Settings: WorkspaceSettings{
 				WebsiteURL: "https://example.com",
 				Timezone:   "UTC",
+				SecretKey:  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", // Add workspace secret key
 			},
 			Integrations: []Integration{
 				{

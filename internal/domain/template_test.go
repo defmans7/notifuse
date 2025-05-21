@@ -978,6 +978,7 @@ func TestBuildTemplateData(t *testing.T) {
 		workspaceID := "ws-123"
 		apiEndpoint := "https://api.example.com"
 		messageID := "msg-456"
+		workspaceSecretKey := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 		firstName := &NullableString{String: "John", IsNull: false}
 		lastName := &NullableString{String: "Doe", IsNull: false}
@@ -1009,8 +1010,8 @@ func TestBuildTemplateData(t *testing.T) {
 			UTMContent:  "button-1",
 		}
 
-		// Call the function
-		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, trackingSettings, broadcast)
+		// Call the function with the workspace secret key
+		data, err := BuildTemplateData(workspaceID, workspaceSecretKey, contactWithList, messageID, trackingSettings, broadcast)
 
 		// Assertions
 		assert.NoError(t, err)
@@ -1067,6 +1068,7 @@ func TestBuildTemplateData(t *testing.T) {
 		// Setup minimal test data
 		workspaceID := "ws-123"
 		messageID := "msg-456"
+		workspaceSecretKey := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 		contactWithList := ContactWithList{
 			Contact: nil,
@@ -1079,8 +1081,8 @@ func TestBuildTemplateData(t *testing.T) {
 			UTMTerm:     "new-users",
 			UTMContent:  "button-1",
 		}
-		// Call the function
-		data, err := BuildTemplateData(workspaceID, "", contactWithList, messageID, trackingSettings, nil)
+		// Call the function with the workspace secret key
+		data, err := BuildTemplateData(workspaceID, workspaceSecretKey, contactWithList, messageID, trackingSettings, nil)
 
 		// Assertions
 		assert.NoError(t, err)

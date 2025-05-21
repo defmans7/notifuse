@@ -5,16 +5,15 @@ import {
   subscribeToLists
 } from './api/notification_center'
 import type { ContactPreferencesResponse } from './api/notification_center'
-import { Switch } from './components/ui/switch'
-import { useToast } from './hooks/use-toast'
-import { Toaster } from './components/ui/toaster'
+import { Switch } from '@/components/ui/switch'
+import { Toaster } from '@/components/ui/sonner'
+import { toast } from 'sonner'
 
 function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notificationData, setNotificationData] = useState<ContactPreferencesResponse | null>(null)
   const [subscriptions, setSubscriptions] = useState<Record<string, boolean>>({})
-  const { toast } = useToast()
 
   useEffect(() => {
     async function loadNotificationData() {
@@ -116,11 +115,7 @@ function App() {
       console.error('Failed to update subscription:', err)
 
       // Show error toast
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to update your subscription. Please try again.'
-      })
+      toast.error('Failed to update your subscription. Please try again.')
     }
   }
 

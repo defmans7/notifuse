@@ -874,6 +874,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
 			TransactionalEmailProviderID: "integration-1",
+			SecretKey:                    "test-secret-key",
 		},
 		Integrations: []domain.Integration{
 			{
@@ -1177,6 +1178,14 @@ func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
 		GetByID(gomock.Any(), workspaceID).
 		Return(workspace, nil)
 
+	// Expect upsert contact call
+	mockContactService.EXPECT().
+		UpsertContact(gomock.Any(), workspaceID, gomock.Any()).
+		Return(domain.UpsertContactOperation{
+			Email:  recipientEmail,
+			Action: domain.UpsertContactOperationUpdate,
+		})
+
 	// Expect compile template
 	mockTemplateService.EXPECT().
 		CompileTemplate(gomock.Any(), gomock.Any()).
@@ -1187,8 +1196,8 @@ func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
 		SendEmail(
 			gomock.Any(),
 			gomock.Eq(workspaceID),
-			gomock.Any(),     // messageID
-			gomock.Eq(false), // isMarketing
+			gomock.Any(), // messageID
+			gomock.Any(), // isMarketing
 			gomock.Eq("sender@example.com"),
 			gomock.Eq("Test Sender"),
 			gomock.Eq(recipientEmail),
