@@ -23,6 +23,7 @@
     "@tanstack/react-router": "^1.15.7",
     "@tanstack/router-devtools": "^1.114.23",
     "@types/html2canvas": "^0.5.35",
+    "@types/uuid": "^10.0.0",
     "antd": "^5.14.0",
     "dayjs": "^1.11.13",
     "filesize": "^10.1.6",
@@ -44,7 +45,8 @@
     "slate-dom": "^0.112.2",
     "slate-history": "^0.110.3",
     "slate-react": "^0.112.1",
-    "timezone": "^1.0.23"
+    "timezone": "^1.0.23",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
