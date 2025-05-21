@@ -634,10 +634,21 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		return fmt.Errorf("sender not found: %s", senderID)
 	}
 
+	// upsert the contact
+	contactOperation := s.contactService.UpsertContact(ctx, workspaceID, &domain.Contact{
+		Email: recipientEmail,
+	})
+
+	if contactOperation.Action == domain.UpsertContactOperationError {
+		return fmt.Errorf("failed to upsert contact: %s", contactOperation.Error)
+	}
+
 	contactWithList := domain.ContactWithList{
 		Contact: &domain.Contact{
 			Email: recipientEmail,
 		},
+		ListID:   "foo",
+		ListName: "bar",
 	}
 
 	// Use fixed messageID for testing

@@ -30,9 +30,9 @@ func NewNotificationCenterService(
 	}
 }
 
-// GetNotificationCenter returns the notification center data for a contact
+// GetContactPreferences returns the notification center data for a contact
 // It returns public lists and public transactional notifications
-func (s *NotificationCenterService) GetNotificationCenter(ctx context.Context, workspaceID string, email string, emailHMAC string) (*domain.NotificationCenterResponse, error) {
+func (s *NotificationCenterService) GetContactPreferences(ctx context.Context, workspaceID string, email string, emailHMAC string) (*domain.ContactPreferencesResponse, error) {
 	// Verify that the email HMAC is valid
 	// This is a simple security measure to verify the request is legitimate
 	// The workspace should have a secret key that is used to generate the HMAC
@@ -75,7 +75,7 @@ func (s *NotificationCenterService) GetNotificationCenter(ctx context.Context, w
 		}
 	}
 
-	return &domain.NotificationCenterResponse{
+	return &domain.ContactPreferencesResponse{
 		Contact:      contact,
 		PublicLists:  publicLists,
 		ContactLists: contact.ContactLists,

@@ -139,7 +139,7 @@ func TestNotificationCenterRequest_FromURLValues(t *testing.T) {
 
 func TestNotificationCenterResponse_Structure(t *testing.T) {
 	// Test the structure of NotificationCenterResponse to ensure it has the expected fields
-	response := NotificationCenterResponse{}
+	response := ContactPreferencesResponse{}
 
 	// Use reflection or direct field access to verify structure
 	t.Run("has contact field", func(t *testing.T) {
@@ -338,6 +338,6 @@ func TestNotificationCenterServiceInterface(t *testing.T) {
 // Simple mock implementation of NotificationCenterService
 type mockNotificationCenter struct{}
 
-func (m *mockNotificationCenter) GetNotificationCenter(_ context.Context, _ string, _ string, _ string) (*NotificationCenterResponse, error) {
+func (m *mockNotificationCenter) GetContactPreferences(_ context.Context, _ string, _ string, _ string) (*ContactPreferencesResponse, error) {
 	return nil, nil
 }

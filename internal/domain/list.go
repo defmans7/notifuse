@@ -357,7 +357,7 @@ func (r *SubscribeToListsRequest) Validate() (err error) {
 type UnsubscribeFromListsRequest struct {
 	WorkspaceID string   `json:"wid"`
 	Email       string   `json:"email"`
-	EmailHMAC   string   `json:"hmac"`
+	EmailHMAC   string   `json:"email_hmac"`
 	ListIDs     []string `json:"lids"`
 	MessageID   string   `json:"mid"`
 }

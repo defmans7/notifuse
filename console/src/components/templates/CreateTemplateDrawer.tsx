@@ -269,7 +269,7 @@ export function CreateTemplateDrawer({
       last_name: 'Doe',
       email: 'john.doe@example.com'
     },
-    unsubscribe_url: `${window.API_ENDPOINT}/unsubscribe?email={{ contact.email }}&lid={{ list.id }}&hmac={{ contact.hmac }}`
+    unsubscribe_url: `${window.API_ENDPOINT}/unsubscribe?email={{ contact.email }}&lid={{ list.id }}&email_hmac={{ contact.hmac }}`
   }
 
   const showDrawer = () => {

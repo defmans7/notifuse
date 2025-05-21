@@ -36,8 +36,8 @@ func NewTestNotificationCenterService(
 	}
 }
 
-// GetNotificationCenter overrides the original method to use our mock HMAC verifier
-func (s *TestNotificationCenterService) GetNotificationCenter(ctx context.Context, workspaceID string, email string, emailHMAC string) (*domain.NotificationCenterResponse, error) {
+// GetContactPreferences overrides the original method to use our mock HMAC verifier
+func (s *TestNotificationCenterService) GetContactPreferences(ctx context.Context, workspaceID string, email string, emailHMAC string) (*domain.ContactPreferencesResponse, error) {
 	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to get workspace: %v", err))
@@ -75,7 +75,7 @@ func (s *TestNotificationCenterService) GetNotificationCenter(ctx context.Contex
 		}
 	}
 
-	return &domain.NotificationCenterResponse{
+	return &domain.ContactPreferencesResponse{
 		Contact:      contact,
 		PublicLists:  publicLists,
 		ContactLists: contact.ContactLists,
@@ -84,7 +84,7 @@ func (s *TestNotificationCenterService) GetNotificationCenter(ctx context.Contex
 	}, nil
 }
 
-func TestNotificationCenterService_GetNotificationCenter(t *testing.T) {
+func TestNotificationCenterService_GetContactPreferences(t *testing.T) {
 	// Set up a fixed secret key for all tests
 	secretKey := "test-secret-key"
 
@@ -107,7 +107,7 @@ func TestNotificationCenterService_GetNotificationCenter(t *testing.T) {
 		email         string
 		emailHMAC     string
 		setupMocks    func(ctrl *gomock.Controller, mockContactRepo *mocks.MockContactRepository, mockWorkspaceRepo *mocks.MockWorkspaceRepository, mockListRepo *mocks.MockListRepository, mockLogger *pkgmocks.MockLogger)
-		expectedResp  *domain.NotificationCenterResponse
+		expectedResp  *domain.ContactPreferencesResponse
 		expectedError string
 	}{
 		{
@@ -166,7 +166,7 @@ func TestNotificationCenterService_GetNotificationCenter(t *testing.T) {
 					GetLists(gomock.Any(), "workspace-123").
 					Return(lists, nil)
 			},
-			expectedResp: &domain.NotificationCenterResponse{
+			expectedResp: &domain.ContactPreferencesResponse{
 				Contact: &domain.Contact{
 					Email: validEmail,
 					ContactLists: []*domain.ContactList{
@@ -339,7 +339,7 @@ func TestNotificationCenterService_GetNotificationCenter(t *testing.T) {
 				mockLogger.EXPECT().
 					Error(gomock.Any())
 			},
-			expectedResp: &domain.NotificationCenterResponse{
+			expectedResp: &domain.ContactPreferencesResponse{
 				Contact: &domain.Contact{
 					Email: validEmail,
 					ContactLists: []*domain.ContactList{
@@ -407,7 +407,7 @@ func TestNotificationCenterService_GetNotificationCenter(t *testing.T) {
 					GetLists(gomock.Any(), "workspace-123").
 					Return(lists, nil)
 			},
-			expectedResp: &domain.NotificationCenterResponse{
+			expectedResp: &domain.ContactPreferencesResponse{
 				Contact: &domain.Contact{
 					Email: validEmail,
 					ContactLists: []*domain.ContactList{
@@ -449,7 +449,7 @@ func TestNotificationCenterService_GetNotificationCenter(t *testing.T) {
 			)
 
 			// Call the method under test
-			result, err := service.GetNotificationCenter(context.Background(), tc.workspaceID, tc.email, tc.emailHMAC)
+			result, err := service.GetContactPreferences(context.Background(), tc.workspaceID, tc.email, tc.emailHMAC)
 
 			// Verify expectations
 			if tc.expectedError != "" {

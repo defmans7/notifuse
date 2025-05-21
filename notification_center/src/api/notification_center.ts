@@ -1,6 +1,15 @@
 import { api } from './client'
 
 export interface NotificationCenterParams {
+  wid: string
+  email: string
+  email_hmac: string
+  lid?: string
+  mid?: string
+  action?: string
+}
+
+export interface PreferencesRequest {
   workspace_id: string
   email: string
   email_hmac: string
@@ -32,7 +41,7 @@ export interface TransactionalNotification {
   description?: string
 }
 
-export interface NotificationCenterResponse {
+export interface ContactPreferencesResponse {
   contact: Contact
   public_lists?: List[] | null
   contact_lists?: ContactList[] | null
@@ -51,73 +60,43 @@ export function validateParams(params: Partial<NotificationCenterParams>): strin
   if (!params.email_hmac) {
     return 'email_hmac is required'
   }
-  if (!params.workspace_id) {
-    return 'workspace_id is required'
+  if (!params.wid) {
+    return 'wid is required'
   }
   return null
 }
 
-/**
- * Fetches notification center data for a contact
- * This uses the public endpoint that doesn't require authentication
- * Matches the handleNotificationCenter method in ContactHandler
- */
-export async function getNotificationCenter(
-  params: NotificationCenterParams
-): Promise<NotificationCenterResponse> {
-  // Validate parameters first
-  const validationError = validateParams(params)
-  if (validationError) {
-    throw new Error(validationError)
-  }
-
+export async function getContactPreferences(
+  params: PreferencesRequest
+): Promise<ContactPreferencesResponse> {
   const queryParams = new URLSearchParams({
     workspace_id: params.workspace_id,
     email: params.email,
     email_hmac: params.email_hmac
   }).toString()
 
-  return api.get<NotificationCenterResponse>(`/notification-center?${queryParams}`)
+  return api.get<ContactPreferencesResponse>(`/preferences?${queryParams}`)
 }
 
-/**
- * Marks a message as read
- * This would need a corresponding endpoint in the backend
- */
-export async function markMessageAsRead(
-  messageId: string,
-  params: NotificationCenterParams
-): Promise<void> {
-  // Validate parameters first
-  const validationError = validateParams(params)
-  if (validationError) {
-    throw new Error(validationError)
-  }
-
-  return api.post<void>('/notification-center/mark-read', {
-    message_id: messageId,
-    workspace_id: params.workspace_id,
-    email: params.email,
-    email_hmac: params.email_hmac
-  })
-}
-
-/**
- * Utility function to parse notification center parameters from URL
- * Similar to FromURLValues method in NotificationCenterRequest
- */
 export function parseNotificationCenterParams(): NotificationCenterParams | null {
   const searchParams = new URLSearchParams(window.location.search)
 
   const params: Partial<NotificationCenterParams> = {
-    workspace_id: searchParams.get('workspace_id') || undefined,
+    wid: searchParams.get('wid') || undefined,
     email: searchParams.get('email') || undefined,
-    email_hmac: searchParams.get('email_hmac') || undefined
+    email_hmac: searchParams.get('email_hmac') || undefined,
+    mid: searchParams.get('mid') || undefined,
+    action: searchParams.get('action') || undefined
   }
 
   // Check if all required params are present
-  const validationError = validateParams(params)
-  if (validationError) {
+  if (!params.email) {
+    return null
+  }
+  if (!params.email_hmac) {
+    return null
+  }
+  if (!params.wid) {
     return null
   }
 

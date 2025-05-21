@@ -3,10 +3,7 @@ package domain
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"database/sql/driver"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -541,8 +538,15 @@ func (e *ErrTemplateNotFound) Error() string {
 }
 
 // BuildTemplateData creates a template data map with flexible options
-func BuildTemplateData(workspaceID string, secretKey string, contactWithList ContactWithList, messageID string, trackingSettings mjml.TrackingSettings, broadcast *Broadcast) (MapOfAny, error) {
+func BuildTemplateData(workspaceID string, workspaceSecretKey string, contactWithList ContactWithList, messageID string, trackingSettings mjml.TrackingSettings, broadcast *Broadcast) (MapOfAny, error) {
+
+	if workspaceSecretKey == "" {
+		return nil, fmt.Errorf("workspace secret key is required")
+	}
+
 	templateData := MapOfAny{}
+
+	var emailHMAC string
 
 	if contactWithList.Contact != nil {
 
@@ -551,6 +555,10 @@ func BuildTemplateData(workspaceID string, secretKey string, contactWithList Con
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert contact to template data: %w", err)
 		}
+
+		// generate hmac for notification center auth
+		emailHMAC = ComputeEmailHMAC(contactWithList.Contact.Email, workspaceSecretKey)
+
 		templateData["contact"] = contactData
 
 	} else {
@@ -592,22 +600,29 @@ func BuildTemplateData(workspaceID string, secretKey string, contactWithList Con
 		}
 
 		// Create unsubscribe link
-		email := url.QueryEscape(contactWithList.Contact.Email)
-		listID := url.QueryEscape(contactWithList.ListID)
-		listName := url.QueryEscape(contactWithList.ListName)
-		workspaceID := url.QueryEscape(workspaceID)
+		// Build unsubscribe URL query params
+		unsubscribeParams := url.Values{}
+		unsubscribeParams.Set("action", "unsubscribe")
+		unsubscribeParams.Set("lid", contactWithList.ListID)
+		unsubscribeParams.Set("lname", contactWithList.ListName)
+		unsubscribeParams.Set("wid", workspaceID)
+		unsubscribeParams.Set("mid", messageID)
+		unsubscribeParams.Set("email", contactWithList.Contact.Email)
+		unsubscribeParams.Set("email_hmac", emailHMAC)
 
-		// generate hmac for unsubscribe link
-		hmac := hmac.New(sha256.New, []byte(secretKey))
-		hmac.Write([]byte(fmt.Sprintf("%s:%s:%s:%s:%s", email, listID, listName, workspaceID, messageID)))
-		signature := base64.StdEncoding.EncodeToString(hmac.Sum(nil))
-		unsubscribeURL := fmt.Sprintf("%s/notification-center?action=unsubscribe&lid=%s&lname=%s&wid=%s&mid=%s&email=%s&hmac=%s",
-			trackingSettings.Endpoint, listID, listName, workspaceID, messageID, email, signature)
+		unsubscribeURL := fmt.Sprintf("%s/notification-center?%s",
+			trackingSettings.Endpoint, unsubscribeParams.Encode())
 		templateData["unsubscribe_url"] = unsubscribeURL
 
-		// oneclick unsubscribe link
-		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?email=%s&lids=%s&wid=%s&mid=%s",
-			trackingSettings.Endpoint, email, listID, workspaceID, messageID)
+		// Build oneclick unsubscribe URL query params
+		oneclickParams := url.Values{}
+		oneclickParams.Set("email", contactWithList.Contact.Email)
+		oneclickParams.Set("lids", contactWithList.ListID)
+		oneclickParams.Set("wid", workspaceID)
+		oneclickParams.Set("mid", messageID)
+
+		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?%s",
+			trackingSettings.Endpoint, oneclickParams.Encode())
 		templateData["oneclick_unsubscribe_url"] = oneclickUnsubscribeURL
 	}
 

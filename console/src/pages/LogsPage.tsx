@@ -38,42 +38,42 @@ const { Title, Text } = Typography
 const statusConfig: Record<MessageStatus, { icon: React.ReactNode; color: string; label: string }> =
   {
     sent: {
-      icon: <FontAwesomeIcon icon={faEnvelope} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faEnvelope} />,
       color: 'blue',
       label: 'Sent'
     },
     delivered: {
-      icon: <FontAwesomeIcon icon={faCircleCheck} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faCircleCheck} />,
       color: 'green',
       label: 'Delivered'
     },
     failed: {
-      icon: <FontAwesomeIcon icon={faCircleXmark} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faCircleXmark} />,
       color: 'red',
       label: 'Failed'
     },
     opened: {
-      icon: <FontAwesomeIcon icon={faEye} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faEye} />,
       color: 'purple',
       label: 'Opened'
     },
     clicked: {
-      icon: <FontAwesomeIcon icon={faHandPointer} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faHandPointer} />,
       color: 'geekblue',
       label: 'Clicked'
     },
     bounced: {
-      icon: <FontAwesomeIcon icon={faTriangleExclamation} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faTriangleExclamation} />,
       color: 'orange',
       label: 'Bounced'
     },
     complained: {
-      icon: <FontAwesomeIcon icon={faBan} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faBan} />,
       color: 'volcano',
       label: 'Complained'
     },
     unsubscribed: {
-      icon: <FontAwesomeIcon icon={faArrowRightFromBracket} />,
+      icon: <FontAwesomeIcon className="!mr-1" icon={faArrowRightFromBracket} />,
       color: 'gold',
       label: 'Unsubscribed'
     }
@@ -384,7 +384,7 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
       key: 'status',
       render: (status: MessageStatus) => (
         <Tag
-          borderless
+          bordered={false}
           color={statusConfig[status]?.color || 'default'}
           icon={statusConfig[status]?.icon}
         >

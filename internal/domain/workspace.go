@@ -237,18 +237,22 @@ func (w *Workspace) Validate(passphrase string) error {
 	return nil
 }
 
-func (w *Workspace) BeforeSave(secretkey string) error {
+func (w *Workspace) BeforeSave(globalSecretKey string) error {
 	// Only process FileManager if there's a SecretKey to encrypt
 	if w.Settings.FileManager.SecretKey != "" {
-		if err := w.Settings.FileManager.EncryptSecretKey(secretkey); err != nil {
+		if err := w.Settings.FileManager.EncryptSecretKey(globalSecretKey); err != nil {
 			return fmt.Errorf("failed to encrypt secret key: %w", err)
 		}
 		// clear the secret key from the workspace settings
 		w.Settings.FileManager.SecretKey = ""
 	}
 
+	if w.Settings.SecretKey == "" {
+		return fmt.Errorf("workspace secret key is missing")
+	}
+
 	// Encrypt the secret key
-	encryptedSecretKey, err := crypto.EncryptString(w.Settings.SecretKey, secretkey)
+	encryptedSecretKey, err := crypto.EncryptString(w.Settings.SecretKey, globalSecretKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt secret key: %w", err)
 	}
@@ -256,7 +260,7 @@ func (w *Workspace) BeforeSave(secretkey string) error {
 
 	// Process all integrations
 	for i := range w.Integrations {
-		if err := w.Integrations[i].BeforeSave(secretkey); err != nil {
+		if err := w.Integrations[i].BeforeSave(globalSecretKey); err != nil {
 			return fmt.Errorf("failed to process integration %s: %w", w.Integrations[i].ID, err)
 		}
 	}
@@ -264,16 +268,16 @@ func (w *Workspace) BeforeSave(secretkey string) error {
 	return nil
 }
 
-func (w *Workspace) AfterLoad(secretkey string) error {
+func (w *Workspace) AfterLoad(globalSecretKey string) error {
 	// Only decrypt if there's an EncryptedSecretKey present
 	if w.Settings.FileManager.EncryptedSecretKey != "" {
-		if err := w.Settings.FileManager.DecryptSecretKey(secretkey); err != nil {
+		if err := w.Settings.FileManager.DecryptSecretKey(globalSecretKey); err != nil {
 			return fmt.Errorf("failed to decrypt secret key: %w", err)
 		}
 	}
 
 	// Decrypt the secret key
-	decryptedSecretKey, err := crypto.DecryptFromHexString(w.Settings.EncryptedSecretKey, secretkey)
+	decryptedSecretKey, err := crypto.DecryptFromHexString(w.Settings.EncryptedSecretKey, globalSecretKey)
 	if err != nil {
 		return fmt.Errorf("failed to decrypt secret key: %w", err)
 	}
@@ -281,7 +285,7 @@ func (w *Workspace) AfterLoad(secretkey string) error {
 
 	// Process all integrations
 	for i := range w.Integrations {
-		if err := w.Integrations[i].AfterLoad(secretkey); err != nil {
+		if err := w.Integrations[i].AfterLoad(globalSecretKey); err != nil {
 			return fmt.Errorf("failed to process integration %s: %w", w.Integrations[i].ID, err)
 		}
 	}

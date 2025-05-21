@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { getNotificationCenter, parseNotificationCenterParams } from './api/notification_center'
-import type { NotificationCenterResponse } from './api/notification_center'
+import { getContactPreferences, parseNotificationCenterParams } from './api/notification_center'
+import type { ContactPreferencesResponse } from './api/notification_center'
 import { Switch } from './components/ui/switch'
 
 function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [notificationData, setNotificationData] = useState<NotificationCenterResponse | null>(null)
+  const [notificationData, setNotificationData] = useState<ContactPreferencesResponse | null>(null)
   const [subscriptions, setSubscriptions] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -22,7 +22,11 @@ function App() {
         }
 
         // Load notification center data
-        const data = await getNotificationCenter(params)
+        const data = await getContactPreferences({
+          workspace_id: params.wid,
+          email: params.email,
+          email_hmac: params.email_hmac
+        })
         setNotificationData(data)
 
         // Initialize subscriptions state

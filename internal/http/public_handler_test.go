@@ -32,7 +32,7 @@ func TestNotificationCenterHandler_RegisterRoutes(t *testing.T) {
 	// and checking that the request doesn't return 404
 
 	// Test notification center endpoint
-	req := httptest.NewRequest(http.MethodGet, "/notification-center", nil)
+	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	assert.NotEqual(t, http.StatusNotFound, rec.Code)
@@ -89,7 +89,7 @@ func TestNotificationCenterHandler_handleNotificationCenter(t *testing.T) {
 			queryParams: "?email=test@example.com&email_hmac=invalid&workspace_id=ws123",
 			setupMock: func() {
 				mockService.EXPECT().
-					GetNotificationCenter(gomock.Any(), "ws123", "test@example.com", "invalid").
+					GetContactPreferences(gomock.Any(), "ws123", "test@example.com", "invalid").
 					Return(nil, errors.New("invalid email verification"))
 			},
 			expectedStatusCode: http.StatusUnauthorized,
@@ -101,7 +101,7 @@ func TestNotificationCenterHandler_handleNotificationCenter(t *testing.T) {
 			queryParams: "?email=test@example.com&email_hmac=valid&workspace_id=ws123",
 			setupMock: func() {
 				mockService.EXPECT().
-					GetNotificationCenter(gomock.Any(), "ws123", "test@example.com", "valid").
+					GetContactPreferences(gomock.Any(), "ws123", "test@example.com", "valid").
 					Return(nil, errors.New("contact not found"))
 			},
 			expectedStatusCode: http.StatusNotFound,
@@ -113,18 +113,18 @@ func TestNotificationCenterHandler_handleNotificationCenter(t *testing.T) {
 			queryParams: "?email=test@example.com&email_hmac=valid&workspace_id=ws123",
 			setupMock: func() {
 				mockService.EXPECT().
-					GetNotificationCenter(gomock.Any(), "ws123", "test@example.com", "valid").
+					GetContactPreferences(gomock.Any(), "ws123", "test@example.com", "valid").
 					Return(nil, errors.New("database error"))
 			},
 			expectedStatusCode: http.StatusInternalServerError,
-			expectedResponse:   `{"error":"Failed to get notification center data"}`,
+			expectedResponse:   `{"error":"Failed to get contact preferences"}`,
 		},
 		{
 			name:        "successful request",
 			method:      http.MethodGet,
 			queryParams: "?email=test@example.com&email_hmac=valid&workspace_id=ws123",
 			setupMock: func() {
-				response := &domain.NotificationCenterResponse{
+				response := &domain.ContactPreferencesResponse{
 					Contact:      &domain.Contact{Email: "test@example.com"},
 					PublicLists:  []*domain.List{{ID: "list1", Name: "Public List"}},
 					ContactLists: []*domain.ContactList{{Email: "test@example.com", ListID: "list1"}},
@@ -132,7 +132,7 @@ func TestNotificationCenterHandler_handleNotificationCenter(t *testing.T) {
 					WebsiteURL:   "https://example.com",
 				}
 				mockService.EXPECT().
-					GetNotificationCenter(gomock.Any(), "ws123", "test@example.com", "valid").
+					GetContactPreferences(gomock.Any(), "ws123", "test@example.com", "valid").
 					Return(response, nil)
 			},
 			expectedStatusCode: http.StatusOK,
@@ -144,10 +144,10 @@ func TestNotificationCenterHandler_handleNotificationCenter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setupMock()
 
-			req := httptest.NewRequest(tc.method, "/notification-center"+tc.queryParams, nil)
+			req := httptest.NewRequest(tc.method, "/preferences"+tc.queryParams, nil)
 			rec := httptest.NewRecorder()
 
-			handler.handleNotificationCenter(rec, req)
+			handler.handlePreferences(rec, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rec.Code)
 
@@ -155,7 +155,7 @@ func TestNotificationCenterHandler_handleNotificationCenter(t *testing.T) {
 				assert.JSONEq(t, tc.expectedResponse, rec.Body.String())
 			} else if tc.expectedStatusCode == http.StatusOK {
 				// For successful requests, verify that the response contains expected fields
-				var response domain.NotificationCenterResponse
+				var response domain.ContactPreferencesResponse
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 				assert.Equal(t, "test@example.com", response.Contact.Email)
@@ -395,18 +395,6 @@ func (l *mockLogger) GetLevel() string {
 }
 
 func (l *mockLogger) SetLevel(level string) {}
-
-// Helper function to make HTTP requests and check responses
-func makeRequest(handler http.HandlerFunc, method, url string, body []byte) (*httptest.ResponseRecorder, error) {
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	handler(rec, req)
-	return rec, nil
-}
 
 // Test NewNotificationCenterHandler function
 func TestNewNotificationCenterHandler(t *testing.T) {

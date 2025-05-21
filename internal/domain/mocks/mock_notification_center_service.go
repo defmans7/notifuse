@@ -35,17 +35,17 @@ func (m *MockNotificationCenterService) EXPECT() *MockNotificationCenterServiceM
 	return m.recorder
 }
 
-// GetNotificationCenter mocks base method.
-func (m *MockNotificationCenterService) GetNotificationCenter(arg0 context.Context, arg1, arg2, arg3 string) (*domain.NotificationCenterResponse, error) {
+// GetContactPreferences mocks base method.
+func (m *MockNotificationCenterService) GetContactPreferences(arg0 context.Context, arg1, arg2, arg3 string) (*domain.ContactPreferencesResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNotificationCenter", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(*domain.NotificationCenterResponse)
+	ret := m.ctrl.Call(m, "GetContactPreferences", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*domain.ContactPreferencesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetNotificationCenter indicates an expected call of GetNotificationCenter.
-func (mr *MockNotificationCenterServiceMockRecorder) GetNotificationCenter(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// GetContactPreferences indicates an expected call of GetContactPreferences.
+func (mr *MockNotificationCenterServiceMockRecorder) GetContactPreferences(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationCenter", reflect.TypeOf((*MockNotificationCenterService)(nil).GetNotificationCenter), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContactPreferences", reflect.TypeOf((*MockNotificationCenterService)(nil).GetContactPreferences), arg0, arg1, arg2, arg3)
 }

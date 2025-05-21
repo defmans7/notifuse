@@ -9,8 +9,8 @@ import (
 //go:generate mockgen -destination mocks/mock_notification_center_service.go -package mocks github.com/Notifuse/notifuse/internal/domain NotificationCenterService
 
 type NotificationCenterService interface {
-	// GetNotificationCenter returns public lists and notifications for a contact
-	GetNotificationCenter(ctx context.Context, workspaceID string, email string, emailHMAC string) (*NotificationCenterResponse, error)
+	// GetContactPreferences returns public lists and notifications for a contact
+	GetContactPreferences(ctx context.Context, workspaceID string, email string, emailHMAC string) (*ContactPreferencesResponse, error)
 }
 
 type NotificationCenterRequest struct {
@@ -39,8 +39,8 @@ func (r *NotificationCenterRequest) FromURLValues(values url.Values) error {
 	return r.Validate()
 }
 
-// NotificationCenterResponse contains the response data for the notification center
-type NotificationCenterResponse struct {
+// ContactPreferencesResponse contains the response data for the notification center
+type ContactPreferencesResponse struct {
 	Contact      *Contact       `json:"contact"`
 	PublicLists  []*List        `json:"public_lists"`
 	ContactLists []*ContactList `json:"contact_lists"`

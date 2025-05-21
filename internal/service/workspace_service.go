@@ -276,9 +276,15 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
-	// Update only the fields specified in the request
 	existingWorkspace.Name = name
-	existingWorkspace.Settings = settings
+	existingWorkspace.Settings.WebsiteURL = settings.WebsiteURL
+	existingWorkspace.Settings.LogoURL = settings.LogoURL
+	existingWorkspace.Settings.CoverURL = settings.CoverURL
+	existingWorkspace.Settings.Timezone = settings.Timezone
+	existingWorkspace.Settings.FileManager = settings.FileManager
+	existingWorkspace.Settings.TransactionalEmailProviderID = settings.TransactionalEmailProviderID
+	existingWorkspace.Settings.MarketingEmailProviderID = settings.MarketingEmailProviderID
+	existingWorkspace.Settings.EmailTrackingEnabled = settings.EmailTrackingEnabled
 	existingWorkspace.UpdatedAt = time.Now()
 
 	if err := existingWorkspace.Validate(s.secretKey); err != nil {

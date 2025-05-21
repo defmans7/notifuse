@@ -25,13 +25,13 @@ func NewNotificationCenterHandler(service domain.NotificationCenterService, list
 
 func (h *NotificationCenterHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Register public routes
-	mux.HandleFunc("/notification-center", h.handleNotificationCenter)
+	mux.HandleFunc("/preferences", h.handlePreferences)
 	mux.HandleFunc("/subscribe", h.handleSubscribe)
 	// one-click unsubscribe for GMAIL header link
 	mux.HandleFunc("/unsubscribe-oneclick", h.handleUnsubscribeOneClick)
 }
 
-func (h *NotificationCenterHandler) handleNotificationCenter(w http.ResponseWriter, r *http.Request) {
+func (h *NotificationCenterHandler) handlePreferences(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -44,7 +44,7 @@ func (h *NotificationCenterHandler) handleNotificationCenter(w http.ResponseWrit
 	}
 
 	// Get notification center data for the contact
-	response, err := h.service.GetNotificationCenter(r.Context(), req.WorkspaceID, req.Email, req.EmailHMAC)
+	response, err := h.service.GetContactPreferences(r.Context(), req.WorkspaceID, req.Email, req.EmailHMAC)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid email verification") {
 			WriteJSONError(w, "Unauthorized: invalid verification", http.StatusUnauthorized)
@@ -54,8 +54,8 @@ func (h *NotificationCenterHandler) handleNotificationCenter(w http.ResponseWrit
 			WriteJSONError(w, "Contact not found", http.StatusNotFound)
 			return
 		}
-		h.logger.WithField("error", err.Error()).Error("Failed to get notification center data")
-		WriteJSONError(w, "Failed to get notification center data", http.StatusInternalServerError)
+		h.logger.WithField("error", err.Error()).Error("Failed to get contact preferences")
+		WriteJSONError(w, "Failed to get contact preferences", http.StatusInternalServerError)
 		return
 	}
 
