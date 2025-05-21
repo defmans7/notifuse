@@ -372,7 +372,7 @@ export interface EmailTemplate {
   reply_to?: string
   subject: string
   subject_preview?: string
-  mjml: string // html
+  compiled_preview: string // compiled html
   visual_editor_tree: BlockInterface
   text?: string
 }

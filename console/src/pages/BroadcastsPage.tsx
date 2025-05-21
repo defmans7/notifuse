@@ -52,6 +52,7 @@ import { SendOrScheduleModal } from '../components/broadcasts/SendOrScheduleModa
 import { useAuth } from '../contexts/AuthContext'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { BroadcastStats } from '../components/broadcasts/BroadcastStats'
+import { Workspace } from '../services/api/types'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -80,26 +81,33 @@ const getStatusBadge = (status: BroadcastStatus) => {
 // Component for rendering a single A/B test variation card
 interface VariationCardProps {
   variation: BroadcastVariation
-  workspaceId: string
+  workspace: Workspace
   colSpan: number
   index: number
 }
 
-const VariationCard: React.FC<VariationCardProps> = ({
-  variation,
-  workspaceId,
-  colSpan,
-  index
-}) => {
+const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, colSpan, index }) => {
+  const emailProvider = workspace.integrations?.find(
+    (i) =>
+      i.id ===
+      (variation.template?.category === 'marketing'
+        ? workspace.settings?.marketing_email_provider_id
+        : workspace.settings?.transactional_email_provider_id)
+  )?.email_provider
+
+  const templateSender = emailProvider?.senders.find(
+    (s) => s.id === variation.template?.email?.sender_id
+  )
+
   return (
     <Col span={colSpan} key={index}>
       <Card
         size="small"
-        title={variation.name || variation.template?.name || `Variation ${index + 1}`}
+        title={variation.template?.name || `Variation ${index + 1}`}
         type="inner"
         extra={
           variation.template ? (
-            <TemplatePreviewDrawer record={variation.template as any} workspaceId={workspaceId}>
+            <TemplatePreviewDrawer record={variation.template as any} workspace={workspace}>
               <Button size="small" type="primary" ghost>
                 Preview
               </Button>
@@ -114,16 +122,17 @@ const VariationCard: React.FC<VariationCardProps> = ({
         <Space direction="vertical" size="small">
           <Space>
             <Text strong>From:</Text>
-            {variation.from_name || variation.template?.email?.from_name || 'N/A'}
-            <span>
-              &lt;
-              {variation.from_email || variation.template?.email?.from_address || 'N/A'}
-              &gt;
-            </span>
+            {templateSender ? (
+              <>
+                {templateSender.name} &lt;{templateSender.email}&gt;
+              </>
+            ) : (
+              <Text>Default sender</Text>
+            )}
           </Space>
           <Space>
             <Text strong>Subject:</Text>
-            {variation.subject || variation.template?.email?.subject || 'N/A'}
+            {variation.template?.email.subject || 'N/A'}
           </Space>
           {variation.template?.email.subject_preview && (
             <Space>
@@ -131,8 +140,8 @@ const VariationCard: React.FC<VariationCardProps> = ({
               {variation.template?.email?.subject_preview}
             </Space>
           )}
-          {(variation.reply_to || variation.template?.email?.reply_to) && (
-            <Text>Reply-to: {variation.reply_to || variation.template?.email?.reply_to}</Text>
+          {variation.template?.email?.reply_to && (
+            <Text>Reply-to: {variation.template?.email?.reply_to}</Text>
           )}
 
           {variation.metrics && (
@@ -584,7 +593,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                     <VariationCard
                       key={index}
                       variation={variation}
-                      workspaceId={workspaceId}
+                      workspace={currentWorkspace}
                       colSpan={colSpan}
                       index={index}
                     />

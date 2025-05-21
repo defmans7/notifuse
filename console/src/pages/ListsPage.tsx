@@ -17,7 +17,7 @@ import {
 import { useParams } from '@tanstack/react-router'
 import { listsApi } from '../services/api/list'
 import { templatesApi } from '../services/api/template'
-import type { List, TemplateReference } from '../services/api/types'
+import type { List, TemplateReference, Workspace } from '../services/api/types'
 import { CreateListDrawer } from '../components/lists/ListDrawer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare, faTrashCan } from '@fortawesome/free-regular-svg-icons'
@@ -35,25 +35,22 @@ const { Title, Paragraph, Text } = Typography
 // Component to fetch template data and render the preview popover
 const TemplatePreviewButton = ({
   templateRef,
-  workspaceId
+  workspace
 }: {
   templateRef: TemplateReference
-  workspaceId: string
+  workspace: Workspace
 }) => {
-  const { workspaces } = useAuth()
-  const workspace = workspaces.find((w) => w.id === workspaceId)
-
   const { data, isLoading } = useQuery({
-    queryKey: ['template', workspaceId, templateRef.id, templateRef.version],
+    queryKey: ['template', workspace.id, templateRef.id, templateRef.version],
     queryFn: async () => {
       const response = await templatesApi.get({
-        workspace_id: workspaceId,
+        workspace_id: workspace.id,
         id: templateRef.id,
         version: templateRef.version
       })
       return response.template
     },
-    enabled: !!templateRef && !!workspaceId,
+    enabled: !!templateRef && !!workspace.id,
     // No need to refetch often - template won't change
     staleTime: 1000 * 60 * 5 // 5 minutes
   })
@@ -68,7 +65,7 @@ const TemplatePreviewButton = ({
 
   return (
     <Space>
-      <TemplatePreviewDrawer record={data} workspaceId={workspaceId}>
+      <TemplatePreviewDrawer record={data} workspace={workspace}>
         <Button type="link" size="small">
           preview
         </Button>
@@ -92,6 +89,8 @@ export function ListsPage() {
   const [confirmationInput, setConfirmationInput] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const queryClient = useQueryClient()
+  const { workspaces } = useAuth()
+  const workspace = workspaces.find((w) => w.id === workspaceId)
 
   const { data, isLoading } = useQuery({
     queryKey: ['lists', workspaceId],
@@ -135,6 +134,10 @@ export function ListsPage() {
   }
 
   const hasLists = !isLoading && data?.lists && data.lists.length > 0
+
+  if (!workspace) {
+    return <div>Loading...</div>
+  }
 
   return (
     <div className="p-6">
@@ -216,7 +219,7 @@ export function ListsPage() {
                       <Check size={16} className="text-green-500 mt-1" />
                       <TemplatePreviewButton
                         templateRef={list.double_optin_template}
-                        workspaceId={workspaceId}
+                        workspace={workspace}
                       />
                     </Space>
                   ) : (
@@ -231,7 +234,7 @@ export function ListsPage() {
                       <Check size={16} className="text-green-500 mt-1" />
                       <TemplatePreviewButton
                         templateRef={list.welcome_template}
-                        workspaceId={workspaceId}
+                        workspace={workspace}
                       />
                     </Space>
                   ) : (
@@ -246,7 +249,7 @@ export function ListsPage() {
                       <Check size={16} className="text-green-500 mt-1" />
                       <TemplatePreviewButton
                         templateRef={list.unsubscribe_template}
-                        workspaceId={workspaceId}
+                        workspace={workspace}
                       />
                     </Space>
                   ) : (

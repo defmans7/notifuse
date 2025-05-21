@@ -1,23 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Drawer, Typography, Spin, Alert, Tabs } from 'antd'
-import type { Template, MjmlCompileError } from '../../services/api/types'
+import type { Template, MjmlCompileError, Workspace } from '../../services/api/types'
 import { templatesApi } from '../../services/api/template'
 import { BlockInterface } from '../email_editor/Block' // Assuming BlockInterface is here
 import { usePrismjs } from '../email_editor/UI/Widgets/PrismJS'
-// We don't need the usePrismjs hook if we call Prism directly
-// import { usePrismjs } from './email_editor/UI/Widgets/PrismJS'
 
 const { Text } = Typography
 
 interface TemplatePreviewDrawerProps {
   record: Template
-  workspaceId: string
+  workspace: Workspace
   children: React.ReactNode
 }
 
 const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   record,
-  workspaceId,
+  workspace,
   children
 }) => {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
@@ -34,7 +32,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   // Removed usePrismjs hook call
 
   const fetchPreview = async () => {
-    if (!workspaceId || !record.email?.visual_editor_tree) {
+    if (!workspace.id || !record.email?.visual_editor_tree) {
       setError('Missing workspace ID or template data.')
       setMjmlError(null)
       setPreviewMjml(null)
@@ -75,7 +73,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
       }
 
       const req = {
-        workspace_id: workspaceId,
+        workspace_id: workspace.id,
         message_id: 'preview',
         visual_editor_tree: treeObject as any,
         test_data: record.test_data || {}
@@ -108,7 +106,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   }
 
   useEffect(() => {
-    if (isOpen && workspaceId) {
+    if (isOpen && workspace.id) {
       fetchPreview()
     } else if (!isOpen) {
       // Reset state when drawer closes to avoid showing stale data briefly on reopen
@@ -119,7 +117,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
       setIsLoading(false)
       setActiveTabKey('1')
     }
-  }, [isOpen, record.id, record.version, workspaceId]) // Keep original dependencies
+  }, [isOpen, record.id, record.version, workspace.id]) // Keep original dependencies
 
   const items = []
 
@@ -146,14 +144,42 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
       children: <MJMLPreview previewMjml={previewMjml} />
     })
   }
+  const emailProvider = workspace.integrations?.find(
+    (i) =>
+      i.id ===
+      (record.category === 'marketing'
+        ? workspace.settings?.marketing_email_provider_id
+        : workspace.settings?.transactional_email_provider_id)
+  )?.email_provider
+
+  const defaultSender = emailProvider?.senders.find((s) => s.is_default)
+  const templateSender = emailProvider?.senders.find((s) => s.id === record.email?.sender_id)
+
   const drawerContent = (
     <div>
       {/* Header details */}
       <div className="mb-4 space-y-2">
         <div>
           <Text strong>From: </Text>
-          <Text>{record.email?.from_name}</Text>
-          <Text type="secondary"> &lt;{record.email?.from_address}&gt;</Text>
+          {templateSender ? (
+            <>
+              <Text>
+                {templateSender.name}
+                <Text type="secondary"> &lt;{templateSender.email}&gt;</Text>
+              </Text>
+            </>
+          ) : (
+            <>
+              {defaultSender ? (
+                <Text>
+                  {defaultSender.name}
+                  <Text type="secondary"> &lt;{defaultSender.email}&gt;</Text>
+                </Text>
+              ) : (
+                <Text>No default sender configured</Text>
+              )}
+            </>
+          )}
         </div>
         {record.email?.reply_to && (
           <div>
@@ -167,7 +193,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
         </div>
         {record.email?.subject_preview && (
           <div>
-            <Text strong>Preview: </Text>
+            <Text strong>Subject preview: </Text>
             <Text type="secondary">{record.email.subject_preview}</Text>
           </div>
         )}

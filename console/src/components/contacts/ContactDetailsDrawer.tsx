@@ -27,24 +27,16 @@ import {
   faShoppingCart,
   faMoneyBillWave,
   faPlus,
-  faEllipsis,
-  faExclamationTriangle,
-  faPaperPlane,
-  faCircleCheck,
-  faCircleXmark,
-  faEye,
-  faArrowPointer,
-  faBan,
-  faTriangleExclamation,
-  faCode
+  faEllipsis
 } from '@fortawesome/free-solid-svg-icons'
-import { faFaceFrown, faPenToSquare } from '@fortawesome/free-regular-svg-icons'
+import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { listMessages, MessageHistory, MessageStatus } from '../../services/api/messages_history'
 import { contactsApi } from '../../services/api/contacts'
 import { contactListApi, UpdateContactListStatusRequest } from '../../services/api/contact_list'
 import { listsApi } from '../../services/api/list'
 import { SubscribeToListsRequest } from '../../services/api/types'
+import { MessageHistoryTable } from '../messages/MessageHistoryTable'
 
 const { Title, Text } = Typography
 
@@ -440,151 +432,6 @@ export function ContactDetailsDrawer({
     const config = statusConfig[status] || { color: 'default', text: status }
     return <Badge status={config.color as any} text={config.text} />
   }
-
-  // Table columns for message history
-  const messageColumns = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      render: (id: string) => {
-        return (
-          <Tooltip title={id}>
-            <span className="text-xs text-gray-500">{id.substring(0, 8) + '...'}</span>
-          </Tooltip>
-        )
-      }
-    },
-    {
-      title: 'Template',
-      dataIndex: 'template_id',
-      key: 'template_id'
-    },
-    {
-      title: 'Broadcast',
-      dataIndex: 'broadcast_id',
-      key: 'broadcast_id'
-    },
-    {
-      title: 'Status',
-      key: 'status',
-      render: (record: MessageHistory) => {
-        return (
-          <div className="flex items-center">
-            {getStatusBadge(record.status)}
-            {record.error && (
-              <Tooltip title={record.error}>
-                <FontAwesomeIcon icon={faExclamationTriangle} className="!ml-2" />
-              </Tooltip>
-            )}
-          </div>
-        )
-      }
-    },
-    {
-      title: 'Events',
-      key: 'events',
-      render: (record: MessageHistory) => {
-        const events = []
-        if (record.sent_at)
-          events.push(
-            <Tooltip title={formatDate(record.sent_at)}>
-              <Tag bordered={false} color="blue">
-                <FontAwesomeIcon icon={faPaperPlane} /> Sent
-              </Tag>
-            </Tooltip>
-          )
-        if (record.delivered_at)
-          events.push(
-            <Tooltip title={formatDate(record.delivered_at)}>
-              <Tag bordered={false} color="green">
-                <FontAwesomeIcon icon={faCircleCheck} /> Delivered
-              </Tag>
-            </Tooltip>
-          )
-        if (record.failed_at)
-          events.push(
-            <Tooltip title={formatDate(record.failed_at)}>
-              <Tag bordered={false} color="red">
-                <FontAwesomeIcon icon={faCircleXmark} /> Failed
-              </Tag>
-            </Tooltip>
-          )
-        if (record.opened_at)
-          events.push(
-            <Tooltip title={formatDate(record.opened_at)}>
-              <Tag bordered={false} color="cyan">
-                <FontAwesomeIcon icon={faEye} /> Opened
-              </Tag>
-            </Tooltip>
-          )
-        if (record.clicked_at)
-          events.push(
-            <Tooltip title={formatDate(record.clicked_at)}>
-              <Tag bordered={false} color="geekblue">
-                <FontAwesomeIcon icon={faArrowPointer} /> Clicked
-              </Tag>
-            </Tooltip>
-          )
-        if (record.bounced_at)
-          events.push(
-            <Tooltip title={formatDate(record.bounced_at)}>
-              <Tag bordered={false} color="volcano">
-                <FontAwesomeIcon icon={faTriangleExclamation} /> Bounced
-              </Tag>
-            </Tooltip>
-          )
-        if (record.complained_at)
-          events.push(
-            <Tooltip title={formatDate(record.complained_at)}>
-              <Tag bordered={false} color="red">
-                <FontAwesomeIcon icon={faFaceFrown} /> Complained
-              </Tag>
-            </Tooltip>
-          )
-        if (record.unsubscribed_at)
-          events.push(
-            <Tooltip title={formatDate(record.unsubscribed_at)}>
-              <Tag bordered={false} color="red">
-                <FontAwesomeIcon icon={faBan} /> Unsubscribed
-              </Tag>
-            </Tooltip>
-          )
-        return <div className="flex items-center">{events.map((event) => event)}</div>
-      }
-    },
-    {
-      title: 'Created At',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (date: string) => {
-        return <Tooltip title={formatDate(date)}>{dayjs(date).fromNow()}</Tooltip>
-      }
-    },
-    {
-      title: 'Data',
-      key: 'json_data',
-      render: (record: MessageHistory) => {
-        return (
-          <Popover
-            placement="left"
-            content={
-              <div
-                className="p-2 bg-gray-50 rounded border border-gray-200 max-h-96 overflow-auto"
-                style={{ maxWidth: '500px' }}
-              >
-                <pre className="text-xs m-0 whitespace-pre-wrap break-all">
-                  {JSON.stringify(record.message_data.data, null, 2)}
-                </pre>
-              </div>
-            }
-          >
-            <Button type="text" className="opacity-70" icon={<FontAwesomeIcon icon={faCode} />} />
-          </Popover>
-        )
-      }
-    }
-  ]
 
   // Field display definitions without icons
   const contactFields = [
@@ -1060,39 +907,16 @@ export function ContactDetailsDrawer({
                 </Space>
               </div>
 
-              {loadingMessages && !isLoadingMore ? (
-                <div
-                  className="loading-container"
-                  style={{ padding: '40px 0', textAlign: 'center' }}
-                >
-                  <Spin size="large" />
-                  <div style={{ marginTop: 16 }}>Loading message history...</div>
-                </div>
-              ) : allMessages && allMessages.length > 0 ? (
-                <>
-                  <Table
-                    dataSource={allMessages}
-                    columns={messageColumns}
-                    rowKey="id"
-                    pagination={false}
-                    size="small"
-                  />
-
-                  {messageHistory?.next_cursor && (
-                    <div className="flex justify-center mt-4 mb-8">
-                      <Button size="small" onClick={handleLoadMore} loading={isLoadingMore}>
-                        Load More
-                      </Button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="No messages found for this contact"
-                  style={{ margin: '40px 0' }}
-                />
-              )}
+              <MessageHistoryTable
+                messages={allMessages}
+                loading={loadingMessages}
+                isLoadingMore={isLoadingMore}
+                workspaceTimezone={workspaceTimezone}
+                nextCursor={messageHistory?.next_cursor}
+                onLoadMore={handleLoadMore}
+                show_email={false} // Hide email since we're in contact details
+                size="small"
+              />
             </div>
           </div>
         </div>

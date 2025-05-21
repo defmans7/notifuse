@@ -3,7 +3,7 @@ import { Input, Drawer, List, Empty, Spin, Button } from 'antd'
 import { EyeOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
-import type { Template } from '../../services/api/types'
+import type { Template, Workspace } from '../../services/api/types'
 import TemplatePreviewPopover from './TemplatePreviewDrawer'
 import { CreateTemplateDrawer } from './CreateTemplateDrawer'
 import { useAuth } from '../../contexts/AuthContext'
@@ -117,6 +117,10 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
     }, 500)
   }
 
+  if (!currentWorkspace) {
+    return <div>Loading...</div>
+  }
+
   return (
     <>
       <Input
@@ -129,8 +133,9 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
           onChange?.(null)
         }}
         addonAfter={
-          selectedTemplate && (
-            <TemplatePreviewPopover record={selectedTemplate} workspaceId={workspaceId}>
+          selectedTemplate &&
+          currentWorkspace && (
+            <TemplatePreviewPopover record={selectedTemplate} workspace={currentWorkspace}>
               <EyeOutlined style={{ cursor: 'pointer' }} />
             </TemplatePreviewPopover>
           )
@@ -182,7 +187,11 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
             renderItem={(template) => (
               <List.Item
                 actions={[
-                  <TemplatePreviewPopover key="preview" record={template} workspaceId={workspaceId}>
+                  <TemplatePreviewPopover
+                    key="preview"
+                    record={template}
+                    workspace={currentWorkspace as Workspace}
+                  >
                     <Button type="text" icon={<EyeOutlined />} />
                   </TemplatePreviewPopover>,
                   currentWorkspace && (

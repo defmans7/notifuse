@@ -22,8 +22,7 @@ export interface VariationMetrics {
 
 // Define the EmailTemplate interface
 export interface EmailTemplate {
-  from_address: string
-  from_name: string
+  sender_id: string
   reply_to?: string
   subject: string
   subject_preview?: string
@@ -53,13 +52,7 @@ export interface Template {
 
 export interface BroadcastVariation {
   id: string
-  name: string
   template_id: string
-  subject: string
-  preview_text?: string
-  from_name: string
-  from_email: string
-  reply_to?: string
   metrics?: VariationMetrics
   template?: Template // Template joined from server when with_templates is true
 }

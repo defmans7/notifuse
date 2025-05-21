@@ -283,7 +283,7 @@ export function CreateTemplateDrawer({
           reply_to: template.email?.reply_to || undefined,
           subject: template.email?.subject || '',
           subject_preview: template.email?.subject_preview || '',
-          content: template.email?.mjml || '',
+          content: template.email?.visual_editor_tree || '',
           visual_editor_tree: template.email?.visual_editor_tree || createDefaultBlocks()
         },
         test_data: template.test_data || defaultTestData
@@ -299,7 +299,7 @@ export function CreateTemplateDrawer({
           reply_to: fromTemplate.email?.reply_to || undefined,
           subject: fromTemplate.email?.subject || '',
           subject_preview: fromTemplate.email?.subject_preview || '',
-          content: fromTemplate.email?.mjml || '',
+          content: fromTemplate.email?.visual_editor_tree || '',
           visual_editor_tree: fromTemplate.email?.visual_editor_tree || createDefaultBlocks()
         },
         test_data: fromTemplate.test_data || defaultTestData
@@ -608,6 +608,7 @@ export function CreateTemplateDrawer({
                             value: sender.id,
                             label: `${sender.name} <${sender.email}>`
                           }))}
+                          allowClear={true}
                         />
                       </Form.Item>
                     </Col>

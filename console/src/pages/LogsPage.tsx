@@ -31,6 +31,7 @@ import {
   faArrowRightFromBracket
 } from '@fortawesome/free-solid-svg-icons'
 import { getWebhookStatus } from '../services/api/webhook_registration'
+import { MessageHistoryTable } from '../components/messages/MessageHistoryTable'
 
 const { Title, Text } = Typography
 
@@ -372,96 +373,6 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
     )
   }
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-'
-    return dayjs(dateString).tz(timezone).format('YYYY-MM-DD HH:mm:ss')
-  }
-
-  const columns = [
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: MessageStatus) => (
-        <Tag
-          bordered={false}
-          color={statusConfig[status]?.color || 'default'}
-          icon={statusConfig[status]?.icon}
-        >
-          {statusConfig[status]?.label || status}
-        </Tag>
-      )
-    },
-    {
-      title: 'Channel',
-      dataIndex: 'channel',
-      key: 'channel',
-      render: (channel: string) => <Tag>{channel}</Tag>
-    },
-    {
-      title: 'Contact ID',
-      dataIndex: 'contact_email',
-      key: 'contact_email',
-      ellipsis: true
-    },
-    {
-      title: 'Template ID',
-      dataIndex: 'template_id',
-      key: 'template_id',
-      ellipsis: true
-    },
-    {
-      title: 'Sent At',
-      dataIndex: 'sent_at',
-      key: 'sent_at',
-      render: (date: string) => (
-        <Tooltip title={formatDate(date)}>{dayjs(date).tz(timezone).fromNow()}</Tooltip>
-      )
-    },
-    {
-      title: 'Last Update',
-      key: 'last_update',
-      render: (_: unknown, record: MessageHistory) => {
-        // Find the most recent timestamp
-        const timestamps = [
-          { label: 'Delivered', date: record.delivered_at },
-          { label: 'Failed', date: record.failed_at },
-          { label: 'Opened', date: record.opened_at },
-          { label: 'Clicked', date: record.clicked_at },
-          { label: 'Bounced', date: record.bounced_at },
-          { label: 'Complained', date: record.complained_at },
-          { label: 'Unsubscribed', date: record.unsubscribed_at }
-        ]
-          .filter((item) => item.date)
-          .sort((a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime())
-
-        if (timestamps.length === 0) {
-          return '-'
-        }
-
-        const latest = timestamps[0]
-        return (
-          <Tooltip title={`${latest.label}: ${formatDate(latest.date)}`}>
-            {dayjs(latest.date).tz(timezone).fromNow()}
-          </Tooltip>
-        )
-      }
-    },
-    {
-      title: 'Error',
-      dataIndex: 'error',
-      key: 'error',
-      render: (error?: string) =>
-        error ? (
-          <Tooltip title={error}>
-            <Tag bordered={false} color="red">
-              Error
-            </Tag>
-          </Tooltip>
-        ) : null
-    }
-  ]
-
   if (error) {
     return (
       <div>
@@ -471,43 +382,21 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
     )
   }
 
-  // Show empty state when there's no data and no loading
-  const showEmptyState = !isLoading && (!allMessages || allMessages.length === 0)
-
   return (
     <div>
       <div className="flex justify-between items-center my-6">{renderFilterButtons()}</div>
 
-      <Table
-        dataSource={allMessages}
-        columns={columns}
-        rowKey="id"
-        loading={isLoading && !isLoadingMore}
-        pagination={false}
-        locale={{
-          emptyText: showEmptyState
-            ? 'No messages found. Try adjusting your filters.'
-            : 'Loading...'
-        }}
-        expandable={{
-          expandedRowRender: (record: MessageHistory) => (
-            <div className="px-4">
-              <pre className="bg-gray-50 p-4 rounded">
-                {JSON.stringify(record.message_data, null, 2)}
-              </pre>
-            </div>
-          )
-        }}
-        className="border border-gray-200 rounded-md"
+      <MessageHistoryTable
+        messages={allMessages}
+        loading={isLoading}
+        isLoadingMore={isLoadingMore}
+        workspaceTimezone={timezone}
+        nextCursor={messagesData?.next_cursor}
+        onLoadMore={handleLoadMore}
+        show_email={true}
+        bordered={true}
+        size="middle"
       />
-
-      {messagesData?.next_cursor && (
-        <div className="flex justify-center mt-4 mb-8">
-          <Button onClick={handleLoadMore} loading={isLoadingMore}>
-            Load More
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

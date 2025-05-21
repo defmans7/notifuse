@@ -34,18 +34,19 @@ import SendTemplateModal from '../components/templates/SendTemplateModal'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { templatesApi } from '../services/api/template'
 import { usePrismjs } from '../components/email_editor/UI/Widgets/PrismJS'
+import { Workspace } from '../services/api/types'
 
 const { Title, Paragraph, Text } = Typography
 
 // Template preview component
-const TemplatePreview: React.FC<{ templateId: string; workspaceId: string }> = ({
+const TemplatePreview: React.FC<{ templateId: string; workspace: Workspace }> = ({
   templateId,
-  workspaceId
+  workspace
 }) => {
   const { data: templateData } = useQuery({
-    queryKey: ['template', workspaceId, templateId],
-    queryFn: () => templatesApi.get({ workspace_id: workspaceId, id: templateId }),
-    enabled: !!workspaceId && !!templateId
+    queryKey: ['template', workspace.id, templateId],
+    queryFn: () => templatesApi.get({ workspace_id: workspace.id, id: templateId }),
+    enabled: !!workspace.id && !!templateId
   })
 
   if (!templateData?.template) {
@@ -53,7 +54,7 @@ const TemplatePreview: React.FC<{ templateId: string; workspaceId: string }> = (
   }
 
   return (
-    <TemplatePreviewDrawer record={templateData.template} workspaceId={workspaceId}>
+    <TemplatePreviewDrawer record={templateData.template} workspace={workspace}>
       <Tooltip title="Preview template">
         <Button type="text" size="small" className="ml-2">
           <FontAwesomeIcon icon={faEye} style={{ opacity: 0.7 }} />
@@ -64,9 +65,9 @@ const TemplatePreview: React.FC<{ templateId: string; workspaceId: string }> = (
 }
 
 // Component for rendering channels
-const ChannelsList: React.FC<{ channels: ChannelTemplates; workspaceId?: string }> = ({
+const ChannelsList: React.FC<{ channels: ChannelTemplates; workspace: Workspace }> = ({
   channels,
-  workspaceId
+  workspace
 }) => {
   return (
     <Space direction="vertical" size="small">
@@ -75,8 +76,8 @@ const ChannelsList: React.FC<{ channels: ChannelTemplates; workspaceId?: string 
           <Tag bordered={false} color="blue">
             <FontAwesomeIcon icon={faEnvelope} style={{ opacity: 0.7 }} /> Email
           </Tag>
-          {channels.email.template_id && workspaceId && (
-            <TemplatePreview templateId={channels.email.template_id} workspaceId={workspaceId} />
+          {channels.email.template_id && workspace.id && (
+            <TemplatePreview templateId={channels.email.template_id} workspace={workspace} />
           )}
         </div>
       )}
@@ -164,6 +165,10 @@ export function TransactionalNotificationsPage() {
   const notifications = notificationsData?.notifications || []
   const hasNotifications = notifications.length > 0
 
+  if (!currentWorkspace) {
+    return <div>Loading...</div>
+  }
+
   const columns = [
     {
       title: 'Name / ID',
@@ -187,7 +192,7 @@ export function TransactionalNotificationsPage() {
       dataIndex: 'channels',
       key: 'channels',
       render: (channels: ChannelTemplates) => (
-        <ChannelsList channels={channels} workspaceId={workspaceId as string} />
+        <ChannelsList channels={channels} workspace={currentWorkspace} />
       )
     },
     {

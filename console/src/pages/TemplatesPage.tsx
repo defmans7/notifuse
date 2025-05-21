@@ -9,7 +9,8 @@ import {
   Popconfirm,
   message,
   Segmented,
-  Tag
+  Tag,
+  TableColumnType
 } from 'antd'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { templatesApi } from '../services/api/template'
@@ -126,7 +127,11 @@ export function TemplatesPage() {
     (integration) => integration.id === workspace.settings.transactional_email_provider_id
   )
 
-  const columns = [
+  if (!workspace) {
+    return <div>Loading...</div>
+  }
+
+  const columns: TableColumnType<Template>[] = [
     {
       title: 'Template',
       dataIndex: 'name',
@@ -251,7 +256,7 @@ export function TemplatesPage() {
           </Tooltip>
           <Tooltip title="Preview Template">
             <>
-              <TemplatePreviewDrawer record={record} workspaceId={workspaceId!}>
+              <TemplatePreviewDrawer record={record} workspace={workspace}>
                 <Button
                   type="text"
                   icon={<FontAwesomeIcon icon={faEye} style={{ opacity: 0.7 }} />}

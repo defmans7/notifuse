@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Button, Drawer, Form, Input, Space, App, Switch, Row, Col } from 'antd'
+import { Button, Drawer, Form, Input, Space, App, Row, Col } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   transactionalNotificationsApi,
