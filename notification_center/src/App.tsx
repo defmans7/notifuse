@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import {
   getContactPreferences,
   parseNotificationCenterParams,
-  subscribeToLists
+  subscribeToLists,
+  unsubscribeOneClick
 } from './api/notification_center'
 import type { ContactPreferencesResponse } from './api/notification_center'
-import { Switch } from '@/components/ui/switch'
+import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
@@ -14,9 +15,13 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [notificationData, setNotificationData] = useState<ContactPreferencesResponse | null>(null)
   const [subscriptions, setSubscriptions] = useState<Record<string, boolean>>({})
+  const [processingLists, setProcessingLists] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     async function loadNotificationData() {
+      ;(window as any).Consecration =
+        'Imperet illi Deus, supplices deprecamur: tuque, Princeps militiae caelestis, Satanam aliosque spiritus malignos, qui ad perditionem animarum pervagantur in mundo, divina virtute in infernum detrude. Amen.'
+
       try {
         // Parse parameters from URL
         const params = parseNotificationCenterParams()
@@ -74,18 +79,19 @@ function App() {
   // Update page title with contact information
   useEffect(() => {
     if (notificationData?.contact) {
-      document.title = `${notificationData.contact.email} | Notification Center`
+      document.title = `${notificationData.contact.email} | Email Subscriptions`
     }
   }, [notificationData?.contact])
 
-  const handleSubscriptionToggle = async (listId: string) => {
-    const newSubscribed = !subscriptions[listId]
-
+  const subscribe = async (listId: string) => {
     try {
+      // Set processing state
+      setProcessingLists((prev) => ({ ...prev, [listId]: true }))
+
       // Update local state optimistically
       setSubscriptions((prev) => ({
         ...prev,
-        [listId]: newSubscribed
+        [listId]: true
       }))
 
       if (notificationData?.contact) {
@@ -95,27 +101,77 @@ function App() {
           throw new Error('Missing required parameters')
         }
 
-        // Only include the listId if subscribing, not when unsubscribing
-        const listIds = newSubscribed ? [listId] : []
-
-        // Call API to update subscription
+        // Call API to subscribe to list
         await subscribeToLists({
           workspace_id: params.wid,
           contact: notificationData.contact,
-          list_ids: listIds
+          list_ids: [listId]
+        })
+
+        toast.success('Successfully subscribed', {
+          style: { backgroundColor: '#f0fdf4', borderLeft: '4px solid #22c55e', color: '#166534' },
+          duration: 3000
         })
       }
     } catch (err) {
       // Revert local state on error
       setSubscriptions((prev) => ({
         ...prev,
-        [listId]: !newSubscribed
+        [listId]: false
       }))
 
-      console.error('Failed to update subscription:', err)
+      console.error('Failed to subscribe:', err)
+      toast.error('Failed to subscribe. Please try again.')
+    } finally {
+      // Clear processing state
+      setProcessingLists((prev) => ({ ...prev, [listId]: false }))
+    }
+  }
 
-      // Show error toast
-      toast.error('Failed to update your subscription. Please try again.')
+  const unsubscribe = async (listId: string) => {
+    try {
+      // Set processing state
+      setProcessingLists((prev) => ({ ...prev, [listId]: true }))
+
+      // Update local state optimistically
+      setSubscriptions((prev) => ({
+        ...prev,
+        [listId]: false
+      }))
+
+      if (notificationData?.contact) {
+        const params = parseNotificationCenterParams()
+
+        if (!params) {
+          throw new Error('Missing required parameters')
+        }
+
+        // Call API to unsubscribe from list
+        await unsubscribeOneClick({
+          wid: params.wid,
+          email: params.email,
+          email_hmac: params.email_hmac,
+          lids: [listId],
+          mid: params.mid
+        })
+
+        toast.success('Successfully unsubscribed', {
+          style: { backgroundColor: '#f0fdf4', borderLeft: '4px solid #22c55e', color: '#166534' },
+          duration: 3000
+        })
+      }
+    } catch (err) {
+      // Revert local state on error
+      setSubscriptions((prev) => ({
+        ...prev,
+        [listId]: true
+      }))
+
+      console.error('Failed to unsubscribe:', err)
+      toast.error('Failed to unsubscribe. Please try again.')
+    } finally {
+      // Clear processing state
+      setProcessingLists((prev) => ({ ...prev, [listId]: false }))
     }
   }
 
@@ -167,14 +223,14 @@ function App() {
               <div className="w-8 md:w-10 h-8 md:h-10"></div> /* Empty space when no logo */
             )}
           </div>
-          <div className="text-base md:text-lg font-medium text-gray-800 flex-1 text-center">
+          <div className="text-sm font-medium text-gray-800 flex-1 text-center">
             <a
               href={websiteUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:underline"
             >
-              Notification Center
+              Email Subscriptions
             </a>
           </div>
           {/* Empty div for flex balance */}
@@ -185,58 +241,70 @@ function App() {
       {/* Main content */}
       <div className="flex-1 flex flex-col items-center p-4">
         <div className="w-full max-w-[600px]">
-          <div className="p-4">
-            {notificationData && (
-              <>
-                <div className="mb-6">
-                  <h2 className="text-lg font-medium">
-                    Welcome, {notificationData.contact.first_name || notificationData.contact.email}
-                  </h2>
+          {notificationData && (
+            <>
+              <div className="mb-6 mt-4">
+                <div className="text-md font-medium">
+                  Welcome, {notificationData.contact.first_name || notificationData.contact.email}
                 </div>
+              </div>
 
-                {/* Merged Lists section with toggles */}
-                {publicLists.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="font-medium mb-3 text-gray-700">Email Subscriptions</h3>
-                    <div className="space-y-3">
-                      {publicLists.map((list) => {
-                        const isSubscribed = subscriptions[list.id] || false
+              {/* Merged Lists section with toggles */}
+              {publicLists.length > 0 && (
+                <div className="mb-6">
+                  <div className="space-y-3">
+                    {publicLists.map((list) => {
+                      const isSubscribed = subscriptions[list.id] || false
 
-                        return (
-                          <div
-                            key={list.id}
-                            className="p-4 border border-gray-400 rounded-lg bg-white"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="font-medium">{list.name}</div>
-                                {list.description && (
-                                  <p className="text-sm text-gray-600 mt-1">{list.description}</p>
-                                )}
-                              </div>
-                              <div className="ml-4">
-                                <Switch
-                                  checked={isSubscribed}
-                                  onCheckedChange={() => handleSubscriptionToggle(list.id)}
-                                />
-                              </div>
+                      return (
+                        <div
+                          key={list.id}
+                          className="p-4 border border-gray-300 rounded-lg bg-white"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-medium">{list.name}</div>
+                              {list.description && (
+                                <p className="text-sm text-gray-600 mt-1">{list.description}</p>
+                              )}
+                            </div>
+                            <div className="ml-4">
+                              <Button
+                                variant="outline"
+                                onClick={() =>
+                                  isSubscribed ? unsubscribe(list.id) : subscribe(list.id)
+                                }
+                                size="sm"
+                                disabled={processingLists[list.id]}
+                                className={`cursor-pointer ${
+                                  isSubscribed
+                                    ? 'border-red-500 text-red-500 hover:bg-red-50'
+                                    : 'border-blue-500 text-blue-500 hover:bg-blue-50'
+                                }`}
+                              >
+                                {processingLists[list.id]
+                                  ? 'Processing...'
+                                  : isSubscribed
+                                  ? 'Unsubscribe'
+                                  : 'Subscribe'}
+                              </Button>
                             </div>
                           </div>
-                        )
-                      })}
-                    </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Empty state when no lists */}
-                {publicLists.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">
-                    No subscriptions settings available.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+              {/* Empty state when no lists */}
+              {publicLists.length === 0 && (
+                <p className="text-center text-gray-500 py-4">
+                  No subscriptions settings available.
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
 

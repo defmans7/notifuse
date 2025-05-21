@@ -118,3 +118,21 @@ export async function subscribeToLists(
 ): Promise<SubscribeResponse> {
   return api.post<SubscribeResponse>('/subscribe', request)
 }
+
+export interface UnsubscribeFromListsRequest {
+  wid: string
+  email: string
+  email_hmac: string
+  lids: string[]
+  mid?: string
+}
+
+export interface UnsubscribeResponse {
+  success: boolean
+}
+
+export async function unsubscribeOneClick(
+  request: UnsubscribeFromListsRequest
+): Promise<UnsubscribeResponse> {
+  return api.post<UnsubscribeResponse>('/unsubscribe-oneclick', request)
+}

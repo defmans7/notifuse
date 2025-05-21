@@ -172,11 +172,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 			return fmt.Errorf("failed to authenticate user: %w", err)
 		}
 		isAuthenticated = true
-	} else {
-		// verify contact hmac
-		if payload.Contact.EmailHMAC == "" {
-			return fmt.Errorf("email_hmac is required")
-		}
+	} else if payload.Contact.EmailHMAC != "" {
 
 		secretKey := workspace.Settings.SecretKey
 		if !domain.VerifyEmailHMAC(payload.Contact.Email, payload.Contact.EmailHMAC, secretKey) {

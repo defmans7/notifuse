@@ -513,10 +513,37 @@ func TestListService_SubscribeToLists(t *testing.T) {
 	})
 
 	t.Run("subscribe with double opt-in (unauthenticated user)", func(t *testing.T) {
-		// Setup for double opt-in test
+		// Setup for double opt-in test with unauthenticated user (no HMAC)
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
 
-		// For unauthenticated case, we need to set isAuthenticated to false
+		// Now we expect GetContactByEmail to be called to check if contact exists
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, "test@example.com").Return(nil, nil)
+
+		// Since contact doesn't exist, UpsertContact should be called
+		mockContactRepo.EXPECT().UpsertContact(gomock.Any(), workspaceID, gomock.Any()).Return(true, nil)
+
+		// GetLists should be called
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
+			{
+				ID:            "list123",
+				Name:          "Test List",
+				IsPublic:      true,
+				IsDoubleOptin: true, // Important: this is a double opt-in list
+				CreatedAt:     time.Now(),
+				UpdatedAt:     time.Now(),
+			},
+		}, nil)
+
+		// AddContactToList should be called with status=pending since this is a double opt-in list
+		mockContactListRepo.EXPECT().AddContactToList(gomock.Any(), workspaceID, gomock.Any()).
+			Do(func(_ context.Context, _ string, contactList *domain.ContactList) {
+				assert.Equal(t, domain.ContactListStatusPending, contactList.Status)
+			}).Return(nil)
+
+		// No marketing provider configured, so we stop here
+		workspace.Settings.MarketingEmailProviderID = ""
+
+		// For unauthenticated case with double opt-in
 		unauthPayload := &domain.SubscribeToListsRequest{
 			WorkspaceID: workspaceID,
 			Contact: domain.Contact{
@@ -528,10 +555,9 @@ func TestListService_SubscribeToLists(t *testing.T) {
 			ListIDs: []string{"list123"},
 		}
 
-		// Verify we get the email_hmac error
+		// The function should now succeed without checking for email_hmac
 		err := service.SubscribeToLists(ctx, unauthPayload, false)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "email_hmac is required")
+		assert.NoError(t, err)
 	})
 
 	t.Run("subscribe with existing contact (check canUpsert logic)", func(t *testing.T) {
@@ -649,12 +675,16 @@ func TestListService_SubscribeToLists(t *testing.T) {
 	})
 
 	t.Run("error - missing HMAC", func(t *testing.T) {
-		// Create unauthenticated payload for public frontend (missing EmailHMAC)
-		unauthPayload := &domain.SubscribeToListsRequest{
+		// This test is now obsolete since the service no longer requires HMAC
+		// Updating to test a different scenario - verification fails when HMAC is provided but invalid
+
+		// Create payload with invalid HMAC
+		invalidHmacPayload := &domain.SubscribeToListsRequest{
 			WorkspaceID: workspaceID,
 			Contact: domain.Contact{
 				Email: "test@example.com",
-				// No EmailHMAC to test the error case
+				// Provide invalid HMAC
+				EmailHMAC: "invalid-hmac-value",
 				FirstName: &domain.NullableString{String: "Test", IsNull: false},
 				LastName:  &domain.NullableString{String: "User", IsNull: false},
 			},
@@ -663,9 +693,9 @@ func TestListService_SubscribeToLists(t *testing.T) {
 
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
 
-		err := service.SubscribeToLists(ctx, unauthPayload, false)
-		assert.Error(t, err) // Should fail due to missing HMAC for unauthenticated request
-		assert.Contains(t, err.Error(), "email_hmac is required")
+		err := service.SubscribeToLists(ctx, invalidHmacPayload, false)
+		assert.Error(t, err) // Should fail due to invalid HMAC verification
+		assert.Contains(t, err.Error(), "invalid email verification")
 	})
 
 	t.Run("error - workspace not found", func(t *testing.T) {
