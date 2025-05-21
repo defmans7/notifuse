@@ -188,7 +188,7 @@ func TestMessageHistory(t *testing.T) {
 	assert.Equal(t, "contact456", message.ContactEmail)
 	assert.Equal(t, "broadcast123", *message.BroadcastID)
 	assert.Equal(t, "template789", message.TemplateID)
-	assert.Equal(t, 1, message.TemplateVersion)
+	assert.Equal(t, int64(1), message.TemplateVersion)
 	assert.Equal(t, "email", message.Channel)
 	assert.Equal(t, MessageStatusSent, message.Status)
 	assert.Equal(t, now, message.SentAt)

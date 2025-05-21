@@ -13,7 +13,7 @@ test-handler:
 	go test -v ./internal/http
 
 test-service:
-	go test -v ./internal/service
+	go test -v ./internal/service ./internal/service/broadcast
 
 test-repo:
 	go test -v ./internal/repository
