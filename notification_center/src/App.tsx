@@ -5,7 +5,7 @@ import {
   subscribeToLists,
   unsubscribeOneClick
 } from './api/notification_center'
-import type { ContactPreferencesResponse } from './api/notification_center'
+import type { ContactPreferencesResponse, List } from './api/notification_center'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
@@ -16,6 +16,7 @@ function App() {
   const [notificationData, setNotificationData] = useState<ContactPreferencesResponse | null>(null)
   const [subscriptions, setSubscriptions] = useState<Record<string, boolean>>({})
   const [processingLists, setProcessingLists] = useState<Record<string, boolean>>({})
+  const [allLists, setAllLists] = useState<Array<List & { status?: string }>>([])
 
   useEffect(() => {
     async function loadNotificationData() {
@@ -42,14 +43,52 @@ function App() {
 
         // Initialize subscriptions state
         const initialSubscriptions: Record<string, boolean> = {}
-        if (data.contact_lists && data.public_lists) {
-          data.public_lists.forEach((list) => {
-            const contactList = data.contact_lists?.find((cl) => cl.list_id === list.id)
-            initialSubscriptions[list.id] = contactList?.subscribed || false
+
+        // Combine public lists and contact-specific lists
+        const combinedLists: Array<List & { status?: string }> = []
+
+        // Process all contact lists to get status
+        if (data.contact_lists) {
+          data.contact_lists.forEach((contactList) => {
+            // Set subscription status based on contact list status
+            initialSubscriptions[contactList.list_id] = contactList.status === 'active'
+
+            // Try to find this list in public lists to get name and description
+            const publicList = data.public_lists?.find((list) => list.id === contactList.list_id)
+
+            if (publicList) {
+              // For lists in both contact_lists and public_lists
+              combinedLists.push({
+                ...publicList,
+                status: contactList.status
+              })
+            } else {
+              // For lists only in contact_lists (private lists)
+              combinedLists.push({
+                id: contactList.list_id,
+                name: contactList.list_name || `List ${contactList.list_id}`,
+                status: contactList.status
+              })
+            }
           })
         }
-        setSubscriptions(initialSubscriptions)
 
+        // Add public lists that aren't in contact_lists
+        if (data.public_lists) {
+          data.public_lists.forEach((list) => {
+            const existingList = combinedLists.find((l) => l.id === list.id)
+            if (!existingList) {
+              combinedLists.push({
+                ...list,
+                status: 'unsubscribed' // Default status for public lists not in contact_lists
+              })
+              initialSubscriptions[list.id] = false
+            }
+          })
+        }
+
+        setAllLists(combinedLists)
+        setSubscriptions(initialSubscriptions)
         setLoading(false)
       } catch (err) {
         console.error('Failed to load notification center data:', err)
@@ -94,6 +133,11 @@ function App() {
         [listId]: true
       }))
 
+      // Also update list status if possible
+      setAllLists((prev) =>
+        prev.map((list) => (list.id === listId ? { ...list, status: 'active' } : list))
+      )
+
       if (notificationData?.contact) {
         const params = parseNotificationCenterParams()
 
@@ -120,6 +164,11 @@ function App() {
         [listId]: false
       }))
 
+      // Revert list status
+      setAllLists((prev) =>
+        prev.map((list) => (list.id === listId ? { ...list, status: 'unsubscribed' } : list))
+      )
+
       console.error('Failed to subscribe:', err)
       toast.error('Failed to subscribe. Please try again.')
     } finally {
@@ -138,6 +187,11 @@ function App() {
         ...prev,
         [listId]: false
       }))
+
+      // Also update list status if possible
+      setAllLists((prev) =>
+        prev.map((list) => (list.id === listId ? { ...list, status: 'unsubscribed' } : list))
+      )
 
       if (notificationData?.contact) {
         const params = parseNotificationCenterParams()
@@ -166,6 +220,11 @@ function App() {
         ...prev,
         [listId]: true
       }))
+
+      // Revert list status
+      setAllLists((prev) =>
+        prev.map((list) => (list.id === listId ? { ...list, status: 'active' } : list))
+      )
 
       console.error('Failed to unsubscribe:', err)
       toast.error('Failed to unsubscribe. Please try again.')
@@ -200,8 +259,6 @@ function App() {
     )
   }
 
-  // Safe array access with defaults
-  const publicLists = notificationData?.public_lists || []
   const websiteUrl = notificationData?.website_url || '#'
 
   return (
@@ -249,21 +306,34 @@ function App() {
                 </div>
               </div>
 
-              {/* Merged Lists section with toggles */}
-              {publicLists.length > 0 && (
+              {/* All Lists section with toggles - showing both public and private lists */}
+              {allLists.length > 0 && (
                 <div className="mb-6">
                   <div className="space-y-3">
-                    {publicLists.map((list) => {
+                    {allLists.map((list) => {
                       const isSubscribed = subscriptions[list.id] || false
+                      const isActive = list.status === 'active'
+                      const canToggle = list.status !== 'bounced' && list.status !== 'complained'
 
                       return (
                         <div
                           key={list.id}
-                          className="p-4 border border-gray-300 rounded-lg bg-white"
+                          className={`p-4 border border-gray-300 rounded-lg ${
+                            isActive ? 'bg-white' : 'bg-gray-50'
+                          }`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
-                              <div className="font-medium">{list.name}</div>
+                              <div className="font-medium">
+                                {list.name}
+                                {list.status &&
+                                  list.status !== 'active' &&
+                                  list.status !== 'unsubscribed' && (
+                                    <span className="ml-2 text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded-full">
+                                      {list.status}
+                                    </span>
+                                  )}
+                              </div>
                               {list.description && (
                                 <p className="text-sm text-gray-600 mt-1">{list.description}</p>
                               )}
@@ -275,15 +345,19 @@ function App() {
                                   isSubscribed ? unsubscribe(list.id) : subscribe(list.id)
                                 }
                                 size="sm"
-                                disabled={processingLists[list.id]}
+                                disabled={processingLists[list.id] || !canToggle}
                                 className={`cursor-pointer ${
-                                  isSubscribed
+                                  !canToggle
+                                    ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                                    : isSubscribed
                                     ? 'border-red-500 text-red-500 hover:bg-red-50'
                                     : 'border-blue-500 text-blue-500 hover:bg-blue-50'
                                 }`}
                               >
                                 {processingLists[list.id]
                                   ? 'Processing...'
+                                  : !canToggle
+                                  ? list.status
                                   : isSubscribed
                                   ? 'Unsubscribe'
                                   : 'Subscribe'}
@@ -298,7 +372,7 @@ function App() {
               )}
 
               {/* Empty state when no lists */}
-              {publicLists.length === 0 && (
+              {allLists.length === 0 && (
                 <p className="text-center text-gray-500 py-4">
                   No subscriptions settings available.
                 </p>

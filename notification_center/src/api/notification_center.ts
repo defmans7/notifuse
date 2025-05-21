@@ -31,8 +31,13 @@ export interface List {
 }
 
 export interface ContactList {
+  email: string
   list_id: string
-  subscribed: boolean
+  list_name: string
+  status: string
+  created_at: string
+  updated_at: string
+  deleted_at?: string
 }
 
 export interface TransactionalNotification {
