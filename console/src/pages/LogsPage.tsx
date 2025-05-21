@@ -1,22 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Typography,
-  Space,
-  Tabs,
-  Table,
-  Tag,
-  Button,
-  Select,
-  Input,
-  Card,
-  Tooltip,
-  Popover
-} from 'antd'
+import { Typography, Space, Tabs, Table, Tag, Button, Select, Input, Card, Popover } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { listMessages, MessageHistory, MessageStatus } from '../services/api/messages_history'
 import { useAuth } from '../contexts/AuthContext'
-import dayjs from '../lib/dayjs'
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faEnvelope,
@@ -160,10 +147,9 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
 
   // Find the current workspace from the workspaces array
   const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
-  const timezone = currentWorkspace?.settings.timezone || 'UTC'
 
   // Load initial filters from URL on mount
-  React.useEffect(() => {
+  useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
     const initialFilters: Filter[] = []
 
@@ -382,6 +368,10 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
     )
   }
 
+  if (!currentWorkspace) {
+    return <div>Loading...</div>
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center my-6">{renderFilterButtons()}</div>
@@ -390,7 +380,7 @@ const MessagesHistoryTab: React.FC<{ workspaceId: string }> = ({ workspaceId }) 
         messages={allMessages}
         loading={isLoading}
         isLoadingMore={isLoadingMore}
-        workspaceTimezone={timezone}
+        workspace={currentWorkspace}
         nextCursor={messagesData?.next_cursor}
         onLoadMore={handleLoadMore}
         show_email={true}

@@ -85,7 +85,6 @@ export function UpsertBroadcastDrawer({
   const [loading, setLoading] = useState(false)
   const { message, modal } = App.useApp()
   const [formTouched, setFormTouched] = useState(false)
-  const trackingEnabled = workspace.settings?.email_tracking_enabled || false
 
   // Watch campaign name changes using Form.useWatch
   const campaignName = Form.useWatch('name', form)
@@ -154,7 +153,6 @@ export function UpsertBroadcastDrawer({
         name: broadcast.name,
         audience: broadcast.audience,
         test_settings: broadcast.test_settings,
-        tracking_enabled: broadcast.tracking_enabled,
         utm_parameters: broadcast.utm_parameters || undefined,
         metadata: broadcast.metadata || undefined
       })
@@ -183,7 +181,6 @@ export function UpsertBroadcastDrawer({
             }
           ]
         },
-        tracking_enabled: true,
         utm_parameters: {
           source: websiteTLD || undefined,
           medium: 'email'
@@ -401,7 +398,7 @@ export function UpsertBroadcastDrawer({
                     Template
                   </div>
 
-                  {!trackingEnabled && (
+                  {!workspace.settings?.email_tracking_enabled && (
                     <Alert
                       description="Tracking (opens & clicks) must be enabled in workspace settings to use A/B testing features."
                       type="info"
@@ -415,7 +412,7 @@ export function UpsertBroadcastDrawer({
                     label="Enable A/B Testing"
                     valuePropName="checked"
                   >
-                    <Switch disabled={!trackingEnabled} />
+                    <Switch disabled={!workspace.settings?.email_tracking_enabled} />
                   </Form.Item>
 
                   <Form.Item
@@ -449,12 +446,15 @@ export function UpsertBroadcastDrawer({
                                   valuePropName="checked"
                                   tooltip="Tracking (opens & clicks) should be enabled in your workspace settings to use this feature"
                                 >
-                                  <Switch disabled={!trackingEnabled} />
+                                  <Switch disabled={!workspace.settings?.email_tracking_enabled} />
                                 </Form.Item>
                               </Col>
                             </Row>
 
-                            <ABTestingConfig form={form} trackingEnabled={trackingEnabled} />
+                            <ABTestingConfig
+                              form={form}
+                              trackingEnabled={workspace.settings?.email_tracking_enabled}
+                            />
 
                             {/* Variations management will be added here */}
                             <div className="text-xs mt-4 mb-4 font-bold border-b border-solid pb-2 border-gray-400 text-gray-900">

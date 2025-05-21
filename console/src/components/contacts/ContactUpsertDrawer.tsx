@@ -23,8 +23,8 @@ import { CountriesFormOptions, TimezonesFormOptions } from '../utils/countries_t
 import { Languages } from '../utils/languages'
 import { Contact, UpsertContactOperationAction } from '../../services/api/contacts'
 import { contactsApi } from '../../services/api/contacts'
-import { useQueryClient } from '@tanstack/react-query'
 import dayjs from '../../lib/dayjs'
+import { Workspace } from '../../services/api/types'
 
 const { Option } = Select
 const { Text } = Typography
@@ -160,7 +160,7 @@ const optionalFields = [
 ]
 
 interface ContactUpsertDrawerProps {
-  workspaceId: string
+  workspace: Workspace
   contact?: Contact
   onSuccess?: (updatedContact: Contact) => void
   buttonProps?: {
@@ -179,7 +179,7 @@ interface ContactUpsertDrawerProps {
 }
 
 export function ContactUpsertDrawer({
-  workspaceId,
+  workspace,
   contact,
   onSuccess,
   buttonProps
@@ -189,7 +189,6 @@ export function ContactUpsertDrawer({
   const [selectedFieldToAdd, setSelectedFieldToAdd] = React.useState<string | null>(null)
   const [form] = Form.useForm()
   const [loading, setLoading] = React.useState(false)
-  const queryClient = useQueryClient()
   const { message } = App.useApp()
 
   React.useEffect(() => {
@@ -243,7 +242,7 @@ export function ContactUpsertDrawer({
       setLoading(true)
       const contactData = {
         ...values,
-        workspace_id: workspaceId
+        workspace_id: workspace.id
       }
 
       // Convert dayjs objects to strings for API submission and parse JSON
@@ -267,7 +266,7 @@ export function ContactUpsertDrawer({
       })
 
       const response = await contactsApi.upsert({
-        workspace_id: workspaceId,
+        workspace_id: workspace.id,
         contact: contactData
       })
 
@@ -289,7 +288,7 @@ export function ContactUpsertDrawer({
         // After successful addition, fetch the latest contact data to pass to the parent
         contactsApi
           .list({
-            workspace_id: workspaceId,
+            workspace_id: workspace.id,
             email: contact?.email,
             with_contact_lists: true,
             limit: 1

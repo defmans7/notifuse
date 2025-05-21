@@ -243,6 +243,10 @@ export function ContactsPage() {
     workspaceId
   ])
 
+  if (!currentWorkspace) {
+    return <div>Loading...</div>
+  }
+
   const columns: ColumnsType<Contact> = [
     {
       title: 'Email',
@@ -573,10 +577,9 @@ export function ContactsPage() {
       render: (_: unknown, record: Contact) => (
         <Space size="small">
           <ContactDetailsDrawer
-            workspaceId={workspaceId}
+            workspace={currentWorkspace}
             contactEmail={record.email}
             lists={listsData?.lists || []}
-            workspaceTimezone={workspaceTimezone}
             key={record.email}
             onContactUpdate={(updatedContact) => {
               // Update the contact in the allContacts array
@@ -616,7 +619,7 @@ export function ContactsPage() {
         <Space>
           <ImportContactsButton lists={listsData?.lists || []} workspaceId={workspaceId} />
           <ContactUpsertDrawer
-            workspaceId={workspaceId}
+            workspace={currentWorkspace}
             buttonProps={{
               buttonContent: 'Create Contact'
             }}

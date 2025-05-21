@@ -17,7 +17,7 @@ import {
   App
 } from 'antd'
 import { Contact } from '../../services/api/contacts'
-import { List } from '../../services/api/types'
+import { List, Workspace } from '../../services/api/types'
 import dayjs from '../../lib/dayjs'
 import numbro from 'numbro'
 import { ContactUpsertDrawer } from './ContactUpsertDrawer'
@@ -41,12 +41,11 @@ import { MessageHistoryTable } from '../messages/MessageHistoryTable'
 const { Title, Text } = Typography
 
 interface ContactDetailsDrawerProps {
-  workspaceId: string
+  workspace: Workspace
   contactEmail: string
   visible?: boolean
   onClose?: () => void
   lists?: List[]
-  workspaceTimezone?: string
   onContactUpdate?: (contact: Contact) => void
   buttonProps: {
     type?: 'primary' | 'default' | 'dashed' | 'link' | 'text'
@@ -72,12 +71,11 @@ interface ContactListWithName {
 }
 
 export function ContactDetailsDrawer({
-  workspaceId,
+  workspace,
   contactEmail,
   visible: externalVisible,
   onClose: externalOnClose,
   lists = [],
-  workspaceTimezone = 'UTC',
   onContactUpdate,
   buttonProps
 }: ContactDetailsDrawerProps) {
@@ -118,9 +116,9 @@ export function ContactDetailsDrawer({
 
   // Load message history for this contact
   const { data: messageHistory, isLoading: loadingMessages } = useQuery({
-    queryKey: ['message_history', workspaceId, contactEmail, currentCursor],
+    queryKey: ['message_history', workspace.id, contactEmail, currentCursor],
     queryFn: () =>
-      listMessages(workspaceId, {
+      listMessages(workspace.id, {
         contact_email: contactEmail,
         limit: 5,
         cursor: currentCursor
@@ -157,10 +155,10 @@ export function ContactDetailsDrawer({
 
   // Fetch the single contact to ensure we have the latest data
   const { data: contact, isLoading: isLoadingContact } = useQuery({
-    queryKey: ['contact_details', workspaceId, contactEmail],
+    queryKey: ['contact_details', workspace.id, contactEmail],
     queryFn: async () => {
       const response = await contactsApi.list({
-        workspace_id: workspaceId,
+        workspace_id: workspace.id,
         email: contactEmail,
         with_contact_lists: true,
         limit: 1
@@ -176,15 +174,15 @@ export function ContactDetailsDrawer({
     mutationFn: (params: UpdateContactListStatusRequest) => contactListApi.updateStatus(params),
     onSuccess: () => {
       messageApi.success('Subscription status updated successfully')
-      queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contactEmail] })
-      queryClient.invalidateQueries({ queryKey: ['contacts', workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['contact_details', workspace.id, contactEmail] })
+      queryClient.invalidateQueries({ queryKey: ['contacts', workspace.id] })
       setStatusModalVisible(false)
       statusForm.resetFields()
 
       // After successful update, fetch the latest contact data to pass to the parent
       contactsApi
         .list({
-          workspace_id: workspaceId,
+          workspace_id: workspace.id,
           email: contactEmail,
           with_contact_lists: true,
           limit: 1
@@ -205,14 +203,14 @@ export function ContactDetailsDrawer({
     mutationFn: (params: SubscribeToListsRequest) => listsApi.subscribe(params),
     onSuccess: () => {
       messageApi.success('Contact added to list successfully')
-      queryClient.invalidateQueries({ queryKey: ['contact_details', workspaceId, contactEmail] })
+      queryClient.invalidateQueries({ queryKey: ['contact_details', workspace.id, contactEmail] })
       setSubscribeModalVisible(false)
       subscribeForm.resetFields()
 
       // After successful addition, fetch the latest contact data to pass to the parent
       contactsApi
         .list({
-          workspace_id: workspaceId,
+          workspace_id: workspace.id,
           email: contactEmail,
           with_contact_lists: true,
           limit: 1
@@ -231,7 +229,7 @@ export function ContactDetailsDrawer({
   const handleContactUpdated = async (updatedContact: Contact) => {
     // Invalidate both the contact details
     await queryClient.invalidateQueries({
-      queryKey: ['contact_details', workspaceId, contactEmail]
+      queryKey: ['contact_details', workspace.id, contactEmail]
     })
     // Call the onContactUpdate prop if it exists and we have the contact data
     if (onContactUpdate && updatedContact) {
@@ -259,7 +257,7 @@ export function ContactDetailsDrawer({
     if (!selectedList) return
 
     updateStatusMutation.mutate({
-      workspace_id: workspaceId,
+      workspace_id: workspace.id,
       email: contactEmail,
       list_id: selectedList.list_id,
       status: values.status
@@ -275,7 +273,7 @@ export function ContactDetailsDrawer({
   // Handle subscribe to list submission
   const handleSubscribe = (values: { list_id: string; status: string }) => {
     addToListMutation.mutate({
-      workspace_id: workspaceId,
+      workspace_id: workspace.id,
       contact: {
         email: contactEmail
       } as Contact,
@@ -365,7 +363,7 @@ export function ContactDetailsDrawer({
   // Format date using dayjs
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return '-'
-    return `${dayjs(dateString).format('lll')} in ${workspaceTimezone}`
+    return `${dayjs(dateString).format('lll')} in ${workspace.settings.timezone}`
   }
 
   // Format currency value using numbro
@@ -664,7 +662,7 @@ export function ContactDetailsDrawer({
         open={internalVisible}
         extra={
           <ContactUpsertDrawer
-            workspaceId={workspaceId}
+            workspace={workspace}
             contact={contact}
             onSuccess={handleContactUpdated}
             buttonProps={{
@@ -784,7 +782,7 @@ export function ContactDetailsDrawer({
               <Tooltip
                 title={
                   contact?.last_order_at
-                    ? `${dayjs(contact?.last_order_at).format('LLLL')} in ${workspaceTimezone}`
+                    ? `${dayjs(contact?.last_order_at).format('LLLL')} in ${workspace.settings.timezone}`
                     : 'No orders yet'
                 }
               >
@@ -857,7 +855,9 @@ export function ContactDetailsDrawer({
                       if (!date) return '-'
 
                       return (
-                        <Tooltip title={`${dayjs(date).format('LLLL')} in ${workspaceTimezone}`}>
+                        <Tooltip
+                          title={`${dayjs(date).format('LLLL')} in ${workspace.settings.timezone}`}
+                        >
                           <span>{dayjs(date).fromNow()}</span>
                         </Tooltip>
                       )
@@ -911,7 +911,7 @@ export function ContactDetailsDrawer({
                 messages={allMessages}
                 loading={loadingMessages}
                 isLoadingMore={isLoadingMore}
-                workspaceTimezone={workspaceTimezone}
+                workspace={workspace}
                 nextCursor={messageHistory?.next_cursor}
                 onLoadMore={handleLoadMore}
                 show_email={false} // Hide email since we're in contact details

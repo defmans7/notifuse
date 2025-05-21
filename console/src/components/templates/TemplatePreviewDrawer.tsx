@@ -10,12 +10,14 @@ const { Text } = Typography
 interface TemplatePreviewDrawerProps {
   record: Template
   workspace: Workspace
+  templateData?: Record<string, any>
   children: React.ReactNode
 }
 
 const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   record,
   workspace,
+  templateData,
   children
 }) => {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
@@ -76,8 +78,9 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
         workspace_id: workspace.id,
         message_id: 'preview',
         visual_editor_tree: treeObject as any,
-        test_data: record.test_data || {}
+        test_data: templateData || record.test_data || {}
       }
+
       // console.log('Compile Request:', req)
       const response = await templatesApi.compile(req)
       // console.log('Compile Response:', response)

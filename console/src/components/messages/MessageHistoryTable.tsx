@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { Table, Tag, Tooltip, Button, Spin, Empty, Popover, Badge } from 'antd'
+import React, { useState, useRef } from 'react'
+import { Table, Tag, Tooltip, Button, Spin, Empty, Popover, Badge, message } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faExclamationTriangle,
@@ -10,12 +10,17 @@ import {
   faArrowPointer,
   faBan,
   faTriangleExclamation,
-  faCode
+  faCode,
+  faFileLines
 } from '@fortawesome/free-solid-svg-icons'
 import { faFaceFrown } from '@fortawesome/free-regular-svg-icons'
 import dayjs from '../../lib/dayjs'
 import { MessageHistory, MessageStatus } from '../../services/api/messages_history'
 import { usePrismjs } from '../../components/email_editor/UI/Widgets/PrismJS'
+import TemplatePreviewDrawer from '../templates/TemplatePreviewDrawer'
+import { templatesApi } from '../../services/api/template'
+import { Workspace } from '../../services/api/types'
+import { useQuery } from '@tanstack/react-query'
 
 // Separate component for JSON data display
 const JsonDataViewer = ({ data }: { data: any }) => {
@@ -49,33 +54,81 @@ const JsonDataViewer = ({ data }: { data: any }) => {
   )
 }
 
+// Template preview button component that handles its own loading state
+interface TemplatePreviewButtonProps {
+  templateId: string
+  templateVersion?: number
+  workspace: Workspace
+  templateData: Record<string, any>
+}
+
+const TemplatePreviewButton: React.FC<TemplatePreviewButtonProps> = ({
+  templateId,
+  templateVersion,
+  workspace,
+  templateData
+}) => {
+  // Use React Query to fetch the template data
+  const { data, isLoading } = useQuery({
+    queryKey: ['template', workspace.id, templateId, templateVersion],
+    queryFn: async () => {
+      const response = await templatesApi.get({
+        workspace_id: workspace.id,
+        id: templateId,
+        version: templateVersion
+      })
+
+      if (!response.template) {
+        throw new Error('Failed to load template')
+      }
+
+      return response.template
+    },
+    enabled: !!workspace.id && !!templateId,
+    staleTime: 60 * 60 * 1000, // 1 hour
+    retry: 1
+  })
+
+  if (!data || isLoading) {
+    return null
+  }
+
+  return (
+    <TemplatePreviewDrawer record={data} workspace={workspace} templateData={templateData}>
+      <Tooltip title="Preview message">
+        <Button type="text" className="opacity-70" icon={<FontAwesomeIcon icon={faEye} />} />
+      </Tooltip>
+    </TemplatePreviewDrawer>
+  )
+}
+
 interface MessageHistoryTableProps {
   messages?: MessageHistory[]
   loading: boolean
   isLoadingMore: boolean
-  workspaceTimezone?: string
   nextCursor?: string
   onLoadMore: () => void
   show_email?: boolean
   bordered?: boolean
   size?: 'small' | 'middle' | 'large'
+  workspace: Workspace
 }
 
 export function MessageHistoryTable({
   messages = [],
   loading,
   isLoadingMore,
-  workspaceTimezone = 'UTC',
   nextCursor,
   onLoadMore,
   show_email = true,
   bordered = false,
-  size = 'small'
+  size = 'small',
+  workspace
 }: MessageHistoryTableProps) {
   // Format date using dayjs
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return '-'
-    return `${dayjs(dateString).format('lll')} in ${workspaceTimezone}`
+    return `${dayjs(dateString).format('lll')} in ${workspace.settings.timezone}`
   }
 
   // Status badge for message history
@@ -111,8 +164,15 @@ export function MessageHistoryTable({
     },
     {
       title: 'Template',
-      dataIndex: 'template_id',
-      key: 'template_id'
+      key: 'template_id',
+      render: (record: MessageHistory) => {
+        return (
+          <>
+            <span className="text-xs">{record.template_id}</span>
+            <span className="text-xs text-gray-500 pl-2">v{record.template_version}</span>
+          </>
+        )
+      }
     },
     {
       title: 'Broadcast',
@@ -248,8 +308,32 @@ export function MessageHistoryTable({
     render: (email: string) => <span className="text-xs">{email}</span>
   }
 
-  // Build columns array based on show_email prop
-  const columns = show_email ? [emailColumn, ...baseColumns] : baseColumns
+  // Add actions column
+  const actionsColumn = {
+    title: '',
+    key: 'actions',
+    width: 100,
+    render: (record: MessageHistory) => {
+      console.log('record', record)
+      if (!record.template_id) {
+        return null
+      }
+
+      return (
+        <TemplatePreviewButton
+          templateId={record.template_id}
+          templateVersion={record.template_version}
+          workspace={workspace}
+          templateData={record.message_data.data || {}}
+        />
+      )
+    }
+  }
+
+  // Build columns array based on show_email prop and add actions column
+  const columns = show_email
+    ? [emailColumn, ...baseColumns, actionsColumn]
+    : [...baseColumns, actionsColumn]
 
   if (loading && !isLoadingMore) {
     return (

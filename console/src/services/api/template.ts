@@ -34,10 +34,7 @@ export const templatesApi: TemplatesApi = {
     return response
   },
   get: async (params: GetTemplateRequest): Promise<GetTemplateResponse> => {
-    let url = `/api/templates.get?workspace_id=${params.workspace_id}&id=${params.id}`
-    if (params.version) {
-      url += `&version=${params.version}`
-    }
+    let url = `/api/templates.get?workspace_id=${params.workspace_id}&id=${params.id}&version=${params.version || 0}`
     const response = await api.get<GetTemplateResponse>(url)
     return response
   },
