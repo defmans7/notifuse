@@ -12,3 +12,5 @@ coverage.html
 coverage.out
 /api
 console/public/config.js
+
+notification_center/tsconfig.tsbuildinfo

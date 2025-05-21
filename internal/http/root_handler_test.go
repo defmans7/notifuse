@@ -14,24 +14,21 @@ import (
 )
 
 func TestNewRootHandler(t *testing.T) {
-	handler := NewRootHandler()
-	assert.NotNil(t, handler, "Root handler should not be nil")
-}
-
-func TestNewRootHandlerWithConsoleAndNotificationCenter(t *testing.T) {
 	// Create a test logger
 	testLogger := logger.NewLogger()
 
 	// Create handler with both console and notification center
-	handler := NewRootHandlerWithConsoleAndNotificationCenter("test_console_dir", "test_notification_center_dir", testLogger, "https://api.example.com")
+	handler := NewRootHandler("console_test", "notification_center_test", testLogger, "https://api.example.com")
 
 	// Assert fields are set correctly
-	assert.Equal(t, "test_console_dir", handler.consoleDir)
-	assert.Equal(t, "test_notification_center_dir", handler.notificationCenterDir)
+	assert.Equal(t, "console_test", handler.consoleDir)
+	assert.Equal(t, "notification_center_test", handler.notificationCenterDir)
 }
 
 func TestRootHandler_Handle(t *testing.T) {
-	handler := NewRootHandler()
+	// Create a test logger
+	testLogger := logger.NewLogger()
+	handler := NewRootHandler("console_test", "notification_center_test", testLogger, "https://api.example.com")
 
 	// Create a test request
 	req := httptest.NewRequest("GET", "/api", nil)
@@ -54,7 +51,10 @@ func TestRootHandler_Handle(t *testing.T) {
 }
 
 func TestRootHandler_RegisterRoutes(t *testing.T) {
-	handler := NewRootHandler()
+
+	// Create a test logger
+	testLogger := logger.NewLogger()
+	handler := NewRootHandler("console_test", "notification_center_test", testLogger, "https://api.example.com")
 	mux := http.NewServeMux()
 
 	// Register routes
@@ -86,7 +86,7 @@ func TestRootHandler_RegisterRoutesWithNotificationCenter(t *testing.T) {
 	testLogger := logger.NewLogger()
 
 	// Create handler with both console and notification center
-	handler := NewRootHandlerWithConsoleAndNotificationCenter("test_console_dir", "test_notification_center_dir", testLogger, "https://api.example.com")
+	handler := NewRootHandler("console_test", "notification_center_test", testLogger, "https://api.example.com")
 
 	mux := http.NewServeMux()
 
@@ -111,7 +111,7 @@ func TestRootHandler_ServeConfigJS(t *testing.T) {
 
 	// Create a handler with a test API endpoint
 	testAPIEndpoint := "https://api.example.com"
-	handler := NewRootHandlerWithConsole("test_console_dir", testLogger, testAPIEndpoint)
+	handler := NewRootHandler("console_test", "notification_center_test", testLogger, testAPIEndpoint)
 
 	// Create a request to /config.js
 	req := httptest.NewRequest("GET", "/config.js", nil)
@@ -142,7 +142,7 @@ func TestRootHandler_Handle_ConfigJS(t *testing.T) {
 
 	// Create a handler with a test API endpoint
 	testAPIEndpoint := "https://api.example.com"
-	handler := NewRootHandlerWithConsole("test_console_dir", testLogger, testAPIEndpoint)
+	handler := NewRootHandler("console_test", "notification_center_test", testLogger, testAPIEndpoint)
 
 	// Create a request to /config.js
 	req := httptest.NewRequest("GET", "/config.js", nil)
@@ -177,7 +177,7 @@ func TestRootHandler_ServeNotificationCenter(t *testing.T) {
 	testLogger := logger.NewLogger()
 
 	// Create handler with notification center directory
-	handler := NewRootHandlerWithConsoleAndNotificationCenter("", tempDir, testLogger, "https://api.example.com")
+	handler := NewRootHandler("console_test", tempDir, testLogger, "https://api.example.com")
 
 	t.Run("ServeExactPath", func(t *testing.T) {
 		// Create a request to /notification-center/
@@ -238,7 +238,7 @@ func TestRootHandler_ServeConsole(t *testing.T) {
 	testLogger := logger.NewLogger()
 
 	// Create handler with console directory
-	handler := NewRootHandlerWithConsole(tempDir, testLogger, "https://api.example.com")
+	handler := NewRootHandler(tempDir, "notification_center_test", testLogger, "https://api.example.com")
 
 	t.Run("ServeExactPath", func(t *testing.T) {
 		// Create a request to root (which should serve index.html)
@@ -315,7 +315,7 @@ func TestRootHandler_Handle_Comprehensive(t *testing.T) {
 	testLogger := logger.NewLogger()
 
 	// Create handler with both console and notification center
-	handler := NewRootHandlerWithConsoleAndNotificationCenter(
+	handler := NewRootHandler(
 		consoleDir,
 		notificationCenterDir,
 		testLogger,

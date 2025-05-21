@@ -17,21 +17,8 @@ type RootHandler struct {
 	apiEndpoint           string
 }
 
-func NewRootHandler() *RootHandler {
-	return &RootHandler{}
-}
-
-// NewRootHandlerWithConsole creates a root handler that also serves console static files
-func NewRootHandlerWithConsole(consoleDir string, logger logger.Logger, apiEndpoint string) *RootHandler {
-	return &RootHandler{
-		consoleDir:  consoleDir,
-		logger:      logger,
-		apiEndpoint: apiEndpoint,
-	}
-}
-
-// NewRootHandlerWithConsoleAndNotificationCenter creates a root handler that serves both console and notification center static files
-func NewRootHandlerWithConsoleAndNotificationCenter(consoleDir string, notificationCenterDir string, logger logger.Logger, apiEndpoint string) *RootHandler {
+// NewRootHandler creates a root handler that serves both console and notification center static files
+func NewRootHandler(consoleDir string, notificationCenterDir string, logger logger.Logger, apiEndpoint string) *RootHandler {
 	return &RootHandler{
 		consoleDir:            consoleDir,
 		notificationCenterDir: notificationCenterDir,

@@ -1,5 +1,5 @@
 # Stage 1: Build the React frontend
-FROM node:20-alpine AS frontend-builder
+FROM node:20-alpine AS console-frontend-builder
 
 # Set working directory for the frontend
 WORKDIR /build/console
@@ -16,7 +16,25 @@ COPY console/ ./
 # Build frontend in production mode
 RUN npm run build
 
-# Stage 2: Build the Go binary
+# Stage 2: Build the notification center frontend
+FROM node:20-alpine AS notification-center-builder
+
+# Set working directory for the notification center
+WORKDIR /build/notification_center
+
+# Copy notification center package files
+COPY notification_center/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy notification center source code
+COPY notification_center/ ./
+
+# Build notification center in production mode
+RUN npm run build
+
+# Stage 3: Build the Go binary
 FROM golang:1.23-alpine AS backend-builder
 
 # Set working directory
@@ -40,7 +58,7 @@ COPY pkg/ pkg/
 # Build the application
 RUN CGO_ENABLED=1 GOOS=linux go build -o /tmp/server ./cmd/api
 
-# Stage 3: Create the runtime container
+# Stage 4: Create the runtime container
 FROM alpine:latest
 
 # Add necessary runtime packages
@@ -48,13 +66,16 @@ RUN apk add --no-cache ca-certificates tzdata postgresql-client
 
 # Create application directory structure
 WORKDIR /app
-RUN mkdir -p /app/console/dist /app/data
+RUN mkdir -p /app/console/dist /app/notification_center/dist /app/data
 
 # Copy the binary from the builder stage
 COPY --from=backend-builder /tmp/server /app/server
 
 # Copy the built console files
-COPY --from=frontend-builder /build/console/dist/ /app/console/dist/
+COPY --from=console-frontend-builder /build/console/dist/ /app/console/dist/
+
+# Copy the built notification center files
+COPY --from=notification-center-builder /build/notification_center/dist/ /app/notification_center/dist/
 
 # Expose the application port
 EXPOSE 8080
