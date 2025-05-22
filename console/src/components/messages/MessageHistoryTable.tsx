@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react'
-import { Table, Tag, Tooltip, Button, Spin, Empty, Popover, Badge, message } from 'antd'
+import React from 'react'
+import { Table, Tag, Tooltip, Button, Spin, Empty, Badge } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faExclamationTriangle,
@@ -9,50 +9,15 @@ import {
   faEye,
   faArrowPointer,
   faBan,
-  faTriangleExclamation,
-  faCode,
-  faFileLines
+  faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons'
 import { faFaceFrown } from '@fortawesome/free-regular-svg-icons'
 import dayjs from '../../lib/dayjs'
 import { MessageHistory, MessageStatus } from '../../services/api/messages_history'
-import { usePrismjs } from '../../components/email_editor/UI/Widgets/PrismJS'
 import TemplatePreviewDrawer from '../templates/TemplatePreviewDrawer'
 import { templatesApi } from '../../services/api/template'
 import { Workspace } from '../../services/api/types'
 import { useQuery } from '@tanstack/react-query'
-
-// Separate component for JSON data display
-const JsonDataViewer = ({ data }: { data: any }) => {
-  const codeRef = useRef<HTMLDivElement>(null)
-  // Apply syntax highlighting
-  usePrismjs(codeRef, ['line-numbers'])
-
-  const prettyJson = JSON.stringify(data, null, 2)
-
-  return (
-    <div
-      ref={codeRef}
-      className="max-h-96 overflow-auto rounded"
-      style={{ maxWidth: '600px', minWidth: '400px' }}
-    >
-      <pre
-        className="line-numbers"
-        style={{
-          margin: '0',
-          borderRadius: '4px',
-          padding: 'O',
-          fontSize: '12px',
-          wordWrap: 'break-word',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'normal'
-        }}
-      >
-        <code className="language-json">{prettyJson}</code>
-      </pre>
-    </div>
-  )
-}
 
 // Template preview button component that handles its own loading state
 interface TemplatePreviewButtonProps {
@@ -274,29 +239,6 @@ export function MessageHistoryTable({
       render: (date: string) => {
         return <Tooltip title={formatDate(date)}>{dayjs(date).fromNow()}</Tooltip>
       }
-    },
-    {
-      title: 'Data',
-      key: 'json_data',
-      render: (record: MessageHistory) => {
-        const jsonData = record.message_data.data || {}
-
-        return (
-          <Popover
-            placement="left"
-            title="Message Data"
-            content={<JsonDataViewer data={jsonData} />}
-            trigger="click"
-          >
-            <Button
-              type="text"
-              className="opacity-70"
-              icon={<FontAwesomeIcon icon={faCode} />}
-              title="View JSON data"
-            />
-          </Popover>
-        )
-      }
     }
   ]
 
@@ -312,7 +254,7 @@ export function MessageHistoryTable({
   const actionsColumn = {
     title: '',
     key: 'actions',
-    width: 100,
+    width: 30,
     render: (record: MessageHistory) => {
       if (!record.template_id) {
         return null

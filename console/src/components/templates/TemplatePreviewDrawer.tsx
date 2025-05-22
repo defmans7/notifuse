@@ -147,6 +147,15 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
       children: <MJMLPreview previewMjml={previewMjml} />
     })
   }
+
+  // Add Template Data tab regardless of preview status
+  const testData = templateData || record.test_data || {}
+  items.push({
+    key: '3',
+    label: 'Template Data',
+    children: <JsonDataViewer data={testData} />
+  })
+
   const emailProvider = workspace.integrations?.find(
     (i) =>
       i.id ===
@@ -253,7 +262,8 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
           !error &&
           !mjmlError &&
           !previewHtml &&
-          !previewMjml && ( // Neither success nor error, initial or no data state
+          !previewMjml &&
+          items.length === 0 && ( // Neither success nor error, initial or no data state
             <div className="flex items-center justify-center flex-grow text-gray-500">
               No preview available or template is empty.
             </div>
@@ -283,6 +293,33 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   )
 }
 
+const JsonDataViewer = ({ data }: { data: any }) => {
+  const codeRef = useRef<HTMLDivElement>(null)
+  // Apply syntax highlighting
+  usePrismjs(codeRef, ['line-numbers'])
+
+  const prettyJson = JSON.stringify(data, null, 2)
+
+  return (
+    <div ref={codeRef} className="rounded" style={{ maxWidth: '100%' }}>
+      <pre
+        className="line-numbers"
+        style={{
+          margin: '0',
+          borderRadius: '4px',
+          padding: '10px',
+          fontSize: '12px',
+          wordWrap: 'break-word',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'normal'
+        }}
+      >
+        <code className="language-json">{prettyJson}</code>
+      </pre>
+    </div>
+  )
+}
+
 const MJMLPreview = ({ previewMjml }: { previewMjml: string }) => {
   const preRef = useRef<HTMLPreElement>(null)
   usePrismjs(preRef, ['line-numbers'])
@@ -295,7 +332,10 @@ const MJMLPreview = ({ previewMjml }: { previewMjml: string }) => {
         style={{
           fontSize: '12px',
           margin: 0,
-          padding: '10px'
+          padding: '10px',
+          wordWrap: 'break-word',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'normal'
         }}
       >
         <code className="language-xml">{previewMjml}</code>
