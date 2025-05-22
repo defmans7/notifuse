@@ -35,21 +35,6 @@ func (m *MockWebhookEventRepository) EXPECT() *MockWebhookEventRepositoryMockRec
 	return m.recorder
 }
 
-// GetEventCount mocks base method.
-func (m *MockWebhookEventRepository) GetEventCount(arg0 context.Context, arg1 string, arg2 domain.EmailEventType) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventCount", arg0, arg1, arg2)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEventCount indicates an expected call of GetEventCount.
-func (mr *MockWebhookEventRepositoryMockRecorder) GetEventCount(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventCount", reflect.TypeOf((*MockWebhookEventRepository)(nil).GetEventCount), arg0, arg1, arg2)
-}
-
 // ListEvents mocks base method.
 func (m *MockWebhookEventRepository) ListEvents(arg0 context.Context, arg1 string, arg2 domain.WebhookEventListParams) (*domain.WebhookEventListResult, error) {
 	m.ctrl.T.Helper()
@@ -65,16 +50,16 @@ func (mr *MockWebhookEventRepositoryMockRecorder) ListEvents(arg0, arg1, arg2 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEvents", reflect.TypeOf((*MockWebhookEventRepository)(nil).ListEvents), arg0, arg1, arg2)
 }
 
-// StoreEvent mocks base method.
-func (m *MockWebhookEventRepository) StoreEvent(arg0 context.Context, arg1 string, arg2 *domain.WebhookEvent) error {
+// StoreEvents mocks base method.
+func (m *MockWebhookEventRepository) StoreEvents(arg0 context.Context, arg1 string, arg2 []*domain.WebhookEvent) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StoreEvent", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "StoreEvents", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// StoreEvent indicates an expected call of StoreEvent.
-func (mr *MockWebhookEventRepositoryMockRecorder) StoreEvent(arg0, arg1, arg2 interface{}) *gomock.Call {
+// StoreEvents indicates an expected call of StoreEvents.
+func (mr *MockWebhookEventRepositoryMockRecorder) StoreEvents(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreEvent", reflect.TypeOf((*MockWebhookEventRepository)(nil).StoreEvent), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreEvents", reflect.TypeOf((*MockWebhookEventRepository)(nil).StoreEvents), arg0, arg1, arg2)
 }

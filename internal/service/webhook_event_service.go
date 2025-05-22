@@ -62,20 +62,21 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 			break
 		}
 	}
-	var event *domain.WebhookEvent
+	var events []*domain.WebhookEvent
+
 	switch integration.EmailProvider.Kind {
 	case domain.EmailProviderKindSES:
-		event, err = s.processSESWebhook(integration.ID, rawPayload)
+		events, err = s.processSESWebhook(integration.ID, rawPayload)
 	case domain.EmailProviderKindPostmark:
-		event, err = s.processPostmarkWebhook(integration.ID, rawPayload)
+		events, err = s.processPostmarkWebhook(integration.ID, rawPayload)
 	case domain.EmailProviderKindMailgun:
-		event, err = s.processMailgunWebhook(integration.ID, rawPayload)
+		events, err = s.processMailgunWebhook(integration.ID, rawPayload)
 	case domain.EmailProviderKindSparkPost:
-		event, err = s.processSparkPostWebhook(integration.ID, rawPayload)
+		events, err = s.processSparkPostWebhook(integration.ID, rawPayload)
 	case domain.EmailProviderKindMailjet:
-		event, err = s.processMailjetWebhook(integration.ID, rawPayload)
+		events, err = s.processMailjetWebhook(integration.ID, rawPayload)
 	case domain.EmailProviderKindSMTP:
-		event, err = s.processSMTPWebhook(integration.ID, rawPayload)
+		events, err = s.processSMTPWebhook(integration.ID, rawPayload)
 	default:
 		// codecov:ignore:start
 		tracing.MarkSpanError(ctx, fmt.Errorf("unsupported email provider kind: %s", integration.EmailProvider.Kind))
@@ -92,49 +93,52 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 
 	// Store the event
 	// No authentication needed for webhook events as they come from external providers
-	if err := s.repo.StoreEvent(ctx, workspaceID, event); err != nil {
-		s.logger.WithField("event_id", event.ID).
-			WithField("event_type", event.Type).
-			WithField("provider", event.EmailProviderKind).
-			Error(fmt.Sprintf("Failed to store webhook event: %v", err))
+	if err := s.repo.StoreEvents(ctx, workspaceID, events); err != nil {
 		// codecov:ignore:start
 		tracing.MarkSpanError(ctx, err)
 		// codecov:ignore:end
-		return fmt.Errorf("failed to store webhook event: %w", err)
+		return fmt.Errorf("failed to store webhook events: %w", err)
 	}
 
-	// Update message history status if we have a message ID
-	if event.MessageID != "" {
-		var status domain.MessageStatus
-		switch event.Type {
-		case domain.EmailEventDelivered:
-			status = domain.MessageStatusDelivered
-		case domain.EmailEventBounce:
-			status = domain.MessageStatusBounced
-		case domain.EmailEventComplaint:
-			status = domain.MessageStatusComplained
-		default:
-			// Skip other event types
-			return nil
-		}
+	updates := []domain.MessageStatusUpdate{}
 
-		// Update the message status with the timestamp from the event
-		err = s.messageHistoryRepo.SetStatusIfNotSet(ctx, workspaceID, event.MessageID, status, event.Timestamp)
-		if err != nil {
-			s.logger.WithField("event_id", event.ID).
-				WithField("message_id", event.MessageID).
-				WithField("status", status).
-				Error(fmt.Sprintf("Failed to update message status: %v", err))
-			// We don't fail the webhook processing if status update fails
-			// Just log the error and continue
+	for _, event := range events {
+		// Update message history status if we have a message ID
+		if event.MessageID != "" {
+			var status domain.MessageStatus
+			switch event.Type {
+			case domain.EmailEventDelivered:
+				status = domain.MessageStatusDelivered
+			case domain.EmailEventBounce:
+				status = domain.MessageStatusBounced
+			case domain.EmailEventComplaint:
+				status = domain.MessageStatusComplained
+			default:
+				// Skip other event types
+				return nil
+			}
+
+			updates = append(updates, domain.MessageStatusUpdate{
+				ID:        event.MessageID,
+				Status:    status,
+				Timestamp: event.Timestamp,
+			})
 		}
+	}
+
+	if err := s.messageHistoryRepo.SetStatusesIfNotSet(ctx, workspaceID, updates); err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return fmt.Errorf("failed to update message status: %w", err)
 	}
 
 	return nil
 }
 
 // processSESWebhook processes a webhook event from Amazon SES
-func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload []byte) (events []*domain.WebhookEvent, err error) {
+
 	// First, parse the SNS message wrapper
 	var snsPayload domain.SESWebhookPayload
 	if err := json.Unmarshal(rawPayload, &snsPayload); err != nil {
@@ -255,11 +259,12 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
-	return event, nil
+	return []*domain.WebhookEvent{event}, nil
 }
 
 // processPostmarkWebhook processes a webhook event from Postmark
-func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPayload []byte) (events []*domain.WebhookEvent, err error) {
+
 	// First, unmarshal into a map to extract the fields directly
 	var jsonData map[string]interface{}
 	if err := json.Unmarshal(rawPayload, &jsonData); err != nil {
@@ -392,11 +397,12 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
-	return event, nil
+	return []*domain.WebhookEvent{event}, nil
 }
 
 // processMailgunWebhook processes a webhook event from Mailgun
-func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPayload []byte) (events []*domain.WebhookEvent, err error) {
+
 	// First unmarshal into a map to access all fields
 	var jsonData map[string]interface{}
 	if err := json.Unmarshal(rawPayload, &jsonData); err != nil {
@@ -480,91 +486,100 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
-	return event, nil
+	return []*domain.WebhookEvent{event}, nil
 }
 
 // processSparkPostWebhook processes a webhook event from SparkPost
-func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
-	var payload domain.SparkPostWebhookPayload
+func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawPayload []byte) (events []*domain.WebhookEvent, err error) {
+	events = []*domain.WebhookEvent{}
+
+	// payload can contain multiple events
+	var payload []*domain.SparkPostWebhookPayload
+
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal SparkPost webhook payload: %w", err)
 	}
 
-	var eventType domain.EmailEventType
-	var recipientEmail, messageID string
-	var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
-	var timestamp time.Time
-	var notifuseMessageID string
+	for _, payload := range payload {
+		var eventType domain.EmailEventType
+		var recipientEmail, messageID string
+		var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
+		var timestamp time.Time
+		var notifuseMessageID string
 
-	if payload.MSys.MessageEvent == nil {
-		return nil, fmt.Errorf("no message_event found in SparkPost webhook payload")
+		if payload.MSys.MessageEvent == nil {
+			return nil, fmt.Errorf("no message_event found in SparkPost webhook payload")
+		}
+
+		if id, ok := payload.MSys.MessageEvent.RecipientMeta["notifuse_message_id"]; ok {
+			notifuseMessageID = fmt.Sprintf("%v", id)
+		}
+
+		// Set common fields
+		recipientEmail = payload.MSys.MessageEvent.RecipientTo
+		messageID = payload.MSys.MessageEvent.MessageID
+
+		// Parse timestamp
+		if t, err := time.Parse(time.RFC3339, payload.MSys.MessageEvent.Timestamp); err == nil {
+			timestamp = t
+		} else {
+			timestamp = time.Now()
+		}
+
+		// Determine event type based on the type field
+		switch payload.MSys.MessageEvent.Type {
+		case "delivery":
+			eventType = domain.EmailEventDelivered
+
+		case "bounce":
+			eventType = domain.EmailEventBounce
+			bounceType = "Bounce"
+			bounceCategory = payload.MSys.MessageEvent.BounceClass
+			bounceDiagnostic = payload.MSys.MessageEvent.Reason
+
+		case "spam_complaint":
+			eventType = domain.EmailEventComplaint
+			complaintFeedbackType = payload.MSys.MessageEvent.FeedbackType
+
+		default:
+			return nil, fmt.Errorf("unsupported SparkPost event type: %s", payload.MSys.MessageEvent.Type)
+		}
+
+		// Use notifuseMessageID if available, otherwise fallback to provider's messageID
+		if notifuseMessageID != "" {
+			messageID = notifuseMessageID
+		}
+
+		// Create the webhook event
+		event := domain.NewWebhookEvent(
+			uuid.New().String(),
+			eventType,
+			domain.EmailProviderKindSparkPost,
+			integrationID,
+			recipientEmail,
+			messageID,
+			timestamp,
+			string(rawPayload),
+		)
+
+		// Set event-specific information
+		if eventType == domain.EmailEventBounce {
+			event.BounceType = bounceType
+			event.BounceCategory = bounceCategory
+			event.BounceDiagnostic = bounceDiagnostic
+		} else if eventType == domain.EmailEventComplaint {
+			event.ComplaintFeedbackType = complaintFeedbackType
+		}
+
+		events = append(events, event)
 	}
 
-	if id, ok := payload.MSys.MessageEvent.RecipientMeta["notifuse_message_id"]; ok {
-		notifuseMessageID = fmt.Sprintf("%v", id)
-	}
-
-	// Set common fields
-	recipientEmail = payload.MSys.MessageEvent.RecipientTo
-	messageID = payload.MSys.MessageEvent.MessageID
-
-	// Parse timestamp
-	if t, err := time.Parse(time.RFC3339, payload.MSys.MessageEvent.Timestamp); err == nil {
-		timestamp = t
-	} else {
-		timestamp = time.Now()
-	}
-
-	// Determine event type based on the type field
-	switch payload.MSys.MessageEvent.Type {
-	case "delivery":
-		eventType = domain.EmailEventDelivered
-
-	case "bounce":
-		eventType = domain.EmailEventBounce
-		bounceType = "Bounce"
-		bounceCategory = payload.MSys.MessageEvent.BounceClass
-		bounceDiagnostic = payload.MSys.MessageEvent.Reason
-
-	case "spam_complaint":
-		eventType = domain.EmailEventComplaint
-		complaintFeedbackType = payload.MSys.MessageEvent.FeedbackType
-
-	default:
-		return nil, fmt.Errorf("unsupported SparkPost event type: %s", payload.MSys.MessageEvent.Type)
-	}
-
-	// Use notifuseMessageID if available, otherwise fallback to provider's messageID
-	if notifuseMessageID != "" {
-		messageID = notifuseMessageID
-	}
-
-	// Create the webhook event
-	event := domain.NewWebhookEvent(
-		uuid.New().String(),
-		eventType,
-		domain.EmailProviderKindSparkPost,
-		integrationID,
-		recipientEmail,
-		messageID,
-		timestamp,
-		string(rawPayload),
-	)
-
-	// Set event-specific information
-	if eventType == domain.EmailEventBounce {
-		event.BounceType = bounceType
-		event.BounceCategory = bounceCategory
-		event.BounceDiagnostic = bounceDiagnostic
-	} else if eventType == domain.EmailEventComplaint {
-		event.ComplaintFeedbackType = complaintFeedbackType
-	}
-
-	return event, nil
+	return events, nil
 }
 
 // processMailjetWebhook processes a webhook event from Mailjet
-func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPayload []byte) (events []*domain.WebhookEvent, err error) {
+
 	var payload domain.MailjetWebhookPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Mailjet webhook payload: %w", err)
@@ -644,11 +659,12 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
-	return event, nil
+	return []*domain.WebhookEvent{event}, nil
 }
 
 // processSMTPWebhook processes a webhook event from a generic SMTP provider
-func (s *WebhookEventService) processSMTPWebhook(integrationID string, rawPayload []byte) (*domain.WebhookEvent, error) {
+func (s *WebhookEventService) processSMTPWebhook(integrationID string, rawPayload []byte) (events []*domain.WebhookEvent, err error) {
+
 	var payload domain.SMTPWebhookPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal SMTP webhook payload: %w", err)
@@ -697,7 +713,7 @@ func (s *WebhookEventService) processSMTPWebhook(integrationID string, rawPayloa
 		event.ComplaintFeedbackType = payload.ComplaintType
 	}
 
-	return event, nil
+	return []*domain.WebhookEvent{event}, nil
 }
 
 // ListEvents retrieves all webhook events for a workspace

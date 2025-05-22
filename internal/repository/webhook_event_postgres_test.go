@@ -14,108 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWebhookEventRepository_StoreEvent(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewWebhookEventRepository(mockWorkspaceRepo)
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	ctx := context.Background()
-	workspaceID := "ws-123"
-	now := time.Now().UTC()
-
-	event := &domain.WebhookEvent{
-		ID:                "evt-123",
-		Type:              domain.EmailEventDelivered,
-		EmailProviderKind: domain.EmailProviderKindSES,
-		IntegrationID:     "integration-123",
-		RecipientEmail:    "test@example.com",
-		MessageID:         "msg-123",
-		TransactionalID:   "trans-123",
-		BroadcastID:       "broadcast-123",
-		Timestamp:         now,
-		RawPayload:        `{"key": "value"}`,
-		BounceType:        "hard",
-		BounceCategory:    "unknown",
-		BounceDiagnostic:  "550 user unknown",
-		CreatedAt:         now,
-	}
-
-	// Set up the workspace connection expectation
-	mockWorkspaceRepo.EXPECT().
-		GetConnection(gomock.Any(), workspaceID).
-		Return(db, nil)
-
-	// Expect the SQL query with parameters - use sqlmock.AnyArg() for the created_at timestamp
-	mock.ExpectExec(`INSERT INTO webhook_events`).
-		WithArgs(
-			event.ID,
-			event.Type,
-			event.EmailProviderKind,
-			event.IntegrationID,
-			event.RecipientEmail,
-			event.MessageID,
-			event.TransactionalID,
-			event.BroadcastID,
-			event.Timestamp,
-			event.RawPayload,
-			event.BounceType,
-			event.BounceCategory,
-			event.BounceDiagnostic,
-			event.ComplaintFeedbackType,
-			sqlmock.AnyArg(), // created_at
-		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	// Call the method
-	err = repo.StoreEvent(ctx, workspaceID, event)
-	assert.NoError(t, err)
-
-	// Verify all expectations were met
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestWebhookEventRepository_StoreEvent_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	repo := NewWebhookEventRepository(mockWorkspaceRepo)
-
-	ctx := context.Background()
-	workspaceID := "ws-123"
-
-	// Test case 1: Database connection error
-	mockWorkspaceRepo.EXPECT().
-		GetConnection(gomock.Any(), workspaceID).
-		Return(nil, errors.New("connection error"))
-
-	err := repo.StoreEvent(ctx, workspaceID, &domain.WebhookEvent{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get workspace connection")
-
-	// Test case 2: SQL execution error
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockWorkspaceRepo.EXPECT().
-		GetConnection(gomock.Any(), workspaceID).
-		Return(db, nil)
-
-	mock.ExpectExec(`INSERT INTO webhook_events`).
-		WillReturnError(errors.New("database error"))
-
-	err = repo.StoreEvent(ctx, workspaceID, &domain.WebhookEvent{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to store webhook event")
-}
-
 func TestWebhookEventRepository_ListEvents(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -347,4 +245,211 @@ func TestWebhookEventRepository_ListEvents_Error(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to scan webhook event row")
 	assert.Nil(t, result)
+}
+
+func TestWebhookEventRepository_StoreEvents(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	now := time.Now().UTC()
+
+	// Create a batch of events
+	events := []*domain.WebhookEvent{
+		{
+			ID:                    "evt-1",
+			Type:                  domain.EmailEventBounce,
+			EmailProviderKind:     domain.EmailProviderKindSES,
+			IntegrationID:         "integration-1",
+			RecipientEmail:        "test1@example.com",
+			MessageID:             "msg-1",
+			TransactionalID:       "trans-1",
+			BroadcastID:           "broadcast-1",
+			Timestamp:             now,
+			RawPayload:            `{"key": "value1"}`,
+			BounceType:            "hard",
+			BounceCategory:        "unknown",
+			BounceDiagnostic:      "550 user unknown",
+			ComplaintFeedbackType: "",
+		},
+		{
+			ID:                    "evt-2",
+			Type:                  domain.EmailEventDelivered,
+			EmailProviderKind:     domain.EmailProviderKindSES,
+			IntegrationID:         "integration-1",
+			RecipientEmail:        "test2@example.com",
+			MessageID:             "msg-2",
+			TransactionalID:       "trans-2",
+			BroadcastID:           "broadcast-2",
+			Timestamp:             now,
+			RawPayload:            `{"key": "value2"}`,
+			BounceType:            "",
+			BounceCategory:        "",
+			BounceDiagnostic:      "",
+			ComplaintFeedbackType: "",
+		},
+	}
+
+	t.Run("Success - Multiple Events", func(t *testing.T) {
+		// Set up the workspace connection expectation
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// We're expecting a multi-value INSERT statement
+		mock.ExpectExec("INSERT INTO webhook_events").
+			WithArgs(
+				events[0].ID, events[0].Type, events[0].EmailProviderKind, events[0].IntegrationID, events[0].RecipientEmail,
+				events[0].MessageID, events[0].TransactionalID, events[0].BroadcastID, events[0].Timestamp, events[0].RawPayload,
+				events[0].BounceType, events[0].BounceCategory, events[0].BounceDiagnostic, events[0].ComplaintFeedbackType, sqlmock.AnyArg(),
+				events[1].ID, events[1].Type, events[1].EmailProviderKind, events[1].IntegrationID, events[1].RecipientEmail,
+				events[1].MessageID, events[1].TransactionalID, events[1].BroadcastID, events[1].Timestamp, events[1].RawPayload,
+				events[1].BounceType, events[1].BounceCategory, events[1].BounceDiagnostic, events[1].ComplaintFeedbackType, sqlmock.AnyArg(),
+			).
+			WillReturnResult(sqlmock.NewResult(0, 2))
+
+		// Call the method
+		err := repo.StoreEvents(ctx, workspaceID, events)
+		assert.NoError(t, err)
+
+		// Verify all expectations were met
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Success - Single Event", func(t *testing.T) {
+		// Create a new mock setup
+		db, mock, err = sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Set up the workspace connection expectation
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// We're expecting a single-value INSERT statement
+		mock.ExpectExec("INSERT INTO webhook_events").
+			WithArgs(
+				events[0].ID, events[0].Type, events[0].EmailProviderKind, events[0].IntegrationID, events[0].RecipientEmail,
+				events[0].MessageID, events[0].TransactionalID, events[0].BroadcastID, events[0].Timestamp, events[0].RawPayload,
+				events[0].BounceType, events[0].BounceCategory, events[0].BounceDiagnostic, events[0].ComplaintFeedbackType, sqlmock.AnyArg(),
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Call the method with a single event
+		err := repo.StoreEvents(ctx, workspaceID, events[:1])
+		assert.NoError(t, err)
+
+		// Verify all expectations were met
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Success - Empty Events", func(t *testing.T) {
+		// No database calls should occur for empty events slice
+		err := repo.StoreEvents(ctx, workspaceID, []*domain.WebhookEvent{})
+		assert.NoError(t, err)
+	})
+
+	t.Run("Error - Connection Failure", func(t *testing.T) {
+		// Set up the workspace connection to return an error
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		err := repo.StoreEvents(ctx, workspaceID, events)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("Error - SQL Execution Failure", func(t *testing.T) {
+		// Create a new mock setup
+		db, mock, err = sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Set up the workspace connection expectation
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// Expect the SQL query but return an error
+		mock.ExpectExec("INSERT INTO webhook_events").
+			WithArgs(
+				events[0].ID, events[0].Type, events[0].EmailProviderKind, events[0].IntegrationID, events[0].RecipientEmail,
+				events[0].MessageID, events[0].TransactionalID, events[0].BroadcastID, events[0].Timestamp, events[0].RawPayload,
+				events[0].BounceType, events[0].BounceCategory, events[0].BounceDiagnostic, events[0].ComplaintFeedbackType, sqlmock.AnyArg(),
+				events[1].ID, events[1].Type, events[1].EmailProviderKind, events[1].IntegrationID, events[1].RecipientEmail,
+				events[1].MessageID, events[1].TransactionalID, events[1].BroadcastID, events[1].Timestamp, events[1].RawPayload,
+				events[1].BounceType, events[1].BounceCategory, events[1].BounceDiagnostic, events[1].ComplaintFeedbackType, sqlmock.AnyArg(),
+			).
+			WillReturnError(errors.New("database error"))
+
+		err := repo.StoreEvents(ctx, workspaceID, events)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to store webhook events batch")
+	})
+}
+
+// Test StoreEvent separately - the implementation that calls StoreEvents
+func TestWebhookEventRepository_StoreEvent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	now := time.Now().UTC()
+
+	// Create a single event
+	event := &domain.WebhookEvent{
+		ID:                    "evt-1",
+		Type:                  domain.EmailEventBounce,
+		EmailProviderKind:     domain.EmailProviderKindSES,
+		IntegrationID:         "integration-1",
+		RecipientEmail:        "test1@example.com",
+		MessageID:             "msg-1",
+		TransactionalID:       "trans-1",
+		BroadcastID:           "broadcast-1",
+		Timestamp:             now,
+		RawPayload:            `{"key": "value1"}`,
+		BounceType:            "hard",
+		BounceCategory:        "unknown",
+		BounceDiagnostic:      "550 user unknown",
+		ComplaintFeedbackType: "",
+	}
+
+	// Set up the workspace connection expectation
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	// We're expecting a single-value INSERT statement
+	mock.ExpectExec("INSERT INTO webhook_events").
+		WithArgs(
+			event.ID, event.Type, event.EmailProviderKind, event.IntegrationID, event.RecipientEmail,
+			event.MessageID, event.TransactionalID, event.BroadcastID, event.Timestamp, event.RawPayload,
+			event.BounceType, event.BounceCategory, event.BounceDiagnostic, event.ComplaintFeedbackType, sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Call the StoreEvent method
+	err = repo.StoreEvents(ctx, workspaceID, []*domain.WebhookEvent{event})
+	assert.NoError(t, err)
+
+	// Verify all expectations were met
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

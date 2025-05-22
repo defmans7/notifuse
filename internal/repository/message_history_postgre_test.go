@@ -1176,3 +1176,179 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 		assert.Equal(t, 1, stats.TotalUnsubscribed)
 	})
 }
+
+func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	now := time.Now().UTC()
+
+	// Create a batch of status updates
+	updates := []domain.MessageStatusUpdate{
+		{
+			ID:        "msg-123",
+			Status:    domain.MessageStatusDelivered,
+			Timestamp: now,
+		},
+		{
+			ID:        "msg-456",
+			Status:    domain.MessageStatusDelivered,
+			Timestamp: now,
+		},
+		{
+			ID:        "msg-789",
+			Status:    domain.MessageStatusBounced,
+			Timestamp: now,
+		},
+	}
+
+	t.Run("successful batch update - multiple statuses", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// Expect two separate queries, one for each unique status (delivered and bounced)
+		// First query for the two delivered status updates
+		mock.ExpectExec(`UPDATE message_history SET status = \$1, delivered_at = CASE id WHEN \$2 THEN \$3 WHEN \$4 THEN \$5 END, updated_at = \$6 WHERE id IN \(\$2, \$4\) AND delivered_at IS NULL`).
+			WithArgs(
+				domain.MessageStatusDelivered,
+				"msg-123", now,
+				"msg-456", now,
+				sqlmock.AnyArg(), // updated_at timestamp
+			).
+			WillReturnResult(sqlmock.NewResult(0, 2))
+
+		// Second query for the bounced status update
+		mock.ExpectExec(`UPDATE message_history SET status = \$1, bounced_at = CASE id WHEN \$2 THEN \$3 END, updated_at = \$4 WHERE id IN \(\$2\) AND bounced_at IS NULL`).
+			WithArgs(
+				domain.MessageStatusBounced,
+				"msg-789", now,
+				sqlmock.AnyArg(), // updated_at timestamp
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, updates)
+		require.NoError(t, err)
+	})
+
+	t.Run("successful batch update - single status", func(t *testing.T) {
+		// Only one status type
+		singleStatusUpdates := []domain.MessageStatusUpdate{
+			{
+				ID:        "msg-123",
+				Status:    domain.MessageStatusOpened,
+				Timestamp: now,
+			},
+			{
+				ID:        "msg-456",
+				Status:    domain.MessageStatusOpened,
+				Timestamp: now.Add(1 * time.Second),
+			},
+		}
+
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// Expect one query for opened status
+		mock.ExpectExec(`UPDATE message_history SET status = \$1, opened_at = CASE id WHEN \$2 THEN \$3 WHEN \$4 THEN \$5 END, updated_at = \$6 WHERE id IN \(\$2, \$4\) AND opened_at IS NULL`).
+			WithArgs(
+				domain.MessageStatusOpened,
+				"msg-123", now,
+				"msg-456", now.Add(1*time.Second),
+				sqlmock.AnyArg(), // updated_at timestamp
+			).
+			WillReturnResult(sqlmock.NewResult(0, 2))
+
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, singleStatusUpdates)
+		require.NoError(t, err)
+	})
+
+	t.Run("empty updates", func(t *testing.T) {
+		// No database calls should be made when the updates slice is empty
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, []domain.MessageStatusUpdate{})
+		require.NoError(t, err)
+	})
+
+	t.Run("workspace connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, updates)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("invalid status", func(t *testing.T) {
+		invalidUpdates := []domain.MessageStatusUpdate{
+			{
+				ID:        "msg-123",
+				Status:    domain.MessageStatus("invalid"),
+				Timestamp: now,
+			},
+		}
+
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, invalidUpdates)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid status")
+	})
+
+	t.Run("database execution error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		mock.ExpectExec(`UPDATE message_history SET status = \$1, delivered_at = CASE id WHEN \$2 THEN \$3 WHEN \$4 THEN \$5 END, updated_at = \$6 WHERE id IN \(\$2, \$4\) AND delivered_at IS NULL`).
+			WithArgs(
+				domain.MessageStatusDelivered,
+				"msg-123", now,
+				"msg-456", now,
+				sqlmock.AnyArg(),
+			).
+			WillReturnError(errors.New("database error"))
+
+		// Only include the delivered status updates to trigger the first query error
+		deliveredUpdates := []domain.MessageStatusUpdate{
+			{
+				ID:        "msg-123",
+				Status:    domain.MessageStatusDelivered,
+				Timestamp: now,
+			},
+			{
+				ID:        "msg-456",
+				Status:    domain.MessageStatusDelivered,
+				Timestamp: now,
+			},
+		}
+
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, deliveredUpdates)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to batch update message statuses")
+	})
+
+	t.Run("integration with single status method", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
+		// Expect the batch version to be called with a single update
+		mock.ExpectExec(`UPDATE message_history SET status = \$1, delivered_at = CASE id WHEN \$2 THEN \$3 END, updated_at = \$4 WHERE id IN \(\$2\) AND delivered_at IS NULL`).
+			WithArgs(
+				domain.MessageStatusDelivered,
+				"msg-123", now,
+				sqlmock.AnyArg(),
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Call the single status method
+		err := repo.SetStatusIfNotSet(ctx, workspaceID, "msg-123", domain.MessageStatusDelivered, now)
+		require.NoError(t, err)
+	})
+}

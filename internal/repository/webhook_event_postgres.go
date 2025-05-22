@@ -24,14 +24,18 @@ func NewWebhookEventRepository(workspaceRepo domain.WorkspaceRepository) domain.
 	}
 }
 
-// StoreEvent stores a webhook event in the database
-func (r *webhookEventRepository) StoreEvent(ctx context.Context, workspaceID string, event *domain.WebhookEvent) error {
+// StoreEvents stores multiple webhook events in the database as a batch
+func (r *webhookEventRepository) StoreEvents(ctx context.Context, workspaceID string, events []*domain.WebhookEvent) error {
 	// codecov:ignore:start
-	ctx, span := tracing.StartServiceSpan(ctx, "WebhookEventRepository", "StoreEvent")
+	ctx, span := tracing.StartServiceSpan(ctx, "WebhookEventRepository", "StoreEvents")
 	defer tracing.EndSpan(span, nil)
 	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
-	tracing.AddAttribute(ctx, "eventID", event.ID)
+	tracing.AddAttribute(ctx, "eventCount", len(events))
 	// codecov:ignore:end
+
+	if len(events) == 0 {
+		return nil
+	}
 
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
@@ -42,48 +46,77 @@ func (r *webhookEventRepository) StoreEvent(ctx context.Context, workspaceID str
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	query := `
+	// Use multi-value INSERT for maximum batch efficiency
+	baseSQL := `
 		INSERT INTO webhook_events (
 			id, type, email_provider_kind, integration_id, recipient_email, 
 			message_id, transactional_id, broadcast_id, timestamp, raw_payload,
 			bounce_type, bounce_category, bounce_diagnostic, complaint_feedback_type,
 			created_at
-		) VALUES (
-			$1, $2, $3, $4, $5, 
-			$6, $7, $8, $9, $10,
-			$11, $12, $13, $14, 
-			$15
-		)
-	`
+		) VALUES `
 
-	_, err = workspaceDB.ExecContext(
-		ctx,
-		query,
-		event.ID,
-		event.Type,
-		event.EmailProviderKind,
-		event.IntegrationID,
-		event.RecipientEmail,
-		event.MessageID,
-		event.TransactionalID,
-		event.BroadcastID,
-		event.Timestamp,
-		event.RawPayload,
-		event.BounceType,
-		event.BounceCategory,
-		event.BounceDiagnostic,
-		event.ComplaintFeedbackType,
-		time.Now(),
-	)
+	// Generate placeholders for all events
+	placeholders := make([]string, len(events))
+	now := time.Now()
 
-	if err != nil {
-		// codecov:ignore:start
-		tracing.MarkSpanError(ctx, err)
-		// codecov:ignore:end
-		return fmt.Errorf("failed to store webhook event: %w", err)
+	// Batch size limit to avoid hitting Postgres parameter limits (max 65535 parameters)
+	const batchSize = 1000 // Each event uses 15 parameters, so ~4000 events would hit the limit
+
+	// Process in batches
+	for i := 0; i < len(events); i += batchSize {
+		end := i + batchSize
+		if end > len(events) {
+			end = len(events)
+		}
+
+		currentBatch := events[i:end]
+		args := make([]interface{}, 0, len(currentBatch)*15)
+
+		// Generate placeholders and collect args for this batch
+		for j, event := range currentBatch {
+			paramOffset := j * 15
+			placeholders[j] = fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d)",
+				paramOffset+1, paramOffset+2, paramOffset+3, paramOffset+4, paramOffset+5,
+				paramOffset+6, paramOffset+7, paramOffset+8, paramOffset+9, paramOffset+10,
+				paramOffset+11, paramOffset+12, paramOffset+13, paramOffset+14, paramOffset+15)
+
+			args = append(args,
+				event.ID,
+				event.Type,
+				event.EmailProviderKind,
+				event.IntegrationID,
+				event.RecipientEmail,
+				event.MessageID,
+				event.TransactionalID,
+				event.BroadcastID,
+				event.Timestamp,
+				event.RawPayload,
+				event.BounceType,
+				event.BounceCategory,
+				event.BounceDiagnostic,
+				event.ComplaintFeedbackType,
+				now,
+			)
+		}
+
+		// Build and execute the SQL for this batch
+		batchSQL := baseSQL + strings.Join(placeholders[:len(currentBatch)], ",") + " ON CONFLICT (id) DO NOTHING"
+		_, err = workspaceDB.ExecContext(ctx, batchSQL, args...)
+
+		if err != nil {
+			// codecov:ignore:start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore:end
+			return fmt.Errorf("failed to store webhook events batch: %w", err)
+		}
 	}
 
 	return nil
+}
+
+// StoreEvent stores a single webhook event in the database
+func (r *webhookEventRepository) StoreEvent(ctx context.Context, workspaceID string, event *domain.WebhookEvent) error {
+	return r.StoreEvents(ctx, workspaceID, []*domain.WebhookEvent{event})
 }
 
 // ListEvents retrieves all webhook events for a workspace

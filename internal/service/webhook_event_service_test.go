@@ -71,26 +71,30 @@ func TestProcessWebhook_Success(t *testing.T) {
 
 		// Setup expectations to match what the service will actually store
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		repo.EXPECT().StoreEvent(gomock.Any(), workspace.ID, gomock.Any()).DoAndReturn(
-			func(_ context.Context, workspaceID string, event *domain.WebhookEvent) error {
+		repo.EXPECT().StoreEvents(gomock.Any(), workspace.ID, gomock.Any()).DoAndReturn(
+			func(_ context.Context, workspaceID string, events []*domain.WebhookEvent) error {
 				assert.Equal(t, workspace.ID, workspaceID)
-				assert.Equal(t, mockEvent.Type, event.Type)
-				assert.Equal(t, mockEvent.EmailProviderKind, event.EmailProviderKind)
-				assert.Equal(t, mockEvent.IntegrationID, event.IntegrationID)
-				assert.Equal(t, mockEvent.RecipientEmail, event.RecipientEmail)
-				assert.Equal(t, mockEvent.MessageID, event.MessageID)
+				assert.Equal(t, mockEvent.Type, events[0].Type)
+				assert.Equal(t, mockEvent.EmailProviderKind, events[0].EmailProviderKind)
+				assert.Equal(t, mockEvent.IntegrationID, events[0].IntegrationID)
+				assert.Equal(t, mockEvent.RecipientEmail, events[0].RecipientEmail)
+				assert.Equal(t, mockEvent.MessageID, events[0].MessageID)
 				return nil
 			})
 
-		// Expect message history to be updated with the bounce status
+		// Expect message history to be updated with the bounce status - using batch method
 		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-		messageHistoryRepo.EXPECT().SetStatusIfNotSet(
+		messageHistoryRepo.EXPECT().SetStatusesIfNotSet(
 			gomock.Any(),
 			workspaceID,
-			"message1",
-			domain.MessageStatusBounced,
-			gomock.Any(),
-		).Return(nil)
+			gomock.Any(), // Will be a slice of MessageStatusUpdate
+		).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+			assert.Equal(t, workspaceID, wsID)
+			assert.Equal(t, 1, len(updates), "Should have 1 message status update")
+			assert.Equal(t, "message1", updates[0].ID)
+			assert.Equal(t, domain.MessageStatusBounced, updates[0].Status)
+			return nil
+		})
 
 		// Create service
 		service := &WebhookEventService{
@@ -145,17 +149,21 @@ func TestProcessWebhook_Success(t *testing.T) {
 
 		// Setup expectations
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		repo.EXPECT().StoreEvent(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+		repo.EXPECT().StoreEvents(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
-		// Expect message history to be updated with the delivery status
+		// Expect message history to be updated with the delivery status - using batch method
 		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-		messageHistoryRepo.EXPECT().SetStatusIfNotSet(
+		messageHistoryRepo.EXPECT().SetStatusesIfNotSet(
 			gomock.Any(),
 			workspaceID,
-			"message1",
-			domain.MessageStatusDelivered,
-			gomock.Any(),
-		).Return(nil)
+			gomock.Any(), // Will be a slice of MessageStatusUpdate
+		).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+			assert.Equal(t, workspaceID, wsID)
+			assert.Equal(t, 1, len(updates), "Should have 1 message status update")
+			assert.Equal(t, "message1", updates[0].ID)
+			assert.Equal(t, domain.MessageStatusDelivered, updates[0].Status)
+			return nil
+		})
 
 		// Create service
 		service := &WebhookEventService{
@@ -233,7 +241,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 
 		// Setup expectations with storage error
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		repo.EXPECT().StoreEvent(gomock.Any(), workspaceID, gomock.Any()).Return(errors.New("database error"))
+		repo.EXPECT().StoreEvents(gomock.Any(), workspaceID, gomock.Any()).Return(errors.New("database error"))
 
 		// Create service
 		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
@@ -345,19 +353,19 @@ func TestProcessSESWebhook(t *testing.T) {
 	require.NoError(t, err)
 
 	// Call method
-	event, err := service.processSESWebhook(integrationID, rawPayload)
+	events, err := service.processSESWebhook(integrationID, rawPayload)
 
 	// Assert
 	assert.NoError(t, err)
-	assert.NotNil(t, event)
-	assert.Equal(t, domain.EmailEventBounce, event.Type)
-	assert.Equal(t, domain.EmailProviderKindSES, event.EmailProviderKind)
-	assert.Equal(t, integrationID, event.IntegrationID)
-	assert.Equal(t, "test@example.com", event.RecipientEmail)
-	assert.Equal(t, "message1", event.MessageID)
-	assert.Equal(t, "Permanent", event.BounceType)
-	assert.Equal(t, "General", event.BounceCategory)
-	assert.Equal(t, "554", event.BounceDiagnostic)
+	assert.NotNil(t, events)
+	assert.Equal(t, domain.EmailEventBounce, events[0].Type)
+	assert.Equal(t, domain.EmailProviderKindSES, events[0].EmailProviderKind)
+	assert.Equal(t, integrationID, events[0].IntegrationID)
+	assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+	assert.Equal(t, "message1", events[0].MessageID)
+	assert.Equal(t, "Permanent", events[0].BounceType)
+	assert.Equal(t, "General", events[0].BounceCategory)
+	assert.Equal(t, "554", events[0].BounceDiagnostic)
 }
 
 func TestProcessPostmarkWebhook(t *testing.T) {
@@ -393,16 +401,16 @@ func TestProcessPostmarkWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processPostmarkWebhook(integrationID, rawPayload)
+		events, err := service.processPostmarkWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventDelivered, event.Type)
-		assert.Equal(t, domain.EmailProviderKindPostmark, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindPostmark, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
 	})
 
 	t.Run("Bounce Event", func(t *testing.T) {
@@ -419,19 +427,19 @@ func TestProcessPostmarkWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processPostmarkWebhook(integrationID, rawPayload)
+		events, err := service.processPostmarkWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventBounce, event.Type)
-		assert.Equal(t, domain.EmailProviderKindPostmark, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "HardBounce", event.BounceType)
-		assert.Equal(t, "HardBounce", event.BounceCategory)
-		assert.Equal(t, "550 Address rejected", event.BounceDiagnostic)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventBounce, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindPostmark, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "HardBounce", events[0].BounceType)
+		assert.Equal(t, "HardBounce", events[0].BounceCategory)
+		assert.Equal(t, "550 Address rejected", events[0].BounceDiagnostic)
 	})
 
 	t.Run("Complaint Event", func(t *testing.T) {
@@ -446,17 +454,17 @@ func TestProcessPostmarkWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processPostmarkWebhook(integrationID, rawPayload)
+		events, err := service.processPostmarkWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventComplaint, event.Type)
-		assert.Equal(t, domain.EmailProviderKindPostmark, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "SpamComplaint", event.ComplaintFeedbackType)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventComplaint, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindPostmark, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "SpamComplaint", events[0].ComplaintFeedbackType)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
@@ -464,11 +472,11 @@ func TestProcessPostmarkWebhook(t *testing.T) {
 		rawPayload := []byte(`{invalid json`)
 
 		// Call method
-		event, err := service.processPostmarkWebhook(integrationID, rawPayload)
+		events, err := service.processPostmarkWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 	})
 
 	t.Run("Unsupported Record Type", func(t *testing.T) {
@@ -480,11 +488,11 @@ func TestProcessPostmarkWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processPostmarkWebhook(integrationID, rawPayload)
+		events, err := service.processPostmarkWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 	})
 }
 
@@ -511,13 +519,15 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 
 	t.Run("Delivery Event", func(t *testing.T) {
 		// Create test delivery payload
-		payload := domain.SparkPostWebhookPayload{
-			MSys: domain.SparkPostMSys{
-				MessageEvent: &domain.SparkPostMessageEvent{
-					Type:        "delivery",
-					RecipientTo: "test@example.com",
-					MessageID:   "message1",
-					Timestamp:   "2023-01-01T12:00:00Z",
+		payload := []*domain.SparkPostWebhookPayload{
+			{
+				MSys: domain.SparkPostMSys{
+					MessageEvent: &domain.SparkPostMessageEvent{
+						Type:        "delivery",
+						RecipientTo: "test@example.com",
+						MessageID:   "message1",
+						Timestamp:   "2023-01-01T12:00:00Z",
+					},
 				},
 			},
 		}
@@ -525,29 +535,31 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processSparkPostWebhook(integrationID, rawPayload)
+		events, err := service.processSparkPostWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventDelivered, event.Type)
-		assert.Equal(t, domain.EmailProviderKindSparkPost, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindSparkPost, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
 	})
 
 	t.Run("Bounce Event", func(t *testing.T) {
 		// Create test bounce payload
-		payload := domain.SparkPostWebhookPayload{
-			MSys: domain.SparkPostMSys{
-				MessageEvent: &domain.SparkPostMessageEvent{
-					Type:        "bounce",
-					RecipientTo: "test@example.com",
-					MessageID:   "message1",
-					BounceClass: "21", // Hard bounce
-					Reason:      "550 5.1.1 The email account does not exist",
-					Timestamp:   "2023-01-01T12:00:00Z",
+		payload := []*domain.SparkPostWebhookPayload{
+			{
+				MSys: domain.SparkPostMSys{
+					MessageEvent: &domain.SparkPostMessageEvent{
+						Type:        "bounce",
+						RecipientTo: "test@example.com",
+						MessageID:   "message1",
+						BounceClass: "21", // Hard bounce
+						Reason:      "550 5.1.1 The email account does not exist",
+						Timestamp:   "2023-01-01T12:00:00Z",
+					},
 				},
 			},
 		}
@@ -555,31 +567,33 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processSparkPostWebhook(integrationID, rawPayload)
+		events, err := service.processSparkPostWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventBounce, event.Type)
-		assert.Equal(t, domain.EmailProviderKindSparkPost, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "Bounce", event.BounceType)
-		assert.Equal(t, "21", event.BounceCategory)
-		assert.Equal(t, "550 5.1.1 The email account does not exist", event.BounceDiagnostic)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventBounce, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindSparkPost, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "Bounce", events[0].BounceType)
+		assert.Equal(t, "21", events[0].BounceCategory)
+		assert.Equal(t, "550 5.1.1 The email account does not exist", events[0].BounceDiagnostic)
 	})
 
 	t.Run("Complaint Event", func(t *testing.T) {
 		// Create test complaint payload
-		payload := domain.SparkPostWebhookPayload{
-			MSys: domain.SparkPostMSys{
-				MessageEvent: &domain.SparkPostMessageEvent{
-					Type:         "spam_complaint",
-					RecipientTo:  "test@example.com",
-					MessageID:    "message1",
-					FeedbackType: "abuse",
-					Timestamp:    "2023-01-01T12:00:00Z",
+		payload := []*domain.SparkPostWebhookPayload{
+			{
+				MSys: domain.SparkPostMSys{
+					MessageEvent: &domain.SparkPostMessageEvent{
+						Type:         "spam_complaint",
+						RecipientTo:  "test@example.com",
+						MessageID:    "message1",
+						FeedbackType: "abuse",
+						Timestamp:    "2023-01-01T12:00:00Z",
+					},
 				},
 			},
 		}
@@ -587,17 +601,17 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processSparkPostWebhook(integrationID, rawPayload)
+		events, err := service.processSparkPostWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventComplaint, event.Type)
-		assert.Equal(t, domain.EmailProviderKindSparkPost, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "abuse", event.ComplaintFeedbackType)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventComplaint, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindSparkPost, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "abuse", events[0].ComplaintFeedbackType)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
@@ -605,27 +619,29 @@ func TestProcessSparkPostWebhook(t *testing.T) {
 		rawPayload := []byte(`{invalid json`)
 
 		// Call method
-		event, err := service.processSparkPostWebhook(integrationID, rawPayload)
+		events, err := service.processSparkPostWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 	})
 
 	t.Run("No Supported Event", func(t *testing.T) {
 		// Create payload with no supported event
-		payload := domain.SparkPostWebhookPayload{
-			MSys: domain.SparkPostMSys{},
+		payload := []*domain.SparkPostWebhookPayload{
+			{
+				MSys: domain.SparkPostMSys{},
+			},
 		}
 		rawPayload, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processSparkPostWebhook(integrationID, rawPayload)
+		events, err := service.processSparkPostWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 	})
 }
 
@@ -668,16 +684,16 @@ func TestProcessMailgunWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailgunWebhook(integrationID, rawPayload)
+		events, err := service.processMailgunWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventDelivered, event.Type)
-		assert.Equal(t, domain.EmailProviderKindMailgun, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailgun, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
 	})
 
 	t.Run("Bounce Event", func(t *testing.T) {
@@ -700,19 +716,19 @@ func TestProcessMailgunWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailgunWebhook(integrationID, rawPayload)
+		events, err := service.processMailgunWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventBounce, event.Type)
-		assert.Equal(t, domain.EmailProviderKindMailgun, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "Failed", event.BounceType)
-		assert.Equal(t, "HardBounce", event.BounceCategory)
-		assert.Equal(t, "550 5.1.1 The email account does not exist", event.BounceDiagnostic)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventBounce, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailgun, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "Failed", events[0].BounceType)
+		assert.Equal(t, "HardBounce", events[0].BounceCategory)
+		assert.Equal(t, "550 5.1.1 The email account does not exist", events[0].BounceDiagnostic)
 	})
 
 	t.Run("Soft Bounce Event", func(t *testing.T) {
@@ -735,13 +751,13 @@ func TestProcessMailgunWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailgunWebhook(integrationID, rawPayload)
+		events, err := service.processMailgunWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventBounce, event.Type)
-		assert.Equal(t, "SoftBounce", event.BounceCategory)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventBounce, events[0].Type)
+		assert.Equal(t, "SoftBounce", events[0].BounceCategory)
 	})
 
 	t.Run("Complaint Event", func(t *testing.T) {
@@ -762,17 +778,17 @@ func TestProcessMailgunWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailgunWebhook(integrationID, rawPayload)
+		events, err := service.processMailgunWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventComplaint, event.Type)
-		assert.Equal(t, domain.EmailProviderKindMailgun, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "abuse", event.ComplaintFeedbackType)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventComplaint, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailgun, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "abuse", events[0].ComplaintFeedbackType)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
@@ -780,11 +796,11 @@ func TestProcessMailgunWebhook(t *testing.T) {
 		rawPayload := []byte(`{invalid json`)
 
 		// Call method
-		event, err := service.processMailgunWebhook(integrationID, rawPayload)
+		events, err := service.processMailgunWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 		assert.Contains(t, err.Error(), "failed to unmarshal Mailgun webhook payload")
 	})
 
@@ -805,11 +821,11 @@ func TestProcessMailgunWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailgunWebhook(integrationID, rawPayload)
+		events, err := service.processMailgunWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 		assert.Contains(t, err.Error(), "unsupported Mailgun event type")
 	})
 }
@@ -847,16 +863,16 @@ func TestProcessMailjetWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailjetWebhook(integrationID, rawPayload)
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventDelivered, event.Type)
-		assert.Equal(t, domain.EmailProviderKindMailjet, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "12345", event.MessageID)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailjet, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "12345", events[0].MessageID)
 	})
 
 	t.Run("Bounce Event", func(t *testing.T) {
@@ -874,19 +890,19 @@ func TestProcessMailjetWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailjetWebhook(integrationID, rawPayload)
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventBounce, event.Type)
-		assert.Equal(t, domain.EmailProviderKindMailjet, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "12345", event.MessageID)
-		assert.Equal(t, "HardBounce", event.BounceType)
-		assert.Equal(t, "Permanent", event.BounceCategory)
-		assert.Equal(t, "Mailbox does not exist: 550", event.BounceDiagnostic)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventBounce, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailjet, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "12345", events[0].MessageID)
+		assert.Equal(t, "HardBounce", events[0].BounceType)
+		assert.Equal(t, "Permanent", events[0].BounceCategory)
+		assert.Equal(t, "Mailbox does not exist: 550", events[0].BounceDiagnostic)
 	})
 
 	t.Run("Spam Event", func(t *testing.T) {
@@ -901,17 +917,17 @@ func TestProcessMailjetWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailjetWebhook(integrationID, rawPayload)
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventComplaint, event.Type)
-		assert.Equal(t, domain.EmailProviderKindMailjet, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "12345", event.MessageID)
-		assert.Equal(t, "abuse", event.ComplaintFeedbackType)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventComplaint, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailjet, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "12345", events[0].MessageID)
+		assert.Equal(t, "abuse", events[0].ComplaintFeedbackType)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
@@ -919,11 +935,11 @@ func TestProcessMailjetWebhook(t *testing.T) {
 		rawPayload := []byte(`{invalid json`)
 
 		// Call method
-		event, err := service.processMailjetWebhook(integrationID, rawPayload)
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 	})
 
 	t.Run("Unsupported Event Type", func(t *testing.T) {
@@ -938,11 +954,11 @@ func TestProcessMailjetWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processMailjetWebhook(integrationID, rawPayload)
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Nil(t, event)
+		assert.Nil(t, events)
 	})
 }
 
@@ -979,16 +995,16 @@ func TestProcessSMTPWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processSMTPWebhook(integrationID, rawPayload)
+		events, err := service.processSMTPWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventDelivered, event.Type)
-		assert.Equal(t, domain.EmailProviderKindSMTP, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindSMTP, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
 	})
 
 	t.Run("Bounce Event", func(t *testing.T) {
@@ -1005,19 +1021,19 @@ func TestProcessSMTPWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processSMTPWebhook(integrationID, rawPayload)
+		events, err := service.processSMTPWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventBounce, event.Type)
-		assert.Equal(t, domain.EmailProviderKindSMTP, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "Bounce", event.BounceType)
-		assert.Equal(t, "Permanent", event.BounceCategory)
-		assert.Equal(t, "550 5.1.1 User unknown", event.BounceDiagnostic)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventBounce, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindSMTP, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "Bounce", events[0].BounceType)
+		assert.Equal(t, "Permanent", events[0].BounceCategory)
+		assert.Equal(t, "550 5.1.1 User unknown", events[0].BounceDiagnostic)
 	})
 
 	t.Run("Complaint Event", func(t *testing.T) {
@@ -1033,17 +1049,17 @@ func TestProcessSMTPWebhook(t *testing.T) {
 		require.NoError(t, err)
 
 		// Call method
-		event, err := service.processSMTPWebhook(integrationID, rawPayload)
+		events, err := service.processSMTPWebhook(integrationID, rawPayload)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, domain.EmailEventComplaint, event.Type)
-		assert.Equal(t, domain.EmailProviderKindSMTP, event.EmailProviderKind)
-		assert.Equal(t, integrationID, event.IntegrationID)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
-		assert.Equal(t, "message1", event.MessageID)
-		assert.Equal(t, "abuse", event.ComplaintFeedbackType)
+		assert.NotNil(t, events)
+		assert.Equal(t, domain.EmailEventComplaint, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindSMTP, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "message1", events[0].MessageID)
+		assert.Equal(t, "abuse", events[0].ComplaintFeedbackType)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
@@ -1132,22 +1148,135 @@ func TestProcessWebhook_UpdatesMessageHistory(t *testing.T) {
 
 	// Setup expectations
 	workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-	repo.EXPECT().StoreEvent(gomock.Any(), workspaceID, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, workspaceID string, event *domain.WebhookEvent) error {
+	repo.EXPECT().StoreEvents(gomock.Any(), workspaceID, gomock.Any()).DoAndReturn(
+		func(ctx context.Context, workspaceID string, events []*domain.WebhookEvent) error {
 			assert.Equal(t, workspace.ID, workspaceID)
-			assert.Equal(t, domain.EmailEventDelivered, event.Type)
-			assert.Equal(t, messageID, event.MessageID)
+			assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+			assert.Equal(t, messageID, events[0].MessageID)
 			return nil
 		})
 
-	// Expect message history to be updated with the delivery status
-	messageHistoryRepo.EXPECT().SetStatusIfNotSet(
+	// Expect message history to be updated with the delivery status using batch method
+	messageHistoryRepo.EXPECT().SetStatusesIfNotSet(
 		gomock.Any(),
 		workspaceID,
-		messageID,
-		domain.MessageStatusDelivered,
+		gomock.Any(), // Will be a slice of MessageStatusUpdate
+	).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+		assert.Equal(t, workspaceID, wsID)
+		assert.Equal(t, 1, len(updates), "Should have 1 message status update")
+		assert.Equal(t, messageID, updates[0].ID)
+		assert.Equal(t, domain.MessageStatusDelivered, updates[0].Status)
+		return nil
+	})
+
+	// Call the method
+	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+
+	// Verify
+	assert.NoError(t, err)
+}
+
+// Test with multiple events
+func TestProcessWebhook_UpdatesMessageHistoryWithMultipleEvents(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockWebhookEventRepository(ctrl)
+	authService := mocks.NewMockAuthService(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().Error(gomock.Any()).AnyTimes()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+
+	// Create service
+	service := &WebhookEventService{
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
+	}
+
+	// Test data
+	workspaceID := "workspace1"
+	integrationID := "integration1"
+	messageID1 := "message123"
+	messageID2 := "message456"
+
+	// Setup workspace with integration
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSparkPost,
+				},
+			},
+		},
+	}
+
+	// Create SparkPost payload with multiple events
+	sparkPostPayload := []*domain.SparkPostWebhookPayload{
+		{
+			MSys: domain.SparkPostMSys{
+				MessageEvent: &domain.SparkPostMessageEvent{
+					Type:        "delivery",
+					RecipientTo: "test1@example.com",
+					MessageID:   messageID1,
+					Timestamp:   time.Now().Format(time.RFC3339),
+				},
+			},
+		},
+		{
+			MSys: domain.SparkPostMSys{
+				MessageEvent: &domain.SparkPostMessageEvent{
+					Type:        "bounce",
+					RecipientTo: "test2@example.com",
+					MessageID:   messageID2,
+					Timestamp:   time.Now().Format(time.RFC3339),
+				},
+			},
+		},
+	}
+
+	rawPayload, err := json.Marshal(sparkPostPayload)
+	require.NoError(t, err)
+
+	// Setup expectations
+	workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+	repo.EXPECT().StoreEvents(gomock.Any(), workspaceID, gomock.Any()).DoAndReturn(
+		func(ctx context.Context, workspaceID string, events []*domain.WebhookEvent) error {
+			assert.Equal(t, workspace.ID, workspaceID)
+			assert.Equal(t, 2, len(events))
+			assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+			assert.Equal(t, messageID1, events[0].MessageID)
+			assert.Equal(t, domain.EmailEventBounce, events[1].Type)
+			assert.Equal(t, messageID2, events[1].MessageID)
+			return nil
+		})
+
+	// Expect message history to be updated with batch of status updates
+	messageHistoryRepo.EXPECT().SetStatusesIfNotSet(
 		gomock.Any(),
-	).Return(nil)
+		workspaceID,
+		gomock.Any(), // Will be a slice of MessageStatusUpdate
+	).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+		assert.Equal(t, workspaceID, wsID)
+		assert.Equal(t, 2, len(updates), "Should have 2 message status updates")
+
+		// Check first update
+		assert.Equal(t, messageID1, updates[0].ID)
+		assert.Equal(t, domain.MessageStatusDelivered, updates[0].Status)
+
+		// Check second update
+		assert.Equal(t, messageID2, updates[1].ID)
+		assert.Equal(t, domain.MessageStatusBounced, updates[1].Status)
+
+		return nil
+	})
 
 	// Call the method
 	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)

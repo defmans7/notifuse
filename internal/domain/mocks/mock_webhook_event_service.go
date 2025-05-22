@@ -35,21 +35,6 @@ func (m *MockWebhookEventServiceInterface) EXPECT() *MockWebhookEventServiceInte
 	return m.recorder
 }
 
-// GetEventCount mocks base method.
-func (m *MockWebhookEventServiceInterface) GetEventCount(arg0 context.Context, arg1 string, arg2 domain.EmailEventType) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventCount", arg0, arg1, arg2)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEventCount indicates an expected call of GetEventCount.
-func (mr *MockWebhookEventServiceInterfaceMockRecorder) GetEventCount(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventCount", reflect.TypeOf((*MockWebhookEventServiceInterface)(nil).GetEventCount), arg0, arg1, arg2)
-}
-
 // ListEvents mocks base method.
 func (m *MockWebhookEventServiceInterface) ListEvents(arg0 context.Context, arg1 string, arg2 domain.WebhookEventListParams) (*domain.WebhookEventListResult, error) {
 	m.ctrl.T.Helper()

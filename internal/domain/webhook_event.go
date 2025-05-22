@@ -214,8 +214,8 @@ type WebhookEventServiceInterface interface {
 
 // WebhookEventRepository is the interface for webhook event operations
 type WebhookEventRepository interface {
-	// StoreEvent stores a webhook event in the database
-	StoreEvent(ctx context.Context, workspaceID string, event *WebhookEvent) error
+	// StoreEvents stores a webhook event in the database
+	StoreEvents(ctx context.Context, workspaceID string, events []*WebhookEvent) error
 
 	// ListEvents retrieves all webhook events for a workspace
 	ListEvents(ctx context.Context, workspaceID string, params WebhookEventListParams) (*WebhookEventListResult, error)

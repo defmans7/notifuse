@@ -387,13 +387,26 @@ func (r *MessageHistoryRepository) UpdateStatus(ctx context.Context, workspaceID
 
 // SetStatusIfNotSet sets a status only if it hasn't been set before (the field is NULL)
 func (r *MessageHistoryRepository) SetStatusIfNotSet(ctx context.Context, workspaceID, id string, status domain.MessageStatus, timestamp time.Time) error {
+	return r.SetStatusesIfNotSet(ctx, workspaceID, []domain.MessageStatusUpdate{{
+		ID:        id,
+		Status:    status,
+		Timestamp: timestamp,
+	}})
+}
+
+// SetStatusesIfNotSet updates multiple message statuses in a single batch operation
+// but only if the corresponding status timestamp is not already set
+func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, workspaceID string, updates []domain.MessageStatusUpdate) error {
 	// codecov:ignore:start
-	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "SetStatusIfNotSet")
+	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "SetStatusesIfNotSet")
 	defer tracing.EndSpan(span, nil)
 	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
-	tracing.AddAttribute(ctx, "messageID", id)
-	tracing.AddAttribute(ctx, "status", string(status))
+	tracing.AddAttribute(ctx, "updateCount", len(updates))
 	// codecov:ignore:end
+
+	if len(updates) == 0 {
+		return nil
+	}
 
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
@@ -404,57 +417,90 @@ func (r *MessageHistoryRepository) SetStatusIfNotSet(ctx context.Context, worksp
 		return fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	// Determine which field to check and update based on status
-	var field string
-	switch status {
-	case domain.MessageStatusDelivered:
-		field = "delivered_at"
-	case domain.MessageStatusFailed:
-		field = "failed_at"
-	case domain.MessageStatusOpened:
-		field = "opened_at"
-	case domain.MessageStatusClicked:
-		field = "clicked_at"
-	case domain.MessageStatusBounced:
-		field = "bounced_at"
-	case domain.MessageStatusComplained:
-		field = "complained_at"
-	case domain.MessageStatusUnsubscribed:
-		field = "unsubscribed_at"
-	default:
-		// codecov:ignore:start
-		tracing.MarkSpanError(ctx, fmt.Errorf("invalid status: %s", status))
-		// codecov:ignore:end
-		return fmt.Errorf("invalid status: %s", status)
+	// Group updates by status type for more efficient processing
+	statusGroups := make(map[domain.MessageStatus][]domain.MessageStatusUpdate)
+	for _, update := range updates {
+		statusGroups[update.Status] = append(statusGroups[update.Status], update)
 	}
 
-	// Only update if there's no existing timestamp (field IS NULL)
-	updateQuery := fmt.Sprintf(`
-		UPDATE message_history 
-		SET status = $1, %s = $2, updated_at = $3
-		WHERE id = $4 AND %s IS NULL
-	`, field, field)
+	now := time.Now()
 
-	result, err := workspaceDB.ExecContext(ctx, updateQuery, status, timestamp, time.Now(), id)
-	if err != nil {
-		// codecov:ignore:start
-		tracing.MarkSpanError(ctx, err)
-		// codecov:ignore:end
-		return fmt.Errorf("failed to update message status: %w", err)
+	// Process each status group separately
+	for status, groupUpdates := range statusGroups {
+		// Determine which field to check and update based on status
+		var field string
+		switch status {
+		case domain.MessageStatusDelivered:
+			field = "delivered_at"
+		case domain.MessageStatusFailed:
+			field = "failed_at"
+		case domain.MessageStatusOpened:
+			field = "opened_at"
+		case domain.MessageStatusClicked:
+			field = "clicked_at"
+		case domain.MessageStatusBounced:
+			field = "bounced_at"
+		case domain.MessageStatusComplained:
+			field = "complained_at"
+		case domain.MessageStatusUnsubscribed:
+			field = "unsubscribed_at"
+		default:
+			// codecov:ignore:start
+			tracing.MarkSpanError(ctx, fmt.Errorf("invalid status: %s", status))
+			// codecov:ignore:end
+			return fmt.Errorf("invalid status: %s", status)
+		}
+
+		// Build the query for this status group
+		updateQueryBase := fmt.Sprintf(`
+			UPDATE message_history 
+			SET status = $1, %s = CASE id `, field)
+
+		// Build the CASE statements for each message ID
+		var caseStatements []string
+		args := []interface{}{status}
+
+		for i, update := range groupUpdates {
+			paramIndex := i*2 + 2 // Starting from $2, then $4, $6, etc.
+			caseStatements = append(caseStatements, fmt.Sprintf(
+				"WHEN $%d THEN $%d",
+				paramIndex,
+				paramIndex+1,
+			))
+			args = append(args, update.ID, update.Timestamp)
+		}
+
+		// Add the updated_at CASE statement
+		updateQueryMiddle := fmt.Sprintf(` END, updated_at = $%d
+			WHERE id IN (`, len(args)+1)
+		args = append(args, now)
+
+		// Build the IN clause with parameters
+		var idPlaceholders []string
+		for i := range groupUpdates {
+			paramIndex := i*2 + 2 // Same as above, $2, $4, $6, etc.
+			idPlaceholders = append(idPlaceholders, fmt.Sprintf("$%d", paramIndex))
+		}
+
+		// Only update if there's no existing timestamp (field IS NULL)
+		updateQueryEnd := fmt.Sprintf(`) AND %s IS NULL`, field)
+
+		// Assemble the full query
+		updateQuery := updateQueryBase +
+			strings.Join(caseStatements, " ") +
+			updateQueryMiddle +
+			strings.Join(idPlaceholders, ", ") +
+			updateQueryEnd
+
+		// Execute the update for this status group
+		_, err = workspaceDB.ExecContext(ctx, updateQuery, args...)
+		if err != nil {
+			// codecov:ignore:start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore:end
+			return fmt.Errorf("failed to batch update message statuses: %w", err)
+		}
 	}
-
-	// Check if any rows were affected (meaning the update happened)
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		// codecov:ignore:start
-		tracing.MarkSpanError(ctx, err)
-		// codecov:ignore:end
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	// codecov:ignore:start
-	tracing.AddAttribute(ctx, "rowsAffected", rowsAffected)
-	// codecov:ignore:end
 
 	return nil
 }

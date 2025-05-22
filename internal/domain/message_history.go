@@ -31,6 +31,13 @@ const (
 	MessageStatusUnsubscribed MessageStatus = "unsubscribed"
 )
 
+// MessageStatusUpdate represents a status update for a message
+type MessageStatusUpdate struct {
+	ID        string        `json:"id"`
+	Status    MessageStatus `json:"status"`
+	Timestamp time.Time     `json:"timestamp"`
+}
+
 // MessageData represents the JSON data used to compile a template
 type MessageData struct {
 	// Custom fields used in template compilation
@@ -122,6 +129,9 @@ type MessageHistoryRepository interface {
 
 	// SetStatusIfNotSet sets a status only if it hasn't been set before (the field is NULL)
 	SetStatusIfNotSet(ctx context.Context, workspaceID, id string, status MessageStatus, timestamp time.Time) error
+
+	// SetStatusesIfNotSet updates multiple message statuses in a batch if they haven't been set before
+	SetStatusesIfNotSet(ctx context.Context, workspaceID string, updates []MessageStatusUpdate) error
 
 	// SetClicked sets the clicked_at timestamp and ensures opened_at is also set
 	SetClicked(ctx context.Context, workspaceID, id string, timestamp time.Time) error
