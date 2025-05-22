@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   getContactPreferences,
   parseNotificationCenterParams,
@@ -9,6 +9,23 @@ import type { ContactPreferencesResponse, List } from './api/notification_center
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
+import { getTranslation, getLanguage } from './translations'
+import type { Language } from './translations'
+import languageIcon from './assets/language-icon.svg'
+
+// Language display names for the selector
+const languageNames: Record<Language, string> = {
+  en: 'English',
+  fr: 'Français',
+  es: 'Español',
+  de: 'Deutsch',
+  zh: '中文',
+  hi: 'हिन्दी',
+  ar: 'العربية',
+  pt: 'Português',
+  ru: 'Русский',
+  ja: '日本語'
+}
 
 function App() {
   const [loading, setLoading] = useState(true)
@@ -17,6 +34,12 @@ function App() {
   const [subscriptions, setSubscriptions] = useState<Record<string, boolean>>({})
   const [processingLists, setProcessingLists] = useState<Record<string, boolean>>({})
   const [allLists, setAllLists] = useState<Array<List & { status?: string }>>([])
+  const [language, setLanguage] = useState<Language>(getLanguage())
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false)
+  const languageMenuRef = useRef<HTMLDivElement>(null)
+
+  // Translation helper function
+  const t = (key: string) => getTranslation(key, language)
 
   useEffect(() => {
     async function loadNotificationData() {
@@ -28,7 +51,7 @@ function App() {
         const params = parseNotificationCenterParams()
 
         if (!params) {
-          setError('Missing required parameters. Please check the URL.')
+          setError(t('missingParameters'))
           setLoading(false)
           return
         }
@@ -92,7 +115,7 @@ function App() {
         setLoading(false)
       } catch (err) {
         console.error('Failed to load notification center data:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load notifications')
+        setError(err instanceof Error ? err.message : t('failedToLoad'))
         setLoading(false)
       }
     }
@@ -118,9 +141,55 @@ function App() {
   // Update page title with contact information
   useEffect(() => {
     if (notificationData?.contact) {
-      document.title = `${notificationData.contact.email} | Email Subscriptions`
+      document.title = `${notificationData.contact.email} | ${t('emailSubscriptions')}`
     }
-  }, [notificationData?.contact])
+  }, [notificationData?.contact, language])
+
+  // Handle clicks outside language menu to close it
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        languageMenuRef.current &&
+        !languageMenuRef.current.contains(event.target as Node) &&
+        showLanguageMenu
+      ) {
+        setShowLanguageMenu(false)
+      }
+    }
+
+    function handleEscapeKey(event: KeyboardEvent) {
+      if (event.key === 'Escape' && showLanguageMenu) {
+        setShowLanguageMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscapeKey)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscapeKey)
+    }
+  }, [showLanguageMenu])
+
+  // Handle keyboard events for language menu
+  const handleLanguageKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setShowLanguageMenu(false)
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      setShowLanguageMenu(!showLanguageMenu)
+    }
+  }
+
+  // Handle keyboard selection within dropdown
+  const handleLanguageOptionKeyDown = (e: React.KeyboardEvent, code: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      setLanguage(code as Language)
+      setShowLanguageMenu(false)
+      e.preventDefault()
+    }
+  }
 
   const subscribe = async (listId: string) => {
     try {
@@ -152,7 +221,7 @@ function App() {
           list_ids: [listId]
         })
 
-        toast.success('Successfully subscribed', {
+        toast.success(t('successSubscribed'), {
           style: { backgroundColor: '#f0fdf4', borderLeft: '4px solid #22c55e', color: '#166534' },
           duration: 3000
         })
@@ -170,7 +239,7 @@ function App() {
       )
 
       console.error('Failed to subscribe:', err)
-      toast.error('Failed to subscribe. Please try again.')
+      toast.error(t('failedSubscribe'))
     } finally {
       // Clear processing state
       setProcessingLists((prev) => ({ ...prev, [listId]: false }))
@@ -209,7 +278,7 @@ function App() {
           mid: params.mid
         })
 
-        toast.success('Successfully unsubscribed', {
+        toast.success(t('successUnsubscribed'), {
           style: { backgroundColor: '#f0fdf4', borderLeft: '4px solid #22c55e', color: '#166534' },
           duration: 3000
         })
@@ -227,7 +296,7 @@ function App() {
       )
 
       console.error('Failed to unsubscribe:', err)
-      toast.error('Failed to unsubscribe. Please try again.')
+      toast.error(t('failedUnsubscribe'))
     } finally {
       // Clear processing state
       setProcessingLists((prev) => ({ ...prev, [listId]: false }))
@@ -239,7 +308,7 @@ function App() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <div className="p-6 max-w-sm mx-auto">
           <div className="text-center">
-            <div className="text-xl font-medium text-black">Loading...</div>
+            <div className="text-xl font-medium text-black">{t('loading')}</div>
           </div>
         </div>
       </div>
@@ -251,7 +320,7 @@ function App() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <div className="p-6 max-w-sm mx-auto">
           <div className="text-center">
-            <div className="text-xl font-medium text-red-500">Error</div>
+            <div className="text-xl font-medium text-red-500">{t('error')}</div>
             <p className="text-gray-700 mt-2">{error}</p>
           </div>
         </div>
@@ -287,11 +356,51 @@ function App() {
               rel="noopener noreferrer"
               className="hover:underline"
             >
-              Email Subscriptions
+              {t('emailSubscriptions')}
             </a>
           </div>
-          {/* Empty div for flex balance */}
-          <div className="flex-shrink-0 w-8 md:w-10"></div>
+          {/* Language selector */}
+          <div className="flex-shrink-0">
+            <div className="relative" ref={languageMenuRef}>
+              <button
+                className="flex items-center focus:outline-none rounded-sm p-1 transition-all border border-gray-300 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+                onKeyDown={handleLanguageKeyDown}
+                aria-label="Select language"
+                aria-expanded={showLanguageMenu}
+                aria-haspopup="true"
+              >
+                <img
+                  src={languageIcon}
+                  alt="Language"
+                  className="h-6 w-6 opacity-70 hover:opacity-100 transition-opacity"
+                />
+              </button>
+
+              {showLanguageMenu && (
+                <div
+                  className="absolute right-0 mt-2 py-2 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-10"
+                  role="menu"
+                >
+                  {Object.entries(languageNames).map(([code, name]) => (
+                    <button
+                      key={code}
+                      className="block w-full text-left px-4 py-1 text-sm hover:bg-gray-100 cursor-pointer"
+                      onClick={() => {
+                        setLanguage(code as Language)
+                        setShowLanguageMenu(false)
+                      }}
+                      onKeyDown={(e) => handleLanguageOptionKeyDown(e, code)}
+                      role="menuitem"
+                      tabIndex={0}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -302,7 +411,8 @@ function App() {
             <>
               <div className="mb-6 mt-4">
                 <div className="text-md font-medium">
-                  Welcome, {notificationData.contact.first_name || notificationData.contact.email}
+                  {t('welcome')}{' '}
+                  {notificationData.contact.first_name || notificationData.contact.email}
                 </div>
               </div>
 
@@ -318,7 +428,7 @@ function App() {
                       return (
                         <div
                           key={list.id}
-                          className={`p-4 border border-gray-300 rounded-lg ${
+                          className={`p-4 border border-gray-300 rounded-sm ${
                             isActive ? 'bg-white' : 'bg-gray-50'
                           }`}
                         >
@@ -355,12 +465,12 @@ function App() {
                                 }`}
                               >
                                 {processingLists[list.id]
-                                  ? 'Processing...'
+                                  ? t('processing')
                                   : !canToggle
                                   ? list.status
                                   : isSubscribed
-                                  ? 'Unsubscribe'
-                                  : 'Subscribe'}
+                                  ? t('unsubscribe')
+                                  : t('subscribe')}
                               </Button>
                             </div>
                           </div>
@@ -373,9 +483,7 @@ function App() {
 
               {/* Empty state when no lists */}
               {allLists.length === 0 && (
-                <p className="text-center text-gray-500 py-4">
-                  No subscriptions settings available.
-                </p>
+                <p className="text-center text-gray-500 py-4">{t('noSubscriptions')}</p>
               )}
             </>
           )}
@@ -390,7 +498,7 @@ function App() {
           rel="noopener noreferrer"
           className="hover:text-gray-700 hover:underline"
         >
-          Visit our website
+          {t('visitWebsite')}
         </a>
       </div>
     </div>

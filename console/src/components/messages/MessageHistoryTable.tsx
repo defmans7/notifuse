@@ -314,7 +314,6 @@ export function MessageHistoryTable({
     key: 'actions',
     width: 100,
     render: (record: MessageHistory) => {
-      console.log('record', record)
       if (!record.template_id) {
         return null
       }

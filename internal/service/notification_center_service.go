@@ -44,6 +44,7 @@ func (s *NotificationCenterService) GetContactPreferences(ctx context.Context, w
 
 	// Using the workspace's settings secret key to verify the HMAC
 	secretKey := workspace.Settings.SecretKey
+
 	if !domain.VerifyEmailHMAC(email, emailHMAC, secretKey) {
 		return nil, fmt.Errorf("invalid email verification")
 	}
