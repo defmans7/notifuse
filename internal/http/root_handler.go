@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -35,13 +36,13 @@ func (h *RootHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle notification center requests
-	if h.notificationCenterDir != "" && strings.HasPrefix(r.URL.Path, "/notification-center") {
+	if strings.HasPrefix(r.URL.Path, "/notification-center") || strings.Contains(r.Header.Get("Referer"), "/notification-center") {
 		h.serveNotificationCenter(w, r)
 		return
 	}
 
-	// If configured to serve console files and path doesn't start with /api
-	if h.consoleDir != "" && !strings.HasPrefix(r.URL.Path, "/api") {
+	// If  path doesn't start with /api
+	if !strings.HasPrefix(r.URL.Path, "/api") {
 		h.serveConsole(w, r)
 		return
 	}
@@ -105,6 +106,7 @@ func (h *RootHandler) serveNotificationCenter(w http.ResponseWriter, r *http.Req
 	fs := http.FileServer(http.Dir(h.notificationCenterDir))
 
 	path := h.notificationCenterDir + r.URL.Path
+	log.Println("path", path)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		// If the requested file doesn't exist, serve index.html for SPA routing
 		r.URL.Path = "/"
@@ -114,16 +116,7 @@ func (h *RootHandler) serveNotificationCenter(w http.ResponseWriter, r *http.Req
 }
 
 func (h *RootHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/", h.Handle)
 	mux.HandleFunc("/config.js", h.serveConfigJS)
-
-	// If notification center directory is configured, register it
-	if h.notificationCenterDir != "" {
-		mux.HandleFunc("/notification-center/", h.Handle)
-	}
-
-	// If console directory is configured, add specific /api route
-	if h.consoleDir != "" {
-		mux.HandleFunc("/api", h.Handle)
-	}
+	// catch all route
+	mux.HandleFunc("/", h.Handle)
 }
