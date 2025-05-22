@@ -3,10 +3,14 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/tracing"
 )
 
 type webhookEventRepository struct {
@@ -20,523 +24,325 @@ func NewWebhookEventRepository(workspaceRepo domain.WorkspaceRepository) domain.
 	}
 }
 
-// webhookEventModel is the database model for webhook events
-type webhookEventModel struct {
-	ID                    string    `db:"id"`
-	Type                  string    `db:"type"`
-	EmailProviderKind     string    `db:"email_provider_kind"`
-	IntegrationID         string    `db:"integration_id"`
-	RecipientEmail        string    `db:"recipient_email"`
-	MessageID             string    `db:"message_id"`
-	TransactionalID       string    `db:"transactional_id"`
-	BroadcastID           string    `db:"broadcast_id"`
-	Timestamp             time.Time `db:"timestamp"`
-	RawPayload            string    `db:"raw_payload"`
-	BounceType            string    `db:"bounce_type"`
-	BounceCategory        string    `db:"bounce_category"`
-	BounceDiagnostic      string    `db:"bounce_diagnostic"`
-	ComplaintFeedbackType string    `db:"complaint_feedback_type"`
-	CreatedAt             time.Time `db:"created_at"`
-}
-
-// toDomain converts a database model to a domain model
-func (m *webhookEventModel) toDomain() *domain.WebhookEvent {
-	event := domain.NewWebhookEvent(
-		m.ID,
-		domain.EmailEventType(m.Type),
-		domain.EmailProviderKind(m.EmailProviderKind),
-		m.IntegrationID,
-		m.RecipientEmail,
-		m.MessageID,
-		m.Timestamp,
-		m.RawPayload,
-	)
-
-	if m.TransactionalID != "" {
-		event.SetTransactionalID(m.TransactionalID)
-	}
-
-	if m.BroadcastID != "" {
-		event.SetBroadcastID(m.BroadcastID)
-	}
-
-	if m.Type == string(domain.EmailEventBounce) && (m.BounceType != "" || m.BounceCategory != "" || m.BounceDiagnostic != "") {
-		event.SetBounceInfo(m.BounceType, m.BounceCategory, m.BounceDiagnostic)
-	}
-
-	if m.Type == string(domain.EmailEventComplaint) && m.ComplaintFeedbackType != "" {
-		event.SetComplaintInfo(m.ComplaintFeedbackType)
-	}
-
-	return event
-}
-
-// scanWebhookEventModel scans a database row into a webhookEventModel
-func scanWebhookEventModel(scanner interface {
-	Scan(dest ...interface{}) error
-}) (*webhookEventModel, error) {
-	var model webhookEventModel
-	err := scanner.Scan(
-		&model.ID,
-		&model.Type,
-		&model.EmailProviderKind,
-		&model.IntegrationID,
-		&model.RecipientEmail,
-		&model.MessageID,
-		&model.TransactionalID,
-		&model.BroadcastID,
-		&model.Timestamp,
-		&model.RawPayload,
-		&model.BounceType,
-		&model.BounceCategory,
-		&model.BounceDiagnostic,
-		&model.ComplaintFeedbackType,
-		&model.CreatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &model, nil
-}
-
-// toModel converts a domain model to a database model
-func eventToModel(e *domain.WebhookEvent) *webhookEventModel {
-	return &webhookEventModel{
-		ID:                    e.ID,
-		Type:                  string(e.Type),
-		EmailProviderKind:     string(e.EmailProviderKind),
-		IntegrationID:         e.IntegrationID,
-		RecipientEmail:        e.RecipientEmail,
-		MessageID:             e.MessageID,
-		TransactionalID:       e.TransactionalID,
-		BroadcastID:           e.BroadcastID,
-		Timestamp:             e.Timestamp,
-		RawPayload:            e.RawPayload,
-		BounceType:            e.BounceType,
-		BounceCategory:        e.BounceCategory,
-		BounceDiagnostic:      e.BounceDiagnostic,
-		ComplaintFeedbackType: e.ComplaintFeedbackType,
-		CreatedAt:             time.Now(),
-	}
-}
-
 // StoreEvent stores a webhook event in the database
-func (r *webhookEventRepository) StoreEvent(ctx context.Context, event *domain.WebhookEvent) error {
-	// Since webhook events need to be stored in a central place, we'll use "system" as the workspace ID
-	// This corresponds to the system database that contains webhook events for all workspaces
-	systemDB, err := r.workspaceRepo.GetConnection(ctx, "system")
-	if err != nil {
-		return fmt.Errorf("failed to get system database connection: %w", err)
-	}
+func (r *webhookEventRepository) StoreEvent(ctx context.Context, workspaceID string, event *domain.WebhookEvent) error {
+	// codecov:ignore:start
+	ctx, span := tracing.StartServiceSpan(ctx, "WebhookEventRepository", "StoreEvent")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	tracing.AddAttribute(ctx, "eventID", event.ID)
+	// codecov:ignore:end
 
-	model := eventToModel(event)
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
 
 	query := `
 		INSERT INTO webhook_events (
-			id, type, email_provider_kind, integration_id, recipient_email, message_id, 
-			transactional_id, broadcast_id, timestamp, raw_payload, 
-			bounce_type, bounce_category, bounce_diagnostic, 
-			complaint_feedback_type, created_at
-		) 
-		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+			id, type, email_provider_kind, integration_id, recipient_email, 
+			message_id, transactional_id, broadcast_id, timestamp, raw_payload,
+			bounce_type, bounce_category, bounce_diagnostic, complaint_feedback_type,
+			created_at
+		) VALUES (
+			$1, $2, $3, $4, $5, 
+			$6, $7, $8, $9, $10,
+			$11, $12, $13, $14, 
+			$15
 		)
 	`
 
-	_, err = systemDB.ExecContext(ctx, query,
-		model.ID, model.Type, model.EmailProviderKind, model.IntegrationID, model.RecipientEmail, model.MessageID,
-		model.TransactionalID, model.BroadcastID, model.Timestamp, model.RawPayload,
-		model.BounceType, model.BounceCategory, model.BounceDiagnostic,
-		model.ComplaintFeedbackType, model.CreatedAt)
+	_, err = workspaceDB.ExecContext(
+		ctx,
+		query,
+		event.ID,
+		event.Type,
+		event.EmailProviderKind,
+		event.IntegrationID,
+		event.RecipientEmail,
+		event.MessageID,
+		event.TransactionalID,
+		event.BroadcastID,
+		event.Timestamp,
+		event.RawPayload,
+		event.BounceType,
+		event.BounceCategory,
+		event.BounceDiagnostic,
+		event.ComplaintFeedbackType,
+		time.Now(),
+	)
 
 	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
 		return fmt.Errorf("failed to store webhook event: %w", err)
 	}
 
 	return nil
 }
 
-// GetEventByID retrieves a webhook event by its ID
-func (r *webhookEventRepository) GetEventByID(ctx context.Context, id string) (*domain.WebhookEvent, error) {
-	// Use the system database for webhook events
-	systemDB, err := r.workspaceRepo.GetConnection(ctx, "system")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get system database connection: %w", err)
-	}
-
-	query := `
-		SELECT * FROM webhook_events WHERE id = $1
-	`
-
-	row := systemDB.QueryRowContext(ctx, query, id)
-	model, err := scanWebhookEventModel(row)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, &domain.ErrWebhookEventNotFound{ID: id}
-		}
-		return nil, fmt.Errorf("failed to get webhook event: %w", err)
-	}
-
-	return model.toDomain(), nil
-}
-
-// GetEventsByMessageID retrieves all webhook events associated with a message ID
-func (r *webhookEventRepository) GetEventsByMessageID(ctx context.Context, messageID string, limit, offset int) ([]*domain.WebhookEvent, error) {
-	// Use the system database for webhook events
-	systemDB, err := r.workspaceRepo.GetConnection(ctx, "system")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get system database connection: %w", err)
-	}
-
-	query := `
-		SELECT * FROM webhook_events 
-		WHERE message_id = $1
-		ORDER BY timestamp DESC
-		LIMIT $2 OFFSET $3
-	`
-
-	rows, err := systemDB.QueryContext(ctx, query, messageID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get webhook events by message ID: %w", err)
-	}
-	defer rows.Close()
-
-	var events []*domain.WebhookEvent
-
-	for rows.Next() {
-		model, err := scanWebhookEventModel(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan webhook event row: %w", err)
-		}
-
-		events = append(events, model.toDomain())
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error while iterating through webhook events: %w", err)
-	}
-
-	return events, nil
-}
-
-// GetEventsByTransactionalID retrieves all webhook events associated with a transactional ID
-func (r *webhookEventRepository) GetEventsByTransactionalID(ctx context.Context, transactionalID string, limit, offset int) ([]*domain.WebhookEvent, error) {
-	// Use the system database for webhook events
-	systemDB, err := r.workspaceRepo.GetConnection(ctx, "system")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get system database connection: %w", err)
-	}
-
-	query := `
-		SELECT * FROM webhook_events 
-		WHERE transactional_id = $1
-		ORDER BY timestamp DESC
-		LIMIT $2 OFFSET $3
-	`
-
-	rows, err := systemDB.QueryContext(ctx, query, transactionalID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get webhook events by transactional ID: %w", err)
-	}
-	defer rows.Close()
-
-	var events []*domain.WebhookEvent
-
-	for rows.Next() {
-		model, err := scanWebhookEventModel(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan webhook event row: %w", err)
-		}
-
-		events = append(events, model.toDomain())
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error while iterating through webhook events: %w", err)
-	}
-
-	return events, nil
-}
-
-// GetEventsByBroadcastID retrieves all webhook events associated with a broadcast ID
-func (r *webhookEventRepository) GetEventsByBroadcastID(ctx context.Context, broadcastID string, limit, offset int) ([]*domain.WebhookEvent, error) {
-	// Use the system database for webhook events
-	systemDB, err := r.workspaceRepo.GetConnection(ctx, "system")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get system database connection: %w", err)
-	}
-
-	query := `
-		SELECT * FROM webhook_events 
-		WHERE broadcast_id = $1
-		ORDER BY timestamp DESC
-		LIMIT $2 OFFSET $3
-	`
-
-	rows, err := systemDB.QueryContext(ctx, query, broadcastID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get webhook events by broadcast ID: %w", err)
-	}
-	defer rows.Close()
-
-	var events []*domain.WebhookEvent
-
-	for rows.Next() {
-		model, err := scanWebhookEventModel(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan webhook event row: %w", err)
-		}
-
-		events = append(events, model.toDomain())
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error while iterating through webhook events: %w", err)
-	}
-
-	return events, nil
-}
-
-// GetEventsByType retrieves webhook events by type (delivered, bounce, complaint)
-func (r *webhookEventRepository) GetEventsByType(ctx context.Context, workspaceID string, eventType domain.EmailEventType, limit, offset int) ([]*domain.WebhookEvent, error) {
-	// Use the system database for webhook events
-	systemDB, err := r.workspaceRepo.GetConnection(ctx, "system")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get system database connection: %w", err)
-	}
+// ListEvents retrieves all webhook events for a workspace
+func (r *webhookEventRepository) ListEvents(ctx context.Context, workspaceID string, params domain.WebhookEventListParams) (*domain.WebhookEventListResult, error) {
+	// codecov:ignore:start
+	ctx, span := tracing.StartServiceSpan(ctx, "WebhookEventRepository", "ListEvents")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	// codecov:ignore:end
 
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	// First, get transactional notification IDs from this workspace
-	transactionalQuery := `
-		SELECT id FROM transactional_notifications 
-		WHERE workspace_id = $1
-	`
+	// Use squirrel to build the query with placeholders
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	queryBuilder := psql.Select(
+		"id", "type", "email_provider_kind", "integration_id", "recipient_email",
+		"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
+		"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type",
+		"created_at",
+	).From("webhook_events")
 
-	transRows, err := workspaceDB.QueryContext(ctx, transactionalQuery, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get transactional notification IDs: %w", err)
+	// Apply filters using squirrel
+	if params.EventType != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"type": params.EventType})
 	}
-	defer transRows.Close()
 
-	var transactionalIDs []string
-	for transRows.Next() {
-		var id string
-		if err := transRows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to scan transactional ID: %w", err)
+	if params.RecipientEmail != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"recipient_email": params.RecipientEmail})
+	}
+
+	if params.MessageID != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"message_id": params.MessageID})
+	}
+
+	if params.TransactionalID != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"transactional_id": params.TransactionalID})
+	}
+
+	if params.BroadcastID != "" {
+		queryBuilder = queryBuilder.Where(sq.Eq{"broadcast_id": params.BroadcastID})
+	}
+
+	// Time range filters
+	if params.TimestampAfter != nil {
+		queryBuilder = queryBuilder.Where(sq.GtOrEq{"timestamp": params.TimestampAfter})
+	}
+
+	if params.TimestampBefore != nil {
+		queryBuilder = queryBuilder.Where(sq.LtOrEq{"timestamp": params.TimestampBefore})
+	}
+
+	// Handle cursor-based pagination
+	if params.Cursor != "" {
+		// Decode the base64 cursor
+		decodedCursor, err := base64.StdEncoding.DecodeString(params.Cursor)
+		if err != nil {
+			// codecov:ignore:start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore:end
+			return nil, fmt.Errorf("invalid cursor encoding: %w", err)
 		}
-		transactionalIDs = append(transactionalIDs, id)
-	}
 
-	// Next, get broadcast IDs from this workspace
-	broadcastQuery := `
-		SELECT id FROM broadcasts 
-		WHERE workspace_id = $1
-	`
-
-	broadcastRows, err := workspaceDB.QueryContext(ctx, broadcastQuery, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get broadcast IDs: %w", err)
-	}
-	defer broadcastRows.Close()
-
-	var broadcastIDs []string
-	for broadcastRows.Next() {
-		var id string
-		if err := broadcastRows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to scan broadcast ID: %w", err)
+		// Parse the compound cursor (timestamp~id)
+		cursorStr := string(decodedCursor)
+		cursorParts := strings.Split(cursorStr, "~")
+		if len(cursorParts) != 2 {
+			// codecov:ignore:start
+			tracing.MarkSpanError(ctx, fmt.Errorf("invalid cursor format"))
+			// codecov:ignore:end
+			return nil, fmt.Errorf("invalid cursor format: expected timestamp~id")
 		}
-		broadcastIDs = append(broadcastIDs, id)
-	}
 
-	// Now, construct the query for webhook events
-	var params []interface{}
-	var conditions []string
-	params = append(params, string(eventType))
-	conditions = append(conditions, fmt.Sprintf("type = $%d", len(params)))
-
-	// Add transactional IDs condition if any exist
-	if len(transactionalIDs) > 0 {
-		placeholders := make([]string, len(transactionalIDs))
-		for i, id := range transactionalIDs {
-			params = append(params, id)
-			placeholders[i] = fmt.Sprintf("$%d", len(params))
+		cursorTime, err := time.Parse(time.RFC3339, cursorParts[0])
+		if err != nil {
+			// codecov:ignore:start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore:end
+			return nil, fmt.Errorf("invalid cursor timestamp format: %w", err)
 		}
-		conditions = append(conditions, fmt.Sprintf("transactional_id IN (%s)", joinStrings(placeholders, ",")))
+
+		cursorID := cursorParts[1]
+
+		// Query for events before the cursor (newer events first)
+		// Either timestamp is less than cursor time
+		// OR timestamp equals cursor time AND id is less than cursor id
+		queryBuilder = queryBuilder.Where(
+			sq.Or{
+				sq.Lt{"timestamp": cursorTime},
+				sq.And{
+					sq.Eq{"timestamp": cursorTime},
+					sq.Lt{"id": cursorID},
+				},
+			},
+		)
 	}
 
-	// Add broadcast IDs condition if any exist
-	if len(broadcastIDs) > 0 {
-		placeholders := make([]string, len(broadcastIDs))
-		for i, id := range broadcastIDs {
-			params = append(params, id)
-			placeholders[i] = fmt.Sprintf("$%d", len(params))
-		}
-		conditions = append(conditions, fmt.Sprintf("broadcast_id IN (%s)", joinStrings(placeholders, ",")))
+	// Default ordering - most recent first
+	queryBuilder = queryBuilder.OrderBy("timestamp DESC", "id DESC")
+
+	// Add limit (fetch one extra to determine if there are more results)
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 20 // Default limit
 	}
-
-	// If no IDs were found, return empty result
-	if len(transactionalIDs) == 0 && len(broadcastIDs) == 0 {
-		return []*domain.WebhookEvent{}, nil
-	}
-
-	// Create the WHERE clause
-	whereClause := joinStrings(conditions, " OR ")
-
-	// Add LIMIT and OFFSET
-	params = append(params, limit, offset)
-	query := fmt.Sprintf(`
-		SELECT * FROM webhook_events 
-		WHERE %s
-		ORDER BY timestamp DESC
-		LIMIT $%d OFFSET $%d
-	`, whereClause, len(params)-1, len(params))
+	queryBuilder = queryBuilder.Limit(uint64(limit + 1))
 
 	// Execute the query
-	rows, err := systemDB.QueryContext(ctx, query, params...)
+	query, args, err := queryBuilder.ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get webhook events by type: %w", err)
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := workspaceDB.QueryContext(ctx, query, args...)
+	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("failed to query webhook events: %w", err)
 	}
 	defer rows.Close()
 
-	var events []*domain.WebhookEvent
-
+	events := []*domain.WebhookEvent{}
 	for rows.Next() {
-		model, err := scanWebhookEventModel(rows)
+		event := &domain.WebhookEvent{}
+		var transactionalID, broadcastID, bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType sql.NullString
+
+		err := rows.Scan(
+			&event.ID,
+			&event.Type,
+			&event.EmailProviderKind,
+			&event.IntegrationID,
+			&event.RecipientEmail,
+			&event.MessageID,
+			&transactionalID,
+			&broadcastID,
+			&event.Timestamp,
+			&event.RawPayload,
+			&bounceType,
+			&bounceCategory,
+			&bounceDiagnostic,
+			&complaintFeedbackType,
+			&event.CreatedAt,
+		)
+
 		if err != nil {
+			// codecov:ignore:start
+			tracing.MarkSpanError(ctx, err)
+			// codecov:ignore:end
 			return nil, fmt.Errorf("failed to scan webhook event row: %w", err)
 		}
 
-		events = append(events, model.toDomain())
+		// Convert nullable fields
+		if transactionalID.Valid {
+			event.TransactionalID = transactionalID.String
+		}
+
+		if broadcastID.Valid {
+			event.BroadcastID = broadcastID.String
+		}
+
+		if bounceType.Valid {
+			event.BounceType = bounceType.String
+		}
+
+		if bounceCategory.Valid {
+			event.BounceCategory = bounceCategory.String
+		}
+
+		if bounceDiagnostic.Valid {
+			event.BounceDiagnostic = bounceDiagnostic.String
+		}
+
+		if complaintFeedbackType.Valid {
+			event.ComplaintFeedbackType = complaintFeedbackType.String
+		}
+
+		events = append(events, event)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error while iterating through webhook events: %w", err)
+	if err = rows.Err(); err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("error iterating webhook event rows: %w", err)
 	}
 
-	return events, nil
+	// Determine if we have more results and generate cursor
+	var nextCursor string
+	hasMore := false
+
+	// Check if we got an extra result, which indicates there are more results
+	if len(events) > limit {
+		hasMore = true
+		events = events[:limit] // Remove the extra item
+	}
+
+	// Generate the next cursor based on the last item if we have results
+	if len(events) > 0 && hasMore {
+		lastEvent := events[len(events)-1]
+		cursorStr := fmt.Sprintf("%s~%s", lastEvent.Timestamp.Format(time.RFC3339), lastEvent.ID)
+		nextCursor = base64.StdEncoding.EncodeToString([]byte(cursorStr))
+	}
+
+	return &domain.WebhookEventListResult{
+		Events:     events,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
 }
 
 // GetEventCount retrieves the count of events by type for a workspace
-func (r *webhookEventRepository) GetEventCount(ctx context.Context, workspaceID string, eventType domain.EmailEventType) (int, error) {
-	// Use the system database for webhook events
-	systemDB, err := r.workspaceRepo.GetConnection(ctx, "system")
-	if err != nil {
-		return 0, fmt.Errorf("failed to get system database connection: %w", err)
-	}
+func (r *webhookEventRepository) GetEventCount(ctx context.Context, workspaceID string, eventType domain.EmailEventType) (int64, error) {
+	// codecov:ignore:start
+	ctx, span := tracing.StartServiceSpan(ctx, "WebhookEventRepository", "GetEventCount")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	tracing.AddAttribute(ctx, "eventType", string(eventType))
+	// codecov:ignore:end
 
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	// First, get transactional notification IDs from this workspace
-	transactionalQuery := `
-		SELECT id FROM transactional_notifications 
-		WHERE workspace_id = $1
-	`
+	// Build the query
+	var query string
+	var args []interface{}
 
-	transRows, err := workspaceDB.QueryContext(ctx, transactionalQuery, workspaceID)
+	if eventType == "" {
+		// Count all events
+		query = "SELECT COUNT(*) FROM webhook_events"
+	} else {
+		// Count events of a specific type
+		query = "SELECT COUNT(*) FROM webhook_events WHERE type = $1"
+		args = append(args, eventType)
+	}
+
+	var count int64
+	err = workspaceDB.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get transactional notification IDs: %w", err)
-	}
-	defer transRows.Close()
-
-	var transactionalIDs []string
-	for transRows.Next() {
-		var id string
-		if err := transRows.Scan(&id); err != nil {
-			return 0, fmt.Errorf("failed to scan transactional ID: %w", err)
-		}
-		transactionalIDs = append(transactionalIDs, id)
-	}
-
-	// Next, get broadcast IDs from this workspace
-	broadcastQuery := `
-		SELECT id FROM broadcasts 
-		WHERE workspace_id = $1
-	`
-
-	broadcastRows, err := workspaceDB.QueryContext(ctx, broadcastQuery, workspaceID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get broadcast IDs: %w", err)
-	}
-	defer broadcastRows.Close()
-
-	var broadcastIDs []string
-	for broadcastRows.Next() {
-		var id string
-		if err := broadcastRows.Scan(&id); err != nil {
-			return 0, fmt.Errorf("failed to scan broadcast ID: %w", err)
-		}
-		broadcastIDs = append(broadcastIDs, id)
-	}
-
-	// Now, construct the query for webhook events
-	var params []interface{}
-	var conditions []string
-	params = append(params, string(eventType))
-	conditions = append(conditions, fmt.Sprintf("type = $%d", len(params)))
-
-	// Add transactional IDs condition if any exist
-	if len(transactionalIDs) > 0 {
-		placeholders := make([]string, len(transactionalIDs))
-		for i, id := range transactionalIDs {
-			params = append(params, id)
-			placeholders[i] = fmt.Sprintf("$%d", len(params))
-		}
-		conditions = append(conditions, fmt.Sprintf("transactional_id IN (%s)", joinStrings(placeholders, ",")))
-	}
-
-	// Add broadcast IDs condition if any exist
-	if len(broadcastIDs) > 0 {
-		placeholders := make([]string, len(broadcastIDs))
-		for i, id := range broadcastIDs {
-			params = append(params, id)
-			placeholders[i] = fmt.Sprintf("$%d", len(params))
-		}
-		conditions = append(conditions, fmt.Sprintf("broadcast_id IN (%s)", joinStrings(placeholders, ",")))
-	}
-
-	// If no IDs were found, return zero
-	if len(transactionalIDs) == 0 && len(broadcastIDs) == 0 {
-		return 0, nil
-	}
-
-	// Create the WHERE clause
-	whereClause := joinStrings(conditions, " OR ")
-
-	query := fmt.Sprintf(`
-		SELECT COUNT(*) FROM webhook_events 
-		WHERE %s
-	`, whereClause)
-
-	// Execute the query
-	var count int
-	err = systemDB.QueryRowContext(ctx, query, params...).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get webhook event count: %w", err)
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return 0, fmt.Errorf("failed to get event count: %w", err)
 	}
 
 	return count, nil
-}
-
-// joinStrings joins strings with a separator
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-
-	return result
 }

@@ -380,13 +380,15 @@ type GetContactsRequest struct {
 	WorkspaceID string `json:"workspace_id" valid:"required,alphanum,stringlength(1|20)"`
 
 	// Optional filters
-	Email      string `json:"email,omitempty" valid:"optional,email"`
-	ExternalID string `json:"external_id,omitempty" valid:"optional"`
-	FirstName  string `json:"first_name,omitempty" valid:"optional"`
-	LastName   string `json:"last_name,omitempty" valid:"optional"`
-	Phone      string `json:"phone,omitempty" valid:"optional"`
-	Country    string `json:"country,omitempty" valid:"optional"`
-	Language   string `json:"language,omitempty" valid:"optional"`
+	Email             string `json:"email,omitempty" valid:"optional,email"`
+	ExternalID        string `json:"external_id,omitempty" valid:"optional"`
+	FirstName         string `json:"first_name,omitempty" valid:"optional"`
+	LastName          string `json:"last_name,omitempty" valid:"optional"`
+	Phone             string `json:"phone,omitempty" valid:"optional"`
+	Country           string `json:"country,omitempty" valid:"optional"`
+	Language          string `json:"language,omitempty" valid:"optional"`
+	ListID            string `json:"list_id,omitempty" valid:"optional"`
+	ContactListStatus string `json:"contact_list_status,omitempty" valid:"optional"`
 
 	// Join contact_lists
 	WithContactLists bool `json:"with_contact_lists,omitempty" valid:"optional"`
@@ -406,6 +408,8 @@ func (r *GetContactsRequest) FromQueryParams(params url.Values) error {
 	r.Phone = params.Get("phone")
 	r.Country = params.Get("country")
 	r.Language = params.Get("language")
+	r.ListID = params.Get("list_id")
+	r.ContactListStatus = params.Get("contact_list_status")
 	r.Cursor = params.Get("cursor")
 
 	// Validate workspace ID

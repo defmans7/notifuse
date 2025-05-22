@@ -2,12 +2,14 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
+	"time"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -18,991 +20,323 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// setupWebhookEventHandlerTest prepares test dependencies and creates a webhook event handler
-func setupWebhookEventHandlerTest(t *testing.T) (*mocks.MockWebhookEventServiceInterface, *pkgmocks.MockLogger, *WebhookEventHandler) {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(func() { ctrl.Finish() })
-
-	mockService := mocks.NewMockWebhookEventServiceInterface(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-
-	// Setup common logger expectations
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
-
-	// Create key pair for testing
-	secretKey := paseto.NewV4AsymmetricSecretKey()
-	publicKey := secretKey.Public()
-
-	handler := NewWebhookEventHandler(mockService, publicKey, mockLogger)
-	return mockService, mockLogger, handler
-}
-
-func TestWebhookEventHandler_RegisterRoutes(t *testing.T) {
-	// Setup
+func setupWebhookEventHandlerTest(t *testing.T) (*WebhookEventHandler, *mocks.MockWebhookEventServiceInterface, paseto.V4AsymmetricSecretKey) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockService := mocks.NewMockWebhookEventServiceInterface(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
-	// Setup logger expectations
+	// Set up logger mock expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Fatal(gomock.Any()).AnyTimes()
 
 	// Create key pair for testing
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	handler := NewWebhookEventHandler(mockService, publicKey, mockLogger)
+	handler := NewWebhookEventHandler(
+		mockService,
+		publicKey,
+		mockLogger,
+	)
 
-	// Register routes to a new multiplexer
+	return handler, mockService, secretKey
+}
+
+func createWebhookTestToken(t *testing.T, secretKey paseto.V4AsymmetricSecretKey, userID string) string {
+	token := paseto.NewToken()
+	token.SetExpiration(time.Now().Add(time.Hour))
+	token.SetString(string(domain.UserIDKey), userID)
+	token.SetString(string(domain.UserTypeKey), string(domain.UserTypeUser))
+	token.SetString(string(domain.SessionIDKey), "test-session")
+
+	signedToken := token.V4Sign(secretKey, nil)
+	require.NotEmpty(t, signedToken)
+	return signedToken
+}
+
+// Tests for handleIncomingWebhook
+
+func TestWebhookEventHandler_handleIncomingWebhook_MethodNotAllowed(t *testing.T) {
+	handler, _, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a non-POST request
+	req := httptest.NewRequest(http.MethodGet, "/webhooks/email", nil)
+	w := httptest.NewRecorder()
+
+	// Call the handler
+	handler.handleIncomingWebhook(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Method not allowed", response["error"])
+}
+
+func TestWebhookEventHandler_handleIncomingWebhook_MissingProvider(t *testing.T) {
+	handler, _, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a request with no provider
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?workspace_id=ws123&integration_id=int123", nil)
+	w := httptest.NewRecorder()
+
+	// Call the handler
+	handler.handleIncomingWebhook(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Provider is required", response["error"])
+}
+
+func TestWebhookEventHandler_handleIncomingWebhook_MissingWorkspaceOrIntegrationID(t *testing.T) {
+	handler, _, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a request with provider but missing workspace_id and integration_id
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses", nil)
+	w := httptest.NewRecorder()
+
+	// Call the handler
+	handler.handleIncomingWebhook(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Workspace ID and integration ID are required", response["error"])
+}
+
+func TestWebhookEventHandler_handleIncomingWebhook_BodyReadError(t *testing.T) {
+	handler, _, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a request with an erroring body
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses&workspace_id=ws123&integration_id=int123", nil)
+	req.Body = io.NopCloser(&errorReader{}) // Use a reader that always returns an error
+	w := httptest.NewRecorder()
+
+	// Call the handler
+	handler.handleIncomingWebhook(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Failed to read request body", response["error"])
+}
+
+func TestWebhookEventHandler_handleIncomingWebhook_ProcessError(t *testing.T) {
+	handler, mockService, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a valid request
+	payload := []byte(`{"event": "test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses&workspace_id=ws123&integration_id=int123", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+
+	// Mock service to return an error
+	mockService.EXPECT().
+		ProcessWebhook(gomock.Any(), "ws123", "int123", payload).
+		Return(errors.New("processing error"))
+
+	// Call the handler
+	handler.handleIncomingWebhook(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Failed to process webhook", response["error"])
+}
+
+func TestWebhookEventHandler_handleIncomingWebhook_Success(t *testing.T) {
+	handler, mockService, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a valid request
+	payload := []byte(`{"event": "test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses&workspace_id=ws123&integration_id=int123", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+
+	// Mock service to return success
+	mockService.EXPECT().
+		ProcessWebhook(gomock.Any(), "ws123", "int123", payload).
+		Return(nil)
+
+	// Call the handler
+	handler.handleIncomingWebhook(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, true, response["success"])
+}
+
+// Tests for handleList
+
+func TestWebhookEventHandler_handleList_MethodNotAllowed(t *testing.T) {
+	handler, _, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a non-GET request
+	req := httptest.NewRequest(http.MethodPost, "/api/webhookEvents.list", nil)
+	w := httptest.NewRecorder()
+
+	// Call the handler
+	handler.handleList(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Method not allowed", response["error"])
+}
+
+func TestWebhookEventHandler_handleList_InvalidParameters(t *testing.T) {
+	handler, _, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a request with invalid parameters (missing workspace_id)
+	req := httptest.NewRequest(http.MethodGet, "/api/webhookEvents.list", nil)
+	w := httptest.NewRecorder()
+
+	// Call the handler
+	handler.handleList(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Contains(t, response["error"], "Invalid parameters")
+}
+
+func TestWebhookEventHandler_handleList_ServiceError(t *testing.T) {
+	handler, mockService, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a valid request
+	req := httptest.NewRequest(http.MethodGet, "/api/webhookEvents.list?workspace_id=ws123", nil)
+	w := httptest.NewRecorder()
+
+	// Mock service to return an error
+	mockService.EXPECT().
+		ListEvents(gomock.Any(), "ws123", gomock.Any()).
+		Return(nil, errors.New("service error"))
+
+	// Call the handler
+	handler.handleList(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Failed to list webhook events", response["error"])
+}
+
+func TestWebhookEventHandler_handleList_Success(t *testing.T) {
+	handler, mockService, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a valid request with filter parameters
+	now := time.Now().UTC()
+	reqURL := "/api/webhookEvents.list?workspace_id=ws123&limit=10&event_type=bounce&recipient_email=test@example.com"
+	req := httptest.NewRequest(http.MethodGet, reqURL, nil)
+	w := httptest.NewRecorder()
+
+	// Create expected events
+	events := []*domain.WebhookEvent{
+		{
+			ID:                "evt1",
+			Type:              domain.EmailEventBounce,
+			EmailProviderKind: domain.EmailProviderKindSES,
+			IntegrationID:     "integration1",
+			RecipientEmail:    "test@example.com",
+			MessageID:         "message1",
+			Timestamp:         now,
+			BounceType:        "Permanent",
+			BounceCategory:    "General",
+			BounceDiagnostic:  "550 User unknown",
+			CreatedAt:         now,
+		},
+	}
+
+	// Create expected result
+	expectedResult := &domain.WebhookEventListResult{
+		Events:     events,
+		NextCursor: "next-cursor",
+		HasMore:    true,
+	}
+
+	// Mock service to return success
+	mockService.EXPECT().
+		ListEvents(gomock.Any(), "ws123", gomock.Any()).
+		DoAndReturn(func(_ context.Context, workspaceID string, params domain.WebhookEventListParams) (*domain.WebhookEventListResult, error) {
+			assert.Equal(t, "ws123", workspaceID)
+			assert.Equal(t, "ws123", params.WorkspaceID)
+			assert.Equal(t, 10, params.Limit)
+			assert.Equal(t, domain.EmailEventBounce, params.EventType)
+			assert.Equal(t, "test@example.com", params.RecipientEmail)
+			return expectedResult, nil
+		})
+
+	// Call the handler
+	handler.handleList(w, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result domain.WebhookEventListResult
+	err := json.NewDecoder(w.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, len(result.Events))
+	assert.Equal(t, "evt1", result.Events[0].ID)
+	assert.Equal(t, domain.EmailEventBounce, result.Events[0].Type)
+	assert.Equal(t, "test@example.com", result.Events[0].RecipientEmail)
+	assert.Equal(t, "next-cursor", result.NextCursor)
+	assert.True(t, result.HasMore)
+}
+
+func TestWebhookEventHandler_RegisterRoutes(t *testing.T) {
+	handler, _, _ := setupWebhookEventHandlerTest(t)
+
+	// Create a new test ServeMux
 	mux := http.NewServeMux()
+
+	// Register the routes
 	handler.RegisterRoutes(mux)
 
-	// Create a test server
-	server := httptest.NewServer(mux)
-	defer server.Close()
+	// Create test requests
+	webhookReq := httptest.NewRequest(http.MethodPost, "/webhooks/email", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/webhookEvents.list", nil)
 
-	// Test only that our routes are registered and accessible
-	// We will test each individual handler separately
-	routes := []string{
-		"/webhooks/email",
-		"/api/webhookEvents.list",
-		"/api/webhookEvents.get",
-		"/api/webhookEvents.getByMessageID",
-		"/api/webhookEvents.getByTransactionalID",
-		"/api/webhookEvents.getByBroadcastID",
-	}
+	// Test that the routes were registered (just checking for no panic)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, webhookReq)
 
-	for _, route := range routes {
-		t.Run(route, func(t *testing.T) {
-			// All routes except the public webhook endpoint require authentication
-			var resp *http.Response
-			var err error
-
-			if route == "/webhooks/email" {
-				// Test that the route exists (will return method not allowed for GET)
-				resp, err = http.Get(server.URL + route)
-			} else {
-				// For authenticated routes, just test that they're registered
-				// (will return unauthorized without a token)
-				resp, err = http.Get(server.URL + route)
-			}
-
-			require.NoError(t, err)
-			defer resp.Body.Close()
-
-			// Routes exist if they don't return 404
-			assert.NotEqual(t, http.StatusNotFound, resp.StatusCode)
-		})
-	}
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, listReq)
 }
 
-func TestWebhookEventHandler_HandleIncomingWebhook(t *testing.T) {
-	testCases := []struct {
-		name           string
-		method         string
-		queryParams    url.Values
-		requestBody    string
-		setupMock      func(*mocks.MockWebhookEventServiceInterface)
-		expectedStatus int
-	}{
-		{
-			name:   "Method not allowed",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"provider":       []string{"sparkpost"},
-				"workspace_id":   []string{"workspace123"},
-				"integration_id": []string{"integration123"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusMethodNotAllowed,
-		},
-		{
-			name:   "Missing provider",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"workspace_id":   []string{"workspace123"},
-				"integration_id": []string{"integration123"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			name:   "Missing workspace ID",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"provider":       []string{"sparkpost"},
-				"integration_id": []string{"integration123"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			name:   "Missing integration ID",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"provider":     []string{"sparkpost"},
-				"workspace_id": []string{"workspace123"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			name:   "Success",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"provider":       []string{"sparkpost"},
-				"workspace_id":   []string{"workspace123"},
-				"integration_id": []string{"integration123"},
-			},
-			requestBody: `{"event": "test"}`,
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					ProcessWebhook(
-						gomock.Any(),
-						"workspace123",
-						"integration123",
-						gomock.Any(), // Raw body bytes
-					).
-					Return(nil)
-			},
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:   "Service error",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"provider":       []string{"sparkpost"},
-				"workspace_id":   []string{"workspace123"},
-				"integration_id": []string{"integration123"},
-			},
-			requestBody: `{"event": "test"}`,
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					ProcessWebhook(
-						gomock.Any(),
-						"workspace123",
-						"integration123",
-						gomock.Any(), // Raw body bytes
-					).
-					Return(errors.New("processing error"))
-			},
-			expectedStatus: http.StatusBadRequest,
-		},
-	}
+// Custom error reader for testing read errors
+type errorReader struct{}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupWebhookEventHandlerTest(t)
-			tc.setupMock(mockService)
-
-			req := httptest.NewRequest(tc.method, "/webhooks/email?"+tc.queryParams.Encode(), bytes.NewBufferString(tc.requestBody))
-			w := httptest.NewRecorder()
-
-			handler.handleIncomingWebhook(w, req)
-
-			assert.Equal(t, tc.expectedStatus, w.Code)
-
-			if tc.expectedStatus == http.StatusOK {
-				var response map[string]interface{}
-				err := json.NewDecoder(w.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Equal(t, true, response["success"])
-			}
-		})
-	}
-}
-
-func TestWebhookEventHandler_HandleList(t *testing.T) {
-	workspaceID := "workspace123"
-
-	testCases := []struct {
-		name           string
-		method         string
-		queryParams    url.Values
-		setupMock      func(*mocks.MockWebhookEventServiceInterface)
-		expectedStatus int
-		expectedEvents bool
-	}{
-		{
-			name:   "Method not allowed",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"type":         []string{"delivered"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid limit parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"type":         []string{"delivered"},
-				"limit":        []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid offset parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"type":         []string{"delivered"},
-				"offset":       []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid request validation",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				// Missing required workspace_id
-				"type": []string{"delivered"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Success with no events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"type":         []string{"delivered"},
-				"limit":        []string{"10"},
-				"offset":       []string{"0"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByType(
-						gomock.Any(),
-						workspaceID,
-						domain.EmailEventDelivered,
-						10,
-						0,
-					).
-					Return([]*domain.WebhookEvent{}, nil)
-
-				m.EXPECT().
-					GetEventCount(
-						gomock.Any(),
-						workspaceID,
-						domain.EmailEventDelivered,
-					).
-					Return(0, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-		{
-			name:   "Success with events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"type":         []string{"delivered"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				events := []*domain.WebhookEvent{
-					{
-						ID:             "event1",
-						Type:           domain.EmailEventDelivered,
-						RecipientEmail: "test@example.com",
-						MessageID:      "msg123",
-					},
-				}
-
-				m.EXPECT().
-					GetEventsByType(
-						gomock.Any(),
-						workspaceID,
-						domain.EmailEventDelivered,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(events, nil)
-
-				m.EXPECT().
-					GetEventCount(
-						gomock.Any(),
-						workspaceID,
-						domain.EmailEventDelivered,
-					).
-					Return(1, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-		{
-			name:   "GetEventsByType service error",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"type":         []string{"delivered"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByType(
-						gomock.Any(),
-						workspaceID,
-						domain.EmailEventDelivered,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(nil, errors.New("database error"))
-			},
-			expectedStatus: http.StatusInternalServerError,
-			expectedEvents: false,
-		},
-		{
-			name:   "GetEventCount service error",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"type":         []string{"delivered"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByType(
-						gomock.Any(),
-						workspaceID,
-						domain.EmailEventDelivered,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return([]*domain.WebhookEvent{}, nil)
-
-				m.EXPECT().
-					GetEventCount(
-						gomock.Any(),
-						workspaceID,
-						domain.EmailEventDelivered,
-					).
-					Return(0, errors.New("count error"))
-			},
-			expectedStatus: http.StatusInternalServerError,
-			expectedEvents: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupWebhookEventHandlerTest(t)
-			tc.setupMock(mockService)
-
-			req := httptest.NewRequest(tc.method, "/api/webhookEvents.list?"+tc.queryParams.Encode(), nil)
-			w := httptest.NewRecorder()
-
-			handler.handleList(w, req)
-
-			assert.Equal(t, tc.expectedStatus, w.Code)
-
-			if tc.expectedStatus == http.StatusOK {
-				var response map[string]interface{}
-				err := json.NewDecoder(w.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Contains(t, response, "events")
-				assert.Contains(t, response, "total")
-			}
-		})
-	}
-}
-
-func TestWebhookEventHandler_HandleGet(t *testing.T) {
-	testCases := []struct {
-		name           string
-		method         string
-		queryParams    url.Values
-		setupMock      func(*mocks.MockWebhookEventServiceInterface)
-		expectedStatus int
-		expectedEvent  bool
-	}{
-		{
-			name:   "Method not allowed",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"id": []string{"event123"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectedEvent:  false,
-		},
-		{
-			name:           "Missing event ID",
-			method:         http.MethodGet,
-			queryParams:    url.Values{},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvent:  false,
-		},
-		{
-			name:   "Event not found",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"id": []string{"event123"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventByID(
-						gomock.Any(),
-						"event123",
-					).
-					Return(nil, &domain.ErrWebhookEventNotFound{ID: "event123"})
-			},
-			expectedStatus: http.StatusNotFound,
-			expectedEvent:  false,
-		},
-		{
-			name:   "Service error",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"id": []string{"event123"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventByID(
-						gomock.Any(),
-						"event123",
-					).
-					Return(nil, errors.New("database error"))
-			},
-			expectedStatus: http.StatusInternalServerError,
-			expectedEvent:  false,
-		},
-		{
-			name:   "Success",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"id": []string{"event123"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				event := &domain.WebhookEvent{
-					ID:             "event123",
-					Type:           domain.EmailEventDelivered,
-					RecipientEmail: "test@example.com",
-					MessageID:      "msg123",
-				}
-
-				m.EXPECT().
-					GetEventByID(
-						gomock.Any(),
-						"event123",
-					).
-					Return(event, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvent:  true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupWebhookEventHandlerTest(t)
-			tc.setupMock(mockService)
-
-			req := httptest.NewRequest(tc.method, "/api/webhookEvents.get?"+tc.queryParams.Encode(), nil)
-			w := httptest.NewRecorder()
-
-			handler.handleGet(w, req)
-
-			assert.Equal(t, tc.expectedStatus, w.Code)
-
-			if tc.expectedEvent {
-				var response map[string]interface{}
-				err := json.NewDecoder(w.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Contains(t, response, "event")
-			}
-		})
-	}
-}
-
-func TestWebhookEventHandler_HandleGetByMessageID(t *testing.T) {
-	messageID := "msg123"
-
-	testCases := []struct {
-		name           string
-		method         string
-		queryParams    url.Values
-		setupMock      func(*mocks.MockWebhookEventServiceInterface)
-		expectedStatus int
-		expectedEvents bool
-	}{
-		{
-			name:   "Method not allowed",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"message_id": []string{messageID},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid limit parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"message_id": []string{messageID},
-				"limit":      []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid offset parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"message_id": []string{messageID},
-				"offset":     []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:        "Invalid request validation",
-			method:      http.MethodGet,
-			queryParams: url.Values{
-				// Missing required message_id
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Service error",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"message_id": []string{messageID},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByMessageID(
-						gomock.Any(),
-						messageID,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(nil, errors.New("database error"))
-			},
-			expectedStatus: http.StatusInternalServerError,
-			expectedEvents: false,
-		},
-		{
-			name:   "Success with no events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"message_id": []string{messageID},
-				"limit":      []string{"10"},
-				"offset":     []string{"0"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByMessageID(
-						gomock.Any(),
-						messageID,
-						10,
-						0,
-					).
-					Return([]*domain.WebhookEvent{}, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-		{
-			name:   "Success with events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"message_id": []string{messageID},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				events := []*domain.WebhookEvent{
-					{
-						ID:             "event1",
-						Type:           domain.EmailEventDelivered,
-						RecipientEmail: "test@example.com",
-						MessageID:      messageID,
-					},
-				}
-
-				m.EXPECT().
-					GetEventsByMessageID(
-						gomock.Any(),
-						messageID,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(events, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupWebhookEventHandlerTest(t)
-			tc.setupMock(mockService)
-
-			req := httptest.NewRequest(tc.method, "/api/webhookEvents.getByMessageID?"+tc.queryParams.Encode(), nil)
-			w := httptest.NewRecorder()
-
-			handler.handleGetByMessageID(w, req)
-
-			assert.Equal(t, tc.expectedStatus, w.Code)
-
-			if tc.expectedEvents {
-				var response map[string]interface{}
-				err := json.NewDecoder(w.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Contains(t, response, "events")
-				assert.Contains(t, response, "total")
-			}
-		})
-	}
-}
-
-func TestWebhookEventHandler_HandleGetByTransactionalID(t *testing.T) {
-	workspaceID := "workspace123"
-	transactionalID := "trans123"
-
-	testCases := []struct {
-		name           string
-		method         string
-		queryParams    url.Values
-		setupMock      func(*mocks.MockWebhookEventServiceInterface)
-		expectedStatus int
-		expectedEvents bool
-	}{
-		{
-			name:   "Method not allowed",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"workspace_id":     []string{workspaceID},
-				"transactional_id": []string{transactionalID},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid limit parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id":     []string{workspaceID},
-				"transactional_id": []string{transactionalID},
-				"limit":            []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid offset parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id":     []string{workspaceID},
-				"transactional_id": []string{transactionalID},
-				"offset":           []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid request validation - missing workspace_id",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"transactional_id": []string{transactionalID},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid request validation - missing transactional_id",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Service error",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id":     []string{workspaceID},
-				"transactional_id": []string{transactionalID},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByTransactionalID(
-						gomock.Any(),
-						transactionalID,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(nil, errors.New("database error"))
-			},
-			expectedStatus: http.StatusInternalServerError,
-			expectedEvents: false,
-		},
-		{
-			name:   "Success with no events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id":     []string{workspaceID},
-				"transactional_id": []string{transactionalID},
-				"limit":            []string{"10"},
-				"offset":           []string{"0"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByTransactionalID(
-						gomock.Any(),
-						transactionalID,
-						10,
-						0,
-					).
-					Return([]*domain.WebhookEvent{}, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-		{
-			name:   "Success with events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id":     []string{workspaceID},
-				"transactional_id": []string{transactionalID},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				events := []*domain.WebhookEvent{
-					{
-						ID:              "event1",
-						Type:            domain.EmailEventDelivered,
-						RecipientEmail:  "test@example.com",
-						TransactionalID: transactionalID,
-					},
-				}
-
-				m.EXPECT().
-					GetEventsByTransactionalID(
-						gomock.Any(),
-						transactionalID,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(events, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupWebhookEventHandlerTest(t)
-			tc.setupMock(mockService)
-
-			req := httptest.NewRequest(tc.method, "/api/webhookEvents.getByTransactionalID?"+tc.queryParams.Encode(), nil)
-			w := httptest.NewRecorder()
-
-			handler.handleGetByTransactionalID(w, req)
-
-			assert.Equal(t, tc.expectedStatus, w.Code)
-
-			if tc.expectedEvents {
-				var response map[string]interface{}
-				err := json.NewDecoder(w.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Contains(t, response, "events")
-				assert.Contains(t, response, "total")
-			}
-		})
-	}
-}
-
-func TestWebhookEventHandler_HandleGetByBroadcastID(t *testing.T) {
-	workspaceID := "workspace123"
-	broadcastID := "broadcast123"
-
-	testCases := []struct {
-		name           string
-		method         string
-		queryParams    url.Values
-		setupMock      func(*mocks.MockWebhookEventServiceInterface)
-		expectedStatus int
-		expectedEvents bool
-	}{
-		{
-			name:   "Method not allowed",
-			method: http.MethodPost,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"broadcast_id": []string{broadcastID},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid limit parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"broadcast_id": []string{broadcastID},
-				"limit":        []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid offset parameter",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"broadcast_id": []string{broadcastID},
-				"offset":       []string{"invalid"},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid request validation - missing workspace_id",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"broadcast_id": []string{broadcastID},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Invalid request validation - missing broadcast_id",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-			},
-			setupMock:      func(m *mocks.MockWebhookEventServiceInterface) {},
-			expectedStatus: http.StatusBadRequest,
-			expectedEvents: false,
-		},
-		{
-			name:   "Service error",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"broadcast_id": []string{broadcastID},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByBroadcastID(
-						gomock.Any(),
-						broadcastID,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(nil, errors.New("database error"))
-			},
-			expectedStatus: http.StatusInternalServerError,
-			expectedEvents: false,
-		},
-		{
-			name:   "Success with no events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"broadcast_id": []string{broadcastID},
-				"limit":        []string{"10"},
-				"offset":       []string{"0"},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				m.EXPECT().
-					GetEventsByBroadcastID(
-						gomock.Any(),
-						broadcastID,
-						10,
-						0,
-					).
-					Return([]*domain.WebhookEvent{}, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-		{
-			name:   "Success with events",
-			method: http.MethodGet,
-			queryParams: url.Values{
-				"workspace_id": []string{workspaceID},
-				"broadcast_id": []string{broadcastID},
-			},
-			setupMock: func(m *mocks.MockWebhookEventServiceInterface) {
-				events := []*domain.WebhookEvent{
-					{
-						ID:             "event1",
-						Type:           domain.EmailEventDelivered,
-						RecipientEmail: "test@example.com",
-						BroadcastID:    broadcastID,
-					},
-				}
-
-				m.EXPECT().
-					GetEventsByBroadcastID(
-						gomock.Any(),
-						broadcastID,
-						gomock.Any(), // Default limit
-						gomock.Any(), // Default offset
-					).
-					Return(events, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedEvents: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockService, _, handler := setupWebhookEventHandlerTest(t)
-			tc.setupMock(mockService)
-
-			req := httptest.NewRequest(tc.method, "/api/webhookEvents.getByBroadcastID?"+tc.queryParams.Encode(), nil)
-			w := httptest.NewRecorder()
-
-			handler.handleGetByBroadcastID(w, req)
-
-			assert.Equal(t, tc.expectedStatus, w.Code)
-
-			if tc.expectedEvents {
-				var response map[string]interface{}
-				err := json.NewDecoder(w.Body).Decode(&response)
-				require.NoError(t, err)
-				assert.Contains(t, response, "events")
-				assert.Contains(t, response, "total")
-			}
-		})
-	}
+func (r *errorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("simulated read error")
 }

@@ -1,19 +1,17 @@
 import React from 'react'
-import { Table, Tag, Tooltip, Button, Spin, Empty, Badge } from 'antd'
+import { Table, Tag, Tooltip, Button, Spin, Empty } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faExclamationTriangle,
   faPaperPlane,
   faCircleCheck,
   faCircleXmark,
-  faEye,
   faArrowPointer,
   faBan,
   faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons'
-import { faFaceFrown } from '@fortawesome/free-regular-svg-icons'
+import { faEye, faFaceFrown } from '@fortawesome/free-regular-svg-icons'
 import dayjs from '../../lib/dayjs'
-import { MessageHistory, MessageStatus } from '../../services/api/messages_history'
+import { MessageHistory } from '../../services/api/messages_history'
 import TemplatePreviewDrawer from '../templates/TemplatePreviewDrawer'
 import { templatesApi } from '../../services/api/template'
 import { Workspace } from '../../services/api/types'
@@ -96,23 +94,6 @@ export function MessageHistoryTable({
     return `${dayjs(dateString).format('lll')} in ${workspace.settings.timezone}`
   }
 
-  // Status badge for message history
-  const getStatusBadge = (status: MessageStatus) => {
-    const statusConfig: Record<MessageStatus, { color: string; text: string }> = {
-      sent: { color: 'blue', text: 'Sent' },
-      delivered: { color: 'green', text: 'Delivered' },
-      failed: { color: 'red', text: 'Failed' },
-      opened: { color: 'cyan', text: 'Opened' },
-      clicked: { color: 'geekblue', text: 'Clicked' },
-      bounced: { color: 'volcano', text: 'Bounced' },
-      complained: { color: 'magenta', text: 'Complained' },
-      unsubscribed: { color: 'gold', text: 'Unsubscribed' }
-    }
-
-    const config = statusConfig[status] || { color: 'default', text: status }
-    return <Badge status={config.color as any} text={config.text} />
-  }
-
   // Define base columns
   const baseColumns = [
     {
@@ -145,22 +126,6 @@ export function MessageHistoryTable({
       key: 'broadcast_id'
     },
     {
-      title: 'Status',
-      key: 'status',
-      render: (record: MessageHistory) => {
-        return (
-          <div className="flex items-center">
-            {getStatusBadge(record.status)}
-            {record.error && (
-              <Tooltip title={record.error}>
-                <FontAwesomeIcon icon={faExclamationTriangle} className="!ml-2" />
-              </Tooltip>
-            )}
-          </div>
-        )
-      }
-    },
-    {
       title: 'Events',
       key: 'events',
       render: (record: MessageHistory) => {
@@ -169,7 +134,7 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="sent" title={formatDate(record.sent_at)}>
               <Tag bordered={false} color="blue">
-                <FontAwesomeIcon icon={faPaperPlane} /> Sent
+                <FontAwesomeIcon icon={faPaperPlane} className="opacity-70" /> Sent
               </Tag>
             </Tooltip>
           )
@@ -177,7 +142,7 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="delivered" title={formatDate(record.delivered_at)}>
               <Tag bordered={false} color="green">
-                <FontAwesomeIcon icon={faCircleCheck} /> Delivered
+                <FontAwesomeIcon icon={faCircleCheck} className="opacity-70" /> Delivered
               </Tag>
             </Tooltip>
           )
@@ -185,7 +150,7 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="failed" title={formatDate(record.failed_at)}>
               <Tag bordered={false} color="red">
-                <FontAwesomeIcon icon={faCircleXmark} /> Failed
+                <FontAwesomeIcon icon={faCircleXmark} className="opacity-70" /> Failed
               </Tag>
             </Tooltip>
           )
@@ -193,7 +158,7 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="opened" title={formatDate(record.opened_at)}>
               <Tag bordered={false} color="cyan">
-                <FontAwesomeIcon icon={faEye} /> Opened
+                <FontAwesomeIcon icon={faEye} className="opacity-70" /> Opened
               </Tag>
             </Tooltip>
           )
@@ -201,7 +166,7 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="clicked" title={formatDate(record.clicked_at)}>
               <Tag bordered={false} color="geekblue">
-                <FontAwesomeIcon icon={faArrowPointer} /> Clicked
+                <FontAwesomeIcon icon={faArrowPointer} className="opacity-70" /> Clicked
               </Tag>
             </Tooltip>
           )
@@ -209,7 +174,7 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="bounced" title={formatDate(record.bounced_at)}>
               <Tag bordered={false} color="volcano">
-                <FontAwesomeIcon icon={faTriangleExclamation} /> Bounced
+                <FontAwesomeIcon icon={faTriangleExclamation} className="opacity-70" /> Bounced
               </Tag>
             </Tooltip>
           )
@@ -217,7 +182,7 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="complained" title={formatDate(record.complained_at)}>
               <Tag bordered={false} color="red">
-                <FontAwesomeIcon icon={faFaceFrown} /> Complained
+                <FontAwesomeIcon icon={faFaceFrown} className="opacity-70" /> Complained
               </Tag>
             </Tooltip>
           )
@@ -225,11 +190,24 @@ export function MessageHistoryTable({
           events.push(
             <Tooltip key="unsubscribed" title={formatDate(record.unsubscribed_at)}>
               <Tag bordered={false} color="red">
-                <FontAwesomeIcon icon={faBan} /> Unsubscribed
+                <FontAwesomeIcon icon={faBan} className="opacity-70" /> Unsubscribed
               </Tag>
             </Tooltip>
           )
         return <div className="flex items-center gap-1">{events}</div>
+      }
+    },
+    {
+      title: 'Error',
+      key: 'error',
+      render: (record: MessageHistory) => {
+        return (
+          <div className="text-xs">
+            {record.error && (
+              <Tooltip title={record.error}>{record.error.substring(0, 50)}...</Tooltip>
+            )}
+          </div>
+        )
       }
     },
     {

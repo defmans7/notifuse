@@ -139,6 +139,36 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		sb = sb.Where(sq.ILike{"c.language": "%" + req.Language + "%"})
 	}
 
+	// Use EXISTS subquery for list_id and contact_list_status filters instead of JOIN
+	if req.ListID != "" || req.ContactListStatus != "" {
+		// Start building the subquery
+		subquery := psql.Select("1").
+			From("contact_lists cl").
+			Where("cl.email = c.email").
+			Where(sq.Eq{"cl.deleted_at": nil})
+
+		// Add specific conditions to the subquery
+		if req.ListID != "" && req.ContactListStatus != "" {
+			// Both list_id and status
+			subquery = subquery.Where(sq.Eq{"cl.list_id": req.ListID, "cl.status": req.ContactListStatus})
+		} else if req.ListID != "" {
+			// Just list_id
+			subquery = subquery.Where(sq.Eq{"cl.list_id": req.ListID})
+		} else if req.ContactListStatus != "" {
+			// Just status
+			subquery = subquery.Where(sq.Eq{"cl.status": req.ContactListStatus})
+		}
+
+		// Convert subquery to SQL
+		subquerySql, subqueryArgs, err := subquery.ToSql()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build subquery: %w", err)
+		}
+
+		// Add the EXISTS condition to the main query
+		sb = sb.Where(fmt.Sprintf("EXISTS (%s)", subquerySql), subqueryArgs...)
+	}
+
 	if req.Cursor != "" {
 		// Decode the base64 cursor
 		decodedCursor, err := base64.StdEncoding.DecodeString(req.Cursor)
@@ -227,12 +257,15 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 			emails[i] = contact.Email
 		}
 
-		// Query for contact lists using squirrel
+		// Query for ALL contact lists for these contacts, regardless of filter criteria
 		listQueryBuilder := psql.Select("cl.email, cl.list_id, cl.status, cl.created_at, cl.updated_at, l.name as list_name").
 			From("contact_lists cl").
 			Join("lists l ON cl.list_id = l.id").
 			Where(sq.Eq{"cl.email": emails}).  // squirrel handles IN clauses automatically
 			Where(sq.Eq{"cl.deleted_at": nil}) // Filter out deleted contact_list entries
+
+		// We no longer apply the ListID and ContactListStatus filters here
+		// This way, we show ALL lists for each contact, not just the ones that match the filter
 
 		listQuery, listArgs, err := listQueryBuilder.ToSql()
 		if err != nil {

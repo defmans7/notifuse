@@ -71,8 +71,9 @@ func TestProcessWebhook_Success(t *testing.T) {
 
 		// Setup expectations to match what the service will actually store
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		repo.EXPECT().StoreEvent(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, event *domain.WebhookEvent) error {
+		repo.EXPECT().StoreEvent(gomock.Any(), workspace.ID, gomock.Any()).DoAndReturn(
+			func(_ context.Context, workspaceID string, event *domain.WebhookEvent) error {
+				assert.Equal(t, workspace.ID, workspaceID)
 				assert.Equal(t, mockEvent.Type, event.Type)
 				assert.Equal(t, mockEvent.EmailProviderKind, event.EmailProviderKind)
 				assert.Equal(t, mockEvent.IntegrationID, event.IntegrationID)
@@ -144,7 +145,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 
 		// Setup expectations
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		repo.EXPECT().StoreEvent(gomock.Any(), gomock.Any()).Return(nil)
+		repo.EXPECT().StoreEvent(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
 		// Expect message history to be updated with the delivery status
 		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
@@ -232,7 +233,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 
 		// Setup expectations with storage error
 		workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		repo.EXPECT().StoreEvent(gomock.Any(), gomock.Any()).Return(errors.New("database error"))
+		repo.EXPECT().StoreEvent(gomock.Any(), workspaceID, gomock.Any()).Return(errors.New("database error"))
 
 		// Create service
 		messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
@@ -313,617 +314,6 @@ func TestNewWebhookEventService(t *testing.T) {
 	assert.NotNil(t, service.logger)
 	assert.Equal(t, workspaceRepo, service.workspaceRepo)
 	assert.Equal(t, messageHistoryRepo, service.messageHistoryRepo)
-}
-
-func TestGetEventByID(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockWebhookEventRepository(ctrl)
-	authService := mocks.NewMockAuthService(ctrl)
-	log := pkgmocks.NewMockLogger(ctrl)
-	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	// Setup logging expectations
-	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
-	log.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	// Create service
-	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	service := &WebhookEventService{
-		repo:               repo,
-		authService:        authService,
-		logger:             log,
-		workspaceRepo:      workspaceRepo,
-		messageHistoryRepo: messageHistoryRepo,
-	}
-
-	t.Run("Success case", func(t *testing.T) {
-		// Create test data
-		eventID := "event1"
-		event := &domain.WebhookEvent{
-			ID:                "event1",
-			Type:              domain.EmailEventDelivered,
-			EmailProviderKind: domain.EmailProviderKindSES,
-			IntegrationID:     "integration1",
-			RecipientEmail:    "test@example.com",
-			MessageID:         "message1",
-		}
-
-		// Setup mock to return event
-		repo.EXPECT().GetEventByID(gomock.Any(), eventID).Return(event, nil)
-
-		// Call method
-		result, err := service.GetEventByID(context.Background(), eventID)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, event, result)
-	})
-
-	t.Run("Event not found", func(t *testing.T) {
-		// Create test data for non-existent event
-		eventID := "nonexistent"
-
-		// Setup mock to return not found error
-		notFoundErr := errors.New("event not found")
-		repo.EXPECT().GetEventByID(gomock.Any(), eventID).Return(nil, notFoundErr)
-
-		// Call method
-		result, err := service.GetEventByID(context.Background(), eventID)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, notFoundErr, err)
-	})
-
-	t.Run("Empty event ID", func(t *testing.T) {
-		// Create test data for empty event ID
-		eventID := ""
-
-		// Setup mock to return error for empty ID
-		invalidIDErr := errors.New("invalid event ID")
-		repo.EXPECT().GetEventByID(gomock.Any(), eventID).Return(nil, invalidIDErr)
-
-		// Call method
-		result, err := service.GetEventByID(context.Background(), eventID)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, invalidIDErr, err)
-	})
-}
-
-func TestGetEventsByType(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockWebhookEventRepository(ctrl)
-	authService := mocks.NewMockAuthService(ctrl)
-	log := pkgmocks.NewMockLogger(ctrl)
-	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	// Setup logging expectations
-	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
-	log.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	// Create service
-	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	service := &WebhookEventService{
-		repo:               repo,
-		authService:        authService,
-		logger:             log,
-		workspaceRepo:      workspaceRepo,
-		messageHistoryRepo: messageHistoryRepo,
-	}
-
-	// Create test data
-	workspaceID := "workspace1"
-	eventType := domain.EmailEventBounce
-	user := &domain.User{ID: "user1"}
-
-	t.Run("Success case", func(t *testing.T) {
-		events := []*domain.WebhookEvent{
-			{
-				ID:                "event1",
-				Type:              domain.EmailEventBounce,
-				EmailProviderKind: domain.EmailProviderKindSES,
-				IntegrationID:     "integration1",
-				RecipientEmail:    "test@example.com",
-				MessageID:         "message1",
-			},
-		}
-
-		// Setup mocks for authentication and repository
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			context.Background(), user, nil)
-		repo.EXPECT().GetEventsByType(gomock.Any(), workspaceID, eventType, 10, 0).Return(events, nil)
-
-		// Call method
-		result, err := service.GetEventsByType(context.Background(), workspaceID, eventType, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, events, result)
-	})
-
-	t.Run("Authentication error", func(t *testing.T) {
-		// Setup mock for failed authentication
-		authErr := &domain.ErrUnauthorized{Message: "User not authorized for workspace"}
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			nil, nil, authErr)
-
-		// Call method
-		result, err := service.GetEventsByType(context.Background(), workspaceID, eventType, 10, 0)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "failed to authenticate user")
-	})
-
-	t.Run("Repository error", func(t *testing.T) {
-		// Setup mocks for successful authentication but repository error
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			context.Background(), user, nil)
-
-		repoErr := errors.New("database error")
-		repo.EXPECT().GetEventsByType(gomock.Any(), workspaceID, eventType, 10, 0).Return(nil, repoErr)
-
-		// Call method
-		result, err := service.GetEventsByType(context.Background(), workspaceID, eventType, 10, 0)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, repoErr, err)
-	})
-
-	t.Run("Empty results", func(t *testing.T) {
-		// Setup mocks for successful authentication but empty results
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			context.Background(), user, nil)
-
-		// Empty slice returned (not nil)
-		repo.EXPECT().GetEventsByType(gomock.Any(), workspaceID, eventType, 10, 0).Return([]*domain.WebhookEvent{}, nil)
-
-		// Call method
-		result, err := service.GetEventsByType(context.Background(), workspaceID, eventType, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Empty(t, result)
-	})
-}
-
-func TestGetEventsByMessageID(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockWebhookEventRepository(ctrl)
-	authService := mocks.NewMockAuthService(ctrl)
-	log := pkgmocks.NewMockLogger(ctrl)
-	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	// Setup logging expectations
-	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
-	log.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	// Create service
-	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	service := &WebhookEventService{
-		repo:               repo,
-		authService:        authService,
-		logger:             log,
-		workspaceRepo:      workspaceRepo,
-		messageHistoryRepo: messageHistoryRepo,
-	}
-
-	t.Run("Success case", func(t *testing.T) {
-		// Create test data
-		messageID := "message1"
-		events := []*domain.WebhookEvent{
-			{
-				ID:                "event1",
-				Type:              domain.EmailEventDelivered,
-				EmailProviderKind: domain.EmailProviderKindSES,
-				IntegrationID:     "integration1",
-				RecipientEmail:    "test@example.com",
-				MessageID:         messageID,
-			},
-		}
-
-		// Setup mock to return events
-		repo.EXPECT().GetEventsByMessageID(gomock.Any(), messageID, 10, 0).Return(events, nil)
-
-		// Call method
-		result, err := service.GetEventsByMessageID(context.Background(), messageID, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, events, result)
-	})
-
-	t.Run("Repository error", func(t *testing.T) {
-		// Create test data
-		messageID := "message1"
-
-		// Setup mock to return error
-		repoErr := errors.New("database error")
-		repo.EXPECT().GetEventsByMessageID(gomock.Any(), messageID, 10, 0).Return(nil, repoErr)
-
-		// Call method
-		result, err := service.GetEventsByMessageID(context.Background(), messageID, 10, 0)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, repoErr, err)
-	})
-
-	t.Run("Empty results", func(t *testing.T) {
-		// Create test data
-		messageID := "nonexistent-message"
-
-		// Setup mock to return empty results
-		repo.EXPECT().GetEventsByMessageID(gomock.Any(), messageID, 10, 0).Return([]*domain.WebhookEvent{}, nil)
-
-		// Call method
-		result, err := service.GetEventsByMessageID(context.Background(), messageID, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Empty(t, result)
-	})
-
-	t.Run("Invalid limits", func(t *testing.T) {
-		// Create test data
-		messageID := "message1"
-
-		// Setup mock with unusual limits
-		repo.EXPECT().GetEventsByMessageID(gomock.Any(), messageID, -1, -5).Return([]*domain.WebhookEvent{}, nil)
-
-		// Call method with negative values
-		result, err := service.GetEventsByMessageID(context.Background(), messageID, -1, -5)
-
-		// Assert - service should still pass these values to repo and not validate them
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-}
-
-func TestGetEventsByTransactionalID(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockWebhookEventRepository(ctrl)
-	authService := mocks.NewMockAuthService(ctrl)
-	log := pkgmocks.NewMockLogger(ctrl)
-	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	// Setup logging expectations
-	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
-	log.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	// Create service
-	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	service := &WebhookEventService{
-		repo:               repo,
-		authService:        authService,
-		logger:             log,
-		workspaceRepo:      workspaceRepo,
-		messageHistoryRepo: messageHistoryRepo,
-	}
-
-	t.Run("Success case", func(t *testing.T) {
-		// Create test data
-		transactionalID := "transaction1"
-		events := []*domain.WebhookEvent{
-			{
-				ID:                "event1",
-				Type:              domain.EmailEventDelivered,
-				EmailProviderKind: domain.EmailProviderKindSES,
-				IntegrationID:     "integration1",
-				RecipientEmail:    "test@example.com",
-				MessageID:         "message1",
-				TransactionalID:   transactionalID,
-			},
-		}
-
-		// Setup mock to return events
-		repo.EXPECT().GetEventsByTransactionalID(gomock.Any(), transactionalID, 10, 0).Return(events, nil)
-
-		// Call method
-		result, err := service.GetEventsByTransactionalID(context.Background(), transactionalID, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, events, result)
-	})
-
-	t.Run("Repository error", func(t *testing.T) {
-		// Create test data
-		transactionalID := "transaction1"
-
-		// Setup mock to return error
-		repoErr := errors.New("database error")
-		repo.EXPECT().GetEventsByTransactionalID(gomock.Any(), transactionalID, 10, 0).Return(nil, repoErr)
-
-		// Call method
-		result, err := service.GetEventsByTransactionalID(context.Background(), transactionalID, 10, 0)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, repoErr, err)
-	})
-
-	t.Run("Empty results", func(t *testing.T) {
-		// Create test data
-		transactionalID := "nonexistent-transaction"
-
-		// Setup mock to return empty results
-		repo.EXPECT().GetEventsByTransactionalID(gomock.Any(), transactionalID, 10, 0).Return([]*domain.WebhookEvent{}, nil)
-
-		// Call method
-		result, err := service.GetEventsByTransactionalID(context.Background(), transactionalID, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Empty(t, result)
-	})
-
-	t.Run("Empty transaction ID", func(t *testing.T) {
-		// Create test data
-		transactionalID := ""
-
-		// Setup mock to return empty results even for empty ID
-		// The service doesn't validate the ID, just passes it to the repo
-		repo.EXPECT().GetEventsByTransactionalID(gomock.Any(), transactionalID, 10, 0).Return([]*domain.WebhookEvent{}, nil)
-
-		// Call method
-		result, err := service.GetEventsByTransactionalID(context.Background(), transactionalID, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Empty(t, result)
-	})
-}
-
-func TestGetEventsByBroadcastID(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockWebhookEventRepository(ctrl)
-	authService := mocks.NewMockAuthService(ctrl)
-	log := pkgmocks.NewMockLogger(ctrl)
-	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	// Setup logging expectations
-	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
-	log.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	// Create service
-	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	service := &WebhookEventService{
-		repo:               repo,
-		authService:        authService,
-		logger:             log,
-		workspaceRepo:      workspaceRepo,
-		messageHistoryRepo: messageHistoryRepo,
-	}
-
-	t.Run("Success case", func(t *testing.T) {
-		// Create test data
-		broadcastID := "broadcast1"
-		events := []*domain.WebhookEvent{
-			{
-				ID:                "event1",
-				Type:              domain.EmailEventDelivered,
-				EmailProviderKind: domain.EmailProviderKindSES,
-				IntegrationID:     "integration1",
-				RecipientEmail:    "test@example.com",
-				MessageID:         "message1",
-				BroadcastID:       broadcastID,
-			},
-		}
-
-		// Setup mock to return events
-		repo.EXPECT().GetEventsByBroadcastID(gomock.Any(), broadcastID, 10, 0).Return(events, nil)
-
-		// Call method
-		result, err := service.GetEventsByBroadcastID(context.Background(), broadcastID, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, events, result)
-	})
-
-	t.Run("Repository error", func(t *testing.T) {
-		// Create test data
-		broadcastID := "broadcast1"
-
-		// Setup mock to return error
-		repoErr := errors.New("database error")
-		repo.EXPECT().GetEventsByBroadcastID(gomock.Any(), broadcastID, 10, 0).Return(nil, repoErr)
-
-		// Call method
-		result, err := service.GetEventsByBroadcastID(context.Background(), broadcastID, 10, 0)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, repoErr, err)
-	})
-
-	t.Run("Empty results", func(t *testing.T) {
-		// Create test data
-		broadcastID := "nonexistent-broadcast"
-
-		// Setup mock to return empty results
-		repo.EXPECT().GetEventsByBroadcastID(gomock.Any(), broadcastID, 10, 0).Return([]*domain.WebhookEvent{}, nil)
-
-		// Call method
-		result, err := service.GetEventsByBroadcastID(context.Background(), broadcastID, 10, 0)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Empty(t, result)
-	})
-
-	t.Run("Custom pagination", func(t *testing.T) {
-		// Create test data
-		broadcastID := "broadcast1"
-		events := []*domain.WebhookEvent{
-			{
-				ID:                "event1",
-				Type:              domain.EmailEventDelivered,
-				EmailProviderKind: domain.EmailProviderKindSES,
-				IntegrationID:     "integration1",
-				RecipientEmail:    "test@example.com",
-				MessageID:         "message1",
-				BroadcastID:       broadcastID,
-			},
-		}
-
-		// Test custom pagination parameters
-		customLimit := 5
-		customOffset := 10
-
-		// Setup mock with specific pagination
-		repo.EXPECT().GetEventsByBroadcastID(gomock.Any(), broadcastID, customLimit, customOffset).Return(events, nil)
-
-		// Call method with custom pagination
-		result, err := service.GetEventsByBroadcastID(context.Background(), broadcastID, customLimit, customOffset)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, events, result)
-	})
-}
-
-func TestGetEventCount(t *testing.T) {
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockWebhookEventRepository(ctrl)
-	authService := mocks.NewMockAuthService(ctrl)
-	log := pkgmocks.NewMockLogger(ctrl)
-	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-
-	// Setup logging expectations
-	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
-	log.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	// Create service
-	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	service := &WebhookEventService{
-		repo:               repo,
-		authService:        authService,
-		logger:             log,
-		workspaceRepo:      workspaceRepo,
-		messageHistoryRepo: messageHistoryRepo,
-	}
-
-	// Create test data
-	workspaceID := "workspace1"
-	eventType := domain.EmailEventBounce
-	user := &domain.User{ID: "user1"}
-
-	t.Run("Success case", func(t *testing.T) {
-		expectedCount := 5
-
-		// Setup mocks for authentication and repository
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			context.Background(), user, nil)
-		repo.EXPECT().GetEventCount(gomock.Any(), workspaceID, eventType).Return(expectedCount, nil)
-
-		// Call method
-		count, err := service.GetEventCount(context.Background(), workspaceID, eventType)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, expectedCount, count)
-	})
-
-	t.Run("Authentication error", func(t *testing.T) {
-		// Setup mock for failed authentication
-		authErr := &domain.ErrUnauthorized{Message: "User not authorized for workspace"}
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			nil, nil, authErr)
-
-		// Call method
-		count, err := service.GetEventCount(context.Background(), workspaceID, eventType)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		assert.Contains(t, err.Error(), "failed to authenticate user")
-	})
-
-	t.Run("Repository error", func(t *testing.T) {
-		// Setup mocks for successful authentication but repository error
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			context.Background(), user, nil)
-
-		repoErr := errors.New("database error")
-		repo.EXPECT().GetEventCount(gomock.Any(), workspaceID, eventType).Return(0, repoErr)
-
-		// Call method
-		count, err := service.GetEventCount(context.Background(), workspaceID, eventType)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		assert.Equal(t, repoErr, err)
-	})
-
-	t.Run("Zero count", func(t *testing.T) {
-		// Setup mocks for successful authentication but zero count
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			context.Background(), user, nil)
-
-		// Repository returns zero count (which is a valid result)
-		repo.EXPECT().GetEventCount(gomock.Any(), workspaceID, eventType).Return(0, nil)
-
-		// Call method
-		count, err := service.GetEventCount(context.Background(), workspaceID, eventType)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, 0, count)
-	})
-
-	t.Run("Different event type", func(t *testing.T) {
-		// Test with a different event type
-		differentEventType := domain.EmailEventComplaint
-		expectedCount := 3
-
-		// Setup mocks
-		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
-			context.Background(), user, nil)
-		repo.EXPECT().GetEventCount(gomock.Any(), workspaceID, differentEventType).Return(expectedCount, nil)
-
-		// Call method with different event type
-		count, err := service.GetEventCount(context.Background(), workspaceID, differentEventType)
-
-		// Assert
-		assert.NoError(t, err)
-		assert.Equal(t, expectedCount, count)
-	})
 }
 
 func TestProcessSESWebhook(t *testing.T) {
@@ -1742,8 +1132,9 @@ func TestProcessWebhook_UpdatesMessageHistory(t *testing.T) {
 
 	// Setup expectations
 	workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-	repo.EXPECT().StoreEvent(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, event *domain.WebhookEvent) error {
+	repo.EXPECT().StoreEvent(gomock.Any(), workspaceID, gomock.Any()).DoAndReturn(
+		func(ctx context.Context, workspaceID string, event *domain.WebhookEvent) error {
+			assert.Equal(t, workspace.ID, workspaceID)
 			assert.Equal(t, domain.EmailEventDelivered, event.Type)
 			assert.Equal(t, messageID, event.MessageID)
 			return nil
@@ -1763,4 +1154,185 @@ func TestProcessWebhook_UpdatesMessageHistory(t *testing.T) {
 
 	// Verify
 	assert.NoError(t, err)
+}
+
+// TestListEvents tests the ListEvents method of WebhookEventService
+func TestListEvents(t *testing.T) {
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockWebhookEventRepository(ctrl)
+	authService := mocks.NewMockAuthService(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+
+	// Setup logging expectations
+	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	// Create service
+	service := &WebhookEventService{
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
+	}
+
+	// Create test data
+	workspaceID := "workspace1"
+	user := &domain.User{ID: "user1"}
+	now := time.Now().UTC()
+
+	t.Run("Success case", func(t *testing.T) {
+		// Create test params and expected result
+		params := domain.WebhookEventListParams{
+			Limit:          10,
+			WorkspaceID:    workspaceID,
+			EventType:      domain.EmailEventBounce,
+			RecipientEmail: "test@example.com",
+		}
+
+		expectedEvents := []*domain.WebhookEvent{
+			{
+				ID:                "event1",
+				Type:              domain.EmailEventBounce,
+				EmailProviderKind: domain.EmailProviderKindSES,
+				IntegrationID:     "integration1",
+				RecipientEmail:    "test@example.com",
+				MessageID:         "message1",
+				Timestamp:         now,
+				BounceType:        "Permanent",
+				BounceCategory:    "General",
+				BounceDiagnostic:  "550 User unknown",
+				CreatedAt:         now,
+			},
+			{
+				ID:                "event2",
+				Type:              domain.EmailEventBounce,
+				EmailProviderKind: domain.EmailProviderKindMailjet,
+				IntegrationID:     "integration2",
+				RecipientEmail:    "test@example.com",
+				MessageID:         "message2",
+				Timestamp:         now,
+				BounceType:        "HardBounce",
+				BounceCategory:    "Permanent",
+				BounceDiagnostic:  "550 User unknown",
+				CreatedAt:         now,
+			},
+		}
+
+		expectedResult := &domain.WebhookEventListResult{
+			Events:     expectedEvents,
+			NextCursor: "next-cursor",
+			HasMore:    true,
+		}
+
+		// Setup mocks for authentication and repository
+		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
+			context.Background(), user, nil)
+		repo.EXPECT().ListEvents(gomock.Any(), workspaceID, params).Return(expectedResult, nil)
+
+		// Call method
+		result, err := service.ListEvents(context.Background(), workspaceID, params)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.Equal(t, expectedResult, result)
+		assert.Len(t, result.Events, 2)
+		assert.Equal(t, "next-cursor", result.NextCursor)
+		assert.True(t, result.HasMore)
+	})
+
+	t.Run("Authentication error", func(t *testing.T) {
+		params := domain.WebhookEventListParams{
+			Limit:       10,
+			WorkspaceID: workspaceID,
+		}
+
+		// Setup mock for failed authentication
+		authErr := &domain.ErrUnauthorized{Message: "User not authorized for workspace"}
+		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
+			context.Background(), nil, authErr)
+
+		// Call method
+		result, err := service.ListEvents(context.Background(), workspaceID, params)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("Validation error", func(t *testing.T) {
+		// Create invalid params
+		params := domain.WebhookEventListParams{
+			Limit:       -1, // Invalid limit
+			WorkspaceID: workspaceID,
+		}
+
+		// Setup mock for successful authentication but failed validation
+		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
+			context.Background(), user, nil)
+
+		// Call method
+		result, err := service.ListEvents(context.Background(), workspaceID, params)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "invalid parameters")
+	})
+
+	t.Run("Repository error", func(t *testing.T) {
+		params := domain.WebhookEventListParams{
+			Limit:       10,
+			WorkspaceID: workspaceID,
+		}
+
+		// Setup mocks for successful authentication but repository error
+		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
+			context.Background(), user, nil)
+
+		repoErr := errors.New("database error")
+		repo.EXPECT().ListEvents(gomock.Any(), workspaceID, params).Return(nil, repoErr)
+
+		// Call method
+		result, err := service.ListEvents(context.Background(), workspaceID, params)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to list webhook events")
+	})
+
+	t.Run("Empty result", func(t *testing.T) {
+		params := domain.WebhookEventListParams{
+			Limit:       10,
+			WorkspaceID: workspaceID,
+		}
+
+		// Setup mocks for successful authentication with empty result
+		authService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(
+			context.Background(), user, nil)
+
+		emptyResult := &domain.WebhookEventListResult{
+			Events:     []*domain.WebhookEvent{},
+			NextCursor: "",
+			HasMore:    false,
+		}
+		repo.EXPECT().ListEvents(gomock.Any(), workspaceID, params).Return(emptyResult, nil)
+
+		// Call method
+		result, err := service.ListEvents(context.Background(), workspaceID, params)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Empty(t, result.Events)
+		assert.Empty(t, result.NextCursor)
+		assert.False(t, result.HasMore)
+	})
 }

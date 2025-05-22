@@ -35,26 +35,11 @@ func (m *MockWebhookEventRepository) EXPECT() *MockWebhookEventRepositoryMockRec
 	return m.recorder
 }
 
-// GetEventByID mocks base method.
-func (m *MockWebhookEventRepository) GetEventByID(arg0 context.Context, arg1 string) (*domain.WebhookEvent, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventByID", arg0, arg1)
-	ret0, _ := ret[0].(*domain.WebhookEvent)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEventByID indicates an expected call of GetEventByID.
-func (mr *MockWebhookEventRepositoryMockRecorder) GetEventByID(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventByID", reflect.TypeOf((*MockWebhookEventRepository)(nil).GetEventByID), arg0, arg1)
-}
-
 // GetEventCount mocks base method.
-func (m *MockWebhookEventRepository) GetEventCount(arg0 context.Context, arg1 string, arg2 domain.EmailEventType) (int, error) {
+func (m *MockWebhookEventRepository) GetEventCount(arg0 context.Context, arg1 string, arg2 domain.EmailEventType) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetEventCount", arg0, arg1, arg2)
-	ret0, _ := ret[0].(int)
+	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -65,76 +50,31 @@ func (mr *MockWebhookEventRepositoryMockRecorder) GetEventCount(arg0, arg1, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventCount", reflect.TypeOf((*MockWebhookEventRepository)(nil).GetEventCount), arg0, arg1, arg2)
 }
 
-// GetEventsByBroadcastID mocks base method.
-func (m *MockWebhookEventRepository) GetEventsByBroadcastID(arg0 context.Context, arg1 string, arg2, arg3 int) ([]*domain.WebhookEvent, error) {
+// ListEvents mocks base method.
+func (m *MockWebhookEventRepository) ListEvents(arg0 context.Context, arg1 string, arg2 domain.WebhookEventListParams) (*domain.WebhookEventListResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventsByBroadcastID", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]*domain.WebhookEvent)
+	ret := m.ctrl.Call(m, "ListEvents", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.WebhookEventListResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetEventsByBroadcastID indicates an expected call of GetEventsByBroadcastID.
-func (mr *MockWebhookEventRepositoryMockRecorder) GetEventsByBroadcastID(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// ListEvents indicates an expected call of ListEvents.
+func (mr *MockWebhookEventRepositoryMockRecorder) ListEvents(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventsByBroadcastID", reflect.TypeOf((*MockWebhookEventRepository)(nil).GetEventsByBroadcastID), arg0, arg1, arg2, arg3)
-}
-
-// GetEventsByMessageID mocks base method.
-func (m *MockWebhookEventRepository) GetEventsByMessageID(arg0 context.Context, arg1 string, arg2, arg3 int) ([]*domain.WebhookEvent, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventsByMessageID", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]*domain.WebhookEvent)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEventsByMessageID indicates an expected call of GetEventsByMessageID.
-func (mr *MockWebhookEventRepositoryMockRecorder) GetEventsByMessageID(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventsByMessageID", reflect.TypeOf((*MockWebhookEventRepository)(nil).GetEventsByMessageID), arg0, arg1, arg2, arg3)
-}
-
-// GetEventsByTransactionalID mocks base method.
-func (m *MockWebhookEventRepository) GetEventsByTransactionalID(arg0 context.Context, arg1 string, arg2, arg3 int) ([]*domain.WebhookEvent, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventsByTransactionalID", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]*domain.WebhookEvent)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEventsByTransactionalID indicates an expected call of GetEventsByTransactionalID.
-func (mr *MockWebhookEventRepositoryMockRecorder) GetEventsByTransactionalID(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventsByTransactionalID", reflect.TypeOf((*MockWebhookEventRepository)(nil).GetEventsByTransactionalID), arg0, arg1, arg2, arg3)
-}
-
-// GetEventsByType mocks base method.
-func (m *MockWebhookEventRepository) GetEventsByType(arg0 context.Context, arg1 string, arg2 domain.EmailEventType, arg3, arg4 int) ([]*domain.WebhookEvent, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventsByType", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].([]*domain.WebhookEvent)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEventsByType indicates an expected call of GetEventsByType.
-func (mr *MockWebhookEventRepositoryMockRecorder) GetEventsByType(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventsByType", reflect.TypeOf((*MockWebhookEventRepository)(nil).GetEventsByType), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEvents", reflect.TypeOf((*MockWebhookEventRepository)(nil).ListEvents), arg0, arg1, arg2)
 }
 
 // StoreEvent mocks base method.
-func (m *MockWebhookEventRepository) StoreEvent(arg0 context.Context, arg1 *domain.WebhookEvent) error {
+func (m *MockWebhookEventRepository) StoreEvent(arg0 context.Context, arg1 string, arg2 *domain.WebhookEvent) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StoreEvent", arg0, arg1)
+	ret := m.ctrl.Call(m, "StoreEvent", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StoreEvent indicates an expected call of StoreEvent.
-func (mr *MockWebhookEventRepositoryMockRecorder) StoreEvent(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockWebhookEventRepositoryMockRecorder) StoreEvent(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreEvent", reflect.TypeOf((*MockWebhookEventRepository)(nil).StoreEvent), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreEvent", reflect.TypeOf((*MockWebhookEventRepository)(nil).StoreEvent), arg0, arg1, arg2)
 }

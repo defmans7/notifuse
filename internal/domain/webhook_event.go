@@ -2,8 +2,12 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
+
+	"github.com/asaskevich/govalidator"
 )
 
 //go:generate mockgen -destination mocks/mock_webhook_event_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain WebhookEventRepository
@@ -43,6 +47,8 @@ type WebhookEvent struct {
 
 	// Complaint specific fields
 	ComplaintFeedbackType string `json:"complaint_feedback_type,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"` // Creation timestamp in the database
 }
 
 // NewWebhookEvent creates a new webhook event
@@ -68,28 +74,6 @@ func NewWebhookEvent(
 	}
 }
 
-// SetBounceInfo sets bounce-specific information
-func (w *WebhookEvent) SetBounceInfo(bounceType, bounceCategory, bounceDiagnostic string) {
-	w.BounceType = bounceType
-	w.BounceCategory = bounceCategory
-	w.BounceDiagnostic = bounceDiagnostic
-}
-
-// SetComplaintInfo sets complaint-specific information
-func (w *WebhookEvent) SetComplaintInfo(feedbackType string) {
-	w.ComplaintFeedbackType = feedbackType
-}
-
-// SetTransactionalID sets the transactional ID for this event
-func (w *WebhookEvent) SetTransactionalID(transactionalID string) {
-	w.TransactionalID = transactionalID
-}
-
-// SetBroadcastID sets the broadcast ID for this event
-func (w *WebhookEvent) SetBroadcastID(broadcastID string) {
-	w.BroadcastID = broadcastID
-}
-
 // ErrWebhookEventNotFound is returned when a webhook event is not found
 type ErrWebhookEventNotFound struct {
 	ID string
@@ -98,14 +82,6 @@ type ErrWebhookEventNotFound struct {
 // Error returns the error message
 func (e *ErrWebhookEventNotFound) Error() string {
 	return fmt.Sprintf("webhook event with ID %s not found", e.ID)
-}
-
-// GetEventsRequest defines the parameters for retrieving webhook events
-type GetEventsRequest struct {
-	WorkspaceID string         `json:"workspace_id"`
-	Type        EmailEventType `json:"type,omitempty"`
-	Limit       int            `json:"limit,omitempty"`
-	Offset      int            `json:"offset,omitempty"`
 }
 
 // GetEventByIDRequest defines the parameters for retrieving a webhook event by ID
@@ -119,151 +95,128 @@ type GetEventsByMessageIDRequest struct {
 	Limit     int    `json:"limit,omitempty"`
 	Offset    int    `json:"offset,omitempty"`
 }
+type WebhookEventListParams struct {
+	// Cursor-based pagination
+	Cursor string `json:"cursor,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
 
-// GetEventsByTransactionalIDRequest defines the parameters for retrieving webhook events by transactional ID
-type GetEventsByTransactionalIDRequest struct {
-	WorkspaceID     string `json:"workspace_id"`
-	TransactionalID string `json:"transactional_id"`
-	Limit           int    `json:"limit,omitempty"`
-	Offset          int    `json:"offset,omitempty"`
-}
-
-// GetEventsByBroadcastIDRequest defines the parameters for retrieving webhook events by broadcast ID
-type GetEventsByBroadcastIDRequest struct {
+	// Workspace identification
 	WorkspaceID string `json:"workspace_id"`
-	BroadcastID string `json:"broadcast_id"`
-	Limit       int    `json:"limit,omitempty"`
-	Offset      int    `json:"offset,omitempty"`
+
+	// Filters
+	EventType       EmailEventType `json:"event_type,omitempty"`
+	RecipientEmail  string         `json:"recipient_email,omitempty"`
+	MessageID       string         `json:"message_id,omitempty"`
+	TransactionalID string         `json:"transactional_id,omitempty"`
+	BroadcastID     string         `json:"broadcast_id,omitempty"`
+
+	// Time range filters
+	TimestampAfter  *time.Time `json:"timestamp_after,omitempty"`
+	TimestampBefore *time.Time `json:"timestamp_before,omitempty"`
 }
 
-// Validate validates the GetEventsRequest
-func (r *GetEventsRequest) Validate() error {
-	if r.WorkspaceID == "" {
+// FromQuery creates WebhookEventListParams from HTTP query parameters
+func (p *WebhookEventListParams) FromQuery(query url.Values) error {
+	// Parse cursor and basic string filters
+	p.Cursor = query.Get("cursor")
+	p.WorkspaceID = query.Get("workspace_id")
+	p.EventType = EmailEventType(query.Get("event_type"))
+	p.RecipientEmail = query.Get("recipient_email")
+	p.MessageID = query.Get("message_id")
+	p.TransactionalID = query.Get("transactional_id")
+	p.BroadcastID = query.Get("broadcast_id")
+
+	// Parse limit
+	if limitStr := query.Get("limit"); limitStr != "" {
+		var limit int
+		if err := json.Unmarshal([]byte(limitStr), &limit); err != nil {
+			return fmt.Errorf("invalid limit value: %s", limitStr)
+		}
+		p.Limit = limit
+	}
+
+	// Parse time filters if provided
+	if err := parseTimeParam(query, "timestamp_after", &p.TimestampAfter); err != nil {
+		return err
+	}
+	if err := parseTimeParam(query, "timestamp_before", &p.TimestampBefore); err != nil {
+		return err
+	}
+
+	// Validate all parameters
+	return p.Validate()
+}
+
+func (p *WebhookEventListParams) Validate() error {
+	// Validate workspace ID
+	if p.WorkspaceID == "" {
 		return fmt.Errorf("workspace_id is required")
 	}
-	if r.Limit <= 0 {
-		r.Limit = 20 // Default limit
+
+	// Validate limit
+	if p.Limit < 0 {
+		return fmt.Errorf("limit cannot be negative")
 	}
-	if r.Limit > 100 {
-		r.Limit = 100 // Max limit
+	if p.Limit > 100 {
+		p.Limit = 100 // Cap at maximum 100 items
 	}
-	if r.Offset < 0 {
-		r.Offset = 0
+	if p.Limit == 0 {
+		p.Limit = 20 // Default limit
 	}
+
+	// Validate event type
+	if p.EventType != "" {
+		validEventTypes := []string{
+			string(EmailEventDelivered),
+			string(EmailEventBounce),
+			string(EmailEventComplaint),
+		}
+		if !govalidator.IsIn(string(p.EventType), validEventTypes...) {
+			return fmt.Errorf("invalid event type: %s", p.EventType)
+		}
+	}
+
+	// Validate contact email if provided
+	if p.RecipientEmail != "" && !govalidator.IsEmail(p.RecipientEmail) {
+		return fmt.Errorf("invalid contact email format")
+	}
+
+	// Validate broadcast ID if provided
+	if p.BroadcastID != "" && !govalidator.IsUUID(p.BroadcastID) {
+		return fmt.Errorf("invalid broadcast ID format")
+	}
+
+	// Validate time ranges
+	if p.TimestampAfter != nil && p.TimestampBefore != nil {
+		if p.TimestampAfter.After(*p.TimestampBefore) {
+			return fmt.Errorf("timestamp_after must be before timestamp_before")
+		}
+	}
+
 	return nil
 }
 
-// Validate validates the GetEventByIDRequest
-func (r *GetEventByIDRequest) Validate() error {
-	if r.ID == "" {
-		return fmt.Errorf("id is required")
-	}
-	return nil
+// WebhookEventListResult contains the result of a ListWebhookEvents operation
+type WebhookEventListResult struct {
+	Events     []*WebhookEvent `json:"events"`
+	NextCursor string          `json:"next_cursor,omitempty"`
+	HasMore    bool            `json:"has_more"`
 }
-
-// Validate validates the GetEventsByMessageIDRequest
-func (r *GetEventsByMessageIDRequest) Validate() error {
-	if r.MessageID == "" {
-		return fmt.Errorf("message_id is required")
-	}
-	if r.Limit <= 0 {
-		r.Limit = 20 // Default limit
-	}
-	if r.Limit > 100 {
-		r.Limit = 100 // Max limit
-	}
-	if r.Offset < 0 {
-		r.Offset = 0
-	}
-	return nil
-}
-
-// Validate validates the GetEventsByTransactionalIDRequest
-func (r *GetEventsByTransactionalIDRequest) Validate() error {
-	if r.WorkspaceID == "" {
-		return fmt.Errorf("workspace_id is required")
-	}
-	if r.TransactionalID == "" {
-		return fmt.Errorf("transactional_id is required")
-	}
-	if r.Limit <= 0 {
-		r.Limit = 20 // Default limit
-	}
-	if r.Limit > 100 {
-		r.Limit = 100 // Max limit
-	}
-	if r.Offset < 0 {
-		r.Offset = 0
-	}
-	return nil
-}
-
-// Validate validates the GetEventsByBroadcastIDRequest
-func (r *GetEventsByBroadcastIDRequest) Validate() error {
-	if r.WorkspaceID == "" {
-		return fmt.Errorf("workspace_id is required")
-	}
-	if r.BroadcastID == "" {
-		return fmt.Errorf("broadcast_id is required")
-	}
-	if r.Limit <= 0 {
-		r.Limit = 20 // Default limit
-	}
-	if r.Limit > 100 {
-		r.Limit = 100 // Max limit
-	}
-	if r.Offset < 0 {
-		r.Offset = 0
-	}
-	return nil
-}
-
-//go:generate mockgen -destination mocks/mock_webhook_event_service.go -package mocks github.com/Notifuse/notifuse/internal/domain WebhookEventServiceInterface
 
 // WebhookEventServiceInterface defines the interface for webhook event service
 type WebhookEventServiceInterface interface {
 	// ProcessWebhook processes a webhook event from an email provider
 	ProcessWebhook(ctx context.Context, workspaceID, integrationID string, rawPayload []byte) error
 
-	// GetEventByID retrieves a webhook event by its ID
-	GetEventByID(ctx context.Context, id string) (*WebhookEvent, error)
-
-	// GetEventsByType retrieves webhook events by type for a workspace
-	GetEventsByType(ctx context.Context, workspaceID string, eventType EmailEventType, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventsByMessageID retrieves all webhook events associated with a message ID
-	GetEventsByMessageID(ctx context.Context, messageID string, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventsByTransactionalID retrieves all webhook events associated with a transactional ID
-	GetEventsByTransactionalID(ctx context.Context, transactionalID string, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventsByBroadcastID retrieves all webhook events associated with a broadcast ID
-	GetEventsByBroadcastID(ctx context.Context, broadcastID string, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventCount retrieves the count of events by type for a workspace
-	GetEventCount(ctx context.Context, workspaceID string, eventType EmailEventType) (int, error)
+	// ListEvents retrieves all webhook events for a workspace
+	ListEvents(ctx context.Context, workspaceID string, params WebhookEventListParams) (*WebhookEventListResult, error)
 }
 
 // WebhookEventRepository is the interface for webhook event operations
 type WebhookEventRepository interface {
 	// StoreEvent stores a webhook event in the database
-	StoreEvent(ctx context.Context, event *WebhookEvent) error
+	StoreEvent(ctx context.Context, workspaceID string, event *WebhookEvent) error
 
-	// GetEventByID retrieves a webhook event by its ID
-	GetEventByID(ctx context.Context, id string) (*WebhookEvent, error)
-
-	// GetEventsByMessageID retrieves all webhook events associated with a message ID
-	GetEventsByMessageID(ctx context.Context, messageID string, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventsByTransactionalID retrieves all webhook events associated with a transactional ID
-	GetEventsByTransactionalID(ctx context.Context, transactionalID string, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventsByBroadcastID retrieves all webhook events associated with a broadcast ID
-	GetEventsByBroadcastID(ctx context.Context, broadcastID string, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventsByType retrieves webhook events by type (delivered, bounce, complaint)
-	GetEventsByType(ctx context.Context, workspaceID string, eventType EmailEventType, limit, offset int) ([]*WebhookEvent, error)
-
-	// GetEventCount retrieves the count of events by type for a workspace
-	GetEventCount(ctx context.Context, workspaceID string, eventType EmailEventType) (int, error)
+	// ListEvents retrieves all webhook events for a workspace
+	ListEvents(ctx context.Context, workspaceID string, params WebhookEventListParams) (*WebhookEventListResult, error)
 }

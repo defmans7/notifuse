@@ -1,20 +1,17 @@
-package repository_test
+package repository
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/internal/repository"
 )
 
 func TestWebhookEventRepository_StoreEvent(t *testing.T) {
@@ -22,1171 +19,332 @@ func TestWebhookEventRepository_StoreEvent(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	eventRepo := repository.NewWebhookEventRepository(mockWorkspaceRepo)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
 
-	// Create test webhook event
-	event := domain.NewWebhookEvent(
-		"event-123",
-		domain.EmailEventDelivered,
-		domain.EmailProviderKindPostmark,
-		"integration-123",
-		"test@example.com",
-		"msg-123",
-		time.Now(),
-		`{"event":"delivered"}`,
-	)
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	now := time.Now().UTC()
 
-	t.Run("Success", func(t *testing.T) {
-		ctx := context.Background()
+	event := &domain.WebhookEvent{
+		ID:                "evt-123",
+		Type:              domain.EmailEventDelivered,
+		EmailProviderKind: domain.EmailProviderKindSES,
+		IntegrationID:     "integration-123",
+		RecipientEmail:    "test@example.com",
+		MessageID:         "msg-123",
+		TransactionalID:   "trans-123",
+		BroadcastID:       "broadcast-123",
+		Timestamp:         now,
+		RawPayload:        `{"key": "value"}`,
+		BounceType:        "hard",
+		BounceCategory:    "unknown",
+		BounceDiagnostic:  "550 user unknown",
+		CreatedAt:         now,
+	}
 
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
+	// Set up the workspace connection expectation
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
 
-		// Expect the correct insert query with parameters
-		mock.ExpectExec("INSERT INTO webhook_events").
-			WithArgs(
-				event.ID,
-				string(event.Type),
-				string(event.EmailProviderKind),
-				event.IntegrationID,
-				event.RecipientEmail,
-				event.MessageID,
-				event.TransactionalID,
-				event.BroadcastID,
-				event.Timestamp,
-				event.RawPayload,
-				event.BounceType,
-				event.BounceCategory,
-				event.BounceDiagnostic,
-				event.ComplaintFeedbackType,
-				sqlmock.AnyArg(), // CreatedAt
-			).
-			WillReturnResult(sqlmock.NewResult(1, 1))
+	// Expect the SQL query with parameters - use sqlmock.AnyArg() for the created_at timestamp
+	mock.ExpectExec(`INSERT INTO webhook_events`).
+		WithArgs(
+			event.ID,
+			event.Type,
+			event.EmailProviderKind,
+			event.IntegrationID,
+			event.RecipientEmail,
+			event.MessageID,
+			event.TransactionalID,
+			event.BroadcastID,
+			event.Timestamp,
+			event.RawPayload,
+			event.BounceType,
+			event.BounceCategory,
+			event.BounceDiagnostic,
+			event.ComplaintFeedbackType,
+			sqlmock.AnyArg(), // created_at
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
-		// Call the repository method
-		err = eventRepo.StoreEvent(ctx, event)
-		assert.NoError(t, err)
+	// Call the method
+	err = repo.StoreEvent(ctx, workspaceID, event)
+	assert.NoError(t, err)
 
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("connection error")
-
-		// Mock workspace repository GetConnection with error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		err = eventRepo.StoreEvent(ctx, event)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get system database connection")
-	})
-
-	t.Run("Database insert error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("insert error")
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Expect the insert query but return an error
-		mock.ExpectExec("INSERT INTO webhook_events").
-			WithArgs(
-				event.ID,
-				string(event.Type),
-				string(event.EmailProviderKind),
-				event.IntegrationID,
-				event.RecipientEmail,
-				event.MessageID,
-				event.TransactionalID,
-				event.BroadcastID,
-				event.Timestamp,
-				event.RawPayload,
-				event.BounceType,
-				event.BounceCategory,
-				event.BounceDiagnostic,
-				event.ComplaintFeedbackType,
-				sqlmock.AnyArg(), // CreatedAt
-			).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		err = eventRepo.StoreEvent(ctx, event)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to store webhook event")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
+	// Verify all expectations were met
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestWebhookEventRepository_GetEventByID(t *testing.T) {
+func TestWebhookEventRepository_StoreEvent_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	eventRepo := repository.NewWebhookEventRepository(mockWorkspaceRepo)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
+
+	ctx := context.Background()
+	workspaceID := "ws-123"
+
+	// Test case 1: Database connection error
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(nil, errors.New("connection error"))
+
+	err := repo.StoreEvent(ctx, workspaceID, &domain.WebhookEvent{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get workspace connection")
+
+	// Test case 2: SQL execution error
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	mock.ExpectExec(`INSERT INTO webhook_events`).
+		WillReturnError(errors.New("database error"))
+
+	err = repo.StoreEvent(ctx, workspaceID, &domain.WebhookEvent{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to store webhook event")
+}
+
+func TestWebhookEventRepository_ListEvents(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
 
-	eventID := "event-123"
-	now := time.Now()
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	now := time.Now().UTC()
 
-	t.Run("Success", func(t *testing.T) {
-		ctx := context.Background()
+	// Set up the workspace connection expectation
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
 
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
+	// Test with various filter parameters
+	params := domain.WebhookEventListParams{
+		Limit:          10,
+		EventType:      domain.EmailEventBounce,
+		RecipientEmail: "test@example.com",
+		MessageID:      "msg-123",
+	}
 
-		// Define the expected rows
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
-		}).AddRow(
-			eventID, "delivered", "postmark", "integration-123", "test@example.com",
-			"msg-123", "", "", now, `{"event":"delivered"}`,
+	// Set up rows for the SQL query result
+	rows := sqlmock.NewRows([]string{
+		"id", "type", "email_provider_kind", "integration_id", "recipient_email",
+		"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
+		"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type",
+		"created_at",
+	}).
+		AddRow(
+			"evt-1", domain.EmailEventBounce, domain.EmailProviderKindSES, "integration-1", "test@example.com",
+			"msg-1", "trans-1", "broadcast-1", now, `{"key": "value1"}`,
+			"hard", "unknown", "550 user unknown", "", now,
+		).
+		AddRow(
+			"evt-2", domain.EmailEventBounce, domain.EmailProviderKindSES, "integration-2", "test@example.com",
+			"msg-2", "trans-2", "broadcast-2", now, `{"key": "value2"}`,
+			"soft", "mailbox_full", "452 mailbox full", "", now,
+		)
+
+	// Expect a SQL query with filters
+	mock.ExpectQuery(`SELECT .+ FROM webhook_events WHERE`).
+		WillReturnRows(rows)
+
+	// Call the method
+	result, err := repo.ListEvents(ctx, workspaceID, params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Events, 2)
+	assert.Equal(t, "evt-1", result.Events[0].ID)
+	assert.Equal(t, "evt-2", result.Events[1].ID)
+	assert.Equal(t, "hard", result.Events[0].BounceType)
+	assert.Equal(t, "soft", result.Events[1].BounceType)
+
+	// Verify all expectations were met
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestWebhookEventRepository_ListEvents_WithCursor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	now := time.Now().UTC()
+
+	// Create a valid cursor (base64 encoded "timestamp~id")
+	cursor := "MjAyMy0xMS0xMFQxMjozNDo1NiswMDowMH5ldnQtcHJldmlvdXM=" // Example base64 encoded cursor
+
+	// Set up the workspace connection expectation
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	// Test with cursor parameter
+	params := domain.WebhookEventListParams{
+		Limit:  10,
+		Cursor: cursor,
+	}
+
+	// Set up rows for the SQL query result
+	rows := sqlmock.NewRows([]string{
+		"id", "type", "email_provider_kind", "integration_id", "recipient_email",
+		"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
+		"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type",
+		"created_at",
+	}).
+		AddRow(
+			"evt-3", domain.EmailEventDelivered, domain.EmailProviderKindSES, "integration-3", "test3@example.com",
+			"msg-3", "trans-3", "broadcast-3", now, `{"key": "value3"}`,
+			"", "", "", "", now,
+		).
+		AddRow(
+			"evt-4", domain.EmailEventDelivered, domain.EmailProviderKindSES, "integration-4", "test4@example.com",
+			"msg-4", "trans-4", "broadcast-4", now, `{"key": "value4"}`,
+			"", "", "", "", now,
+		).
+		AddRow(
+			"evt-5", domain.EmailEventDelivered, domain.EmailProviderKindSES, "integration-5", "test5@example.com",
+			"msg-5", "trans-5", "broadcast-5", now, `{"key": "value5"}`,
 			"", "", "", "", now,
 		)
 
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE id = \\$1").
-			WithArgs(eventID).
-			WillReturnRows(rows)
+	// Expect a SQL query with cursor condition
+	mock.ExpectQuery(`SELECT .+ FROM webhook_events WHERE`).
+		WillReturnRows(rows)
 
-		// Call the repository method
-		event, err := eventRepo.GetEventByID(ctx, eventID)
-		assert.NoError(t, err)
-		assert.NotNil(t, event)
-		assert.Equal(t, eventID, event.ID)
-		assert.Equal(t, domain.EmailEventDelivered, event.Type)
-		assert.Equal(t, domain.EmailProviderKindPostmark, event.EmailProviderKind)
-		assert.Equal(t, "test@example.com", event.RecipientEmail)
+	// Call the method
+	result, err := repo.ListEvents(ctx, workspaceID, params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Events, 3)
+	assert.False(t, result.HasMore) // With 3 results and limit 10, HasMore should be false
 
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Not found", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Expect the query with no rows
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE id = \\$1").
-			WithArgs(eventID).
-			WillReturnError(sql.ErrNoRows)
-
-		// Call the repository method
-		event, err := eventRepo.GetEventByID(ctx, eventID)
-		assert.Error(t, err)
-		assert.Nil(t, event)
-
-		// Verify the error type
-		var notFoundErr *domain.ErrWebhookEventNotFound
-		assert.True(t, errors.As(err, &notFoundErr))
-		assert.Equal(t, eventID, notFoundErr.ID)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Database error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("database error")
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Expect the query with error
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE id = \\$1").
-			WithArgs(eventID).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		event, err := eventRepo.GetEventByID(ctx, eventID)
-		assert.Error(t, err)
-		assert.Nil(t, event)
-		assert.Contains(t, err.Error(), "failed to get webhook event")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
+	// Verify all expectations were met
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestWebhookEventRepository_GetEventsByMessageID(t *testing.T) {
+func TestWebhookEventRepository_ListEvents_InvalidCursor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	eventRepo := repository.NewWebhookEventRepository(mockWorkspaceRepo)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
 
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
+	ctx := context.Background()
+	workspaceID := "ws-123"
 
-	messageID := "msg-123"
-	now := time.Now()
-	limit := 10
-	offset := 0
+	// Test cases for invalid cursors
+	testCases := []struct {
+		name   string
+		cursor string
+	}{
+		{
+			name:   "Invalid base64",
+			cursor: "not-base64!",
+		},
+		{
+			name:   "Invalid format",
+			cursor: "aW52YWxpZC1mb3JtYXQ=", // base64 of "invalid-format"
+		},
+		{
+			name:   "Invalid timestamp",
+			cursor: "bm90LWEtdGltZXN0YW1wfmV2dC0xMjM=", // base64 of "not-a-timestamp~evt-123"
+		},
+	}
 
-	t.Run("Success with results", func(t *testing.T) {
-		ctx := context.Background()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := domain.WebhookEventListParams{
+				Limit:  10,
+				Cursor: tc.cursor,
+			}
 
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
+			// Set up the workspace connection expectation for each test case
+			mockWorkspaceRepo.EXPECT().
+				GetConnection(gomock.Any(), workspaceID).
+				Return(nil, errors.New("connection error"))
 
-		// Define the expected rows
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
-		}).
-			AddRow(
-				"event-1", "delivered", "postmark", "integration-123", "user1@example.com",
-				messageID, "trans-1", "", now, `{"event":"delivered"}`,
-				"", "", "", "", now,
-			).
-			AddRow(
-				"event-2", "bounce", "postmark", "integration-123", "user2@example.com",
-				messageID, "trans-1", "", now.Add(-1*time.Hour), `{"event":"bounce"}`,
-				"hard", "5.0.0", "rejected", "", now,
-			)
-
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE message_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(messageID, limit, offset).
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByMessageID(ctx, messageID, limit, offset)
-		assert.NoError(t, err)
-		assert.Len(t, events, 2)
-
-		// Verify first event properties
-		assert.Equal(t, "event-1", events[0].ID)
-		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
-		assert.Equal(t, "trans-1", events[0].TransactionalID)
-
-		// Verify second event properties
-		assert.Equal(t, "event-2", events[1].ID)
-		assert.Equal(t, domain.EmailEventBounce, events[1].Type)
-		assert.Equal(t, "hard", events[1].BounceType)
-		assert.Equal(t, "5.0.0", events[1].BounceCategory)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Success with no results", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Define empty result set
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
+			_, err := repo.ListEvents(ctx, workspaceID, params)
+			assert.Error(t, err)
 		})
-
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE message_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(messageID, limit, offset).
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByMessageID(ctx, messageID, limit, offset)
-		assert.NoError(t, err)
-		assert.Empty(t, events)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("connection error")
-
-		// Mock workspace repository GetConnection with error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByMessageID(ctx, messageID, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get system database connection")
-	})
-
-	t.Run("Database query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("query error")
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Expect the query with error
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE message_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(messageID, limit, offset).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByMessageID(ctx, messageID, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get webhook events by message ID")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Row scan error", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Define rows with wrong column count (missing some columns)
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind",
-			// Missing many required columns which will cause scan error
-		}).AddRow("event-1", "delivered", "postmark")
-
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE message_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(messageID, limit, offset).
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByMessageID(ctx, messageID, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to scan webhook event row")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
+	}
 }
 
-func TestWebhookEventRepository_GetEventsByTransactionalID(t *testing.T) {
+func TestWebhookEventRepository_ListEvents_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	eventRepo := repository.NewWebhookEventRepository(mockWorkspaceRepo)
+	repo := NewWebhookEventRepository(mockWorkspaceRepo)
 
+	ctx := context.Background()
+	workspaceID := "ws-123"
+	params := domain.WebhookEventListParams{Limit: 10}
+
+	// Test case 1: Database connection error
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(nil, errors.New("connection error"))
+
+	result, err := repo.ListEvents(ctx, workspaceID, params)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get workspace connection")
+	assert.Nil(t, result)
+
+	// Test case 2: SQL execution error
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
 
-	transactionalID := "trans-123"
-	now := time.Now()
-	limit := 10
-	offset := 0
-
-	t.Run("Success with results", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Define the expected rows
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
-		}).
-			AddRow(
-				"event-1", "delivered", "postmark", "integration-123", "user1@example.com",
-				"msg-1", transactionalID, "", now, `{"event":"delivered"}`,
-				"", "", "", "", now,
-			).
-			AddRow(
-				"event-2", "complaint", "postmark", "integration-123", "user2@example.com",
-				"msg-2", transactionalID, "", now.Add(-1*time.Hour), `{"event":"complaint"}`,
-				"", "", "", "abuse", now,
-			)
-
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE transactional_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(transactionalID, limit, offset).
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByTransactionalID(ctx, transactionalID, limit, offset)
-		assert.NoError(t, err)
-		assert.Len(t, events, 2)
-
-		// Verify first event properties
-		assert.Equal(t, "event-1", events[0].ID)
-		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
-		assert.Equal(t, transactionalID, events[0].TransactionalID)
-
-		// Verify second event properties
-		assert.Equal(t, "event-2", events[1].ID)
-		assert.Equal(t, domain.EmailEventComplaint, events[1].Type)
-		assert.Equal(t, "abuse", events[1].ComplaintFeedbackType)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Success with no results", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Define empty result set
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
-		})
-
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE transactional_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(transactionalID, limit, offset).
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByTransactionalID(ctx, transactionalID, limit, offset)
-		assert.NoError(t, err)
-		assert.Empty(t, events)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("connection error")
-
-		// Mock workspace repository GetConnection with error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByTransactionalID(ctx, transactionalID, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get system database connection")
-	})
-
-	t.Run("Database query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("query error")
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Expect the query with error
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE transactional_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(transactionalID, limit, offset).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByTransactionalID(ctx, transactionalID, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get webhook events by transactional ID")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestWebhookEventRepository_GetEventsByBroadcastID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	eventRepo := repository.NewWebhookEventRepository(mockWorkspaceRepo)
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	broadcastID := "broadcast-123"
-	now := time.Now()
-	limit := 10
-	offset := 0
-
-	t.Run("Success with results", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Define the expected rows
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
-		}).
-			AddRow(
-				"event-1", "delivered", "postmark", "integration-123", "user1@example.com",
-				"msg-1", "", broadcastID, now, `{"event":"delivered"}`,
-				"", "", "", "", now,
-			).
-			AddRow(
-				"event-2", "bounce", "postmark", "integration-123", "user2@example.com",
-				"msg-2", "", broadcastID, now.Add(-1*time.Hour), `{"event":"bounce"}`,
-				"hard", "5.1.1", "rejected", "", now,
-			)
-
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE broadcast_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(broadcastID, limit, offset).
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByBroadcastID(ctx, broadcastID, limit, offset)
-		assert.NoError(t, err)
-		assert.Len(t, events, 2)
-
-		// Verify first event properties
-		assert.Equal(t, "event-1", events[0].ID)
-		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
-		assert.Equal(t, broadcastID, events[0].BroadcastID)
-
-		// Verify second event properties
-		assert.Equal(t, "event-2", events[1].ID)
-		assert.Equal(t, domain.EmailEventBounce, events[1].Type)
-		assert.Equal(t, "hard", events[1].BounceType)
-		assert.Equal(t, "5.1.1", events[1].BounceCategory)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Success with no results", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Define empty result set
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
-		})
-
-		// Expect the query
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE broadcast_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(broadcastID, limit, offset).
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByBroadcastID(ctx, broadcastID, limit, offset)
-		assert.NoError(t, err)
-		assert.Empty(t, events)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("connection error")
-
-		// Mock workspace repository GetConnection with error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByBroadcastID(ctx, broadcastID, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get system database connection")
-	})
-
-	t.Run("Database query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("query error")
-
-		// Mock workspace repository GetConnection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Expect the query with error
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE broadcast_id = \\$1 ORDER BY timestamp DESC LIMIT \\$2 OFFSET \\$3").
-			WithArgs(broadcastID, limit, offset).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByBroadcastID(ctx, broadcastID, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get webhook events by broadcast ID")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestWebhookEventRepository_GetEventsByType(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	eventRepo := repository.NewWebhookEventRepository(mockWorkspaceRepo)
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	workspaceID := "workspace-123"
-	eventType := domain.EmailEventDelivered
-	now := time.Now()
-	limit := 10
-	offset := 0
-
-	t.Run("Success with results", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query
-		transRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("trans-1").
-			AddRow("trans-2")
-
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Setup mock for broadcast IDs query
-		broadcastRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("broadcast-1").
-			AddRow("broadcast-2")
-
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(broadcastRows)
-
-		// Define the expected rows for webhook events
-		rows := sqlmock.NewRows([]string{
-			"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-			"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
-			"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type", "created_at",
-		}).
-			AddRow(
-				"event-1", string(eventType), "postmark", "integration-123", "user1@example.com",
-				"msg-1", "trans-1", "", now, `{"event":"delivered"}`,
-				"", "", "", "", now,
-			).
-			AddRow(
-				"event-2", string(eventType), "postmark", "integration-123", "user2@example.com",
-				"msg-2", "trans-2", "", now.Add(-1*time.Hour), `{"event":"delivered"}`,
-				"", "", "", "", now,
-			).
-			AddRow(
-				"event-3", string(eventType), "postmark", "integration-123", "user3@example.com",
-				"msg-3", "", "broadcast-1", now.Add(-2*time.Hour), `{"event":"delivered"}`,
-				"", "", "", "", now,
-			)
-
-		// This regex is a bit more complex as the actual query is built dynamically
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE (.+) ORDER BY timestamp DESC LIMIT \\$\\d+ OFFSET \\$\\d+").
-			WillReturnRows(rows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-		assert.NoError(t, err)
-		assert.Len(t, events, 3)
-
-		// Verify event properties
-		assert.Equal(t, "event-1", events[0].ID)
-		assert.Equal(t, eventType, events[0].Type)
-		assert.Equal(t, "trans-1", events[0].TransactionalID)
-
-		assert.Equal(t, "event-2", events[1].ID)
-		assert.Equal(t, "trans-2", events[1].TransactionalID)
-
-		assert.Equal(t, "event-3", events[2].ID)
-		assert.Equal(t, "broadcast-1", events[2].BroadcastID)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("No transactional or broadcast IDs found", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query - empty result
-		transRows := sqlmock.NewRows([]string{"id"})
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Setup mock for broadcast IDs query - empty result
-		broadcastRows := sqlmock.NewRows([]string{"id"})
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(broadcastRows)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-		assert.NoError(t, err)
-		assert.Empty(t, events)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("System database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("system connection error")
-
-		// Mock system database connection error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get system database connection")
-	})
-
-	t.Run("Workspace database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("workspace connection error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get workspace connection")
-	})
-
-	t.Run("Transactional IDs query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("transactional query error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Expect the transactional IDs query with error
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get transactional notification IDs")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Broadcast IDs query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("broadcast query error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query
-		transRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("trans-1")
-
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Expect the broadcast IDs query with error
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get broadcast IDs")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Webhook events query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("events query error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query
-		transRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("trans-1")
-
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Setup mock for broadcast IDs query
-		broadcastRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("broadcast-1")
-
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(broadcastRows)
-
-		// Expect the webhook events query with error
-		mock.ExpectQuery("SELECT \\* FROM webhook_events WHERE (.+) ORDER BY timestamp DESC LIMIT \\$\\d+ OFFSET \\$\\d+").
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		events, err := eventRepo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-		assert.Error(t, err)
-		assert.Nil(t, events)
-		assert.Contains(t, err.Error(), "failed to get webhook events by type")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestWebhookEventRepository_GetEventCount(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	eventRepo := repository.NewWebhookEventRepository(mockWorkspaceRepo)
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	workspaceID := "workspace-123"
-	eventType := domain.EmailEventDelivered
-
-	t.Run("Success with count", func(t *testing.T) {
-		ctx := context.Background()
-		expectedCount := 42
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query
-		transRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("trans-1").
-			AddRow("trans-2")
-
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Setup mock for broadcast IDs query
-		broadcastRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("broadcast-1").
-			AddRow("broadcast-2")
-
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(broadcastRows)
-
-		// Setup mock for count query
-		countRow := sqlmock.NewRows([]string{"count"}).
-			AddRow(expectedCount)
-
-		mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM webhook_events WHERE (.+)").
-			WillReturnRows(countRow)
-
-		// Call the repository method
-		count, err := eventRepo.GetEventCount(ctx, workspaceID, eventType)
-		assert.NoError(t, err)
-		assert.Equal(t, expectedCount, count)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("No transactional or broadcast IDs found", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query - empty result
-		transRows := sqlmock.NewRows([]string{"id"})
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Setup mock for broadcast IDs query - empty result
-		broadcastRows := sqlmock.NewRows([]string{"id"})
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(broadcastRows)
-
-		// Call the repository method
-		count, err := eventRepo.GetEventCount(ctx, workspaceID, eventType)
-		assert.NoError(t, err)
-		assert.Equal(t, 0, count)
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("System database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("system connection error")
-
-		// Mock system database connection error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		count, err := eventRepo.GetEventCount(ctx, workspaceID, eventType)
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		assert.Contains(t, err.Error(), "failed to get system database connection")
-	})
-
-	t.Run("Workspace database connection error", func(t *testing.T) {
-		ctx := context.Background()
-		expectedErr := errors.New("workspace connection error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection error
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(nil, expectedErr)
-
-		// Call the repository method
-		count, err := eventRepo.GetEventCount(ctx, workspaceID, eventType)
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		assert.Contains(t, err.Error(), "failed to get workspace connection")
-	})
-
-	t.Run("Transactional IDs query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("transactional query error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Expect the transactional IDs query with error
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		count, err := eventRepo.GetEventCount(ctx, workspaceID, eventType)
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		assert.Contains(t, err.Error(), "failed to get transactional notification IDs")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Broadcast IDs query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("broadcast query error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query
-		transRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("trans-1")
-
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Expect the broadcast IDs query with error
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		count, err := eventRepo.GetEventCount(ctx, workspaceID, eventType)
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		assert.Contains(t, err.Error(), "failed to get broadcast IDs")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("Count query error", func(t *testing.T) {
-		ctx := context.Background()
-		dbErr := errors.New("count query error")
-
-		// Mock system database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, "system").
-			Return(db, nil)
-
-		// Mock workspace database connection
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		// Setup mock for transactional IDs query
-		transRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("trans-1")
-
-		mock.ExpectQuery("SELECT id FROM transactional_notifications WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(transRows)
-
-		// Setup mock for broadcast IDs query
-		broadcastRows := sqlmock.NewRows([]string{"id"}).
-			AddRow("broadcast-1")
-
-		mock.ExpectQuery("SELECT id FROM broadcasts WHERE workspace_id = \\$1").
-			WithArgs(workspaceID).
-			WillReturnRows(broadcastRows)
-
-		// Expect the count query with error
-		mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM webhook_events WHERE (.+)").
-			WillReturnError(dbErr)
-
-		// Call the repository method
-		count, err := eventRepo.GetEventCount(ctx, workspaceID, eventType)
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		assert.Contains(t, err.Error(), "failed to get webhook event count")
-
-		// Verify all expectations were met
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	mock.ExpectQuery("SELECT").
+		WillReturnError(errors.New("database error"))
+
+	result, err = repo.ListEvents(ctx, workspaceID, params)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to query webhook events")
+	assert.Nil(t, result)
+
+	// Test case 3: Scan error
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	rows := sqlmock.NewRows([]string{"id"}). // Deliberately wrong number of columns
+							AddRow("evt-1")
+
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(rows)
+
+	result, err = repo.ListEvents(ctx, workspaceID, params)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to scan webhook event row")
+	assert.Nil(t, result)
 }

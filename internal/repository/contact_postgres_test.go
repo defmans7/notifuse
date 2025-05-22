@@ -819,6 +819,221 @@ func TestGetContacts(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to execute query")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("should filter contacts by list_id", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
+		repo := NewContactRepository(workspaceRepo)
+
+		// Set up expectations for the workspace database query with EXISTS subquery
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
+			"custom_json_5", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
+			"Engineer", 100.0, 5, time.Now(),
+			"custom1", "custom2", "custom3", "custom4", "custom5",
+			1.0, 2.0, 3.0, 4.0, 5.0,
+			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			time.Now(), time.Now(),
+		)
+
+		// Match the query using a regex pattern that includes the EXISTS subquery
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+			WithArgs("list123").
+			WillReturnRows(rows)
+
+		// Set up expectations for the contact lists query (should fetch ALL lists, not just the one used for filtering)
+		listRows := sqlmock.NewRows([]string{
+			"email", "list_id", "status", "created_at", "updated_at", "list_name",
+		}).
+			AddRow("test@example.com", "list123", "active", time.Now(), time.Now(), "Marketing List").
+			AddRow("test@example.com", "list456", "active", time.Now(), time.Now(), "Sales List")
+
+		mock.ExpectQuery(`SELECT cl\.email, cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email IN \(\$1\) AND cl\.deleted_at IS NULL`).
+			WithArgs("test@example.com").
+			WillReturnRows(listRows)
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID:      "workspace123",
+			ListID:           "list123",
+			Limit:            10,
+			WithContactLists: true,
+		}
+
+		resp, err := repo.GetContacts(context.Background(), req)
+		require.NoError(t, err)
+		require.Len(t, resp.Contacts, 1)
+		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+
+		// Should return ALL lists the contact belongs to (both list123 and list456)
+		require.Len(t, resp.Contacts[0].ContactLists, 2)
+		assert.Contains(t, []string{resp.Contacts[0].ContactLists[0].ListID, resp.Contacts[0].ContactLists[1].ListID}, "list123")
+		assert.Contains(t, []string{resp.Contacts[0].ContactLists[0].ListID, resp.Contacts[0].ContactLists[1].ListID}, "list456")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should filter contacts by contact_list_status", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
+		repo := NewContactRepository(workspaceRepo)
+
+		// Set up expectations for the workspace database query with EXISTS subquery
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
+			"custom_json_5", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
+			"Engineer", 100.0, 5, time.Now(),
+			"custom1", "custom2", "custom3", "custom4", "custom5",
+			1.0, 2.0, 3.0, 4.0, 5.0,
+			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			time.Now(), time.Now(),
+		)
+
+		// Match the query using a regex pattern that includes the EXISTS subquery
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.status = \$1\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+			WithArgs(string(domain.ContactListStatusActive)).
+			WillReturnRows(rows)
+
+		// Set up expectations for the contact lists query
+		listRows := sqlmock.NewRows([]string{
+			"email", "list_id", "status", "created_at", "updated_at", "list_name",
+		}).
+			AddRow("test@example.com", "list123", "active", time.Now(), time.Now(), "Marketing List").
+			AddRow("test@example.com", "list456", "pending", time.Now(), time.Now(), "Sales List")
+
+		mock.ExpectQuery(`SELECT cl\.email, cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email IN \(\$1\) AND cl\.deleted_at IS NULL`).
+			WithArgs("test@example.com").
+			WillReturnRows(listRows)
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID:       "workspace123",
+			ContactListStatus: string(domain.ContactListStatusActive),
+			Limit:             10,
+			WithContactLists:  true,
+		}
+
+		resp, err := repo.GetContacts(context.Background(), req)
+		require.NoError(t, err)
+		require.Len(t, resp.Contacts, 1)
+		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+
+		// Should return ALL lists the contact belongs to (both active and pending)
+		require.Len(t, resp.Contacts[0].ContactLists, 2)
+		assert.Contains(t, []string{string(resp.Contacts[0].ContactLists[0].Status), string(resp.Contacts[0].ContactLists[1].Status)}, "active")
+		assert.Contains(t, []string{string(resp.Contacts[0].ContactLists[0].Status), string(resp.Contacts[0].ContactLists[1].Status)}, "pending")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("should filter contacts by both list_id and contact_list_status", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil).AnyTimes()
+
+		repo := NewContactRepository(workspaceRepo)
+
+		// Set up expectations for the workspace database query with EXISTS subquery
+		rows := sqlmock.NewRows([]string{
+			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
+			"job_title", "lifetime_value", "orders_count", "last_order_at",
+			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
+			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
+			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
+			"custom_json_5", "created_at", "updated_at",
+		}).AddRow(
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
+			"Engineer", 100.0, 5, time.Now(),
+			"custom1", "custom2", "custom3", "custom4", "custom5",
+			1.0, 2.0, 3.0, 4.0, 5.0,
+			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			[]byte(`{"key": "value"}`), []byte(`{"key": "value"}`),
+			time.Now(), time.Now(),
+		)
+
+		// Match the query using a regex pattern that includes the EXISTS subquery with both list_id and status filters
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1 AND cl\.status = \$2\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+			WithArgs("list123", string(domain.ContactListStatusActive)).
+			WillReturnRows(rows)
+
+		// Set up expectations for the contact lists query
+		listRows := sqlmock.NewRows([]string{
+			"email", "list_id", "status", "created_at", "updated_at", "list_name",
+		}).
+			AddRow("test@example.com", "list123", "active", time.Now(), time.Now(), "Marketing List").
+			AddRow("test@example.com", "list456", "pending", time.Now(), time.Now(), "Sales List")
+
+		mock.ExpectQuery(`SELECT cl\.email, cl\.list_id, cl\.status, cl\.created_at, cl\.updated_at, l\.name as list_name FROM contact_lists cl JOIN lists l ON cl\.list_id = l\.id WHERE cl\.email IN \(\$1\) AND cl\.deleted_at IS NULL`).
+			WithArgs("test@example.com").
+			WillReturnRows(listRows)
+
+		req := &domain.GetContactsRequest{
+			WorkspaceID:       "workspace123",
+			ListID:            "list123",
+			ContactListStatus: string(domain.ContactListStatusActive),
+			Limit:             10,
+			WithContactLists:  true,
+		}
+
+		resp, err := repo.GetContacts(context.Background(), req)
+		require.NoError(t, err)
+		require.Len(t, resp.Contacts, 1)
+		assert.Equal(t, "test@example.com", resp.Contacts[0].Email)
+
+		// Should return ALL lists the contact belongs to
+		require.Len(t, resp.Contacts[0].ContactLists, 2)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestGetContactsForBroadcast(t *testing.T) {
@@ -853,8 +1068,8 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
-			"created_at", "updated_at",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
+			"custom_json_5", "created_at", "updated_at",
 		}).
 			AddRow(
 				"test1@example.com", "ext123", "Europe/Paris", "en-US",
@@ -930,8 +1145,8 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
-			"created_at", "updated_at",
+			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
+			"custom_json_5", "created_at", "updated_at",
 		}).
 			AddRow(
 				"test1@example.com", "ext123", "Europe/Paris", "en-US",
@@ -1092,7 +1307,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		}
 
 		// Expect query with error
-		mock.ExpectQuery(`SELECT c\.\*, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
+		mock.ExpectQuery(`SELECT c\.\* FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
 			WithArgs("list1",
 				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,

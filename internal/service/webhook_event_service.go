@@ -92,7 +92,7 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 
 	// Store the event
 	// No authentication needed for webhook events as they come from external providers
-	if err := s.repo.StoreEvent(ctx, event); err != nil {
+	if err := s.repo.StoreEvent(ctx, workspaceID, event); err != nil {
 		s.logger.WithField("event_id", event.ID).
 			WithField("event_type", event.Type).
 			WithField("provider", event.EmailProviderKind).
@@ -131,86 +131,6 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 	}
 
 	return nil
-}
-
-// GetEventByID retrieves a webhook event by its ID
-func (s *WebhookEventService) GetEventByID(ctx context.Context, id string) (*domain.WebhookEvent, error) {
-	event, err := s.repo.GetEventByID(ctx, id)
-	if err != nil {
-		s.logger.WithField("event_id", id).
-			Error(fmt.Sprintf("Failed to get webhook event: %v", err))
-		return nil, err
-	}
-	return event, nil
-}
-
-// GetEventsByType retrieves webhook events by type for a workspace
-func (s *WebhookEventService) GetEventsByType(ctx context.Context, workspaceID string, eventType domain.EmailEventType, limit, offset int) ([]*domain.WebhookEvent, error) {
-	// Authenticate user for workspace
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
-	}
-
-	events, err := s.repo.GetEventsByType(ctx, workspaceID, eventType, limit, offset)
-	if err != nil {
-		s.logger.WithField("workspace_id", workspaceID).
-			WithField("event_type", eventType).
-			Error(fmt.Sprintf("Failed to get webhook events by type: %v", err))
-		return nil, err
-	}
-	return events, nil
-}
-
-// GetEventsByMessageID retrieves all webhook events associated with a message ID
-func (s *WebhookEventService) GetEventsByMessageID(ctx context.Context, messageID string, limit, offset int) ([]*domain.WebhookEvent, error) {
-	events, err := s.repo.GetEventsByMessageID(ctx, messageID, limit, offset)
-	if err != nil {
-		s.logger.WithField("message_id", messageID).
-			Error(fmt.Sprintf("Failed to get webhook events by message ID: %v", err))
-		return nil, err
-	}
-	return events, nil
-}
-
-// GetEventsByTransactionalID retrieves all webhook events associated with a transactional ID
-func (s *WebhookEventService) GetEventsByTransactionalID(ctx context.Context, transactionalID string, limit, offset int) ([]*domain.WebhookEvent, error) {
-	events, err := s.repo.GetEventsByTransactionalID(ctx, transactionalID, limit, offset)
-	if err != nil {
-		s.logger.WithField("transactional_id", transactionalID).
-			Error(fmt.Sprintf("Failed to get webhook events by transactional ID: %v", err))
-		return nil, err
-	}
-	return events, nil
-}
-
-// GetEventsByBroadcastID retrieves all webhook events associated with a broadcast ID
-func (s *WebhookEventService) GetEventsByBroadcastID(ctx context.Context, broadcastID string, limit, offset int) ([]*domain.WebhookEvent, error) {
-	events, err := s.repo.GetEventsByBroadcastID(ctx, broadcastID, limit, offset)
-	if err != nil {
-		s.logger.WithField("broadcast_id", broadcastID).
-			Error(fmt.Sprintf("Failed to get webhook events by broadcast ID: %v", err))
-		return nil, err
-	}
-	return events, nil
-}
-
-// GetEventCount retrieves the count of events by type for a workspace
-func (s *WebhookEventService) GetEventCount(ctx context.Context, workspaceID string, eventType domain.EmailEventType) (int, error) {
-	// Authenticate user for workspace
-	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to authenticate user: %w", err)
-	}
-
-	count, err := s.repo.GetEventCount(ctx, workspaceID, eventType)
-	if err != nil {
-		s.logger.WithField("workspace_id", workspaceID).
-			WithField("event_type", eventType).
-			Error(fmt.Sprintf("Failed to get webhook event count: %v", err))
-		return 0, err
-	}
-	return count, nil
 }
 
 // processSESWebhook processes a webhook event from Amazon SES
@@ -328,9 +248,11 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 
 	// Set event-specific information
 	if eventType == domain.EmailEventBounce {
-		event.SetBounceInfo(bounceType, bounceCategory, bounceDiagnostic)
+		event.BounceType = bounceType
+		event.BounceCategory = bounceCategory
+		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
-		event.SetComplaintInfo(complaintFeedbackType)
+		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
 	return event, nil
@@ -463,9 +385,11 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 
 	// Set event-specific information
 	if eventType == domain.EmailEventBounce {
-		event.SetBounceInfo(bounceType, bounceCategory, bounceDiagnostic)
+		event.BounceType = bounceType
+		event.BounceCategory = bounceCategory
+		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
-		event.SetComplaintInfo(complaintFeedbackType)
+		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
 	return event, nil
@@ -549,9 +473,11 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 
 	// Set event-specific information
 	if eventType == domain.EmailEventBounce {
-		event.SetBounceInfo(bounceType, bounceCategory, bounceDiagnostic)
+		event.BounceType = bounceType
+		event.BounceCategory = bounceCategory
+		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
-		event.SetComplaintInfo(complaintFeedbackType)
+		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
 	return event, nil
@@ -627,9 +553,11 @@ func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawP
 
 	// Set event-specific information
 	if eventType == domain.EmailEventBounce {
-		event.SetBounceInfo(bounceType, bounceCategory, bounceDiagnostic)
+		event.BounceType = bounceType
+		event.BounceCategory = bounceCategory
+		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
-		event.SetComplaintInfo(complaintFeedbackType)
+		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
 	return event, nil
@@ -709,9 +637,11 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 
 	// Set event-specific information
 	if eventType == domain.EmailEventBounce {
-		event.SetBounceInfo(bounceType, bounceCategory, bounceDiagnostic)
+		event.BounceType = bounceType
+		event.BounceCategory = bounceCategory
+		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
-		event.SetComplaintInfo(complaintFeedbackType)
+		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
 	return event, nil
@@ -760,10 +690,52 @@ func (s *WebhookEventService) processSMTPWebhook(integrationID string, rawPayloa
 
 	// Set event-specific information
 	if eventType == domain.EmailEventBounce {
-		event.SetBounceInfo("Bounce", payload.BounceCategory, payload.DiagnosticCode)
+		event.BounceType = "Bounce"
+		event.BounceCategory = payload.BounceCategory
+		event.BounceDiagnostic = payload.DiagnosticCode
 	} else if eventType == domain.EmailEventComplaint {
-		event.SetComplaintInfo(payload.ComplaintType)
+		event.ComplaintFeedbackType = payload.ComplaintType
 	}
 
 	return event, nil
+}
+
+// ListEvents retrieves all webhook events for a workspace
+func (s *WebhookEventService) ListEvents(ctx context.Context, workspaceID string, params domain.WebhookEventListParams) (*domain.WebhookEventListResult, error) {
+	// codecov:ignore:start
+	ctx, span := tracing.StartServiceSpan(ctx, "WebhookEventService", "ListEvents")
+	defer tracing.EndSpan(span, nil)
+	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
+	// codecov:ignore:end
+
+	// Authenticate user for workspace
+	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	// Validate params
+	if err := params.Validate(); err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+
+	// Call repository method
+	result, err := s.repo.ListEvents(ctx, workspaceID, params)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).
+			WithField("params", params).
+			Error(fmt.Sprintf("Failed to list webhook events: %v", err))
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return nil, fmt.Errorf("failed to list webhook events: %w", err)
+	}
+
+	return result, nil
 }
