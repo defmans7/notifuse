@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -259,6 +260,36 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
+	// Check for transactional_id and broadcast_id in tags and validate as UUID
+	// These must be valid UUIDs or empty strings to avoid database errors
+	var tags map[string]string
+
+	// Get the tags from the appropriate notification based on event type
+	if eventType == domain.EmailEventBounce && len(bounceNotification.Mail.Tags) > 0 {
+		tags = bounceNotification.Mail.Tags
+	} else if eventType == domain.EmailEventComplaint && err == nil { // err is nil when complaintNotification was parsed successfully
+		var complaintNotification domain.SESComplaintNotification
+		if err := json.Unmarshal(messageBytes, &complaintNotification); err == nil && complaintNotification.NotificationType == "Complaint" {
+			tags = complaintNotification.Mail.Tags
+		}
+	} else if eventType == domain.EmailEventDelivered && err == nil { // err is nil when deliveryNotification was parsed successfully
+		var deliveryNotification domain.SESDeliveryNotification
+		if err := json.Unmarshal(messageBytes, &deliveryNotification); err == nil && deliveryNotification.NotificationType == "Delivery" {
+			tags = deliveryNotification.Mail.Tags
+		}
+	}
+
+	// Process the tags if we have any
+	if len(tags) > 0 {
+		if id, ok := tags["transactional_id"]; ok && id != "" {
+			event.TransactionalID = id
+		}
+
+		if id, ok := tags["broadcast_id"]; ok && id != "" {
+			event.BroadcastID = id
+		}
+	}
+
 	return []*domain.WebhookEvent{event}, nil
 }
 
@@ -397,6 +428,18 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
+	// Validate TransactionalID and BroadcastID fields from metadata
+	// These must be valid UUIDs or empty strings to avoid database errors
+	if payload.Metadata != nil {
+		if id, ok := payload.Metadata["transactional_id"]; ok && id != "" {
+			event.TransactionalID = id
+		}
+
+		if id, ok := payload.Metadata["broadcast_id"]; ok && id != "" {
+			event.BroadcastID = id
+		}
+	}
+
 	return []*domain.WebhookEvent{event}, nil
 }
 
@@ -486,6 +529,20 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
+	// Validate TransactionalID and BroadcastID from user variables
+	// These must be valid UUIDs or empty strings to avoid database errors
+	if eventData, ok := jsonData["event-data"].(map[string]interface{}); ok {
+		if userVariables, ok := eventData["user-variables"].(map[string]interface{}); ok {
+			if id, ok := userVariables["transactional_id"]; ok && id != nil {
+				event.TransactionalID = fmt.Sprintf("%v", id)
+			}
+
+			if id, ok := userVariables["broadcast_id"]; ok && id != nil {
+				event.BroadcastID = fmt.Sprintf("%v", id)
+			}
+		}
+	}
+
 	return []*domain.WebhookEvent{event}, nil
 }
 
@@ -519,9 +576,24 @@ func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawP
 		recipientEmail = payload.MSys.MessageEvent.RecipientTo
 		messageID = payload.MSys.MessageEvent.MessageID
 
-		// Parse timestamp
-		if t, err := time.Parse(time.RFC3339, payload.MSys.MessageEvent.Timestamp); err == nil {
-			timestamp = t
+		// Parse timestamp - SparkPost may send Unix timestamp as a string
+		if payload.MSys.MessageEvent.Timestamp != "" {
+			// First try parsing as RFC3339
+			if t, err := time.Parse(time.RFC3339, payload.MSys.MessageEvent.Timestamp); err == nil {
+				timestamp = t
+			} else {
+				// If RFC3339 parsing fails, try parsing as Unix timestamp
+				if unixTimestamp, err := strconv.ParseInt(payload.MSys.MessageEvent.Timestamp, 10, 64); err == nil {
+					timestamp = time.Unix(unixTimestamp, 0)
+				} else {
+					// Fall back to current time if parsing fails
+					timestamp = time.Now()
+					s.logger.WithFields(map[string]interface{}{
+						"timestamp_string": payload.MSys.MessageEvent.Timestamp,
+						"parse_error":      err.Error(),
+					}).Warn("Failed to parse SparkPost timestamp")
+				}
+			}
 		} else {
 			timestamp = time.Now()
 		}
@@ -657,6 +729,23 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
 		event.ComplaintFeedbackType = complaintFeedbackType
+	}
+
+	// Validate TransactionalID and BroadcastID
+	// These must be valid UUIDs or empty strings to avoid database errors
+	// Mailjet allows custom IDs to be passed in the Payload field, which might be JSON
+	if payload.Payload != "" {
+		// Try to parse Payload as JSON
+		var customData map[string]interface{}
+		if err := json.Unmarshal([]byte(payload.Payload), &customData); err == nil {
+			if id, ok := customData["transactional_id"]; ok && id != nil {
+				event.TransactionalID = fmt.Sprintf("%v", id)
+			}
+
+			if id, ok := customData["broadcast_id"]; ok && id != nil {
+				event.BroadcastID = fmt.Sprintf("%v", id)
+			}
+		}
 	}
 
 	return []*domain.WebhookEvent{event}, nil
