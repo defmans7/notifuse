@@ -425,7 +425,7 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 
 	now := time.Now()
 
-	// Process each status group separately
+	// Process each status group with a single query
 	for status, groupUpdates := range statusGroups {
 		// Determine which field to check and update based on status
 		var field string
@@ -451,54 +451,30 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 			return fmt.Errorf("invalid status: %s", status)
 		}
 
-		// Build the query for this status group
-		updateQueryBase := fmt.Sprintf(`
-			UPDATE message_history 
-			SET status = $1, %s = CASE id `, field)
-
-		// Build the CASE statements for each message ID
-		var caseStatements []string
-		args := []interface{}{status}
+		// Build VALUES clause for batch update with explicit timestamp casting
+		valuesParts := make([]string, len(groupUpdates))
+		args := []interface{}{status, now}
 
 		for i, update := range groupUpdates {
-			paramIndex := i*2 + 2 // Starting from $2, then $4, $6, etc.
-			caseStatements = append(caseStatements, fmt.Sprintf(
-				"WHEN $%d THEN $%d",
-				paramIndex,
-				paramIndex+1,
-			))
+			valuesParts[i] = fmt.Sprintf("($%d, $%d::TIMESTAMP WITH TIME ZONE)", len(args)+1, len(args)+2)
 			args = append(args, update.ID, update.Timestamp)
 		}
 
-		// Add the updated_at CASE statement
-		updateQueryMiddle := fmt.Sprintf(` END, updated_at = $%d
-			WHERE id IN (`, len(args)+1)
-		args = append(args, now)
+		valuesClause := strings.Join(valuesParts, ", ")
 
-		// Build the IN clause with parameters
-		var idPlaceholders []string
-		for i := range groupUpdates {
-			paramIndex := i*2 + 2 // Same as above, $2, $4, $6, etc.
-			idPlaceholders = append(idPlaceholders, fmt.Sprintf("$%d", paramIndex))
-		}
+		query := fmt.Sprintf(`
+			UPDATE message_history 
+			SET status = $1, %s = updates.timestamp, updated_at = $2::TIMESTAMP WITH TIME ZONE
+			FROM (VALUES %s) AS updates(id, timestamp)
+			WHERE message_history.id = updates.id AND %s IS NULL
+		`, field, valuesClause, field)
 
-		// Only update if there's no existing timestamp (field IS NULL)
-		updateQueryEnd := fmt.Sprintf(`) AND %s IS NULL`, field)
-
-		// Assemble the full query
-		updateQuery := updateQueryBase +
-			strings.Join(caseStatements, " ") +
-			updateQueryMiddle +
-			strings.Join(idPlaceholders, ", ") +
-			updateQueryEnd
-
-		// Execute the update for this status group
-		_, err = workspaceDB.ExecContext(ctx, updateQuery, args...)
+		_, err = workspaceDB.ExecContext(ctx, query, args...)
 		if err != nil {
 			// codecov:ignore:start
 			tracing.MarkSpanError(ctx, err)
 			// codecov:ignore:end
-			return fmt.Errorf("failed to batch update message statuses: %w", err)
+			return fmt.Errorf("failed to batch update message statuses for status %s: %w", status, err)
 		}
 	}
 
