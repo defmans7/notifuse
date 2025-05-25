@@ -50,7 +50,7 @@ func (r *webhookEventRepository) StoreEvents(ctx context.Context, workspaceID st
 	baseSQL := `
 		INSERT INTO webhook_events (
 			id, type, email_provider_kind, integration_id, recipient_email, 
-			message_id, transactional_id, broadcast_id, timestamp, raw_payload,
+			message_id, timestamp, raw_payload,
 			bounce_type, bounce_category, bounce_diagnostic, complaint_feedback_type,
 			created_at
 		) VALUES `
@@ -60,7 +60,7 @@ func (r *webhookEventRepository) StoreEvents(ctx context.Context, workspaceID st
 	now := time.Now()
 
 	// Batch size limit to avoid hitting Postgres parameter limits (max 65535 parameters)
-	const batchSize = 1000 // Each event uses 15 parameters, so ~4000 events would hit the limit
+	const batchSize = 1000 // Each event uses 13 parameters, so ~4000 events would hit the limit
 
 	// Process in batches
 	for i := 0; i < len(events); i += batchSize {
@@ -75,10 +75,10 @@ func (r *webhookEventRepository) StoreEvents(ctx context.Context, workspaceID st
 		// Generate placeholders and collect args for this batch
 		for j, event := range currentBatch {
 			paramOffset := j * 15
-			placeholders[j] = fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d)",
+			placeholders[j] = fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d)",
 				paramOffset+1, paramOffset+2, paramOffset+3, paramOffset+4, paramOffset+5,
 				paramOffset+6, paramOffset+7, paramOffset+8, paramOffset+9, paramOffset+10,
-				paramOffset+11, paramOffset+12, paramOffset+13, paramOffset+14, paramOffset+15)
+				paramOffset+11, paramOffset+12, paramOffset+13)
 
 			args = append(args,
 				event.ID,
@@ -87,8 +87,6 @@ func (r *webhookEventRepository) StoreEvents(ctx context.Context, workspaceID st
 				event.IntegrationID,
 				event.RecipientEmail,
 				event.MessageID,
-				event.TransactionalID,
-				event.BroadcastID,
 				event.Timestamp,
 				event.RawPayload,
 				event.BounceType,
@@ -140,7 +138,7 @@ func (r *webhookEventRepository) ListEvents(ctx context.Context, workspaceID str
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	queryBuilder := psql.Select(
 		"id", "type", "email_provider_kind", "integration_id", "recipient_email",
-		"message_id", "transactional_id", "broadcast_id", "timestamp", "raw_payload",
+		"message_id", "timestamp", "raw_payload",
 		"bounce_type", "bounce_category", "bounce_diagnostic", "complaint_feedback_type",
 		"created_at",
 	).From("webhook_events")
@@ -156,14 +154,6 @@ func (r *webhookEventRepository) ListEvents(ctx context.Context, workspaceID str
 
 	if params.MessageID != "" {
 		queryBuilder = queryBuilder.Where(sq.Eq{"message_id": params.MessageID})
-	}
-
-	if params.TransactionalID != "" {
-		queryBuilder = queryBuilder.Where(sq.Eq{"transactional_id": params.TransactionalID})
-	}
-
-	if params.BroadcastID != "" {
-		queryBuilder = queryBuilder.Where(sq.Eq{"broadcast_id": params.BroadcastID})
 	}
 
 	// Time range filters
@@ -251,7 +241,7 @@ func (r *webhookEventRepository) ListEvents(ctx context.Context, workspaceID str
 	events := []*domain.WebhookEvent{}
 	for rows.Next() {
 		event := &domain.WebhookEvent{}
-		var transactionalID, broadcastID, bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType sql.NullString
+		var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType sql.NullString
 
 		err := rows.Scan(
 			&event.ID,
@@ -260,8 +250,6 @@ func (r *webhookEventRepository) ListEvents(ctx context.Context, workspaceID str
 			&event.IntegrationID,
 			&event.RecipientEmail,
 			&event.MessageID,
-			&transactionalID,
-			&broadcastID,
 			&event.Timestamp,
 			&event.RawPayload,
 			&bounceType,
@@ -276,15 +264,6 @@ func (r *webhookEventRepository) ListEvents(ctx context.Context, workspaceID str
 			tracing.MarkSpanError(ctx, err)
 			// codecov:ignore:end
 			return nil, fmt.Errorf("failed to scan webhook event row: %w", err)
-		}
-
-		// Convert nullable fields
-		if transactionalID.Valid {
-			event.TransactionalID = transactionalID.String
-		}
-
-		if broadcastID.Valid {
-			event.BroadcastID = broadcastID.String
 		}
 
 		if bounceType.Valid {

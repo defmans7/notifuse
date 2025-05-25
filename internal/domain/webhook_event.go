@@ -35,8 +35,6 @@ type WebhookEvent struct {
 	IntegrationID     string            `json:"integration_id"`
 	RecipientEmail    string            `json:"recipient_email"`
 	MessageID         string            `json:"message_id"`
-	TransactionalID   string            `json:"transactional_id,omitempty"`
-	BroadcastID       string            `json:"broadcast_id,omitempty"`
 	Timestamp         time.Time         `json:"timestamp"`
 	RawPayload        string            `json:"raw_payload"`
 
@@ -104,11 +102,9 @@ type WebhookEventListParams struct {
 	WorkspaceID string `json:"workspace_id"`
 
 	// Filters
-	EventType       EmailEventType `json:"event_type,omitempty"`
-	RecipientEmail  string         `json:"recipient_email,omitempty"`
-	MessageID       string         `json:"message_id,omitempty"`
-	TransactionalID string         `json:"transactional_id,omitempty"`
-	BroadcastID     string         `json:"broadcast_id,omitempty"`
+	EventType      EmailEventType `json:"event_type,omitempty"`
+	RecipientEmail string         `json:"recipient_email,omitempty"`
+	MessageID      string         `json:"message_id,omitempty"`
 
 	// Time range filters
 	TimestampAfter  *time.Time `json:"timestamp_after,omitempty"`
@@ -123,8 +119,6 @@ func (p *WebhookEventListParams) FromQuery(query url.Values) error {
 	p.EventType = EmailEventType(query.Get("event_type"))
 	p.RecipientEmail = query.Get("recipient_email")
 	p.MessageID = query.Get("message_id")
-	p.TransactionalID = query.Get("transactional_id")
-	p.BroadcastID = query.Get("broadcast_id")
 
 	// Parse limit
 	if limitStr := query.Get("limit"); limitStr != "" {
@@ -179,11 +173,6 @@ func (p *WebhookEventListParams) Validate() error {
 	// Validate contact email if provided
 	if p.RecipientEmail != "" && !govalidator.IsEmail(p.RecipientEmail) {
 		return fmt.Errorf("invalid contact email format")
-	}
-
-	// Validate broadcast ID if provided
-	if p.BroadcastID != "" && !govalidator.IsUUID(p.BroadcastID) {
-		return fmt.Errorf("invalid broadcast ID format")
 	}
 
 	// Validate time ranges

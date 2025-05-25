@@ -410,7 +410,7 @@ func TestMessageHistoryHandler_handleList_InvalidBooleanFormat(t *testing.T) {
 	handler, _, mockAuthService, mockTracer, _ := setupMessageHistoryHandlerTest(t)
 
 	// Create a request with an invalid boolean format
-	req := httptest.NewRequest(http.MethodGet, "/api/messages.list?workspace_id=ws123&has_error=invalid-bool", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/messages.list?workspace_id=ws123&is_sent=invalid-bool", nil)
 	w := httptest.NewRecorder()
 
 	// Create a user for authentication
@@ -441,14 +441,14 @@ func TestMessageHistoryHandler_handleList_InvalidBooleanFormat(t *testing.T) {
 	var response map[string]string
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Contains(t, response["error"], "invalid has_error value")
+	assert.Contains(t, response["error"], "invalid is_sent value")
 }
 
 func TestMessageHistoryHandler_handleList_WithBooleanParameter(t *testing.T) {
 	handler, mockService, mockAuthService, mockTracer, _ := setupMessageHistoryHandlerTest(t)
 
-	// Create a request with has_error=true parameter
-	req := httptest.NewRequest(http.MethodGet, "/api/messages.list?workspace_id=ws123&has_error=true", nil)
+	// Create a request with is_sent=true parameter
+	req := httptest.NewRequest(http.MethodGet, "/api/messages.list?workspace_id=ws123&is_sent=true", nil)
 	w := httptest.NewRecorder()
 
 	// Create a user for authentication
@@ -482,8 +482,8 @@ func TestMessageHistoryHandler_handleList_WithBooleanParameter(t *testing.T) {
 		ListMessages(gomock.Any(), "ws123", gomock.Any()).
 		DoAndReturn(func(_ context.Context, workspaceID string, params domain.MessageListParams) (*domain.MessageListResult, error) {
 			assert.Equal(t, "ws123", workspaceID)
-			assert.NotNil(t, params.HasError)
-			assert.True(t, *params.HasError)
+			assert.NotNil(t, params.IsSent)
+			assert.True(t, *params.IsSent)
 			return result, nil
 		})
 

@@ -467,7 +467,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		if err != nil {
 			message.FailedAt = &now
 			errStr := fmt.Sprintf("%.255s", err.Error())
-			message.Error = &errStr
+			message.StatusInfo = &errStr
 		}
 
 		// Record the message

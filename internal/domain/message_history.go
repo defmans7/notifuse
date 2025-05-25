@@ -33,9 +33,10 @@ const (
 
 // MessageEventUpdate represents a status update for a message
 type MessageEventUpdate struct {
-	ID        string       `json:"id"`
-	Event     MessageEvent `json:"event"`
-	Timestamp time.Time    `json:"timestamp"`
+	ID         string       `json:"id"`
+	Event      MessageEvent `json:"event"`
+	Timestamp  time.Time    `json:"timestamp"`
+	StatusInfo *string      `json:"status_info,omitempty"`
 }
 
 // MessageData represents the JSON data used to compile a template
@@ -74,7 +75,7 @@ type MessageHistory struct {
 	TemplateID      string      `json:"template_id"`
 	TemplateVersion int64       `json:"template_version"`
 	Channel         string      `json:"channel"` // email, sms, push, etc.
-	Error           *string     `json:"error,omitempty"`
+	StatusInfo      *string     `json:"status_info,omitempty"`
 	MessageData     MessageData `json:"message_data"`
 
 	// Event timestamps
@@ -162,7 +163,6 @@ type MessageListParams struct {
 	ContactEmail   string `json:"contact_email,omitempty"`   // filter by contact
 	BroadcastID    string `json:"broadcast_id,omitempty"`    // filter by broadcast
 	TemplateID     string `json:"template_id,omitempty"`     // filter by template
-	HasError       *bool  `json:"has_error,omitempty"`       // filter messages with/without errors
 	IsSent         *bool  `json:"is_sent,omitempty"`         // filter messages that are sent
 	IsDelivered    *bool  `json:"is_delivered,omitempty"`    // filter messages that are delivered
 	IsFailed       *bool  `json:"is_failed,omitempty"`       // filter messages that are failed
@@ -194,15 +194,6 @@ func (p *MessageListParams) FromQuery(query url.Values) error {
 			return fmt.Errorf("invalid limit value: %s", limitStr)
 		}
 		p.Limit = limit
-	}
-
-	// Parse hasError if provided
-	if hasErrorStr := query.Get("has_error"); hasErrorStr != "" {
-		var hasError bool
-		if err := json.Unmarshal([]byte(hasErrorStr), &hasError); err != nil {
-			return fmt.Errorf("invalid has_error value: %s", hasErrorStr)
-		}
-		p.HasError = &hasError
 	}
 
 	// Parse isSent if provided

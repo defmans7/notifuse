@@ -367,7 +367,7 @@ func (s *EmailService) SendEmailForTemplate(
 		messageHistory.FailedAt = &now
 		messageHistory.UpdatedAt = now
 		errorMsg := err.Error()
-		messageHistory.Error = &errorMsg
+		messageHistory.StatusInfo = &errorMsg
 
 		// Attempt to update the message history record
 		updateErr := s.messageRepo.Update(ctx, workspaceID, messageHistory)

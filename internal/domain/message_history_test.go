@@ -254,31 +254,31 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "with has_error true",
+			name: "with is_sent true",
 			queryData: map[string][]string{
-				"has_error": {"true"},
+				"is_sent": {"true"},
 			},
 			want: MessageListParams{
-				HasError: boolPtr(true),
-				Limit:    20, // Default limit
+				IsSent: boolPtr(true),
+				Limit:  20, // Default limit
 			},
 			wantErr: false,
 		},
 		{
-			name: "with has_error false",
+			name: "with is_sent false",
 			queryData: map[string][]string{
-				"has_error": {"false"},
+				"is_sent": {"false"},
 			},
 			want: MessageListParams{
-				HasError: boolPtr(false),
-				Limit:    20, // Default limit
+				IsSent: boolPtr(false),
+				Limit:  20, // Default limit
 			},
 			wantErr: false,
 		},
 		{
-			name: "with invalid has_error",
+			name: "with invalid is_sent",
 			queryData: map[string][]string{
-				"has_error": {"not_a_boolean"},
+				"is_sent": {"not_a_boolean"},
 			},
 			wantErr: true,
 		},
@@ -376,7 +376,7 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 				"contact_email":  {"contact@example.com"},
 				"broadcast_id":   {"a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"},
 				"template_id":    {"7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d"},
-				"has_error":      {"true"},
+				"is_sent":        {"true"},
 				"limit":          {"50"},
 				"sent_after":     {"2023-01-01T00:00:00Z"},
 				"sent_before":    {"2023-12-31T23:59:59Z"},
@@ -389,7 +389,7 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 				ContactEmail:  "contact@example.com",
 				BroadcastID:   "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
 				TemplateID:    "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-				HasError:      boolPtr(true),
+				IsSent:        boolPtr(true),
 				Limit:         50,
 				SentAfter:     timePtr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
 				SentBefore:    timePtr(time.Date(2023, 12, 31, 23, 59, 59, 0, time.UTC)),
@@ -419,11 +419,11 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			assert.Equal(t, tt.want.TemplateID, params.TemplateID)
 			assert.Equal(t, tt.want.Limit, params.Limit)
 
-			if tt.want.HasError != nil {
-				assert.NotNil(t, params.HasError)
-				assert.Equal(t, *tt.want.HasError, *params.HasError)
+			if tt.want.IsSent != nil {
+				assert.NotNil(t, params.IsSent)
+				assert.Equal(t, *tt.want.IsSent, *params.IsSent)
 			} else {
-				assert.Nil(t, params.HasError)
+				assert.Nil(t, params.IsSent)
 			}
 
 			if tt.want.SentAfter != nil {

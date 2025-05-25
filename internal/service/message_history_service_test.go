@@ -293,55 +293,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:        "With error filter",
-			workspaceID: "workspace-123",
-			params: domain.MessageListParams{
-				Limit:    10,
-				HasError: boolPtr(true),
-			},
-			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
-				mockAuthService.EXPECT().
-					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
-					Return(context.Background(), nil, nil)
-
-				errMsg := "failed to send email"
-				messages := []*domain.MessageHistory{
-					{
-						ID:           "msg-6",
-						ContactEmail: "user6@example.com",
-						TemplateID:   "template-4",
-						Channel:      "email",
-						Error:        &errMsg,
-					},
-				}
-
-				mockRepo.EXPECT().
-					ListMessages(
-						gomock.Any(),
-						"workspace-123",
-						gomock.Any(),
-					).
-					Do(func(_ context.Context, _ string, params domain.MessageListParams) {
-						assert.True(t, *params.HasError)
-					}).
-					Return(messages, "", nil)
-			},
-			expectedResult: &domain.MessageListResult{
-				Messages: []*domain.MessageHistory{
-					{
-						ID:           "msg-6",
-						ContactEmail: "user6@example.com",
-						TemplateID:   "template-4",
-						Channel:      "email",
-						Error:        strPtr("failed to send email"),
-					},
-				},
-				NextCursor: "",
-				HasMore:    false,
-			},
-			expectedError: nil,
-		},
-		{
 			name:        "Multiple filter combinations",
 			workspaceID: "workspace-123",
 			params: domain.MessageListParams{
@@ -349,7 +300,7 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 				Channel:     "email",
 				BroadcastID: "broadcast-123",
 				TemplateID:  "template-5",
-				HasError:    boolPtr(true),
+				IsSent:      boolPtr(true),
 			},
 			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
 				mockAuthService.EXPECT().
@@ -365,7 +316,7 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						BroadcastID:  &broadcastID,
 						TemplateID:   "template-5",
 						Channel:      "email",
-						Error:        &errMsg,
+						StatusInfo:   &errMsg,
 					},
 				}
 
@@ -379,7 +330,7 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						assert.Equal(t, "email", params.Channel)
 						assert.Equal(t, "broadcast-123", params.BroadcastID)
 						assert.Equal(t, "template-5", params.TemplateID)
-						assert.True(t, *params.HasError)
+						assert.True(t, *params.IsSent)
 					}).
 					Return(messages, "", nil)
 			},
@@ -391,7 +342,7 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						BroadcastID:  strPtr("broadcast-123"),
 						TemplateID:   "template-5",
 						Channel:      "email",
-						Error:        strPtr("template error"),
+						StatusInfo:   strPtr("template error"),
 					},
 				},
 				NextCursor: "",

@@ -873,8 +873,8 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			assert.Equal(t, "email", message.Channel)
 
 			// Verify error is stored
-			assert.NotNil(t, message.Error)
-			assert.Contains(t, *message.Error, "email service unavailable")
+			assert.NotNil(t, message.StatusInfo)
+			assert.Contains(t, *message.StatusInfo, "email service unavailable")
 
 			// Verify message data
 			assert.Contains(t, message.MessageData.Data, "broadcast_id")

@@ -104,6 +104,8 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 	updates := []domain.MessageEventUpdate{}
 
 	for _, event := range events {
+		var statusInfo *string
+
 		// Update message history status if we have a message ID
 		if event.MessageID != "" {
 			var messageEvent domain.MessageEvent
@@ -112,17 +114,22 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 				messageEvent = domain.MessageEventDelivered
 			case domain.EmailEventBounce:
 				messageEvent = domain.MessageEventBounced
+				reason := fmt.Sprintf("%s %s %s", event.BounceType, event.BounceCategory, event.BounceDiagnostic)
+				statusInfo = &reason
 			case domain.EmailEventComplaint:
 				messageEvent = domain.MessageEventComplained
+				reason := fmt.Sprintf("%s", event.ComplaintFeedbackType)
+				statusInfo = &reason
 			default:
 				// Skip other event types
 				return nil
 			}
 
 			updates = append(updates, domain.MessageEventUpdate{
-				ID:        event.MessageID,
-				Event:     messageEvent,
-				Timestamp: event.Timestamp,
+				ID:         event.MessageID,
+				Event:      messageEvent,
+				Timestamp:  event.Timestamp,
+				StatusInfo: statusInfo,
 			})
 		}
 	}
@@ -258,36 +265,6 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
 		event.ComplaintFeedbackType = complaintFeedbackType
-	}
-
-	// Check for transactional_id and broadcast_id in tags and validate as UUID
-	// These must be valid UUIDs or empty strings to avoid database errors
-	var tags map[string]string
-
-	// Get the tags from the appropriate notification based on event type
-	if eventType == domain.EmailEventBounce && len(bounceNotification.Mail.Tags) > 0 {
-		tags = bounceNotification.Mail.Tags
-	} else if eventType == domain.EmailEventComplaint && err == nil { // err is nil when complaintNotification was parsed successfully
-		var complaintNotification domain.SESComplaintNotification
-		if err := json.Unmarshal(messageBytes, &complaintNotification); err == nil && complaintNotification.NotificationType == "Complaint" {
-			tags = complaintNotification.Mail.Tags
-		}
-	} else if eventType == domain.EmailEventDelivered && err == nil { // err is nil when deliveryNotification was parsed successfully
-		var deliveryNotification domain.SESDeliveryNotification
-		if err := json.Unmarshal(messageBytes, &deliveryNotification); err == nil && deliveryNotification.NotificationType == "Delivery" {
-			tags = deliveryNotification.Mail.Tags
-		}
-	}
-
-	// Process the tags if we have any
-	if len(tags) > 0 {
-		if id, ok := tags["transactional_id"]; ok && id != "" {
-			event.TransactionalID = id
-		}
-
-		if id, ok := tags["broadcast_id"]; ok && id != "" {
-			event.BroadcastID = id
-		}
 	}
 
 	return []*domain.WebhookEvent{event}, nil
@@ -428,18 +405,6 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
-	// Validate TransactionalID and BroadcastID fields from metadata
-	// These must be valid UUIDs or empty strings to avoid database errors
-	if payload.Metadata != nil {
-		if id, ok := payload.Metadata["transactional_id"]; ok && id != "" {
-			event.TransactionalID = id
-		}
-
-		if id, ok := payload.Metadata["broadcast_id"]; ok && id != "" {
-			event.BroadcastID = id
-		}
-	}
-
 	return []*domain.WebhookEvent{event}, nil
 }
 
@@ -527,20 +492,6 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
 		event.ComplaintFeedbackType = complaintFeedbackType
-	}
-
-	// Validate TransactionalID and BroadcastID from user variables
-	// These must be valid UUIDs or empty strings to avoid database errors
-	if eventData, ok := jsonData["event-data"].(map[string]interface{}); ok {
-		if userVariables, ok := eventData["user-variables"].(map[string]interface{}); ok {
-			if id, ok := userVariables["transactional_id"]; ok && id != nil {
-				event.TransactionalID = fmt.Sprintf("%v", id)
-			}
-
-			if id, ok := userVariables["broadcast_id"]; ok && id != nil {
-				event.BroadcastID = fmt.Sprintf("%v", id)
-			}
-		}
 	}
 
 	return []*domain.WebhookEvent{event}, nil
@@ -729,23 +680,6 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 		event.BounceDiagnostic = bounceDiagnostic
 	} else if eventType == domain.EmailEventComplaint {
 		event.ComplaintFeedbackType = complaintFeedbackType
-	}
-
-	// Validate TransactionalID and BroadcastID
-	// These must be valid UUIDs or empty strings to avoid database errors
-	// Mailjet allows custom IDs to be passed in the Payload field, which might be JSON
-	if payload.Payload != "" {
-		// Try to parse Payload as JSON
-		var customData map[string]interface{}
-		if err := json.Unmarshal([]byte(payload.Payload), &customData); err == nil {
-			if id, ok := customData["transactional_id"]; ok && id != nil {
-				event.TransactionalID = fmt.Sprintf("%v", id)
-			}
-
-			if id, ok := customData["broadcast_id"]; ok && id != nil {
-				event.BroadcastID = fmt.Sprintf("%v", id)
-			}
-		}
 	}
 
 	return []*domain.WebhookEvent{event}, nil

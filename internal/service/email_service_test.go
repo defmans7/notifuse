@@ -946,7 +946,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			DoAndReturn(func(_ context.Context, wsID string, msgHistory *domain.MessageHistory) error {
 				// Verify message history error properties
 				assert.Equal(t, messageID, msgHistory.ID)
-				assert.NotNil(t, msgHistory.Error)
+				assert.NotNil(t, msgHistory.StatusInfo)
 
 				return nil
 			})
