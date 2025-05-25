@@ -21,16 +21,6 @@ import { ContactDetailsDrawer } from '../components/contacts/ContactDetailsDrawe
 import dayjs from '../lib/dayjs'
 import { useAuth } from '../contexts/AuthContext'
 
-const filterFields: FilterField[] = [
-  { key: 'email', label: 'Email', type: 'string' as const },
-  { key: 'external_id', label: 'External ID', type: 'string' as const },
-  { key: 'first_name', label: 'First Name', type: 'string' as const },
-  { key: 'last_name', label: 'Last Name', type: 'string' as const },
-  { key: 'phone', label: 'Phone', type: 'string' as const },
-  { key: 'language', label: 'Language', type: 'string' as const, options: Languages },
-  { key: 'country', label: 'Country', type: 'string' as const, options: CountriesFormOptions }
-]
-
 const STORAGE_KEY = 'contact_columns_visibility'
 
 const DEFAULT_VISIBLE_COLUMNS = {
@@ -90,6 +80,38 @@ export function ContactsPage() {
     queryKey: ['lists', workspaceId],
     queryFn: () => listsApi.list({ workspace_id: workspaceId })
   })
+
+  const filterFields: FilterField[] = [
+    { key: 'email', label: 'Email', type: 'string' as const },
+    { key: 'external_id', label: 'External ID', type: 'string' as const },
+    { key: 'first_name', label: 'First Name', type: 'string' as const },
+    { key: 'last_name', label: 'Last Name', type: 'string' as const },
+    { key: 'phone', label: 'Phone', type: 'string' as const },
+    { key: 'language', label: 'Language', type: 'string' as const, options: Languages },
+    { key: 'country', label: 'Country', type: 'string' as const, options: CountriesFormOptions },
+    {
+      key: 'list_id',
+      label: 'List',
+      type: 'string' as const,
+      options:
+        listsData?.lists?.map((list: { id: string; name: string }) => ({
+          value: list.id,
+          label: list.name
+        })) || []
+    },
+    {
+      key: 'contact_list_status',
+      label: 'List Status',
+      type: 'string' as const,
+      options: [
+        { value: 'active', label: 'Active' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'unsubscribed', label: 'Unsubscribed' },
+        { value: 'bounced', label: 'Bounced' },
+        { value: 'complained', label: 'Complained' }
+      ]
+    }
+  ]
 
   // Load saved state from localStorage on mount
   React.useEffect(() => {
@@ -189,6 +211,8 @@ export function ContactsPage() {
         phone: search.phone,
         country: search.country,
         language: search.language,
+        list_id: search.list_id,
+        contact_list_status: search.contact_list_status,
         with_contact_lists: true
       }
       return contactsApi.list(request)
@@ -237,6 +261,8 @@ export function ContactsPage() {
     search.phone,
     search.country,
     search.language,
+    search.list_id,
+    search.contact_list_status,
     search.limit,
     refetch,
     queryClient,

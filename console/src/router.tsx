@@ -24,6 +24,8 @@ export interface ContactsSearch {
   phone?: string
   country?: string
   language?: string
+  list_id?: string
+  contact_list_status?: string
   limit?: number
 }
 
@@ -118,6 +120,8 @@ export const workspaceContactsRoute = createRoute({
     phone: search.phone as string | undefined,
     country: search.country as string | undefined,
     language: search.language as string | undefined,
+    list_id: search.list_id as string | undefined,
+    contact_list_status: search.contact_list_status as string | undefined,
     limit: search.limit ? Number(search.limit) : 10
   })
 })

@@ -3,6 +3,7 @@ import { Row, Col, Statistic, Space, Spin } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleCheck, faFaceFrown, faHourglass } from '@fortawesome/free-regular-svg-icons'
 import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { Link, useParams } from '@tanstack/react-router'
 import { listsApi } from '../../services/api/list'
 
 interface ListStatsProps {
@@ -11,6 +12,10 @@ interface ListStatsProps {
 }
 
 export function ListStats({ workspaceId, listId }: ListStatsProps) {
+  const { workspaceId: paramWorkspaceId } = useParams({ from: '/workspace/$workspaceId' })
+  // Use workspaceId from params if available, otherwise use the prop
+  const currentWorkspaceId = paramWorkspaceId || workspaceId
+
   const { data, isLoading } = useQuery({
     queryKey: ['list-stats', workspaceId, listId],
     queryFn: async () => {
@@ -44,14 +49,21 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
       <Col flex="1">
         <Statistic
           title={
-            <Space>
-              <FontAwesomeIcon
-                icon={faCircleCheck}
-                className="text-green-500"
-                style={{ opacity: 0.7 }}
-              />{' '}
-              Active
-            </Space>
+            <Link
+              to="/workspace/$workspaceId/contacts"
+              params={{ workspaceId: currentWorkspaceId }}
+              search={{ list_id: listId, contact_list_status: 'active' }}
+              className="text-inherit hover:text-primary transition-colors"
+            >
+              <Space>
+                <FontAwesomeIcon
+                  icon={faCircleCheck}
+                  className="text-green-500"
+                  style={{ opacity: 0.7 }}
+                />{' '}
+                Active
+              </Space>
+            </Link>
           }
           value={stats.total_active}
           valueStyle={{ fontSize: '16px' }}
@@ -61,14 +73,21 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
       <Col flex="1">
         <Statistic
           title={
-            <Space>
-              <FontAwesomeIcon
-                icon={faHourglass}
-                className="text-blue-500"
-                style={{ opacity: 0.7 }}
-              />{' '}
-              Pending
-            </Space>
+            <Link
+              to="/workspace/$workspaceId/contacts"
+              params={{ workspaceId: currentWorkspaceId }}
+              search={{ list_id: listId, contact_list_status: 'pending' }}
+              className="text-inherit hover:text-primary transition-colors"
+            >
+              <Space>
+                <FontAwesomeIcon
+                  icon={faHourglass}
+                  className="text-blue-500"
+                  style={{ opacity: 0.7 }}
+                />{' '}
+                Pending
+              </Space>
+            </Link>
           }
           value={stats.total_pending}
           valueStyle={{ fontSize: '16px' }}
@@ -78,10 +97,17 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
       <Col flex="1">
         <Statistic
           title={
-            <Space>
-              <FontAwesomeIcon icon={faBan} className="text-gray-500" style={{ opacity: 0.7 }} />{' '}
-              Unsub
-            </Space>
+            <Link
+              to="/workspace/$workspaceId/contacts"
+              params={{ workspaceId: currentWorkspaceId }}
+              search={{ list_id: listId, contact_list_status: 'unsubscribed' }}
+              className="text-inherit hover:text-primary transition-colors"
+            >
+              <Space>
+                <FontAwesomeIcon icon={faBan} className="text-gray-500" style={{ opacity: 0.7 }} />{' '}
+                Unsub
+              </Space>
+            </Link>
           }
           value={stats.total_unsubscribed}
           valueStyle={{ fontSize: '16px' }}
@@ -91,14 +117,21 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
       <Col flex="1">
         <Statistic
           title={
-            <Space>
-              <FontAwesomeIcon
-                icon={faTriangleExclamation}
-                className="text-yellow-500"
-                style={{ opacity: 0.7 }}
-              />{' '}
-              Bounced
-            </Space>
+            <Link
+              to="/workspace/$workspaceId/contacts"
+              params={{ workspaceId: currentWorkspaceId }}
+              search={{ list_id: listId, contact_list_status: 'bounced' }}
+              className="text-inherit hover:text-primary transition-colors"
+            >
+              <Space>
+                <FontAwesomeIcon
+                  icon={faTriangleExclamation}
+                  className="text-yellow-500"
+                  style={{ opacity: 0.7 }}
+                />{' '}
+                Bounced
+              </Space>
+            </Link>
           }
           value={stats.total_bounced}
           valueStyle={{ fontSize: '16px' }}
@@ -108,14 +141,21 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
       <Col flex="1">
         <Statistic
           title={
-            <Space>
-              <FontAwesomeIcon
-                icon={faFaceFrown}
-                className="text-red-500"
-                style={{ opacity: 0.7 }}
-              />{' '}
-              Complaints
-            </Space>
+            <Link
+              to="/workspace/$workspaceId/contacts"
+              params={{ workspaceId: currentWorkspaceId }}
+              search={{ list_id: listId, contact_list_status: 'complained' }}
+              className="text-inherit hover:text-primary transition-colors"
+            >
+              <Space>
+                <FontAwesomeIcon
+                  icon={faFaceFrown}
+                  className="text-red-500"
+                  style={{ opacity: 0.7 }}
+                />{' '}
+                Complaints
+              </Space>
+            </Link>
           }
           value={stats.total_complained}
           valueStyle={{ fontSize: '16px' }}

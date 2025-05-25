@@ -16,7 +16,7 @@ import { listWebhookEvents, WebhookEvent, EmailEventType } from '../../services/
 import { useAuth } from '../../contexts/AuthContext'
 import React, { useState, useMemo, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faEnvelope, faCircleCheck, faCircleXmark } from '@fortawesome/free-regular-svg-icons'
+import { faCircleCheck, faCircleXmark } from '@fortawesome/free-regular-svg-icons'
 import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import dayjs from '../../lib/dayjs'
 
@@ -341,7 +341,7 @@ export const WebhookEventsTab: React.FC<WebhookEventsTabProps> = ({ workspaceId 
       render: (type: EmailEventType) => {
         const config = eventTypeConfig[type]
         return (
-          <Tag color={config.color}>
+          <Tag bordered={false} color={config.color}>
             {config.icon} {config.label}
           </Tag>
         )

@@ -11,6 +11,8 @@ export interface ListContactsRequest {
   country?: string
   language?: string
   with_contact_lists?: boolean
+  list_id?: string
+  contact_list_status?: string
   // Pagination
   limit?: number
   cursor?: string
@@ -102,6 +104,9 @@ export const contactsApi = {
     if (params.phone) searchParams.append('phone', params.phone)
     if (params.country) searchParams.append('country', params.country)
     if (params.language) searchParams.append('language', params.language)
+    if (params.list_id) searchParams.append('list_id', params.list_id)
+    if (params.contact_list_status)
+      searchParams.append('contact_list_status', params.contact_list_status)
     if (params.limit) searchParams.append('limit', params.limit.toString())
     if (params.cursor) searchParams.append('cursor', params.cursor)
     if (params.with_contact_lists)
