@@ -576,3 +576,142 @@ func TestAuthService_GetUserByID(t *testing.T) {
 		require.Nil(t, result)
 	})
 }
+
+func TestAuthService_GenerateAPIAuthToken(t *testing.T) {
+	_, _, _, service := setupAuthTest(t)
+
+	userID := "user123"
+	email := "test@example.com"
+
+	t.Run("successful API token generation", func(t *testing.T) {
+		user := &domain.User{
+			ID:    userID,
+			Email: email,
+		}
+
+		token := service.GenerateAPIAuthToken(user)
+
+		require.NotEmpty(t, token)
+		require.NotNil(t, token)
+
+		// Verify the token can be parsed and contains expected claims
+		parser := paseto.NewParser()
+		publicKey := service.GetPrivateKey().Public()
+
+		parsedToken, err := parser.ParseV4Public(publicKey, token, nil)
+		require.NoError(t, err)
+		require.NotNil(t, parsedToken)
+
+		// Verify token claims
+		userIDClaim, err := parsedToken.GetString("user_id")
+		require.NoError(t, err)
+		require.Equal(t, userID, userIDClaim)
+
+		typeClaim, err := parsedToken.GetString("type")
+		require.NoError(t, err)
+		require.Equal(t, string(domain.UserTypeAPIKey), typeClaim)
+
+		// Verify expiration is set to 10 years from now (approximately)
+		expiration, err := parsedToken.GetExpiration()
+		require.NoError(t, err)
+		expectedExpiration := time.Now().Add(time.Hour * 24 * 365 * 10)
+		require.WithinDuration(t, expectedExpiration, expiration, time.Minute)
+
+		// Verify issued at and not before are set
+		issuedAt, err := parsedToken.GetIssuedAt()
+		require.NoError(t, err)
+		require.WithinDuration(t, time.Now(), issuedAt, time.Minute)
+
+		notBefore, err := parsedToken.GetNotBefore()
+		require.NoError(t, err)
+		require.WithinDuration(t, time.Now(), notBefore, time.Minute)
+	})
+
+	t.Run("token generation with invalid key format", func(t *testing.T) {
+		// Test that service construction fails with invalid key format
+		mockLoggerForInvalid := pkgmocks.NewMockLogger(gomock.NewController(t))
+		mockLoggerForInvalid.EXPECT().
+			WithField("error", gomock.Any()).
+			Return(mockLoggerForInvalid)
+		mockLoggerForInvalid.EXPECT().
+			Error("Error creating PASETO private key")
+
+		_, err := NewAuthService(AuthServiceConfig{
+			Repository:          nil,
+			WorkspaceRepository: nil,
+			PrivateKey:          make([]byte, 32), // Invalid key format
+			PublicKey:           make([]byte, 32), // Invalid key format
+			Logger:              mockLoggerForInvalid,
+		})
+		require.Error(t, err) // Should fail during construction
+
+		// Test with valid service to ensure token generation works
+		user := &domain.User{
+			ID:    userID,
+			Email: email,
+		}
+
+		token := service.GenerateAPIAuthToken(user)
+		require.NotEmpty(t, token)
+	})
+
+	t.Run("token generation with nil user", func(t *testing.T) {
+		// This test verifies that the method panics with nil user (current behavior)
+		// In a production system, this should be handled more gracefully
+		require.Panics(t, func() {
+			service.GenerateAPIAuthToken(nil)
+		})
+	})
+}
+
+func TestAuthService_GetPrivateKey(t *testing.T) {
+	_, _, _, service := setupAuthTest(t)
+
+	t.Run("successful private key retrieval", func(t *testing.T) {
+		privateKey := service.GetPrivateKey()
+
+		require.NotNil(t, privateKey)
+
+		// Verify the key can be used for signing
+		token := paseto.NewToken()
+		token.SetString("test", "value")
+		token.SetExpiration(time.Now().Add(time.Hour)) // Add expiration to make token valid
+
+		signed := token.V4Sign(privateKey, nil)
+		require.NotEmpty(t, signed)
+
+		// Verify the key can be used to derive public key
+		publicKey := privateKey.Public()
+		require.NotNil(t, publicKey)
+
+		// Verify we can parse the token with the public key
+		parser := paseto.NewParser()
+		parsedToken, err := parser.ParseV4Public(publicKey, signed, nil)
+		require.NoError(t, err)
+		require.NotNil(t, parsedToken)
+
+		testValue, err := parsedToken.GetString("test")
+		require.NoError(t, err)
+		require.Equal(t, "value", testValue)
+	})
+
+	t.Run("private key consistency", func(t *testing.T) {
+		// Verify that multiple calls return the same key
+		key1 := service.GetPrivateKey()
+		key2 := service.GetPrivateKey()
+
+		require.Equal(t, key1.ExportBytes(), key2.ExportBytes())
+	})
+
+	t.Run("private key security", func(t *testing.T) {
+		privateKey := service.GetPrivateKey()
+
+		// Verify the key has the expected length for V4 asymmetric keys
+		keyBytes := privateKey.ExportBytes()
+		require.Len(t, keyBytes, 64) // Ed25519 private key is 64 bytes
+
+		// Verify the key is not all zeros (basic sanity check)
+		allZeros := make([]byte, 64)
+		require.NotEqual(t, allZeros, keyBytes)
+	})
+}
