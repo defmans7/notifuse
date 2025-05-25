@@ -16,7 +16,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 )
 
 func TestMailgunService_ListWebhooks(t *testing.T) {
@@ -25,10 +25,10 @@ func TestMailgunService_ListWebhooks(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://webhook.example.com"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	config := domain.MailgunSettings{
@@ -128,6 +128,9 @@ func TestMailgunService_ListWebhooks(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, errors.New("connection error"))
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.ListWebhooks(ctx, config)
 
@@ -148,6 +151,9 @@ func TestMailgunService_ListWebhooks(t *testing.T) {
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			Return(resp, nil)
+
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call the service
 		result, err := service.ListWebhooks(ctx, config)
@@ -170,6 +176,9 @@ func TestMailgunService_ListWebhooks(t *testing.T) {
 			Do(gomock.Any()).
 			Return(resp, nil)
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.ListWebhooks(ctx, config)
 
@@ -186,10 +195,10 @@ func TestMailgunService_CreateWebhook(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://webhook.example.com"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	config := domain.MailgunSettings{
@@ -270,6 +279,9 @@ func TestMailgunService_CreateWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, errors.New("connection error"))
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.CreateWebhook(ctx, config, webhook)
 
@@ -291,6 +303,9 @@ func TestMailgunService_CreateWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(resp, nil)
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.CreateWebhook(ctx, config, webhook)
 
@@ -307,10 +322,10 @@ func TestMailgunService_DeleteWebhook(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://webhook.example.com"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	config := domain.MailgunSettings{
@@ -356,6 +371,9 @@ func TestMailgunService_DeleteWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, errors.New("connection error"))
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		err := service.DeleteWebhook(ctx, config, webhookID)
 
@@ -376,6 +394,9 @@ func TestMailgunService_DeleteWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(resp, nil)
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		err := service.DeleteWebhook(ctx, config, webhookID)
 
@@ -391,10 +412,10 @@ func TestMailgunService_GetWebhook(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://webhook.example.com"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	config := domain.MailgunSettings{
@@ -448,6 +469,9 @@ func TestMailgunService_GetWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, errors.New("connection error"))
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.GetWebhook(ctx, config, webhookID)
 
@@ -469,6 +493,9 @@ func TestMailgunService_GetWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(resp, nil)
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.GetWebhook(ctx, config, webhookID)
 
@@ -485,10 +512,10 @@ func TestMailgunService_UpdateWebhook(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://webhook.example.com"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	config := domain.MailgunSettings{
@@ -552,6 +579,9 @@ func TestMailgunService_UpdateWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, errors.New("connection error"))
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.UpdateWebhook(ctx, config, webhookID, webhook)
 
@@ -573,6 +603,9 @@ func TestMailgunService_UpdateWebhook(t *testing.T) {
 			Do(gomock.Any()).
 			Return(resp, nil)
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		result, err := service.UpdateWebhook(ctx, config, webhookID, webhook)
 
@@ -589,10 +622,10 @@ func TestMailgunService_SendEmail(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://webhook.example.com"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	// Test data
 	workspaceID := "workspace-123"
@@ -728,6 +761,9 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, errors.New("connection error"))
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
 
@@ -758,6 +794,9 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			Return(resp, nil)
+
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call the service
 		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)

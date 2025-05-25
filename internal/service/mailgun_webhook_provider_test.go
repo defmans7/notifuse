@@ -13,7 +13,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 )
 
 func TestMailgunService_RegisterWebhooks(t *testing.T) {
@@ -22,10 +22,10 @@ func TestMailgunService_RegisterWebhooks(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://api.notifuse.com/webhooks"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -196,6 +196,9 @@ func TestMailgunService_RegisterWebhooks(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, assert.AnError)
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		status, err := service.RegisterWebhooks(ctx, workspaceID, integrationID, baseURL, eventTypes, providerConfig)
 
@@ -212,10 +215,10 @@ func TestMailgunService_GetWebhookStatus(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://api.notifuse.com/webhooks"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -380,6 +383,9 @@ func TestMailgunService_GetWebhookStatus(t *testing.T) {
 			Do(gomock.Any()).
 			Return(nil, assert.AnError)
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
 		// Call the service
 		status, err := service.GetWebhookStatus(ctx, workspaceID, integrationID, providerConfig)
 
@@ -396,10 +402,10 @@ func TestMailgunService_UnregisterWebhooks(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://api.notifuse.com/webhooks"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -480,6 +486,10 @@ func TestMailgunService_UnregisterWebhooks(t *testing.T) {
 				})
 		}
 
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
 		// Call the service
 		err := service.UnregisterWebhooks(ctx, workspaceID, integrationID, providerConfig)
 
@@ -535,6 +545,9 @@ func TestMailgunService_UnregisterWebhooks(t *testing.T) {
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			Return(nil, assert.AnError)
+
+		// Allow any logger calls since we don't test logging
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call the service
 		err := service.UnregisterWebhooks(ctx, workspaceID, integrationID, providerConfig)
@@ -648,10 +661,10 @@ func TestMailgunService_TestWebhook(t *testing.T) {
 
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
-	testLogger := logger.NewMockLogger(t)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
 	webhookEndpoint := "https://api.notifuse.com/webhooks"
-	service := NewMailgunService(mockHTTPClient, mockAuthService, testLogger, webhookEndpoint)
+	service := NewMailgunService(mockHTTPClient, mockAuthService, mockLogger, webhookEndpoint)
 
 	ctx := context.Background()
 	config := domain.MailgunSettings{
