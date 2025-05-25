@@ -494,6 +494,522 @@ func TestBroadcastService_UpdateBroadcast(t *testing.T) {
 	})
 }
 
+func TestBroadcastService_ListBroadcasts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+	t.Run("Success_WithoutTemplates", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        domain.BroadcastStatusDraft,
+			Limit:         10,
+			Offset:        0,
+			WithTemplates: false,
+		}
+
+		// Create sample broadcasts
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 1",
+				Status:      domain.BroadcastStatusDraft,
+				CreatedAt:   time.Now().Add(-2 * time.Hour),
+				UpdatedAt:   time.Now().Add(-2 * time.Hour),
+			},
+			{
+				ID:          "bcast2",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 2",
+				Status:      domain.BroadcastStatusDraft,
+				CreatedAt:   time.Now().Add(-1 * time.Hour),
+				UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 2,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository to return broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), params).
+			Return(expectedResponse, nil)
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 2, result.TotalCount)
+		assert.Len(t, result.Broadcasts, 2)
+		assert.Equal(t, "bcast1", result.Broadcasts[0].ID)
+		assert.Equal(t, "bcast2", result.Broadcasts[1].ID)
+	})
+
+	t.Run("Success_WithTemplates", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         5,
+			Offset:        0,
+			WithTemplates: true,
+		}
+
+		// Create sample broadcasts with variations
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 1",
+				Status:      domain.BroadcastStatusDraft,
+				TestSettings: domain.BroadcastTestSettings{
+					Enabled: true,
+					Variations: []domain.BroadcastVariation{
+						{
+							ID:         "var1",
+							TemplateID: "template1",
+						},
+						{
+							ID:         "var2",
+							TemplateID: "template2",
+						},
+					},
+				},
+				CreatedAt: time.Now().Add(-2 * time.Hour),
+				UpdatedAt: time.Now().Add(-2 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 1,
+		}
+
+		// Create sample templates
+		template1 := &domain.Template{
+			ID:   "template1",
+			Name: "Template 1",
+		}
+		template2 := &domain.Template{
+			ID:   "template2",
+			Name: "Template 2",
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository to return broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), params).
+			Return(expectedResponse, nil)
+
+		// Mock template service to return templates for each variation
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, "template1", int64(0)).
+			Return(template1, nil)
+
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, "template2", int64(0)).
+			Return(template2, nil)
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.TotalCount)
+		assert.Len(t, result.Broadcasts, 1)
+
+		// Verify that templates were fetched and attached
+		broadcast := result.Broadcasts[0]
+		assert.Len(t, broadcast.TestSettings.Variations, 2)
+		assert.Equal(t, template1, broadcast.TestSettings.Variations[0].Template)
+		assert.Equal(t, template2, broadcast.TestSettings.Variations[1].Template)
+	})
+
+	t.Run("Success_WithTemplates_TemplateError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         5,
+			Offset:        0,
+			WithTemplates: true,
+		}
+
+		// Create sample broadcasts with variations
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 1",
+				Status:      domain.BroadcastStatusDraft,
+				TestSettings: domain.BroadcastTestSettings{
+					Enabled: true,
+					Variations: []domain.BroadcastVariation{
+						{
+							ID:         "var1",
+							TemplateID: "template1",
+						},
+					},
+				},
+				CreatedAt: time.Now().Add(-2 * time.Hour),
+				UpdatedAt: time.Now().Add(-2 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 1,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository to return broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), params).
+			Return(expectedResponse, nil)
+
+		// Mock template service to return error for template
+		templateErr := errors.New("template not found")
+		mockTemplateSvc.EXPECT().
+			GetTemplateByID(gomock.Any(), workspaceID, "template1", int64(0)).
+			Return(nil, templateErr)
+
+		// Call the service - should not fail even if template fetch fails
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results - should succeed despite template error
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.TotalCount)
+		assert.Len(t, result.Broadcasts, 1)
+
+		// Verify that template was not attached due to error
+		broadcast := result.Broadcasts[0]
+		assert.Len(t, broadcast.TestSettings.Variations, 1)
+		assert.Nil(t, broadcast.TestSettings.Variations[0].Template)
+	})
+
+	t.Run("Success_DefaultPagination", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Test with invalid/zero pagination values
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         0,  // Should default to 50
+			Offset:        -5, // Should default to 0
+			WithTemplates: false,
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: []*domain.Broadcast{},
+			TotalCount: 0,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository - verify that defaults are applied
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, actualParams domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				// Verify that defaults were applied
+				assert.Equal(t, 50, actualParams.Limit) // Default limit
+				assert.Equal(t, 0, actualParams.Offset) // Default offset
+				assert.Equal(t, workspaceID, actualParams.WorkspaceID)
+				return expectedResponse, nil
+			})
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 0, result.TotalCount)
+	})
+
+	t.Run("Success_MaxLimitEnforced", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Test with limit exceeding maximum
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         150, // Should be capped to 100
+			Offset:        0,
+			WithTemplates: false,
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: []*domain.Broadcast{},
+			TotalCount: 0,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository - verify that limit is capped
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, actualParams domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
+				// Verify that limit was capped to maximum
+				assert.Equal(t, 100, actualParams.Limit) // Maximum limit
+				assert.Equal(t, 0, actualParams.Offset)
+				assert.Equal(t, workspaceID, actualParams.WorkspaceID)
+				return expectedResponse, nil
+			})
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 0, result.TotalCount)
+	})
+
+	t.Run("AuthenticationError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         10,
+			Offset:        0,
+			WithTemplates: false,
+		}
+
+		// Mock authentication to return error
+		authErr := errors.New("authentication failed")
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, nil, authErr)
+
+		// Repository should not be called due to authentication failure
+		mockRepo.EXPECT().ListBroadcasts(gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("RepositoryError", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         10,
+			Offset:        0,
+			WithTemplates: false,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository to return error
+		repoErr := errors.New("database error")
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), params).
+			Return(nil, repoErr)
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Equal(t, repoErr, err)
+	})
+
+	t.Run("Success_EmptyVariations", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         5,
+			Offset:        0,
+			WithTemplates: true,
+		}
+
+		// Create broadcast with no variations
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 1",
+				Status:      domain.BroadcastStatusDraft,
+				TestSettings: domain.BroadcastTestSettings{
+					Enabled:    false,
+					Variations: []domain.BroadcastVariation{}, // Empty variations
+				},
+				CreatedAt: time.Now().Add(-2 * time.Hour),
+				UpdatedAt: time.Now().Add(-2 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 1,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository to return broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), params).
+			Return(expectedResponse, nil)
+
+		// No template service calls expected since there are no variations
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.TotalCount)
+		assert.Len(t, result.Broadcasts, 1)
+
+		// Verify that no templates were attached
+		broadcast := result.Broadcasts[0]
+		assert.Len(t, broadcast.TestSettings.Variations, 0)
+	})
+
+	t.Run("Success_VariationWithoutTemplateID", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		params := domain.ListBroadcastsParams{
+			WorkspaceID:   workspaceID,
+			Status:        "",
+			Limit:         5,
+			Offset:        0,
+			WithTemplates: true,
+		}
+
+		// Create broadcast with variation that has no template ID
+		broadcasts := []*domain.Broadcast{
+			{
+				ID:          "bcast1",
+				WorkspaceID: workspaceID,
+				Name:        "Broadcast 1",
+				Status:      domain.BroadcastStatusDraft,
+				TestSettings: domain.BroadcastTestSettings{
+					Enabled: true,
+					Variations: []domain.BroadcastVariation{
+						{
+							ID:         "var1",
+							TemplateID: "", // Empty template ID
+						},
+					},
+				},
+				CreatedAt: time.Now().Add(-2 * time.Hour),
+				UpdatedAt: time.Now().Add(-2 * time.Hour),
+			},
+		}
+
+		expectedResponse := &domain.BroadcastListResponse{
+			Broadcasts: broadcasts,
+			TotalCount: 1,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock repository to return broadcasts
+		mockRepo.EXPECT().
+			ListBroadcasts(gomock.Any(), params).
+			Return(expectedResponse, nil)
+
+		// No template service calls expected since template ID is empty
+
+		// Call the service
+		result, err := service.ListBroadcasts(ctx, params)
+
+		// Verify results
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.TotalCount)
+		assert.Len(t, result.Broadcasts, 1)
+
+		// Verify that no template was attached
+		broadcast := result.Broadcasts[0]
+		assert.Len(t, broadcast.TestSettings.Variations, 1)
+		assert.Nil(t, broadcast.TestSettings.Variations[0].Template)
+	})
+}
+
 func TestBroadcastService_ScheduleBroadcast(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -250,49 +250,110 @@ func TestWorkspaceRepository_GetByID(t *testing.T) {
 		secretKey: "secret_key_for_dev_env",
 	}
 
-	// Test data
-	workspaceID := "testworkspace"
-	workspaceName := "Test Workspace"
-	// Include a valid hex-encoded secure key in the settings without encrypted_secret_key
-	settings := `{"timezone":"UTC","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
-	integrations := `[]`
-	createdAt := time.Now()
-	updatedAt := time.Now()
+	t.Run("successful retrieval", func(t *testing.T) {
+		workspaceID := "testworkspace"
+		workspaceName := "Test Workspace"
+		settings := `{"timezone":"UTC","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
+		integrations := `[{"type":"email","provider":"mailgun","config":{"api_key":"test"}}]`
+		createdAt := time.Now()
+		updatedAt := time.Now()
 
-	// Test successful retrieval
-	rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
-		AddRow(workspaceID, workspaceName, settings, integrations, createdAt, updatedAt)
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+			AddRow(workspaceID, workspaceName, settings, integrations, createdAt, updatedAt)
 
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
-		WithArgs(workspaceID).
-		WillReturnRows(rows)
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
+			WithArgs(workspaceID).
+			WillReturnRows(rows)
 
-	workspace, err := repo.GetByID(context.Background(), workspaceID)
-	require.NoError(t, err)
-	assert.Equal(t, workspaceID, workspace.ID)
-	assert.Equal(t, workspaceName, workspace.Name)
-	assert.Equal(t, "UTC", workspace.Settings.Timezone)
-	// Don't assert on the SecretKey value since it's handled differently in tests vs. real code
+		workspace, err := repo.GetByID(context.Background(), workspaceID)
+		require.NoError(t, err)
+		assert.Equal(t, workspaceID, workspace.ID)
+		assert.Equal(t, workspaceName, workspace.Name)
+		assert.Equal(t, "UTC", workspace.Settings.Timezone)
+		assert.Equal(t, createdAt.Unix(), workspace.CreatedAt.Unix())
+		assert.Equal(t, updatedAt.Unix(), workspace.UpdatedAt.Unix())
+		assert.NotNil(t, workspace.Integrations)
+		assert.Len(t, workspace.Integrations, 1)
+	})
 
-	// Test not found
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
-		WithArgs("nonexistent").
-		WillReturnError(sql.ErrNoRows)
+	t.Run("workspace not found", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
+			WithArgs("nonexistent").
+			WillReturnError(sql.ErrNoRows)
 
-	workspace, err = repo.GetByID(context.Background(), "nonexistent")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-	assert.Nil(t, workspace)
+		workspace, err := repo.GetByID(context.Background(), "nonexistent")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+		assert.Nil(t, workspace)
+	})
 
-	// Test database error
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
-		WithArgs(workspaceID).
-		WillReturnError(fmt.Errorf("database error"))
+	t.Run("database connection error", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
+			WithArgs("testworkspace").
+			WillReturnError(fmt.Errorf("connection refused"))
 
-	workspace, err = repo.GetByID(context.Background(), workspaceID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "database error")
-	assert.Nil(t, workspace)
+		workspace, err := repo.GetByID(context.Background(), "testworkspace")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "connection refused")
+		assert.Nil(t, workspace)
+	})
+
+	t.Run("empty workspace ID", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
+			WithArgs("").
+			WillReturnError(sql.ErrNoRows)
+
+		workspace, err := repo.GetByID(context.Background(), "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+		assert.Nil(t, workspace)
+	})
+
+	t.Run("workspace with minimal settings", func(t *testing.T) {
+		workspaceID := "minimal-workspace"
+		workspaceName := "Minimal Workspace"
+		settings := `{"timezone":"UTC"}`
+		integrations := `[]`
+		createdAt := time.Now()
+		updatedAt := time.Now()
+
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+			AddRow(workspaceID, workspaceName, settings, integrations, createdAt, updatedAt)
+
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
+			WithArgs(workspaceID).
+			WillReturnRows(rows)
+
+		workspace, err := repo.GetByID(context.Background(), workspaceID)
+		require.NoError(t, err)
+		assert.Equal(t, workspaceID, workspace.ID)
+		assert.Equal(t, workspaceName, workspace.Name)
+		assert.Equal(t, "UTC", workspace.Settings.Timezone)
+		assert.Empty(t, workspace.Integrations)
+	})
+
+	t.Run("workspace with null integrations", func(t *testing.T) {
+		workspaceID := "null-integrations-workspace"
+		workspaceName := "Null Integrations Workspace"
+		settings := `{"timezone":"UTC","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
+		integrations := `null`
+		createdAt := time.Now()
+		updatedAt := time.Now()
+
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+			AddRow(workspaceID, workspaceName, settings, integrations, createdAt, updatedAt)
+
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces WHERE id = \$1`).
+			WithArgs(workspaceID).
+			WillReturnRows(rows)
+
+		workspace, err := repo.GetByID(context.Background(), workspaceID)
+		require.NoError(t, err)
+		assert.Equal(t, workspaceID, workspace.ID)
+		assert.Equal(t, workspaceName, workspace.Name)
+		assert.Equal(t, "UTC", workspace.Settings.Timezone)
+		assert.Empty(t, workspace.Integrations)
+	})
 }
 
 func TestWorkspaceRepository_List(t *testing.T) {
@@ -310,45 +371,139 @@ func TestWorkspaceRepository_List(t *testing.T) {
 		secretKey: "secret_key_for_dev_env",
 	}
 
-	// Test data
-	workspace1ID := "workspace1"
-	workspace1Name := "Workspace 1"
-	// Include a valid hex-encoded secure key in the settings without encrypted_secret_key
-	workspace1Settings := `{"timezone":"UTC","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
-	workspace1Integrations := `[]`
-	workspace1CreatedAt := time.Now()
-	workspace1UpdatedAt := time.Now()
+	t.Run("successful retrieval with multiple workspaces", func(t *testing.T) {
+		workspace1ID := "workspace1"
+		workspace1Name := "Workspace 1"
+		workspace1Settings := `{"timezone":"UTC","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
+		workspace1Integrations := `[{"type":"email","provider":"mailgun"}]`
+		workspace1CreatedAt := time.Now()
+		workspace1UpdatedAt := time.Now()
 
-	workspace2ID := "workspace2"
-	workspace2Name := "Workspace 2"
-	// Include a valid hex-encoded secure key in the settings without encrypted_secret_key
-	workspace2Settings := `{"timezone":"Europe/London","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
-	workspace2Integrations := `[]`
-	workspace2CreatedAt := time.Now().Add(time.Hour)
-	workspace2UpdatedAt := time.Now().Add(time.Hour)
+		workspace2ID := "workspace2"
+		workspace2Name := "Workspace 2"
+		workspace2Settings := `{"timezone":"Europe/London","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
+		workspace2Integrations := `[]`
+		workspace2CreatedAt := time.Now().Add(time.Hour)
+		workspace2UpdatedAt := time.Now().Add(time.Hour)
 
-	// Test successful retrieval
-	rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
-		AddRow(workspace2ID, workspace2Name, workspace2Settings, workspace2Integrations, workspace2CreatedAt, workspace2UpdatedAt).
-		AddRow(workspace1ID, workspace1Name, workspace1Settings, workspace1Integrations, workspace1CreatedAt, workspace1UpdatedAt)
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+			AddRow(workspace2ID, workspace2Name, workspace2Settings, workspace2Integrations, workspace2CreatedAt, workspace2UpdatedAt).
+			AddRow(workspace1ID, workspace1Name, workspace1Settings, workspace1Integrations, workspace1CreatedAt, workspace1UpdatedAt)
 
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
-		WillReturnRows(rows)
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+			WillReturnRows(rows)
 
-	workspaces, err := repo.List(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 2, len(workspaces))
-	assert.Equal(t, workspace2ID, workspaces[0].ID)
-	assert.Equal(t, workspace1ID, workspaces[1].ID)
+		workspaces, err := repo.List(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(workspaces))
 
-	// Test database error
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
-		WillReturnError(fmt.Errorf("database error"))
+		// Verify order (newest first)
+		assert.Equal(t, workspace2ID, workspaces[0].ID)
+		assert.Equal(t, workspace2Name, workspaces[0].Name)
+		assert.Equal(t, "Europe/London", workspaces[0].Settings.Timezone)
 
-	workspaces, err = repo.List(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "database error")
-	assert.Nil(t, workspaces)
+		assert.Equal(t, workspace1ID, workspaces[1].ID)
+		assert.Equal(t, workspace1Name, workspaces[1].Name)
+		assert.Equal(t, "UTC", workspaces[1].Settings.Timezone)
+		assert.Len(t, workspaces[1].Integrations, 1)
+	})
+
+	t.Run("empty result set", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"})
+
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+			WillReturnRows(rows)
+
+		workspaces, err := repo.List(context.Background())
+		require.NoError(t, err)
+		assert.Empty(t, workspaces)
+	})
+
+	t.Run("single workspace", func(t *testing.T) {
+		workspaceID := "single-workspace"
+		workspaceName := "Single Workspace"
+		settings := `{"timezone":"America/New_York","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`
+		integrations := `[{"type":"sms","provider":"twilio","config":{"account_sid":"test"}}]`
+		createdAt := time.Now()
+		updatedAt := time.Now()
+
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+			AddRow(workspaceID, workspaceName, settings, integrations, createdAt, updatedAt)
+
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+			WillReturnRows(rows)
+
+		workspaces, err := repo.List(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(workspaces))
+		assert.Equal(t, workspaceID, workspaces[0].ID)
+		assert.Equal(t, workspaceName, workspaces[0].Name)
+		assert.Equal(t, "America/New_York", workspaces[0].Settings.Timezone)
+		assert.Len(t, workspaces[0].Integrations, 1)
+	})
+
+	t.Run("database connection error", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+			WillReturnError(fmt.Errorf("connection timeout"))
+
+		workspaces, err := repo.List(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "connection timeout")
+		assert.Nil(t, workspaces)
+	})
+
+	t.Run("row iteration error", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+			AddRow("workspace1", "Workspace 1", `{"timezone":"UTC"}`, `[]`, time.Now(), time.Now()).
+			RowError(0, fmt.Errorf("row scan error"))
+
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+			WillReturnRows(rows)
+
+		workspaces, err := repo.List(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "row scan error")
+		assert.Nil(t, workspaces)
+	})
+
+	t.Run("workspaces with various configurations", func(t *testing.T) {
+		// Workspace with minimal config
+		workspace1ID := "minimal-workspace"
+		workspace1Name := "Minimal Workspace"
+		workspace1Settings := `{"timezone":"UTC"}`
+		workspace1Integrations := `[]`
+		workspace1CreatedAt := time.Now().Add(-2 * time.Hour)
+		workspace1UpdatedAt := time.Now().Add(-2 * time.Hour)
+
+		// Workspace with full config
+		workspace2ID := "full-workspace"
+		workspace2Name := "Full Workspace"
+		workspace2Settings := `{"timezone":"Asia/Tokyo","secret_key":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","custom_setting":"value"}`
+		workspace2Integrations := `[{"type":"email","provider":"sendgrid"},{"type":"sms","provider":"twilio"}]`
+		workspace2CreatedAt := time.Now().Add(-1 * time.Hour)
+		workspace2UpdatedAt := time.Now().Add(-1 * time.Hour)
+
+		rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+			AddRow(workspace2ID, workspace2Name, workspace2Settings, workspace2Integrations, workspace2CreatedAt, workspace2UpdatedAt).
+			AddRow(workspace1ID, workspace1Name, workspace1Settings, workspace1Integrations, workspace1CreatedAt, workspace1UpdatedAt)
+
+		mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at FROM workspaces ORDER BY created_at DESC`).
+			WillReturnRows(rows)
+
+		workspaces, err := repo.List(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(workspaces))
+
+		// Verify full workspace
+		assert.Equal(t, workspace2ID, workspaces[0].ID)
+		assert.Equal(t, "Asia/Tokyo", workspaces[0].Settings.Timezone)
+		assert.Len(t, workspaces[0].Integrations, 2)
+
+		// Verify minimal workspace
+		assert.Equal(t, workspace1ID, workspaces[1].ID)
+		assert.Equal(t, "UTC", workspaces[1].Settings.Timezone)
+		assert.Empty(t, workspaces[1].Integrations)
+	})
 }
 
 func TestWorkspaceRepository_CheckWorkspaceIDExists(t *testing.T) {
@@ -530,62 +685,206 @@ func TestWorkspaceRepository_Update(t *testing.T) {
 		secretKey: "secret_key_for_dev_env",
 	}
 
-	workspace := &domain.Workspace{
-		ID:   "workspace1",
-		Name: "Updated Workspace",
-		Settings: domain.WorkspaceSettings{
-			Timezone:  "America/New_York",
-			SecretKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		},
-	}
+	t.Run("successful update", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "workspace1",
+			Name: "Updated Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone:  "America/New_York",
+				SecretKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			},
+			Integrations: []domain.Integration{
+				{
+					ID:   "integration-1",
+					Name: "SendGrid Integration",
+					Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind: domain.EmailProviderKindSMTP,
+					},
+				},
+			},
+		}
 
-	// Skip actually calling BeforeSave since we can't decrypt in tests
-	// Prepare a proper SecretKey for workspace.Settings
-	workspace.Settings.SecretKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+		mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
+			WithArgs(
+				workspace.Name,
+				sqlmock.AnyArg(), // settings - use AnyArg since it will be dynamic
+				sqlmock.AnyArg(), // integrations
+				sqlmock.AnyArg(), // updated_at
+				workspace.ID,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
 
-	// Mock for successful update
-	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
-		WithArgs(
-			workspace.Name,
-			sqlmock.AnyArg(), // settings - use AnyArg since it will be dynamic
-			sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
-			sqlmock.AnyArg(), // updated_at
-			workspace.ID,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		err := mockRepo.Update(context.Background(), workspace)
+		require.NoError(t, err)
+		assert.True(t, workspace.UpdatedAt.After(time.Now().Add(-time.Minute)))
+	})
 
-	err := mockRepo.Update(context.Background(), workspace)
-	require.NoError(t, err)
+	t.Run("workspace not found", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "nonexistent-workspace",
+			Name: "Nonexistent Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone:  "UTC",
+				SecretKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			},
+		}
 
-	// Mock for workspace not found
-	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
-		WithArgs(
-			workspace.Name,
-			sqlmock.AnyArg(), // settings - use AnyArg since it will be dynamic
-			sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
-			sqlmock.AnyArg(), // updated_at
-			workspace.ID,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
+			WithArgs(
+				workspace.Name,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				workspace.ID,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = mockRepo.Update(context.Background(), workspace)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+		err := mockRepo.Update(context.Background(), workspace)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+	})
 
-	// Mock for database error
-	mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
-		WithArgs(
-			workspace.Name,
-			sqlmock.AnyArg(), // settings - use AnyArg since it will be dynamic
-			sqlmock.AnyArg(), // integrations (should be nil or empty JSON array)
-			sqlmock.AnyArg(), // updated_at
-			workspace.ID,
-		).
-		WillReturnError(fmt.Errorf("database error"))
+	t.Run("database connection error", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "workspace1",
+			Name: "Updated Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone:  "Europe/Paris",
+				SecretKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			},
+		}
 
-	err = mockRepo.Update(context.Background(), workspace)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "database error")
+		mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
+			WithArgs(
+				workspace.Name,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				workspace.ID,
+			).
+			WillReturnError(fmt.Errorf("connection lost"))
+
+		err := mockRepo.Update(context.Background(), workspace)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "connection lost")
+	})
+
+	t.Run("update with minimal settings", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "minimal-workspace",
+			Name: "Minimal Updated Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+			},
+			Integrations: []domain.Integration{},
+		}
+
+		mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
+			WithArgs(
+				workspace.Name,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				workspace.ID,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := mockRepo.Update(context.Background(), workspace)
+		require.NoError(t, err)
+	})
+
+	t.Run("update with complex integrations", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "complex-workspace",
+			Name: "Complex Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone:  "Asia/Tokyo",
+				SecretKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			},
+			Integrations: []domain.Integration{
+				{
+					ID:   "integration-1",
+					Name: "Mailgun Integration",
+					Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind: domain.EmailProviderKindMailgun,
+					},
+				},
+				{
+					ID:   "integration-2",
+					Name: "Twilio Integration",
+					Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind: domain.EmailProviderKindSMTP,
+					},
+				},
+			},
+		}
+
+		mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
+			WithArgs(
+				workspace.Name,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				workspace.ID,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := mockRepo.Update(context.Background(), workspace)
+		require.NoError(t, err)
+	})
+
+	t.Run("rows affected error", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "workspace1",
+			Name: "Updated Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone:  "UTC",
+				SecretKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			},
+		}
+
+		result := sqlmock.NewErrorResult(fmt.Errorf("rows affected error"))
+		mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
+			WithArgs(
+				workspace.Name,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				workspace.ID,
+			).
+			WillReturnResult(result)
+
+		err := mockRepo.Update(context.Background(), workspace)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "rows affected error")
+	})
+
+	t.Run("update with empty workspace name", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID:   "workspace1",
+			Name: "", // Empty name
+			Settings: domain.WorkspaceSettings{
+				Timezone:  "UTC",
+				SecretKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			},
+		}
+
+		mock.ExpectExec(`UPDATE workspaces SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4 WHERE id = \$5`).
+			WithArgs(
+				workspace.Name,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				workspace.ID,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := mockRepo.Update(context.Background(), workspace)
+		require.NoError(t, err)
+	})
 }
 
 func TestWorkspaceRepository_Delete(t *testing.T) {

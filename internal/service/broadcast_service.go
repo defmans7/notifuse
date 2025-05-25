@@ -883,9 +883,3 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 
 	return nil
 }
-
-// GetTemplateByID gets a template by ID for use with broadcasts
-func (s *BroadcastService) GetTemplateByID(ctx context.Context, workspaceID, templateID string) (*domain.Template, error) {
-	// Simply delegate to the template service, version 0 is the latest version
-	return s.templateSvc.GetTemplateByID(ctx, workspaceID, templateID, 0)
-}

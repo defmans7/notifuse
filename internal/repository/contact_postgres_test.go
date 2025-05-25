@@ -1526,3 +1526,206 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		assert.Equal(t, 0, count)
 	})
 }
+
+func TestDeleteContact(t *testing.T) {
+	t.Run("should successfully delete existing contact", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
+
+		repo := NewContactRepository(workspaceRepo)
+
+		email := "test@example.com"
+
+		// Set up expectations for the delete query
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnResult(sqlmock.NewResult(0, 1)) // 1 row affected
+
+		// Call the method being tested
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+
+		// Assertions
+		require.NoError(t, err)
+	})
+
+	t.Run("should return error when contact not found", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
+
+		repo := NewContactRepository(workspaceRepo)
+
+		email := "nonexistent@example.com"
+
+		// Set up expectations for the delete query with 0 rows affected
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows affected
+
+		// Call the method being tested
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "contact not found")
+	})
+
+	t.Run("should handle database connection error", func(t *testing.T) {
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").
+			Return(nil, fmt.Errorf("connection error"))
+
+		repo := NewContactRepository(workspaceRepo)
+
+		email := "test@example.com"
+
+		// Call the method being tested
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("should handle database execution error", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
+
+		repo := NewContactRepository(workspaceRepo)
+
+		email := "test@example.com"
+
+		// Set up expectations for the delete query with database error
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnError(fmt.Errorf("database execution error"))
+
+		// Call the method being tested
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to delete contact")
+	})
+
+	t.Run("should handle rows affected error", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
+
+		repo := NewContactRepository(workspaceRepo)
+
+		email := "test@example.com"
+
+		// Create a mock result that returns an error when RowsAffected is called
+		mockResult := sqlmock.NewErrorResult(fmt.Errorf("rows affected error"))
+
+		// Set up expectations for the delete query
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnResult(mockResult)
+
+		// Call the method being tested
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get affected rows")
+	})
+
+	t.Run("should handle empty email", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
+
+		repo := NewContactRepository(workspaceRepo)
+
+		email := ""
+
+		// Set up expectations for the delete query with empty email
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows affected
+
+		// Call the method being tested
+		err := repo.DeleteContact(context.Background(), email, "workspace123")
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "contact not found")
+	})
+
+	t.Run("should handle context cancellation", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
+
+		repo := NewContactRepository(workspaceRepo)
+
+		email := "test@example.com"
+
+		// Create a cancelled context
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		// Set up expectations for the delete query with context cancellation
+		mock.ExpectExec(`DELETE FROM contacts WHERE email = \$1`).
+			WithArgs(email).
+			WillReturnError(context.Canceled)
+
+		// Call the method being tested
+		err := repo.DeleteContact(ctx, email, "workspace123")
+
+		// Assertions
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to delete contact")
+	})
+}

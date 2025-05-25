@@ -427,6 +427,271 @@ func TestExecutePendingTasksRequest_FromURLParams(t *testing.T) {
 	})
 }
 
+func TestCreateTaskRequest_Validate(t *testing.T) {
+	t.Run("valid request with minimal fields", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+			Type:        "send_broadcast",
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+
+		assert.Equal(t, "ws-123", task.WorkspaceID)
+		assert.Equal(t, "send_broadcast", task.Type)
+		assert.Equal(t, TaskStatusPending, task.Status)
+		assert.Equal(t, 0.0, task.Progress)
+		assert.Nil(t, task.State)
+		assert.Equal(t, "", task.ErrorMessage)
+		assert.Equal(t, 300, task.MaxRuntime)    // Default value
+		assert.Equal(t, 3, task.MaxRetries)      // Default value
+		assert.Equal(t, 300, task.RetryInterval) // Default value
+		assert.Equal(t, 0, task.RetryCount)
+		assert.Nil(t, task.BroadcastID)
+		assert.Nil(t, task.LastRunAt)
+		assert.Nil(t, task.CompletedAt)
+		assert.Nil(t, task.NextRunAfter)
+		assert.Nil(t, task.TimeoutAfter)
+		assert.False(t, task.CreatedAt.IsZero())
+		assert.False(t, task.UpdatedAt.IsZero())
+	})
+
+	t.Run("valid request with all fields", func(t *testing.T) {
+		nextRunAfter := time.Now().Add(time.Hour)
+		state := &TaskState{
+			Progress: 25.0,
+			Message:  "Starting task",
+			SendBroadcast: &SendBroadcastState{
+				BroadcastID:     "broadcast-123",
+				TotalRecipients: 1000,
+				SentCount:       0,
+				FailedCount:     0,
+				ChannelType:     "email",
+				RecipientOffset: 0,
+				EndOffset:       1000,
+			},
+		}
+
+		req := &CreateTaskRequest{
+			WorkspaceID:   "ws-456",
+			Type:          "send_broadcast",
+			State:         state,
+			MaxRuntime:    600,
+			MaxRetries:    5,
+			RetryInterval: 120,
+			NextRunAfter:  &nextRunAfter,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+
+		assert.Equal(t, "ws-456", task.WorkspaceID)
+		assert.Equal(t, "send_broadcast", task.Type)
+		assert.Equal(t, TaskStatusPending, task.Status)
+		assert.Equal(t, 0.0, task.Progress)
+		assert.Equal(t, state, task.State)
+		assert.Equal(t, "", task.ErrorMessage)
+		assert.Equal(t, 600, task.MaxRuntime)
+		assert.Equal(t, 5, task.MaxRetries)
+		assert.Equal(t, 120, task.RetryInterval)
+		assert.Equal(t, 0, task.RetryCount)
+		assert.Equal(t, &nextRunAfter, task.NextRunAfter)
+		assert.Nil(t, task.BroadcastID)
+		assert.Nil(t, task.LastRunAt)
+		assert.Nil(t, task.CompletedAt)
+		assert.Nil(t, task.TimeoutAfter)
+		assert.False(t, task.CreatedAt.IsZero())
+		assert.False(t, task.UpdatedAt.IsZero())
+	})
+
+	t.Run("missing workspace_id", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			Type: "send_broadcast",
+		}
+
+		task, err := req.Validate()
+		require.Error(t, err)
+		assert.Nil(t, task)
+		assert.Contains(t, err.Error(), "workspace_id is required")
+	})
+
+	t.Run("empty workspace_id", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "",
+			Type:        "send_broadcast",
+		}
+
+		task, err := req.Validate()
+		require.Error(t, err)
+		assert.Nil(t, task)
+		assert.Contains(t, err.Error(), "workspace_id is required")
+	})
+
+	t.Run("missing type", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+		}
+
+		task, err := req.Validate()
+		require.Error(t, err)
+		assert.Nil(t, task)
+		assert.Contains(t, err.Error(), "task type is required")
+	})
+
+	t.Run("empty type", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+			Type:        "",
+		}
+
+		task, err := req.Validate()
+		require.Error(t, err)
+		assert.Nil(t, task)
+		assert.Contains(t, err.Error(), "task type is required")
+	})
+
+	t.Run("zero max_runtime gets default", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+			Type:        "send_broadcast",
+			MaxRuntime:  0,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, 300, task.MaxRuntime) // Default value
+	})
+
+	t.Run("negative max_runtime gets default", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+			Type:        "send_broadcast",
+			MaxRuntime:  -100,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, 300, task.MaxRuntime) // Default value
+	})
+
+	t.Run("zero max_retries gets default", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+			Type:        "send_broadcast",
+			MaxRetries:  0,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, 3, task.MaxRetries) // Default value
+	})
+
+	t.Run("negative max_retries gets default", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+			Type:        "send_broadcast",
+			MaxRetries:  -5,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, 3, task.MaxRetries) // Default value
+	})
+
+	t.Run("zero retry_interval gets default", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID:   "ws-123",
+			Type:          "send_broadcast",
+			RetryInterval: 0,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, 300, task.RetryInterval) // Default value
+	})
+
+	t.Run("negative retry_interval gets default", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID:   "ws-123",
+			Type:          "send_broadcast",
+			RetryInterval: -60,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, 300, task.RetryInterval) // Default value
+	})
+
+	t.Run("custom values are preserved", func(t *testing.T) {
+		req := &CreateTaskRequest{
+			WorkspaceID:   "ws-123",
+			Type:          "send_broadcast",
+			MaxRuntime:    1800, // 30 minutes
+			MaxRetries:    10,
+			RetryInterval: 60, // 1 minute
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, 1800, task.MaxRuntime)
+		assert.Equal(t, 10, task.MaxRetries)
+		assert.Equal(t, 60, task.RetryInterval)
+	})
+
+	t.Run("state is preserved", func(t *testing.T) {
+		state := &TaskState{
+			Progress: 10.5,
+			Message:  "Initializing",
+			SendBroadcast: &SendBroadcastState{
+				BroadcastID:     "broadcast-789",
+				TotalRecipients: 500,
+				SentCount:       0,
+				FailedCount:     0,
+				ChannelType:     "sms",
+				RecipientOffset: 0,
+				EndOffset:       500,
+			},
+		}
+
+		req := &CreateTaskRequest{
+			WorkspaceID: "ws-123",
+			Type:        "send_broadcast",
+			State:       state,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, state, task.State)
+		assert.Equal(t, state.Progress, task.State.Progress)
+		assert.Equal(t, state.Message, task.State.Message)
+		assert.Equal(t, state.SendBroadcast, task.State.SendBroadcast)
+	})
+
+	t.Run("next_run_after is preserved", func(t *testing.T) {
+		futureTime := time.Now().Add(2 * time.Hour)
+		req := &CreateTaskRequest{
+			WorkspaceID:  "ws-123",
+			Type:         "send_broadcast",
+			NextRunAfter: &futureTime,
+		}
+
+		task, err := req.Validate()
+		require.NoError(t, err)
+		require.NotNil(t, task)
+		assert.Equal(t, &futureTime, task.NextRunAfter)
+	})
+}
+
 func TestExecuteTaskRequest_Validate(t *testing.T) {
 	t.Run("valid request", func(t *testing.T) {
 		req := &ExecuteTaskRequest{
