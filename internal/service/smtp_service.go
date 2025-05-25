@@ -66,11 +66,14 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	if err != nil {
 		return fmt.Errorf("failed to create SMTP client: %w", err)
 	}
+	if client == nil {
+		return fmt.Errorf("SMTP client factory returned nil client")
+	}
 	defer client.Close()
 
 	// Create and configure the message
 	msg := mail.NewMsg()
-	if err := msg.FromFormat(fromAddress, fromName); err != nil {
+	if err := msg.FromFormat(fromName, fromAddress); err != nil {
 		return fmt.Errorf("invalid sender: %w", err)
 	}
 	if err := msg.To(to); err != nil {
@@ -97,7 +100,9 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 
 	// Add Reply-To if specified
 	if replyTo != "" {
-		msg.SetAddrHeader("Reply-To", replyTo, "")
+		if err := msg.ReplyTo(replyTo); err != nil {
+			return fmt.Errorf("invalid reply-to address: %w", err)
+		}
 	}
 
 	// Add message ID tracking header
