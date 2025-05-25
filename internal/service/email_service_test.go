@@ -17,6 +17,264 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestEmailService_NewEmailService(t *testing.T) {
+	// Setup the controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Setup mocks
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockMessageRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+
+	secretKey := "test-secret-key"
+	webhookEndpoint := "https://webhook.test"
+	apiEndpoint := "https://api.test"
+
+	t.Run("successful service creation with all dependencies", func(t *testing.T) {
+		// Call the constructor
+		service := NewEmailService(
+			mockLogger,
+			mockAuthService,
+			secretKey,
+			mockWorkspaceRepo,
+			mockTemplateRepo,
+			mockTemplateService,
+			mockMessageRepo,
+			mockHTTPClient,
+			webhookEndpoint,
+			apiEndpoint,
+		)
+
+		// Verify the service is created and all fields are properly set
+		require.NotNil(t, service)
+		require.Equal(t, mockLogger, service.logger)
+		require.Equal(t, mockAuthService, service.authService)
+		require.Equal(t, secretKey, service.secretKey)
+		require.Equal(t, mockWorkspaceRepo, service.workspaceRepo)
+		require.Equal(t, mockTemplateRepo, service.templateRepo)
+		require.Equal(t, mockTemplateService, service.templateService)
+		require.Equal(t, mockMessageRepo, service.messageRepo)
+		require.Equal(t, mockHTTPClient, service.httpClient)
+		require.Equal(t, webhookEndpoint, service.webhookEndpoint)
+		require.Equal(t, apiEndpoint, service.apiEndpoint)
+
+		// Verify all provider services are initialized
+		require.NotNil(t, service.smtpService)
+		require.NotNil(t, service.sesService)
+		require.NotNil(t, service.sparkPostService)
+		require.NotNil(t, service.postmarkService)
+		require.NotNil(t, service.mailgunService)
+		require.NotNil(t, service.mailjetService)
+	})
+
+	t.Run("service creation with nil dependencies", func(t *testing.T) {
+		// Test that the constructor handles nil dependencies gracefully
+		service := NewEmailService(
+			nil, // nil logger
+			nil, // nil authService
+			"",  // empty secretKey
+			nil, // nil workspaceRepo
+			nil, // nil templateRepo
+			nil, // nil templateService
+			nil, // nil messageRepo
+			nil, // nil httpClient
+			"",  // empty webhookEndpoint
+			"",  // empty apiEndpoint
+		)
+
+		// Verify the service is still created (constructor doesn't validate inputs)
+		require.NotNil(t, service)
+		require.Nil(t, service.logger)
+		require.Nil(t, service.authService)
+		require.Equal(t, "", service.secretKey)
+		require.Nil(t, service.workspaceRepo)
+		require.Nil(t, service.templateRepo)
+		require.Nil(t, service.templateService)
+		require.Nil(t, service.messageRepo)
+		require.Nil(t, service.httpClient)
+		require.Equal(t, "", service.webhookEndpoint)
+		require.Equal(t, "", service.apiEndpoint)
+
+		// Provider services should still be initialized (they handle nil dependencies internally)
+		require.NotNil(t, service.smtpService)
+		require.NotNil(t, service.sesService)
+		require.NotNil(t, service.sparkPostService)
+		require.NotNil(t, service.postmarkService)
+		require.NotNil(t, service.mailgunService)
+		require.NotNil(t, service.mailjetService)
+	})
+
+	t.Run("service creation with empty string parameters", func(t *testing.T) {
+		// Test with empty strings for string parameters
+		service := NewEmailService(
+			mockLogger,
+			mockAuthService,
+			"", // empty secretKey
+			mockWorkspaceRepo,
+			mockTemplateRepo,
+			mockTemplateService,
+			mockMessageRepo,
+			mockHTTPClient,
+			"", // empty webhookEndpoint
+			"", // empty apiEndpoint
+		)
+
+		require.NotNil(t, service)
+		require.Equal(t, "", service.secretKey)
+		require.Equal(t, "", service.webhookEndpoint)
+		require.Equal(t, "", service.apiEndpoint)
+
+		// Other dependencies should be set correctly
+		require.Equal(t, mockLogger, service.logger)
+		require.Equal(t, mockAuthService, service.authService)
+		require.Equal(t, mockWorkspaceRepo, service.workspaceRepo)
+	})
+
+	t.Run("verify provider service initialization", func(t *testing.T) {
+		service := NewEmailService(
+			mockLogger,
+			mockAuthService,
+			secretKey,
+			mockWorkspaceRepo,
+			mockTemplateRepo,
+			mockTemplateService,
+			mockMessageRepo,
+			mockHTTPClient,
+			webhookEndpoint,
+			apiEndpoint,
+		)
+
+		// Test that getProviderService works for all provider types
+		smtpService, err := service.getProviderService(domain.EmailProviderKindSMTP)
+		require.NoError(t, err)
+		require.NotNil(t, smtpService)
+		require.Equal(t, service.smtpService, smtpService)
+
+		sesService, err := service.getProviderService(domain.EmailProviderKindSES)
+		require.NoError(t, err)
+		require.NotNil(t, sesService)
+		require.Equal(t, service.sesService, sesService)
+
+		sparkPostService, err := service.getProviderService(domain.EmailProviderKindSparkPost)
+		require.NoError(t, err)
+		require.NotNil(t, sparkPostService)
+		require.Equal(t, service.sparkPostService, sparkPostService)
+
+		postmarkService, err := service.getProviderService(domain.EmailProviderKindPostmark)
+		require.NoError(t, err)
+		require.NotNil(t, postmarkService)
+		require.Equal(t, service.postmarkService, postmarkService)
+
+		mailgunService, err := service.getProviderService(domain.EmailProviderKindMailgun)
+		require.NoError(t, err)
+		require.NotNil(t, mailgunService)
+		require.Equal(t, service.mailgunService, mailgunService)
+
+		mailjetService, err := service.getProviderService(domain.EmailProviderKindMailjet)
+		require.NoError(t, err)
+		require.NotNil(t, mailjetService)
+		require.Equal(t, service.mailjetService, mailjetService)
+	})
+
+	t.Run("verify service type and interface compliance", func(t *testing.T) {
+		service := NewEmailService(
+			mockLogger,
+			mockAuthService,
+			secretKey,
+			mockWorkspaceRepo,
+			mockTemplateRepo,
+			mockTemplateService,
+			mockMessageRepo,
+			mockHTTPClient,
+			webhookEndpoint,
+			apiEndpoint,
+		)
+
+		// Verify the service implements the expected interface (compile-time check)
+		var _ domain.EmailServiceInterface = service
+
+		// Verify the service is of the correct type
+		require.IsType(t, &EmailService{}, service)
+	})
+
+	t.Run("verify constructor parameters are used correctly", func(t *testing.T) {
+		// Use specific values to verify they're set correctly
+		specificSecretKey := "specific-secret-key-12345"
+		specificWebhookEndpoint := "https://specific-webhook.example.com/webhook"
+		specificAPIEndpoint := "https://specific-api.example.com/api"
+
+		service := NewEmailService(
+			mockLogger,
+			mockAuthService,
+			specificSecretKey,
+			mockWorkspaceRepo,
+			mockTemplateRepo,
+			mockTemplateService,
+			mockMessageRepo,
+			mockHTTPClient,
+			specificWebhookEndpoint,
+			specificAPIEndpoint,
+		)
+
+		// Verify specific values are set correctly
+		require.Equal(t, specificSecretKey, service.secretKey)
+		require.Equal(t, specificWebhookEndpoint, service.webhookEndpoint)
+		require.Equal(t, specificAPIEndpoint, service.apiEndpoint)
+	})
+}
+
+func TestEmailService_CreateSESClient(t *testing.T) {
+	t.Run("successful SES client creation", func(t *testing.T) {
+		region := "us-east-1"
+		accessKey := "test-access-key"
+		secretKey := "test-secret-key"
+
+		client := CreateSESClient(region, accessKey, secretKey)
+
+		// Verify the client is created
+		require.NotNil(t, client)
+
+		// Verify the client is of the expected type
+		require.Implements(t, (*domain.SESClient)(nil), client)
+	})
+
+	t.Run("SES client creation with empty parameters", func(t *testing.T) {
+		// Test with empty parameters
+		client := CreateSESClient("", "", "")
+
+		// Client should still be created (AWS SDK handles validation)
+		require.NotNil(t, client)
+		require.Implements(t, (*domain.SESClient)(nil), client)
+	})
+
+	t.Run("SES client creation with different regions", func(t *testing.T) {
+		regions := []string{"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"}
+
+		for _, region := range regions {
+			client := CreateSESClient(region, "test-key", "test-secret")
+			require.NotNil(t, client)
+			require.Implements(t, (*domain.SESClient)(nil), client)
+		}
+	})
+
+	t.Run("verify client independence", func(t *testing.T) {
+		// Create multiple clients to verify they are independent
+		client1 := CreateSESClient("us-east-1", "key1", "secret1")
+		client2 := CreateSESClient("us-west-2", "key2", "secret2")
+
+		require.NotNil(t, client1)
+		require.NotNil(t, client2)
+
+		// Verify they are different instances
+		require.NotEqual(t, client1, client2)
+	})
+}
+
 // Create our own mock of EmailProviderService instead of using gomock
 type mockEmailProviderService struct {
 	ctrl  *gomock.Controller
