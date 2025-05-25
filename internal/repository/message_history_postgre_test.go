@@ -38,7 +38,8 @@ func setupMessageHistoryTest(t *testing.T) (*mocks.MockWorkspaceRepository, doma
 }
 
 func createSampleMessageHistory() *domain.MessageHistory {
-	now := time.Now()
+	// Use a fixed timestamp to avoid timing issues in CI
+	now := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 	broadcastID := "broadcast-123"
 	messageData := domain.MessageData{
 		Data: map[string]interface{}{
@@ -657,7 +658,8 @@ func TestMessageHistoryRepository_SetClicked(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "workspace-123"
 	messageID := "msg-123"
-	timestamp := time.Now()
+	// Use a fixed timestamp to avoid timing issues in CI
+	timestamp := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	t.Run("successful click update", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().
@@ -731,7 +733,8 @@ func TestMessageHistoryRepository_SetOpened(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "workspace-123"
 	messageID := "msg-123"
-	timestamp := time.Now()
+	// Use a fixed timestamp to avoid timing issues in CI
+	timestamp := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	t.Run("successful open update", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().
@@ -1006,7 +1009,8 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 
 	ctx := context.Background()
 	workspaceID := "workspace-123"
-	now := time.Now().UTC()
+	// Use a fixed timestamp to avoid timing issues in CI
+	now := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	// Create a batch of status updates
 	updates := []domain.MessageEventUpdate{
@@ -1231,7 +1235,8 @@ func TestMessageHistoryRepository_ListMessages(t *testing.T) {
 	workspaceID := "workspace-123"
 
 	// Create sample messages for testing
-	now := time.Now()
+	// Use a fixed timestamp to avoid timing issues in CI
+	now := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 	oneHourAgo := now.Add(-1 * time.Hour)
 	twoHoursAgo := now.Add(-2 * time.Hour)
 

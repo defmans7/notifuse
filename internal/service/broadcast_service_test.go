@@ -2795,3 +2795,788 @@ func getTestEmailBlock() mjml.EmailBlock {
 		},
 	}
 }
+
+func TestBroadcastService_ResumeBroadcast(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockEmailSvc := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	mockAuthSvc := mocks.NewMockAuthService(ctrl)
+	mockTaskService := mocks.NewMockTaskService(ctrl)
+	mockEventBus := mocks.NewMockEventBus(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+	// Set up logger mock to return itself for chaining
+	mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+	mockLoggerWithFields := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLoggerWithField).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLoggerWithFields).AnyTimes()
+	mockLoggerWithField.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithField.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLoggerWithFields.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Add direct logger method expectations
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	service := NewBroadcastService(mockLogger, mockRepo, mockWorkspaceRepo, mockEmailSvc, mockContactRepo, mockTemplateSvc, mockTaskService, mockAuthSvc, mockEventBus, "https://api.example.com")
+
+	t.Run("Success_ResumeToSending_NotScheduled", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a paused broadcast that was not originally scheduled
+		pausedTime := time.Now().Add(-10 * time.Minute)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusPaused,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			PausedAt:    &pausedTime,
+			Schedule: domain.ScheduleSettings{
+				IsScheduled: false, // Not scheduled
+			},
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository update with verification
+		mockRepo.EXPECT().
+			UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ *sql.Tx, broadcast *domain.Broadcast) error {
+				// Verify important properties
+				assert.Equal(t, broadcastID, broadcast.ID)
+				assert.Equal(t, workspaceID, broadcast.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatusSending, broadcast.Status)
+				assert.Nil(t, broadcast.PausedAt)     // Should be cleared
+				assert.NotNil(t, broadcast.StartedAt) // Should be set
+				return nil
+			})
+
+		// Mock event bus to simulate successful event processing
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Verify event payload
+				assert.Equal(t, domain.EventBroadcastResumed, payload.Type)
+				assert.Equal(t, workspaceID, payload.WorkspaceID)
+				assert.Equal(t, broadcastID, payload.EntityID)
+				assert.Equal(t, broadcastID, payload.Data["broadcast_id"])
+				assert.Equal(t, true, payload.Data["start_now"])
+
+				// Call the callback with success
+				callback(nil)
+			})
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("Success_ResumeToScheduled_FutureSchedule", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a paused broadcast that was originally scheduled for the future
+		pausedTime := time.Now().Add(-10 * time.Minute)
+		futureTime := time.Now().Add(2 * time.Hour)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusPaused,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			PausedAt:    &pausedTime,
+			Schedule: domain.ScheduleSettings{
+				IsScheduled:   true,
+				ScheduledDate: futureTime.Format("2006-01-02"),
+				ScheduledTime: futureTime.Format("15:04"),
+				Timezone:      "UTC",
+			},
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository update with verification
+		mockRepo.EXPECT().
+			UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ *sql.Tx, broadcast *domain.Broadcast) error {
+				// Verify important properties
+				assert.Equal(t, broadcastID, broadcast.ID)
+				assert.Equal(t, workspaceID, broadcast.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatusScheduled, broadcast.Status)
+				assert.Nil(t, broadcast.PausedAt)  // Should be cleared
+				assert.Nil(t, broadcast.StartedAt) // Should remain nil for scheduled
+				return nil
+			})
+
+		// Mock event bus to simulate successful event processing
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Verify event payload
+				assert.Equal(t, domain.EventBroadcastResumed, payload.Type)
+				assert.Equal(t, workspaceID, payload.WorkspaceID)
+				assert.Equal(t, broadcastID, payload.EntityID)
+				assert.Equal(t, broadcastID, payload.Data["broadcast_id"])
+				assert.Equal(t, false, payload.Data["start_now"])
+
+				// Call the callback with success
+				callback(nil)
+			})
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("Success_ResumeToSending_PastSchedule", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a paused broadcast that was originally scheduled for the past
+		pausedTime := time.Now().Add(-10 * time.Minute)
+		pastTime := time.Now().Add(-2 * time.Hour)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusPaused,
+			CreatedAt:   time.Now().Add(-3 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			PausedAt:    &pausedTime,
+			Schedule: domain.ScheduleSettings{
+				IsScheduled:   true,
+				ScheduledDate: pastTime.Format("2006-01-02"),
+				ScheduledTime: pastTime.Format("15:04"),
+				Timezone:      "UTC",
+			},
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository update with verification
+		mockRepo.EXPECT().
+			UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ *sql.Tx, broadcast *domain.Broadcast) error {
+				// Verify important properties
+				assert.Equal(t, broadcastID, broadcast.ID)
+				assert.Equal(t, workspaceID, broadcast.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatusSending, broadcast.Status)
+				assert.Nil(t, broadcast.PausedAt)     // Should be cleared
+				assert.NotNil(t, broadcast.StartedAt) // Should be set
+				return nil
+			})
+
+		// Mock event bus to simulate successful event processing
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Verify event payload
+				assert.Equal(t, domain.EventBroadcastResumed, payload.Type)
+				assert.Equal(t, workspaceID, payload.WorkspaceID)
+				assert.Equal(t, broadcastID, payload.EntityID)
+				assert.Equal(t, broadcastID, payload.Data["broadcast_id"])
+				assert.Equal(t, true, payload.Data["start_now"])
+
+				// Call the callback with success
+				callback(nil)
+			})
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("Success_ResumeToSending_AlreadyStarted", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a paused broadcast that was already started
+		pausedTime := time.Now().Add(-10 * time.Minute)
+		startedTime := time.Now().Add(-30 * time.Minute)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusPaused,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			PausedAt:    &pausedTime,
+			StartedAt:   &startedTime, // Already started
+			Schedule: domain.ScheduleSettings{
+				IsScheduled: false,
+			},
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository update with verification
+		mockRepo.EXPECT().
+			UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ *sql.Tx, broadcast *domain.Broadcast) error {
+				// Verify important properties
+				assert.Equal(t, broadcastID, broadcast.ID)
+				assert.Equal(t, workspaceID, broadcast.WorkspaceID)
+				assert.Equal(t, domain.BroadcastStatusSending, broadcast.Status)
+				assert.Nil(t, broadcast.PausedAt)                  // Should be cleared
+				assert.Equal(t, startedTime, *broadcast.StartedAt) // Should remain the same
+				return nil
+			})
+
+		// Mock event bus to simulate successful event processing
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Call the callback with success
+				callback(nil)
+			})
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.NoError(t, err)
+	})
+
+	t.Run("Error_InvalidStatus_Draft", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a draft broadcast that cannot be resumed
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusDraft,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// No update or event calls should be made
+		mockRepo.EXPECT().UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockEventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only broadcasts with paused status can be resumed")
+		assert.Contains(t, err.Error(), "current status: draft")
+	})
+
+	t.Run("Error_InvalidStatus_Sending", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a sending broadcast that cannot be resumed
+		startedTime := time.Now().Add(-10 * time.Minute)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSending,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			StartedAt:   &startedTime,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// No update or event calls should be made
+		mockRepo.EXPECT().UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockEventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only broadcasts with paused status can be resumed")
+		assert.Contains(t, err.Error(), "current status: sending")
+	})
+
+	t.Run("Error_InvalidStatus_Sent", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a sent broadcast that cannot be resumed
+		sentTime := time.Now().Add(-30 * time.Minute)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusSent,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			SentAt:      &sentTime,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// No update or event calls should be made
+		mockRepo.EXPECT().UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockEventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only broadcasts with paused status can be resumed")
+		assert.Contains(t, err.Error(), "current status: sent")
+	})
+
+	t.Run("Error_AuthenticationFailed", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Mock authentication to return error
+		authErr := errors.New("authentication failed")
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(nil, nil, authErr)
+
+		// No repository or event calls should be made due to authentication failure
+		mockRepo.EXPECT().WithTransaction(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockEventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("Error_ValidationFailed", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+
+		// Create invalid request (missing ID)
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          "", // Missing ID
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// No repository or event calls should be made due to validation failure
+		mockRepo.EXPECT().WithTransaction(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockEventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "required")
+	})
+
+	t.Run("Error_BroadcastNotFound", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "nonexistent"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return not found error
+		notFoundErr := &domain.ErrBroadcastNotFound{ID: broadcastID}
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(nil, notFoundErr)
+
+		// No update or event calls should be made
+		mockRepo.EXPECT().UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		mockEventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Equal(t, notFoundErr, err)
+	})
+
+	t.Run("Error_RepositoryUpdateFailed", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a paused broadcast that can be resumed
+		pausedTime := time.Now().Add(-10 * time.Minute)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusPaused,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			PausedAt:    &pausedTime,
+			Schedule: domain.ScheduleSettings{
+				IsScheduled: false,
+			},
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository update to return error
+		updateErr := errors.New("failed to update broadcast in database")
+		mockRepo.EXPECT().
+			UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(updateErr)
+
+		// No event calls should be made due to update failure
+		mockEventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Equal(t, updateErr, err)
+	})
+
+	t.Run("Error_EventProcessingFailed", func(t *testing.T) {
+		ctx := context.Background()
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a paused broadcast that can be resumed
+		pausedTime := time.Now().Add(-10 * time.Minute)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusPaused,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			PausedAt:    &pausedTime,
+			Schedule: domain.ScheduleSettings{
+				IsScheduled: false,
+			},
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository update to succeed
+		mockRepo.EXPECT().
+			UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil)
+
+		// Mock event bus to simulate failed event processing
+		eventErr := errors.New("event processing failed")
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Call the callback with error
+				callback(eventErr)
+			})
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to process resume event")
+	})
+
+	t.Run("Error_ContextCancelled", func(t *testing.T) {
+		// Create a cancelled context
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		workspaceID := "ws123"
+		broadcastID := "bcast123"
+
+		request := &domain.ResumeBroadcastRequest{
+			WorkspaceID: workspaceID,
+			ID:          broadcastID,
+		}
+
+		// Create a paused broadcast that can be resumed
+		pausedTime := time.Now().Add(-10 * time.Minute)
+		existingBroadcast := &domain.Broadcast{
+			ID:          broadcastID,
+			WorkspaceID: workspaceID,
+			Name:        "Test Broadcast",
+			Status:      domain.BroadcastStatusPaused,
+			CreatedAt:   time.Now().Add(-1 * time.Hour),
+			UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			PausedAt:    &pausedTime,
+			Schedule: domain.ScheduleSettings{
+				IsScheduled: false,
+			},
+		}
+
+		// Mock authentication
+		mockAuthSvc.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user123"}, nil)
+
+		// Mock the WithTransaction call and execute the provided function with nil
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
+				return fn(nil) // Pass nil as the transaction, it won't be used in the test
+			})
+
+		// Mock repository to return the existing broadcast
+		mockRepo.EXPECT().
+			GetBroadcastTx(gomock.Any(), gomock.Any(), workspaceID, broadcastID).
+			Return(existingBroadcast, nil)
+
+		// Mock repository update to succeed
+		mockRepo.EXPECT().
+			UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil)
+
+		// Mock event bus but don't call the callback (simulate hanging event processing)
+		mockEventBus.EXPECT().
+			PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, payload domain.EventPayload, callback domain.EventAckCallback) {
+				// Don't call the callback, let context cancellation handle it
+			})
+
+		// Call the service
+		err := service.ResumeBroadcast(ctx, request)
+
+		// Verify results
+		require.Error(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
+}
