@@ -37,14 +37,14 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 	query := `
 		INSERT INTO message_history (
 			id, contact_email, broadcast_id, template_id, template_version, 
-			channel, status, message_data, sent_at, delivered_at, 
+			channel, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, 
 			$6, $7, $8, $9, $10, 
 			$11, $12, $13, $14, $15, 
-			$16, $17, $18
+			$16, $17
 		)
 	`
 
@@ -57,7 +57,6 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		message.TemplateID,
 		message.TemplateVersion,
 		message.Channel,
-		message.Status,
 		message.MessageData,
 		message.SentAt,
 		message.DeliveredAt,
@@ -93,17 +92,16 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID strin
 			template_id = $4,
 			template_version = $5,
 			channel = $6,
-			status = $7,
-			message_data = $8,
-			sent_at = $9,
-			delivered_at = $10,
-			failed_at = $11,
-			opened_at = $12,
-			clicked_at = $13,
-			bounced_at = $14,
-			complained_at = $15,
-			unsubscribed_at = $16,
-			updated_at = $17
+			message_data = $7,
+			sent_at = $8,
+			delivered_at = $9,
+			failed_at = $10,
+			opened_at = $11,	
+			clicked_at = $12,
+			bounced_at = $13,
+			complained_at = $14,
+			unsubscribed_at = $15,
+			updated_at = $16
 		WHERE id = $1
 	`
 
@@ -116,7 +114,6 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID strin
 		message.TemplateID,
 		message.TemplateVersion,
 		message.Channel,
-		message.Status,
 		message.MessageData,
 		message.SentAt,
 		message.DeliveredAt,
@@ -147,7 +144,7 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 	query := `
 		SELECT 
 			id, contact_email, broadcast_id, template_id, template_version, 
-			channel, status, message_data, sent_at, delivered_at, 
+			channel, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
 		FROM message_history
@@ -162,7 +159,6 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 		&message.TemplateID,
 		&message.TemplateVersion,
 		&message.Channel,
-		&message.Status,
 		&message.MessageData,
 		&message.SentAt,
 		&message.DeliveredAt,
@@ -213,7 +209,7 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 	query := `
 		SELECT 
 			id, contact_email, broadcast_id, template_id, template_version, 
-			channel, status, message_data, sent_at, delivered_at, 
+			channel, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
 		FROM message_history
@@ -238,7 +234,6 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 			&message.TemplateID,
 			&message.TemplateVersion,
 			&message.Channel,
-			&message.Status,
 			&message.MessageData,
 			&message.SentAt,
 			&message.DeliveredAt,
@@ -291,7 +286,7 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 	query := `
 		SELECT 
 			id, contact_email, broadcast_id, template_id, template_version, 
-			channel, status, message_data, sent_at, delivered_at, 
+			channel, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
 		FROM message_history
@@ -316,7 +311,6 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 			&message.TemplateID,
 			&message.TemplateVersion,
 			&message.Channel,
-			&message.Status,
 			&message.MessageData,
 			&message.SentAt,
 			&message.DeliveredAt,
@@ -342,61 +336,9 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 	return messages, totalCount, nil
 }
 
-// UpdateStatus updates the status of a message and sets the corresponding timestamp
-func (r *MessageHistoryRepository) UpdateStatus(ctx context.Context, workspaceID, id string, status domain.MessageStatus, timestamp time.Time) error {
-	// Get the workspace database connection
-	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to get workspace connection: %w", err)
-	}
-
-	var field string
-
-	switch status {
-	case domain.MessageStatusDelivered:
-		field = "delivered_at"
-	case domain.MessageStatusFailed:
-		field = "failed_at"
-	case domain.MessageStatusOpened:
-		field = "opened_at"
-	case domain.MessageStatusClicked:
-		field = "clicked_at"
-	case domain.MessageStatusBounced:
-		field = "bounced_at"
-	case domain.MessageStatusComplained:
-		field = "complained_at"
-	case domain.MessageStatusUnsubscribed:
-		field = "unsubscribed_at"
-	default:
-		return fmt.Errorf("invalid status: %s", status)
-	}
-
-	query := fmt.Sprintf(`
-		UPDATE message_history 
-		SET status = $1, %s = $2, updated_at = $3
-		WHERE id = $4
-	`, field)
-
-	_, err = workspaceDB.ExecContext(ctx, query, status, timestamp, time.Now(), id)
-	if err != nil {
-		return fmt.Errorf("failed to update message status: %w", err)
-	}
-
-	return nil
-}
-
-// SetStatusIfNotSet sets a status only if it hasn't been set before (the field is NULL)
-func (r *MessageHistoryRepository) SetStatusIfNotSet(ctx context.Context, workspaceID, id string, status domain.MessageStatus, timestamp time.Time) error {
-	return r.SetStatusesIfNotSet(ctx, workspaceID, []domain.MessageStatusUpdate{{
-		ID:        id,
-		Status:    status,
-		Timestamp: timestamp,
-	}})
-}
-
 // SetStatusesIfNotSet updates multiple message statuses in a single batch operation
 // but only if the corresponding status timestamp is not already set
-func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, workspaceID string, updates []domain.MessageStatusUpdate) error {
+func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, workspaceID string, updates []domain.MessageEventUpdate) error {
 	// codecov:ignore:start
 	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "SetStatusesIfNotSet")
 	defer tracing.EndSpan(span, nil)
@@ -418,42 +360,42 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 	}
 
 	// Group updates by status type for more efficient processing
-	statusGroups := make(map[domain.MessageStatus][]domain.MessageStatusUpdate)
+	messageEventGroups := make(map[domain.MessageEvent][]domain.MessageEventUpdate)
 	for _, update := range updates {
-		statusGroups[update.Status] = append(statusGroups[update.Status], update)
+		messageEventGroups[update.Event] = append(messageEventGroups[update.Event], update)
 	}
 
 	now := time.Now()
 
 	// Process each status group with a single query
-	for status, groupUpdates := range statusGroups {
+	for messageEvent, groupUpdates := range messageEventGroups {
 		// Determine which field to check and update based on status
 		var field string
-		switch status {
-		case domain.MessageStatusDelivered:
+		switch messageEvent {
+		case domain.MessageEventDelivered:
 			field = "delivered_at"
-		case domain.MessageStatusFailed:
+		case domain.MessageEventFailed:
 			field = "failed_at"
-		case domain.MessageStatusOpened:
+		case domain.MessageEventOpened:
 			field = "opened_at"
-		case domain.MessageStatusClicked:
+		case domain.MessageEventClicked:
 			field = "clicked_at"
-		case domain.MessageStatusBounced:
+		case domain.MessageEventBounced:
 			field = "bounced_at"
-		case domain.MessageStatusComplained:
+		case domain.MessageEventComplained:
 			field = "complained_at"
-		case domain.MessageStatusUnsubscribed:
+		case domain.MessageEventUnsubscribed:
 			field = "unsubscribed_at"
 		default:
 			// codecov:ignore:start
-			tracing.MarkSpanError(ctx, fmt.Errorf("invalid status: %s", status))
+			tracing.MarkSpanError(ctx, fmt.Errorf("invalid status: %s", messageEvent))
 			// codecov:ignore:end
-			return fmt.Errorf("invalid status: %s", status)
+			return fmt.Errorf("invalid status: %s", messageEvent)
 		}
 
 		// Build VALUES clause for batch update with explicit timestamp casting
 		valuesParts := make([]string, len(groupUpdates))
-		args := []interface{}{status, now}
+		args := []interface{}{now}
 
 		for i, update := range groupUpdates {
 			valuesParts[i] = fmt.Sprintf("($%d, $%d::TIMESTAMP WITH TIME ZONE)", len(args)+1, len(args)+2)
@@ -464,17 +406,16 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 
 		query := fmt.Sprintf(`
 			UPDATE message_history 
-			SET status = $1, %s = updates.timestamp, updated_at = $2::TIMESTAMP WITH TIME ZONE
+			SET %s = updates.timestamp, updated_at = $1::TIMESTAMP WITH TIME ZONE
 			FROM (VALUES %s) AS updates(id, timestamp)
 			WHERE message_history.id = updates.id AND %s IS NULL
 		`, field, valuesClause, field)
-
 		_, err = workspaceDB.ExecContext(ctx, query, args...)
 		if err != nil {
 			// codecov:ignore:start
 			tracing.MarkSpanError(ctx, err)
 			// codecov:ignore:end
-			return fmt.Errorf("failed to batch update message statuses for status %s: %w", status, err)
+			return fmt.Errorf("failed to batch update message statuses for status %s: %w", messageEvent, err)
 		}
 	}
 
@@ -493,7 +434,6 @@ func (r *MessageHistoryRepository) SetClicked(ctx context.Context, workspaceID, 
 		UPDATE message_history 
 		SET 
 			clicked_at = $1,
-			status = 'clicked',
 			updated_at = NOW()
 		WHERE id = $2 AND clicked_at IS NULL
 	`
@@ -571,7 +511,7 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	queryBuilder := psql.Select(
 		"id", "contact_email", "broadcast_id", "template_id", "template_version",
-		"channel", "status", "error", "message_data", "sent_at", "delivered_at",
+		"channel", "error", "message_data", "sent_at", "delivered_at",
 		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 		"unsubscribed_at", "created_at", "updated_at",
 	).From("message_history")
@@ -579,10 +519,6 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	// Apply filters using squirrel
 	if params.Channel != "" {
 		queryBuilder = queryBuilder.Where(sq.Eq{"channel": params.Channel})
-	}
-
-	if params.Status != "" {
-		queryBuilder = queryBuilder.Where(sq.Eq{"status": params.Status})
 	}
 
 	if params.ContactEmail != "" {
@@ -603,6 +539,38 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		} else {
 			queryBuilder = queryBuilder.Where(sq.Eq{"error": nil})
 		}
+	}
+
+	if params.IsSent != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"sent_at": *params.IsSent})
+	}
+
+	if params.IsDelivered != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"delivered_at": *params.IsDelivered})
+	}
+
+	if params.IsFailed != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"failed_at": *params.IsFailed})
+	}
+
+	if params.IsOpened != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"opened_at": *params.IsOpened})
+	}
+
+	if params.IsClicked != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"clicked_at": *params.IsClicked})
+	}
+
+	if params.IsBounced != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"bounced_at": *params.IsBounced})
+	}
+
+	if params.IsComplained != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"complained_at": *params.IsComplained})
+	}
+
+	if params.IsUnsubscribed != nil {
+		queryBuilder = queryBuilder.Where(sq.Eq{"unsubscribed_at": *params.IsUnsubscribed})
 	}
 
 	// Time range filters
@@ -701,7 +669,7 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 
 		err := rows.Scan(
 			&message.ID, &message.ContactEmail, &broadcastID, &message.TemplateID, &message.TemplateVersion,
-			&message.Channel, &message.Status, &errorMsg, &message.MessageData,
+			&message.Channel, &errorMsg, &message.MessageData,
 			&message.SentAt, &deliveredAt, &failedAt, &openedAt,
 			&clickedAt, &bouncedAt, &complainedAt, &unsubscribedAt,
 			&message.CreatedAt, &message.UpdatedAt,
@@ -798,25 +766,25 @@ func (r *MessageHistoryRepository) GetBroadcastStats(ctx context.Context, worksp
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	// MessageStatusSent         MessageStatus = "sent"
-	// MessageStatusDelivered    MessageStatus = "delivered"
-	// MessageStatusFailed       MessageStatus = "failed"
-	// MessageStatusOpened       MessageStatus = "opened"
-	// MessageStatusClicked      MessageStatus = "clicked"
-	// MessageStatusBounced      MessageStatus = "bounced"
-	// MessageStatusComplained   MessageStatus = "complained"
-	// MessageStatusUnsubscribed MessageStatus = "unsubscribed"
+	// MessageEventSent         MessageEvent = "sent"
+	// MessageEventDelivered    MessageEvent = "delivered"
+	// MessageEventFailed       MessageEvent = "failed"
+	// MessageEventOpened       MessageEvent = "opened"
+	// MessageEventClicked      MessageEvent = "clicked"
+	// MessageEventBounced      MessageEvent = "bounced"
+	// MessageEventComplained   MessageEvent = "complained"
+	// MessageEventUnsubscribed MessageEvent = "unsubscribed"
 
 	query := `
 		SELECT 
-			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as total_sent,
-			SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as total_delivered,
-			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as total_failed,
-			SUM(CASE WHEN status = 'opened' THEN 1 ELSE 0 END) as total_opened,
-			SUM(CASE WHEN status = 'clicked' THEN 1 ELSE 0 END) as total_clicked,
-			SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
-			SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained,
-			SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed
+			SUM(CASE WHEN sent_at IS NOT NULL THEN 1 ELSE 0 END) as total_sent,
+			SUM(CASE WHEN delivered_at IS NOT NULL THEN 1 ELSE 0 END) as total_delivered,
+			SUM(CASE WHEN failed_at IS NOT NULL THEN 1 ELSE 0 END) as total_failed,
+			SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) as total_opened,
+			SUM(CASE WHEN clicked_at IS NOT NULL THEN 1 ELSE 0 END) as total_clicked,
+			SUM(CASE WHEN bounced_at IS NOT NULL THEN 1 ELSE 0 END) as total_bounced,
+			SUM(CASE WHEN complained_at IS NOT NULL THEN 1 ELSE 0 END) as total_complained,
+			SUM(CASE WHEN unsubscribed_at IS NOT NULL THEN 1 ELSE 0 END) as total_unsubscribed
 		FROM message_history
 		WHERE broadcast_id = $1
 	`
@@ -899,14 +867,10 @@ func (r *MessageHistoryRepository) GetBroadcastVariationStats(ctx context.Contex
 
 	query := `
 		SELECT 
-			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as total_sent,
-			SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as total_delivered,
-			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as total_failed,
-			SUM(CASE WHEN status = 'opened' THEN 1 ELSE 0 END) as total_opened,
-			SUM(CASE WHEN status = 'clicked' THEN 1 ELSE 0 END) as total_clicked,
-			SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
-			SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained,
-			SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed
+			SUM(CASE WHEN sent_at IS NOT NULL THEN 1 ELSE 0 END) as total_sent,
+			SUM(CASE WHEN delivered_at IS NOT NULL THEN 1 ELSE 0 END) as total_delivered,
+			SUM(CASE WHEN failed_at IS NOT NULL THEN 1 ELSE 0 END) as total_failed,
+			SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) as total
 		FROM message_history
 		WHERE broadcast_id = $1 AND message_data->>'variation_id' = $2
 	`

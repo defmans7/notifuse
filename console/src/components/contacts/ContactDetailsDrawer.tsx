@@ -31,7 +31,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { listMessages, MessageHistory, MessageStatus } from '../../services/api/messages_history'
+import { listMessages, MessageHistory } from '../../services/api/messages_history'
 import { contactsApi } from '../../services/api/contacts'
 import { contactListApi, UpdateContactListStatusRequest } from '../../services/api/contact_list'
 import { listsApi } from '../../services/api/list'
@@ -412,23 +412,6 @@ export function ContactDetailsDrawer({
       blacklisted: 'black'
     }
     return statusColors[status.toLowerCase()] || 'blue'
-  }
-
-  // Status badge for message history
-  const getStatusBadge = (status: MessageStatus) => {
-    const statusConfig: Record<MessageStatus, { color: string; text: string }> = {
-      sent: { color: 'blue', text: 'Sent' },
-      delivered: { color: 'green', text: 'Delivered' },
-      failed: { color: 'red', text: 'Failed' },
-      opened: { color: 'cyan', text: 'Opened' },
-      clicked: { color: 'geekblue', text: 'Clicked' },
-      bounced: { color: 'volcano', text: 'Bounced' },
-      complained: { color: 'magenta', text: 'Complained' },
-      unsubscribed: { color: 'gold', text: 'Unsubscribed' }
-    }
-
-    const config = statusConfig[status] || { color: 'default', text: status }
-    return <Badge status={config.color as any} text={config.text} />
   }
 
   // Field display definitions without icons

@@ -560,7 +560,6 @@ func TestSendBatch(t *testing.T) {
 				assert.Equal(t, "template-123", message.TemplateID)
 				assert.Equal(t, template.Version, message.TemplateVersion)
 				assert.Equal(t, "email", message.Channel)
-				assert.Equal(t, domain.MessageStatusSent, message.Status)
 
 				// Verify message data
 				assert.Contains(t, message.MessageData.Data, "broadcast_id")
@@ -872,7 +871,6 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			assert.Equal(t, "template-123", message.TemplateID)
 			assert.Equal(t, template.Version, message.TemplateVersion)
 			assert.Equal(t, "email", message.Channel)
-			assert.Equal(t, domain.MessageStatusFailed, message.Status)
 
 			// Verify error is stored
 			assert.NotNil(t, message.Error)

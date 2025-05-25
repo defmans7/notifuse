@@ -52,7 +52,6 @@ func createSampleMessageHistory() *domain.MessageHistory {
 		TemplateID:      "template-123",
 		TemplateVersion: 1,
 		Channel:         "email",
-		Status:          domain.MessageStatusSent,
 		MessageData:     messageData,
 		SentAt:          now,
 		DeliveredAt:     nil,
@@ -88,7 +87,6 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.TemplateID,
 				message.TemplateVersion,
 				message.Channel,
-				message.Status,
 				sqlmock.AnyArg(), // message_data - complex type
 				message.SentAt,
 				message.DeliveredAt,
@@ -130,7 +128,6 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.TemplateID,
 				message.TemplateVersion,
 				message.Channel,
-				message.Status,
 				sqlmock.AnyArg(), // message_data
 				message.SentAt,
 				message.DeliveredAt,
@@ -172,7 +169,6 @@ func TestMessageHistoryRepository_Update(t *testing.T) {
 				message.TemplateID,
 				message.TemplateVersion,
 				message.Channel,
-				message.Status,
 				sqlmock.AnyArg(), // message_data
 				message.SentAt,
 				message.DeliveredAt,
@@ -213,7 +209,6 @@ func TestMessageHistoryRepository_Update(t *testing.T) {
 				message.TemplateID,
 				message.TemplateVersion,
 				message.Channel,
-				message.Status,
 				sqlmock.AnyArg(), // message_data
 				message.SentAt,
 				message.DeliveredAt,
@@ -252,7 +247,7 @@ func TestMessageHistoryRepository_Get(t *testing.T) {
 
 		rows := sqlmock.NewRows([]string{
 			"id", "contact_email", "broadcast_id", "template_id", "template_version",
-			"channel", "status", "message_data", "sent_at", "delivered_at",
+			"channel", "message_data", "sent_at", "delivered_at",
 			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 			"unsubscribed_at", "created_at", "updated_at",
 		}).AddRow(
@@ -262,7 +257,6 @@ func TestMessageHistoryRepository_Get(t *testing.T) {
 			message.TemplateID,
 			message.TemplateVersion,
 			message.Channel,
-			message.Status,
 			messageDataJSON, // Use the actual JSON bytes
 			message.SentAt,
 			message.DeliveredAt,
@@ -286,7 +280,6 @@ func TestMessageHistoryRepository_Get(t *testing.T) {
 		assert.Equal(t, message.ID, result.ID)
 		assert.Equal(t, message.ContactEmail, result.ContactEmail)
 		assert.Equal(t, *message.BroadcastID, *result.BroadcastID)
-		assert.Equal(t, message.Status, result.Status)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -369,7 +362,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 		// Set up data query
 		dataRows := sqlmock.NewRows([]string{
 			"id", "contact_email", "broadcast_id", "template_id", "template_version",
-			"channel", "status", "message_data", "sent_at", "delivered_at",
+			"channel", "message_data", "sent_at", "delivered_at",
 			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 			"unsubscribed_at", "created_at", "updated_at",
 		}).AddRow(
@@ -379,7 +372,6 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			message.TemplateID,
 			message.TemplateVersion,
 			message.Channel,
-			message.Status,
 			messageDataJSON, // Use the actual JSON bytes
 			message.SentAt,
 			message.DeliveredAt,
@@ -499,7 +491,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			WithArgs(contactEmail, 50, 0).
 			WillReturnRows(sqlmock.NewRows([]string{
 				"id", "contact_email", "broadcast_id", "template_id", "template_version",
-				"channel", "status", "message_data", "sent_at", "delivered_at",
+				"channel", "message_data", "sent_at", "delivered_at",
 				"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 				"unsubscribed_at", "created_at", "updated_at",
 			}).AddRow(
@@ -509,7 +501,6 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 				message.TemplateID,
 				message.TemplateVersion,
 				message.Channel,
-				message.Status,
 				messageDataJSON, // Use the actual JSON bytes
 				message.SentAt,
 				message.DeliveredAt,
@@ -560,7 +551,7 @@ func TestMessageHistoryRepository_GetByBroadcast(t *testing.T) {
 		// Set up data query
 		dataRows := sqlmock.NewRows([]string{
 			"id", "contact_email", "broadcast_id", "template_id", "template_version",
-			"channel", "status", "message_data", "sent_at", "delivered_at",
+			"channel", "message_data", "sent_at", "delivered_at",
 			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 			"unsubscribed_at", "created_at", "updated_at",
 		}).AddRow(
@@ -570,7 +561,6 @@ func TestMessageHistoryRepository_GetByBroadcast(t *testing.T) {
 			message.TemplateID,
 			message.TemplateVersion,
 			message.Channel,
-			message.Status,
 			messageDataJSON, // Use the actual JSON bytes
 			message.SentAt,
 			message.DeliveredAt,
@@ -649,108 +639,6 @@ func TestMessageHistoryRepository_GetByBroadcast(t *testing.T) {
 	})
 }
 
-func TestMessageHistoryRepository_UpdateStatus(t *testing.T) {
-	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	workspaceID := "workspace-123"
-	messageID := "msg-123"
-	timestamp := time.Now()
-
-	testCases := []struct {
-		name          string
-		status        domain.MessageStatus
-		expectedField string
-	}{
-		{
-			name:          "delivered status",
-			status:        domain.MessageStatusDelivered,
-			expectedField: "delivered_at",
-		},
-		{
-			name:          "failed status",
-			status:        domain.MessageStatusFailed,
-			expectedField: "failed_at",
-		},
-		{
-			name:          "opened status",
-			status:        domain.MessageStatusOpened,
-			expectedField: "opened_at",
-		},
-		{
-			name:          "clicked status",
-			status:        domain.MessageStatusClicked,
-			expectedField: "clicked_at",
-		},
-		{
-			name:          "bounced status",
-			status:        domain.MessageStatusBounced,
-			expectedField: "bounced_at",
-		},
-		{
-			name:          "complained status",
-			status:        domain.MessageStatusComplained,
-			expectedField: "complained_at",
-		},
-		{
-			name:          "unsubscribed status",
-			status:        domain.MessageStatusUnsubscribed,
-			expectedField: "unsubscribed_at",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockWorkspaceRepo.EXPECT().
-				GetConnection(ctx, workspaceID).
-				Return(db, nil)
-
-			mock.ExpectExec(`UPDATE message_history SET status = \$1, `+tc.expectedField+` = \$2, updated_at = \$3 WHERE id = \$4`).
-				WithArgs(tc.status, timestamp, sqlmock.AnyArg(), messageID).
-				WillReturnResult(sqlmock.NewResult(1, 1))
-
-			err := repo.UpdateStatus(ctx, workspaceID, messageID, tc.status, timestamp)
-			require.NoError(t, err)
-		})
-	}
-
-	t.Run("workspace connection error", func(t *testing.T) {
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(nil, errors.New("connection error"))
-
-		err := repo.UpdateStatus(ctx, workspaceID, messageID, domain.MessageStatusDelivered, timestamp)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to get workspace connection")
-	})
-
-	t.Run("invalid status", func(t *testing.T) {
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		invalidStatus := domain.MessageStatus("invalid")
-		err := repo.UpdateStatus(ctx, workspaceID, messageID, invalidStatus, timestamp)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid status")
-	})
-
-	t.Run("execution error", func(t *testing.T) {
-		mockWorkspaceRepo.EXPECT().
-			GetConnection(ctx, workspaceID).
-			Return(db, nil)
-
-		mock.ExpectExec(`UPDATE message_history SET status = \$1, delivered_at = \$2, updated_at = \$3 WHERE id = \$4`).
-			WithArgs(domain.MessageStatusDelivered, timestamp, sqlmock.AnyArg(), messageID).
-			WillReturnError(errors.New("execution error"))
-
-		err := repo.UpdateStatus(ctx, workspaceID, messageID, domain.MessageStatusDelivered, timestamp)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to update message status")
-	})
-}
-
 func TestMessageHistoryRepository_SetClicked(t *testing.T) {
 	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
 	defer cleanup()
@@ -766,7 +654,7 @@ func TestMessageHistoryRepository_SetClicked(t *testing.T) {
 			Return(db, nil)
 
 		// Expect the clicked_at update query
-		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, status = 'clicked', updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
 			WithArgs(timestamp, messageID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -795,7 +683,7 @@ func TestMessageHistoryRepository_SetClicked(t *testing.T) {
 			Return(db, nil)
 
 		// First query fails
-		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, status = 'clicked', updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
 			WithArgs(timestamp, messageID).
 			WillReturnError(errors.New("execution error"))
 
@@ -810,7 +698,7 @@ func TestMessageHistoryRepository_SetClicked(t *testing.T) {
 			Return(db, nil)
 
 		// First query succeeds
-		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, status = 'clicked', updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET clicked_at = \$1, updated_at = NOW\(\) WHERE id = \$2 AND clicked_at IS NULL`).
 			WithArgs(timestamp, messageID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -934,7 +822,6 @@ func addRowFromMessage(rows *sqlmock.Rows, message *domain.MessageHistory) {
 		message.TemplateID,
 		message.TemplateVersion,
 		message.Channel,
-		message.Status,
 		errorMsg,
 		message.MessageData,
 		message.SentAt,
@@ -1186,20 +1073,20 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 	now := time.Now().UTC()
 
 	// Create a batch of status updates
-	updates := []domain.MessageStatusUpdate{
+	updates := []domain.MessageEventUpdate{
 		{
 			ID:        "msg-123",
-			Status:    domain.MessageStatusDelivered,
+			Event:     domain.MessageEventDelivered,
 			Timestamp: now,
 		},
 		{
 			ID:        "msg-456",
-			Status:    domain.MessageStatusDelivered,
+			Event:     domain.MessageEventDelivered,
 			Timestamp: now,
 		},
 		{
 			ID:        "msg-789",
-			Status:    domain.MessageStatusBounced,
+			Event:     domain.MessageEventBounced,
 			Timestamp: now,
 		},
 	}
@@ -1210,9 +1097,8 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			Return(db, nil)
 
 		// Expect batch query for delivered status updates (2 messages)
-		mock.ExpectExec(`UPDATE message_history SET status = \$1, delivered_at = updates\.timestamp, updated_at = \$2::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$3, \$4::TIMESTAMP WITH TIME ZONE\), \(\$5, \$6::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND delivered_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET delivered_at = updates\.timestamp, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE\), \(\$4, \$5::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND delivered_at IS NULL`).
 			WithArgs(
-				domain.MessageStatusDelivered,
 				sqlmock.AnyArg(), // updated_at timestamp
 				"msg-123",
 				now,
@@ -1222,9 +1108,8 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 2))
 
 		// Expect batch query for bounced status updates (1 message)
-		mock.ExpectExec(`UPDATE message_history SET status = \$1, bounced_at = updates\.timestamp, updated_at = \$2::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$3, \$4::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
 			WithArgs(
-				domain.MessageStatusBounced,
 				sqlmock.AnyArg(), // updated_at timestamp
 				"msg-789",
 				now,
@@ -1237,15 +1122,15 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 
 	t.Run("successful batch update - single status", func(t *testing.T) {
 		// Only one status type
-		singleStatusUpdates := []domain.MessageStatusUpdate{
+		singleStatusUpdates := []domain.MessageEventUpdate{
 			{
 				ID:        "msg-123",
-				Status:    domain.MessageStatusOpened,
+				Event:     domain.MessageEventOpened,
 				Timestamp: now,
 			},
 			{
 				ID:        "msg-456",
-				Status:    domain.MessageStatusOpened,
+				Event:     domain.MessageEventOpened,
 				Timestamp: now.Add(1 * time.Second),
 			},
 		}
@@ -1255,9 +1140,8 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			Return(db, nil)
 
 		// Expect single batch query for opened status updates (2 messages)
-		mock.ExpectExec(`UPDATE message_history SET status = \$1, opened_at = updates\.timestamp, updated_at = \$2::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$3, \$4::TIMESTAMP WITH TIME ZONE\), \(\$5, \$6::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND opened_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET opened_at = updates\.timestamp, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE\), \(\$4, \$5::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND opened_at IS NULL`).
 			WithArgs(
-				domain.MessageStatusOpened,
 				sqlmock.AnyArg(), // updated_at timestamp
 				"msg-123",
 				now,
@@ -1272,7 +1156,7 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 
 	t.Run("empty updates", func(t *testing.T) {
 		// No database calls should be made when the updates slice is empty
-		err := repo.SetStatusesIfNotSet(ctx, workspaceID, []domain.MessageStatusUpdate{})
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, []domain.MessageEventUpdate{})
 		require.NoError(t, err)
 	})
 
@@ -1287,10 +1171,10 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 	})
 
 	t.Run("invalid status", func(t *testing.T) {
-		invalidUpdates := []domain.MessageStatusUpdate{
+		invalidUpdates := []domain.MessageEventUpdate{
 			{
 				ID:        "msg-123",
-				Status:    domain.MessageStatus("invalid"),
+				Event:     domain.MessageEvent("invalid"),
 				Timestamp: now,
 			},
 		}
@@ -1309,9 +1193,8 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			GetConnection(gomock.Any(), workspaceID).
 			Return(db, nil)
 
-		mock.ExpectExec(`UPDATE message_history SET status = \$1, delivered_at = updates\.timestamp, updated_at = \$2::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$3, \$4::TIMESTAMP WITH TIME ZONE\), \(\$5, \$6::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND delivered_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET delivered_at = updates\.timestamp, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE\), \(\$4, \$5::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND delivered_at IS NULL`).
 			WithArgs(
-				domain.MessageStatusDelivered,
 				sqlmock.AnyArg(),
 				"msg-123",
 				now,
@@ -1321,15 +1204,15 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			WillReturnError(errors.New("database error"))
 
 		// Only include the delivered status updates to trigger the first query error
-		deliveredUpdates := []domain.MessageStatusUpdate{
+		deliveredUpdates := []domain.MessageEventUpdate{
 			{
 				ID:        "msg-123",
-				Status:    domain.MessageStatusDelivered,
+				Event:     domain.MessageEventDelivered,
 				Timestamp: now,
 			},
 			{
 				ID:        "msg-456",
-				Status:    domain.MessageStatusDelivered,
+				Event:     domain.MessageEventDelivered,
 				Timestamp: now,
 			},
 		}
@@ -1345,9 +1228,8 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			Return(db, nil)
 
 		// Expect the batch version to be called with a single update
-		mock.ExpectExec(`UPDATE message_history SET status = \$1, delivered_at = updates\.timestamp, updated_at = \$2::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$3, \$4::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND delivered_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET delivered_at = updates\.timestamp, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE\)\) AS updates\(id, timestamp\) WHERE message_history\.id = updates\.id AND delivered_at IS NULL`).
 			WithArgs(
-				domain.MessageStatusDelivered,
 				sqlmock.AnyArg(),
 				"msg-123",
 				now,
@@ -1355,7 +1237,13 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		// Call the single status method
-		err := repo.SetStatusIfNotSet(ctx, workspaceID, "msg-123", domain.MessageStatusDelivered, now)
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, []domain.MessageEventUpdate{
+			{
+				ID:        "msg-123",
+				Event:     domain.MessageEventDelivered,
+				Timestamp: now,
+			},
+		})
 		require.NoError(t, err)
 	})
 }

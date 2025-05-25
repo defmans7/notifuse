@@ -727,7 +727,6 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 				assert.Equal(t, contact.Email, msgHistory.ContactEmail)
 				assert.Equal(t, templateConfig.TemplateID, msgHistory.TemplateID)
 				assert.Equal(t, "email", msgHistory.Channel)
-				assert.Equal(t, domain.MessageStatusSent, msgHistory.Status)
 				assert.Equal(t, messageData, msgHistory.MessageData)
 
 				return nil
@@ -947,7 +946,6 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			DoAndReturn(func(_ context.Context, wsID string, msgHistory *domain.MessageHistory) error {
 				// Verify message history error properties
 				assert.Equal(t, messageID, msgHistory.ID)
-				assert.Equal(t, domain.MessageStatusFailed, msgHistory.Status)
 				assert.NotNil(t, msgHistory.Error)
 
 				return nil

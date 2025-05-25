@@ -713,7 +713,6 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		TemplateID:      templateID,
 		TemplateVersion: template.Version,
 		Channel:         "email",
-		Status:          domain.MessageStatusSent,
 		MessageData: domain.MessageData{
 			Data: messageData,
 		},

@@ -88,11 +88,11 @@ func TestProcessWebhook_Success(t *testing.T) {
 			gomock.Any(),
 			workspaceID,
 			gomock.Any(), // Will be a slice of MessageStatusUpdate
-		).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+		).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageEventUpdate) error {
 			assert.Equal(t, workspaceID, wsID)
 			assert.Equal(t, 1, len(updates), "Should have 1 message status update")
 			assert.Equal(t, "message1", updates[0].ID)
-			assert.Equal(t, domain.MessageStatusBounced, updates[0].Status)
+			assert.Equal(t, domain.MessageEventBounced, updates[0].Event)
 			return nil
 		})
 
@@ -157,11 +157,11 @@ func TestProcessWebhook_Success(t *testing.T) {
 			gomock.Any(),
 			workspaceID,
 			gomock.Any(), // Will be a slice of MessageStatusUpdate
-		).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+		).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageEventUpdate) error {
 			assert.Equal(t, workspaceID, wsID)
 			assert.Equal(t, 1, len(updates), "Should have 1 message status update")
 			assert.Equal(t, "message1", updates[0].ID)
-			assert.Equal(t, domain.MessageStatusDelivered, updates[0].Status)
+			assert.Equal(t, domain.MessageEventDelivered, updates[0].Event)
 			return nil
 		})
 
@@ -1161,11 +1161,11 @@ func TestProcessWebhook_UpdatesMessageHistory(t *testing.T) {
 		gomock.Any(),
 		workspaceID,
 		gomock.Any(), // Will be a slice of MessageStatusUpdate
-	).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+	).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageEventUpdate) error {
 		assert.Equal(t, workspaceID, wsID)
 		assert.Equal(t, 1, len(updates), "Should have 1 message status update")
 		assert.Equal(t, messageID, updates[0].ID)
-		assert.Equal(t, domain.MessageStatusDelivered, updates[0].Status)
+		assert.Equal(t, domain.MessageEventDelivered, updates[0].Event)
 		return nil
 	})
 
@@ -1263,17 +1263,17 @@ func TestProcessWebhook_UpdatesMessageHistoryWithMultipleEvents(t *testing.T) {
 		gomock.Any(),
 		workspaceID,
 		gomock.Any(), // Will be a slice of MessageStatusUpdate
-	).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageStatusUpdate) error {
+	).DoAndReturn(func(ctx context.Context, wsID string, updates []domain.MessageEventUpdate) error {
 		assert.Equal(t, workspaceID, wsID)
 		assert.Equal(t, 2, len(updates), "Should have 2 message status updates")
 
 		// Check first update
 		assert.Equal(t, messageID1, updates[0].ID)
-		assert.Equal(t, domain.MessageStatusDelivered, updates[0].Status)
+		assert.Equal(t, domain.MessageEventDelivered, updates[0].Event)
 
 		// Check second update
 		assert.Equal(t, messageID2, updates[1].ID)
-		assert.Equal(t, domain.MessageStatusBounced, updates[1].Status)
+		assert.Equal(t, domain.MessageEventBounced, updates[1].Event)
 
 		return nil
 	})

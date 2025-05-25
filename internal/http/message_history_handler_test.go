@@ -237,7 +237,6 @@ func TestMessageHistoryHandler_handleList_Success(t *testing.T) {
 			ContactEmail: "contact1",
 			TemplateID:   "template1",
 			Channel:      "email",
-			Status:       domain.MessageStatusSent,
 			SentAt:       time.Now().Add(-time.Hour),
 			CreatedAt:    time.Now().Add(-time.Hour),
 			UpdatedAt:    time.Now().Add(-time.Hour),
@@ -270,7 +269,6 @@ func TestMessageHistoryHandler_handleList_Success(t *testing.T) {
 			assert.Equal(t, "ws123", workspaceID)
 			assert.Equal(t, 10, params.Limit)
 			assert.Equal(t, "email", params.Channel)
-			assert.Equal(t, domain.MessageStatusSent, params.Status)
 
 			// Verify time parameters were parsed correctly - with approximate comparison
 			assert.NotNil(t, params.SentAfter)

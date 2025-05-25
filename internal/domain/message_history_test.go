@@ -10,18 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMessageStatus(t *testing.T) {
-	// Test all defined message status constants
-	assert.Equal(t, MessageStatus("sent"), MessageStatusSent)
-	assert.Equal(t, MessageStatus("delivered"), MessageStatusDelivered)
-	assert.Equal(t, MessageStatus("failed"), MessageStatusFailed)
-	assert.Equal(t, MessageStatus("opened"), MessageStatusOpened)
-	assert.Equal(t, MessageStatus("clicked"), MessageStatusClicked)
-	assert.Equal(t, MessageStatus("bounced"), MessageStatusBounced)
-	assert.Equal(t, MessageStatus("complained"), MessageStatusComplained)
-	assert.Equal(t, MessageStatus("unsubscribed"), MessageStatusUnsubscribed)
-}
-
 func TestMessageData_Value(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -168,7 +156,6 @@ func TestMessageHistory(t *testing.T) {
 		TemplateID:      "template789",
 		TemplateVersion: 1,
 		Channel:         "email",
-		Status:          MessageStatusSent,
 		MessageData: MessageData{
 			Data: map[string]interface{}{
 				"subject": "Welcome!",
@@ -190,7 +177,6 @@ func TestMessageHistory(t *testing.T) {
 	assert.Equal(t, "template789", message.TemplateID)
 	assert.Equal(t, int64(1), message.TemplateVersion)
 	assert.Equal(t, "email", message.Channel)
-	assert.Equal(t, MessageStatusSent, message.Status)
 	assert.Equal(t, now, message.SentAt)
 	assert.Equal(t, now, message.CreatedAt)
 	assert.Equal(t, now, message.UpdatedAt)
@@ -243,7 +229,6 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			want: MessageListParams{
 				Cursor:       "next_page",
 				Channel:      "email",
-				Status:       MessageStatusDelivered,
 				ContactEmail: "contact@example.com",
 				BroadcastID:  "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
 				TemplateID:   "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
@@ -329,13 +314,6 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "with invalid status",
-			queryData: map[string][]string{
-				"status": {"invalid_status"}, // Not one of the allowed values
-			},
-			wantErr: true,
-		},
-		{
 			name: "with invalid contact_email",
 			queryData: map[string][]string{
 				"contact_email": {"not-a-email"}, // Not a UUID format
@@ -408,7 +386,6 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			want: MessageListParams{
 				Cursor:        "next_page",
 				Channel:       "email",
-				Status:        MessageStatusDelivered,
 				ContactEmail:  "contact@example.com",
 				BroadcastID:   "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
 				TemplateID:    "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
@@ -437,7 +414,6 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.want.Cursor, params.Cursor)
 			assert.Equal(t, tt.want.Channel, params.Channel)
-			assert.Equal(t, tt.want.Status, params.Status)
 			assert.Equal(t, tt.want.ContactEmail, params.ContactEmail)
 			assert.Equal(t, tt.want.BroadcastID, params.BroadcastID)
 			assert.Equal(t, tt.want.TemplateID, params.TemplateID)
@@ -542,24 +518,6 @@ func TestMessageListParams_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "valid status",
-			params: MessageListParams{
-				Status: MessageStatusDelivered,
-			},
-			want: MessageListParams{
-				Status: MessageStatusDelivered,
-				Limit:  20, // Default limit
-			},
-			wantErr: false,
-		},
-		{
-			name: "invalid status",
-			params: MessageListParams{
-				Status: MessageStatus("invalid_status"),
-			},
-			wantErr: true,
-		},
-		{
 			name: "valid IDs",
 			params: MessageListParams{
 				ContactEmail: "contact@example.com",
@@ -649,7 +607,6 @@ func TestMessageListParams_Validate(t *testing.T) {
 				assert.Equal(t, tt.want.Limit, params.Limit)
 			}
 			assert.Equal(t, tt.want.Channel, params.Channel)
-			assert.Equal(t, tt.want.Status, params.Status)
 			assert.Equal(t, tt.want.ContactEmail, params.ContactEmail)
 			assert.Equal(t, tt.want.BroadcastID, params.BroadcastID)
 			assert.Equal(t, tt.want.TemplateID, params.TemplateID)

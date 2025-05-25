@@ -101,27 +101,27 @@ func (s *WebhookEventService) ProcessWebhook(ctx context.Context, workspaceID st
 		return fmt.Errorf("failed to store webhook events: %w", err)
 	}
 
-	updates := []domain.MessageStatusUpdate{}
+	updates := []domain.MessageEventUpdate{}
 
 	for _, event := range events {
 		// Update message history status if we have a message ID
 		if event.MessageID != "" {
-			var status domain.MessageStatus
+			var messageEvent domain.MessageEvent
 			switch event.Type {
 			case domain.EmailEventDelivered:
-				status = domain.MessageStatusDelivered
+				messageEvent = domain.MessageEventDelivered
 			case domain.EmailEventBounce:
-				status = domain.MessageStatusBounced
+				messageEvent = domain.MessageEventBounced
 			case domain.EmailEventComplaint:
-				status = domain.MessageStatusComplained
+				messageEvent = domain.MessageEventComplained
 			default:
 				// Skip other event types
 				return nil
 			}
 
-			updates = append(updates, domain.MessageStatusUpdate{
+			updates = append(updates, domain.MessageEventUpdate{
 				ID:        event.MessageID,
-				Status:    status,
+				Event:     messageEvent,
 				Timestamp: event.Timestamp,
 			})
 		}

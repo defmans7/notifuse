@@ -309,6 +309,7 @@ func (s *EmailService) SendEmailForTemplate(
 	fromName := emailSender.Name
 	subject := template.Email.Subject
 	htmlContent := *compiledTemplate.HTML
+	now := time.Now().UTC()
 
 	// Create message history record
 	messageHistory := &domain.MessageHistory{
@@ -316,11 +317,10 @@ func (s *EmailService) SendEmailForTemplate(
 		ContactEmail: contact.Email,
 		TemplateID:   templateConfig.TemplateID,
 		Channel:      "email",
-		Status:       domain.MessageStatusSent,
 		MessageData:  messageData,
-		SentAt:       time.Now().UTC(),
-		CreatedAt:    time.Now().UTC(),
-		UpdatedAt:    time.Now().UTC(),
+		SentAt:       now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	// Save to message history
@@ -364,8 +364,8 @@ func (s *EmailService) SendEmailForTemplate(
 
 	if err != nil {
 		// Update message history with error status
-		messageHistory.Status = domain.MessageStatusFailed
-		messageHistory.UpdatedAt = time.Now().UTC()
+		messageHistory.FailedAt = &now
+		messageHistory.UpdatedAt = now
 		errorMsg := err.Error()
 		messageHistory.Error = &errorMsg
 

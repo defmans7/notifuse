@@ -444,6 +444,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 			sent++
 		}
 
+		now := time.Now().UTC()
 		message := &domain.MessageHistory{
 			ID:              messageID,
 			ContactEmail:    contact.Email,
@@ -451,7 +452,6 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 			TemplateID:      templateID,
 			TemplateVersion: templates[templateID].Version,
 			Channel:         "email",
-			Status:          domain.MessageStatusSent,
 			MessageData: domain.MessageData{
 				Data: map[string]interface{}{
 					"broadcast_id": broadcastID,
@@ -459,13 +459,13 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 					"template_id":  templateID,
 				},
 			},
-			SentAt:    time.Now(),
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+			SentAt:    now,
+			CreatedAt: now,
+			UpdatedAt: now,
 		}
 
 		if err != nil {
-			message.Status = domain.MessageStatusFailed
+			message.FailedAt = &now
 			errStr := fmt.Sprintf("%.255s", err.Error())
 			message.Error = &errStr
 		}

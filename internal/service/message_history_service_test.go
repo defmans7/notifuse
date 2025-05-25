@@ -44,14 +44,12 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user@example.com",
 						TemplateID:   "template-1",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 					},
 					{
 						ID:           "msg-2",
 						ContactEmail: "user2@example.com",
 						TemplateID:   "template-1",
 						Channel:      "email",
-						Status:       domain.MessageStatusDelivered,
 					},
 				}
 				nextCursor := "cursor-value"
@@ -66,14 +64,12 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user@example.com",
 						TemplateID:   "template-1",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 					},
 					{
 						ID:           "msg-2",
 						ContactEmail: "user2@example.com",
 						TemplateID:   "template-1",
 						Channel:      "email",
-						Status:       domain.MessageStatusDelivered,
 					},
 				},
 				NextCursor: "cursor-value",
@@ -145,7 +141,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 			params: domain.MessageListParams{
 				Limit:        10,
 				Channel:      "email",
-				Status:       domain.MessageStatusSent,
 				ContactEmail: "user@example.com",
 			},
 			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockLogger *pkgmocks.MockLogger, mockAuthService *mocks.MockAuthService) {
@@ -159,7 +154,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user@example.com",
 						TemplateID:   "template-1",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 					},
 				}
 				mockRepo.EXPECT().
@@ -170,7 +164,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 					).
 					Do(func(_ context.Context, _ string, params domain.MessageListParams) {
 						assert.Equal(t, "email", params.Channel)
-						assert.Equal(t, domain.MessageStatusSent, params.Status)
 						assert.Equal(t, "user@example.com", params.ContactEmail)
 						assert.Equal(t, 10, params.Limit)
 					}).
@@ -183,7 +176,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user@example.com",
 						TemplateID:   "template-1",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 					},
 				},
 				NextCursor: "",
@@ -209,14 +201,12 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user3@example.com",
 						TemplateID:   "template-2",
 						Channel:      "email",
-						Status:       domain.MessageStatusDelivered,
 					},
 					{
 						ID:           "msg-4",
 						ContactEmail: "user4@example.com",
 						TemplateID:   "template-2",
 						Channel:      "email",
-						Status:       domain.MessageStatusOpened,
 					},
 				}
 
@@ -239,14 +229,12 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user3@example.com",
 						TemplateID:   "template-2",
 						Channel:      "email",
-						Status:       domain.MessageStatusDelivered,
 					},
 					{
 						ID:           "msg-4",
 						ContactEmail: "user4@example.com",
 						TemplateID:   "template-2",
 						Channel:      "email",
-						Status:       domain.MessageStatusOpened,
 					},
 				},
 				NextCursor: "next-cursor",
@@ -273,7 +261,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user5@example.com",
 						TemplateID:   "template-3",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 						SentAt:       twoHoursAgo.Add(time.Hour),
 					},
 				}
@@ -297,7 +284,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user5@example.com",
 						TemplateID:   "template-3",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 						SentAt:       twoHoursAgo.Add(time.Hour),
 					},
 				},
@@ -325,7 +311,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user6@example.com",
 						TemplateID:   "template-4",
 						Channel:      "email",
-						Status:       domain.MessageStatusFailed,
 						Error:        &errMsg,
 					},
 				}
@@ -348,7 +333,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user6@example.com",
 						TemplateID:   "template-4",
 						Channel:      "email",
-						Status:       domain.MessageStatusFailed,
 						Error:        strPtr("failed to send email"),
 					},
 				},
@@ -363,7 +347,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 			params: domain.MessageListParams{
 				Limit:       10,
 				Channel:     "email",
-				Status:      domain.MessageStatusFailed,
 				BroadcastID: "broadcast-123",
 				TemplateID:  "template-5",
 				HasError:    boolPtr(true),
@@ -382,7 +365,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						BroadcastID:  &broadcastID,
 						TemplateID:   "template-5",
 						Channel:      "email",
-						Status:       domain.MessageStatusFailed,
 						Error:        &errMsg,
 					},
 				}
@@ -395,7 +377,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 					).
 					Do(func(_ context.Context, _ string, params domain.MessageListParams) {
 						assert.Equal(t, "email", params.Channel)
-						assert.Equal(t, domain.MessageStatusFailed, params.Status)
 						assert.Equal(t, "broadcast-123", params.BroadcastID)
 						assert.Equal(t, "template-5", params.TemplateID)
 						assert.True(t, *params.HasError)
@@ -410,7 +391,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						BroadcastID:  strPtr("broadcast-123"),
 						TemplateID:   "template-5",
 						Channel:      "email",
-						Status:       domain.MessageStatusFailed,
 						Error:        strPtr("template error"),
 					},
 				},
@@ -437,7 +417,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user8@example.com",
 						TemplateID:   "template-6",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 					},
 				}
 				// Empty next cursor indicates no more pages
@@ -452,7 +431,6 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user8@example.com",
 						TemplateID:   "template-6",
 						Channel:      "email",
-						Status:       domain.MessageStatusSent,
 					},
 				},
 				NextCursor: "",

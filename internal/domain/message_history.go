@@ -17,25 +17,25 @@ import (
 //go:generate mockgen -destination mocks/mock_message_history_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain MessageHistoryRepository
 
 // MessageStatus represents the current status of a message
-type MessageStatus string
+type MessageEvent string
 
 const (
 	// Message status constants
-	MessageStatusSent         MessageStatus = "sent"
-	MessageStatusDelivered    MessageStatus = "delivered"
-	MessageStatusFailed       MessageStatus = "failed"
-	MessageStatusOpened       MessageStatus = "opened"
-	MessageStatusClicked      MessageStatus = "clicked"
-	MessageStatusBounced      MessageStatus = "bounced"
-	MessageStatusComplained   MessageStatus = "complained"
-	MessageStatusUnsubscribed MessageStatus = "unsubscribed"
+	MessageEventSent         MessageEvent = "sent"
+	MessageEventDelivered    MessageEvent = "delivered"
+	MessageEventFailed       MessageEvent = "failed"
+	MessageEventOpened       MessageEvent = "opened"
+	MessageEventClicked      MessageEvent = "clicked"
+	MessageEventBounced      MessageEvent = "bounced"
+	MessageEventComplained   MessageEvent = "complained"
+	MessageEventUnsubscribed MessageEvent = "unsubscribed"
 )
 
-// MessageStatusUpdate represents a status update for a message
-type MessageStatusUpdate struct {
-	ID        string        `json:"id"`
-	Status    MessageStatus `json:"status"`
-	Timestamp time.Time     `json:"timestamp"`
+// MessageEventUpdate represents a status update for a message
+type MessageEventUpdate struct {
+	ID        string       `json:"id"`
+	Event     MessageEvent `json:"event"`
+	Timestamp time.Time    `json:"timestamp"`
 }
 
 // MessageData represents the JSON data used to compile a template
@@ -68,15 +68,14 @@ func (d *MessageData) Scan(value interface{}) error {
 
 // MessageHistory represents a record of a message sent to a contact
 type MessageHistory struct {
-	ID              string        `json:"id"`
-	ContactEmail    string        `json:"contact_email"`
-	BroadcastID     *string       `json:"broadcast_id,omitempty"`
-	TemplateID      string        `json:"template_id"`
-	TemplateVersion int64         `json:"template_version"`
-	Channel         string        `json:"channel"` // email, sms, push, etc.
-	Status          MessageStatus `json:"status"`
-	Error           *string       `json:"error,omitempty"`
-	MessageData     MessageData   `json:"message_data"`
+	ID              string      `json:"id"`
+	ContactEmail    string      `json:"contact_email"`
+	BroadcastID     *string     `json:"broadcast_id,omitempty"`
+	TemplateID      string      `json:"template_id"`
+	TemplateVersion int64       `json:"template_version"`
+	Channel         string      `json:"channel"` // email, sms, push, etc.
+	Error           *string     `json:"error,omitempty"`
+	MessageData     MessageData `json:"message_data"`
 
 	// Event timestamps
 	SentAt         time.Time  `json:"sent_at"`
@@ -124,14 +123,8 @@ type MessageHistoryRepository interface {
 	// ListMessages retrieves message history with cursor-based pagination and filtering
 	ListMessages(ctx context.Context, workspaceID string, params MessageListParams) ([]*MessageHistory, string, error)
 
-	// UpdateStatus updates the status of a message and sets the corresponding timestamp
-	UpdateStatus(ctx context.Context, workspaceID, id string, status MessageStatus, timestamp time.Time) error
-
-	// SetStatusIfNotSet sets a status only if it hasn't been set before (the field is NULL)
-	SetStatusIfNotSet(ctx context.Context, workspaceID, id string, status MessageStatus, timestamp time.Time) error
-
 	// SetStatusesIfNotSet updates multiple message statuses in a batch if they haven't been set before
-	SetStatusesIfNotSet(ctx context.Context, workspaceID string, updates []MessageStatusUpdate) error
+	SetStatusesIfNotSet(ctx context.Context, workspaceID string, updates []MessageEventUpdate) error
 
 	// SetClicked sets the clicked_at timestamp and ensures opened_at is also set
 	SetClicked(ctx context.Context, workspaceID, id string, timestamp time.Time) error
@@ -165,13 +158,19 @@ type MessageListParams struct {
 	Limit  int    `json:"limit,omitempty"`
 
 	// Filters
-	Channel      string        `json:"channel,omitempty"`       // email, sms, push, etc.
-	Status       MessageStatus `json:"status,omitempty"`        // message status filter
-	ContactEmail string        `json:"contact_email,omitempty"` // filter by contact
-	BroadcastID  string        `json:"broadcast_id,omitempty"`  // filter by broadcast
-	TemplateID   string        `json:"template_id,omitempty"`   // filter by template
-	HasError     *bool         `json:"has_error,omitempty"`     // filter messages with/without errors
-
+	Channel        string `json:"channel,omitempty"`         // email, sms, push, etc.
+	ContactEmail   string `json:"contact_email,omitempty"`   // filter by contact
+	BroadcastID    string `json:"broadcast_id,omitempty"`    // filter by broadcast
+	TemplateID     string `json:"template_id,omitempty"`     // filter by template
+	HasError       *bool  `json:"has_error,omitempty"`       // filter messages with/without errors
+	IsSent         *bool  `json:"is_sent,omitempty"`         // filter messages that are sent
+	IsDelivered    *bool  `json:"is_delivered,omitempty"`    // filter messages that are delivered
+	IsFailed       *bool  `json:"is_failed,omitempty"`       // filter messages that are failed
+	IsOpened       *bool  `json:"is_opened,omitempty"`       // filter messages that are opened
+	IsClicked      *bool  `json:"is_clicked,omitempty"`      // filter messages that are clicked
+	IsBounced      *bool  `json:"is_bounced,omitempty"`      // filter messages that are bounced
+	IsComplained   *bool  `json:"is_complained,omitempty"`   // filter messages that are complained
+	IsUnsubscribed *bool  `json:"is_unsubscribed,omitempty"` // filter messages that are unsubscribed
 	// Time range filters
 	SentAfter     *time.Time `json:"sent_after,omitempty"`
 	SentBefore    *time.Time `json:"sent_before,omitempty"`
@@ -184,7 +183,6 @@ func (p *MessageListParams) FromQuery(query url.Values) error {
 	// Parse cursor and basic string filters
 	p.Cursor = query.Get("cursor")
 	p.Channel = query.Get("channel")
-	p.Status = MessageStatus(query.Get("status"))
 	p.ContactEmail = query.Get("contact_email")
 	p.BroadcastID = query.Get("broadcast_id")
 	p.TemplateID = query.Get("template_id")
@@ -254,23 +252,6 @@ func (p *MessageListParams) Validate() error {
 		// Use govalidator to check if channel is valid
 		if !govalidator.IsIn(p.Channel, "email", "sms", "push") {
 			return fmt.Errorf("invalid channel type: %s", p.Channel)
-		}
-	}
-
-	// Validate status
-	if p.Status != "" {
-		validStatuses := []string{
-			string(MessageStatusSent),
-			string(MessageStatusDelivered),
-			string(MessageStatusFailed),
-			string(MessageStatusOpened),
-			string(MessageStatusClicked),
-			string(MessageStatusBounced),
-			string(MessageStatusComplained),
-			string(MessageStatusUnsubscribed),
-		}
-		if !govalidator.IsIn(string(p.Status), validStatuses...) {
-			return fmt.Errorf("invalid message status: %s", p.Status)
 		}
 	}
 

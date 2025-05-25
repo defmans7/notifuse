@@ -81,7 +81,7 @@ func (mr *MockBroadcastSenderMockRecorder) RecordMessageSent(arg0, arg1, arg2 in
 }
 
 // UpdateMessageStatus mocks base method.
-func (m *MockBroadcastSender) UpdateMessageStatus(arg0 context.Context, arg1, arg2 string, arg3 domain.MessageStatus, arg4 time.Time) error {
+func (m *MockBroadcastSender) UpdateMessageStatus(arg0 context.Context, arg1, arg2 string, arg3 domain.MessageEvent, arg4 time.Time) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateMessageStatus", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)

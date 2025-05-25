@@ -1,15 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Typography, Space, Button, Select, Input, Popover } from 'antd'
-import { listMessages, MessageHistory, MessageStatus } from '../../services/api/messages_history'
+import { Typography, Space, Button, Select, Input, Popover, Tooltip, Radio } from 'antd'
+import { listMessages, MessageHistory } from '../../services/api/messages_history'
 import { useAuth } from '../../contexts/AuthContext'
 import React, { useState, useMemo, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faEnvelope,
   faCircleCheck,
   faCircleXmark,
   faEye,
-  faHandPointer
+  faHandPointer,
+  faPaperPlane
 } from '@fortawesome/free-regular-svg-icons'
 import {
   faTriangleExclamation,
@@ -20,68 +20,23 @@ import { MessageHistoryTable } from './MessageHistoryTable'
 
 const { Title, Text } = Typography
 
-// Define status icon and color mappings
-const statusConfig: Record<MessageStatus, { icon: React.ReactNode; color: string; label: string }> =
-  {
-    sent: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faEnvelope} />,
-      color: 'blue',
-      label: 'Sent'
-    },
-    delivered: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faCircleCheck} />,
-      color: 'green',
-      label: 'Delivered'
-    },
-    failed: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faCircleXmark} />,
-      color: 'red',
-      label: 'Failed'
-    },
-    opened: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faEye} />,
-      color: 'purple',
-      label: 'Opened'
-    },
-    clicked: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faHandPointer} />,
-      color: 'geekblue',
-      label: 'Clicked'
-    },
-    bounced: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faTriangleExclamation} />,
-      color: 'orange',
-      label: 'Bounced'
-    },
-    complained: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faBan} />,
-      color: 'volcano',
-      label: 'Complained'
-    },
-    unsubscribed: {
-      icon: <FontAwesomeIcon className="!mr-1 opacity-70" icon={faArrowRightFromBracket} />,
-      color: 'gold',
-      label: 'Unsubscribed'
-    }
-  }
-
 // Simple filter field type
 interface FilterOption {
   key: string
-  label: string
+  label: React.ReactNode
   options?: { value: string; label: string }[]
 }
 
 // Define filter fields for message history
 const filterOptions: FilterOption[] = [
-  {
-    key: 'status',
-    label: 'Status',
-    options: Object.entries(statusConfig).map(([value, { label }]) => ({
-      value,
-      label
-    }))
-  },
+  // {
+  //   key: 'status',
+  //   label: 'Status',
+  //   options: Object.entries(statusConfig).map(([value, { label }]) => ({
+  //     value,
+  //     label
+  //   }))
+  // },
   {
     key: 'channel',
     label: 'Channel',
@@ -100,6 +55,108 @@ const filterOptions: FilterOption[] = [
     options: [
       { value: 'true', label: 'With Errors' },
       { value: 'false', label: 'No Errors' }
+    ]
+  },
+  {
+    key: 'is_sent',
+    label: (
+      <Tooltip title="Sent">
+        <FontAwesomeIcon className="!mr-1 opacity-70 text-blue-500" icon={faPaperPlane} /> Sent
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
+    ]
+  },
+  {
+    key: 'is_delivered',
+    label: (
+      <Tooltip title="Delivered">
+        <FontAwesomeIcon className="!mr-1 opacity-70 text-green-500" icon={faCircleCheck} />{' '}
+        Delivered
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
+    ]
+  },
+  {
+    key: 'is_failed',
+    label: (
+      <Tooltip title="Failed">
+        <FontAwesomeIcon className="!mr-1 opacity-70 text-red-500" icon={faCircleXmark} /> Failed
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
+    ]
+  },
+  {
+    key: 'is_opened',
+    label: (
+      <Tooltip title="Opened">
+        <FontAwesomeIcon className="!mr-1 opacity-70 text-purple-500" icon={faEye} /> Opened
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
+    ]
+  },
+  {
+    key: 'is_clicked',
+    label: (
+      <Tooltip title="Clicked">
+        <FontAwesomeIcon className="!mr-1 opacity-70 text-blue-500" icon={faHandPointer} /> Clicked
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
+    ]
+  },
+  {
+    key: 'is_bounced',
+    label: (
+      <Tooltip title="Bounced">
+        <FontAwesomeIcon
+          className="!mr-1 opacity-70 text-orange-500"
+          icon={faTriangleExclamation}
+        />{' '}
+        Bounced
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
+    ]
+  },
+  {
+    key: 'is_complained',
+    label: (
+      <Tooltip title="Complained">
+        <FontAwesomeIcon className="!mr-1 opacity-70 text-red-500" icon={faBan} /> Complained
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
+    ]
+  },
+  {
+    key: 'is_unsubscribed',
+    label: (
+      <Tooltip title="Unsubscribed">
+        <FontAwesomeIcon className="!mr-1 opacity-70 text-red-500" icon={faArrowRightFromBracket} />{' '}
+        Unsubscribed
+      </Tooltip>
+    ),
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' }
     ]
   }
 ]
@@ -136,6 +193,22 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
         // Special case for has_error which needs to be converted to boolean
         if (field === 'has_error') {
           filters[field] = value === 'true'
+        } else if (field === 'is_sent') {
+          filters[field] = value === 'true'
+        } else if (field === 'is_delivered') {
+          filters[field] = value === 'true'
+        } else if (field === 'is_failed') {
+          filters[field] = value === 'true'
+        } else if (field === 'is_opened') {
+          filters[field] = value === 'true'
+        } else if (field === 'is_clicked') {
+          filters[field] = value === 'true'
+        } else if (field === 'is_bounced') {
+          filters[field] = value === 'true'
+        } else if (field === 'is_complained') {
+          filters[field] = value === 'true'
+        } else if (field === 'is_unsubscribed') {
+          filters[field] = value === 'true'
         } else {
           filters[field] = value
         }
@@ -160,7 +233,7 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
         initialFilters.push({
           field: option.key,
           value,
-          label: option.label
+          label: '' // Convert ReactNode to string
         })
       }
     })
@@ -248,7 +321,7 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
         updatedFilters.push({
           field,
           value,
-          label: filterOption.label
+          label: ''
         })
       }
     }
@@ -298,19 +371,42 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
               content={
                 <div style={{ width: 200 }}>
                   {option.options ? (
-                    <Select
-                      style={{ width: '100%', marginBottom: 8 }}
-                      placeholder={`Select ${option.label}`}
-                      value={tempFilterValues[option.key] || undefined}
-                      onChange={(value) =>
-                        setTempFilterValues({
-                          ...tempFilterValues,
-                          [option.key]: value
-                        })
-                      }
-                      options={option.options}
-                      allowClear
-                    />
+                    // Check if this is a boolean field (has only Yes/No options)
+                    option.options.length === 2 &&
+                    option.options.every((opt) => opt.value === 'true' || opt.value === 'false') ? (
+                      <Radio.Group
+                        style={{ width: '100%', marginBottom: 8 }}
+                        value={tempFilterValues[option.key] || undefined}
+                        onChange={(e) =>
+                          setTempFilterValues({
+                            ...tempFilterValues,
+                            [option.key]: e.target.value
+                          })
+                        }
+                      >
+                        <div className="flex flex-col gap-1">
+                          {option.options.map((opt) => (
+                            <Radio key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </Radio>
+                          ))}
+                        </div>
+                      </Radio.Group>
+                    ) : (
+                      <Select
+                        style={{ width: '100%', marginBottom: 8 }}
+                        placeholder={`Select ${option.label}`}
+                        value={tempFilterValues[option.key] || undefined}
+                        onChange={(value) =>
+                          setTempFilterValues({
+                            ...tempFilterValues,
+                            [option.key]: value
+                          })
+                        }
+                        options={option.options}
+                        allowClear
+                      />
+                    )
                   ) : (
                     <Input
                       placeholder={`Enter ${option.label}`}
@@ -345,7 +441,13 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
               }
             >
               <Button type={isActive ? 'primary' : 'default'} size="small">
-                {isActive ? `${option.label}: ${activeFilter!.value}` : option.label}
+                {isActive ? (
+                  <span>
+                    {option.label}: {activeFilter!.value}
+                  </span>
+                ) : (
+                  option.label
+                )}
               </Button>
             </Popover>
           )
