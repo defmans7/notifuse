@@ -1777,3 +1777,233 @@ func TestSendEmail_ListConfigSetsError(t *testing.T) {
 
 	assert.NoError(t, err)
 }
+
+// Test SendEmail - session factory error
+func TestSendEmail_SessionFactoryError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Create service with failing session factory
+	service := NewSESServiceWithClients(
+		mockAuthService,
+		mockLogger,
+		func(config domain.AmazonSESSettings) (*session.Session, error) {
+			return nil, errors.New("session creation failed")
+		},
+		nil, // sesClientFactory not used in this test
+		nil, // snsClientFactory not used in this test
+		nil, // sesEmailClientFactory not used in this test
+	)
+
+	provider := &domain.EmailProvider{
+		SES: &domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		},
+	}
+
+	// Expect logger to be called for the error
+	mockLogger.EXPECT().Error(gomock.Any()).Times(1)
+
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create AWS session")
+}
+
+// Test SendEmail - with CC and BCC addresses
+func TestSendEmail_WithCCAndBCC(t *testing.T) {
+	service, mockSESClient, _, _, _ := createMockSESService(t)
+
+	provider := &domain.EmailProvider{
+		SES: &domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		},
+	}
+
+	cc := []string{"cc1@example.com", "cc2@example.com"}
+	bcc := []string{"bcc1@example.com", "bcc2@example.com"}
+
+	mockSESClient.EXPECT().
+		ListConfigurationSetsWithContext(gomock.Any(), gomock.Any()).
+		Return(&ses.ListConfigurationSetsOutput{}, nil)
+
+	mockSESClient.EXPECT().
+		SendEmailWithContext(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, input *ses.SendEmailInput, _ ...request.Option) (*ses.SendEmailOutput, error) {
+			// Verify CC addresses
+			assert.Len(t, input.Destination.CcAddresses, 2)
+			assert.Equal(t, "cc1@example.com", *input.Destination.CcAddresses[0])
+			assert.Equal(t, "cc2@example.com", *input.Destination.CcAddresses[1])
+
+			// Verify BCC addresses
+			assert.Len(t, input.Destination.BccAddresses, 2)
+			assert.Equal(t, "bcc1@example.com", *input.Destination.BccAddresses[0])
+			assert.Equal(t, "bcc2@example.com", *input.Destination.BccAddresses[1])
+
+			return &ses.SendEmailOutput{}, nil
+		})
+
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", cc, bcc)
+
+	assert.NoError(t, err)
+}
+
+// Test SendEmail - with ReplyTo
+func TestSendEmail_WithReplyTo(t *testing.T) {
+	service, mockSESClient, _, _, _ := createMockSESService(t)
+
+	provider := &domain.EmailProvider{
+		SES: &domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		},
+	}
+
+	replyTo := "reply@example.com"
+
+	mockSESClient.EXPECT().
+		ListConfigurationSetsWithContext(gomock.Any(), gomock.Any()).
+		Return(&ses.ListConfigurationSetsOutput{}, nil)
+
+	mockSESClient.EXPECT().
+		SendEmailWithContext(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, input *ses.SendEmailInput, _ ...request.Option) (*ses.SendEmailOutput, error) {
+			// Verify ReplyTo address
+			assert.Len(t, input.ReplyToAddresses, 1)
+			assert.Equal(t, replyTo, *input.ReplyToAddresses[0])
+
+			return &ses.SendEmailOutput{}, nil
+		})
+
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, replyTo, nil, nil)
+
+	assert.NoError(t, err)
+}
+
+// Test SendEmail - with configuration set found
+func TestSendEmail_WithConfigurationSet(t *testing.T) {
+	service, mockSESClient, _, _, _ := createMockSESService(t)
+
+	workspaceID := "test-workspace"
+	configSetName := fmt.Sprintf("notifuse-%s", workspaceID)
+
+	provider := &domain.EmailProvider{
+		SES: &domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		},
+	}
+
+	// Mock configuration sets with matching config set
+	mockSESClient.EXPECT().
+		ListConfigurationSetsWithContext(gomock.Any(), gomock.Any()).
+		Return(&ses.ListConfigurationSetsOutput{
+			ConfigurationSets: []*ses.ConfigurationSet{
+				{Name: aws.String(configSetName)},
+			},
+		}, nil)
+
+	mockSESClient.EXPECT().
+		SendEmailWithContext(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, input *ses.SendEmailInput, _ ...request.Option) (*ses.SendEmailOutput, error) {
+			// Verify configuration set is set
+			assert.NotNil(t, input.ConfigurationSetName)
+			assert.Equal(t, configSetName, *input.ConfigurationSetName)
+
+			return &ses.SendEmailOutput{}, nil
+		})
+
+	err := service.SendEmail(context.Background(), workspaceID, "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+
+	assert.NoError(t, err)
+}
+
+// Test SendEmail - with message ID tag
+func TestSendEmail_WithMessageIDTag(t *testing.T) {
+	service, mockSESClient, _, _, _ := createMockSESService(t)
+
+	messageID := "test-message-123"
+
+	provider := &domain.EmailProvider{
+		SES: &domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		},
+	}
+
+	mockSESClient.EXPECT().
+		ListConfigurationSetsWithContext(gomock.Any(), gomock.Any()).
+		Return(&ses.ListConfigurationSetsOutput{}, nil)
+
+	mockSESClient.EXPECT().
+		SendEmailWithContext(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, input *ses.SendEmailInput, _ ...request.Option) (*ses.SendEmailOutput, error) {
+			// Verify message ID tag
+			assert.Len(t, input.Tags, 1)
+			assert.Equal(t, "notifuse_message_id", *input.Tags[0].Name)
+			assert.Equal(t, messageID, *input.Tags[0].Value)
+
+			return &ses.SendEmailOutput{}, nil
+		})
+
+	err := service.SendEmail(context.Background(), "workspace", messageID, "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+
+	assert.NoError(t, err)
+}
+
+// Test SendEmail - verify email structure
+func TestSendEmail_VerifyEmailStructure(t *testing.T) {
+	service, mockSESClient, _, _, _ := createMockSESService(t)
+
+	fromAddress := "from@example.com"
+	fromName := "Test Sender"
+	to := "to@example.com"
+	subject := "Test Subject"
+	content := "<html><body>Test Content</body></html>"
+
+	provider := &domain.EmailProvider{
+		SES: &domain.AmazonSESSettings{
+			AccessKey: "test-access-key",
+			SecretKey: "test-secret-key",
+			Region:    "us-east-1",
+		},
+	}
+
+	mockSESClient.EXPECT().
+		ListConfigurationSetsWithContext(gomock.Any(), gomock.Any()).
+		Return(&ses.ListConfigurationSetsOutput{}, nil)
+
+	mockSESClient.EXPECT().
+		SendEmailWithContext(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, input *ses.SendEmailInput, _ ...request.Option) (*ses.SendEmailOutput, error) {
+			// Verify source format
+			expectedSource := fmt.Sprintf("%s <%s>", fromName, fromAddress)
+			assert.Equal(t, expectedSource, *input.Source)
+
+			// Verify destination
+			assert.Len(t, input.Destination.ToAddresses, 1)
+			assert.Equal(t, to, *input.Destination.ToAddresses[0])
+
+			// Verify message structure
+			assert.Equal(t, subject, *input.Message.Subject.Data)
+			assert.Equal(t, "UTF-8", *input.Message.Subject.Charset)
+			assert.Equal(t, content, *input.Message.Body.Html.Data)
+			assert.Equal(t, "UTF-8", *input.Message.Body.Html.Charset)
+
+			return &ses.SendEmailOutput{}, nil
+		})
+
+	err := service.SendEmail(context.Background(), "workspace", "message", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+
+	assert.NoError(t, err)
+}
