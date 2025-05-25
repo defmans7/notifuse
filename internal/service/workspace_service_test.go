@@ -1517,6 +1517,214 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 	})
 }
 
+func TestWorkspaceService_RemoveMember(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockConfig := &config.Config{}
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key",
+	)
+
+	ctx := context.Background()
+	workspaceID := "test-workspace"
+	ownerID := "owner-user"
+	memberID := "member-user"
+	apiKeyID := "api-key-user"
+
+	t.Run("successful removal of regular member", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		member := &domain.User{ID: memberID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{
+			UserID:      ownerID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, memberID).Return(member, nil)
+		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, memberID, workspaceID).Return(nil)
+
+		err := service.RemoveMember(ctx, workspaceID, memberID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("successful removal of API key member", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		apiKeyUser := &domain.User{ID: apiKeyID, Type: domain.UserTypeAPIKey}
+		ownerWorkspace := &domain.UserWorkspace{
+			UserID:      ownerID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, apiKeyID).Return(apiKeyUser, nil)
+		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, apiKeyID, workspaceID).Return(nil)
+		mockUserRepo.EXPECT().Delete(ctx, apiKeyID).Return(nil)
+		mockLogger.EXPECT().WithField("user_id", apiKeyID).Return(mockLogger)
+		mockLogger.EXPECT().Info("API key user deleted successfully")
+
+		err := service.RemoveMember(ctx, workspaceID, apiKeyID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("authentication failure", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, nil, errors.New("auth error"))
+
+		err := service.RemoveMember(ctx, workspaceID, memberID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("requester is not owner", func(t *testing.T) {
+		member := &domain.User{ID: memberID, Type: domain.UserTypeUser}
+		memberWorkspace := &domain.UserWorkspace{
+			UserID:      memberID,
+			WorkspaceID: workspaceID,
+			Role:        "member",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, member, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, memberID, workspaceID).Return(memberWorkspace, nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", memberID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("requester_id", memberID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("role", "member").Return(mockLogger)
+		mockLogger.EXPECT().Error("Requester is not an owner of the workspace")
+
+		err := service.RemoveMember(ctx, workspaceID, memberID)
+		assert.Error(t, err)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("cannot remove self", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{
+			UserID:      ownerID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", ownerID).Return(mockLogger)
+		mockLogger.EXPECT().Error("Cannot remove self from workspace")
+
+		err := service.RemoveMember(ctx, workspaceID, ownerID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot remove yourself from the workspace")
+	})
+
+	t.Run("error getting requester workspace", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(nil, errors.New("repo error"))
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", memberID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("requester_id", ownerID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("error", "repo error").Return(mockLogger)
+		mockLogger.EXPECT().Error("Failed to get requester workspace")
+
+		err := service.RemoveMember(ctx, workspaceID, memberID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "repo error")
+	})
+
+	t.Run("error getting user details", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{
+			UserID:      ownerID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, memberID).Return(nil, errors.New("user not found"))
+		mockLogger.EXPECT().WithField("user_id", memberID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("error", "user not found").Return(mockLogger)
+		mockLogger.EXPECT().Error("Failed to get user details")
+
+		err := service.RemoveMember(ctx, workspaceID, memberID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "user not found")
+	})
+
+	t.Run("error removing user from workspace", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		member := &domain.User{ID: memberID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{
+			UserID:      ownerID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, memberID).Return(member, nil)
+		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, memberID, workspaceID).Return(errors.New("remove error"))
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", memberID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("error", "remove error").Return(mockLogger)
+		mockLogger.EXPECT().Error("Failed to remove user from workspace")
+
+		err := service.RemoveMember(ctx, workspaceID, memberID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "remove error")
+	})
+
+	t.Run("API key deletion fails but removal succeeds", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		apiKeyUser := &domain.User{ID: apiKeyID, Type: domain.UserTypeAPIKey}
+		ownerWorkspace := &domain.UserWorkspace{
+			UserID:      ownerID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, apiKeyID).Return(apiKeyUser, nil)
+		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, apiKeyID, workspaceID).Return(nil)
+		mockUserRepo.EXPECT().Delete(ctx, apiKeyID).Return(errors.New("delete error"))
+		mockLogger.EXPECT().WithField("user_id", apiKeyID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("error", "delete error").Return(mockLogger)
+		mockLogger.EXPECT().Error("Failed to delete API key user")
+
+		err := service.RemoveMember(ctx, workspaceID, apiKeyID)
+		assert.NoError(t, err) // Should not return error even if API key deletion fails
+	})
+}
+
 func TestGenerateSecureKey(t *testing.T) {
 	t.Run("generates key of expected length", func(t *testing.T) {
 		// Test with different byte lengths
