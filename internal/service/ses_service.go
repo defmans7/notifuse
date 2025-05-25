@@ -3,9 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -26,11 +24,12 @@ var (
 
 // SESService implements the domain.SESServiceInterface
 type SESService struct {
-	authService      domain.AuthService
-	logger           logger.Logger
-	sessionFactory   func(config domain.AmazonSESSettings) (*session.Session, error)
-	sesClientFactory func(sess *session.Session) domain.SESWebhookClient
-	snsClientFactory func(sess *session.Session) domain.SNSWebhookClient
+	authService           domain.AuthService
+	logger                logger.Logger
+	sessionFactory        func(config domain.AmazonSESSettings) (*session.Session, error)
+	sesClientFactory      func(sess *session.Session) domain.SESWebhookClient
+	snsClientFactory      func(sess *session.Session) domain.SNSWebhookClient
+	sesEmailClientFactory func(sess *session.Session) domain.SESClient
 }
 
 // NewSESService creates a new instance of SESService with default factories
@@ -47,6 +46,9 @@ func NewSESService(authService domain.AuthService, logger logger.Logger) *SESSer
 		snsClientFactory: func(sess *session.Session) domain.SNSWebhookClient {
 			return sns.New(sess)
 		},
+		sesEmailClientFactory: func(sess *session.Session) domain.SESClient {
+			return ses.New(sess)
+		},
 	}
 }
 
@@ -57,13 +59,15 @@ func NewSESServiceWithClients(
 	sessionFactory func(config domain.AmazonSESSettings) (*session.Session, error),
 	sesClientFactory func(sess *session.Session) domain.SESWebhookClient,
 	snsClientFactory func(sess *session.Session) domain.SNSWebhookClient,
+	sesEmailClientFactory func(sess *session.Session) domain.SESClient,
 ) *SESService {
 	return &SESService{
-		authService:      authService,
-		logger:           logger,
-		sessionFactory:   sessionFactory,
-		sesClientFactory: sesClientFactory,
-		snsClientFactory: snsClientFactory,
+		authService:           authService,
+		logger:                logger,
+		sessionFactory:        sessionFactory,
+		sesClientFactory:      sesClientFactory,
+		snsClientFactory:      snsClientFactory,
+		sesEmailClientFactory: sesEmailClientFactory,
 	}
 }
 
@@ -712,23 +716,14 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 		return ErrInvalidAWSCredentials
 	}
 
-	// Create a new AWS session with the provided credentials
-	awsConfig := &aws.Config{
-		Region:      aws.String(provider.SES.Region),
-		Credentials: credentials.NewStaticCredentials(provider.SES.AccessKey, provider.SES.SecretKey, ""),
-		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-	}
-
-	awsSession, err := session.NewSession(awsConfig)
+	// Get SES email client using the factory method for testability
+	sess, err := s.sessionFactory(*provider.SES)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
 		return fmt.Errorf("failed to create AWS session: %w", err)
 	}
 
-	// Create SES client
-	sesClient := ses.New(awsSession)
+	sesEmailClient := s.sesEmailClientFactory(sess)
 
 	// Format the "From" header with name and email
 	fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)
@@ -810,7 +805,7 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	}
 
 	// Send the email
-	_, err = sesClient.SendEmail(input)
+	_, err = sesEmailClient.SendEmailWithContext(ctx, input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			return fmt.Errorf("SES error: %s", aerr.Error())
