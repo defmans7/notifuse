@@ -172,7 +172,6 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			template_id VARCHAR(32) NOT NULL,
 			template_version INTEGER NOT NULL,
 			channel VARCHAR(20) NOT NULL,
-			status VARCHAR(20) NOT NULL,
 			error VARCHAR(255),
 			message_data JSONB NOT NULL,
 			sent_at TIMESTAMP WITH TIME ZONE NOT NULL,
