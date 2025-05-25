@@ -205,6 +205,73 @@ func (p *MessageListParams) FromQuery(query url.Values) error {
 		p.HasError = &hasError
 	}
 
+	// Parse isSent if provided
+	if isSentStr := query.Get("is_sent"); isSentStr != "" {
+		var isSent bool
+		if err := json.Unmarshal([]byte(isSentStr), &isSent); err != nil {
+			return fmt.Errorf("invalid is_sent value: %s", isSentStr)
+		}
+		p.IsSent = &isSent
+	}
+
+	// Parse isDelivered if provided
+	if isDeliveredStr := query.Get("is_delivered"); isDeliveredStr != "" {
+		var isDelivered bool
+		if err := json.Unmarshal([]byte(isDeliveredStr), &isDelivered); err != nil {
+			return fmt.Errorf("invalid is_delivered value: %s", isDeliveredStr)
+		}
+		p.IsDelivered = &isDelivered
+	}
+	// Parse isFailed if provided
+	if isFailedStr := query.Get("is_failed"); isFailedStr != "" {
+		var isFailed bool
+		if err := json.Unmarshal([]byte(isFailedStr), &isFailed); err != nil {
+			return fmt.Errorf("invalid is_failed value: %s", isFailedStr)
+		}
+		p.IsFailed = &isFailed
+	}
+	// Parse isOpened if provided
+	if isOpenedStr := query.Get("is_opened"); isOpenedStr != "" {
+		var isOpened bool
+		if err := json.Unmarshal([]byte(isOpenedStr), &isOpened); err != nil {
+			return fmt.Errorf("invalid is_opened value: %s", isOpenedStr)
+		}
+		p.IsOpened = &isOpened
+	}
+
+	// Parse isClicked if provided
+	if isClickedStr := query.Get("is_clicked"); isClickedStr != "" {
+		var isClicked bool
+		if err := json.Unmarshal([]byte(isClickedStr), &isClicked); err != nil {
+			return fmt.Errorf("invalid is_clicked value: %s", isClickedStr)
+		}
+		p.IsClicked = &isClicked
+	}
+
+	// Parse isBounced if provided
+	if isBouncedStr := query.Get("is_bounced"); isBouncedStr != "" {
+		var isBounced bool
+		if err := json.Unmarshal([]byte(isBouncedStr), &isBounced); err != nil {
+			return fmt.Errorf("invalid is_bounced value: %s", isBouncedStr)
+		}
+		p.IsBounced = &isBounced
+	}
+	// Parse isComplained if provided
+	if isComplainedStr := query.Get("is_complained"); isComplainedStr != "" {
+		var isComplained bool
+		if err := json.Unmarshal([]byte(isComplainedStr), &isComplained); err != nil {
+			return fmt.Errorf("invalid is_complained value: %s", isComplainedStr)
+		}
+		p.IsComplained = &isComplained
+	}
+	// Parse isUnsubscribed if provided
+	if isUnsubscribedStr := query.Get("is_unsubscribed"); isUnsubscribedStr != "" {
+		var isUnsubscribed bool
+		if err := json.Unmarshal([]byte(isUnsubscribedStr), &isUnsubscribed); err != nil {
+			return fmt.Errorf("invalid is_unsubscribed value: %s", isUnsubscribedStr)
+		}
+		p.IsUnsubscribed = &isUnsubscribed
+	}
 	// Parse time filters if provided
 	if err := parseTimeParam(query, "sent_after", &p.SentAfter); err != nil {
 		return err
