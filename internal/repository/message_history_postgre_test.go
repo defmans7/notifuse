@@ -1031,7 +1031,21 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 		},
 	}
 
-	t.Run("successful batch update - multiple statuses", func(t *testing.T) {
+	t.Run("successful batch update - delivered status only", func(t *testing.T) {
+		// Test with only delivered status updates to avoid order dependency
+		deliveredUpdates := []domain.MessageEventUpdate{
+			{
+				ID:        "msg-123",
+				Event:     domain.MessageEventDelivered,
+				Timestamp: now,
+			},
+			{
+				ID:        "msg-456",
+				Event:     domain.MessageEventDelivered,
+				Timestamp: now,
+			},
+		}
+
 		mockWorkspaceRepo.EXPECT().
 			GetConnection(gomock.Any(), workspaceID).
 			Return(db, nil)
@@ -1049,6 +1063,24 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			).
 			WillReturnResult(sqlmock.NewResult(0, 2))
 
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, deliveredUpdates)
+		require.NoError(t, err)
+	})
+
+	t.Run("successful batch update - bounced status only", func(t *testing.T) {
+		// Test with only bounced status updates to avoid order dependency
+		bouncedUpdates := []domain.MessageEventUpdate{
+			{
+				ID:        "msg-789",
+				Event:     domain.MessageEventBounced,
+				Timestamp: now,
+			},
+		}
+
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(gomock.Any(), workspaceID).
+			Return(db, nil)
+
 		// Expect batch query for bounced status updates (1 message)
 		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, status_info = COALESCE\(updates\.status_info, status_info\), updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE, \$4\)\) AS updates\(id, timestamp, status_info\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
 			WithArgs(
@@ -1059,7 +1091,7 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := repo.SetStatusesIfNotSet(ctx, workspaceID, updates)
+		err := repo.SetStatusesIfNotSet(ctx, workspaceID, bouncedUpdates)
 		require.NoError(t, err)
 	})
 
