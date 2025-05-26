@@ -93,7 +93,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
 
       const newItems = response.Contents.map((x) => {
         const key = x.Key as string
-        let endpoint = props.settings?.endpoint || '' + '/' + props.settings?.bucket || ''
+        let endpoint = (props.settings?.endpoint || '') + '/' + (props.settings?.bucket || '')
 
         if (props.settings?.cdn_endpoint !== '') {
           endpoint = props.settings?.cdn_endpoint || ''
@@ -525,6 +525,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
                       </div>
                     )
                   }
+                  console.log('item', item)
                   return (
                     <div onClick={toggleSelectionForItem.bind(null, item)}>
                       {item.file_info.content_type.includes('image') && (

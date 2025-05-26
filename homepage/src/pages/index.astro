@@ -1,0 +1,567 @@
+---
+import "../styles/global.css"
+import logoMedium from "../assets/logo/logo-medium.png"
+import emailBuilderImage from "../assets/screenshots/email_builder.png"
+import IntegrationMarquee from "../components/IntegrationMarquee.astro"
+import Footer from "../components/Footer.astro"
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>Notifuse - Open-Source Newsletter & Notification Platform</title>
+    <meta
+      name="description"
+      content="The creative platform for cross-functional newsletter and notification workflows. Open-source, powerful, and built for teams."
+    />
+  </head>
+  <body class="bg-white">
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+          <div class="flex items-center">
+            <img src={logoMedium.src} alt="Notifuse" class="h-8" />
+          </div>
+          <div class="hidden md:flex items-center space-x-8">
+            <a
+              href="#features"
+              class="text-gray-600 hover:text-gray-900 transition-colors"
+              >Features</a
+            >
+            <a
+              href="#pricing"
+              class="text-gray-600 hover:text-gray-900 transition-colors"
+              >Pricing</a
+            >
+            <a
+              href="#"
+              class="text-gray-600 hover:text-gray-900 transition-colors"
+              >Docs</a
+            >
+            <a
+              href="#"
+              class="text-gray-600 hover:text-gray-900 transition-colors"
+              >GitHub</a
+            >
+          </div>
+          <div class="flex items-center space-x-4">
+            <a
+              href="#"
+              class="text-gray-600 hover:text-gray-900 transition-colors"
+              >Log in</a
+            >
+            <a
+              href="#"
+              class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/80 transition-colors"
+              >Get Started</a
+            >
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative bg-white py-20 lg:py-32">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <!-- Content -->
+          <div class="text-center lg:text-left">
+            <h1 class="text-2xl lg:text-4xl font-bold text-gray-900 mb-6">
+              The open-source <span class="italic text-primary"
+                >alternative</span
+              > to:<br />
+              <span class="text-lg lg:text-xl text-gray-600 font-normal"
+                >Mailchimp, Brevo, Mailjet, Listmonk, Mailerlite, Klaviyo...</span
+              >
+            </h1>
+            <p class="text-lg text-black mb-10 max-w-3xl lg:max-w-none">
+              Notifuse is a modern newsletter and notification platform that
+              allows you to send newsletters and transactional emails.
+            </p>
+            <div
+              class="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start"
+            >
+              <a
+                href="#"
+                class="bg-primary text-white px-4 py-2 rounded-md text-base font-semibold hover:bg-primary/80 transition-colors"
+              >
+                Live Demo
+              </a>
+              <a
+                href="#"
+                class="border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-base font-semibold hover:bg-gray-50 transition-colors"
+              >
+                One-click Deploy
+              </a>
+            </div>
+          </div>
+
+          <!-- App Preview -->
+          <div class="relative max-w-md mx-auto lg:max-w-md lg:ml-auto lg:mr-0">
+            <div class="relative">
+              <img
+                src={emailBuilderImage.src}
+                alt="Notifuse Dashboard Preview"
+                class="w-full rounded-xl shadow-xl shadow-primary/25 border border-gray-200"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Integration Logos - Streaming -->
+        <IntegrationMarquee />
+      </div>
+    </section>
+  </body>
+
+  <!-- Features Bento Grid -->
+  <section class="py-20 bg-gray-100" id="features">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">
+          Everything you need to succeed
+        </h2>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          Powerful features designed to help you create, send, and track your
+          newsletters with ease.
+        </p>
+      </div>
+
+      <!-- Bento Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Large Feature Card - Drag & Drop Email Builder -->
+        <div
+          class="md:col-span-2 bg-white rounded-md p-8 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center gap-3 mb-6">
+            <div
+              class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center"
+            >
+              <svg
+                class="w-6 h-6 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z"
+                ></path>
+              </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900">
+              Visual Email Builder
+            </h3>
+          </div>
+          <p class="text-gray-600 mb-6">
+            Create stunning emails with our intuitive drag-and-drop editor.
+            Build responsive layouts with MJML components and real-time preview.
+          </p>
+          <div
+            class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-4 h-32 flex items-center justify-center"
+          >
+            <div class="grid grid-cols-3 gap-2 w-full max-w-24">
+              <div class="h-3 bg-blue-500 rounded"></div>
+              <div class="h-3 bg-purple-500 rounded"></div>
+              <div class="h-3 bg-blue-400 rounded"></div>
+              <div class="h-2 bg-gray-300 rounded col-span-2"></div>
+              <div class="h-2 bg-gray-200 rounded"></div>
+              <div class="h-4 bg-purple-400 rounded col-span-3"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contact Profiles -->
+        <div class="bg-white rounded-md p-6 shadow-sm border border-gray-200">
+          <div class="flex items-center gap-3 mb-4">
+            <div
+              class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                ></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">
+              Contact Profiles
+            </h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Rich contact profiles with custom fields for advanced segmentation
+            and personalization.
+          </p>
+        </div>
+
+        <!-- Opens & Click Tracking -->
+        <div
+          class="md:col-span-1 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center gap-3 mb-4">
+            <div
+              class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                ></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">
+              Opens & Click Tracking
+            </h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Real-time analytics with detailed open rates, click tracking, and
+            engagement metrics.
+          </p>
+        </div>
+
+        <!-- S3 File Manager -->
+        <div
+          class="md:col-span-2 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center gap-3 mb-4">
+            <div
+              class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-orange-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+                ></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">S3 File Manager</h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Integrated file management with S3 storage for images, attachments,
+            and media assets.
+          </p>
+        </div>
+
+        <!-- Notification Center -->
+        <div
+          class="md:col-span-2 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center gap-3 mb-4">
+            <div
+              class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-indigo-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 17h5l-5 5v-5zM4 19h6v-6H4v6zM16 3h5v5h-5V3zM4 3h6v6H4V3z"
+                ></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">
+              Notification Center
+            </h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Centralized notification system for managing alerts, updates, and
+            system events.
+          </p>
+        </div>
+
+        <!-- A/B Testing -->
+        <div
+          class="md:col-span-1 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center gap-3 mb-4">
+            <div
+              class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-yellow-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                ></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">A/B Testing</h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Optimize your newsletters with built-in A/B testing for subject
+            lines, content, and send times.
+          </p>
+        </div>
+
+        <!-- Transactional API & MJML -->
+        <div
+          class="md:col-span-2 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div
+                class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center"
+              >
+                <svg
+                  class="w-5 h-5 text-red-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                </svg>
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900">
+                Transactional API & MJML
+              </h3>
+            </div>
+            <div class="flex space-x-2">
+              <span
+                class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                >REST API</span
+              >
+              <span
+                class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full"
+                >MJML</span
+              >
+            </div>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Powerful REST API for transactional emails with responsive MJML
+            templates for perfect rendering across all devices.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing Section -->
+  <section class="py-20 bg-gray-50" id="pricing">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">
+          Start your journey today
+        </h2>
+        <p class="text-xl text-gray-600">
+          Start creating powerful newsletters for free. Upgrade for extra
+          features and collaboration with your team.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <!-- Free Plan -->
+        <div class="bg-white border border-gray-200 rounded-md p-8">
+          <div class="text-center mb-8">
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Forever Free</h3>
+            <p class="text-gray-600">Open-source self-hosted solution.</p>
+          </div>
+          <ul class="space-y-4 mb-8">
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">Unlimited subscribers</span>
+            </li>
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">Unlimited campaigns</span>
+            </li>
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">All features included</span>
+            </li>
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">Self-hosted</span>
+            </li>
+          </ul>
+          <a
+            href="#"
+            class="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-primary/80 transition-colors text-center block"
+          >
+            Get Started
+          </a>
+        </div>
+
+        <!-- Support Plan -->
+        <div class="bg-white border border-gray-200 rounded-md p-8">
+          <div class="text-center mb-8">
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Enterprise</h3>
+            <p class="text-gray-600">With dedicated support.</p>
+          </div>
+          <ul class="space-y-4 mb-8">
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">Priority support</span>
+            </li>
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">Custom implementation</span>
+            </li>
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">Training & onboarding</span>
+            </li>
+            <li class="flex items-center">
+              <svg
+                class="w-5 h-5 text-green-500 mr-3"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              <span class="text-gray-700">SLA guarantee</span>
+            </li>
+          </ul>
+          <a
+            href="#"
+            class="w-full bg-gray-900 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-800 transition-colors text-center block"
+          >
+            Contact Us
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-20 bg-gray-900 text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-4xl font-bold mb-4">
+        Start your journey <span class="italic text-blue-400">today</span>
+      </h2>
+      <p class="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
+        Notifuse removes communication barriers by connecting beginners, pros,
+        and every team in between. Are you ready to start your journey?
+      </p>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a
+          href="#"
+          class="bg-primary text-white px-6 py-3 rounded-lg text-base font-semibold hover:bg-primary/80 transition-colors"
+        >
+          Get Started Free
+        </a>
+        <a
+          href="#"
+          class="border border-gray-600 text-gray-300 px-6 py-3 rounded-lg text-base font-semibold hover:bg-gray-800 transition-colors"
+        >
+          View Documentation
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <Footer />
+</html>
