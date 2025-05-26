@@ -36,36 +36,21 @@
       },
       {
         "tab": "API Reference",
+        "openapi": "api-reference/openapi.json",
         "groups": [
           {
             "group": "API Documentation",
             "pages": ["api-reference/introduction"]
           },
           {
-            "group": "Endpoint Examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
+            "group": "Transactional API",
+            "pages": ["api-reference/endpoint/send-transactional"]
           }
         ]
       }
     ],
     "global": {
-      "anchors": [
-        {
-          "anchor": "GitHub",
-          "href": "https://github.com/notifuse",
-          "icon": "github"
-        },
-        {
-          "anchor": "X",
-          "href": "https://x.com/notifuse",
-          "icon": "x"
-        }
-      ]
+      "anchors": []
     }
   },
   "logo": "/assets/logo/logo-small.png",

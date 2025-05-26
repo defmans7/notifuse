@@ -1,216 +1,466 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
-    "title": "OpenAPI Plant Store",
-    "description": "A sample API that uses a plant store as an example to demonstrate features in the OpenAPI specification",
-    "license": {
-      "name": "MIT"
-    },
-    "version": "1.0.0"
+    "title": "Notifuse API",
+    "description": "API for Notifuse - a notification and newsletter management platform",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Notifuse Support",
+      "url": "https://www.notifuse.com/support",
+      "email": "hello@notifuse.com"
+    }
   },
   "servers": [
     {
-      "url": "http://sandbox.mintlify.com"
-    }
-  ],
-  "security": [
-    {
-      "bearerAuth": []
+      "url": "https://{customerDomain}",
+      "description": "Customer-specific Notifuse API server",
+      "variables": {
+        "customerDomain": {
+          "description": "Your unique Notifuse domain"
+        }
+      }
     }
   ],
   "paths": {
-    "/plants": {
-      "get": {
-        "description": "Returns all plants from the system that the user has access to",
-        "parameters": [
+    "/api/transactional.send": {
+      "post": {
+        "summary": "Send a transactional notification",
+        "description": "Sends a transactional notification to a contact through specified channels.\nRequires authentication.",
+        "operationId": "sendTransactionalNotification",
+        "security": [
           {
-            "name": "limit",
-            "in": "query",
-            "description": "The maximum number of results to return",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
+            "BearerAuth": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendTransactionalRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Plant response",
+            "description": "Notification sent successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plant"
+                  "type": "object",
+                  "properties": {
+                    "message_id": {
+                      "type": "string",
+                      "description": "Unique identifier for the sent message",
+                      "example": "msg_1234567890abcdef"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "description": "Whether the notification was sent successfully",
+                      "example": true
+                    }
                   }
                 }
               }
             }
           },
           "400": {
-            "description": "Unexpected error",
+            "description": "Bad request - validation failed",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "description": "Creates a new plant in the store",
-        "requestBody": {
-          "description": "Plant to add to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "plant response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Plant"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notFoundExample": {
+                    "value": {
+                      "error": "Notification not found"
+                    }
+                  },
+                  "inactiveExample": {
+                    "value": {
+                      "error": "Notification is not active"
+                    }
+                  },
+                  "noChannelsExample": {
+                    "value": {
+                      "error": "No valid channels configured"
+                    }
+                  },
+                  "validationExample": {
+                    "value": {
+                      "error": "notification.contact is required"
+                    }
+                  }
                 }
               }
             }
           },
-          "400": {
-            "description": "unexpected error",
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Unauthorized"
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/plants/{id}": {
-      "delete": {
-        "description": "Deletes a single plant based on the ID supplied",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of plant to delete",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Plant deleted",
-            "content": {}
           },
-          "400": {
-            "description": "unexpected error",
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Failed to send notification"
                 }
               }
             }
-          }
-        }
-      }
-    }
-  },
-  "webhooks": {
-    "/plant/webhook": {
-      "post": {
-        "description": "Information about a new plant added to the store",
-        "requestBody": {
-          "description": "Plant added to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Return a 200 status to indicate that the data was received successfully"
           }
         }
       }
     }
   },
   "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "PASETO",
+        "description": "PASETO token for authentication"
+      }
+    },
     "schemas": {
-      "Plant": {
-        "required": [
-          "name"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "description": "The name of the plant",
-            "type": "string"
-          },
-          "tag": {
-            "description": "Tag to specify the type",
-            "type": "string"
-          }
-        }
-      },
-      "NewPlant": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Plant"
-          },
-          {
-            "required": [
-              "id"
-            ],
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Identification number of the plant",
-                "type": "integer",
-                "format": "int64"
-              }
-            }
-          }
-        ]
-      },
-      "Error": {
-        "required": [
-          "error",
-          "message"
-        ],
+      "ErrorResponse": {
         "type": "object",
         "properties": {
           "error": {
-            "type": "integer",
-            "format": "int32"
+            "type": "string",
+            "description": "Error message"
+          }
+        },
+        "required": ["error"]
+      },
+      "SendTransactionalRequest": {
+        "type": "object",
+        "required": ["workspace_id", "notification"],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "The ID of the workspace",
+            "example": "ws_1234567890"
           },
-          "message": {
-            "type": "string"
+          "notification": {
+            "$ref": "#/components/schemas/TransactionalNotificationSendParams"
           }
         }
-      }
-    },
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
+      },
+      "TransactionalNotificationSendParams": {
+        "type": "object",
+        "required": ["id", "contact"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the notification to send",
+            "example": "welcome_email"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/Contact"
+          },
+          "channels": {
+            "type": "array",
+            "description": "Specific channels to send through (if empty, use all configured channels)",
+            "items": {
+              "type": "string",
+              "enum": ["email"]
+            },
+            "example": ["email"]
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Data to populate the template with",
+            "example": {
+              "user_name": "John Doe",
+              "activation_link": "https://example.com/activate/abc123"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Additional metadata for tracking",
+            "example": {
+              "campaign_id": "spring_promo_2023",
+              "source": "user_signup"
+            }
+          },
+          "cc": {
+            "type": "array",
+            "description": "CC email addresses",
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "example": ["manager@example.com"]
+          },
+          "bcc": {
+            "type": "array",
+            "description": "BCC email addresses",
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "example": ["archive@example.com"]
+          },
+          "reply_to": {
+            "type": "string",
+            "format": "email",
+            "description": "Reply-To email address",
+            "example": "support@example.com"
+          }
+        }
+      },
+      "Contact": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email address of the contact",
+            "example": "user@example.com"
+          },
+          "external_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "External identifier for the contact",
+            "example": "user_12345"
+          },
+          "timezone": {
+            "type": "string",
+            "nullable": true,
+            "description": "Timezone of the contact",
+            "example": "America/New_York"
+          },
+          "language": {
+            "type": "string",
+            "nullable": true,
+            "description": "Preferred language of the contact",
+            "example": "en-US"
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "First name of the contact",
+            "example": "John"
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Last name of the contact",
+            "example": "Doe"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "description": "Phone number of the contact",
+            "example": "+15551234567"
+          },
+          "address_line_1": {
+            "type": "string",
+            "nullable": true,
+            "description": "First line of address",
+            "example": "123 Main St"
+          },
+          "address_line_2": {
+            "type": "string",
+            "nullable": true,
+            "description": "Second line of address",
+            "example": "Apt 4B"
+          },
+          "country": {
+            "type": "string",
+            "nullable": true,
+            "description": "Country of the contact",
+            "example": "US"
+          },
+          "postcode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Postal code",
+            "example": "10001"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true,
+            "description": "State or province",
+            "example": "NY"
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true,
+            "description": "Job title of the contact",
+            "example": "Software Engineer"
+          },
+          "lifetime_value": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Lifetime value of the contact",
+            "example": 1250.5
+          },
+          "orders_count": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Number of orders placed by the contact",
+            "example": 5
+          },
+          "last_order_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Date and time of the contact's last order",
+            "example": "2023-05-15T14:30:00Z"
+          },
+          "custom_string_1": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 1",
+            "example": "Premium tier"
+          },
+          "custom_string_2": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 2"
+          },
+          "custom_string_3": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 3"
+          },
+          "custom_string_4": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 4"
+          },
+          "custom_string_5": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 5"
+          },
+          "custom_number_1": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 1",
+            "example": 42
+          },
+          "custom_number_2": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 2"
+          },
+          "custom_number_3": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 3"
+          },
+          "custom_number_4": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 4"
+          },
+          "custom_number_5": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 5"
+          },
+          "custom_datetime_1": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 1",
+            "example": "2023-06-01T09:00:00Z"
+          },
+          "custom_datetime_2": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 2"
+          },
+          "custom_datetime_3": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 3"
+          },
+          "custom_datetime_4": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 4"
+          },
+          "custom_datetime_5": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 5"
+          },
+          "custom_json_1": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 1",
+            "example": {
+              "preferences": {
+                "theme": "dark",
+                "notifications": true
+              }
+            }
+          },
+          "custom_json_2": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 2"
+          },
+          "custom_json_3": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 3"
+          },
+          "custom_json_4": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 4"
+          },
+          "custom_json_5": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 5"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact was created",
+            "example": "2023-01-15T10:30:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact was last updated",
+            "example": "2023-04-22T15:45:00Z"
+          }
+        }
       }
     }
   }
