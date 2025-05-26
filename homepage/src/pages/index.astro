@@ -133,7 +133,8 @@ import Footer from "../components/Footer.astro"
 
       <!-- Bento Grid -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Large Feature Card - Drag & Drop Email Builder -->
+        <!-- Row 1: 2 Big Blocks -->
+        <!-- Visual Email Builder -->
         <div
           class="md:col-span-2 bg-white rounded-md p-8 shadow-sm border border-gray-200"
         >
@@ -177,8 +178,46 @@ import Footer from "../components/Footer.astro"
           </div>
         </div>
 
+        <!-- S3 File Manager -->
+        <div
+          class="md:col-span-1 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center gap-3 mb-4">
+            <div
+              class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-orange-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+                ></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">S3 File Manager</h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Integrated file management with S3 storage for images, attachments,
+            and media assets.
+          </p>
+        </div>
+
+        <!-- Row 2: 3 Small Blocks -->
         <!-- Contact Profiles -->
-        <div class="bg-white rounded-md p-6 shadow-sm border border-gray-200">
+        <div
+          class="md:col-span-1 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
           <div class="flex items-center gap-3 mb-4">
             <div
               class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center"
@@ -239,73 +278,6 @@ import Footer from "../components/Footer.astro"
           </p>
         </div>
 
-        <!-- S3 File Manager -->
-        <div
-          class="md:col-span-2 bg-white rounded-md p-6 shadow-sm border border-gray-200"
-        >
-          <div class="flex items-center gap-3 mb-4">
-            <div
-              class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center"
-            >
-              <svg
-                class="w-5 h-5 text-orange-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
-                ></path>
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
-              </svg>
-            </div>
-            <h3 class="text-lg font-semibold text-gray-900">S3 File Manager</h3>
-          </div>
-          <p class="text-gray-600 text-sm">
-            Integrated file management with S3 storage for images, attachments,
-            and media assets.
-          </p>
-        </div>
-
-        <!-- Notification Center -->
-        <div
-          class="md:col-span-2 bg-white rounded-md p-6 shadow-sm border border-gray-200"
-        >
-          <div class="flex items-center gap-3 mb-4">
-            <div
-              class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center"
-            >
-              <svg
-                class="w-5 h-5 text-indigo-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 17h5l-5 5v-5zM4 19h6v-6H4v6zM16 3h5v5h-5V3zM4 3h6v6H4V3z"
-                ></path>
-              </svg>
-            </div>
-            <h3 class="text-lg font-semibold text-gray-900">
-              Notification Center
-            </h3>
-          </div>
-          <p class="text-gray-600 text-sm">
-            Centralized notification system for managing alerts, updates, and
-            system events.
-          </p>
-        </div>
-
         <!-- A/B Testing -->
         <div
           class="md:col-span-1 bg-white rounded-md p-6 shadow-sm border border-gray-200"
@@ -333,6 +305,39 @@ import Footer from "../components/Footer.astro"
           <p class="text-gray-600 text-sm">
             Optimize your newsletters with built-in A/B testing for subject
             lines, content, and send times.
+          </p>
+        </div>
+
+        <!-- Row 3: 2 Big Blocks -->
+        <!-- Notification Center -->
+        <div
+          class="md:col-span-1 bg-white rounded-md p-6 shadow-sm border border-gray-200"
+        >
+          <div class="flex items-center gap-3 mb-4">
+            <div
+              class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-indigo-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 17h5l-5 5v-5zM4 19h6v-6H4v6zM16 3h5v5h-5V3zM4 3h6v6H4V3z"
+                ></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">
+              Notification Center
+            </h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Centralized notification system for managing alerts, updates, and
+            system events.
           </p>
         </div>
 
