@@ -1,71 +1,116 @@
 ---
-title: Introduction
-description: "Welcome to the home of your new documentation"
+title: Welcome to Notifuse
+description: "Notifuse is a modern, open-source email marketing platform designed for businesses that want complete control over their email infrastructure. Whether you're sending marketing campaigns, transactional emails, or building notification systems, Notifuse provides the tools and flexibility you need."
 ---
 
 <img
-  className="block dark:hidden"
-  src="/images/hero-light.png"
-  alt="Hero Light"
-/>
-<img
-  className="hidden dark:block"
-  src="/images/hero-dark.png"
-  alt="Hero Dark"
+  className="block rounded-lg shadow-lg"
+  src="/images/email_builder.png"
+  alt="Notifuse Email Marketing Platform - Visual Email Builder"
 />
 
-## Setting up
-
-The first step to world-class documentation is setting up your editing environments.
+### Key Features
 
 <CardGroup cols={2}>
-  <Card
-    title="Edit Your Docs"
-    icon="pen-to-square"
-    href="https://mintlify.com/docs/quickstart"
-  >
-    Get your docs set up locally for easy development
+  <Card title="Visual Email Builder" icon="paintbrush">
+    Create stunning emails with our drag-and-drop editor
   </Card>
-  <Card
-    title="Preview Changes"
-    icon="image"
-    href="https://mintlify.com/docs/development"
-  >
-    Preview your changes before you push to make sure they're perfect
+  <Card title="Multi-Tenant Workspaces" icon="building">
+    Organize projects with complete isolation and security
+  </Card>
+  <Card title="Transactional API" icon="code">
+    Send transactional emails with our developer-friendly API
+  </Card>
+  <Card title="Multiple Providers" icon="network-wired">
+    Connect with popular email service providers
   </Card>
 </CardGroup>
 
-## Make it yours
+## Core Concepts
 
-Update your docs to your brand and add valuable content for the best user conversion.
+Get familiar with Notifuse's fundamental building blocks:
 
 <CardGroup cols={2}>
-  <Card
-    title="Customize Style"
-    icon="palette"
-    href="https://mintlify.com/docs/settings/global"
-  >
-    Customize your docs to your company's colors and brands
+  <Card title="Workspaces" icon="building" href="/concepts/workspaces">
+    Isolated environments for organizing your email operations by project, client, or business unit.
   </Card>
-  <Card
-    title="Reference APIs"
-    icon="code"
-    href="https://mintlify.com/docs/api-playground/openapi"
-  >
-    Automatically generate endpoints from an OpenAPI spec
+  <Card title="Contacts & Lists" icon="users" href="/concepts/contacts">
+    Manage your subscriber database with powerful segmentation and list management tools.
   </Card>
-  <Card
-    title="Add Components"
-    icon="screwdriver-wrench"
-    href="https://mintlify.com/docs/content/components/accordions"
-  >
-    Build interactive features and designs to guide your users
+  <Card title="Email Templates" icon="file-text" href="/concepts/templates">
+    Create reusable email designs with our visual builder and template system.
   </Card>
-  <Card
-    title="Get Inspiration"
-    icon="stars"
-    href="https://mintlify.com/customers"
-  >
-    Check out our showcase of our favorite documentation
+  <Card title="Broadcast Campaigns" icon="megaphone" href="/concepts/broadcast-campaigns">
+    Send targeted marketing emails to specific segments of your audience.
+  </Card>
+  <Card title="Transactional API" icon="bolt" href="/concepts/transactional-api">
+    Send automated emails triggered by user actions or system events.
+  </Card>
+  <Card title="Notification Center" icon="bell" href="/concepts/notification-center">
+    Embedded notification system for your applications.
   </Card>
 </CardGroup>
+
+## Email Provider Integrations
+
+Notifuse supports multiple email service providers, giving you flexibility and redundancy:
+
+<CardGroup cols={3}>
+  <Card title="Amazon SES" icon="aws" href="/integrations/amazon-ses">
+    <img src="/assets/integrations/amazonses.png" alt="Amazon SES" className="w-full h-12 object-contain mb-2" />
+    Cost-effective email service from AWS
+  </Card>
+  <Card title="Mailgun" icon="envelope" href="/integrations/mailgun">
+    <img src="/assets/integrations/mailgun.png" alt="Mailgun" className="w-full h-12 object-contain mb-2" />
+    Powerful email API for developers
+  </Card>
+  <Card title="Postmark" icon="paper-plane" href="/integrations/postmark">
+    <img src="/assets/integrations/postmark.png" alt="Postmark" className="w-full h-12 object-contain mb-2" />
+    Fast and reliable transactional email
+  </Card>
+  <Card title="SparkPost" icon="sparkles" href="/integrations/sparkpost">
+    <img src="/assets/integrations/sparkpost.png" alt="SparkPost" className="w-full h-12 object-contain mb-2" />
+    Enterprise email delivery platform
+  </Card>
+  <Card title="Mailjet" icon="jet-fighter" href="/integrations/mailjet">
+    <img src="/assets/integrations/mailjet.png" alt="Mailjet" className="w-full h-12 object-contain mb-2" />
+    All-in-one email service solution
+  </Card>
+  <Card title="SendGrid" icon="grid" href="/integrations/sendgrid">
+    Popular email delivery service
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Set up Notifuse in your environment with our step-by-step installation guide.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore our comprehensive API documentation and start integrating.
+  </Card>
+</CardGroup>
+
+## Why Choose Notifuse?
+
+<AccordionGroup>
+  <Accordion title="Open Source & Self-Hosted">
+    Complete control over your data and infrastructure. No vendor lock-in, no usage limits based on pricing tiers.
+  </Accordion>
+  <Accordion title="Modern Architecture">
+    Built with Go backend and React frontend, designed for performance and scalability.
+  </Accordion>
+  <Accordion title="Developer-Friendly">
+    Comprehensive API, webhook support, and extensive documentation for seamless integration.
+  </Accordion>
+  <Accordion title="Multi-Provider Support">
+    Switch between email providers or use multiple providers for redundancy and optimization.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+Ready to get started? Check out our [installation guide](/installation) or explore the [API documentation](/api-reference/introduction).
+
+

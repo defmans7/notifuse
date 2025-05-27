@@ -15,21 +15,31 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Get Started",
-            "pages": ["index", "quickstart", "development"]
+            "group": "Getting Started",
+            "pages": ["index", "installation"]
           },
           {
-            "group": "Essentials",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/settings",
-              "essentials/navigation",
-              "essentials/reusable-snippets"
+              "concepts/workspaces",
+              "concepts/contacts",
+              "concepts/lists",
+              "concepts/templates",
+              "concepts/broadcast-campaigns",
+              "concepts/transactional-api",
+              "concepts/notification-center"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/sendgrid",
+              "integrations/mailgun",
+              "integrations/amazon-ses",
+              "integrations/postmark"
             ]
           }
         ]
@@ -40,18 +50,18 @@
         "groups": [
           {
             "group": "API Documentation",
-            "pages": ["api-reference/introduction"]
+            "pages": ["api-reference/introduction", "api-reference/authentication"]
           },
           {
-            "group": "Transactional API",
-            "pages": ["api-reference/endpoint/send-transactional"]
+            "group": "Transactional Notifications",
+            "pages": [
+              "api-reference/endpoint/send-transactional",
+              "api-reference/transactional-examples"
+            ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": []
-    }
+    ]
   },
   "logo": "/assets/logo/logo-small.png",
   "navbar": {
@@ -59,18 +69,23 @@
       {
         "label": "Support",
         "href": "mailto:hello@notifuse.com"
+      },
+      {
+        "label": "GitHub",
+        "href": "https://github.com/notifuse"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Home",
-      "href": "https://www.notifuse.com"
+      "label": "Live Demo",
+      "href": "https://demo.notifuse.com"
     }
   },
   "footer": {
     "socials": {
       "x": "https://x.com/notifuse",
-      "github": "https://github.com/notifuse"
+      "github": "https://github.com/notifuse",
+      "discord": "https://discord.gg/notifuse"
     }
   }
 }

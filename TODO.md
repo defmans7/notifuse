@@ -5,6 +5,5 @@
 - test the docker compose
 - add contact_list reason string
 - remove metadata from transactional api payload
-- put cc bcc replyto in email_options object
 - rename data to template_data
 - docs
