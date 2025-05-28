@@ -130,9 +130,11 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 		subject,
 		content,
 		&provider,
-		"",
-		nil,
-		nil,
+		domain.EmailOptions{
+			ReplyTo: "",
+			CC:      nil,
+			BCC:     nil,
+		},
 	)
 
 	if err != nil {
@@ -144,7 +146,7 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 }
 
 // SendEmail sends an email using the specified provider
-func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, options domain.EmailOptions) error {
 
 	// If fromAddress is not provided, use the first sender's email from the provider
 	if fromAddress == "" && len(provider.Senders) > 0 {
@@ -163,7 +165,7 @@ func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, messag
 	}
 
 	// Delegate to the provider-specific implementation
-	return providerService.SendEmail(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, replyTo, cc, bcc)
+	return providerService.SendEmail(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, options)
 }
 
 // getProviderService returns the appropriate email provider service based on provider kind
@@ -216,8 +218,7 @@ func (s *EmailService) SendEmailForTemplate(
 	messageData domain.MessageData,
 	trackingSettings mjml.TrackingSettings,
 	emailProvider *domain.EmailProvider,
-	cc []string,
-	bcc []string,
+	options domain.EmailOptions,
 ) error {
 	ctx, span := tracing.StartServiceSpan(ctx, "EmailService", "SendEmailForTemplate")
 	defer span.End()
@@ -346,6 +347,11 @@ func (s *EmailService) SendEmailForTemplate(
 
 	tracing.AddAttribute(ctx, "email.sending", true)
 
+	// optional override for reply to
+	if template.Email.ReplyTo != "" {
+		options.ReplyTo = template.Email.ReplyTo
+	}
+
 	err = s.SendEmail(
 		ctx,
 		workspaceID,
@@ -357,9 +363,7 @@ func (s *EmailService) SendEmailForTemplate(
 		subject,
 		htmlContent,
 		emailProvider,
-		template.Email.ReplyTo,
-		cc,
-		bcc,
+		options,
 	)
 
 	if err != nil {

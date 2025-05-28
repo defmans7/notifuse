@@ -280,9 +280,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		template.Email.Subject,
 		*compiledTemplate.HTML,
 		emailProvider,
-		template.Email.ReplyTo,
-		nil,
-		nil,
+		domain.EmailOptions{
+			ReplyTo: template.Email.ReplyTo,
+		},
 	)
 
 	if err != nil {

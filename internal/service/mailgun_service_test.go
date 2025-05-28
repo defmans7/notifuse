@@ -690,7 +690,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Verify results
 		require.NoError(t, err)
@@ -724,7 +724,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Verify results
 		require.NoError(t, err)
@@ -737,7 +737,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		provider := &domain.EmailProvider{}
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Verify error
 		assert.Error(t, err)
@@ -765,7 +765,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Verify error handling
 		assert.Error(t, err)
@@ -799,7 +799,7 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Verify error handling
 		assert.Error(t, err)

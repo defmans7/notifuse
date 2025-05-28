@@ -192,9 +192,11 @@ func TestTransactionalNotificationSendParams(t *testing.T) {
 			"email": "john@example.com",
 		},
 		Metadata: MapOfAny{"source": "registration"},
-		CC:       []string{"manager@example.com", "support@example.com"},
-		BCC:      []string{"archive@example.com"},
-		ReplyTo:  "replies@example.com",
+		EmailOptions: EmailOptions{
+			CC:      []string{"manager@example.com", "support@example.com"},
+			BCC:     []string{"archive@example.com"},
+			ReplyTo: "replies@example.com",
+		},
 	}
 
 	// Verify field values
@@ -203,9 +205,9 @@ func TestTransactionalNotificationSendParams(t *testing.T) {
 	assert.Equal(t, []TransactionalChannel{TransactionalChannelEmail}, params.Channels)
 	assert.Equal(t, MapOfAny{"name": "John Doe", "email": "john@example.com"}, params.Data)
 	assert.Equal(t, MapOfAny{"source": "registration"}, params.Metadata)
-	assert.Equal(t, []string{"manager@example.com", "support@example.com"}, params.CC)
-	assert.Equal(t, []string{"archive@example.com"}, params.BCC)
-	assert.Equal(t, "replies@example.com", params.ReplyTo)
+	assert.Equal(t, []string{"manager@example.com", "support@example.com"}, params.EmailOptions.CC)
+	assert.Equal(t, []string{"archive@example.com"}, params.EmailOptions.BCC)
+	assert.Equal(t, "replies@example.com", params.EmailOptions.ReplyTo)
 }
 
 // Tests for request validation methods and URL parameter handling
@@ -634,9 +636,11 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 						Email: "contact@example.com",
 					},
 					Channels: []TransactionalChannel{TransactionalChannelEmail},
-					CC:       []string{"cc1@example.com", "cc2@example.com"},
-					BCC:      []string{"bcc@example.com"},
-					ReplyTo:  "replies@example.com",
+					EmailOptions: EmailOptions{
+						CC:      []string{"cc1@example.com", "cc2@example.com"},
+						BCC:     []string{"bcc@example.com"},
+						ReplyTo: "replies@example.com",
+					},
 				},
 			},
 			wantErr: false,
@@ -705,7 +709,9 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 						Email: "contact@example.com",
 					},
 					Channels: []TransactionalChannel{TransactionalChannelEmail},
-					CC:       []string{"not-an-email"},
+					EmailOptions: EmailOptions{
+						CC: []string{"not-an-email"},
+					},
 				},
 			},
 			wantErr: true,
@@ -721,7 +727,9 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 						Email: "contact@example.com",
 					},
 					Channels: []TransactionalChannel{TransactionalChannelEmail},
-					BCC:      []string{"not-an-email"},
+					EmailOptions: EmailOptions{
+						BCC: []string{"not-an-email"},
+					},
 				},
 			},
 			wantErr: true,
@@ -737,7 +745,9 @@ func TestSendTransactionalRequest_Validate(t *testing.T) {
 						Email: "contact@example.com",
 					},
 					Channels: []TransactionalChannel{TransactionalChannelEmail},
-					ReplyTo:  "not-an-email",
+					EmailOptions: EmailOptions{
+						ReplyTo: "not-an-email",
+					},
 				},
 			},
 			wantErr: true,
@@ -1027,9 +1037,11 @@ func TestTransactionalNotificationSendParamsWithCcBcc(t *testing.T) {
 		Data: MapOfAny{
 			"name": "John Doe",
 		},
-		CC:      []string{"cc1@example.com", "cc2@example.com"},
-		BCC:     []string{"bcc@example.com"},
-		ReplyTo: "replies@example.com",
+		EmailOptions: EmailOptions{
+			CC:      []string{"cc1@example.com", "cc2@example.com"},
+			BCC:     []string{"bcc@example.com"},
+			ReplyTo: "replies@example.com",
+		},
 	}
 
 	// Create a send request
@@ -1043,9 +1055,9 @@ func TestTransactionalNotificationSendParamsWithCcBcc(t *testing.T) {
 	require.NoError(t, err, "Valid request with cc, bcc and replyTo should not fail validation")
 
 	// Verify values are preserved
-	assert.Equal(t, []string{"cc1@example.com", "cc2@example.com"}, sendReq.Notification.CC)
-	assert.Equal(t, []string{"bcc@example.com"}, sendReq.Notification.BCC)
-	assert.Equal(t, "replies@example.com", sendReq.Notification.ReplyTo)
+	assert.Equal(t, []string{"cc1@example.com", "cc2@example.com"}, sendReq.Notification.EmailOptions.CC)
+	assert.Equal(t, []string{"bcc@example.com"}, sendReq.Notification.EmailOptions.BCC)
+	assert.Equal(t, "replies@example.com", sendReq.Notification.EmailOptions.ReplyTo)
 
 	// Test JSON serialization and deserialization
 	jsonData, err := json.Marshal(sendReq)
@@ -1056,9 +1068,9 @@ func TestTransactionalNotificationSendParamsWithCcBcc(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify values are preserved through serialization
-	assert.Equal(t, sendReq.Notification.CC, unmarshaled.Notification.CC)
-	assert.Equal(t, sendReq.Notification.BCC, unmarshaled.Notification.BCC)
-	assert.Equal(t, sendReq.Notification.ReplyTo, unmarshaled.Notification.ReplyTo)
+	assert.Equal(t, sendReq.Notification.EmailOptions.CC, unmarshaled.Notification.EmailOptions.CC)
+	assert.Equal(t, sendReq.Notification.EmailOptions.BCC, unmarshaled.Notification.EmailOptions.BCC)
+	assert.Equal(t, sendReq.Notification.EmailOptions.ReplyTo, unmarshaled.Notification.EmailOptions.ReplyTo)
 }
 
 // TestChannelTemplates_ComplexDataStructures tests the serialization and deserialization

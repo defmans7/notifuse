@@ -201,29 +201,35 @@
               "source": "user_signup"
             }
           },
-          "cc": {
-            "type": "array",
-            "description": "CC email addresses",
-            "items": {
-              "type": "string",
-              "format": "email"
-            },
-            "example": ["manager@example.com"]
-          },
-          "bcc": {
-            "type": "array",
-            "description": "BCC email addresses",
-            "items": {
-              "type": "string",
-              "format": "email"
-            },
-            "example": ["archive@example.com"]
-          },
-          "reply_to": {
-            "type": "string",
-            "format": "email",
-            "description": "Reply-To email address",
-            "example": "support@example.com"
+          "email_options": {
+            "type": "object",
+            "description": "Email-specific options",
+            "properties": {
+              "cc": {
+                "type": "array",
+                "description": "CC email addresses",
+                "items": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "example": ["manager@example.com"]
+              },
+              "bcc": {
+                "type": "array",
+                "description": "BCC email addresses",
+                "items": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "example": ["archive@example.com"]
+              },
+              "reply_to": {
+                "type": "string",
+                "format": "email",
+                "description": "Reply-To email address",
+                "example": "support@example.com"
+              }
+            }
           }
         }
       },

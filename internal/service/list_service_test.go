@@ -8,6 +8,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -946,11 +947,10 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			gomock.Any(), // MessageData
 			gomock.Any(), // TrackingSettings
 			gomock.Any(), // Use gomock.Any() instead of testEmailProvider
-			nil,
-			nil,
+			domain.EmailOptions{},
 		).Do(func(_ context.Context, _ string, _ string, _ *domain.Contact,
-			_ domain.ChannelTemplate, _ domain.MessageData, _ interface{},
-			provider *domain.EmailProvider, _, _ interface{}) {
+			_ domain.ChannelTemplate, _ domain.MessageData, _ mjml.TrackingSettings,
+			provider *domain.EmailProvider, _ domain.EmailOptions) {
 			assert.Equal(t, domain.EmailProviderKindSparkPost, provider.Kind)
 			assert.Len(t, provider.Senders, 1)
 			assert.Equal(t, "test@example.com", provider.Senders[0].Email)
@@ -1035,8 +1035,7 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			gomock.Any(), // MessageData
 			gomock.Any(), // TrackingSettings
 			gomock.Any(), // Match any provider since we're testing the error path
-			nil,
-			nil,
+			domain.EmailOptions{},
 		).Return(errors.New("email sending error"))
 
 		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)

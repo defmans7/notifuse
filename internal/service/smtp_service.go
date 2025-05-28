@@ -50,7 +50,7 @@ func NewSMTPService(logger logger.Logger) *SMTPService {
 }
 
 // SendEmail sends an email using SMTP
-func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
 	if provider.SMTP == nil {
 		return fmt.Errorf("SMTP settings required")
 	}
@@ -81,7 +81,7 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	}
 
 	// Add CC recipients if specified
-	for _, ccAddr := range cc {
+	for _, ccAddr := range emailOptions.CC {
 		if ccAddr != "" {
 			if err := msg.Cc(ccAddr); err != nil {
 				return fmt.Errorf("invalid CC recipient: %w", err)
@@ -90,7 +90,7 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	}
 
 	// Add BCC recipients if specified
-	for _, bccAddr := range bcc {
+	for _, bccAddr := range emailOptions.BCC {
 		if bccAddr != "" {
 			if err := msg.Bcc(bccAddr); err != nil {
 				return fmt.Errorf("invalid BCC recipient: %w", err)
@@ -99,8 +99,8 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	}
 
 	// Add Reply-To if specified
-	if replyTo != "" {
-		if err := msg.ReplyTo(replyTo); err != nil {
+	if emailOptions.ReplyTo != "" {
+		if err := msg.ReplyTo(emailOptions.ReplyTo); err != nil {
 			return fmt.Errorf("invalid reply-to address: %w", err)
 		}
 	}

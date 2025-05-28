@@ -151,9 +151,7 @@ func TestSendToRecipientSuccess(t *testing.T) {
 			template.Email.Subject,
 			compiledHTML,
 			emailProvider,
-			"",  // replyTo
-			nil, // cc
-			nil, // bcc
+			domain.EmailOptions{},
 		).
 		Return(nil)
 
@@ -544,9 +542,7 @@ func TestSendBatch(t *testing.T) {
 				template.Email.Subject,
 				compiledHTML,
 				emailProvider,
-				"",  // replyTo
-				nil, // cc
-				nil, // bcc
+				domain.EmailOptions{},
 			).
 			Return(nil)
 
@@ -855,9 +851,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			template.Email.Subject,
 			compiledHTML,
 			emailProvider,
-			"",  // replyTo
-			nil, // cc
-			nil, // bcc
+			domain.EmailOptions{},
 		).
 		Return(sendError)
 
@@ -1027,9 +1021,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 			template.Email.Subject,
 			compiledHTML,
 			emailProvider,
-			"",  // replyTo
-			nil, // cc
-			nil, // bcc
+			domain.EmailOptions{},
 		).
 		Return(nil)
 

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -275,64 +274,6 @@ func TestEmailService_CreateSESClient(t *testing.T) {
 	})
 }
 
-// Create our own mock of EmailProviderService instead of using gomock
-type mockEmailProviderService struct {
-	ctrl  *gomock.Controller
-	calls map[string][]interface{}
-}
-
-func (m *mockEmailProviderService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
-	// Use empty string as fromAddress and fromName if they're blank to handle default sender case properly
-	actualFromAddress := fromAddress
-	actualFromName := fromName
-
-	// When from information is empty, use the first sender from the provider
-	if fromAddress == "" && fromName == "" && provider != nil && len(provider.Senders) > 0 {
-		actualFromAddress = provider.Senders[0].Email
-		actualFromName = provider.Senders[0].Name
-		fmt.Printf("Using default sender: %s (%s)\n", actualFromAddress, actualFromName)
-	} else {
-		fmt.Printf("Using provided sender: %s (%s)\n", fromAddress, fromName)
-	}
-
-	// Check if an expectation is set
-	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s-%s", workspaceID, messageID, actualFromAddress, actualFromName, to, subject, replyTo)
-
-	if m.calls == nil {
-		m.ctrl.T.Fatalf("No expectations set for SendEmail")
-		return nil
-	}
-
-	call, exists := m.calls[key]
-	if !exists {
-		// Print the keys that exist in the map for debugging
-		availableKeys := make([]string, 0, len(m.calls))
-		for k := range m.calls {
-			availableKeys = append(availableKeys, k)
-		}
-		m.ctrl.T.Fatalf("Unexpected call to SendEmail with calculated key: %s, available keys: %v, args: %v, %v, %v, %v, %v, %v, %v",
-			key, availableKeys, ctx, workspaceID, messageID, fromAddress, fromName, to, subject)
-		return nil
-	}
-
-	// Return the error from the expectation
-	if call[0] != nil {
-		return call[0].(error)
-	}
-	return nil
-}
-
-func (m *mockEmailProviderService) expectSendEmailWithOptions(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string, err error) {
-	// Initialize the calls map if needed
-	if m.calls == nil {
-		m.calls = make(map[string][]interface{})
-	}
-
-	// Store the expectation using the messageID in the key
-	key := fmt.Sprintf("SendEmail-%s-%s-%s-%s-%s-%s-%s", workspaceID, messageID, fromAddress, fromName, to, subject, replyTo)
-	m.calls[key] = []interface{}{err}
-}
-
 func TestEmailService_TestEmailProvider(t *testing.T) {
 	// Setup the controller
 	ctrl := gomock.NewController(t)
@@ -346,13 +287,13 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
-	// Create a mock email provider service that doesn't check for exact key matches
+	// Create a mock email provider service using the generated mock
 	mockSESService := mocks.NewMockEmailProviderService(ctrl)
 
 	secretKey := "test-secret-key"
 	webhookEndpoint := "https://webhook.test"
 
-	// Create the email service with the simplified mock
+	// Create the email service with the generated mock
 	emailService := EmailService{
 		logger:          mockLogger,
 		authService:     mockAuthService,
@@ -405,9 +346,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 				gomock.Eq("Notifuse: Test Email Provider"),
 				gomock.Eq(testEmailContent),
 				gomock.Any(),
-				gomock.Eq(""),
-				gomock.Nil(),
-				gomock.Nil(),
+				gomock.Any(),
 			).Return(nil)
 
 		// Call method under test
@@ -501,9 +440,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 				gomock.Eq("Notifuse: Test Email Provider"),
 				gomock.Eq(testEmailContent),
 				gomock.Any(),
-				gomock.Eq(""),
-				gomock.Nil(),
-				gomock.Nil(),
+				gomock.Any(),
 			).Return(assert.AnError)
 
 		// Call method under test
@@ -528,7 +465,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
-	// Create mocks for each email provider service
+	// Create mocks for each email provider service using generated mocks
 	mockSESService := mocks.NewMockEmailProviderService(ctrl)
 
 	// Create the email service
@@ -552,6 +489,11 @@ func TestEmailService_SendEmail(t *testing.T) {
 	subject := "Test Subject"
 	content := "<html><body>Test content</body></html>"
 	messageID := uuid.New().String()
+	options := domain.EmailOptions{
+		ReplyTo: "",
+		CC:      nil,
+		BCC:     nil,
+	}
 
 	t.Run("Basic SES provider", func(t *testing.T) {
 		provider := domain.EmailProvider{
@@ -582,13 +524,11 @@ func TestEmailService_SendEmail(t *testing.T) {
 				gomock.Eq(subject),
 				gomock.Eq(content),
 				gomock.Any(),
-				gomock.Eq(""),
-				gomock.Nil(),
-				gomock.Nil(),
+				gomock.Any(),
 			).Return(nil)
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
+		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, options)
 
 		// Assertions
 		require.NoError(t, err)
@@ -600,7 +540,7 @@ func TestEmailService_SendEmail(t *testing.T) {
 		}
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, "", nil, nil)
+		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, options)
 
 		// Assertions
 		require.Error(t, err)
@@ -621,13 +561,13 @@ func TestEmailService_getProviderService(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 
-	// Email provider services
-	mockSMTPService := &mockEmailProviderService{ctrl: ctrl}
-	mockSESService := &mockEmailProviderService{ctrl: ctrl}
-	mockSparkPostService := &mockEmailProviderService{ctrl: ctrl}
-	mockPostmarkService := &mockEmailProviderService{ctrl: ctrl}
-	mockMailgunService := &mockEmailProviderService{ctrl: ctrl}
-	mockMailjetService := &mockEmailProviderService{ctrl: ctrl}
+	// Email provider services using generated mocks
+	mockSMTPService := mocks.NewMockEmailProviderService(ctrl)
+	mockSESService := mocks.NewMockEmailProviderService(ctrl)
+	mockSparkPostService := mocks.NewMockEmailProviderService(ctrl)
+	mockPostmarkService := mocks.NewMockEmailProviderService(ctrl)
+	mockMailgunService := mocks.NewMockEmailProviderService(ctrl)
+	mockMailjetService := mocks.NewMockEmailProviderService(ctrl)
 
 	// Create the email service
 	emailService := EmailService{
@@ -863,13 +803,13 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
 	mockMessageRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 
-	// Email provider services
-	mockSMTPService := &mockEmailProviderService{ctrl: ctrl}
-	mockSESService := &mockEmailProviderService{ctrl: ctrl}
-	mockSparkPostService := &mockEmailProviderService{ctrl: ctrl}
-	mockPostmarkService := &mockEmailProviderService{ctrl: ctrl}
-	mockMailgunService := &mockEmailProviderService{ctrl: ctrl}
-	mockMailjetService := &mockEmailProviderService{ctrl: ctrl}
+	// Email provider services using generated mocks
+	mockSMTPService := mocks.NewMockEmailProviderService(ctrl)
+	mockSESService := mocks.NewMockEmailProviderService(ctrl)
+	mockSparkPostService := mocks.NewMockEmailProviderService(ctrl)
+	mockPostmarkService := mocks.NewMockEmailProviderService(ctrl)
+	mockMailgunService := mocks.NewMockEmailProviderService(ctrl)
+	mockMailjetService := mocks.NewMockEmailProviderService(ctrl)
 
 	// Create the email service
 	emailService := EmailService{
@@ -965,6 +905,12 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		HTML:    &compiledHTML,
 	}
 
+	options := domain.EmailOptions{
+		ReplyTo: emailTemplate.Email.ReplyTo,
+		CC:      nil,
+		BCC:     nil,
+	}
+
 	t.Run("Successfully sends email template", func(t *testing.T) {
 		// Setup template service mock
 		mockTemplateService.EXPECT().
@@ -991,21 +937,19 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			})
 
 		// Setup email provider mock
-		mockSESService.expectSendEmailWithOptions(
-			ctx,
-			workspaceID,
-			messageID,
-			emailSender.Email,
-			emailSender.Name,
-			contact.Email,
-			emailTemplate.Email.Subject,
-			compiledHTML,
-			emailProvider,
-			emailTemplate.Email.ReplyTo,
-			nil, // cc
-			nil, // bcc
-			nil, // no error
-		)
+		mockSESService.EXPECT().
+			SendEmail(
+				gomock.Any(),
+				gomock.Eq(workspaceID),
+				gomock.Eq(messageID),
+				gomock.Eq(emailSender.Email),
+				gomock.Eq(emailSender.Name),
+				gomock.Eq(contact.Email),
+				gomock.Eq(emailTemplate.Email.Subject),
+				gomock.Eq(compiledHTML),
+				gomock.Eq(emailProvider),
+				gomock.Eq(options),
+			).Return(nil)
 
 		// Call method under test
 		err := emailService.SendEmailForTemplate(
@@ -1017,8 +961,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			messageData,
 			trackingSettings,
 			emailProvider,
-			nil, // cc
-			nil, // bcc
+			options,
 		)
 
 		// Assertions
@@ -1044,8 +987,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			messageData,
 			trackingSettings,
 			emailProvider,
-			nil, // cc
-			nil, // bcc
+			options,
 		)
 
 		// Assertions
@@ -1077,8 +1019,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			messageData,
 			trackingSettings,
 			emailProvider,
-			nil, // cc
-			nil, // bcc
+			options,
 		)
 
 		// Assertions
@@ -1118,8 +1059,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			messageData,
 			trackingSettings,
 			emailProvider,
-			nil, // cc
-			nil, // bcc
+			options,
 		)
 
 		// Assertions
@@ -1156,8 +1096,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			messageData,
 			trackingSettings,
 			emailProvider,
-			nil, // cc
-			nil, // bcc
+			options,
 		)
 
 		// Assertions
@@ -1182,21 +1121,19 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			Return(nil)
 
 		// Setup email provider mock to return an error
-		mockSESService.expectSendEmailWithOptions(
-			ctx,
-			workspaceID,
-			messageID,
-			emailSender.Email,
-			emailSender.Name,
-			contact.Email,
-			emailTemplate.Email.Subject,
-			compiledHTML,
-			emailProvider,
-			emailTemplate.Email.ReplyTo,
-			nil, // cc
-			nil, // bcc
-			assert.AnError,
-		)
+		mockSESService.EXPECT().
+			SendEmail(
+				gomock.Any(),
+				gomock.Eq(workspaceID),
+				gomock.Eq(messageID),
+				gomock.Eq(emailSender.Email),
+				gomock.Eq(emailSender.Name),
+				gomock.Eq(contact.Email),
+				gomock.Eq(emailTemplate.Email.Subject),
+				gomock.Eq(compiledHTML),
+				gomock.Eq(emailProvider),
+				gomock.Eq(options),
+			).Return(assert.AnError)
 
 		// Setup message repository mock to update with error status
 		mockMessageRepo.EXPECT().
@@ -1222,8 +1159,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			messageData,
 			trackingSettings,
 			emailProvider,
-			nil, // cc
-			nil, // bcc
+			options,
 		)
 
 		// Assertions
@@ -1248,21 +1184,19 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			Return(nil)
 
 		// Setup email provider mock to return an error
-		mockSESService.expectSendEmailWithOptions(
-			ctx,
-			workspaceID,
-			messageID,
-			emailSender.Email,
-			emailSender.Name,
-			contact.Email,
-			emailTemplate.Email.Subject,
-			compiledHTML,
-			emailProvider,
-			emailTemplate.Email.ReplyTo,
-			nil, // cc
-			nil, // bcc
-			assert.AnError,
-		)
+		mockSESService.EXPECT().
+			SendEmail(
+				gomock.Any(),
+				gomock.Eq(workspaceID),
+				gomock.Eq(messageID),
+				gomock.Eq(emailSender.Email),
+				gomock.Eq(emailSender.Name),
+				gomock.Eq(contact.Email),
+				gomock.Eq(emailTemplate.Email.Subject),
+				gomock.Eq(compiledHTML),
+				gomock.Eq(emailProvider),
+				gomock.Eq(options),
+			).Return(assert.AnError)
 
 		// Setup message repository mock to fail updating with error status
 		mockMessageRepo.EXPECT().
@@ -1282,8 +1216,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			messageData,
 			trackingSettings,
 			emailProvider,
-			nil, // cc
-			nil, // bcc
+			options,
 		)
 
 		// Assertions

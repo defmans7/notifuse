@@ -706,7 +706,7 @@ func (s *SESService) UnregisterWebhooks(
 }
 
 // SendEmail sends an email using AWS SES
-func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
 	if provider.SES == nil {
 		return fmt.Errorf("SES provider is not configured")
 	}
@@ -734,9 +734,9 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	}
 
 	// Add CC addresses if provided
-	if len(cc) > 0 {
+	if len(emailOptions.CC) > 0 {
 		var ccAddresses []*string
-		for _, ccAddress := range cc {
+		for _, ccAddress := range emailOptions.CC {
 			if ccAddress != "" {
 				ccAddresses = append(ccAddresses, aws.String(ccAddress))
 			}
@@ -747,9 +747,9 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	}
 
 	// Add BCC addresses if provided
-	if len(bcc) > 0 {
+	if len(emailOptions.BCC) > 0 {
 		var bccAddresses []*string
-		for _, bccAddress := range bcc {
+		for _, bccAddress := range emailOptions.BCC {
 			if bccAddress != "" {
 				bccAddresses = append(bccAddresses, aws.String(bccAddress))
 			}
@@ -778,8 +778,8 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	}
 
 	// Add ReplyTo if provided
-	if replyTo != "" {
-		input.ReplyToAddresses = []*string{aws.String(replyTo)}
+	if emailOptions.ReplyTo != "" {
+		input.ReplyToAddresses = []*string{aws.String(emailOptions.ReplyTo)}
 	}
 
 	// Add configuration set if it exists

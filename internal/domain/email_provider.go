@@ -252,10 +252,16 @@ func (e *EmailProvider) DecryptSecretKeys(passphrase string) error {
 	return nil
 }
 
+type EmailOptions struct {
+	CC      []string
+	BCC     []string
+	ReplyTo string
+}
+
 // EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
-	SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, replyTo string, cc []string, bcc []string) error
+	SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, emailOptions EmailOptions) error
 	SendEmailForTemplate(
 		ctx context.Context,
 		workspaceID string,
@@ -265,13 +271,12 @@ type EmailServiceInterface interface {
 		messageData MessageData,
 		trackingSettings mjml.TrackingSettings,
 		emailProvider *EmailProvider,
-		cc []string,
-		bcc []string,
+		emailOptions EmailOptions,
 	) error
 	VisitLink(ctx context.Context, messageID string, workspaceID string) error
 	OpenEmail(ctx context.Context, messageID string, workspaceID string) error
 }
 
 type EmailProviderService interface {
-	SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, replyTo string, cc []string, bcc []string) error
+	SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, emailOptions EmailOptions) error
 }

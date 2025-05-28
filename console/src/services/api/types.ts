@@ -1,5 +1,6 @@
 import type { BlockInterface } from '../../components/email_editor/Block'
 import { Contact } from './contacts'
+import { EmailOptions } from './transactional_notifications'
 
 // Authentication types
 export interface SignInRequest {
@@ -493,9 +494,7 @@ export interface TestTemplateRequest {
   integration_id: string
   sender_id: string
   recipient_email: string
-  cc?: string[]
-  bcc?: string[]
-  reply_to?: string
+  email_options?: EmailOptions
 }
 
 export interface TestTemplateResponse {

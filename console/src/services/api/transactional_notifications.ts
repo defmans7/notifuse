@@ -36,6 +36,12 @@ export interface TransactionalNotification {
   deleted_at?: string
 }
 
+export interface EmailOptions {
+  reply_to?: string
+  cc?: string[]
+  bcc?: string[]
+}
+
 export interface CreateTransactionalNotificationRequest {
   workspace_id: string
   notification: {
@@ -101,8 +107,7 @@ export interface SendTransactionalNotificationRequest {
     channels?: TransactionalChannel[]
     data?: Record<string, any>
     metadata?: Record<string, any>
-    cc?: string[]
-    bcc?: string[]
+    email_options?: EmailOptions
   }
 }
 
@@ -165,9 +170,7 @@ export const transactionalNotificationsApi = {
    * @param templateId The ID of the template to test
    * @param integrationId The ID of the integration to use
    * @param recipientEmail The email address to send the test email to
-   * @param cc Optional array of CC email addresses
-   * @param bcc Optional array of BCC email addresses
-   * @param replyTo Optional Reply-To email address
+   * @param email_options Optional email options
    * @returns A response indicating success or failure
    */
   testTemplate: (
@@ -176,9 +179,7 @@ export const transactionalNotificationsApi = {
     integrationId: string,
     senderId: string,
     recipientEmail: string,
-    cc?: string[],
-    bcc?: string[],
-    replyTo?: string
+    email_options?: EmailOptions
   ): Promise<TestTemplateResponse> => {
     const request: TestTemplateRequest = {
       workspace_id: workspaceId,
@@ -186,9 +187,7 @@ export const transactionalNotificationsApi = {
       integration_id: integrationId,
       sender_id: senderId,
       recipient_email: recipientEmail,
-      cc,
-      bcc,
-      reply_to: replyTo
+      email_options: email_options
     }
     return api.post<TestTemplateResponse>('/api/transactional.testTemplate', request)
   }

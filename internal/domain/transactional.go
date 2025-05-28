@@ -108,26 +108,22 @@ type TransactionalNotificationUpdateParams struct {
 
 // TransactionalNotificationSendParams contains the parameters for sending a transactional notification
 type TransactionalNotificationSendParams struct {
-	ID       string                 `json:"id" validate:"required"`      // ID of the notification to send
-	Contact  *Contact               `json:"contact" validate:"required"` // Contact to send the notification to
-	Channels []TransactionalChannel `json:"channels,omitempty"`          // Specific channels to send through (if empty, use all configured channels)
-	Data     MapOfAny               `json:"data,omitempty"`              // Data to populate the template with
-	Metadata MapOfAny               `json:"metadata,omitempty"`          // Additional metadata for tracking
-	CC       []string               `json:"cc,omitempty"`                // CC email addresses
-	BCC      []string               `json:"bcc,omitempty"`               // BCC email addresses
-	ReplyTo  string                 `json:"reply_to,omitempty"`          // Reply-To email address
+	ID           string                 `json:"id" validate:"required"`      // ID of the notification to send
+	Contact      *Contact               `json:"contact" validate:"required"` // Contact to send the notification to
+	Channels     []TransactionalChannel `json:"channels,omitempty"`          // Specific channels to send through (if empty, use all configured channels)
+	Data         MapOfAny               `json:"data,omitempty"`              // Data to populate the template with
+	Metadata     MapOfAny               `json:"metadata,omitempty"`          // Additional metadata for tracking
+	EmailOptions EmailOptions           `json:"email_options,omitempty"`     // Email options for the notification
 }
 
 // TestTemplateRequest represents a request to test a template
 type TestTemplateRequest struct {
-	WorkspaceID    string   `json:"workspace_id"`
-	TemplateID     string   `json:"template_id"`
-	IntegrationID  string   `json:"integration_id"`
-	SenderID       string   `json:"sender_id"`
-	RecipientEmail string   `json:"recipient_email"`
-	CC             []string `json:"cc,omitempty"`
-	BCC            []string `json:"bcc,omitempty"`
-	ReplyTo        string   `json:"reply_to,omitempty"`
+	WorkspaceID    string       `json:"workspace_id"`
+	TemplateID     string       `json:"template_id"`
+	IntegrationID  string       `json:"integration_id"`
+	SenderID       string       `json:"sender_id"`
+	RecipientEmail string       `json:"recipient_email"`
+	EmailOptions   EmailOptions `json:"email_options,omitempty"`
 }
 
 func (r *TestTemplateRequest) Validate() error {
@@ -151,16 +147,16 @@ func (r *TestTemplateRequest) Validate() error {
 	}
 
 	// Validate CC and BCC email addresses if provided
-	if r.CC != nil {
-		for _, email := range r.CC {
+	if r.EmailOptions.CC != nil {
+		for _, email := range r.EmailOptions.CC {
 			if !govalidator.IsEmail(email) {
 				return fmt.Errorf("invalid CC email format: %s", email)
 			}
 		}
 	}
 
-	if r.BCC != nil {
-		for _, email := range r.BCC {
+	if r.EmailOptions.BCC != nil {
+		for _, email := range r.EmailOptions.BCC {
 			if !govalidator.IsEmail(email) {
 				return fmt.Errorf("invalid BCC email format: %s", email)
 			}
@@ -168,8 +164,8 @@ func (r *TestTemplateRequest) Validate() error {
 	}
 
 	// Validate ReplyTo if provided
-	if r.ReplyTo != "" && !govalidator.IsEmail(r.ReplyTo) {
-		return fmt.Errorf("invalid reply_to email format: %s", r.ReplyTo)
+	if r.EmailOptions.ReplyTo != "" && !govalidator.IsEmail(r.EmailOptions.ReplyTo) {
+		return fmt.Errorf("invalid reply_to email format: %s", r.EmailOptions.ReplyTo)
 	}
 
 	return nil
@@ -201,7 +197,7 @@ type TransactionalNotificationService interface {
 	// SendNotification sends a transactional notification to a contact
 	SendNotification(ctx context.Context, workspaceID string, params TransactionalNotificationSendParams) (string, error)
 
-	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, cc []string, bcc []string, replyTo string) error
+	TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, options EmailOptions) error
 }
 
 // Request and response types for transactional notifications
@@ -371,21 +367,21 @@ func (req *SendTransactionalRequest) Validate() error {
 	}
 
 	// validate optional cc and bcc
-	for _, cc := range req.Notification.CC {
+	for _, cc := range req.Notification.EmailOptions.CC {
 		if !govalidator.IsEmail(cc) {
 			return NewValidationError(fmt.Sprintf("cc '%s' must be a valid email address", cc))
 		}
 	}
 
-	for _, bcc := range req.Notification.BCC {
+	for _, bcc := range req.Notification.EmailOptions.BCC {
 		if !govalidator.IsEmail(bcc) {
 			return NewValidationError(fmt.Sprintf("bcc '%s' must be a valid email address", bcc))
 		}
 	}
 
 	// validate reply_to if provided
-	if req.Notification.ReplyTo != "" && !govalidator.IsEmail(req.Notification.ReplyTo) {
-		return NewValidationError(fmt.Sprintf("replyTo '%s' must be a valid email address", req.Notification.ReplyTo))
+	if req.Notification.EmailOptions.ReplyTo != "" && !govalidator.IsEmail(req.Notification.EmailOptions.ReplyTo) {
+		return NewValidationError(fmt.Sprintf("replyTo '%s' must be a valid email address", req.Notification.EmailOptions.ReplyTo))
 	}
 
 	return nil

@@ -526,7 +526,7 @@ func (s *PostmarkService) filterPostmarkWebhooks(
 }
 
 // SendEmail sends an email using Postmark
-func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
 	if provider.Postmark == nil {
 		return fmt.Errorf("Postmark provider is not configured")
 	}
@@ -555,9 +555,9 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 	}
 
 	// Add CC if specified
-	if len(cc) > 0 {
+	if len(emailOptions.CC) > 0 {
 		var ccAddresses []string
-		for _, ccAddr := range cc {
+		for _, ccAddr := range emailOptions.CC {
 			if ccAddr != "" {
 				ccAddresses = append(ccAddresses, ccAddr)
 			}
@@ -568,9 +568,9 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 	}
 
 	// Add BCC if specified
-	if len(bcc) > 0 {
+	if len(emailOptions.BCC) > 0 {
 		var bccAddresses []string
-		for _, bccAddr := range bcc {
+		for _, bccAddr := range emailOptions.BCC {
 			if bccAddr != "" {
 				bccAddresses = append(bccAddresses, bccAddr)
 			}
@@ -581,8 +581,8 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 	}
 
 	// Add ReplyTo if specified
-	if replyTo != "" {
-		requestBody["ReplyTo"] = replyTo
+	if emailOptions.ReplyTo != "" {
+		requestBody["ReplyTo"] = emailOptions.ReplyTo
 	}
 
 	// Convert to JSON

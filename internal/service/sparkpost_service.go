@@ -761,7 +761,7 @@ func (s *SparkPostService) directDeleteWebhook(ctx context.Context, settings *do
 }
 
 // SendEmail sends an email using SparkPost
-func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, options domain.EmailOptions) error {
 	if provider.SparkPost == nil {
 		return fmt.Errorf("SparkPost provider is not configured")
 	}
@@ -832,12 +832,12 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	emailReq.Options.ClickTracking = false
 
 	// Add replyTo if specified
-	if replyTo != "" {
-		emailReq.Content.ReplyTo = replyTo
+	if options.ReplyTo != "" {
+		emailReq.Content.ReplyTo = options.ReplyTo
 	}
 
 	// Add CC recipients if specified
-	for _, ccAddress := range cc {
+	for _, ccAddress := range options.CC {
 		if ccAddress != "" {
 			emailReq.Recipients = append(emailReq.Recipients, Recipient{
 				Address: Address{
@@ -848,7 +848,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	}
 
 	// Add BCC recipients if specified
-	for _, bccAddress := range bcc {
+	for _, bccAddress := range options.BCC {
 		if bccAddress != "" {
 			emailReq.Recipients = append(emailReq.Recipients, Recipient{
 				Address: Address{

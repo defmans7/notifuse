@@ -84,9 +84,11 @@ export default function SendTemplateModal({
         selectedIntegrationId,
         selectedSenderId,
         email,
-        ccEmails.length > 0 ? ccEmails : undefined,
-        bccEmails.length > 0 ? bccEmails : undefined,
-        replyTo
+        {
+          cc: ccEmails,
+          bcc: bccEmails,
+          reply_to: replyTo
+        }
       )
 
       if (response.success) {

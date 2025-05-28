@@ -948,6 +948,10 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 			Metadata: map[string]interface{}{
 				"source": "api",
 			},
+			EmailOptions: domain.EmailOptions{
+				CC:  []string{"cc@example.com"},
+				BCC: []string{"bcc@example.com"},
+			},
 		}
 
 		// Expect auth service to authenticate the user
@@ -992,8 +996,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 					EnableTracking: workspaceObj.Settings.EmailTrackingEnabled,
 				},
 				gomock.Not(gomock.Nil()), // Ensure we expect a non-nil provider
-				gomock.Any(),             // cc
-				gomock.Any(),             // bcc
+				gomock.Any(),             // emailOptions
 			).Return(nil)
 
 		// Message history creation happens inside SendEmailForTemplate
@@ -1203,10 +1206,8 @@ func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
 			gomock.Eq(recipientEmail),
 			gomock.Eq(template.Email.Subject),
 			gomock.Eq(htmlResult),
-			gomock.Any(),  // emailProvider
-			gomock.Eq(""), // replyTo
-			gomock.Nil(),  // cc
-			gomock.Nil(),  // bcc
+			gomock.Any(), // emailProvider
+			gomock.Any(), // emailOptions
 		).Return(nil)
 
 	// Expect message history creation
@@ -1215,7 +1216,7 @@ func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
 		Return(nil)
 
 	// Call the method
-	err := service.TestTemplate(ctx, workspaceID, templateID, integrationID, senderID, recipientEmail, nil, nil, "")
+	err := service.TestTemplate(ctx, workspaceID, templateID, integrationID, senderID, recipientEmail, domain.EmailOptions{})
 
 	// Assertions
 	require.NoError(t, err)

@@ -498,7 +498,7 @@ func TestMailjetService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Assertions
 		require.NoError(t, err)
@@ -511,7 +511,7 @@ func TestMailjetService_SendEmail(t *testing.T) {
 		provider := &domain.EmailProvider{}
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Assertions
 		require.Error(t, err)
@@ -536,7 +536,7 @@ func TestMailjetService_SendEmail(t *testing.T) {
 			Return(nil, expectedErr)
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Assertions
 		require.Error(t, err)
@@ -566,7 +566,7 @@ func TestMailjetService_SendEmail(t *testing.T) {
 			Return(mockHTTPResponse(t, http.StatusBadRequest, errorResp), nil)
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 		// Assertions
 		require.Error(t, err)

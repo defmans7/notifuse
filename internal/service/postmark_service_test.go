@@ -1540,9 +1540,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			subject,
 			content,
 			providerConfig,
-			"",
-			nil,
-			nil,
+			domain.EmailOptions{},
 		)
 
 		// Verify results
@@ -1567,9 +1565,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			&domain.EmailProvider{
 				Kind: domain.EmailProviderKindPostmark,
 			},
-			"",
-			nil,
-			nil,
+			domain.EmailOptions{},
 		)
 
 		// Verify results
@@ -1601,9 +1597,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			"Subject",
 			"Content",
 			providerConfig,
-			"",
-			nil,
-			nil,
+			domain.EmailOptions{},
 		)
 
 		// Verify results
@@ -1640,9 +1634,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			"Subject",
 			"Content",
 			providerConfig,
-			"",
-			nil,
-			nil,
+			domain.EmailOptions{},
 		)
 
 		// Verify results
@@ -1679,9 +1671,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			"Subject",
 			"Content",
 			providerConfig,
-			"",
-			nil,
-			nil,
+			domain.EmailOptions{},
 		)
 
 		// Verify results
@@ -1724,9 +1714,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			"Subject",
 			"Content",
 			providerConfig,
-			"",
-			nil,
-			nil,
+			domain.EmailOptions{},
 		)
 
 		// Verify results

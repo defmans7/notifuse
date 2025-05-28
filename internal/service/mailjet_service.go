@@ -452,7 +452,7 @@ func (s *MailjetService) TestWebhook(ctx context.Context, config domain.MailjetS
 }
 
 // SendEmail sends an email using Mailjet
-func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
 	if provider.Mailjet == nil {
 		return fmt.Errorf("Mailjet provider is not configured")
 	}
@@ -505,8 +505,8 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	// Add CC recipients if specified
-	if len(cc) > 0 {
-		for _, ccAddr := range cc {
+	if len(emailOptions.CC) > 0 {
+		for _, ccAddr := range emailOptions.CC {
 			if ccAddr != "" {
 				message.Cc = append(message.Cc, EmailRecipient{Email: ccAddr})
 			}
@@ -514,8 +514,8 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	// Add BCC recipients if specified
-	if len(bcc) > 0 {
-		for _, bccAddr := range bcc {
+	if len(emailOptions.BCC) > 0 {
+		for _, bccAddr := range emailOptions.BCC {
 			if bccAddr != "" {
 				message.Bcc = append(message.Bcc, EmailRecipient{Email: bccAddr})
 			}
@@ -528,8 +528,8 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	// Add Reply-To if specified
-	if replyTo != "" {
-		message.Headers["Reply-To"] = replyTo
+	if emailOptions.ReplyTo != "" {
+		message.Headers["Reply-To"] = emailOptions.ReplyTo
 	}
 
 	// Set up the email payload

@@ -2682,9 +2682,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 				template.Email.Subject,
 				*compiledResult.HTML,
 				nil,
-				"",
-				nil,
-				nil,
+				domain.EmailOptions{},
 			).
 			Return(nil)
 

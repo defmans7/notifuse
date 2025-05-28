@@ -552,8 +552,7 @@ func (s *TransactionalNotificationService) SendNotification(
 				messageData,
 				notification.TrackingSettings,
 				emailProvider,
-				params.CC,
-				params.BCC,
+				params.EmailOptions,
 			)
 			if err == nil {
 				successfulChannels++
@@ -589,7 +588,7 @@ func (s *TransactionalNotificationService) SendNotification(
 }
 
 // TestTemplate sends a test email with a template to verify it works
-func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, cc []string, bcc []string, replyTo string) error {
+func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, workspaceID string, templateID string, integrationID string, senderID string, recipientEmail string, emailOptions domain.EmailOptions) error {
 	// Authenticate user
 	var err error
 	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
@@ -697,9 +696,7 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		template.Email.Subject,
 		*compiledResult.HTML,
 		emailProvider,
-		replyTo,
-		cc,
-		bcc,
+		emailOptions,
 	)
 
 	if err != nil {

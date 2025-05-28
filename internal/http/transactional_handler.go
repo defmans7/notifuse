@@ -273,7 +273,7 @@ func (h *TransactionalNotificationHandler) handleTestTemplate(w http.ResponseWri
 		return
 	}
 
-	err = h.service.TestTemplate(r.Context(), req.WorkspaceID, req.TemplateID, req.IntegrationID, req.SenderID, req.RecipientEmail, req.CC, req.BCC, req.ReplyTo)
+	err = h.service.TestTemplate(r.Context(), req.WorkspaceID, req.TemplateID, req.IntegrationID, req.SenderID, req.RecipientEmail, req.EmailOptions)
 
 	// Create response
 	response := domain.TestTemplateResponse{

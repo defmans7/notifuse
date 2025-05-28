@@ -1029,8 +1029,10 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 						"name": "Test User",
 					},
 					Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail},
-					CC:       []string{"cc1@example.com", "cc2@example.com"},
-					BCC:      []string{"bcc@example.com"},
+					EmailOptions: domain.EmailOptions{
+						CC:  []string{"cc1@example.com", "cc2@example.com"},
+						BCC: []string{"bcc@example.com"},
+					},
 				},
 			},
 			setupMock: func() {
@@ -1038,8 +1040,8 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 					SendNotification(gomock.Any(), gomock.Eq(workspaceID), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, wsID string, params domain.TransactionalNotificationSendParams) (string, error) {
 						// Verify cc and bcc are passed correctly
-						assert.Equal(t, []string{"cc1@example.com", "cc2@example.com"}, params.CC)
-						assert.Equal(t, []string{"bcc@example.com"}, params.BCC)
+						assert.Equal(t, []string{"cc1@example.com", "cc2@example.com"}, params.EmailOptions.CC)
+						assert.Equal(t, []string{"bcc@example.com"}, params.EmailOptions.BCC)
 						assert.Contains(t, params.Channels, domain.TransactionalChannelEmail)
 						return "msg_with_cc_bcc", nil
 					})
@@ -1066,7 +1068,9 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 						Email: "test@example.com",
 					},
 					Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail},
-					CC:       []string{"invalid-email"},
+					EmailOptions: domain.EmailOptions{
+						CC: []string{"invalid-email"},
+					},
 				},
 			},
 			setupMock:      func() {},
@@ -1084,7 +1088,9 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 						Email: "test@example.com",
 					},
 					Channels: []domain.TransactionalChannel{domain.TransactionalChannelEmail},
-					BCC:      []string{"invalid-email"},
+					EmailOptions: domain.EmailOptions{
+						BCC: []string{"invalid-email"},
+					},
 				},
 			},
 			setupMock:      func() {},
@@ -1233,9 +1239,7 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 						"invalid",
 						"sender123",
 						"test@example.com",
-						nil,
-						nil,
-						"",
+						domain.EmailOptions{},
 					).
 					Return(fmt.Errorf("integration not found: invalid"))
 
@@ -1274,9 +1278,7 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 						"marketing",
 						"sender123",
 						"test@example.com",
-						nil,
-						nil,
-						"",
+						domain.EmailOptions{},
 					).
 					Return(errors.New("service error"))
 
@@ -1315,9 +1317,7 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 						"marketing",
 						"sender123",
 						"test@example.com",
-						nil,
-						nil,
-						"",
+						domain.EmailOptions{},
 					).
 					Return(&domain.ErrTemplateNotFound{Message: "not found"})
 			},
@@ -1333,8 +1333,10 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 				IntegrationID:  "marketing",
 				SenderID:       "sender123",
 				RecipientEmail: "test@example.com",
-				CC:             []string{"cc1@example.com", "cc2@example.com"},
-				BCC:            []string{"bcc@example.com"},
+				EmailOptions: domain.EmailOptions{
+					CC:  []string{"cc1@example.com", "cc2@example.com"},
+					BCC: []string{"bcc@example.com"},
+				},
 			},
 			setupMock: func(m *mocks.MockTransactionalNotificationService, l *pkgmocks.MockLogger) {
 				m.EXPECT().
@@ -1345,9 +1347,10 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 						"marketing",
 						"sender123",
 						"test@example.com",
-						[]string{"cc1@example.com", "cc2@example.com"},
-						[]string{"bcc@example.com"},
-						"",
+						domain.EmailOptions{
+							CC:  []string{"cc1@example.com", "cc2@example.com"},
+							BCC: []string{"bcc@example.com"},
+						},
 					).
 					Return(nil)
 			},
@@ -1375,9 +1378,7 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 						"marketing",
 						"sender123",
 						"test@example.com",
-						nil,
-						nil,
-						"",
+						domain.EmailOptions{},
 					).
 					Return(nil)
 			},
@@ -1395,7 +1396,9 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 				IntegrationID:  "marketing",
 				SenderID:       "sender123",
 				RecipientEmail: "test@example.com",
-				ReplyTo:        "custom-reply@example.com",
+				EmailOptions: domain.EmailOptions{
+					ReplyTo: "custom-reply@example.com",
+				},
 			},
 			setupMock: func(m *mocks.MockTransactionalNotificationService, l *pkgmocks.MockLogger) {
 				m.EXPECT().
@@ -1406,9 +1409,9 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 						"marketing",
 						"sender123",
 						"test@example.com",
-						nil,
-						nil,
-						"custom-reply@example.com",
+						domain.EmailOptions{
+							ReplyTo: "custom-reply@example.com",
+						},
 					).
 					Return(nil)
 			},
@@ -1425,7 +1428,9 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 				TemplateID:     "template123",
 				IntegrationID:  "marketing",
 				RecipientEmail: "test@example.com",
-				ReplyTo:        "invalid-email", // Invalid email format
+				EmailOptions: domain.EmailOptions{
+					ReplyTo: "invalid-email", // Invalid email format
+				},
 			},
 			setupMock:      func(m *mocks.MockTransactionalNotificationService, l *pkgmocks.MockLogger) {},
 			expectedStatus: http.StatusBadRequest,
@@ -1440,9 +1445,11 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 				IntegrationID:  "marketing",
 				SenderID:       "sender123",
 				RecipientEmail: "test@example.com",
-				CC:             []string{"cc@example.com"},
-				BCC:            []string{"bcc@example.com"},
-				ReplyTo:        "reply@example.com",
+				EmailOptions: domain.EmailOptions{
+					CC:      []string{"cc@example.com"},
+					BCC:     []string{"bcc@example.com"},
+					ReplyTo: "reply@example.com",
+				},
 			},
 			setupMock: func(m *mocks.MockTransactionalNotificationService, l *pkgmocks.MockLogger) {
 				m.EXPECT().
@@ -1453,9 +1460,11 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 						"marketing",
 						"sender123",
 						"test@example.com",
-						[]string{"cc@example.com"},
-						[]string{"bcc@example.com"},
-						"reply@example.com",
+						domain.EmailOptions{
+							CC:      []string{"cc@example.com"},
+							BCC:     []string{"bcc@example.com"},
+							ReplyTo: "reply@example.com",
+						},
 					).
 					Return(nil)
 			},

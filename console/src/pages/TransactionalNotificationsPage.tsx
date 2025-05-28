@@ -341,6 +341,11 @@ export function TransactionalNotificationsPage() {
     },
     "data": {
       // Your template variables here
+    },
+    "email_options": {
+      "reply_to": "reply@example.com",
+      "cc": ["cc@example.com"],
+      "bcc": ["bcc@example.com"]
     }
   }
 }'`}</code>

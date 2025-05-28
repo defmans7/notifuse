@@ -1599,7 +1599,7 @@ func TestSendEmail_Success(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 	assert.NoError(t, err)
 }
@@ -1610,7 +1610,7 @@ func TestSendEmail_NilSESProvider(t *testing.T) {
 
 	provider := &domain.EmailProvider{SES: nil}
 
-	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "SES provider is not configured")
@@ -1628,7 +1628,7 @@ func TestSendEmail_InvalidCredentials(t *testing.T) {
 		},
 	}
 
-	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.Error(t, err)
 	assert.Equal(t, ErrInvalidAWSCredentials, err)
@@ -1654,7 +1654,7 @@ func TestSendEmail_AWSError(t *testing.T) {
 		SendEmailWithContext(gomock.Any(), gomock.Any()).
 		Return(nil, errors.New("AWS send error"))
 
-	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to send email")
@@ -1681,7 +1681,7 @@ func TestSendEmail_AWSErrorWithAWSErr(t *testing.T) {
 		SendEmailWithContext(gomock.Any(), gomock.Any()).
 		Return(nil, awsErr)
 
-	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "SES error")
@@ -1714,7 +1714,7 @@ func TestSendEmail_EmptyCCBCC(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), "workspace", "", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", []string{}, []string{})
+	err := service.SendEmail(context.Background(), "workspace", "", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.NoError(t, err)
 }
@@ -1744,7 +1744,7 @@ func TestSendEmail_CCBCCWithEmptyStrings(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), "workspace", "", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", []string{""}, []string{""})
+	err := service.SendEmail(context.Background(), "workspace", "", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.NoError(t, err)
 }
@@ -1773,7 +1773,7 @@ func TestSendEmail_ListConfigSetsError(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), "workspace", "", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.NoError(t, err)
 }
@@ -1809,7 +1809,7 @@ func TestSendEmail_SessionFactoryError(t *testing.T) {
 	// Expect logger to be called for the error
 	mockLogger.EXPECT().Error(gomock.Any()).Times(1)
 
-	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create AWS session")
@@ -1850,7 +1850,7 @@ func TestSendEmail_WithCCAndBCC(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", cc, bcc)
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{CC: cc, BCC: bcc})
 
 	assert.NoError(t, err)
 }
@@ -1883,7 +1883,7 @@ func TestSendEmail_WithReplyTo(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, replyTo, nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{ReplyTo: replyTo})
 
 	assert.NoError(t, err)
 }
@@ -1922,7 +1922,7 @@ func TestSendEmail_WithConfigurationSet(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), workspaceID, "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), workspaceID, "message", "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.NoError(t, err)
 }
@@ -1956,7 +1956,7 @@ func TestSendEmail_WithMessageIDTag(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), "workspace", messageID, "from@example.com", "From", "to@example.com", "Subject", "Content", provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", messageID, "from@example.com", "From", "to@example.com", "Subject", "Content", provider, domain.EmailOptions{})
 
 	assert.NoError(t, err)
 }
@@ -2003,7 +2003,7 @@ func TestSendEmail_VerifyEmailStructure(t *testing.T) {
 			return &ses.SendEmailOutput{}, nil
 		})
 
-	err := service.SendEmail(context.Background(), "workspace", "message", fromAddress, fromName, to, subject, content, provider, "", nil, nil)
+	err := service.SendEmail(context.Background(), "workspace", "message", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
 
 	assert.NoError(t, err)
 }
