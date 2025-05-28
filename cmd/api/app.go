@@ -363,6 +363,7 @@ func (a *App) InitServices() error {
 		a.logger,
 		a.authService,
 		a.config.Security.SecretKey,
+		a.config.IsDemo(),
 		a.workspaceRepo,
 		a.templateRepo,
 		a.templateService,
@@ -514,14 +515,14 @@ func (a *App) InitHandlers() error {
 	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, a.config.Security.PasetoPublicKey, a.logger)
 	templateHandler := httpHandler.NewTemplateHandler(a.templateService, a.config.Security.PasetoPublicKey, a.logger)
 	emailHandler := httpHandler.NewEmailHandler(a.emailService, a.config.Security.PasetoPublicKey, a.logger, a.config.Security.SecretKey)
-	broadcastHandler := httpHandler.NewBroadcastHandler(a.broadcastService, a.templateService, a.config.Security.PasetoPublicKey, a.logger)
+	broadcastHandler := httpHandler.NewBroadcastHandler(a.broadcastService, a.templateService, a.config.Security.PasetoPublicKey, a.logger, a.config.IsDemo())
 	taskHandler := httpHandler.NewTaskHandler(
 		a.taskService,
 		a.config.Security.PasetoPublicKey,
 		a.logger,
 		a.config.Security.SecretKey,
 	)
-	transactionalHandler := httpHandler.NewTransactionalNotificationHandler(a.transactionalNotificationService, a.config.Security.PasetoPublicKey, a.logger)
+	transactionalHandler := httpHandler.NewTransactionalNotificationHandler(a.transactionalNotificationService, a.config.Security.PasetoPublicKey, a.logger, a.config.IsDemo())
 	webhookEventHandler := httpHandler.NewWebhookEventHandler(a.webhookEventService, a.config.Security.PasetoPublicKey, a.logger)
 	webhookRegistrationHandler := httpHandler.NewWebhookRegistrationHandler(a.webhookRegistrationService, a.config.Security.PasetoPublicKey, a.logger)
 	messageHistoryHandler := httpHandler.NewMessageHistoryHandler(

@@ -21,6 +21,7 @@ type EmailService struct {
 	logger           logger.Logger
 	authService      domain.AuthService
 	secretKey        string
+	isDemo           bool
 	workspaceRepo    domain.WorkspaceRepository
 	templateRepo     domain.TemplateRepository
 	templateService  domain.TemplateService
@@ -41,6 +42,7 @@ func NewEmailService(
 	logger logger.Logger,
 	authService domain.AuthService,
 	secretKey string,
+	isDemo bool,
 	workspaceRepo domain.WorkspaceRepository,
 	templateRepo domain.TemplateRepository,
 	templateService domain.TemplateService,
@@ -61,6 +63,7 @@ func NewEmailService(
 		logger:           logger,
 		authService:      authService,
 		secretKey:        secretKey,
+		isDemo:           isDemo,
 		workspaceRepo:    workspaceRepo,
 		templateRepo:     templateRepo,
 		templateService:  templateService,
@@ -147,6 +150,10 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 
 // SendEmail sends an email using the specified provider
 func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, options domain.EmailOptions) error {
+
+	if s.isDemo {
+		return nil
+	}
 
 	// If fromAddress is not provided, use the first sender's email from the provider
 	if fromAddress == "" && len(provider.Senders) > 0 {

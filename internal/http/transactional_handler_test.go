@@ -32,7 +32,7 @@ func setupTransactionalHandlerTest(t *testing.T) (*mocks.MockTransactionalNotifi
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger)
+	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger, false)
 
 	return mockService, mockLogger, handler
 }
@@ -68,7 +68,7 @@ func TestNewTransactionalNotificationHandler(t *testing.T) {
 	publicKey := secretKey.Public()
 
 	// Act
-	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger)
+	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger, false)
 
 	// Assert
 	assert.NotNil(t, handler)
@@ -863,7 +863,7 @@ func TestTransactionalNotificationHandler_HandleSend(t *testing.T) {
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger)
+	handler := NewTransactionalNotificationHandler(mockService, publicKey, mockLogger, false)
 
 	workspaceID := "workspace1"
 	notificationID := "test-notification"

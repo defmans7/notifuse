@@ -26,14 +26,16 @@ type BroadcastHandler struct {
 	templateSvc domain.TemplateService
 	logger      logger.Logger
 	publicKey   paseto.V4AsymmetricPublicKey
+	isDemo      bool
 }
 
-func NewBroadcastHandler(service domain.BroadcastService, templateSvc domain.TemplateService, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger) *BroadcastHandler {
+func NewBroadcastHandler(service domain.BroadcastService, templateSvc domain.TemplateService, publicKey paseto.V4AsymmetricPublicKey, logger logger.Logger, isDemo bool) *BroadcastHandler {
 	return &BroadcastHandler{
 		service:     service,
 		templateSvc: templateSvc,
 		logger:      logger,
 		publicKey:   publicKey,
+		isDemo:      isDemo,
 	}
 }
 
@@ -42,12 +44,14 @@ func (h *BroadcastHandler) RegisterRoutes(mux *http.ServeMux) {
 	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
 	requireAuth := authMiddleware.RequireAuth()
 
+	restrictedInDemo := middleware.RestrictedInDemo(h.isDemo)
+
 	// Register RPC-style endpoints with dot notation
 	mux.Handle("/api/broadcasts.list", requireAuth(http.HandlerFunc(h.HandleList)))
 	mux.Handle("/api/broadcasts.get", requireAuth(http.HandlerFunc(h.HandleGet)))
 	mux.Handle("/api/broadcasts.create", requireAuth(http.HandlerFunc(h.HandleCreate)))
 	mux.Handle("/api/broadcasts.update", requireAuth(http.HandlerFunc(h.HandleUpdate)))
-	mux.Handle("/api/broadcasts.schedule", requireAuth(http.HandlerFunc(h.HandleSchedule)))
+	mux.Handle("/api/broadcasts.schedule", restrictedInDemo(requireAuth(http.HandlerFunc(h.HandleSchedule))))
 	mux.Handle("/api/broadcasts.pause", requireAuth(http.HandlerFunc(h.HandlePause)))
 	mux.Handle("/api/broadcasts.resume", requireAuth(http.HandlerFunc(h.HandleResume)))
 	mux.Handle("/api/broadcasts.cancel", requireAuth(http.HandlerFunc(h.HandleCancel)))

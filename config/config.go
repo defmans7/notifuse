@@ -313,3 +313,11 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 func (c *Config) IsDevelopment() bool {
 	return c.Environment == "development"
 }
+
+func (c *Config) IsDemo() bool {
+	return c.Environment == "demo"
+}
+
+func (c *Config) IsProduction() bool {
+	return c.Environment == "production"
+}

@@ -4,7 +4,7 @@
 [![Go](https://github.com/Notifuse/notifuse/actions/workflows/go.yml/badge.svg)](https://github.com/Notifuse/notifuse/actions/workflows/go.yml)
 [![codecov](https://codecov.io/gh/Notifuse/notifuse/graph/badge.svg?token=VZ0HBEM9OZ)](https://codecov.io/gh/Notifuse/notifuse)
 
-**The open-source alternative to Mailchimp, Brevo, Mailjet, Listmonk, Mailerlite, and Klaviyo.**
+**The open-source alternative to Mailchimp, Brevo, Mailjet, Listmonk, Mailerlite, and Klaviyo, Loop.so, etc.**
 
 Notifuse is a modern, self-hosted email marketing platform that allows you to send newsletters and transactional emails at a fraction of the cost. Built with Go and React, it provides enterprise-grade features with the flexibility of open-source software.
 
@@ -23,7 +23,7 @@ Notifuse is a modern, self-hosted email marketing platform that allows you to se
 - **Transactional API**: Powerful REST API for automated email delivery
 - **Webhook Integration**: Real-time event notifications and integrations
 - **Liquid Templating**: Dynamic content with variables like `{{ contact.first_name }}`
-- **Multi-Provider Support**: Connect with SendGrid, Mailgun, SES, Postmark, Mailjet, SparkPost, and SMTP
+- **Multi-Provider Support**: Connect with Amazon SES, SendGrid, Mailgun, Postmark, Mailjet, SparkPost, and SMTP
 
 ### 📊 Analytics & Insights
 

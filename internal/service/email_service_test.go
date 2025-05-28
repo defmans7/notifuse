@@ -33,6 +33,7 @@ func TestEmailService_NewEmailService(t *testing.T) {
 	secretKey := "test-secret-key"
 	webhookEndpoint := "https://webhook.test"
 	apiEndpoint := "https://api.test"
+	isDemo := false
 
 	t.Run("successful service creation with all dependencies", func(t *testing.T) {
 		// Call the constructor
@@ -40,6 +41,7 @@ func TestEmailService_NewEmailService(t *testing.T) {
 			mockLogger,
 			mockAuthService,
 			secretKey,
+			isDemo,
 			mockWorkspaceRepo,
 			mockTemplateRepo,
 			mockTemplateService,
@@ -77,6 +79,7 @@ func TestEmailService_NewEmailService(t *testing.T) {
 			nil, // nil logger
 			nil, // nil authService
 			"",  // empty secretKey
+			false,
 			nil, // nil workspaceRepo
 			nil, // nil templateRepo
 			nil, // nil templateService
@@ -114,6 +117,7 @@ func TestEmailService_NewEmailService(t *testing.T) {
 			mockLogger,
 			mockAuthService,
 			"", // empty secretKey
+			false,
 			mockWorkspaceRepo,
 			mockTemplateRepo,
 			mockTemplateService,
@@ -139,6 +143,7 @@ func TestEmailService_NewEmailService(t *testing.T) {
 			mockLogger,
 			mockAuthService,
 			secretKey,
+			false,
 			mockWorkspaceRepo,
 			mockTemplateRepo,
 			mockTemplateService,
@@ -185,6 +190,7 @@ func TestEmailService_NewEmailService(t *testing.T) {
 			mockLogger,
 			mockAuthService,
 			secretKey,
+			false,
 			mockWorkspaceRepo,
 			mockTemplateRepo,
 			mockTemplateService,
@@ -211,6 +217,7 @@ func TestEmailService_NewEmailService(t *testing.T) {
 			mockLogger,
 			mockAuthService,
 			specificSecretKey,
+			false,
 			mockWorkspaceRepo,
 			mockTemplateRepo,
 			mockTemplateService,

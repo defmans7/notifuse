@@ -16,6 +16,7 @@ type TransactionalNotificationHandler struct {
 	service   domain.TransactionalNotificationService
 	logger    logger.Logger
 	publicKey paseto.V4AsymmetricPublicKey
+	isDemo    bool
 }
 
 // NewTransactionalNotificationHandler creates a new instance of TransactionalNotificationHandler
@@ -23,11 +24,13 @@ func NewTransactionalNotificationHandler(
 	service domain.TransactionalNotificationService,
 	publicKey paseto.V4AsymmetricPublicKey,
 	logger logger.Logger,
+	isDemo bool,
 ) *TransactionalNotificationHandler {
 	return &TransactionalNotificationHandler{
 		service:   service,
 		logger:    logger,
 		publicKey: publicKey,
+		isDemo:    isDemo,
 	}
 }
 
@@ -37,14 +40,16 @@ func (h *TransactionalNotificationHandler) RegisterRoutes(mux *http.ServeMux) {
 	authMiddleware := middleware.NewAuthMiddleware(h.publicKey)
 	requireAuth := authMiddleware.RequireAuth()
 
+	restrictedInDemo := middleware.RestrictedInDemo(h.isDemo)
+
 	// Register RPC-style endpoints with dot notation
 	mux.Handle("/api/transactional.list", requireAuth(http.HandlerFunc(h.handleList)))
 	mux.Handle("/api/transactional.get", requireAuth(http.HandlerFunc(h.handleGet)))
 	mux.Handle("/api/transactional.create", requireAuth(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("/api/transactional.update", requireAuth(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("/api/transactional.delete", requireAuth(http.HandlerFunc(h.handleDelete)))
-	mux.Handle("/api/transactional.send", requireAuth(http.HandlerFunc(h.handleSend)))
-	mux.Handle("/api/transactional.testTemplate", requireAuth(http.HandlerFunc(h.handleTestTemplate)))
+	mux.Handle("/api/transactional.send", restrictedInDemo(requireAuth(http.HandlerFunc(h.handleSend))))
+	mux.Handle("/api/transactional.testTemplate", restrictedInDemo(requireAuth(http.HandlerFunc(h.handleTestTemplate))))
 }
 
 // Handler methods

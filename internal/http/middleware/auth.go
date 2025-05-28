@@ -87,3 +87,24 @@ func (ac *AuthConfig) RequireAuth() func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// RestrictedInDemo creates a middleware that returns a 400 error if the server is in demo mode
+//
+// Usage example:
+//
+//	restrictedMiddleware := middleware.RestrictedInDemo(true)
+//	mux.Handle("/api/sensitive.operation", restrictedMiddleware(http.HandlerFunc(handler)))
+//
+// This middleware should be applied to endpoints that should be disabled in demo environments,
+// such as operations that modify critical data or perform destructive actions.
+func RestrictedInDemo(isDemo bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isDemo {
+				http.Error(w, "This operation is not allowed in demo mode", http.StatusBadRequest)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

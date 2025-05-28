@@ -29,6 +29,10 @@ export interface ContactsSearch {
   limit?: number
 }
 
+export interface SignInSearch {
+  email?: string
+}
+
 // Create the root route
 const rootRoute = createRootRoute({
   component: RootLayout
@@ -45,7 +49,10 @@ const indexRoute = createRoute({
 const signinRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/signin',
-  component: SignInPage
+  component: SignInPage,
+  validateSearch: (search: Record<string, unknown>): SignInSearch => ({
+    email: search.email as string | undefined
+  })
 })
 
 // Create the logout route

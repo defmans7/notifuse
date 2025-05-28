@@ -267,3 +267,80 @@ func TestRequireAuth(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
+
+func TestRestrictedInDemo(t *testing.T) {
+	t.Run("allows request when not in demo mode", func(t *testing.T) {
+		// Create config with demo mode disabled
+		isDemo := false
+
+		// Create a test handler
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("success"))
+		})
+
+		// Apply the middleware
+		handler := RestrictedInDemo(isDemo)(next)
+
+		// Create a test request
+		req := httptest.NewRequest("POST", "/", nil)
+		w := httptest.NewRecorder()
+
+		// Call the handler
+		handler.ServeHTTP(w, req)
+
+		// Assert the response
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "success", w.Body.String())
+	})
+
+	t.Run("blocks request when in demo mode", func(t *testing.T) {
+		// Create config with demo mode enabled
+		isDemo := true
+
+		// Create a test handler
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("success"))
+		})
+
+		// Apply the middleware
+		handler := RestrictedInDemo(isDemo)(next)
+
+		// Create a test request
+		req := httptest.NewRequest("POST", "/", nil)
+		w := httptest.NewRecorder()
+
+		// Call the handler
+		handler.ServeHTTP(w, req)
+
+		// Assert the response
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "This operation is not allowed in demo mode")
+	})
+
+	t.Run("allows request when environment is development", func(t *testing.T) {
+		// Create config with development environment
+		isDemo := false
+
+		// Create a test handler
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("success"))
+		})
+
+		// Apply the middleware
+		handler := RestrictedInDemo(isDemo)(next)
+
+		// Create a test request
+		req := httptest.NewRequest("POST", "/", nil)
+		w := httptest.NewRecorder()
+
+		// Call the handler
+		handler.ServeHTTP(w, req)
+
+		// Assert the response
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "success", w.Body.String())
+	})
+}

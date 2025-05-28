@@ -537,7 +537,6 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
                       </div>
                     )
                   }
-                  console.log('item', item)
                   return (
                     <div onClick={toggleSelectionForItem.bind(null, item)}>
                       {item.file_info.content_type.includes('image') && (

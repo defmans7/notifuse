@@ -64,6 +64,7 @@ func setupBroadcastHandler(t *testing.T) (
 		mockTemplateService,
 		publicKey,
 		mockLogger,
+		false,
 	)
 
 	return handler, mockBroadcastService, mockTemplateService, mockLogger, ctrl
@@ -590,6 +591,7 @@ func TestHandleSchedule(t *testing.T) {
 			customTemplateService,
 			publicKey,
 			customLogger,
+			false,
 		)
 
 		// Setup mock to return a broadcast not found error
@@ -631,6 +633,7 @@ func TestHandleSchedule(t *testing.T) {
 			customTemplateService,
 			publicKey,
 			customLogger,
+			false,
 		)
 
 		// Set up expectations differently - this is more direct and explicit
@@ -677,6 +680,7 @@ func TestHandleSchedule(t *testing.T) {
 			customTemplateService,
 			publicKey,
 			customLogger,
+			false,
 		)
 
 		// Set up expectations differently - this is more direct and explicit
