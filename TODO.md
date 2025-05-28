@@ -4,6 +4,4 @@
 - test winning variations
 - test the docker compose
 - add contact_list reason string
-- remove metadata from transactional api payload
-- rename data to template_data
 - docs

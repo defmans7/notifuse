@@ -4,8 +4,8 @@
   "name": "Notifuse Documentation",
   "colors": {
     "primary": "#7763F1",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "light": "#7763F1",
+    "dark": "#7763F1"
   },
   "favicon": "/assets/logo/icon.png",
   "appearance": {
@@ -63,7 +63,11 @@
       }
     ]
   },
-  "logo": "/assets/logo/logo-small.png",
+  "logo": {
+    "light": "/assets/logo/logo-small.png",
+    "dark": "/assets/logo/logo-small.png",
+    "href": "https://notifuse.com"
+  },
   "navbar": {
     "links": [
       {
