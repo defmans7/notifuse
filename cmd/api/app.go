@@ -87,6 +87,7 @@ type App struct {
 	webhookRegistrationService       *service.WebhookRegistrationService
 	messageHistoryService            *service.MessageHistoryService
 	notificationCenterService        *service.NotificationCenterService
+	demoService                      *service.DemoService
 	// providers
 	postmarkService  *service.PostmarkService
 	mailgunService   *service.MailgunService
@@ -488,6 +489,28 @@ func (a *App) InitServices() error {
 		a.logger,
 	)
 
+	// Initialize demo service
+	a.demoService = service.NewDemoService(
+		a.logger,
+		a.config,
+		a.workspaceService,
+		a.userService,
+		a.contactService,
+		a.listService,
+		a.contactListService,
+		a.templateService,
+		a.emailService,
+		a.broadcastService,
+		a.taskService,
+		a.transactionalNotificationService,
+		a.webhookEventService,
+		a.webhookRegistrationService,
+		a.messageHistoryService,
+		a.notificationCenterService,
+		a.workspaceRepo,
+		a.taskRepo,
+	)
+
 	return nil
 }
 
@@ -536,6 +559,10 @@ func (a *App) InitHandlers() error {
 		a.listService,
 		a.logger,
 	)
+	if a.config.IsDemo() || a.config.IsDevelopment() {
+		demoHandler := httpHandler.NewDemoHandler(a.demoService, a.logger)
+		demoHandler.RegisterRoutes(a.mux)
+	}
 
 	// Register routes
 	userHandler.RegisterRoutes(a.mux)
