@@ -5,3 +5,4 @@
 - test the docker compose
 - add contact_list reason string
 - docs
+- file manager check
