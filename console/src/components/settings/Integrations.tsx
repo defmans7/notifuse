@@ -382,7 +382,7 @@ const EmailIntegration = ({
           </Space>
         </Descriptions.Item>
         {renderProviderSpecificDetails(provider)}
-        {renderWebhookStatus()}
+        {provider.kind !== 'smtp' && renderWebhookStatus()}
       </Descriptions>
     </Card>
   )

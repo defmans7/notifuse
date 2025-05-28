@@ -20,20 +20,35 @@ type SMTPService struct {
 type defaultGoMailFactory struct{}
 
 func (f *defaultGoMailFactory) CreateClient(host string, port int, username, password string, useTLS bool) (*mail.Client, error) {
-	tlsPolicy := mail.TLSOpportunistic
+	var tlsPolicy mail.TLSPolicy
+	var clientOptions []mail.Option
+
+	// Configure TLS policy
 	if useTLS {
 		tlsPolicy = mail.TLSMandatory
+	} else {
+		// For local development servers like Mailpit, disable TLS completely
+		tlsPolicy = mail.NoTLS
 	}
 
-	client, err := mail.NewClient(
-		host,
+	// Basic client options
+	clientOptions = append(clientOptions,
 		mail.WithPort(port),
-		mail.WithUsername(username),
-		mail.WithPassword(password),
-		mail.WithSMTPAuth(mail.SMTPAuthPlain),
 		mail.WithTLSPolicy(tlsPolicy),
 		mail.WithTimeout(10*time.Second),
 	)
+
+	// Only add authentication if username and password are provided
+	// This allows for servers like Mailpit that don't require authentication
+	if username != "" && password != "" {
+		clientOptions = append(clientOptions,
+			mail.WithUsername(username),
+			mail.WithPassword(password),
+			mail.WithSMTPAuth(mail.SMTPAuthPlain),
+		)
+	}
+
+	client, err := mail.NewClient(host, clientOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mail client: %w", err)
 	}
