@@ -323,22 +323,34 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
       setIsUploading(true)
       const file = e.target.files.item(i) as File
 
-      s3ClientRef.current
-        .send(
-          new PutObjectCommand({
-            Bucket: props.settings?.bucket || '',
-            Key: currentPath + file.name,
-            Body: file,
-            ContentType: file.type
-          })
-        )
-        .then(() => {
-          message.success('File' + file.name + ' uploaded successfully.')
-          setIsUploading(false)
-          fetchObjects()
+      // Convert file to ArrayBuffer for browser compatibility with AWS SDK v3
+      file
+        .arrayBuffer()
+        .then((arrayBuffer) => {
+          const uint8Array = new Uint8Array(arrayBuffer)
+
+          s3ClientRef
+            .current!.send(
+              new PutObjectCommand({
+                Bucket: props.settings?.bucket || '',
+                Key: currentPath + file.name,
+                Body: uint8Array,
+                ContentType: file.type
+              })
+            )
+            .then(() => {
+              message.success('File ' + file.name + ' uploaded successfully.')
+              setIsUploading(false)
+              fetchObjects()
+            })
+            .catch((error) => {
+              message.error('Failed to upload file: ' + error)
+              setIsUploading(false)
+              props.onError(error)
+            })
         })
         .catch((error) => {
-          message.error('Failed to upload file: ' + error)
+          message.error('Failed to read file: ' + error)
           setIsUploading(false)
           props.onError(error)
         })
