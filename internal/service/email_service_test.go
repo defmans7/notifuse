@@ -959,18 +959,18 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			).Return(nil)
 
 		// Call method under test
-		err := emailService.SendEmailForTemplate(
-			ctx,
-			workspaceID,
-			messageID,
-			nil, // externalID
-			contact,
-			templateConfig,
-			messageData,
-			trackingSettings,
-			emailProvider,
-			options,
-		)
+		request := domain.SendEmailRequest{
+			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
+			ExternalID:       nil,
+			Contact:          contact,
+			TemplateConfig:   templateConfig,
+			MessageData:      messageData,
+			TrackingSettings: trackingSettings,
+			EmailProvider:    emailProvider,
+			EmailOptions:     options,
+		}
+		err := emailService.SendEmailForTemplate(ctx, request)
 
 		// Assertions
 		require.NoError(t, err)
@@ -986,18 +986,18 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call method under test
-		err := emailService.SendEmailForTemplate(
-			ctx,
-			workspaceID,
-			messageID,
-			nil, // externalID
-			contact,
-			templateConfig,
-			messageData,
-			trackingSettings,
-			emailProvider,
-			options,
-		)
+		request := domain.SendEmailRequest{
+			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
+			ExternalID:       nil,
+			Contact:          contact,
+			TemplateConfig:   templateConfig,
+			MessageData:      messageData,
+			TrackingSettings: trackingSettings,
+			EmailProvider:    emailProvider,
+			EmailOptions:     options,
+		}
+		err := emailService.SendEmailForTemplate(ctx, request)
 
 		// Assertions
 		require.Error(t, err)
@@ -1019,18 +1019,18 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call method under test
-		err := emailService.SendEmailForTemplate(
-			ctx,
-			workspaceID,
-			messageID,
-			nil, // externalID
-			contact,
-			templateConfig,
-			messageData,
-			trackingSettings,
-			emailProvider,
-			options,
-		)
+		request := domain.SendEmailRequest{
+			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
+			ExternalID:       nil,
+			Contact:          contact,
+			TemplateConfig:   templateConfig,
+			MessageData:      messageData,
+			TrackingSettings: trackingSettings,
+			EmailProvider:    emailProvider,
+			EmailOptions:     options,
+		}
+		err := emailService.SendEmailForTemplate(ctx, request)
 
 		// Assertions
 		require.Error(t, err)
@@ -1060,18 +1060,18 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call method under test
-		err := emailService.SendEmailForTemplate(
-			ctx,
-			workspaceID,
-			messageID,
-			nil, // externalID
-			contact,
-			templateConfig,
-			messageData,
-			trackingSettings,
-			emailProvider,
-			options,
-		)
+		request := domain.SendEmailRequest{
+			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
+			ExternalID:       nil,
+			Contact:          contact,
+			TemplateConfig:   templateConfig,
+			MessageData:      messageData,
+			TrackingSettings: trackingSettings,
+			EmailProvider:    emailProvider,
+			EmailOptions:     options,
+		}
+		err := emailService.SendEmailForTemplate(ctx, request)
 
 		// Assertions
 		require.Error(t, err)
@@ -1098,18 +1098,18 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call method under test
-		err := emailService.SendEmailForTemplate(
-			ctx,
-			workspaceID,
-			messageID,
-			nil, // externalID
-			contact,
-			templateConfig,
-			messageData,
-			trackingSettings,
-			emailProvider,
-			options,
-		)
+		request := domain.SendEmailRequest{
+			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
+			ExternalID:       nil,
+			Contact:          contact,
+			TemplateConfig:   templateConfig,
+			MessageData:      messageData,
+			TrackingSettings: trackingSettings,
+			EmailProvider:    emailProvider,
+			EmailOptions:     options,
+		}
+		err := emailService.SendEmailForTemplate(ctx, request)
 
 		// Assertions
 		require.Error(t, err)
@@ -1162,18 +1162,18 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call method under test
-		err := emailService.SendEmailForTemplate(
-			ctx,
-			workspaceID,
-			messageID,
-			nil, // externalID
-			contact,
-			templateConfig,
-			messageData,
-			trackingSettings,
-			emailProvider,
-			options,
-		)
+		request := domain.SendEmailRequest{
+			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
+			ExternalID:       nil,
+			Contact:          contact,
+			TemplateConfig:   templateConfig,
+			MessageData:      messageData,
+			TrackingSettings: trackingSettings,
+			EmailProvider:    emailProvider,
+			EmailOptions:     options,
+		}
+		err := emailService.SendEmailForTemplate(ctx, request)
 
 		// Assertions
 		require.Error(t, err)
@@ -1220,18 +1220,18 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call method under test
-		err := emailService.SendEmailForTemplate(
-			ctx,
-			workspaceID,
-			messageID,
-			nil, // externalID
-			contact,
-			templateConfig,
-			messageData,
-			trackingSettings,
-			emailProvider,
-			options,
-		)
+		request := domain.SendEmailRequest{
+			WorkspaceID:      workspaceID,
+			MessageID:        messageID,
+			ExternalID:       nil,
+			Contact:          contact,
+			TemplateConfig:   templateConfig,
+			MessageData:      messageData,
+			TrackingSettings: trackingSettings,
+			EmailProvider:    emailProvider,
+			EmailOptions:     options,
+		}
+		err := emailService.SendEmailForTemplate(ctx, request)
 
 		// Assertions
 		require.Error(t, err)

@@ -8,7 +8,6 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -938,25 +937,16 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		// Email sending expectations
 		mockEmailService.EXPECT().SendEmailForTemplate(
 			gomock.Any(),
-			workspaceID,
-			gomock.Any(), // messageID
-			gomock.Any(), // externalID
-			contact,      // Contact
-			domain.ChannelTemplate{
-				TemplateID: "unsub-template",
-			},
-			gomock.Any(), // MessageData
-			gomock.Any(), // TrackingSettings
-			gomock.Any(), // Use gomock.Any() instead of testEmailProvider
-			domain.EmailOptions{},
-		).Do(func(_ context.Context, _ string, _ string, _ *string, _ *domain.Contact,
-			_ domain.ChannelTemplate, _ domain.MessageData, _ mjml.TrackingSettings,
-			provider *domain.EmailProvider, _ domain.EmailOptions) {
-			assert.Equal(t, domain.EmailProviderKindSparkPost, provider.Kind)
-			assert.Len(t, provider.Senders, 1)
-			assert.Equal(t, "test@example.com", provider.Senders[0].Email)
-			assert.NotNil(t, provider.SparkPost)
-			assert.Equal(t, "test-api-key", provider.SparkPost.APIKey)
+			gomock.Any(), // SendEmailRequest
+		).Do(func(_ context.Context, request domain.SendEmailRequest) {
+			assert.Equal(t, workspaceID, request.WorkspaceID)
+			assert.Equal(t, contact, request.Contact)
+			assert.Equal(t, "unsub-template", request.TemplateConfig.TemplateID)
+			assert.Equal(t, domain.EmailProviderKindSparkPost, request.EmailProvider.Kind)
+			assert.Len(t, request.EmailProvider.Senders, 1)
+			assert.Equal(t, "test@example.com", request.EmailProvider.Senders[0].Email)
+			assert.NotNil(t, request.EmailProvider.SparkPost)
+			assert.Equal(t, "test-api-key", request.EmailProvider.SparkPost.APIKey)
 		}).Return(nil)
 
 		err := service.UnsubscribeFromLists(ctx, payload, false)
@@ -1027,17 +1017,7 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		// Email sending expectations - returns error
 		mockEmailService.EXPECT().SendEmailForTemplate(
 			gomock.Any(),
-			workspaceID,
-			gomock.Any(), // messageID
-			gomock.Any(), // externalID
-			contact,      // Contact
-			domain.ChannelTemplate{
-				TemplateID: "unsub-template",
-			},
-			gomock.Any(), // MessageData
-			gomock.Any(), // TrackingSettings
-			gomock.Any(), // Match any provider since we're testing the error path
-			domain.EmailOptions{},
+			gomock.Any(), // SendEmailRequest
 		).Return(errors.New("email sending error"))
 
 		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)

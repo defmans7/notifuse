@@ -296,9 +296,18 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 		// send welcome email
 		if contactList.Status == domain.ContactListStatusActive && list.WelcomeTemplate != nil {
 
-			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, nil, contact, domain.ChannelTemplate{
-				TemplateID: list.WelcomeTemplate.ID,
-			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, domain.EmailOptions{})
+			request := domain.SendEmailRequest{
+				WorkspaceID:      workspace.ID,
+				MessageID:        messageID,
+				ExternalID:       nil,
+				Contact:          contact,
+				TemplateConfig:   domain.ChannelTemplate{TemplateID: list.WelcomeTemplate.ID},
+				MessageData:      domain.MessageData{Data: templateData},
+				TrackingSettings: trackingSettings,
+				EmailProvider:    marketingEmailProvider,
+				EmailOptions:     domain.EmailOptions{},
+			}
+			err = s.emailService.SendEmailForTemplate(ctx, request)
 
 			if err != nil {
 				s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to send welcome email: %v", err))
@@ -309,9 +318,18 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 		// double optin
 		if contactList.Status == domain.ContactListStatusPending && list.DoubleOptInTemplate != nil {
 
-			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, nil, contact, domain.ChannelTemplate{
-				TemplateID: list.DoubleOptInTemplate.ID,
-			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, domain.EmailOptions{})
+			request := domain.SendEmailRequest{
+				WorkspaceID:      workspace.ID,
+				MessageID:        messageID,
+				ExternalID:       nil,
+				Contact:          contact,
+				TemplateConfig:   domain.ChannelTemplate{TemplateID: list.DoubleOptInTemplate.ID},
+				MessageData:      domain.MessageData{Data: templateData},
+				TrackingSettings: trackingSettings,
+				EmailProvider:    marketingEmailProvider,
+				EmailOptions:     domain.EmailOptions{},
+			}
+			err = s.emailService.SendEmailForTemplate(ctx, request)
 
 			if err != nil {
 				s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to send double optin email: %v", err))
@@ -423,9 +441,18 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 				return fmt.Errorf("failed to build template data: %w", err)
 			}
 
-			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, nil, contact, domain.ChannelTemplate{
-				TemplateID: list.UnsubscribeTemplate.ID,
-			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, domain.EmailOptions{})
+			request := domain.SendEmailRequest{
+				WorkspaceID:      workspace.ID,
+				MessageID:        messageID,
+				ExternalID:       nil,
+				Contact:          contact,
+				TemplateConfig:   domain.ChannelTemplate{TemplateID: list.UnsubscribeTemplate.ID},
+				MessageData:      domain.MessageData{Data: templateData},
+				TrackingSettings: trackingSettings,
+				EmailProvider:    marketingEmailProvider,
+				EmailOptions:     domain.EmailOptions{},
+			}
+			err = s.emailService.SendEmailForTemplate(ctx, request)
 
 			if err != nil {
 				s.logger.WithField("email", payload.Email).Error(fmt.Sprintf("Failed to send unsubscribe confirmation email: %v", err))

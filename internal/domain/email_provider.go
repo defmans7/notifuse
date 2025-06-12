@@ -258,22 +258,49 @@ type EmailOptions struct {
 	ReplyTo string
 }
 
+// SendEmailRequest encapsulates all parameters needed to send an email using a template
+type SendEmailRequest struct {
+	// Core identification
+	WorkspaceID string `validate:"required"`
+	MessageID   string `validate:"required"`
+	ExternalID  *string
+
+	// Target and content
+	Contact        *Contact        `validate:"required"`
+	TemplateConfig ChannelTemplate `validate:"required"`
+	MessageData    MessageData
+
+	// Configuration
+	TrackingSettings mjml.TrackingSettings
+	EmailProvider    *EmailProvider `validate:"required"`
+	EmailOptions     EmailOptions
+}
+
+// Validate ensures all required fields are present and valid
+func (r *SendEmailRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace ID is required")
+	}
+	if r.MessageID == "" {
+		return fmt.Errorf("message ID is required")
+	}
+	if r.Contact == nil {
+		return fmt.Errorf("contact is required")
+	}
+	if r.EmailProvider == nil {
+		return fmt.Errorf("email provider is required")
+	}
+	if r.TemplateConfig.TemplateID == "" {
+		return fmt.Errorf("template ID is required")
+	}
+	return nil
+}
+
 // EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
 	SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, emailOptions EmailOptions) error
-	SendEmailForTemplate(
-		ctx context.Context,
-		workspaceID string,
-		messageID string,
-		externalID *string,
-		contact *Contact,
-		templateConfig ChannelTemplate,
-		messageData MessageData,
-		trackingSettings mjml.TrackingSettings,
-		emailProvider *EmailProvider,
-		emailOptions EmailOptions,
-	) error
+	SendEmailForTemplate(ctx context.Context, request SendEmailRequest) error
 	VisitLink(ctx context.Context, messageID string, workspaceID string) error
 	OpenEmail(ctx context.Context, messageID string, workspaceID string) error
 }

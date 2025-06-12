@@ -986,19 +986,15 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 		mockEmailService.EXPECT().
 			SendEmailForTemplate(
 				gomock.Any(),
-				workspace,
-				gomock.Any(), // messageID
-				gomock.Any(), // externalID
-				contact,
-				notification.Channels[domain.TransactionalChannelEmail],
-				gomock.Any(), // messageData
-				mjml.TrackingSettings{
-					Endpoint:       "https://api.example.com",
-					EnableTracking: workspaceObj.Settings.EmailTrackingEnabled,
-				},
-				gomock.Not(gomock.Nil()), // Ensure we expect a non-nil provider
-				gomock.Any(),             // emailOptions
-			).Return(nil)
+				gomock.Any(), // SendEmailRequest
+			).Do(func(_ context.Context, request domain.SendEmailRequest) {
+			assert.Equal(t, workspace, request.WorkspaceID)
+			assert.Equal(t, contact, request.Contact)
+			assert.Equal(t, notification.Channels[domain.TransactionalChannelEmail], request.TemplateConfig)
+			assert.NotNil(t, request.EmailProvider)
+			assert.Equal(t, workspaceObj.Settings.EmailTrackingEnabled, request.TrackingSettings.EnableTracking)
+			assert.Equal(t, "https://api.example.com", request.TrackingSettings.Endpoint)
+		}).Return(nil)
 
 		// Message history creation happens inside SendEmailForTemplate
 

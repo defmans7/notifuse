@@ -570,18 +570,18 @@ func (s *TransactionalNotificationService) SendNotification(
 
 			notification.TrackingSettings.EnableTracking = workspace.Settings.EmailTrackingEnabled
 
-			err = s.emailService.SendEmailForTemplate(
-				childCtx,
-				workspaceID,
-				messageID,
-				params.ExternalID,
-				contact,
-				templateConfig,
-				messageData,
-				notification.TrackingSettings,
-				emailProvider,
-				params.EmailOptions,
-			)
+			request := domain.SendEmailRequest{
+				WorkspaceID:      workspaceID,
+				MessageID:        messageID,
+				ExternalID:       params.ExternalID,
+				Contact:          contact,
+				TemplateConfig:   templateConfig,
+				MessageData:      messageData,
+				TrackingSettings: notification.TrackingSettings,
+				EmailProvider:    emailProvider,
+				EmailOptions:     params.EmailOptions,
+			}
+			err = s.emailService.SendEmailForTemplate(childCtx, request)
 			if err == nil {
 				successfulChannels++
 				childSpan.End()
