@@ -423,7 +423,15 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		}
 
 		// Build the template data with all options
-		recipientData, err := domain.BuildTemplateData(workspaceID, workspaceSecretKey, *contactWithList, messageID, trackingSettings, broadcast)
+		req := domain.TemplateDataRequest{
+			WorkspaceID:        workspaceID,
+			WorkspaceSecretKey: workspaceSecretKey,
+			ContactWithList:    *contactWithList,
+			MessageID:          messageID,
+			TrackingSettings:   trackingSettings,
+			Broadcast:          broadcast,
+		}
+		recipientData, err := domain.BuildTemplateData(req)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,

@@ -537,27 +537,50 @@ func (e *ErrTemplateNotFound) Error() string {
 	return e.Message
 }
 
-// BuildTemplateData creates a template data map with flexible options
-func BuildTemplateData(workspaceID string, workspaceSecretKey string, contactWithList ContactWithList, messageID string, trackingSettings mjml.TrackingSettings, broadcast *Broadcast) (MapOfAny, error) {
+// TemplateDataRequest groups parameters for building template data
+type TemplateDataRequest struct {
+	WorkspaceID        string                `json:"workspace_id"`
+	WorkspaceSecretKey string                `json:"workspace_secret_key"`
+	ContactWithList    ContactWithList       `json:"contact_with_list"`
+	MessageID          string                `json:"message_id"`
+	TrackingSettings   mjml.TrackingSettings `json:"tracking_settings"`
+	Broadcast          *Broadcast            `json:"broadcast,omitempty"`
+}
 
-	if workspaceSecretKey == "" {
-		return nil, fmt.Errorf("workspace secret key is required")
+// Validate ensures that the template data request has all required fields
+func (r *TemplateDataRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+	if r.WorkspaceSecretKey == "" {
+		return fmt.Errorf("workspace_secret_key is required")
+	}
+	if r.MessageID == "" {
+		return fmt.Errorf("message_id is required")
+	}
+	return nil
+}
+
+// BuildTemplateData creates a template data map with flexible options
+func BuildTemplateData(req TemplateDataRequest) (MapOfAny, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid template data request: %w", err)
 	}
 
 	templateData := MapOfAny{}
 
 	var emailHMAC string
 
-	if contactWithList.Contact != nil {
+	if req.ContactWithList.Contact != nil {
 
 		// Use all contact data
-		contactData, err := contactWithList.Contact.ToMapOfAny()
+		contactData, err := req.ContactWithList.Contact.ToMapOfAny()
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert contact to template data: %w", err)
 		}
 
 		// generate hmac for notification center auth
-		emailHMAC = ComputeEmailHMAC(contactWithList.Contact.Email, workspaceSecretKey)
+		emailHMAC = ComputeEmailHMAC(req.ContactWithList.Contact.Email, req.WorkspaceSecretKey)
 
 		templateData["contact"] = contactData
 
@@ -567,77 +590,77 @@ func BuildTemplateData(workspaceID string, workspaceSecretKey string, contactWit
 	}
 
 	// Add broadcast data if available
-	if broadcast != nil {
+	if req.Broadcast != nil {
 		templateData["broadcast"] = MapOfAny{
-			"id":   broadcast.ID,
-			"name": broadcast.Name,
+			"id":   req.Broadcast.ID,
+			"name": req.Broadcast.Name,
 		}
 
 		// Add UTM parameters from broadcast if available
-		if trackingSettings.UTMSource != "" {
-			templateData["utm_source"] = trackingSettings.UTMSource
+		if req.TrackingSettings.UTMSource != "" {
+			templateData["utm_source"] = req.TrackingSettings.UTMSource
 		}
-		if trackingSettings.UTMMedium != "" {
-			templateData["utm_medium"] = trackingSettings.UTMMedium
+		if req.TrackingSettings.UTMMedium != "" {
+			templateData["utm_medium"] = req.TrackingSettings.UTMMedium
 		}
-		if trackingSettings.UTMCampaign != "" {
-			templateData["utm_campaign"] = trackingSettings.UTMCampaign
+		if req.TrackingSettings.UTMCampaign != "" {
+			templateData["utm_campaign"] = req.TrackingSettings.UTMCampaign
 		}
-		if trackingSettings.UTMTerm != "" {
-			templateData["utm_term"] = trackingSettings.UTMTerm
+		if req.TrackingSettings.UTMTerm != "" {
+			templateData["utm_term"] = req.TrackingSettings.UTMTerm
 		}
-		if trackingSettings.UTMContent != "" {
-			templateData["utm_content"] = trackingSettings.UTMContent
+		if req.TrackingSettings.UTMContent != "" {
+			templateData["utm_content"] = req.TrackingSettings.UTMContent
 		}
 	}
 
 	// Add list data and unsubscribe link if available
-	if contactWithList.ListID != "" && workspaceID != "" {
+	if req.ContactWithList.ListID != "" && req.WorkspaceID != "" {
 
 		templateData["list"] = MapOfAny{
-			"id":   contactWithList.ListID,
-			"name": contactWithList.ListName,
+			"id":   req.ContactWithList.ListID,
+			"name": req.ContactWithList.ListName,
 		}
 
 		// Create unsubscribe link
 		// Build unsubscribe URL query params
 		unsubscribeParams := url.Values{}
 		unsubscribeParams.Set("action", "unsubscribe")
-		unsubscribeParams.Set("lid", contactWithList.ListID)
-		unsubscribeParams.Set("lname", contactWithList.ListName)
-		unsubscribeParams.Set("wid", workspaceID)
-		unsubscribeParams.Set("mid", messageID)
-		unsubscribeParams.Set("email", contactWithList.Contact.Email)
+		unsubscribeParams.Set("lid", req.ContactWithList.ListID)
+		unsubscribeParams.Set("lname", req.ContactWithList.ListName)
+		unsubscribeParams.Set("wid", req.WorkspaceID)
+		unsubscribeParams.Set("mid", req.MessageID)
+		unsubscribeParams.Set("email", req.ContactWithList.Contact.Email)
 		unsubscribeParams.Set("email_hmac", emailHMAC)
 
 		unsubscribeURL := fmt.Sprintf("%s/notification-center?%s",
-			trackingSettings.Endpoint, unsubscribeParams.Encode())
+			req.TrackingSettings.Endpoint, unsubscribeParams.Encode())
 		templateData["unsubscribe_url"] = unsubscribeURL
 
 		// Build oneclick unsubscribe URL query params
 		oneclickParams := url.Values{}
-		oneclickParams.Set("email", contactWithList.Contact.Email)
-		oneclickParams.Set("lids", contactWithList.ListID)
-		oneclickParams.Set("wid", workspaceID)
-		oneclickParams.Set("mid", messageID)
+		oneclickParams.Set("email", req.ContactWithList.Contact.Email)
+		oneclickParams.Set("lids", req.ContactWithList.ListID)
+		oneclickParams.Set("wid", req.WorkspaceID)
+		oneclickParams.Set("mid", req.MessageID)
 
 		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?%s",
-			trackingSettings.Endpoint, oneclickParams.Encode())
+			req.TrackingSettings.Endpoint, oneclickParams.Encode())
 		templateData["oneclick_unsubscribe_url"] = oneclickUnsubscribeURL
 	}
 
 	// Add tracking data
-	templateData["message_id"] = messageID
+	templateData["message_id"] = req.MessageID
 
 	// Add tracking pixel if API endpoint is provided
 
 	// Format: {apiEndpoint}/api/pixel?id={messageID}&t=o&w={workspaceID}
-	messageID = url.QueryEscape(messageID)
-	workspaceID = url.QueryEscape(workspaceID)
+	messageID := url.QueryEscape(req.MessageID)
+	workspaceID := url.QueryEscape(req.WorkspaceID)
 
 	// Tracking pixel for opens
 	trackingPixelURL := fmt.Sprintf("%s/opens?mid=%s&wid=%s",
-		trackingSettings.Endpoint, messageID, workspaceID)
+		req.TrackingSettings.Endpoint, messageID, workspaceID)
 
 	templateData["tracking_opens_url"] = trackingPixelURL
 

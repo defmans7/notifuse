@@ -282,11 +282,19 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 			UTMContent:     messageID,
 		}
 
-		templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, domain.ContactWithList{
-			Contact:  contact,
-			ListID:   listID,
-			ListName: list.Name,
-		}, messageID, trackingSettings, nil)
+		req := domain.TemplateDataRequest{
+			WorkspaceID:        workspace.ID,
+			WorkspaceSecretKey: workspace.Settings.SecretKey,
+			ContactWithList: domain.ContactWithList{
+				Contact:  contact,
+				ListID:   listID,
+				ListName: list.Name,
+			},
+			MessageID:        messageID,
+			TrackingSettings: trackingSettings,
+			Broadcast:        nil,
+		}
+		templateData, err := domain.BuildTemplateData(req)
 
 		if err != nil {
 			s.logger.WithField("email", contactList.Email).Error(fmt.Sprintf("Failed to build template data: %v", err))
@@ -430,11 +438,19 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 				UTMContent:     messageID,
 			}
 
-			templateData, err := domain.BuildTemplateData(workspace.ID, workspace.Settings.SecretKey, domain.ContactWithList{
-				Contact:  contact,
-				ListID:   listID,
-				ListName: list.Name,
-			}, messageID, trackingSettings, nil)
+			req := domain.TemplateDataRequest{
+				WorkspaceID:        workspace.ID,
+				WorkspaceSecretKey: workspace.Settings.SecretKey,
+				ContactWithList: domain.ContactWithList{
+					Contact:  contact,
+					ListID:   listID,
+					ListName: list.Name,
+				},
+				MessageID:        messageID,
+				TrackingSettings: trackingSettings,
+				Broadcast:        nil,
+			}
+			templateData, err := domain.BuildTemplateData(req)
 
 			if err != nil {
 				s.logger.WithField("email", payload.Email).Error(fmt.Sprintf("Failed to build template data: %v", err))

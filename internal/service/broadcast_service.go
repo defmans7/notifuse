@@ -819,11 +819,19 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		trackingSettings.UTMTerm = broadcast.UTMParameters.Term
 	}
 
-	templateData, err := domain.BuildTemplateData(request.WorkspaceID, workspace.Settings.SecretKey, domain.ContactWithList{
-		Contact:  contact,
-		ListID:   "",
-		ListName: "",
-	}, messageID, trackingSettings, broadcast)
+	req := domain.TemplateDataRequest{
+		WorkspaceID:        request.WorkspaceID,
+		WorkspaceSecretKey: workspace.Settings.SecretKey,
+		ContactWithList: domain.ContactWithList{
+			Contact:  contact,
+			ListID:   "",
+			ListName: "",
+		},
+		MessageID:        messageID,
+		TrackingSettings: trackingSettings,
+		Broadcast:        broadcast,
+	}
+	templateData, err := domain.BuildTemplateData(req)
 	if err != nil {
 		s.logger.Error("Failed to build template data for broadcast")
 		return err

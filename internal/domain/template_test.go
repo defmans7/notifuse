@@ -1010,8 +1010,16 @@ func TestBuildTemplateData(t *testing.T) {
 			UTMContent:  "button-1",
 		}
 
-		// Call the function with the workspace secret key
-		data, err := BuildTemplateData(workspaceID, workspaceSecretKey, contactWithList, messageID, trackingSettings, broadcast)
+		// Call the function with the workspace secret key using the new struct
+		req := TemplateDataRequest{
+			WorkspaceID:        workspaceID,
+			WorkspaceSecretKey: workspaceSecretKey,
+			ContactWithList:    contactWithList,
+			MessageID:          messageID,
+			TrackingSettings:   trackingSettings,
+			Broadcast:          broadcast,
+		}
+		data, err := BuildTemplateData(req)
 
 		// Assertions
 		assert.NoError(t, err)
@@ -1081,8 +1089,16 @@ func TestBuildTemplateData(t *testing.T) {
 			UTMTerm:     "new-users",
 			UTMContent:  "button-1",
 		}
-		// Call the function with the workspace secret key
-		data, err := BuildTemplateData(workspaceID, workspaceSecretKey, contactWithList, messageID, trackingSettings, nil)
+		// Call the function with the workspace secret key using the new struct
+		req := TemplateDataRequest{
+			WorkspaceID:        workspaceID,
+			WorkspaceSecretKey: workspaceSecretKey,
+			ContactWithList:    contactWithList,
+			MessageID:          messageID,
+			TrackingSettings:   trackingSettings,
+			Broadcast:          nil,
+		}
+		data, err := BuildTemplateData(req)
 
 		// Assertions
 		assert.NoError(t, err)
@@ -1147,6 +1163,67 @@ func TestGenerateEmailRedirectionEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			url := GenerateEmailRedirectionEndpoint(tt.workspaceID, tt.messageID, tt.apiEndpoint)
 			assert.Equal(t, tt.expected, url)
+		})
+	}
+}
+
+func TestTemplateDataRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		request TemplateDataRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			request: TemplateDataRequest{
+				WorkspaceID:        "ws-123",
+				WorkspaceSecretKey: "secret-key",
+				MessageID:          "msg-456",
+				ContactWithList:    ContactWithList{},
+				TrackingSettings:   mjml.TrackingSettings{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace ID",
+			request: TemplateDataRequest{
+				WorkspaceSecretKey: "secret-key",
+				MessageID:          "msg-456",
+				ContactWithList:    ContactWithList{},
+				TrackingSettings:   mjml.TrackingSettings{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing workspace secret key",
+			request: TemplateDataRequest{
+				WorkspaceID:      "ws-123",
+				MessageID:        "msg-456",
+				ContactWithList:  ContactWithList{},
+				TrackingSettings: mjml.TrackingSettings{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing message ID",
+			request: TemplateDataRequest{
+				WorkspaceID:        "ws-123",
+				WorkspaceSecretKey: "secret-key",
+				ContactWithList:    ContactWithList{},
+				TrackingSettings:   mjml.TrackingSettings{},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.request.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
