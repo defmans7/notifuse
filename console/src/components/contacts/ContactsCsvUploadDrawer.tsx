@@ -144,7 +144,7 @@ export function ContactsCsvUploadDrawer({
   const [errorDetails, setErrorDetails] = useState<
     Array<{ line: number; email: string; error: string }>
   >([])
-  const progressSaveInterval = useRef<NodeJS.Timeout | null>(null)
+  const progressSaveInterval = useRef<number | null>(null)
   const uploadRef = useRef<{
     abort: () => void
     resume: () => void
@@ -723,7 +723,7 @@ export function ContactsCsvUploadDrawer({
       clearInterval(progressSaveInterval.current)
     }
 
-    progressSaveInterval.current = setInterval(() => {
+    progressSaveInterval.current = window.setInterval(() => {
       if (uploading && !processingCancelled) {
         saveProgress()
       }

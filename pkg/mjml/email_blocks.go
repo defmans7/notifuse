@@ -1270,6 +1270,8 @@ func TreeToMjml(rootStyles map[string]interface{}, block EmailBlock, templateDat
 		// Container background from wrapper (assuming field exists)
 		// if wrapBgColor := imgData.Wrapper.BackgroundColor; wrapBgColor != "" { imageAttrs["container-background-color"] = wrapBgColor }
 
+		log.Printf("imgData: %+v\n", imgData)
+		log.Printf("imageAttrs: %+v\n", imageAttrs)
 		attributes = imageAttrs
 		children = nil // mj-image is self-contained
 
