@@ -963,6 +963,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ctx,
 			workspaceID,
 			messageID,
+			nil, // externalID
 			contact,
 			templateConfig,
 			messageData,
@@ -989,6 +990,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ctx,
 			workspaceID,
 			messageID,
+			nil, // externalID
 			contact,
 			templateConfig,
 			messageData,
@@ -1021,6 +1023,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ctx,
 			workspaceID,
 			messageID,
+			nil, // externalID
 			contact,
 			templateConfig,
 			messageData,
@@ -1061,6 +1064,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ctx,
 			workspaceID,
 			messageID,
+			nil, // externalID
 			contact,
 			templateConfig,
 			messageData,
@@ -1098,6 +1102,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ctx,
 			workspaceID,
 			messageID,
+			nil, // externalID
 			contact,
 			templateConfig,
 			messageData,
@@ -1161,6 +1166,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ctx,
 			workspaceID,
 			messageID,
+			nil, // externalID
 			contact,
 			templateConfig,
 			messageData,
@@ -1218,6 +1224,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			ctx,
 			workspaceID,
 			messageID,
+			nil, // externalID
 			contact,
 			templateConfig,
 			messageData,

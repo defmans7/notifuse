@@ -70,6 +70,7 @@ func (d *MessageData) Scan(value interface{}) error {
 // MessageHistory represents a record of a message sent to a contact
 type MessageHistory struct {
 	ID              string      `json:"id"`
+	ExternalID      *string     `json:"external_id,omitempty"` // For idempotency checks
 	ContactEmail    string      `json:"contact_email"`
 	BroadcastID     *string     `json:"broadcast_id,omitempty"`
 	TemplateID      string      `json:"template_id"`
@@ -114,6 +115,9 @@ type MessageHistoryRepository interface {
 
 	// Get retrieves a message history by ID
 	Get(ctx context.Context, workspaceID, id string) (*MessageHistory, error)
+
+	// GetByExternalID retrieves a message history by external ID for idempotency checks
+	GetByExternalID(ctx context.Context, workspaceID, externalID string) (*MessageHistory, error)
 
 	// GetByContact retrieves message history for a specific contact
 	GetByContact(ctx context.Context, workspaceID, contactEmail string, limit, offset int) ([]*MessageHistory, int, error)

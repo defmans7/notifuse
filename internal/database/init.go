@@ -168,6 +168,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS message_history (
 			id VARCHAR(255) NOT NULL PRIMARY KEY,
 			contact_email VARCHAR(255) NOT NULL,
+			external_id VARCHAR(255),
 			broadcast_id VARCHAR(255),
 			template_id VARCHAR(32) NOT NULL,
 			template_version INTEGER NOT NULL,

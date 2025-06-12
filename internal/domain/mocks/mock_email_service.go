@@ -65,17 +65,17 @@ func (mr *MockEmailServiceInterfaceMockRecorder) SendEmail(arg0, arg1, arg2, arg
 }
 
 // SendEmailForTemplate mocks base method.
-func (m *MockEmailServiceInterface) SendEmailForTemplate(arg0 context.Context, arg1, arg2 string, arg3 *domain.Contact, arg4 domain.ChannelTemplate, arg5 domain.MessageData, arg6 mjml.TrackingSettings, arg7 *domain.EmailProvider, arg8 domain.EmailOptions) error {
+func (m *MockEmailServiceInterface) SendEmailForTemplate(arg0 context.Context, arg1, arg2 string, arg3 *string, arg4 *domain.Contact, arg5 domain.ChannelTemplate, arg6 domain.MessageData, arg7 mjml.TrackingSettings, arg8 *domain.EmailProvider, arg9 domain.EmailOptions) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendEmailForTemplate", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+	ret := m.ctrl.Call(m, "SendEmailForTemplate", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendEmailForTemplate indicates an expected call of SendEmailForTemplate.
-func (mr *MockEmailServiceInterfaceMockRecorder) SendEmailForTemplate(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 interface{}) *gomock.Call {
+func (mr *MockEmailServiceInterfaceMockRecorder) SendEmailForTemplate(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEmailForTemplate", reflect.TypeOf((*MockEmailServiceInterface)(nil).SendEmailForTemplate), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEmailForTemplate", reflect.TypeOf((*MockEmailServiceInterface)(nil).SendEmailForTemplate), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
 }
 
 // TestEmailProvider mocks base method.

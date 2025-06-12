@@ -296,7 +296,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 		// send welcome email
 		if contactList.Status == domain.ContactListStatusActive && list.WelcomeTemplate != nil {
 
-			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
+			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, nil, contact, domain.ChannelTemplate{
 				TemplateID: list.WelcomeTemplate.ID,
 			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, domain.EmailOptions{})
 
@@ -309,7 +309,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 		// double optin
 		if contactList.Status == domain.ContactListStatusPending && list.DoubleOptInTemplate != nil {
 
-			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
+			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, nil, contact, domain.ChannelTemplate{
 				TemplateID: list.DoubleOptInTemplate.ID,
 			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, domain.EmailOptions{})
 
@@ -423,7 +423,7 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 				return fmt.Errorf("failed to build template data: %w", err)
 			}
 
-			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, contact, domain.ChannelTemplate{
+			err = s.emailService.SendEmailForTemplate(ctx, workspace.ID, messageID, nil, contact, domain.ChannelTemplate{
 				TemplateID: list.UnsubscribeTemplate.ID,
 			}, domain.MessageData{Data: templateData}, trackingSettings, marketingEmailProvider, domain.EmailOptions{})
 

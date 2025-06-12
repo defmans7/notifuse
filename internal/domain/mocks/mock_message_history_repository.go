@@ -127,6 +127,21 @@ func (mr *MockMessageHistoryRepositoryMockRecorder) GetByContact(arg0, arg1, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByContact", reflect.TypeOf((*MockMessageHistoryRepository)(nil).GetByContact), arg0, arg1, arg2, arg3, arg4)
 }
 
+// GetByExternalID mocks base method.
+func (m *MockMessageHistoryRepository) GetByExternalID(arg0 context.Context, arg1, arg2 string) (*domain.MessageHistory, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByExternalID", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.MessageHistory)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByExternalID indicates an expected call of GetByExternalID.
+func (mr *MockMessageHistoryRepositoryMockRecorder) GetByExternalID(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByExternalID", reflect.TypeOf((*MockMessageHistoryRepository)(nil).GetByExternalID), arg0, arg1, arg2)
+}
+
 // ListMessages mocks base method.
 func (m *MockMessageHistoryRepository) ListMessages(arg0 context.Context, arg1 string, arg2 domain.MessageListParams) ([]*domain.MessageHistory, string, error) {
 	m.ctrl.T.Helper()

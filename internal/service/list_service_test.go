@@ -940,6 +940,7 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			gomock.Any(),
 			workspaceID,
 			gomock.Any(), // messageID
+			gomock.Any(), // externalID
 			contact,      // Contact
 			domain.ChannelTemplate{
 				TemplateID: "unsub-template",
@@ -948,7 +949,7 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			gomock.Any(), // TrackingSettings
 			gomock.Any(), // Use gomock.Any() instead of testEmailProvider
 			domain.EmailOptions{},
-		).Do(func(_ context.Context, _ string, _ string, _ *domain.Contact,
+		).Do(func(_ context.Context, _ string, _ string, _ *string, _ *domain.Contact,
 			_ domain.ChannelTemplate, _ domain.MessageData, _ mjml.TrackingSettings,
 			provider *domain.EmailProvider, _ domain.EmailOptions) {
 			assert.Equal(t, domain.EmailProviderKindSparkPost, provider.Kind)
@@ -1028,6 +1029,7 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			gomock.Any(),
 			workspaceID,
 			gomock.Any(), // messageID
+			gomock.Any(), // externalID
 			contact,      // Contact
 			domain.ChannelTemplate{
 				TemplateID: "unsub-template",

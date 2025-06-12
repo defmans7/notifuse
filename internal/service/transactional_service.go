@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -470,6 +471,32 @@ func (s *TransactionalNotificationService) SendNotification(
 
 	// Create message history entry
 	messageID := uuid.New().String()
+
+	// Check for idempotency if external_id is provided
+	if params.ExternalID != nil && *params.ExternalID != "" {
+		existingMessage, err := s.messageHistoryRepo.GetByExternalID(ctx, workspaceID, *params.ExternalID)
+		if err == nil && existingMessage != nil {
+			// Message with this external_id already exists, return success with existing message ID
+			s.logger.WithFields(map[string]interface{}{
+				"workspace":   workspaceID,
+				"external_id": *params.ExternalID,
+				"message_id":  existingMessage.ID,
+			}).Info("Message with external_id already exists, returning existing message")
+
+			span.AddAttributes(
+				trace.StringAttribute("existing_message_id", existingMessage.ID),
+				trace.BoolAttribute("idempotent_response", true),
+			)
+
+			return existingMessage.ID, nil
+		}
+		// If error is not "not found", it's a real error
+		if err != nil && !strings.Contains(err.Error(), "not found") {
+			tracing.MarkSpanError(ctx, err)
+			return "", fmt.Errorf("failed to check for existing message: %w", err)
+		}
+	}
+
 	successfulChannels := 0
 
 	span.AddAttributes(
@@ -547,6 +574,7 @@ func (s *TransactionalNotificationService) SendNotification(
 				childCtx,
 				workspaceID,
 				messageID,
+				params.ExternalID,
 				contact,
 				templateConfig,
 				messageData,
@@ -706,6 +734,7 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 	// record the message history
 	return s.messageHistoryRepo.Create(ctx, workspaceID, &domain.MessageHistory{
 		ID:              messageID,
+		ExternalID:      nil, // No external ID for test messages
 		ContactEmail:    recipientEmail,
 		TemplateID:      templateID,
 		TemplateVersion: template.Version,

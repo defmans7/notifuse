@@ -109,6 +109,7 @@ type TransactionalNotificationUpdateParams struct {
 // TransactionalNotificationSendParams contains the parameters for sending a transactional notification
 type TransactionalNotificationSendParams struct {
 	ID           string                 `json:"id" validate:"required"`      // ID of the notification to send
+	ExternalID   *string                `json:"external_id,omitempty"`       // External ID for idempotency checks
 	Contact      *Contact               `json:"contact" validate:"required"` // Contact to send the notification to
 	Channels     []TransactionalChannel `json:"channels,omitempty"`          // Specific channels to send through (if empty, use all configured channels)
 	Data         MapOfAny               `json:"data,omitempty"`              // Data to populate the template with

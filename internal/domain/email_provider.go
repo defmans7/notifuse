@@ -266,6 +266,7 @@ type EmailServiceInterface interface {
 		ctx context.Context,
 		workspaceID string,
 		messageID string,
+		externalID *string,
 		contact *Contact,
 		templateConfig ChannelTemplate,
 		messageData MessageData,

@@ -36,15 +36,15 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 
 	query := `
 		INSERT INTO message_history (
-			id, contact_email, broadcast_id, template_id, template_version, 
+			id, external_id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status_info, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, 
-			$6, $7, $8, $9, $10, 
-			$11, $12, $13, $14, $15, 
-			$16, $17, $18
+			$1, $2, $3, $4, $5, $6, 
+			$7, $8, $9, $10, $11, 
+			$12, $13, $14, $15, $16, 
+			$17, $18, $19
 		)
 	`
 
@@ -52,6 +52,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		ctx,
 		query,
 		message.ID,
+		message.ExternalID,
 		message.ContactEmail,
 		message.BroadcastID,
 		message.TemplateID,
@@ -88,22 +89,23 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID strin
 
 	query := `
 		UPDATE message_history SET
-			contact_email = $2,
-			broadcast_id = $3,
-			template_id = $4,
-			template_version = $5,
-			channel = $6,
-			status_info = $7,
-			message_data = $8,
-			sent_at = $9,
-			delivered_at = $10,
-			failed_at = $11,
-			opened_at = $12,	
-			clicked_at = $13,
-			bounced_at = $14,
-			complained_at = $15,
-			unsubscribed_at = $16,
-			updated_at = $17
+			external_id = $2,
+			contact_email = $3,
+			broadcast_id = $4,
+			template_id = $5,
+			template_version = $6,
+			channel = $7,
+			status_info = $8,
+			message_data = $9,
+			sent_at = $10,
+			delivered_at = $11,
+			failed_at = $12,
+			opened_at = $13,	
+			clicked_at = $14,
+			bounced_at = $15,
+			complained_at = $16,
+			unsubscribed_at = $17,
+			updated_at = $18
 		WHERE id = $1
 	`
 
@@ -111,6 +113,7 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID strin
 		ctx,
 		query,
 		message.ID,
+		message.ExternalID,
 		message.ContactEmail,
 		message.BroadcastID,
 		message.TemplateID,
@@ -146,7 +149,7 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 
 	query := `
 		SELECT 
-			id, contact_email, broadcast_id, template_id, template_version, 
+			id, external_id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status_info, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
@@ -157,6 +160,7 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 	var message domain.MessageHistory
 	err = workspaceDB.QueryRowContext(ctx, query, id).Scan(
 		&message.ID,
+		&message.ExternalID,
 		&message.ContactEmail,
 		&message.BroadcastID,
 		&message.TemplateID,
@@ -181,6 +185,57 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID, id stri
 			return nil, fmt.Errorf("message history with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get message history: %w", err)
+	}
+
+	return &message, nil
+}
+
+// GetByExternalID retrieves a message history by external ID for idempotency checks
+func (r *MessageHistoryRepository) GetByExternalID(ctx context.Context, workspaceID, externalID string) (*domain.MessageHistory, error) {
+	// Get the workspace database connection
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	query := `
+		SELECT 
+			id, external_id, contact_email, broadcast_id, template_id, template_version, 
+			channel, status_info, message_data, sent_at, delivered_at, 
+			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
+			unsubscribed_at, created_at, updated_at
+		FROM message_history
+		WHERE external_id = $1
+	`
+
+	var message domain.MessageHistory
+	err = workspaceDB.QueryRowContext(ctx, query, externalID).Scan(
+		&message.ID,
+		&message.ExternalID,
+		&message.ContactEmail,
+		&message.BroadcastID,
+		&message.TemplateID,
+		&message.TemplateVersion,
+		&message.Channel,
+		&message.StatusInfo,
+		&message.MessageData,
+		&message.SentAt,
+		&message.DeliveredAt,
+		&message.FailedAt,
+		&message.OpenedAt,
+		&message.ClickedAt,
+		&message.BouncedAt,
+		&message.ComplainedAt,
+		&message.UnsubscribedAt,
+		&message.CreatedAt,
+		&message.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("message history with external_id %s not found", externalID)
+		}
+		return nil, fmt.Errorf("failed to get message history by external_id: %w", err)
 	}
 
 	return &message, nil
@@ -212,7 +267,7 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 
 	query := `
 		SELECT 
-			id, contact_email, broadcast_id, template_id, template_version, 
+			id, external_id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status_info, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
@@ -233,6 +288,7 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 		var message domain.MessageHistory
 		err := rows.Scan(
 			&message.ID,
+			&message.ExternalID,
 			&message.ContactEmail,
 			&message.BroadcastID,
 			&message.TemplateID,
@@ -290,7 +346,7 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 
 	query := `
 		SELECT 
-			id, contact_email, broadcast_id, template_id, template_version, 
+			id, external_id, contact_email, broadcast_id, template_id, template_version, 
 			channel, status_info, message_data, sent_at, delivered_at, 
 			failed_at, opened_at, clicked_at, bounced_at, complained_at, 
 			unsubscribed_at, created_at, updated_at
@@ -311,6 +367,7 @@ func (r *MessageHistoryRepository) GetByBroadcast(ctx context.Context, workspace
 		var message domain.MessageHistory
 		err := rows.Scan(
 			&message.ID,
+			&message.ExternalID,
 			&message.ContactEmail,
 			&message.BroadcastID,
 			&message.TemplateID,
@@ -518,7 +575,7 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	// Use squirrel to build the query with placeholders
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	queryBuilder := psql.Select(
-		"id", "contact_email", "broadcast_id", "template_id", "template_version",
+		"id", "external_id", "contact_email", "broadcast_id", "template_id", "template_version",
 		"channel", "status_info", "message_data", "sent_at", "delivered_at",
 		"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 		"unsubscribed_at", "created_at", "updated_at",
@@ -663,12 +720,13 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	messages := []*domain.MessageHistory{}
 	for rows.Next() {
 		message := &domain.MessageHistory{}
+		var externalID sql.NullString
 		var broadcastID sql.NullString
 		var statusInfo sql.NullString
 		var deliveredAt, failedAt, openedAt, clickedAt, bouncedAt, complainedAt, unsubscribedAt sql.NullTime
 
 		err := rows.Scan(
-			&message.ID, &message.ContactEmail, &broadcastID, &message.TemplateID, &message.TemplateVersion,
+			&message.ID, &externalID, &message.ContactEmail, &broadcastID, &message.TemplateID, &message.TemplateVersion,
 			&message.Channel, &statusInfo, &message.MessageData,
 			&message.SentAt, &deliveredAt, &failedAt, &openedAt,
 			&clickedAt, &bouncedAt, &complainedAt, &unsubscribedAt,
@@ -683,6 +741,10 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		}
 
 		// Convert nullable fields
+		if externalID.Valid {
+			message.ExternalID = &externalID.String
+		}
+
 		if broadcastID.Valid {
 			message.BroadcastID = &broadcastID.String
 		}

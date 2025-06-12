@@ -988,6 +988,7 @@ func TestTransactionalNotificationService_SendNotification(t *testing.T) {
 				gomock.Any(),
 				workspace,
 				gomock.Any(), // messageID
+				gomock.Any(), // externalID
 				contact,
 				notification.Channels[domain.TransactionalChannelEmail],
 				gomock.Any(), // messageData

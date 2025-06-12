@@ -220,6 +220,7 @@ func (s *EmailService) SendEmailForTemplate(
 	ctx context.Context,
 	workspaceID string,
 	messageID string,
+	externalID *string,
 	contact *domain.Contact,
 	templateConfig domain.ChannelTemplate,
 	messageData domain.MessageData,
@@ -322,6 +323,7 @@ func (s *EmailService) SendEmailForTemplate(
 	// Create message history record
 	messageHistory := &domain.MessageHistory{
 		ID:           messageID,
+		ExternalID:   externalID,
 		ContactEmail: contact.Email,
 		TemplateID:   templateConfig.TemplateID,
 		Channel:      "email",
