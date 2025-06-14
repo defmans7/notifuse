@@ -91,7 +91,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 type messageSender struct {
 	broadcastRepo      domain.BroadcastRepository
 	messageHistoryRepo domain.MessageHistoryRepository
-	templateService    domain.TemplateService
+	templateRepo       domain.TemplateRepository
 	emailService       domain.EmailServiceInterface
 	logger             logger.Logger
 	config             *Config
@@ -103,7 +103,7 @@ type messageSender struct {
 }
 
 // NewMessageSender creates a new message sender
-func NewMessageSender(broadcastRepo domain.BroadcastRepository, messageHistoryRepo domain.MessageHistoryRepository, templateService domain.TemplateService,
+func NewMessageSender(broadcastRepo domain.BroadcastRepository, messageHistoryRepo domain.MessageHistoryRepository, templateRepo domain.TemplateRepository,
 	emailService domain.EmailServiceInterface, logger logger.Logger, config *Config, apiEndpoint string) MessageSender {
 	if config == nil {
 		config = DefaultConfig()
@@ -123,7 +123,7 @@ func NewMessageSender(broadcastRepo domain.BroadcastRepository, messageHistoryRe
 	return &messageSender{
 		broadcastRepo:      broadcastRepo,
 		messageHistoryRepo: messageHistoryRepo,
-		templateService:    templateService,
+		templateRepo:       templateRepo,
 		emailService:       emailService,
 		logger:             logger,
 		config:             config,
@@ -214,8 +214,8 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	}
 
 	// Compile template with the provided data
-	compiledTemplate, err := s.templateService.CompileTemplate(
-		ctx,
+	compiledTemplate, err := domain.CompileTemplate(
+		s.apiEndpoint,
 		domain.CompileTemplateRequest{
 			WorkspaceID:      workspaceID,
 			MessageID:        messageID,

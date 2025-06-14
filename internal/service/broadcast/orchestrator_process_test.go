@@ -22,7 +22,7 @@ func setupTestEnvironment(t *testing.T) (
 	*gomock.Controller,
 	*mocks.MockMessageSender,
 	*domainmocks.MockBroadcastRepository,
-	*domainmocks.MockTemplateService,
+	*domainmocks.MockTemplateRepository,
 	*domainmocks.MockContactRepository,
 	*domainmocks.MockTaskRepository,
 	*domainmocks.MockWorkspaceRepository,
@@ -40,7 +40,7 @@ func setupTestEnvironment(t *testing.T) (
 		AnyTimes()
 
 	mockBroadcastRepository := domainmocks.NewMockBroadcastRepository(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
 	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
 	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
@@ -55,7 +55,7 @@ func setupTestEnvironment(t *testing.T) (
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	return ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	return ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider
 }
 
@@ -125,7 +125,7 @@ func createTask(
 // TestProcess_HappyPath tests the successful processing of a broadcast
 func TestProcess_HappyPath(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -190,7 +190,7 @@ func TestProcess_HappyPath(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
@@ -214,7 +214,7 @@ func TestProcess_HappyPath(t *testing.T) {
 // TestProcess_NilTaskState tests initialization of nil task state
 func TestProcess_NilTaskState(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -276,7 +276,7 @@ func TestProcess_NilTaskState(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
@@ -303,7 +303,7 @@ func TestProcess_NilTaskState(t *testing.T) {
 // TestProcess_NilSendBroadcastState tests initialization of nil send broadcast state
 func TestProcess_NilSendBroadcastState(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -370,7 +370,7 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
@@ -395,7 +395,7 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 // TestProcess_MissingBroadcastID tests error handling when broadcast ID is missing
 func TestProcess_MissingBroadcastID(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -449,7 +449,7 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
@@ -472,7 +472,7 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 // TestProcess_ZeroRecipients tests early completion when there are no recipients
 func TestProcess_ZeroRecipients(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -539,7 +539,7 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
@@ -563,7 +563,7 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 // TestProcess_GetTotalRecipientCountError tests error handling when getting recipient count fails
 func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -632,7 +632,7 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
@@ -655,7 +655,7 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 // TestProcess_LastRetryError tests marking broadcasts as failed on the last retry
 func TestProcess_LastRetryError(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -735,7 +735,7 @@ func TestProcess_LastRetryError(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
@@ -758,7 +758,7 @@ func TestProcess_LastRetryError(t *testing.T) {
 // TestProcess_LoadTemplatesError tests error handling when template loading fails
 func TestProcess_LoadTemplatesError(t *testing.T) {
 	// Setup
-	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateService,
+	ctrl, mockMessageSender, mockBroadcastRepository, mockTemplateRepo,
 		mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider := setupTestEnvironment(t)
 	defer ctrl.Finish()
 
@@ -826,7 +826,7 @@ func TestProcess_LoadTemplatesError(t *testing.T) {
 	orchestrator := broadcast.NewBroadcastOrchestrator(
 		mockMessageSender,
 		mockBroadcastRepository,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,

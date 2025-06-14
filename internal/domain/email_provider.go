@@ -130,17 +130,17 @@ func (e *EmailProvider) Validate(passphrase string) error {
 
 func (e *EmailProvider) GetSender(id string) *EmailSender {
 	if id != "" {
-		for _, sender := range e.Senders {
-			if sender.ID == id {
-				return &sender
+		for i := range e.Senders {
+			if e.Senders[i].ID == id {
+				return &e.Senders[i]
 			}
 		}
 	}
 
 	// use default sender
-	for _, sender := range e.Senders {
-		if sender.IsDefault {
-			return &sender
+	for i := range e.Senders {
+		if e.Senders[i].IsDefault {
+			return &e.Senders[i]
 		}
 	}
 

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Modal, Button, Input, Select, Typography, Form } from 'antd'
+import { Modal, Button, Input, Select, Typography, Form, App } from 'antd'
 import { Workspace, Template, Integration } from '../../services/api/types'
 import { transactionalNotificationsApi } from '../../services/api/transactional_notifications'
-import { message } from 'antd'
 import { emailProviders } from '../integrations/EmailProviders'
 
 const { Text } = Typography
@@ -34,6 +33,7 @@ export default function SendTemplateModal({
   const [replyTo, setReplyTo] = useState<string>('')
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [form] = Form.useForm()
+  const { message } = App.useApp()
 
   // Filter to only email integrations
   const emailIntegrations =

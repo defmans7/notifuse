@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -525,8 +524,8 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 		return nil, fmt.Errorf("failed to build next batch query: %w", err)
 	}
 
-	log.Println("sqlQuery", sqlQuery)
-	log.Println("args", args)
+	// log.Println("sqlQuery", sqlQuery)
+	// log.Println("args", args)
 
 	rows, err := r.systemDB.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {

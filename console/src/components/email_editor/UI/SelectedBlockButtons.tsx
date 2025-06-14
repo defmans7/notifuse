@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { SelectedBlockButtonsProp } from '../Editor'
-import { Tooltip, Popconfirm, Modal, Form, Button, Spin, Input, message, Select } from 'antd'
+import { Tooltip, Popconfirm, Modal, Form, Button, Spin, Input, Select, App } from 'antd'
 import { DragOutlined, DeleteOutlined, CopyOutlined, SaveOutlined } from '@ant-design/icons'
 import { EmailTemplateBlock } from '../types'
 import uuid from 'short-uuid'
@@ -8,6 +8,7 @@ import uuid from 'short-uuid'
 const SelectedBlockButtons = (props: SelectedBlockButtonsProp) => {
   const [saveVisible, setSaveVisible] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { message } = App.useApp()
 
   const [form] = Form.useForm()
 

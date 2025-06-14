@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, Drawer, Form, Input, Switch, message, Tooltip } from 'antd'
+import { Button, Drawer, Form, Input, Switch, App, Tooltip } from 'antd'
 import { InfoCircleOutlined } from '@ant-design/icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { listsApi } from '../../services/api/list'
@@ -34,6 +34,7 @@ export function CreateListDrawer({
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
   const isEditMode = !!list
+  const { message } = App.useApp()
 
   // Generate list ID from name (alphanumeric only)
   const generateListId = (name: string) => {

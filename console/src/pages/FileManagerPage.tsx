@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { message } from 'antd'
+import { App } from 'antd'
 import { FileManager, ExtendedFileManagerProps } from '../components/file_manager/fileManager'
 import { StorageObject } from '../components/file_manager/interfaces'
 import { useParams } from '@tanstack/react-router'
@@ -11,6 +11,7 @@ export function FileManagerPage() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
   const { workspaces, refreshWorkspaces } = useAuth()
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null)
+  const { message } = App.useApp()
 
   // Initialize settings from the current workspace
   useEffect(() => {

@@ -10,7 +10,7 @@ import {
   Space,
   Table,
   Tooltip,
-  message
+  App
 } from 'antd'
 import { FileManagerProps, StorageObject } from './interfaces'
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -66,6 +66,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
   const inputFileRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [form] = Form.useForm()
+  const { message } = App.useApp()
 
   const goToPath = (path: string) => {
     // reset selection on path change

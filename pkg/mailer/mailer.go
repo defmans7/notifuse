@@ -54,7 +54,7 @@ func (m *SMTPMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, 
 	inviteURL := fmt.Sprintf("%s/invitation?token=%s", m.config.APIEndpoint, token)
 
 	// Create a new message
-	msg := mail.NewMsg()
+	msg := mail.NewMsg(mail.WithNoDefaultUserAgent())
 
 	// Set sender and recipient
 	if err := msg.FromFormat(m.config.FromName, m.config.FromEmail); err != nil {
@@ -121,7 +121,7 @@ func (m *SMTPMailer) SendWorkspaceInvitation(email, workspaceName, inviterName, 
 // SendMagicCode sends an authentication magic code email
 func (m *SMTPMailer) SendMagicCode(email, code string) error {
 	// Create a new message
-	msg := mail.NewMsg()
+	msg := mail.NewMsg(mail.WithNoDefaultUserAgent())
 
 	// Set sender and recipient
 	if err := msg.FromFormat(m.config.FromName, m.config.FromEmail); err != nil {

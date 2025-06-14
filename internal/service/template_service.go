@@ -2,14 +2,11 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
-	mjmlgo "github.com/Boostport/mjml-go"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
 )
 
 type TemplateService struct {
@@ -170,85 +167,5 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.Co
 		ctx = context.WithValue(ctx, "authenticated_user", user)
 	}
 
-	// Extract root styles from the tree data
-	rootDataMap, ok := payload.VisualEditorTree.Data.(map[string]interface{})
-	if !ok {
-		s.logger.Error("CompileTemplate: Root block data is not a map")
-		// Return standard Go error for non-compilation issues
-		return nil, fmt.Errorf("invalid root block data format")
-	}
-	rootStyles, _ := rootDataMap["styles"].(map[string]interface{})
-	if rootStyles == nil {
-		s.logger.Error("CompileTemplate: Root block styles are missing")
-		// Return standard Go error for non-compilation issues
-		return nil, fmt.Errorf("root block styles are required for compilation")
-	}
-
-	// Prepare template data JSON string
-	var templateDataStr string
-	if payload.TemplateData != nil && len(payload.TemplateData) > 0 {
-		jsonDataBytes, err := json.Marshal(payload.TemplateData)
-		if err != nil {
-			s.logger.WithField("error", err).Error("Failed to marshal test_data to JSON")
-			// Return standard Go error for non-compilation issues
-			return nil, fmt.Errorf("failed to marshal test_data: %w", err)
-		}
-		templateDataStr = string(jsonDataBytes)
-	}
-
-	trackingSettings := notifusemjml.TrackingSettings{
-		EnableTracking: payload.TrackingEnabled,
-		Endpoint:       domain.GenerateEmailRedirectionEndpoint(payload.WorkspaceID, payload.MessageID, s.apiEndpoint),
-	}
-
-	if payload.UTMSource != nil {
-		trackingSettings.UTMSource = *payload.UTMSource
-	}
-	if payload.UTMMedium != nil {
-		trackingSettings.UTMMedium = *payload.UTMMedium
-	}
-	if payload.UTMCampaign != nil {
-		trackingSettings.UTMCampaign = *payload.UTMCampaign
-	}
-	if payload.UTMContent != nil {
-		trackingSettings.UTMContent = *payload.UTMContent
-	}
-	if payload.UTMTerm != nil {
-		trackingSettings.UTMTerm = *payload.UTMTerm
-	}
-
-	// Compile tree to MJML using our pkg/mjml function
-	mjmlResult, err := notifusemjml.TreeToMjml(rootStyles, payload.VisualEditorTree, templateDataStr, trackingSettings, 0, nil)
-	if err != nil {
-		return &domain.CompileTemplateResponse{
-			Success: false,
-			MJML:    nil,
-			HTML:    nil,
-			Error: &mjmlgo.Error{
-				Message: err.Error(),
-			},
-		}, nil
-	}
-
-	// Compile MJML to HTML using mjml-go library
-	htmlResult, err := mjmlgo.ToHTML(ctx, mjmlResult)
-	if err != nil {
-		// Return the response struct with Success=false and the Error details
-		return &domain.CompileTemplateResponse{
-			Success: false,
-			MJML:    &mjmlResult, // Include original MJML for context if desired
-			HTML:    nil,
-			Error: &mjmlgo.Error{
-				Message: err.Error(),
-			},
-		}, nil
-	}
-
-	// Return successful response
-	return &domain.CompileTemplateResponse{
-		Success: true,
-		MJML:    &mjmlResult,
-		HTML:    &htmlResult,
-		Error:   nil,
-	}, nil
+	return domain.CompileTemplate(s.apiEndpoint, payload)
 }

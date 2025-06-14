@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, Modal, message } from 'antd'
+import { Alert, Button, Form, Input, Modal, App } from 'antd'
 import { useState } from 'react'
 import { useForm } from 'antd/lib/form/Form'
 import { FileManagerSettings } from '../../services/api/types'
@@ -14,6 +14,7 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
   const [loading, setLoading] = useState(false)
   const [form] = useForm()
   const [settingsVisible, setSettingsVisible] = useState(false)
+  const { message } = App.useApp()
 
   const toggleSettings = () => {
     setSettingsVisible(!settingsVisible)
@@ -148,5 +149,4 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
     </span>
   )
 }
-
 export default ButtonFilesSettings

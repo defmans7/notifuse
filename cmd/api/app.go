@@ -459,7 +459,7 @@ func (a *App) InitServices() error {
 	broadcastFactory := broadcast.NewFactory(
 		a.broadcastRepo,
 		a.messageHistoryRepo,
-		a.templateService,
+		a.templateRepo,
 		a.emailService,
 		a.contactRepo,
 		a.taskRepo,

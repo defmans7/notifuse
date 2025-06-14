@@ -1,7 +1,20 @@
 import { useState } from 'react'
-import { Modal, Button, Form, Switch, Select, DatePicker, Row, Col, message, Space } from 'antd'
+import {
+  Modal,
+  Button,
+  Form,
+  Switch,
+  Select,
+  DatePicker,
+  Row,
+  Col,
+  message,
+  Space,
+  Alert
+} from 'antd'
 import { Broadcast } from '../../services/api/broadcast'
 import { broadcastApi } from '../../services/api/broadcast'
+import type { Workspace } from '../../services/api/types'
 import dayjs from '../../lib/dayjs'
 
 interface SendOrScheduleModalProps {
@@ -9,6 +22,7 @@ interface SendOrScheduleModalProps {
   visible: boolean
   onClose: () => void
   workspaceId: string
+  workspace?: Workspace
   onSuccess: () => void
 }
 
@@ -17,11 +31,14 @@ export function SendOrScheduleModal({
   visible,
   onClose,
   workspaceId,
+  workspace,
   onSuccess
 }: SendOrScheduleModalProps) {
   const [form] = Form.useForm()
   const [isScheduled, setIsScheduled] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  const hasMarketingEmailProvider = workspace?.settings?.marketing_email_provider_id
 
   // Reset form when modal opens
   const handleOpen = () => {
@@ -125,6 +142,21 @@ export function SendOrScheduleModal({
       }}
     >
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        {!hasMarketingEmailProvider && (
+          <Alert
+            message="Marketing Email Provider Required"
+            description="You don't have a marketing email provider configured. Please set up an email provider in your workspace settings to send broadcasts."
+            type="warning"
+            showIcon
+            className="!mb-4"
+            action={
+              <Button type="link" size="small" href={`/workspace/${workspaceId}/settings`}>
+                Configure Provider
+              </Button>
+            }
+          />
+        )}
+
         <div className="mb-4">
           <p>Do you want to send "{broadcast.name}" immediately or schedule it for later?</p>
         </div>
@@ -247,7 +279,12 @@ export function SendOrScheduleModal({
         <div className="flex justify-end space-x-2 mt-6">
           <Space>
             <Button onClick={onClose}>Cancel</Button>
-            <Button type="primary" loading={loading} htmlType="submit">
+            <Button
+              type="primary"
+              loading={loading}
+              htmlType="submit"
+              disabled={!hasMarketingEmailProvider}
+            >
               {isScheduled ? 'Schedule' : 'Send Now'}
             </Button>
           </Space>

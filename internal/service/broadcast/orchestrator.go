@@ -19,8 +19,8 @@ type BroadcastOrchestratorInterface interface {
 	// Process executes or continues a broadcast sending task
 	Process(ctx context.Context, task *domain.Task) (bool, error)
 
-	// LoadTemplatesForBroadcast loads all templates for a broadcast's variations
-	LoadTemplatesForBroadcast(ctx context.Context, workspaceID, broadcastID string) (map[string]*domain.Template, error)
+	// LoadTemplates loads all templates for a broadcast's variations
+	LoadTemplates(ctx context.Context, workspaceID string, templateIDs []string) (map[string]*domain.Template, error)
 
 	// ValidateTemplates validates that the required templates are loaded and valid
 	ValidateTemplates(templates map[string]*domain.Template) error
@@ -37,22 +37,22 @@ type BroadcastOrchestratorInterface interface {
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
 type BroadcastOrchestrator struct {
-	messageSender   MessageSender
-	broadcastRepo   domain.BroadcastRepository
-	templateService domain.TemplateService
-	contactRepo     domain.ContactRepository
-	taskRepo        domain.TaskRepository
-	workspaceRepo   domain.WorkspaceRepository
-	logger          logger.Logger
-	config          *Config
-	timeProvider    TimeProvider
+	messageSender MessageSender
+	broadcastRepo domain.BroadcastRepository
+	templateRepo  domain.TemplateRepository
+	contactRepo   domain.ContactRepository
+	taskRepo      domain.TaskRepository
+	workspaceRepo domain.WorkspaceRepository
+	logger        logger.Logger
+	config        *Config
+	timeProvider  TimeProvider
 }
 
 // NewBroadcastOrchestrator creates a new broadcast orchestrator
 func NewBroadcastOrchestrator(
 	messageSender MessageSender,
 	broadcastRepo domain.BroadcastRepository,
-	templateService domain.TemplateService,
+	templateRepo domain.TemplateRepository,
 	contactRepo domain.ContactRepository,
 	taskRepo domain.TaskRepository,
 	workspaceRepo domain.WorkspaceRepository,
@@ -69,15 +69,15 @@ func NewBroadcastOrchestrator(
 	}
 
 	return &BroadcastOrchestrator{
-		messageSender:   messageSender,
-		broadcastRepo:   broadcastRepo,
-		templateService: templateService,
-		contactRepo:     contactRepo,
-		taskRepo:        taskRepo,
-		workspaceRepo:   workspaceRepo,
-		logger:          logger,
-		config:          config,
-		timeProvider:    timeProvider,
+		messageSender: messageSender,
+		broadcastRepo: broadcastRepo,
+		templateRepo:  templateRepo,
+		contactRepo:   contactRepo,
+		taskRepo:      taskRepo,
+		workspaceRepo: workspaceRepo,
+		logger:        logger,
+		config:        config,
+		timeProvider:  timeProvider,
 	}
 }
 
@@ -86,56 +86,16 @@ func (o *BroadcastOrchestrator) CanProcess(taskType string) bool {
 	return taskType == "send_broadcast"
 }
 
-// LoadTemplatesForBroadcast loads all templates for a broadcast's variations
-func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, workspaceID, broadcastID string) (map[string]*domain.Template, error) {
-	startTime := time.Now()
-	defer func() {
-		// codecov:ignore:start
-		o.logger.WithFields(map[string]interface{}{
-			"duration_ms":  time.Since(startTime).Milliseconds(),
-			"broadcast_id": broadcastID,
-			"workspace_id": workspaceID,
-		}).Debug("Template loading completed")
-		// codecov:ignore:end
-	}()
-
-	// Get the broadcast to access its template variations
-	broadcast, err := o.broadcastRepo.GetBroadcast(ctx, workspaceID, broadcastID)
-	if err != nil {
-		// codecov:ignore:start
-		o.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
-			"workspace_id": workspaceID,
-			"error":        err.Error(),
-		}).Error("Failed to get broadcast for templates")
-		// codecov:ignore:end
-		return nil, NewBroadcastError(ErrCodeBroadcastNotFound, "broadcast not found", false, err)
-	}
-
-	// Process the broadcast's variations to get template IDs
-	templateIDs := make(map[string]bool)
-	for _, variation := range broadcast.TestSettings.Variations {
-		templateIDs[variation.TemplateID] = true
-	}
-
-	if len(templateIDs) == 0 {
-		// codecov:ignore:start
-		o.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
-			"workspace_id": workspaceID,
-		}).Error("No template variations found in broadcast")
-		// codecov:ignore:end
-		return nil, NewBroadcastError(ErrCodeTemplateMissing, "no template variations found in broadcast", false, nil)
-	}
+// LoadTemplates loads all templates for a broadcast's variations
+func (o *BroadcastOrchestrator) LoadTemplates(ctx context.Context, workspaceID string, templateIDs []string) (map[string]*domain.Template, error) {
 
 	// Load all templates
 	templates := make(map[string]*domain.Template)
-	for templateID := range templateIDs {
-		template, err := o.templateService.GetTemplateByID(ctx, workspaceID, templateID, 0) // Always use version 0
+	for _, templateID := range templateIDs {
+		template, err := o.templateRepo.GetTemplateByID(ctx, workspaceID, templateID, 0) // Always use version 0
 		if err != nil {
 			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
-				"broadcast_id": broadcastID,
 				"workspace_id": workspaceID,
 				"template_id":  templateID,
 				"error":        err.Error(),
@@ -150,21 +110,11 @@ func (o *BroadcastOrchestrator) LoadTemplatesForBroadcast(ctx context.Context, w
 	if len(templates) == 0 {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
-			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 		}).Error("No valid templates found for broadcast")
 		// codecov:ignore:end
 		return nil, NewBroadcastError(ErrCodeTemplateMissing, "no valid templates found for broadcast", false, nil)
 	}
-
-	// codecov:ignore:start
-	o.logger.WithFields(map[string]interface{}{
-		"broadcast_id":    broadcastID,
-		"workspace_id":    workspaceID,
-		"template_count":  len(templates),
-		"variation_count": len(broadcast.TestSettings.Variations),
-	}).Info("Templates loaded for broadcast")
-	// codecov:ignore:end
 
 	return templates, nil
 }
@@ -299,6 +249,7 @@ func (o *BroadcastOrchestrator) FetchBatch(ctx context.Context, workspaceID, bro
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
+			"audience":     broadcast.Audience,
 			"offset":       offset,
 			"limit":        limit,
 			"error":        err.Error(),
@@ -376,12 +327,6 @@ func (o *BroadcastOrchestrator) SaveProgressState(
 	startTime time.Time,
 ) (time.Time, error) {
 	currentTime := o.timeProvider.Now()
-
-	// Skip saving if not enough time has passed
-	elapsed := currentTime.Sub(lastSaveTime)
-	if elapsed < 5*time.Second {
-		return lastSaveTime, nil
-	}
 
 	// Calculate progress
 	elapsedSinceStart := currentTime.Sub(startTime)
@@ -612,8 +557,19 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		return false, err
 	}
 
+	// Get the broadcast to access its template variations
+	broadcast, err := o.broadcastRepo.GetBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
+	if err != nil {
+		return false, err
+	}
+
 	// Phase 2: Load templates
-	templates, templatesErr := o.LoadTemplatesForBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
+	templateIDs := make([]string, len(broadcast.TestSettings.Variations))
+	for i, variation := range broadcast.TestSettings.Variations {
+		templateIDs[i] = variation.TemplateID
+	}
+
+	templates, templatesErr := o.LoadTemplates(ctx, task.WorkspaceID, templateIDs)
 	if templatesErr != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
@@ -668,14 +624,6 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			o.config.FetchBatchSize,
 		)
 		if batchErr != nil {
-			// codecov:ignore:start
-			o.logger.WithFields(map[string]interface{}{
-				"task_id":      task.ID,
-				"broadcast_id": broadcastState.BroadcastID,
-				"offset":       currentOffset,
-				"error":        batchErr.Error(),
-			}).Error("Failed to fetch recipients for broadcast")
-			// codecov:ignore:end
 			err = batchErr
 			return false, err
 		}
@@ -792,6 +740,41 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	task.State.Progress = progress
 	task.State.Message = message
 	task.Progress = progress
+
+	// If the task is complete, update the broadcast status to "sent"
+	if allDone {
+
+		// Update broadcast status to sent
+		broadcast.Status = domain.BroadcastStatusSent
+		broadcast.UpdatedAt = time.Now().UTC()
+
+		// Set completion time
+		completedAt := time.Now().UTC()
+		broadcast.CompletedAt = &completedAt
+
+		// Save the updated broadcast
+		updateErr := o.broadcastRepo.UpdateBroadcast(ctx, broadcast)
+		if updateErr != nil {
+			// codecov:ignore:start
+			o.logger.WithFields(map[string]interface{}{
+				"task_id":      task.ID,
+				"broadcast_id": broadcastState.BroadcastID,
+				"error":        updateErr.Error(),
+			}).Error("Failed to update broadcast status to sent")
+			// codecov:ignore:end
+			err = fmt.Errorf("failed to update broadcast status to sent: %w", updateErr)
+			return false, err
+		}
+
+		// codecov:ignore:start
+		o.logger.WithFields(map[string]interface{}{
+			"task_id":      task.ID,
+			"broadcast_id": broadcastState.BroadcastID,
+			"sent_count":   sentCount,
+			"failed_count": failedCount,
+		}).Info("Broadcast marked as sent successfully")
+		// codecov:ignore:end
+	}
 
 	// codecov:ignore:start
 	o.logger.WithFields(map[string]interface{}{

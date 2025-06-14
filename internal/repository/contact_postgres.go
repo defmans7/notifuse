@@ -1037,9 +1037,16 @@ func (r *contactRepository) GetContactsForBroadcast(
 			Join("contact_lists cl ON c.email = cl.email").
 			Join("lists l ON cl.list_id = l.id"). // Join with lists table to get the name
 			Where(sq.Eq{"cl.list_id": audience.Lists}).
-			OrderBy("c.created_at ASC"). // Order by created_at to ensure deterministic ordering
 			Limit(uint64(limit)).
 			Offset(uint64(offset))
+
+		// Set order by clause based on whether we need deduplication
+		if audience.SkipDuplicateEmails {
+			// For DISTINCT ON (c.email), we must order by c.email first
+			query = query.OrderBy("c.email ASC", "c.created_at ASC")
+		} else {
+			query = query.OrderBy("c.created_at ASC")
+		}
 
 		// Exclude unsubscribed contacts if required
 		if audience.ExcludeUnsubscribed {
@@ -1052,9 +1059,16 @@ func (r *contactRepository) GetContactsForBroadcast(
 		includeListID = false
 		query = psql.Select("c.*").
 			From("contacts c").
-			OrderBy("c.created_at ASC").
 			Limit(uint64(limit)).
 			Offset(uint64(offset))
+
+		// Set order by clause based on whether we need deduplication
+		if audience.SkipDuplicateEmails {
+			// For DISTINCT ON (c.email), we must order by c.email first
+			query = query.OrderBy("c.email ASC", "c.created_at ASC")
+		} else {
+			query = query.OrderBy("c.created_at ASC")
+		}
 	}
 
 	// Handle segments filtering (if implemented)
@@ -1065,17 +1079,16 @@ func (r *contactRepository) GetContactsForBroadcast(
 		return nil, fmt.Errorf("segments filtering not implemented")
 	}
 
-	// Handle deduplication if required
-	if audience.SkipDuplicateEmails {
-		// Use DISTINCT ON to ensure unique emails
-		// Note: This requires careful handling with the ordering
-		query = query.Prefix("SELECT DISTINCT ON (c.email)")
-	}
-
 	// Build the final query
 	sqlQuery, args, err := query.ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	// Handle deduplication if required by modifying the SQL string
+	if audience.SkipDuplicateEmails {
+		// Replace "SELECT" with "SELECT DISTINCT ON (c.email)" at the beginning
+		sqlQuery = strings.Replace(sqlQuery, "SELECT", "SELECT DISTINCT ON (c.email)", 1)
 	}
 
 	// Execute the query
@@ -1091,23 +1104,171 @@ func (r *contactRepository) GetContactsForBroadcast(
 	for rows.Next() {
 		var listID sql.NullString
 		var listName sql.NullString
-		var scanErr error
 		var contact *domain.Contact
+		var scanErr error
 
 		if includeListID {
-			// Scan all contact fields first
-			contact, scanErr = domain.ScanContact(rows)
+			// We need to scan all columns at once since we selected c.*, cl.list_id, l.name
+			// Create all the scan destinations for contact fields plus list_id and list_name
+			var email, externalID, timezone, language sql.NullString
+			var firstName, lastName, phone, addressLine1, addressLine2 sql.NullString
+			var country, postcode, state, jobTitle sql.NullString
+			var lifetimeValue, ordersCount sql.NullFloat64
+			var lastOrderAt sql.NullTime
+			var customString1, customString2, customString3, customString4, customString5 sql.NullString
+			var customNumber1, customNumber2, customNumber3, customNumber4, customNumber5 sql.NullFloat64
+			var customDatetime1, customDatetime2, customDatetime3, customDatetime4, customDatetime5 sql.NullTime
+			var customJSON1, customJSON2, customJSON3, customJSON4, customJSON5 sql.NullString
+			var createdAt, updatedAt time.Time
+
+			// Scan all columns including contact fields + list_id + list_name
+			scanErr = rows.Scan(
+				&email, &externalID, &timezone, &language,
+				&firstName, &lastName, &phone, &addressLine1, &addressLine2,
+				&country, &postcode, &state, &jobTitle,
+				&lifetimeValue, &ordersCount, &lastOrderAt,
+				&customString1, &customString2, &customString3, &customString4, &customString5,
+				&customNumber1, &customNumber2, &customNumber3, &customNumber4, &customNumber5,
+				&customDatetime1, &customDatetime2, &customDatetime3, &customDatetime4, &customDatetime5,
+				&customJSON1, &customJSON2, &customJSON3, &customJSON4, &customJSON5,
+				&createdAt, &updatedAt,
+				&listID, &listName, // Additional columns
+			)
 			if scanErr != nil {
-				return nil, fmt.Errorf("failed to scan contact: %w", scanErr)
+				return nil, fmt.Errorf("failed to scan contact with list: %w", scanErr)
 			}
 
-			// Try to scan the list_id and list_name separately
-			if err := rows.Scan(&listID, &listName); err == nil {
-				// This is a best-effort scan
-				// If it fails, we continue with a nil listID and listName
+			// Convert scanned values to domain.Contact
+			contact = &domain.Contact{
+				Email:       email.String,
+				DBCreatedAt: createdAt,
+				DBUpdatedAt: updatedAt,
+			}
+
+			// Set nullable fields
+			if externalID.Valid {
+				contact.ExternalID = &domain.NullableString{String: externalID.String, IsNull: false}
+			}
+			if timezone.Valid {
+				contact.Timezone = &domain.NullableString{String: timezone.String, IsNull: false}
+			}
+			if language.Valid {
+				contact.Language = &domain.NullableString{String: language.String, IsNull: false}
+			}
+			if firstName.Valid {
+				contact.FirstName = &domain.NullableString{String: firstName.String, IsNull: false}
+			}
+			if lastName.Valid {
+				contact.LastName = &domain.NullableString{String: lastName.String, IsNull: false}
+			}
+			if phone.Valid {
+				contact.Phone = &domain.NullableString{String: phone.String, IsNull: false}
+			}
+			if addressLine1.Valid {
+				contact.AddressLine1 = &domain.NullableString{String: addressLine1.String, IsNull: false}
+			}
+			if addressLine2.Valid {
+				contact.AddressLine2 = &domain.NullableString{String: addressLine2.String, IsNull: false}
+			}
+			if country.Valid {
+				contact.Country = &domain.NullableString{String: country.String, IsNull: false}
+			}
+			if postcode.Valid {
+				contact.Postcode = &domain.NullableString{String: postcode.String, IsNull: false}
+			}
+			if state.Valid {
+				contact.State = &domain.NullableString{String: state.String, IsNull: false}
+			}
+			if jobTitle.Valid {
+				contact.JobTitle = &domain.NullableString{String: jobTitle.String, IsNull: false}
+			}
+			if lifetimeValue.Valid {
+				contact.LifetimeValue = &domain.NullableFloat64{Float64: lifetimeValue.Float64, IsNull: false}
+			}
+			if ordersCount.Valid {
+				contact.OrdersCount = &domain.NullableFloat64{Float64: ordersCount.Float64, IsNull: false}
+			}
+			if lastOrderAt.Valid {
+				contact.LastOrderAt = &domain.NullableTime{Time: lastOrderAt.Time, IsNull: false}
+			}
+			// Handle custom fields similarly...
+			if customString1.Valid {
+				contact.CustomString1 = &domain.NullableString{String: customString1.String, IsNull: false}
+			}
+			if customString2.Valid {
+				contact.CustomString2 = &domain.NullableString{String: customString2.String, IsNull: false}
+			}
+			if customString3.Valid {
+				contact.CustomString3 = &domain.NullableString{String: customString3.String, IsNull: false}
+			}
+			if customString4.Valid {
+				contact.CustomString4 = &domain.NullableString{String: customString4.String, IsNull: false}
+			}
+			if customString5.Valid {
+				contact.CustomString5 = &domain.NullableString{String: customString5.String, IsNull: false}
+			}
+			if customNumber1.Valid {
+				contact.CustomNumber1 = &domain.NullableFloat64{Float64: customNumber1.Float64, IsNull: false}
+			}
+			if customNumber2.Valid {
+				contact.CustomNumber2 = &domain.NullableFloat64{Float64: customNumber2.Float64, IsNull: false}
+			}
+			if customNumber3.Valid {
+				contact.CustomNumber3 = &domain.NullableFloat64{Float64: customNumber3.Float64, IsNull: false}
+			}
+			if customNumber4.Valid {
+				contact.CustomNumber4 = &domain.NullableFloat64{Float64: customNumber4.Float64, IsNull: false}
+			}
+			if customNumber5.Valid {
+				contact.CustomNumber5 = &domain.NullableFloat64{Float64: customNumber5.Float64, IsNull: false}
+			}
+			if customDatetime1.Valid {
+				contact.CustomDatetime1 = &domain.NullableTime{Time: customDatetime1.Time, IsNull: false}
+			}
+			if customDatetime2.Valid {
+				contact.CustomDatetime2 = &domain.NullableTime{Time: customDatetime2.Time, IsNull: false}
+			}
+			if customDatetime3.Valid {
+				contact.CustomDatetime3 = &domain.NullableTime{Time: customDatetime3.Time, IsNull: false}
+			}
+			if customDatetime4.Valid {
+				contact.CustomDatetime4 = &domain.NullableTime{Time: customDatetime4.Time, IsNull: false}
+			}
+			if customDatetime5.Valid {
+				contact.CustomDatetime5 = &domain.NullableTime{Time: customDatetime5.Time, IsNull: false}
+			}
+			if customJSON1.Valid {
+				var jsonData interface{}
+				if err := json.Unmarshal([]byte(customJSON1.String), &jsonData); err == nil {
+					contact.CustomJSON1 = &domain.NullableJSON{Data: jsonData, IsNull: false}
+				}
+			}
+			if customJSON2.Valid {
+				var jsonData interface{}
+				if err := json.Unmarshal([]byte(customJSON2.String), &jsonData); err == nil {
+					contact.CustomJSON2 = &domain.NullableJSON{Data: jsonData, IsNull: false}
+				}
+			}
+			if customJSON3.Valid {
+				var jsonData interface{}
+				if err := json.Unmarshal([]byte(customJSON3.String), &jsonData); err == nil {
+					contact.CustomJSON3 = &domain.NullableJSON{Data: jsonData, IsNull: false}
+				}
+			}
+			if customJSON4.Valid {
+				var jsonData interface{}
+				if err := json.Unmarshal([]byte(customJSON4.String), &jsonData); err == nil {
+					contact.CustomJSON4 = &domain.NullableJSON{Data: jsonData, IsNull: false}
+				}
+			}
+			if customJSON5.Valid {
+				var jsonData interface{}
+				if err := json.Unmarshal([]byte(customJSON5.String), &jsonData); err == nil {
+					contact.CustomJSON5 = &domain.NullableJSON{Data: jsonData, IsNull: false}
+				}
 			}
 		} else {
-			// No list ID to scan, just get the contact
+			// No list ID to scan, just get the contact using the existing ScanContact function
 			contact, scanErr = domain.ScanContact(rows)
 			if scanErr != nil {
 				return nil, fmt.Errorf("failed to scan contact: %w", scanErr)

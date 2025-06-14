@@ -220,13 +220,13 @@ func (r *broadcastRepository) UpdateBroadcastTx(ctx context.Context, tx *sql.Tx,
 			test_settings = $7,
 			utm_parameters = $8,
 			metadata = $9,
-			winning_variation = $17,
-			test_sent_at = $18,
-			winner_sent_at = $19,
-			updated_at = $20,
-			started_at = $21,
-			completed_at = $22,
-			cancelled_at = $23
+			winning_variation = $10,
+			test_sent_at = $11,
+			winner_sent_at = $12,
+			updated_at = $13,
+			started_at = $14,
+			completed_at = $15,
+			cancelled_at = $16
 		WHERE id = $1 AND workspace_id = $2
 	`
 

@@ -87,7 +87,8 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	defer client.Close()
 
 	// Create and configure the message
-	msg := mail.NewMsg()
+	msg := mail.NewMsg(mail.WithNoDefaultUserAgent())
+
 	if err := msg.FromFormat(fromName, fromAddress); err != nil {
 		return fmt.Errorf("invalid sender: %w", err)
 	}
@@ -122,6 +123,9 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 
 	// Add message ID tracking header
 	msg.SetGenHeader("X-Message-ID", messageID)
+
+	// Remove User-Agent and X-Mailer headers
+	// msg.SetUserAgent("")
 
 	msg.Subject(subject)
 	msg.SetBodyString(mail.TypeTextHTML, content)

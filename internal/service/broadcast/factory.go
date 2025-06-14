@@ -9,7 +9,7 @@ import (
 type Factory struct {
 	broadcastRepo      domain.BroadcastRepository
 	messageHistoryRepo domain.MessageHistoryRepository
-	templateService    domain.TemplateService
+	templateRepo       domain.TemplateRepository
 	emailService       domain.EmailServiceInterface
 	contactRepo        domain.ContactRepository
 	taskRepo           domain.TaskRepository
@@ -23,7 +23,7 @@ type Factory struct {
 func NewFactory(
 	broadcastRepo domain.BroadcastRepository,
 	messageHistoryRepo domain.MessageHistoryRepository,
-	templateService domain.TemplateService,
+	templateRepo domain.TemplateRepository,
 	emailService domain.EmailServiceInterface,
 	contactRepo domain.ContactRepository,
 	taskRepo domain.TaskRepository,
@@ -39,7 +39,7 @@ func NewFactory(
 	return &Factory{
 		broadcastRepo:      broadcastRepo,
 		messageHistoryRepo: messageHistoryRepo,
-		templateService:    templateService,
+		templateRepo:       templateRepo,
 		emailService:       emailService,
 		contactRepo:        contactRepo,
 		taskRepo:           taskRepo,
@@ -55,7 +55,7 @@ func (f *Factory) CreateMessageSender() MessageSender {
 	return NewMessageSender(
 		f.broadcastRepo,
 		f.messageHistoryRepo,
-		f.templateService,
+		f.templateRepo,
 		f.emailService,
 		f.logger,
 		f.config,
@@ -71,7 +71,7 @@ func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 	return NewBroadcastOrchestrator(
 		messageSender,
 		f.broadcastRepo,
-		f.templateService,
+		f.templateRepo,
 		f.contactRepo,
 		f.taskRepo,
 		f.workspaceRepo,

@@ -1058,7 +1058,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			SkipDuplicateEmails: false,
 		}
 
-		// Set up expectations for the database query
+		// Set up expectations for the database query with all 40 columns (38 contact + 2 list)
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
@@ -1070,6 +1070,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
+			"list_id", "list_name", // Additional columns for list filtering (makes it 40 total)
 		}).
 			AddRow(
 				"test1@example.com", "ext123", "Europe/Paris", "en-US",
@@ -1081,6 +1082,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 				now, now, now, now, now,
 				[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 				now, now,
+				"list1", "Marketing List", // Additional values for list filtering
 			).
 			AddRow(
 				"test2@example.com", "ext456", "America/New_York", "en-US",
@@ -1092,6 +1094,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 				now, now, now, now, now,
 				[]byte(`{"key": "value1-2"}`), []byte(`{"key": "value2-2"}`), []byte(`{"key": "value3-2"}`), []byte(`{"key": "value4-2"}`), []byte(`{"key": "value5-2"}`),
 				now, now,
+				"list2", "Sales List", // Additional values for list filtering
 			)
 
 		// Expect query with JOINS for list filtering and excludeUnsubscribed
@@ -1109,9 +1112,14 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, contacts, 2)
 
-		// Check contact emails - we won't check ListID and ListName since they're not filled in the implementation
+		// Check contact emails and list information
 		assert.Equal(t, "test1@example.com", contacts[0].Contact.Email)
+		assert.Equal(t, "list1", contacts[0].ListID)
+		assert.Equal(t, "Marketing List", contacts[0].ListName)
+
 		assert.Equal(t, "test2@example.com", contacts[1].Contact.Email)
+		assert.Equal(t, "list2", contacts[1].ListID)
+		assert.Equal(t, "Sales List", contacts[1].ListName)
 	})
 
 	t.Run("should handle deduplication (skip_duplicate_emails=true)", func(t *testing.T) {
@@ -1135,7 +1143,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			SkipDuplicateEmails: true, // Enable deduplication
 		}
 
-		// Set up expectations for the database query
+		// Set up expectations for the database query with all 40 columns (38 contact + 2 list)
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
@@ -1147,6 +1155,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at",
+			"list_id", "list_name", // Additional columns for list filtering (makes it 40 total)
 		}).
 			AddRow(
 				"test1@example.com", "ext123", "Europe/Paris", "en-US",
@@ -1158,6 +1167,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 				now, now, now, now, now,
 				[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
 				now, now,
+				"list1", "Marketing List", // Additional values for list filtering
 			)
 
 		// Expect query with DISTINCT ON for deduplication
@@ -1175,6 +1185,8 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, contacts, 1)
 		assert.Equal(t, "test1@example.com", contacts[0].Contact.Email)
+		assert.Equal(t, "list1", contacts[0].ListID)
+		assert.Equal(t, "Marketing List", contacts[0].ListName)
 	})
 
 	t.Run("should get contacts without list filtering", func(t *testing.T) {
@@ -1199,7 +1211,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			SkipDuplicateEmails: false,
 		}
 
-		// Set up expectations for the database query
+		// Set up expectations for the database query with only 38 contact columns (no list columns)
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
@@ -1236,7 +1248,6 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			)
 
 		// Expect query without JOINS for all contacts
-		// Don't include numeric placeholders in the regex
 		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at ASC LIMIT 10 OFFSET 0`).
 			WillReturnRows(rows)
 
@@ -1307,7 +1318,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		}
 
 		// Expect query with error
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
+		mock.ExpectQuery(`SELECT c\.\*, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 ORDER BY c\.created_at ASC LIMIT 10 OFFSET 0`).
 			WithArgs("list1",
 				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
@@ -1319,7 +1330,7 @@ func TestGetContactsForBroadcast(t *testing.T) {
 
 		// Assertions
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to execute query") // This is the actual message
+		assert.Contains(t, err.Error(), "failed to execute query")
 		assert.Nil(t, contacts)
 	})
 

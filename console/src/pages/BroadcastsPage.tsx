@@ -10,7 +10,7 @@ import {
   Divider,
   Modal,
   Input,
-  message,
+  App,
   Badge,
   Descriptions,
   Progress,
@@ -52,7 +52,7 @@ import { SendOrScheduleModal } from '../components/broadcasts/SendOrScheduleModa
 import { useAuth } from '../contexts/AuthContext'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { BroadcastStats } from '../components/broadcasts/BroadcastStats'
-import { Workspace } from '../services/api/types'
+import { List, Workspace } from '../services/api/types'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -194,7 +194,7 @@ const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, col
 // Component for rendering a single broadcast card
 interface BroadcastCardProps {
   broadcast: Broadcast
-  lists: any[]
+  lists: List[]
   workspaceId: string
   onDelete: (broadcast: Broadcast) => void
   onPause: (broadcast: Broadcast) => void
@@ -360,7 +360,13 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                   <FontAwesomeIcon icon={faTrashCan} style={{ opacity: 0.7 }} />
                 </Tooltip>
               </Button>
-              <Button type="primary" size="small" ghost onClick={() => onSchedule(broadcast)}>
+              <Button
+                type="primary"
+                size="small"
+                ghost
+                disabled={!currentWorkspace?.settings?.marketing_email_provider_id}
+                onClick={() => onSchedule(broadcast)}
+              >
                 Send or Schedule
               </Button>
             </>
@@ -437,9 +443,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                     {broadcast.audience.lists.map((listId) => {
                       const list = lists.find((l) => l.id === listId)
                       return list ? (
-                        <div key={list.id}>
-                          {list.name} ({(list.total_active ?? 0).toLocaleString()} subscribers)
-                        </div>
+                        <div key={list.id}>{list.name}</div>
                       ) : (
                         <div key={listId}>Unknown list ({listId})</div>
                       )
@@ -618,6 +622,7 @@ export function BroadcastsPage() {
   const [broadcastToSchedule, setBroadcastToSchedule] = useState<Broadcast | null>(null)
   const queryClient = useQueryClient()
   const { workspaces } = useAuth()
+  const { message } = App.useApp()
 
   // Find the current workspace from the workspaces array
   const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
@@ -752,11 +757,7 @@ export function BroadcastsPage() {
           showIcon
           className="!mb-6"
           action={
-            <Button
-              type="primary"
-              size="small"
-              href={`/workspace/${workspaceId}/settings/integrations`}
-            >
+            <Button type="primary" size="small" href={`/workspace/${workspaceId}/settings`}>
               Configure Provider
             </Button>
           }
@@ -812,6 +813,7 @@ export function BroadcastsPage() {
         visible={isScheduleModalVisible}
         onClose={closeScheduleModal}
         workspaceId={workspaceId}
+        workspace={currentWorkspace}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['broadcasts', workspaceId] })
         }}

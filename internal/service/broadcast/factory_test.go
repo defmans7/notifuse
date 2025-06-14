@@ -17,7 +17,7 @@ func TestNewFactory(t *testing.T) {
 	// Mock dependencies
 	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
 	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
@@ -44,7 +44,7 @@ func TestNewFactory(t *testing.T) {
 			factory := NewFactory(
 				mockBroadcastRepository,
 				mockMessageHistoryRepo,
-				mockTemplateService,
+				mockTemplateRepo,
 				mockEmailService,
 				mockContactRepo,
 				mockTaskRepo,
@@ -56,7 +56,7 @@ func TestNewFactory(t *testing.T) {
 
 			assert.NotNil(t, factory)
 			assert.Equal(t, mockBroadcastRepository, factory.broadcastRepo)
-			assert.Equal(t, mockTemplateService, factory.templateService)
+			assert.Equal(t, mockTemplateRepo, factory.templateRepo)
 			assert.Equal(t, mockEmailService, factory.emailService)
 			assert.Equal(t, mockContactRepo, factory.contactRepo)
 			assert.Equal(t, mockTaskRepo, factory.taskRepo)
@@ -80,7 +80,7 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 	// Mock dependencies
 	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
 	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
@@ -91,7 +91,7 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 	factory := NewFactory(
 		mockBroadcastRepository,
 		mockMessageHistoryRepo,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockEmailService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -118,7 +118,7 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 	// Mock dependencies
 	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
 	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
@@ -129,7 +129,7 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 	factory := NewFactory(
 		mockBroadcastRepository,
 		mockMessageHistoryRepo,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockEmailService,
 		mockContactRepo,
 		mockTaskRepo,
@@ -156,7 +156,7 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 	// Mock dependencies
 	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
 	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
@@ -172,7 +172,7 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 	factory := NewFactory(
 		mockBroadcastRepository,
 		mockMessageHistoryRepo,
-		mockTemplateService,
+		mockTemplateRepo,
 		mockEmailService,
 		mockContactRepo,
 		mockTaskRepo,

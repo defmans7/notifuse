@@ -80,19 +80,19 @@ func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) GetTotalRecipientCount
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTotalRecipientCount", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).GetTotalRecipientCount), arg0, arg1, arg2)
 }
 
-// LoadTemplatesForBroadcast mocks base method.
-func (m *MockBroadcastOrchestratorInterface) LoadTemplatesForBroadcast(arg0 context.Context, arg1, arg2 string) (map[string]*domain.Template, error) {
+// LoadTemplates mocks base method.
+func (m *MockBroadcastOrchestratorInterface) LoadTemplates(arg0 context.Context, arg1 string, arg2 []string) (map[string]*domain.Template, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadTemplatesForBroadcast", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "LoadTemplates", arg0, arg1, arg2)
 	ret0, _ := ret[0].(map[string]*domain.Template)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// LoadTemplatesForBroadcast indicates an expected call of LoadTemplatesForBroadcast.
-func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) LoadTemplatesForBroadcast(arg0, arg1, arg2 interface{}) *gomock.Call {
+// LoadTemplates indicates an expected call of LoadTemplates.
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) LoadTemplates(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadTemplatesForBroadcast", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).LoadTemplatesForBroadcast), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadTemplates", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).LoadTemplates), arg0, arg1, arg2)
 }
 
 // Process mocks base method.
