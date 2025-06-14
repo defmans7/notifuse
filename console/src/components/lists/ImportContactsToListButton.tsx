@@ -30,15 +30,6 @@ export function ImportContactsToListButton({
   const handleClick = () => {
     // Pass true for refreshOnClose to refresh contacts data
     openDrawerWithSelectedList(workspaceId, lists, list.id, true)
-
-    // Listen for the drawer to close with a successful import
-    const handleSuccess = () => {
-      // Also invalidate lists query to refresh list counts
-      queryClient.invalidateQueries({ queryKey: ['lists', workspaceId] })
-    }
-
-    // Set up a one-time event listener for the import success
-    document.addEventListener('contactsImported', handleSuccess, { once: true })
   }
 
   return (

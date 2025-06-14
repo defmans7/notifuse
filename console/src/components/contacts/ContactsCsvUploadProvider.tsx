@@ -32,9 +32,11 @@ export const ContactsCsvUploadProvider: React.FC<ContactsCsvUploadDrawerProvider
 
   // Handler for when import is successful
   const handleImportSuccess = () => {
-    // Invalidate contacts query to trigger a refresh
+    // Invalidate contacts, lists, and list-stats queries to trigger a refresh
     if (shouldRefreshOnClose && contextWorkspaceId) {
       queryClient.invalidateQueries({ queryKey: ['contacts', contextWorkspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['lists', contextWorkspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['list-stats', contextWorkspaceId] })
     }
   }
 

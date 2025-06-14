@@ -519,6 +519,19 @@ export function ContactsCsvUploadDrawer({
           setUploading(false)
           stopProgressSaveInterval()
           clearSavedProgress(fileName) // Clear progress when reaching the end
+
+          // Call onSuccess callback if provided
+          if (onSuccess) {
+            onSuccess()
+          }
+
+          message.success(
+            `Imported ${successCount.toLocaleString()} contacts${
+              failureCount > 0
+                ? ` (${failureCount.toLocaleString()} failed, see details below)`
+                : ''
+            }`
+          )
           return
         }
 
@@ -646,17 +659,6 @@ export function ContactsCsvUploadDrawer({
           if (onSuccess) {
             onSuccess()
           }
-
-          // Dispatch event to notify that contacts were imported
-          document.dispatchEvent(
-            new CustomEvent('contactsImported', {
-              detail: {
-                success: successCount,
-                failures: failureCount,
-                workspaceId
-              }
-            })
-          )
 
           message.success(
             `Imported ${successCount.toLocaleString()} contacts${
@@ -792,20 +794,6 @@ export function ContactsCsvUploadDrawer({
                 // Ensure progress is cleared from localStorage
                 clearSavedProgress(fileName)
 
-                // Dispatch event when closing after successful import
-                document.dispatchEvent(
-                  new CustomEvent('contactsImported', {
-                    detail: {
-                      success: successCount,
-                      failures: failureCount,
-                      workspaceId
-                    }
-                  })
-                )
-
-                if (onSuccess) {
-                  onSuccess()
-                }
                 onClose()
               }}
             >
