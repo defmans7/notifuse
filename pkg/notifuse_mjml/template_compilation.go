@@ -1,0 +1,217 @@
+package notifuse_mjml
+
+import (
+	"context"
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
+
+	mjmlgo "github.com/Boostport/mjml-go"
+)
+
+// MapOfAny represents a map of string to any value, used for template data
+type MapOfAny map[string]any
+
+type TrackingSettings struct {
+	EnableTracking bool   `json:"enable_tracking"`
+	Endpoint       string `json:"endpoint,omitempty"`
+	UTMSource      string `json:"utm_source,omitempty"`
+	UTMMedium      string `json:"utm_medium,omitempty"`
+	UTMCampaign    string `json:"utm_campaign,omitempty"`
+	UTMContent     string `json:"utm_content,omitempty"`
+	UTMTerm        string `json:"utm_term,omitempty"`
+}
+
+// Value implements the driver.Valuer interface for database storage
+func (t TrackingSettings) Value() (driver.Value, error) {
+	return json.Marshal(t)
+}
+
+// Scan implements the sql.Scanner interface for database retrieval
+func (t *TrackingSettings) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	v, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed for TrackingSettings")
+	}
+
+	return json.Unmarshal(v, t)
+}
+
+func (t *TrackingSettings) GetTrackingURL(sourceURL string) string {
+	// Ignore if URL is empty, a placeholder, mailto:, tel:, or already tracked (basic check)
+	if sourceURL == "" || strings.Contains(sourceURL, "{{") || strings.Contains(sourceURL, "{%") || strings.HasPrefix(sourceURL, "mailto:") || strings.HasPrefix(sourceURL, "tel:") {
+		return sourceURL
+	}
+
+	// parse sourceURL to get the domain
+	parsedURL, err := url.Parse(sourceURL)
+	if err != nil {
+		return sourceURL
+	}
+
+	// Get existing query parameters
+	queryParams := parsedURL.Query()
+
+	// Check if URL already has UTM parameters - if yes, don't modify them
+	hasExistingUTM := false
+	for key := range queryParams {
+		if strings.HasPrefix(strings.ToLower(key), "utm_") {
+			hasExistingUTM = true
+			break
+		}
+	}
+
+	// Add UTM parameters to the URL if no existing UTM parameters
+	if !hasExistingUTM {
+		if t.UTMSource != "" {
+			queryParams.Add("utm_source", t.UTMSource)
+		}
+		if t.UTMMedium != "" {
+			queryParams.Add("utm_medium", t.UTMMedium)
+		}
+		if t.UTMCampaign != "" {
+			queryParams.Add("utm_campaign", t.UTMCampaign)
+		}
+		if t.UTMContent != "" {
+			queryParams.Add("utm_content", t.UTMContent)
+		}
+		if t.UTMTerm != "" {
+			queryParams.Add("utm_term", t.UTMTerm)
+		}
+		parsedURL.RawQuery = queryParams.Encode()
+	}
+
+	if !t.EnableTracking {
+		return parsedURL.String()
+	}
+
+	// parse endpoint and add url to the query params
+	parsedEndpoint, err := url.Parse(t.Endpoint)
+	if err != nil {
+		return sourceURL
+	}
+	endpointParams := parsedEndpoint.Query()
+	endpointParams.Add("url", parsedURL.String()) // Use the URL with UTM parameters
+	parsedEndpoint.RawQuery = endpointParams.Encode()
+
+	return parsedEndpoint.String()
+}
+
+// CompileTemplateRequest represents the request for compiling a template
+type CompileTemplateRequest struct {
+	WorkspaceID      string           `json:"workspace_id"`
+	MessageID        string           `json:"message_id"`
+	VisualEditorTree EmailBlock       `json:"visual_editor_tree"`
+	TemplateData     MapOfAny         `json:"test_data,omitempty"`
+	TrackingSettings TrackingSettings `json:"tracking_settings,omitempty"`
+}
+
+// Validate ensures that the compile template request has all required fields
+func (r *CompileTemplateRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("invalid compile template request: workspace_id is required")
+	}
+	if r.MessageID == "" {
+		return fmt.Errorf("invalid compile template request: message_id is required")
+	}
+	// Basic validation for the tree root kind
+	if r.VisualEditorTree.GetType() != MJMLComponentMjml {
+		return fmt.Errorf("invalid compile template request: visual_editor_tree must have type 'mjml'")
+	}
+	if r.VisualEditorTree.GetChildren() == nil {
+		return fmt.Errorf("invalid compile template request: visual_editor_tree root block must have data (styles)")
+	}
+
+	return nil
+}
+
+// CompileTemplateResponse represents the response from compiling a template
+type CompileTemplateResponse struct {
+	Success bool          `json:"success"`
+	MJML    *string       `json:"mjml,omitempty"`  // Pointer, omit if nil
+	HTML    *string       `json:"html,omitempty"`  // Pointer, omit if nil
+	Error   *mjmlgo.Error `json:"error,omitempty"` // Pointer, omit if nil
+}
+
+// GenerateEmailRedirectionEndpoint generates the email redirection endpoint URL
+func GenerateEmailRedirectionEndpoint(workspaceID string, messageID string, apiEndpoint string) string {
+	// URL encode the parameters to handle special characters
+	encodedMID := url.QueryEscape(messageID)
+	encodedWID := url.QueryEscape(workspaceID)
+	return fmt.Sprintf("%s/visit?mid=%s&wid=%s",
+		apiEndpoint, encodedMID, encodedWID)
+}
+
+// CompileTemplate compiles a visual editor tree to MJML and HTML
+func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse, err error) {
+	// Compile tree to MJML using our pkg/mjml function
+	mjmlString := ConvertJSONToMJML(req.VisualEditorTree)
+
+	// Compile MJML to HTML using mjml-go library
+	htmlResult, err := mjmlgo.ToHTML(context.Background(), mjmlString)
+	if err != nil {
+		// Return the response struct with Success=false and the Error details
+		return &CompileTemplateResponse{
+			Success: false,
+			MJML:    &mjmlString, // Include original MJML for context if desired
+			HTML:    nil,
+			Error: &mjmlgo.Error{
+				Message: err.Error(),
+			},
+		}, nil
+	}
+
+	// Apply link tracking to the HTML output
+	trackedHTML, err := TrackLinks(htmlResult, req.TrackingSettings)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return successful response
+	return &CompileTemplateResponse{
+		Success: true,
+		MJML:    &mjmlString,
+		HTML:    &trackedHTML,
+		Error:   nil,
+	}, nil
+}
+
+func TrackLinks(htmlString string, trackingSettings TrackingSettings) (updatedHTML string, err error) {
+	// If tracking is disabled and no UTM parameters to add, return original HTML
+	if !trackingSettings.EnableTracking && trackingSettings.UTMSource == "" &&
+		trackingSettings.UTMMedium == "" && trackingSettings.UTMCampaign == "" &&
+		trackingSettings.UTMContent == "" && trackingSettings.UTMTerm == "" {
+		return htmlString, nil
+	}
+
+	// Use regex to find and replace href attributes in <a> tags
+	// This regex matches: <a ...href="url"... > or <a ...href='url'... >
+	hrefRegex := regexp.MustCompile(`(<a[^>]*\s+href=["'])([^"']+)(["'][^>]*>)`)
+
+	updatedHTML = hrefRegex.ReplaceAllStringFunc(htmlString, func(match string) string {
+		// Extract the parts: opening tag with href=", URL, closing " and rest of tag
+		parts := hrefRegex.FindStringSubmatch(match)
+		if len(parts) != 4 {
+			return match // Return original if parsing fails
+		}
+
+		beforeURL := parts[1]   // <a ...href="
+		originalURL := parts[2] // the URL
+		afterURL := parts[3]    // "...>
+
+		// Apply tracking to the URL
+		trackedURL := trackingSettings.GetTrackingURL(originalURL)
+
+		// Return the updated tag
+		return beforeURL + trackedURL + afterURL
+	})
+
+	return updatedHTML, nil
+}

@@ -1,9 +1,5 @@
-aidanwoods.dev/go-paseto v1.5.1 h1:IvT7wk7jmeTff6wyk7RlS6uAjUIAKU4MU2hkqr95lCo=
-aidanwoods.dev/go-paseto v1.5.1/go.mod h1:9J13iCMdWrkfK1AxAg9QDHLaDMYSEP1ldbFiR+DfmVc=
 aidanwoods.dev/go-paseto v1.5.4 h1:MH+SBroZEk5Q5pjhVh4l48HIbrdWhWI3SZmA/DXhnuw=
 aidanwoods.dev/go-paseto v1.5.4/go.mod h1:Rn37AIcqrvSMu0YPw65CrlEUuoyKL6Yw6B0htrGr3EU=
-aidanwoods.dev/go-result v0.1.0 h1:y/BMIRX6q3HwaorX1Wzrjo3WUdiYeyWbvGe18hKS3K8=
-aidanwoods.dev/go-result v0.1.0/go.mod h1:yridkWghM7AXSFA6wzx0IbsurIm1Lhuro3rYef8FBHM=
 aidanwoods.dev/go-result v0.3.1 h1:ee98hpohYUVYbI+pa6gUHTyoRerIudgjky/IPSowDXQ=
 aidanwoods.dev/go-result v0.3.1/go.mod h1:GKnFg8p/BKulVD3wsfULiPhpPmrTWyiTIbz8EWuUqSk=
 bazil.org/fuse v0.0.0-20160811212531-371fbbdaa898/go.mod h1:Xbm+BRKSBEpa4q4hTSxohYNQpsxXPbPry4JJWOB3LB8=
@@ -946,6 +942,8 @@ github.com/openzipkin/zipkin-go v0.4.2 h1:zjqfqHjUpPmB3c1GlCvvgsM1G4LkvqQbBDueDO
 github.com/openzipkin/zipkin-go v0.4.2/go.mod h1:ZeVkFjuuBiSy13y8vpSDCjMi9GoI3hPpCJSBx/EYFhY=
 github.com/osteele/liquid v1.6.0 h1:bTsbZjPIr7F+pU+K6o//Y5//W4McMzvUlMXWGOVvpc0=
 github.com/osteele/liquid v1.6.0/go.mod h1:xU0Z2dn2hOQIEFEWNmeltOmCtfhtoW/2fCyiNQeNG+U=
+github.com/osteele/liquid v1.7.0 h1:VsbPSchE5D5S5scylAIvERET4dnCxsO6IDri2oSJ5Dk=
+github.com/osteele/liquid v1.7.0/go.mod h1:xU0Z2dn2hOQIEFEWNmeltOmCtfhtoW/2fCyiNQeNG+U=
 github.com/osteele/tuesday v1.0.3 h1:SrCmo6sWwSgnvs1bivmXLvD7Ko9+aJvvkmDjB5G4FTU=
 github.com/osteele/tuesday v1.0.3/go.mod h1:pREKpE+L03UFuR+hiznj3q7j3qB1rUZ4XfKejwWFF2M=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
