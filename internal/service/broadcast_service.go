@@ -850,7 +850,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		WorkspaceID:      request.WorkspaceID,
 		MessageID:        messageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
-		TemplateData:     templateData,
+		TemplateData:     mjml.MapOfAny(templateData),
 	})
 	if err != nil {
 		s.logger.Error("Failed to compile template for broadcast")

@@ -633,7 +633,7 @@ func TestCompileTemplate_Success(t *testing.T) {
 	workspaceID := "ws_123"
 	userID := "user_abc"
 	testTree := createValidTestTree(createTestTextBlock("txt1", "Hello {{name}}"))
-	testData := domain.MapOfAny{"name": "Tester"}
+	testData := mjml.MapOfAny{"name": "Tester"}
 
 	// Mock expectations
 	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{ID: userID}, nil)

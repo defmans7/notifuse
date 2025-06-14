@@ -56,8 +56,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_sent} total emails sent`}>
           <Statistic
             title={
-              <Space className="text-blue-500 font-medium">
-                <FontAwesomeIcon icon={faPaperPlane} style={{ opacity: 0.7 }} /> Sent
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faPaperPlane}
+                  style={{ opacity: 0.7 }}
+                  className="text-blue-500"
+                />{' '}
+                Sent
               </Space>
             }
             value={stats.total_sent}
@@ -70,8 +75,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_delivered} emails successfully delivered`}>
           <Statistic
             title={
-              <Space className="text-green-500 font-medium">
-                <FontAwesomeIcon icon={faCircleCheck} style={{ opacity: 0.7 }} /> Delivered
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faCircleCheck}
+                  style={{ opacity: 0.7 }}
+                  className="text-green-500"
+                />{' '}
+                Delivered
               </Space>
             }
             value={getRate(stats.total_delivered, stats.total_sent)}
@@ -84,8 +94,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_opened} total opens`}>
           <Statistic
             title={
-              <Space className="text-purple-500 font-medium">
-                <FontAwesomeIcon icon={faEye} style={{ opacity: 0.7 }} /> Opens
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faEye}
+                  style={{ opacity: 0.7 }}
+                  className="text-purple-500"
+                />{' '}
+                Opens
               </Space>
             }
             value={getRate(stats.total_opened, stats.total_sent)}
@@ -98,8 +113,12 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_clicked} total clicks`}>
           <Statistic
             title={
-              <Space className="text-cyan-500 font-medium">
-                <FontAwesomeIcon icon={faArrowPointer} style={{ opacity: 0.7 }} className="mr-1" />{' '}
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faArrowPointer}
+                  style={{ opacity: 0.7 }}
+                  className="text-cyan-500 mr-1"
+                />{' '}
                 Clicks
               </Space>
             }
@@ -113,8 +132,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_failed} emails failed to send`}>
           <Statistic
             title={
-              <Space className="text-orange-500 font-medium">
-                <FontAwesomeIcon icon={faCircleXmark} style={{ opacity: 0.7 }} /> Failed
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faCircleXmark}
+                  style={{ opacity: 0.7 }}
+                  className="text-orange-500"
+                />{' '}
+                Failed
               </Space>
             }
             value={getRate(stats.total_failed, stats.total_sent)}
@@ -127,8 +151,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_bounced} emails bounced back`}>
           <Statistic
             title={
-              <Space className="text-orange-500 font-medium">
-                <FontAwesomeIcon icon={faTriangleExclamation} style={{ opacity: 0.7 }} /> Bounced
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faTriangleExclamation}
+                  style={{ opacity: 0.7 }}
+                  className="text-orange-500"
+                />{' '}
+                Bounced
               </Space>
             }
             value={getRate(stats.total_bounced, stats.total_sent)}
@@ -141,8 +170,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_complained} total complaints`}>
           <Statistic
             title={
-              <Space className="text-orange-500 font-medium">
-                <FontAwesomeIcon icon={faFaceFrown} style={{ opacity: 0.7 }} /> Complaints
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faFaceFrown}
+                  style={{ opacity: 0.7 }}
+                  className="text-orange-500"
+                />{' '}
+                Complaints
               </Space>
             }
             value={getRate(stats.total_complained, stats.total_sent)}
@@ -155,8 +189,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         <Tooltip title={`${stats.total_unsubscribed} total unsubscribes`}>
           <Statistic
             title={
-              <Space className="text-orange-500 font-medium">
-                <FontAwesomeIcon icon={faBan} style={{ opacity: 0.7 }} /> Unsub.
+              <Space className="font-medium">
+                <FontAwesomeIcon
+                  icon={faBan}
+                  style={{ opacity: 0.7 }}
+                  className="text-orange-500"
+                />{' '}
+                Unsub.
               </Space>
             }
             value={getRate(stats.total_unsubscribed, stats.total_sent)}

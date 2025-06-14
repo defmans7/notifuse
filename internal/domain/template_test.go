@@ -1161,7 +1161,7 @@ func TestGenerateEmailRedirectionEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			url := GenerateEmailRedirectionEndpoint(tt.workspaceID, tt.messageID, tt.apiEndpoint)
+			url := mjml.GenerateEmailRedirectionEndpoint(tt.workspaceID, tt.messageID, tt.apiEndpoint)
 			assert.Equal(t, tt.expected, url)
 		})
 	}

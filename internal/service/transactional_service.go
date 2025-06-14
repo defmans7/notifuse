@@ -712,7 +712,7 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		WorkspaceID:      workspaceID,
 		MessageID:        messageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
-		TemplateData:     messageData,
+		TemplateData:     mjml.MapOfAny(messageData),
 		TrackingEnabled:  true,
 	})
 

@@ -266,10 +266,19 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
           <div>{getTaskStatusBadge(task.status)}</div>
         </div>
 
-        {task.progress > 0 && (
+        {(task.progress > 0 || task.state?.send_broadcast) && (
           <div className="mb-2">
             <div className="font-medium text-gray-500">Progress</div>
-            <Progress percent={Math.round(task.progress * 100)} size="small" />
+            <Progress
+              percent={Math.round(
+                task.state?.send_broadcast
+                  ? (task.state.send_broadcast.sent_count /
+                      task.state.send_broadcast.total_recipients) *
+                      100
+                  : task.progress * 100
+              )}
+              size="small"
+            />
           </div>
         )}
 

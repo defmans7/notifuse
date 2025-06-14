@@ -214,9 +214,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	}
 
 	// Compile template with the provided data
-	compiledTemplate, err := domain.CompileTemplate(
+	compiledTemplate, err := mjml.CompileTemplate(
 		s.apiEndpoint,
-		domain.CompileTemplateRequest{
+		mjml.CompileTemplateRequest{
 			WorkspaceID:      workspaceID,
 			MessageID:        messageID,
 			VisualEditorTree: template.Email.VisualEditorTree,
