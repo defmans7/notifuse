@@ -226,7 +226,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
       return taskApi.findByBroadcastId(workspaceId, broadcast.id)
     },
     // Only fetch task data if the broadcast status indicates a task might exist
-    enabled: ['scheduled', 'sending', 'paused', 'failed'].includes(broadcast.status),
+    // enabled: ['scheduled', 'sending', 'paused', 'failed'].includes(broadcast.status),
     refetchInterval:
       broadcast.status === 'sending'
         ? 5000 // Refetch every 5 seconds for sending broadcasts
@@ -261,7 +261,6 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
 
     return (
       <div className="max-w-xs">
-        <div className="font-medium mb-2">Task Details</div>
         <div className="mb-2">
           <div className="font-medium text-gray-500">Status</div>
           <div>{getTaskStatusBadge(task.status)}</div>
@@ -316,7 +315,32 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
       title={
         <Space size="large">
           <div>{broadcast.name}</div>
-          <div className="text-xs font-normal">{getStatusBadge(broadcast.status)}</div>
+          <div className="text-xs font-normal">
+            {task ? (
+              <Popover
+                content={taskPopoverContent}
+                title="Task Status"
+                placement="bottom"
+                trigger="hover"
+              >
+                <span className="cursor-help">
+                  {getStatusBadge(broadcast.status)}
+                  <FontAwesomeIcon
+                    icon={faCircleQuestion}
+                    style={{ opacity: 0.7 }}
+                    className="ml-2"
+                  />
+                </span>
+              </Popover>
+            ) : isTaskLoading ? (
+              <span className="text-gray-400">
+                {getStatusBadge(broadcast.status)}
+                <FontAwesomeIcon icon={faSpinner} spin className="ml-2" />
+              </span>
+            ) : (
+              getStatusBadge(broadcast.status)
+            )}
+          </div>
         </Space>
       }
       extra={
@@ -518,32 +542,6 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                       : broadcast.schedule.timezone}
                   </Descriptions.Item>
                 )}
-
-              <Descriptions.Item label="Task Status">
-                {task && (
-                  <Popover
-                    content={taskPopoverContent}
-                    title="Task Status"
-                    placement="left"
-                    trigger="hover"
-                  >
-                    <span className="text-xs font-normal cursor-help">
-                      {getTaskStatusBadge(task.status)}
-                      <FontAwesomeIcon
-                        icon={faCircleQuestion}
-                        style={{ opacity: 0.7 }}
-                        className="ml-2"
-                      />
-                    </span>
-                  </Popover>
-                )}
-
-                {isTaskLoading && ['scheduled', 'sending', 'paused'].includes(broadcast.status) && (
-                  <span className="text-xs font-normal text-gray-400">
-                    <FontAwesomeIcon icon={faSpinner} spin /> Loading task...
-                  </span>
-                )}
-              </Descriptions.Item>
             </Descriptions>
 
             <div className="mt-2">
