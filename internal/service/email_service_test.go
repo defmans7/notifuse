@@ -8,8 +8,8 @@ import (
 	mjmlgo "github.com/Boostport/mjml-go"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -861,7 +861,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 	}
 
 	// Create tracking settings
-	trackingSettings := mjml.TrackingSettings{
+	trackingSettings := notifuse_mjml.TrackingSettings{
 		Endpoint:       "https://track.example.com",
 		EnableTracking: true,
 		UTMSource:      "newsletter",
@@ -898,10 +898,15 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		ID:   "template-789",
 		Name: "Welcome Email",
 		Email: &domain.EmailTemplate{
-			Subject:          "Welcome to Our Service",
-			SenderID:         emailSender.ID,
-			ReplyTo:          "support@example.com",
-			VisualEditorTree: mjml.EmailBlock{Kind: "root", Data: map[string]interface{}{"styles": map[string]interface{}{}}},
+			Subject:  "Welcome to Our Service",
+			SenderID: emailSender.ID,
+			ReplyTo:  "support@example.com",
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:   "root",
+					Type: notifuse_mjml.MJMLComponentMjml,
+				},
+			},
 		},
 	}
 

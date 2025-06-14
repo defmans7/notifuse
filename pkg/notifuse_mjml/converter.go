@@ -15,8 +15,70 @@ func ConvertJSONToMJML(tree EmailBlock) string {
 }
 
 // ConvertJSONToMJMLWithData converts an EmailBlock JSON tree to MJML string with template data
-func ConvertJSONToMJMLWithData(tree EmailBlock, templateData string) string {
-	return convertBlockToMJML(tree, 0, templateData)
+func ConvertJSONToMJMLWithData(tree EmailBlock, templateData string) (string, error) {
+	return convertBlockToMJMLWithError(tree, 0, templateData)
+}
+
+// convertBlockToMJMLWithError recursively converts a single EmailBlock to MJML string with error handling
+func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData string) (string, error) {
+	indent := strings.Repeat("  ", indentLevel)
+	tagName := string(block.GetType())
+	children := block.GetChildren()
+
+	// Handle self-closing tags that don't have children but may have content
+	if len(children) == 0 {
+		// Check if the block has content (for mj-text, mj-button, etc.)
+		content := getBlockContent(block)
+
+		if content != "" {
+			// Process Liquid templating for mj-text, mj-button, mj-title, mj-preview, and mj-raw blocks
+			blockType := block.GetType()
+			if blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton || blockType == MJMLComponentMjTitle || blockType == MJMLComponentMjPreview || blockType == MJMLComponentMjRaw {
+				processedContent, err := processLiquidContent(content, templateData, block.GetID())
+				if err != nil {
+					// Return error instead of just logging
+					return "", fmt.Errorf("liquid processing failed for block %s: %v", block.GetID(), err)
+				} else {
+					content = processedContent
+				}
+			}
+
+			// Block with content - don't escape for mj-raw, mj-text, and mj-button (they can contain HTML)
+			attributeString := formatAttributes(block.GetAttributes())
+			if blockType == MJMLComponentMjRaw || blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton {
+				return fmt.Sprintf("%s<%s%s>%s</%s>", indent, tagName, attributeString, content, tagName), nil
+			} else {
+				return fmt.Sprintf("%s<%s%s>%s</%s>", indent, tagName, attributeString, escapeContent(content), tagName), nil
+			}
+		} else {
+			// Self-closing block or empty block
+			attributeString := formatAttributes(block.GetAttributes())
+			if attributeString != "" {
+				return fmt.Sprintf("%s<%s%s />", indent, tagName, attributeString), nil
+			} else {
+				return fmt.Sprintf("%s<%s />", indent, tagName), nil
+			}
+		}
+	}
+
+	// Block with children
+	attributeString := formatAttributes(block.GetAttributes())
+	openTag := fmt.Sprintf("%s<%s%s>", indent, tagName, attributeString)
+	closeTag := fmt.Sprintf("%s</%s>", indent, tagName)
+
+	// Process children
+	var childrenMJML []string
+	for _, child := range children {
+		if child != nil {
+			childMJML, err := convertBlockToMJMLWithError(child, indentLevel+1, templateData)
+			if err != nil {
+				return "", err
+			}
+			childrenMJML = append(childrenMJML, childMJML)
+		}
+	}
+
+	return fmt.Sprintf("%s\n%s\n%s", openTag, strings.Join(childrenMJML, "\n"), closeTag), nil
 }
 
 // convertBlockToMJML recursively converts a single EmailBlock to MJML string
@@ -272,7 +334,7 @@ func ConvertToMJMLStringWithData(block EmailBlock, templateData string) (string,
 		return "", fmt.Errorf("invalid email structure: %w", err)
 	}
 
-	return ConvertJSONToMJMLWithData(block, templateData), nil
+	return ConvertJSONToMJMLWithData(block, templateData)
 }
 
 // ConvertToMJMLWithOptions provides additional options for MJML conversion
@@ -297,7 +359,10 @@ func ConvertToMJMLWithOptions(block EmailBlock, options MJMLConvertOptions) (str
 	}
 
 	// Convert to MJML with template data
-	mjml := ConvertJSONToMJMLWithData(block, options.TemplateData)
+	mjml, err := ConvertJSONToMJMLWithData(block, options.TemplateData)
+	if err != nil {
+		return "", fmt.Errorf("mjml conversion failed: %w", err)
+	}
 
 	// Add XML declaration if requested
 	if options.IncludeXMLTag {

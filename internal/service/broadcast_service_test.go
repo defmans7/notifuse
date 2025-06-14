@@ -9,8 +9,8 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2783,11 +2783,13 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 	})
 }
 
-func getTestEmailBlock() mjml.EmailBlock {
-	return mjml.EmailBlock{
-		Kind: "root",
-		Data: map[string]interface{}{
-			"styles": map[string]interface{}{
+func getTestEmailBlock() notifuse_mjml.EmailBlock {
+	return &notifuse_mjml.MJMLBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "root",
+			Type: notifuse_mjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{
+				"version":         "4.0.0",
 				"backgroundColor": "#ffffff",
 			},
 		},

@@ -11,7 +11,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/Notifuse/notifuse/pkg/tracing"
 	"go.opencensus.io/trace"
 )
@@ -688,7 +688,7 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 
 	// Use fixed messageID for testing
 	messageID := uuid.New().String()
-	trackingSettings := mjml.TrackingSettings{
+	trackingSettings := notifuse_mjml.TrackingSettings{
 		EnableTracking: true,
 		Endpoint:       s.apiEndpoint,
 	}
@@ -712,8 +712,8 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		WorkspaceID:      workspaceID,
 		MessageID:        messageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
-		TemplateData:     mjml.MapOfAny(messageData),
-		TrackingEnabled:  true,
+		TemplateData:     notifuse_mjml.MapOfAny(messageData),
+		TrackingSettings: trackingSettings,
 	})
 
 	if err != nil {

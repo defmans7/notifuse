@@ -8,7 +8,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/disposable_emails"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/google/uuid"
 )
 
@@ -273,7 +273,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 
 		messageID := uuid.New().String()
 
-		trackingSettings := mjml.TrackingSettings{
+		trackingSettings := notifuse_mjml.TrackingSettings{
 			Endpoint:       s.apiEndpoint,
 			EnableTracking: workspace.Settings.EmailTrackingEnabled,
 			UTMSource:      workspace.Settings.WebsiteURL,
@@ -429,7 +429,7 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 		if list.UnsubscribeTemplate != nil && marketingEmailProvider != nil {
 			messageID := uuid.New().String()
 
-			trackingSettings := mjml.TrackingSettings{
+			trackingSettings := notifuse_mjml.TrackingSettings{
 				Endpoint:       s.apiEndpoint,
 				EnableTracking: workspace.Settings.EmailTrackingEnabled,
 				UTMSource:      workspace.Settings.WebsiteURL,

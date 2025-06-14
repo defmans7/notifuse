@@ -151,8 +151,41 @@ func GenerateEmailRedirectionEndpoint(workspaceID string, messageID string, apiE
 
 // CompileTemplate compiles a visual editor tree to MJML and HTML
 func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse, err error) {
-	// Compile tree to MJML using our pkg/mjml function
-	mjmlString := ConvertJSONToMJML(req.VisualEditorTree)
+	// Prepare template data JSON string
+	var templateDataStr string
+	if req.TemplateData != nil && len(req.TemplateData) > 0 {
+		jsonDataBytes, err := json.Marshal(req.TemplateData)
+		if err != nil {
+			return &CompileTemplateResponse{
+				Success: false,
+				MJML:    nil,
+				HTML:    nil,
+				Error: &mjmlgo.Error{
+					Message: fmt.Sprintf("failed to marshal template data: %v", err),
+				},
+			}, nil
+		}
+		templateDataStr = string(jsonDataBytes)
+	}
+
+	// Compile tree to MJML using our pkg/mjml function with template data
+	var mjmlString string
+	if templateDataStr != "" {
+		var err error
+		mjmlString, err = ConvertJSONToMJMLWithData(req.VisualEditorTree, templateDataStr)
+		if err != nil {
+			return &CompileTemplateResponse{
+				Success: false,
+				MJML:    nil,
+				HTML:    nil,
+				Error: &mjmlgo.Error{
+					Message: err.Error(),
+				},
+			}, nil
+		}
+	} else {
+		mjmlString = ConvertJSONToMJML(req.VisualEditorTree)
+	}
 
 	// Compile MJML to HTML using mjml-go library
 	htmlResult, err := mjmlgo.ToHTML(context.Background(), mjmlString)

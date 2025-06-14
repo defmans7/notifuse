@@ -3,6 +3,8 @@ package notifuse_mjml
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestConvertJSONToMJML(t *testing.T) {
@@ -207,7 +209,8 @@ func TestLiquidTemplatingInTextBlock(t *testing.T) {
 	}`
 
 	// Convert with template data
-	result := ConvertJSONToMJMLWithData(mjml, templateData)
+	result, err := ConvertJSONToMJMLWithData(mjml, templateData)
+	require.NoError(t, err)
 
 	// Check if Liquid variables were replaced
 	if !strings.Contains(result, "Hello John Doe") {
@@ -277,7 +280,8 @@ func TestLiquidTemplatingInButtonBlock(t *testing.T) {
 	}`
 
 	// Convert with template data
-	result := ConvertJSONToMJMLWithData(mjml, templateData)
+	result, err := ConvertJSONToMJMLWithData(mjml, templateData)
+	require.NoError(t, err)
 
 	// Check if Liquid variables were replaced
 	if !strings.Contains(result, "View Order #12345") {
@@ -317,13 +321,10 @@ func TestLiquidTemplatingWithInvalidJSON(t *testing.T) {
 	// Invalid JSON template data
 	invalidTemplateData := `{"user": "invalid json`
 
-	// Convert with invalid template data - should still work but show warning
-	result := ConvertJSONToMJMLWithData(mjml, invalidTemplateData)
-
-	// Should contain original content since JSON parsing failed
-	if !strings.Contains(result, "Hello {{ user.name }}!") {
-		t.Error("Expected original content when JSON is invalid")
-	}
+	// Convert with invalid template data - should return error
+	_, err := ConvertJSONToMJMLWithData(mjml, invalidTemplateData)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid JSON in templateData")
 }
 
 func TestLiquidTemplatingWithEmptyData(t *testing.T) {
@@ -354,7 +355,10 @@ func TestLiquidTemplatingWithEmptyData(t *testing.T) {
 	}
 
 	// Convert with empty template data
-	result := ConvertJSONToMJMLWithData(mjml, "")
+	result, err := ConvertJSONToMJMLWithData(mjml, "")
+	if err != nil {
+		t.Errorf("ConvertJSONToMJMLWithData failed: %v", err)
+	}
 
 	// Should use default value
 	if !strings.Contains(result, "Hello Guest!") {
@@ -513,7 +517,8 @@ func TestLiquidTemplatingInRawBlock(t *testing.T) {
 	}`
 
 	// Convert with template data
-	result := ConvertJSONToMJMLWithData(mjml, templateData)
+	result, err := ConvertJSONToMJMLWithData(mjml, templateData)
+	require.NoError(t, err)
 
 	// Check that Liquid was processed and MJML button was generated
 	expectedContains := []string{
@@ -567,7 +572,8 @@ func TestLiquidTemplatingInRawBlockWithDisabledCondition(t *testing.T) {
 	}`
 
 	// Convert with template data
-	result := ConvertJSONToMJMLWithData(mjml, templateData)
+	result, err := ConvertJSONToMJMLWithData(mjml, templateData)
+	require.NoError(t, err)
 
 	// Check that the button was not generated (condition was false)
 	if strings.Contains(result, "<mj-button") {

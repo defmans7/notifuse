@@ -14,10 +14,9 @@ import (
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	apphttp "github.com/Notifuse/notifuse/internal/http"
-	"github.com/Notifuse/notifuse/pkg/mjml"
-	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
+	http_handler "github.com/Notifuse/notifuse/internal/http"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	notifusemjml "github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +43,7 @@ func setupTemplateHandlerTest(t *testing.T) (*mocks.MockTemplateService, *pkgmoc
 	secretKey := paseto.NewV4AsymmetricSecretKey() // Key for signing tokens
 	publicKey := secretKey.Public()                // Key for handler/middleware verification
 
-	handler := apphttp.NewTemplateHandler(mockService, publicKey, mockLogger)
+	handler := http_handler.NewTemplateHandler(mockService, publicKey, mockLogger)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -61,11 +60,14 @@ func createTestEmailTemplate() *domain.EmailTemplate {
 		SenderID:        "sender123",
 		Subject:         "Test Email",
 		CompiledPreview: "<html><body>Test</body></html>",
-		VisualEditorTree: mjml.EmailBlock{
-			Kind: "root",
-			Data: map[string]interface{}{
-				"styles": map[string]interface{}{},
+		VisualEditorTree: &notifusemjml.MJMLBlock{
+			BaseBlock: notifusemjml.BaseBlock{
+				ID:         "root",
+				Type:       notifusemjml.MJMLComponentMjml,
+				Attributes: map[string]interface{}{"version": "4.0.0"},
 			},
+			Type:       notifusemjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{"version": "4.0.0"},
 		},
 	}
 }
@@ -663,19 +665,28 @@ func TestTemplateHandler_HandleDelete(t *testing.T) {
 
 // Helper function from email_blocks_test.go (or define similarly here)
 func createTestRootBlockHandler(children ...notifusemjml.EmailBlock) notifusemjml.EmailBlock {
-	rootStyles := map[string]interface{}{
-		"body":      map[string]interface{}{"width": "600px"},
-		"paragraph": map[string]interface{}{"color": "#000"},
-	}
-	return notifusemjml.EmailBlock{
-		ID: "root", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: children,
+	return &notifusemjml.MJMLBlock{
+		BaseBlock: notifusemjml.BaseBlock{
+			ID:         "root",
+			Type:       notifusemjml.MJMLComponentMjml,
+			Children:   make([]interface{}, len(children)),
+			Attributes: map[string]interface{}{"version": "4.0.0"},
+		},
+		Type:       notifusemjml.MJMLComponentMjml,
+		Children:   children,
+		Attributes: map[string]interface{}{"version": "4.0.0"},
 	}
 }
+
 func createTestTextBlockHandler(id, textContent string) notifusemjml.EmailBlock {
-	return notifusemjml.EmailBlock{
-		ID: id, Kind: "text", Data: map[string]interface{}{"align": "left", "editorData": []interface{}{
-			map[string]interface{}{"type": "paragraph", "children": []interface{}{map[string]interface{}{"text": textContent}}},
-		}},
+	content := textContent
+	return &notifusemjml.MJTextBlock{
+		BaseBlock: notifusemjml.BaseBlock{
+			ID:   id,
+			Type: notifusemjml.MJMLComponentMjText,
+		},
+		Type:    notifusemjml.MJMLComponentMjText,
+		Content: &content,
 	}
 }
 

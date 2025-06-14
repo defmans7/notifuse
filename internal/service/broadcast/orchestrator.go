@@ -146,7 +146,7 @@ func (o *BroadcastOrchestrator) ValidateTemplates(templates map[string]*domain.T
 			return NewBroadcastError(ErrCodeTemplateInvalid, "template missing subject", false, nil)
 		}
 
-		if template.Email.VisualEditorTree.Kind == "" {
+		if template.Email.VisualEditorTree.GetType() == "" {
 			// codecov:ignore:start
 			o.logger.WithField("template_id", id).Error("Template missing content")
 			// codecov:ignore:end

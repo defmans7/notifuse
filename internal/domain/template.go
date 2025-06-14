@@ -10,7 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Notifuse/notifuse/pkg/mjml" // Import the mjml package
+	// Import the notifuse_mjml package
+
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/asaskevich/govalidator"
 )
 
@@ -148,13 +150,13 @@ func (t TemplateReference) Value() (driver.Value, error) {
 }
 
 type EmailTemplate struct {
-	SenderID         string          `json:"sender_id,omitempty"`
-	ReplyTo          string          `json:"reply_to,omitempty"`
-	Subject          string          `json:"subject"`
-	SubjectPreview   *string         `json:"subject_preview,omitempty"`
-	CompiledPreview  string          `json:"compiled_preview"` // compiled html
-	VisualEditorTree mjml.EmailBlock `json:"visual_editor_tree"`
-	Text             *string         `json:"text,omitempty"`
+	SenderID         string                   `json:"sender_id,omitempty"`
+	ReplyTo          string                   `json:"reply_to,omitempty"`
+	Subject          string                   `json:"subject"`
+	SubjectPreview   *string                  `json:"subject_preview,omitempty"`
+	CompiledPreview  string                   `json:"compiled_preview"` // compiled html
+	VisualEditorTree notifuse_mjml.EmailBlock `json:"visual_editor_tree"`
+	Text             *string                  `json:"text,omitempty"`
 }
 
 func (e *EmailTemplate) Validate(testData MapOfAny) error {
@@ -165,23 +167,13 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	if len(e.Subject) > 32 {
 		return fmt.Errorf("invalid email template: subject length must be between 1 and 32")
 	}
-	if e.VisualEditorTree.Kind != "root" {
-		return fmt.Errorf("invalid email template: visual_editor_tree must have kind 'root'")
+	if e.VisualEditorTree.GetType() != notifuse_mjml.MJMLComponentMjml {
+		return fmt.Errorf("invalid email template: visual_editor_tree must have type 'mjml'")
 	}
-	if e.VisualEditorTree.Data == nil {
-		return fmt.Errorf("invalid email template: visual_editor_tree root block must have data (styles)")
+	if e.VisualEditorTree.GetAttributes() == nil {
+		return fmt.Errorf("invalid email template: visual_editor_tree root block must have attributes")
 	}
 	if e.CompiledPreview == "" {
-		// Extract root styles from the tree data
-		rootDataMap, ok := e.VisualEditorTree.Data.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("invalid email template: root block data is not a map")
-		}
-		rootStyles, _ := rootDataMap["styles"].(map[string]interface{})
-		if rootStyles == nil {
-			return fmt.Errorf("invalid email template: root block styles are missing")
-		}
-
 		// Prepare template data JSON string
 		var templateDataStr string
 		if testData != nil && len(testData) > 0 {
@@ -192,10 +184,16 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 			templateDataStr = string(jsonDataBytes)
 		}
 
-		// Compile tree to MJML using our pkg/mjml function
-		mjmlResult, err := mjml.TreeToMjml(rootStyles, e.VisualEditorTree, templateDataStr, mjml.TrackingSettings{}, 0, nil)
-		if err != nil {
-			return fmt.Errorf("failed to generate MJML from tree: %w", err)
+		// Compile tree to MJML using our pkg/notifuse_mjml function
+		var mjmlResult string
+		if templateDataStr != "" {
+			result, err := notifuse_mjml.ConvertJSONToMJMLWithData(e.VisualEditorTree, templateDataStr)
+			if err != nil {
+				return fmt.Errorf("failed to convert tree to MJML: %w", err)
+			}
+			mjmlResult = result
+		} else {
+			mjmlResult = notifuse_mjml.ConvertJSONToMJML(e.VisualEditorTree)
 		}
 		e.CompiledPreview = mjmlResult
 	}
@@ -225,11 +223,47 @@ func (x *EmailTemplate) Scan(val interface{}) error {
 		return nil
 	}
 
-	return json.Unmarshal(data, x)
+	return x.UnmarshalJSON(data)
 }
 
 func (x EmailTemplate) Value() (driver.Value, error) {
-	return json.Marshal(x)
+	return x.MarshalJSON()
+}
+
+// MarshalJSON implements custom JSON marshaling for EmailTemplate
+func (x EmailTemplate) MarshalJSON() ([]byte, error) {
+	type Alias EmailTemplate
+	return json.Marshal(&struct {
+		*Alias
+	}{
+		Alias: (*Alias)(&x),
+	})
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for EmailTemplate
+func (x *EmailTemplate) UnmarshalJSON(data []byte) error {
+	type Alias EmailTemplate
+	aux := &struct {
+		VisualEditorTree json.RawMessage `json:"visual_editor_tree"`
+		*Alias
+	}{
+		Alias: (*Alias)(x),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return fmt.Errorf("failed to unmarshal EmailTemplate: %w", err)
+	}
+
+	// Handle the VisualEditorTree field specially
+	if len(aux.VisualEditorTree) > 0 {
+		block, err := notifuse_mjml.UnmarshalEmailBlock(aux.VisualEditorTree)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal VisualEditorTree: %w", err)
+		}
+		x.VisualEditorTree = block
+	}
+
+	return nil
 }
 
 //go:generate mockgen -destination mocks/mock_template_service.go -package mocks github.com/Notifuse/notifuse/internal/domain TemplateService
@@ -445,9 +479,9 @@ func (r *DeleteTemplateRequest) Validate() (workspaceID string, id string, err e
 
 // --- Compile Request/Response ---
 
-// Use types from mjml package
-type CompileTemplateRequest = mjml.CompileTemplateRequest
-type CompileTemplateResponse = mjml.CompileTemplateResponse
+// Use types from notifuse_mjml package
+type CompileTemplateRequest = notifuse_mjml.CompileTemplateRequest
+type CompileTemplateResponse = notifuse_mjml.CompileTemplateResponse
 
 // TemplateService provides operations for managing templates
 type TemplateService interface {
@@ -467,7 +501,7 @@ type TemplateService interface {
 	DeleteTemplate(ctx context.Context, workspaceID string, id string) error
 
 	// CompileTemplate compiles a visual editor tree to MJML and HTML
-	CompileTemplate(ctx context.Context, payload CompileTemplateRequest) (*CompileTemplateResponse, error) // Use mjml.EmailBlock
+	CompileTemplate(ctx context.Context, payload CompileTemplateRequest) (*CompileTemplateResponse, error) // Use notifuse_mjml.EmailBlock
 }
 
 // TemplateRepository provides database operations for templates
@@ -502,12 +536,12 @@ func (e *ErrTemplateNotFound) Error() string {
 
 // TemplateDataRequest groups parameters for building template data
 type TemplateDataRequest struct {
-	WorkspaceID        string                `json:"workspace_id"`
-	WorkspaceSecretKey string                `json:"workspace_secret_key"`
-	ContactWithList    ContactWithList       `json:"contact_with_list"`
-	MessageID          string                `json:"message_id"`
-	TrackingSettings   mjml.TrackingSettings `json:"tracking_settings"`
-	Broadcast          *Broadcast            `json:"broadcast,omitempty"`
+	WorkspaceID        string                         `json:"workspace_id"`
+	WorkspaceSecretKey string                         `json:"workspace_secret_key"`
+	ContactWithList    ContactWithList                `json:"contact_with_list"`
+	MessageID          string                         `json:"message_id"`
+	TrackingSettings   notifuse_mjml.TrackingSettings `json:"tracking_settings"`
+	Broadcast          *Broadcast                     `json:"broadcast,omitempty"`
 }
 
 // Validate ensures that the template data request has all required fields

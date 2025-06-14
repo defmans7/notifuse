@@ -8,7 +8,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/google/uuid"
 	"golang.org/x/sync/semaphore"
 )
@@ -213,20 +213,24 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		broadcast.UTMParameters.Content = template.ID
 	}
 
+	trackingSettings := notifuse_mjml.TrackingSettings{
+		Endpoint:       s.apiEndpoint,
+		EnableTracking: trackingEnabled,
+		UTMSource:      broadcast.UTMParameters.Source,
+		UTMMedium:      broadcast.UTMParameters.Medium,
+		UTMCampaign:    broadcast.UTMParameters.Campaign,
+		UTMContent:     broadcast.UTMParameters.Content,
+		UTMTerm:        broadcast.UTMParameters.Term,
+	}
+
 	// Compile template with the provided data
-	compiledTemplate, err := mjml.CompileTemplate(
-		s.apiEndpoint,
-		mjml.CompileTemplateRequest{
+	compiledTemplate, err := notifuse_mjml.CompileTemplate(
+		notifuse_mjml.CompileTemplateRequest{
 			WorkspaceID:      workspaceID,
 			MessageID:        messageID,
 			VisualEditorTree: template.Email.VisualEditorTree,
 			TemplateData:     data,
-			TrackingEnabled:  trackingEnabled,
-			UTMSource:        &broadcast.UTMParameters.Source,
-			UTMMedium:        &broadcast.UTMParameters.Medium,
-			UTMCampaign:      &broadcast.UTMParameters.Campaign,
-			UTMContent:       &broadcast.UTMParameters.Content,
-			UTMTerm:          &broadcast.UTMParameters.Term,
+			TrackingSettings: trackingSettings,
 		},
 	)
 
@@ -409,7 +413,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		// Generate a unique message ID for tracking
 		messageID := generateMessageID(workspaceID)
 
-		trackingSettings := mjml.TrackingSettings{
+		trackingSettings := notifuse_mjml.TrackingSettings{
 			Endpoint:       s.apiEndpoint,
 			EnableTracking: trackingEnabled,
 			UTMSource:      broadcast.UTMParameters.Source,

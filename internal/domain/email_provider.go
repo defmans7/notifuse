@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/asaskevich/govalidator"
 	"github.com/google/uuid"
 )
@@ -271,7 +271,7 @@ type SendEmailRequest struct {
 	MessageData    MessageData
 
 	// Configuration
-	TrackingSettings mjml.TrackingSettings
+	TrackingSettings notifuse_mjml.TrackingSettings
 	EmailProvider    *EmailProvider `validate:"required"`
 	EmailOptions     EmailOptions
 }

@@ -8,8 +8,8 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -1129,15 +1129,16 @@ func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
 		Name: "Test Template",
 		Email: &domain.EmailTemplate{
 			Subject: "Test Subject",
-			VisualEditorTree: mjml.EmailBlock{
-				Kind: "root",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:   "root",
+					Type: notifuse_mjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{
+						"version":         "4.0.0",
 						"backgroundColor": "#ffffff",
 						"width":           "600px",
 					},
 				},
-				Children: []mjml.EmailBlock{},
 			},
 			ReplyTo: "",
 		},

@@ -10,8 +10,8 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	bmocks "github.com/Notifuse/notifuse/internal/service/broadcast/mocks"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
@@ -70,6 +70,51 @@ func TestMessageSenderCreation(t *testing.T) {
 	assert.True(t, ok, "Custom sender should implement MessageSender interface")
 }
 
+// Helper function to create a simple text block
+func createTestTextBlock(id, textContent string) notifuse_mjml.EmailBlock {
+	content := textContent
+	return &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   id,
+			Type: notifuse_mjml.MJMLComponentMjText,
+		},
+		Content: &content,
+	}
+}
+
+// Helper function to create a valid MJML tree structure
+func createValidTestTree(textBlock notifuse_mjml.EmailBlock) notifuse_mjml.EmailBlock {
+	columnBlock := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "col1",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{textBlock},
+		},
+	}
+	sectionBlock := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "sec1",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{columnBlock},
+		},
+	}
+	bodyBlock := &notifuse_mjml.MJBodyBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "body1",
+			Type:     notifuse_mjml.MJMLComponentMjBody,
+			Children: []interface{}{sectionBlock},
+		},
+	}
+	return &notifuse_mjml.MJMLBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:         "root",
+			Type:       notifuse_mjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{"version": "4.0.0"},
+			Children:   []interface{}{bodyBlock},
+		},
+	}
+}
+
 // TestSendToRecipientSuccess tests successful sending to a recipient
 func TestSendToRecipientSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -119,75 +164,9 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			SenderID: emailSender.ID,
-			Subject:  "Test Subject",
-			VisualEditorTree: mjml.EmailBlock{
-				ID:   "root",
-				Kind: "root",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{
-						"body": map[string]interface{}{
-							"width":           "600px",
-							"margin":          "0 auto",
-							"backgroundColor": "#F4F7FA",
-						},
-					},
-				},
-				Children: []mjml.EmailBlock{
-					{
-						ID:   "content-section",
-						Kind: "section",
-						Data: map[string]interface{}{
-							"columnsOnMobile":     false,
-							"stackColumnsAtWidth": 480,
-							"backgroundType":      "color",
-							"paddingControl":      "all",
-							"borderControl":       "all",
-							"styles": map[string]interface{}{
-								"textAlign":        "center",
-								"backgroundRepeat": "repeat",
-								"padding":          "30px",
-								"borderWidth":      "0px",
-								"borderStyle":      "none",
-								"borderColor":      "#000000",
-								"backgroundColor":  "#ffffff",
-							},
-						},
-						Children: []mjml.EmailBlock{
-							{
-								ID:   "content-column",
-								Kind: "column",
-								Data: map[string]interface{}{
-									"paddingControl": "all",
-									"borderControl":  "all",
-									"styles": map[string]interface{}{
-										"verticalAlign": "top",
-										"minHeight":     "30px",
-									},
-								},
-								Children: []mjml.EmailBlock{
-									{
-										ID:   "text-block",
-										Kind: "text",
-										Data: map[string]interface{}{
-											"align": "left",
-											"width": "100%",
-											"editorData": []map[string]interface{}{
-												{
-													"type": "paragraph",
-													"children": []map[string]interface{}{
-														{"text": "Test content"},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			SenderID:         emailSender.ID,
+			Subject:          "Test Subject",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Test content")),
 		},
 	}
 
@@ -269,13 +248,13 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 		Senders: []domain.EmailSender{emailSender},
 		SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "user", Password: "pass", UseTLS: true},
 	}
-	// Create a template with invalid/empty VisualEditorTree that should cause compilation to fail
+	// Create a template with empty VisualEditorTree that should cause compilation to fail
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
 			SenderID:         emailSender.ID,
 			Subject:          "Test Subject",
-			VisualEditorTree: mjml.EmailBlock{}, // Empty block should cause compilation issues
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{}, // Empty block should cause compilation issues
 		},
 	}
 
@@ -500,75 +479,9 @@ func TestSendBatch(t *testing.T) {
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			SenderID: emailSender.ID,
-			Subject:  "Test Subject",
-			VisualEditorTree: mjml.EmailBlock{
-				ID:   "root",
-				Kind: "root",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{
-						"body": map[string]interface{}{
-							"width":           "600px",
-							"margin":          "0 auto",
-							"backgroundColor": "#F4F7FA",
-						},
-					},
-				},
-				Children: []mjml.EmailBlock{
-					{
-						ID:   "content-section",
-						Kind: "section",
-						Data: map[string]interface{}{
-							"columnsOnMobile":     false,
-							"stackColumnsAtWidth": 480,
-							"backgroundType":      "color",
-							"paddingControl":      "all",
-							"borderControl":       "all",
-							"styles": map[string]interface{}{
-								"textAlign":        "center",
-								"backgroundRepeat": "repeat",
-								"padding":          "30px",
-								"borderWidth":      "0px",
-								"borderStyle":      "none",
-								"borderColor":      "#000000",
-								"backgroundColor":  "#ffffff",
-							},
-						},
-						Children: []mjml.EmailBlock{
-							{
-								ID:   "content-column",
-								Kind: "column",
-								Data: map[string]interface{}{
-									"paddingControl": "all",
-									"borderControl":  "all",
-									"styles": map[string]interface{}{
-										"verticalAlign": "top",
-										"minHeight":     "30px",
-									},
-								},
-								Children: []mjml.EmailBlock{
-									{
-										ID:   "text-block",
-										Kind: "text",
-										Data: map[string]interface{}{
-											"align": "left",
-											"width": "100%",
-											"editorData": []map[string]interface{}{
-												{
-													"type": "paragraph",
-													"children": []map[string]interface{}{
-														{"text": "Test content"},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			SenderID:         emailSender.ID,
+			Subject:          "Test Subject",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Test content")),
 		},
 	}
 
@@ -834,75 +747,9 @@ func TestSendBatch_WithFailure(t *testing.T) {
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			SenderID: emailSender.ID,
-			Subject:  "Test Subject",
-			VisualEditorTree: mjml.EmailBlock{
-				ID:   "root",
-				Kind: "root",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{
-						"body": map[string]interface{}{
-							"width":           "600px",
-							"margin":          "0 auto",
-							"backgroundColor": "#F4F7FA",
-						},
-					},
-				},
-				Children: []mjml.EmailBlock{
-					{
-						ID:   "content-section",
-						Kind: "section",
-						Data: map[string]interface{}{
-							"columnsOnMobile":     false,
-							"stackColumnsAtWidth": 480,
-							"backgroundType":      "color",
-							"paddingControl":      "all",
-							"borderControl":       "all",
-							"styles": map[string]interface{}{
-								"textAlign":        "center",
-								"backgroundRepeat": "repeat",
-								"padding":          "30px",
-								"borderWidth":      "0px",
-								"borderStyle":      "none",
-								"borderColor":      "#000000",
-								"backgroundColor":  "#ffffff",
-							},
-						},
-						Children: []mjml.EmailBlock{
-							{
-								ID:   "content-column",
-								Kind: "column",
-								Data: map[string]interface{}{
-									"paddingControl": "all",
-									"borderControl":  "all",
-									"styles": map[string]interface{}{
-										"verticalAlign": "top",
-										"minHeight":     "30px",
-									},
-								},
-								Children: []mjml.EmailBlock{
-									{
-										ID:   "text-block",
-										Kind: "text",
-										Data: map[string]interface{}{
-											"align": "left",
-											"width": "100%",
-											"editorData": []map[string]interface{}{
-												{
-													"type": "paragraph",
-													"children": []map[string]interface{}{
-														{"text": "Test content"},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			SenderID:         emailSender.ID,
+			Subject:          "Test Subject",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Test content")),
 		},
 	}
 
@@ -1020,75 +867,9 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
-			SenderID: emailSender.ID,
-			Subject:  "Test Subject",
-			VisualEditorTree: mjml.EmailBlock{
-				ID:   "root",
-				Kind: "root",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{
-						"body": map[string]interface{}{
-							"width":           "600px",
-							"margin":          "0 auto",
-							"backgroundColor": "#F4F7FA",
-						},
-					},
-				},
-				Children: []mjml.EmailBlock{
-					{
-						ID:   "content-section",
-						Kind: "section",
-						Data: map[string]interface{}{
-							"columnsOnMobile":     false,
-							"stackColumnsAtWidth": 480,
-							"backgroundType":      "color",
-							"paddingControl":      "all",
-							"borderControl":       "all",
-							"styles": map[string]interface{}{
-								"textAlign":        "center",
-								"backgroundRepeat": "repeat",
-								"padding":          "30px",
-								"borderWidth":      "0px",
-								"borderStyle":      "none",
-								"borderColor":      "#000000",
-								"backgroundColor":  "#ffffff",
-							},
-						},
-						Children: []mjml.EmailBlock{
-							{
-								ID:   "content-column",
-								Kind: "column",
-								Data: map[string]interface{}{
-									"paddingControl": "all",
-									"borderControl":  "all",
-									"styles": map[string]interface{}{
-										"verticalAlign": "top",
-										"minHeight":     "30px",
-									},
-								},
-								Children: []mjml.EmailBlock{
-									{
-										ID:   "text-block",
-										Kind: "text",
-										Data: map[string]interface{}{
-											"align": "left",
-											"width": "100%",
-											"editorData": []map[string]interface{}{
-												{
-													"type": "paragraph",
-													"children": []map[string]interface{}{
-														{"text": "Test content"},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			SenderID:         emailSender.ID,
+			Subject:          "Test Subject",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Test content")),
 		},
 	}
 

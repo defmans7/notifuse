@@ -15,8 +15,8 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	http_handler "github.com/Notifuse/notifuse/internal/http"
-	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	notifusemjml "github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
@@ -250,14 +250,14 @@ func TestHandleGet(t *testing.T) {
 				SenderID:        "sender123",
 				Subject:         "Test Subject",
 				CompiledPreview: "<p>Test HTML content</p>",
-				VisualEditorTree: notifusemjml.EmailBlock{
-					ID:       "root",
-					Kind:     "root",
-					Path:     "",
-					Children: []notifusemjml.EmailBlock{},
-					Data: map[string]interface{}{
-						"styles": map[string]interface{}{},
+				VisualEditorTree: &notifusemjml.MJMLBlock{
+					BaseBlock: notifusemjml.BaseBlock{
+						ID:         "root",
+						Type:       notifusemjml.MJMLComponentMjml,
+						Attributes: map[string]interface{}{"version": "4.0.0"},
 					},
+					Type:       notifusemjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{"version": "4.0.0"},
 				},
 			},
 			Category:  "marketing",

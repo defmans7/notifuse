@@ -11,7 +11,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +50,7 @@ func createSampleTransactionalNotification() *domain.TransactionalNotification {
 				},
 			},
 		},
-		TrackingSettings: mjml.TrackingSettings{
+		TrackingSettings: notifuse_mjml.TrackingSettings{
 			EnableTracking: true,
 			UTMSource:      "notifuse",
 			UTMMedium:      "email",

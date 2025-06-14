@@ -9,7 +9,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/google/uuid"
 )
 
@@ -805,7 +805,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 
 	messageID := uuid.New().String()
 
-	trackingSettings := mjml.TrackingSettings{
+	trackingSettings := notifuse_mjml.TrackingSettings{
 		Endpoint:       s.apiEndpoint,
 		EnableTracking: workspace.Settings.EmailTrackingEnabled,
 	}
@@ -850,7 +850,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		WorkspaceID:      request.WorkspaceID,
 		MessageID:        messageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
-		TemplateData:     mjml.MapOfAny(templateData),
+		TemplateData:     notifuse_mjml.MapOfAny(templateData),
 	})
 	if err != nil {
 		s.logger.Error("Failed to compile template for broadcast")

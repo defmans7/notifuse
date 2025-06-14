@@ -11,10 +11,9 @@ import (
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks" // Corrected import path
 	"github.com/Notifuse/notifuse/internal/service"                  // Added logger import
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
-	notifusemjml "github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks" // Corrected import path
-	"github.com/golang/mock/gomock"                   // Added gomock import
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
+	"github.com/golang/mock/gomock" // Added gomock import
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	// Keep testify/assert
@@ -72,9 +71,12 @@ func TestTemplateService_CreateTemplate(t *testing.T) {
 			SenderID:        "sender-123",
 			Subject:         "Test Email",
 			CompiledPreview: "<p>Test</p>",
-			VisualEditorTree: mjml.EmailBlock{
-				Kind: "root",
-				Data: map[string]interface{}{"styles": map[string]interface{}{}},
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:         "root",
+					Type:       notifuse_mjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{"version": "4.0.0"},
+				},
 			},
 		},
 		// Version should be set to 1 by the service
@@ -182,10 +184,16 @@ func TestTemplateService_GetTemplateByID(t *testing.T) {
 		CreatedAt: now,
 		UpdatedAt: now,
 		Email: &domain.EmailTemplate{
-			SenderID:         "sender-123",
-			Subject:          "Test Email",
-			CompiledPreview:  "<html><body>Test</body></html>",
-			VisualEditorTree: mjml.EmailBlock{},
+			SenderID:        "sender-123",
+			Subject:         "Test Email",
+			CompiledPreview: "<html><body>Test</body></html>",
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:         "root",
+					Type:       notifuse_mjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{"version": "4.0.0"},
+				},
+			},
 		},
 	}
 
@@ -355,9 +363,12 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 			SenderID:        "sender-123",
 			Subject:         "Old Subject",
 			CompiledPreview: "<p>Old</p>",
-			VisualEditorTree: mjml.EmailBlock{
-				Kind: "root",
-				Data: map[string]interface{}{"styles": map[string]interface{}{}},
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:         "root",
+					Type:       notifuse_mjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{"version": "4.0.0"},
+				},
 			},
 		},
 	}
@@ -371,9 +382,12 @@ func TestTemplateService_UpdateTemplate(t *testing.T) {
 			SenderID:        "sender-123",   // Updated field
 			Subject:         "New Subject",  // Updated field
 			CompiledPreview: "<h1>New</h1>", // Updated field
-			VisualEditorTree: mjml.EmailBlock{
-				Kind: "root",
-				Data: map[string]interface{}{"styles": map[string]interface{}{}},
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:         "root",
+					Type:       notifuse_mjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{"version": "4.0.0"},
+				},
 			},
 		},
 		// Version, CreatedAt, UpdatedAt should be handled by the service
@@ -578,44 +592,47 @@ func (l *MockLogger) WithField(key string, value interface{}) logger.Logger  { r
 func (l *MockLogger) WithFields(fields map[string]interface{}) logger.Logger { return l }
 
 // --- Helper to create a basic text block ---
-func createTestTextBlock(id, textContent string) notifusemjml.EmailBlock {
-	return notifusemjml.EmailBlock{
-		ID:   id,
-		Kind: "text",
-		Data: map[string]interface{}{
-			"align": "left",
-			"editorData": []interface{}{
-				map[string]interface{}{
-					"type": "paragraph",
-					"children": []interface{}{
-						map[string]interface{}{"text": textContent},
-					},
-				},
-			},
+func createTestTextBlock(id, textContent string) notifuse_mjml.EmailBlock {
+	content := textContent
+	return &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   id,
+			Type: notifuse_mjml.MJMLComponentMjText,
 		},
+		Content: &content,
 	}
 }
 
 // --- Helper to create a valid nested structure for testing success ---
-func createValidTestTree(textBlock notifusemjml.EmailBlock) notifusemjml.EmailBlock {
-	columnBlock := notifusemjml.EmailBlock{
-		ID:       "col1",
-		Kind:     "column",
-		Data:     map[string]interface{}{"styles": map[string]interface{}{"verticalAlign": "top"}},
-		Children: []notifusemjml.EmailBlock{textBlock},
+func createValidTestTree(textBlock notifuse_mjml.EmailBlock) notifuse_mjml.EmailBlock {
+	columnBlock := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "col1",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{textBlock},
+		},
 	}
-	sectionBlock := notifusemjml.EmailBlock{
-		ID:       "sec1",
-		Kind:     "oneColumn", // Acts as mj-section
-		Data:     map[string]interface{}{"styles": map[string]interface{}{"textAlign": "left"}},
-		Children: []notifusemjml.EmailBlock{columnBlock},
+	sectionBlock := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "sec1",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{columnBlock},
+		},
 	}
-	rootStyles := map[string]interface{}{ // Basic root styles
-		"body":      map[string]interface{}{"width": "600px", "backgroundColor": "#ffffff"},
-		"paragraph": map[string]interface{}{"color": "#000000", "fontSize": "16px", "margin": "0px", "fontFamily": "Arial"},
+	bodyBlock := &notifuse_mjml.MJBodyBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "body1",
+			Type:     notifuse_mjml.MJMLComponentMjBody,
+			Children: []interface{}{sectionBlock},
+		},
 	}
-	return notifusemjml.EmailBlock{
-		ID: "root", Kind: "root", Data: map[string]interface{}{"styles": rootStyles}, Children: []notifusemjml.EmailBlock{sectionBlock},
+	return &notifuse_mjml.MJMLBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:         "root",
+			Type:       notifuse_mjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{"version": "4.0.0"},
+			Children:   []interface{}{bodyBlock},
+		},
 	}
 }
 
@@ -633,7 +650,7 @@ func TestCompileTemplate_Success(t *testing.T) {
 	workspaceID := "ws_123"
 	userID := "user_abc"
 	testTree := createValidTestTree(createTestTextBlock("txt1", "Hello {{name}}"))
-	testData := mjml.MapOfAny{"name": "Tester"}
+	testData := notifuse_mjml.MapOfAny{"name": "Tester"}
 
 	// Mock expectations
 	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{ID: userID}, nil)
@@ -681,8 +698,13 @@ func TestCompileTemplate_TreeToMjmlError(t *testing.T) {
 	userID := "user_abc"
 
 	// Create a tree containing a block that will cause TreeToMjml to return an error (e.g., bad liquid)
-	badLiquidBlock := notifusemjml.EmailBlock{
-		ID: "badliq", Kind: "liquid", Data: map[string]interface{}{"liquidCode": "{% invalid tag %}"},
+	invalidContent := "{% invalid tag %}"
+	badLiquidBlock := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "badliq",
+			Type: notifuse_mjml.MJMLComponentMjText,
+		},
+		Content: &invalidContent,
 	}
 	badLiquidTree := createValidTestTree(badLiquidBlock) // Embed the bad block in a valid structure
 
@@ -693,7 +715,7 @@ func TestCompileTemplate_TreeToMjmlError(t *testing.T) {
 	resp, err := svc.CompileTemplate(ctx, domain.CompileTemplateRequest{
 		WorkspaceID:      workspaceID,
 		VisualEditorTree: badLiquidTree,
-		TemplateData:     nil,
+		TemplateData:     notifuse_mjml.MapOfAny{"name": "test"}, // Provide template data to trigger liquid processing
 	})
 
 	// --- Assert ---
@@ -702,7 +724,7 @@ func TestCompileTemplate_TreeToMjmlError(t *testing.T) {
 	assert.False(t, resp.Success, "Response Success should be false on TreeToMjml failure")
 	require.NotNil(t, resp.Error, "Response Error should not be nil on TreeToMjml failure")
 	// Check that the error message originates from the TreeToMjml function and indicates a liquid error
-	assert.Contains(t, resp.Error.Message, "liquid rendering error in liquid block", "Error message should wrap the liquid error")
+	assert.Contains(t, resp.Error.Message, "liquid processing failed for block badliq", "Error message should wrap the liquid error")
 
 	// Note: Testing the specific mjmlgo.Error path (where err is nil but resp.Success is false)
 	// would ideally involve mocking mjmlgo.ToHTML or using specific input known to cause mjmlgo.Error.
@@ -754,8 +776,12 @@ func TestCompileTemplate_InvalidTreeData(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "ws_123"
 	userID := "user_abc"
-	invalidTree := notifusemjml.EmailBlock{
-		ID: "root_invalid", Kind: "root", Data: nil, Children: nil,
+	invalidTree := &notifuse_mjml.MJMLBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:         "root_invalid",
+			Type:       notifuse_mjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{"version": "4.0.0"},
+		},
 	}
 
 	// Mock expectations
@@ -769,9 +795,10 @@ func TestCompileTemplate_InvalidTreeData(t *testing.T) {
 	})
 
 	// --- Assert ---
-	require.Error(t, err)
-	require.Nil(t, resp)
-	// Update assertion to match the actual error message when Data is nil
-	assert.Contains(t, err.Error(), "invalid root block data format", "Error message should indicate invalid root data")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.False(t, resp.Success, "Response Success should be false for invalid tree")
+	require.NotNil(t, resp.Error, "Response Error should not be nil for invalid tree")
+	assert.Contains(t, resp.Error.Message, "mjml", "Error message should relate to MJML processing")
 
 }

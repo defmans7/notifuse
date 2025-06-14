@@ -1,9 +1,13 @@
 package notifuse_mjml
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMJMLComponentTypeConstants(t *testing.T) {
@@ -649,6 +653,296 @@ func TestSaveOperation(t *testing.T) {
 	if SaveOperationUpdate != "update" {
 		t.Errorf("Expected SaveOperationUpdate to be 'update', got %s", SaveOperationUpdate)
 	}
+}
+
+func TestEmailBlockJSONMarshaling(t *testing.T) {
+	// Create a test block with children
+	textBlock := &MJTextBlock{
+		BaseBlock: BaseBlock{
+			ID:   "text1",
+			Type: MJMLComponentMjText,
+		},
+		Type:    MJMLComponentMjText,
+		Content: stringPtr("Hello World"),
+	}
+
+	bodyBlock := &MJBodyBlock{
+		BaseBlock: BaseBlock{
+			ID:       "body1",
+			Type:     MJMLComponentMjBody,
+			Children: []interface{}{textBlock},
+		},
+		Type:     MJMLComponentMjBody,
+		Children: []EmailBlock{textBlock}, // Set in concrete type too
+	}
+
+	block := &MJMLBlock{
+		BaseBlock: BaseBlock{
+			ID:         "test",
+			Type:       MJMLComponentMjml,
+			Attributes: map[string]interface{}{"version": "4.0.0"},
+			Children:   []interface{}{bodyBlock},
+		},
+		Type:       MJMLComponentMjml,
+		Attributes: map[string]interface{}{"version": "4.0.0"},
+		Children:   []EmailBlock{bodyBlock}, // Set in concrete type too
+	}
+
+	// Marshal it
+	data, err := json.Marshal(block)
+	require.NoError(t, err)
+	t.Logf("Marshaled JSON: %s", string(data))
+
+	// Unmarshal it using our custom function
+	unmarshaled, err := UnmarshalEmailBlock(data)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test", unmarshaled.GetID())
+	assert.Equal(t, MJMLComponentMjml, unmarshaled.GetType())
+	if unmarshaled.GetAttributes() != nil {
+		assert.Equal(t, "4.0.0", unmarshaled.GetAttributes()["version"])
+	}
+
+	// Verify it's the correct concrete type
+	mjmlBlock, ok := unmarshaled.(*MJMLBlock)
+	require.True(t, ok, "Expected MJMLBlock but got %T", unmarshaled)
+	assert.Equal(t, MJMLComponentMjml, mjmlBlock.Type)
+
+	// Check children
+	children := unmarshaled.GetChildren()
+	require.Len(t, children, 1, "Expected 1 child")
+
+	bodyChild, ok := children[0].(*MJBodyBlock)
+	require.True(t, ok, "Expected MJBodyBlock child but got %T", children[0])
+	assert.Equal(t, "body1", bodyChild.GetID())
+	assert.Equal(t, MJMLComponentMjBody, bodyChild.GetType())
+
+	// Check grandchildren
+	bodyChildren := bodyChild.GetChildren()
+	require.Len(t, bodyChildren, 1, "Expected 1 grandchild")
+
+	textChild, ok := bodyChildren[0].(*MJTextBlock)
+	require.True(t, ok, "Expected MJTextBlock grandchild but got %T", bodyChildren[0])
+	assert.Equal(t, "text1", textChild.GetID())
+	assert.Equal(t, MJMLComponentMjText, textChild.GetType())
+	assert.Equal(t, "Hello World", *textChild.Content)
+}
+
+func TestAllComponentTypesUnmarshal(t *testing.T) {
+	// Test that all defined component types can be unmarshaled without errors
+	allComponentTypes := []MJMLComponentType{
+		MJMLComponentMjml,
+		MJMLComponentMjBody,
+		MJMLComponentMjWrapper,
+		MJMLComponentMjSection,
+		MJMLComponentMjColumn,
+		MJMLComponentMjGroup,
+		MJMLComponentMjText,
+		MJMLComponentMjButton,
+		MJMLComponentMjImage,
+		MJMLComponentMjDivider,
+		MJMLComponentMjSpacer,
+		MJMLComponentMjSocial,
+		MJMLComponentMjSocialElement,
+		MJMLComponentMjHead,
+		MJMLComponentMjAttributes,
+		MJMLComponentMjBreakpoint,
+		MJMLComponentMjFont,
+		MJMLComponentMjHtmlAttributes,
+		MJMLComponentMjPreview,
+		MJMLComponentMjStyle,
+		MJMLComponentMjTitle,
+		MJMLComponentMjRaw,
+	}
+
+	for _, componentType := range allComponentTypes {
+		t.Run(string(componentType), func(t *testing.T) {
+			// Create a basic JSON structure for each component type
+			jsonData := map[string]interface{}{
+				"id":         "test-" + string(componentType),
+				"type":       componentType,
+				"attributes": map[string]interface{}{"testAttr": "testValue"},
+			}
+
+			// Add content field to components that support it
+			contentComponents := []MJMLComponentType{
+				MJMLComponentMjText, MJMLComponentMjButton, MJMLComponentMjPreview,
+				MJMLComponentMjStyle, MJMLComponentMjTitle, MJMLComponentMjRaw,
+				MJMLComponentMjSocialElement,
+			}
+			for _, contentComp := range contentComponents {
+				if componentType == contentComp {
+					jsonData["content"] = "Test content for " + string(componentType)
+					break
+				}
+			}
+
+			// Marshal to JSON
+			jsonBytes, err := json.Marshal(jsonData)
+			if err != nil {
+				t.Fatalf("Failed to marshal JSON for %s: %v", componentType, err)
+			}
+
+			// Unmarshal using our function
+			block, err := UnmarshalEmailBlock(jsonBytes)
+			if err != nil {
+				t.Fatalf("Failed to unmarshal %s: %v", componentType, err)
+			}
+
+			// Verify the block was created correctly
+			if block == nil {
+				t.Fatalf("UnmarshalEmailBlock returned nil for %s", componentType)
+			}
+
+			if block.GetType() != componentType {
+				t.Errorf("Expected type %s, got %s", componentType, block.GetType())
+			}
+
+			if block.GetID() != "test-"+string(componentType) {
+				t.Errorf("Expected ID 'test-%s', got '%s'", componentType, block.GetID())
+			}
+
+			// Verify attributes
+			attrs := block.GetAttributes()
+			if attrs == nil {
+				t.Errorf("Attributes should not be nil for %s", componentType)
+			} else if testAttr, exists := attrs["testAttr"]; !exists || testAttr != "testValue" {
+				t.Errorf("Expected testAttr=testValue for %s, got %v", componentType, testAttr)
+			}
+
+			t.Logf("Successfully unmarshaled %s component", componentType)
+		})
+	}
+}
+
+func TestUnmarshalEmailBlockWithChildren(t *testing.T) {
+	// Test unmarshaling of complex nested structures with all component types
+	complexJSON := `{
+		"id": "root",
+		"type": "mjml",
+		"children": [
+			{
+				"id": "head",
+				"type": "mj-head",
+				"children": [
+					{
+						"id": "title",
+						"type": "mj-title",
+						"content": "Test Email"
+					},
+					{
+						"id": "breakpoint",
+						"type": "mj-breakpoint",
+						"attributes": {"width": "600px"}
+					},
+					{
+						"id": "font",
+						"type": "mj-font",
+						"attributes": {"name": "Arial", "href": "https://fonts.google.com/arial"}
+					}
+				]
+			},
+			{
+				"id": "body",
+				"type": "mj-body",
+				"children": [
+					{
+						"id": "wrapper",
+						"type": "mj-wrapper",
+						"children": [
+							{
+								"id": "section",
+								"type": "mj-section",
+								"children": [
+									{
+										"id": "group",
+										"type": "mj-group",
+										"children": [
+											{
+												"id": "column",
+												"type": "mj-column",
+												"children": [
+													{
+														"id": "text",
+														"type": "mj-text",
+														"content": "Hello World"
+													},
+													{
+														"id": "button",
+														"type": "mj-button",
+														"content": "Click Me"
+													},
+													{
+														"id": "image",
+														"type": "mj-image",
+														"attributes": {"src": "https://example.com/image.jpg"}
+													},
+													{
+														"id": "divider",
+														"type": "mj-divider"
+													},
+													{
+														"id": "spacer",
+														"type": "mj-spacer",
+														"attributes": {"height": "20px"}
+													},
+													{
+														"id": "social",
+														"type": "mj-social",
+														"children": [
+															{
+																"id": "social-element",
+																"type": "mj-social-element",
+																"content": "Follow Us",
+																"attributes": {"name": "facebook"}
+															}
+														]
+													},
+													{
+														"id": "raw",
+														"type": "mj-raw",
+														"content": "<p>Raw HTML content</p>"
+													}
+												]
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	}`
+
+	block, err := UnmarshalEmailBlock([]byte(complexJSON))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal complex JSON: %v", err)
+	}
+
+	// Verify root block
+	if block.GetType() != MJMLComponentMjml {
+		t.Errorf("Expected root type mjml, got %s", block.GetType())
+	}
+
+	// Verify children exist
+	children := block.GetChildren()
+	if len(children) != 2 {
+		t.Errorf("Expected 2 root children, got %d", len(children))
+	}
+
+	// Verify head block
+	if len(children) > 0 && children[0].GetType() != MJMLComponentMjHead {
+		t.Errorf("Expected first child to be mj-head, got %s", children[0].GetType())
+	}
+
+	// Verify body block
+	if len(children) > 1 && children[1].GetType() != MJMLComponentMjBody {
+		t.Errorf("Expected second child to be mj-body, got %s", children[1].GetType())
+	}
+
+	t.Log("Successfully unmarshaled complex nested structure with all component types")
 }
 
 // Helper function for tests - using stringPtr from examples.go

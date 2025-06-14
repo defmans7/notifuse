@@ -12,7 +12,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -145,6 +145,62 @@ func (m *MockWorkspaceRepository) WithWorkspaceTransaction(ctx context.Context, 
 	return args.Error(0)
 }
 
+// Helper function to create a simple text block for testing
+func createTestTextBlock(id, textContent string) notifuse_mjml.EmailBlock {
+	content := textContent
+	return &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   id,
+			Type: notifuse_mjml.MJMLComponentMjText,
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &content,
+	}
+}
+
+// Helper function to create a valid MJML tree structure for testing
+func createValidTestTree() notifuse_mjml.EmailBlock {
+	textBlock := createTestTextBlock("txt1", "Test content")
+	columnBlock := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "col1",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{textBlock},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{textBlock},
+	}
+	sectionBlock := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "sec1",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{columnBlock},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjSection,
+		Children: []notifuse_mjml.EmailBlock{columnBlock},
+	}
+	bodyBlock := &notifuse_mjml.MJBodyBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "body1",
+			Type:     notifuse_mjml.MJMLComponentMjBody,
+			Children: []interface{}{sectionBlock},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjBody,
+		Children: []notifuse_mjml.EmailBlock{sectionBlock},
+	}
+	return &notifuse_mjml.MJMLBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:         "root",
+			Type:       notifuse_mjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{"version": "4.0.0"},
+			Children:   []interface{}{bodyBlock},
+		},
+		Type:       notifuse_mjml.MJMLComponentMjml,
+		Attributes: map[string]interface{}{"version": "4.0.0"},
+		Children:   []notifuse_mjml.EmailBlock{bodyBlock},
+	}
+}
+
 // Helper function to create a valid template for testing
 func createTestTemplate() *domain.Template {
 	now := time.Now().UTC().Truncate(time.Microsecond) // Truncate for DB precision
@@ -157,7 +213,7 @@ func createTestTemplate() *domain.Template {
 			SenderID:         uuid.New().String(),
 			Subject:          "Test Email",
 			CompiledPreview:  "<html><body>Test</body></html>",
-			VisualEditorTree: mjml.EmailBlock{}, // Add required field
+			VisualEditorTree: createValidTestTree(), // Use valid MJML structure
 		},
 		Category:  "Test Category",
 		TestData:  domain.MapOfAny{"name": "Test User"},

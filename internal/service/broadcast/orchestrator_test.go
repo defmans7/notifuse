@@ -10,8 +10,8 @@ import (
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/service/broadcast"
 	"github.com/Notifuse/notifuse/internal/service/broadcast/mocks"
-	"github.com/Notifuse/notifuse/pkg/mjml"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,10 +113,13 @@ func TestBroadcastOrchestrator_LoadTemplates(t *testing.T) {
 		Email: &domain.EmailTemplate{
 			Subject:  "Test Subject 1",
 			SenderID: "sender-123",
-			VisualEditorTree: mjml.EmailBlock{
-				Kind: "container",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{},
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:   "root1",
+					Type: notifuse_mjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{
+						"version": "4.0.0",
+					},
 				},
 			},
 		},
@@ -126,10 +129,13 @@ func TestBroadcastOrchestrator_LoadTemplates(t *testing.T) {
 		Email: &domain.EmailTemplate{
 			Subject:  "Test Subject 2",
 			SenderID: "sender-123",
-			VisualEditorTree: mjml.EmailBlock{
-				Kind: "container",
-				Data: map[string]interface{}{
-					"styles": map[string]interface{}{},
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:   "root2",
+					Type: notifuse_mjml.MJMLComponentMjml,
+					Attributes: map[string]interface{}{
+						"version": "4.0.0",
+					},
 				},
 			},
 		},
@@ -202,8 +208,14 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 					Email: &domain.EmailTemplate{
 						Subject:  "Test Subject",
 						SenderID: "sender-123",
-						VisualEditorTree: mjml.EmailBlock{
-							Kind: "container",
+						VisualEditorTree: &notifuse_mjml.MJMLBlock{
+							BaseBlock: notifuse_mjml.BaseBlock{
+								ID:   "root1",
+								Type: notifuse_mjml.MJMLComponentMjml,
+								Attributes: map[string]interface{}{
+									"version": "4.0.0",
+								},
+							},
 						},
 					},
 				},
@@ -231,8 +243,14 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 					ID: "template-1",
 					Email: &domain.EmailTemplate{
 						SenderID: "sender-123",
-						VisualEditorTree: mjml.EmailBlock{
-							Kind: "container",
+						VisualEditorTree: &notifuse_mjml.MJMLBlock{
+							BaseBlock: notifuse_mjml.BaseBlock{
+								ID:   "root1",
+								Type: notifuse_mjml.MJMLComponentMjml,
+								Attributes: map[string]interface{}{
+									"version": "4.0.0",
+								},
+							},
 						},
 					},
 				},
@@ -611,8 +629,14 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					Email: &domain.EmailTemplate{
 						Subject:  "Test Subject",
 						SenderID: "sender-123",
-						VisualEditorTree: mjml.EmailBlock{
-							Kind: "container",
+						VisualEditorTree: &notifuse_mjml.MJMLBlock{
+							BaseBlock: notifuse_mjml.BaseBlock{
+								ID:   "root1",
+								Type: notifuse_mjml.MJMLComponentMjml,
+								Attributes: map[string]interface{}{
+									"version": "4.0.0",
+								},
+							},
 						},
 					},
 				}
@@ -739,8 +763,14 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					Email: &domain.EmailTemplate{
 						Subject:  "Test Subject",
 						SenderID: "sender-123",
-						VisualEditorTree: mjml.EmailBlock{
-							Kind: "container",
+						VisualEditorTree: &notifuse_mjml.MJMLBlock{
+							BaseBlock: notifuse_mjml.BaseBlock{
+								ID:   "root1",
+								Type: notifuse_mjml.MJMLComponentMjml,
+								Attributes: map[string]interface{}{
+									"version": "4.0.0",
+								},
+							},
 						},
 					},
 				}
@@ -1062,8 +1092,14 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					Email: &domain.EmailTemplate{
 						Subject:  "Test Subject",
 						SenderID: "sender-123",
-						VisualEditorTree: mjml.EmailBlock{
-							Kind: "container",
+						VisualEditorTree: &notifuse_mjml.MJMLBlock{
+							BaseBlock: notifuse_mjml.BaseBlock{
+								ID:   "root1",
+								Type: notifuse_mjml.MJMLComponentMjml,
+								Attributes: map[string]interface{}{
+									"version": "4.0.0",
+								},
+							},
 						},
 					},
 				}
@@ -1177,8 +1213,14 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					Email: &domain.EmailTemplate{
 						Subject:  "Test Subject",
 						SenderID: "sender-123",
-						VisualEditorTree: mjml.EmailBlock{
-							Kind: "container",
+						VisualEditorTree: &notifuse_mjml.MJMLBlock{
+							BaseBlock: notifuse_mjml.BaseBlock{
+								ID:   "root1",
+								Type: notifuse_mjml.MJMLComponentMjml,
+								Attributes: map[string]interface{}{
+									"version": "4.0.0",
+								},
+							},
 						},
 					},
 				}

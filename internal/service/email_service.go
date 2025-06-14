@@ -7,6 +7,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/Notifuse/notifuse/pkg/tracing"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -267,17 +268,22 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		request.TrackingSettings.UTMContent = template.ID
 	}
 
+	trackingSettings := notifuse_mjml.TrackingSettings{
+		Endpoint:       s.apiEndpoint,
+		EnableTracking: request.TrackingSettings.EnableTracking,
+		UTMSource:      request.TrackingSettings.UTMSource,
+		UTMMedium:      request.TrackingSettings.UTMMedium,
+		UTMCampaign:    request.TrackingSettings.UTMCampaign,
+		UTMContent:     request.TrackingSettings.UTMContent,
+		UTMTerm:        request.TrackingSettings.UTMTerm,
+	}
+
 	compileTemplateRequest := domain.CompileTemplateRequest{
 		WorkspaceID:      request.WorkspaceID,
 		MessageID:        request.MessageID,
 		VisualEditorTree: template.Email.VisualEditorTree,
 		TemplateData:     request.MessageData.Data,
-		TrackingEnabled:  request.TrackingSettings.EnableTracking,
-		UTMSource:        &request.TrackingSettings.UTMSource,
-		UTMMedium:        &request.TrackingSettings.UTMMedium,
-		UTMCampaign:      &request.TrackingSettings.UTMCampaign,
-		UTMContent:       &request.TrackingSettings.UTMContent,
-		UTMTerm:          &request.TrackingSettings.UTMTerm,
+		TrackingSettings: trackingSettings,
 	}
 
 	// Compile the template with the message data

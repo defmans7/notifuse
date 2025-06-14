@@ -7,7 +7,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/mjml"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 )
 
 type TemplateService struct {
@@ -168,5 +168,7 @@ func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.Co
 		ctx = context.WithValue(ctx, "authenticated_user", user)
 	}
 
-	return mjml.CompileTemplate(s.apiEndpoint, payload)
+	payload.TrackingSettings.Endpoint = s.apiEndpoint
+
+	return notifuse_mjml.CompileTemplate(payload)
 }

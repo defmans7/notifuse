@@ -1,6 +1,7 @@
 package notifuse_mjml
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -560,6 +561,414 @@ func (b *BaseBlock) GetChildren() []EmailBlock {
 
 func (b *BaseBlock) GetAttributes() map[string]interface{} {
 	return b.Attributes
+}
+
+// EmailBlockJSON is used for JSON marshaling/unmarshaling with type information
+type EmailBlockJSON struct {
+	ID         string                 `json:"id"`
+	Type       MJMLComponentType      `json:"type"`
+	Children   []json.RawMessage      `json:"children,omitempty"`
+	Attributes map[string]interface{} `json:"attributes,omitempty"`
+	Content    *string                `json:"content,omitempty"`
+}
+
+// MarshalJSON implements custom JSON marshaling for EmailBlock interface
+func MarshalEmailBlock(block EmailBlock) ([]byte, error) {
+	if block == nil {
+		return []byte("null"), nil
+	}
+
+	return json.Marshal(block)
+}
+
+// UnmarshalEmailBlock implements custom JSON unmarshaling for EmailBlock interface
+func UnmarshalEmailBlock(data []byte) (EmailBlock, error) {
+	var blockJSON EmailBlockJSON
+	if err := json.Unmarshal(data, &blockJSON); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal EmailBlock JSON: %w", err)
+	}
+
+	// Handle children recursively first
+	var children []interface{}
+	var emailBlockChildren []EmailBlock
+	if len(blockJSON.Children) > 0 {
+		children = make([]interface{}, len(blockJSON.Children))
+		emailBlockChildren = make([]EmailBlock, len(blockJSON.Children))
+		for i, childData := range blockJSON.Children {
+			childBlock, err := UnmarshalEmailBlock(childData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal child at index %d: %w", i, err)
+			}
+			children[i] = childBlock
+			emailBlockChildren[i] = childBlock
+		}
+	}
+
+	// Create the appropriate concrete type based on the type field and set all fields manually
+	var block EmailBlock
+	switch blockJSON.Type {
+	case MJMLComponentMjml:
+		mjmlBlock := &MJMLBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:       blockJSON.Type,
+			Children:   emailBlockChildren,
+			Attributes: blockJSON.Attributes,
+		}
+		block = mjmlBlock
+	case MJMLComponentMjHead:
+		headBlock := &MJHeadBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:       blockJSON.Type,
+			Children:   emailBlockChildren,
+			Attributes: blockJSON.Attributes,
+		}
+		block = headBlock
+	case MJMLComponentMjBody:
+		bodyBlock := &MJBodyBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = bodyBlock
+	case MJMLComponentMjSection:
+		sectionBlock := &MJSectionBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = sectionBlock
+	case MJMLComponentMjColumn:
+		columnBlock := &MJColumnBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = columnBlock
+	case MJMLComponentMjText:
+		// Handle content field for text blocks
+		var rawContent map[string]interface{}
+		if err := json.Unmarshal(data, &rawContent); err == nil {
+			if contentVal, exists := rawContent["content"]; exists {
+				if contentStr, ok := contentVal.(string); ok {
+					blockJSON.Content = &contentStr
+				}
+			}
+		}
+
+		textBlock := &MJTextBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+			Content:  blockJSON.Content,
+		}
+		block = textBlock
+	case MJMLComponentMjButton:
+		// Handle content field for button blocks
+		var rawContent map[string]interface{}
+		if err := json.Unmarshal(data, &rawContent); err == nil {
+			if contentVal, exists := rawContent["content"]; exists {
+				if contentStr, ok := contentVal.(string); ok {
+					blockJSON.Content = &contentStr
+				}
+			}
+		}
+
+		buttonBlock := &MJButtonBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+			Content:  blockJSON.Content,
+		}
+		block = buttonBlock
+	case MJMLComponentMjImage:
+		imageBlock := &MJImageBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = imageBlock
+	case MJMLComponentMjDivider:
+		dividerBlock := &MJDividerBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = dividerBlock
+	case MJMLComponentMjSpacer:
+		spacerBlock := &MJSpacerBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = spacerBlock
+	case MJMLComponentMjSocial:
+		socialBlock := &MJSocialBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = socialBlock
+	case MJMLComponentMjSocialElement:
+		socialElementBlock := &MJSocialElementBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = socialElementBlock
+	case MJMLComponentMjWrapper:
+		wrapperBlock := &MJWrapperBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = wrapperBlock
+	case MJMLComponentMjGroup:
+		groupBlock := &MJGroupBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = groupBlock
+	case MJMLComponentMjAttributes:
+		attributesBlock := &MJAttributesBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:       blockJSON.Type,
+			Children:   emailBlockChildren,
+			Attributes: blockJSON.Attributes,
+		}
+		block = attributesBlock
+	case MJMLComponentMjBreakpoint:
+		breakpointBlock := &MJBreakpointBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = breakpointBlock
+	case MJMLComponentMjFont:
+		fontBlock := &MJFontBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+		}
+		block = fontBlock
+	case MJMLComponentMjHtmlAttributes:
+		htmlAttributesBlock := &MJHtmlAttributesBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:       blockJSON.Type,
+			Children:   emailBlockChildren,
+			Attributes: blockJSON.Attributes,
+		}
+		block = htmlAttributesBlock
+	case MJMLComponentMjPreview:
+		// Handle content field for preview blocks
+		var rawContent map[string]interface{}
+		if err := json.Unmarshal(data, &rawContent); err == nil {
+			if contentVal, exists := rawContent["content"]; exists {
+				if contentStr, ok := contentVal.(string); ok {
+					blockJSON.Content = &contentStr
+				}
+			}
+		}
+
+		previewBlock := &MJPreviewBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:       blockJSON.Type,
+			Children:   emailBlockChildren,
+			Content:    blockJSON.Content,
+			Attributes: blockJSON.Attributes,
+		}
+		block = previewBlock
+	case MJMLComponentMjStyle:
+		// Handle content field for style blocks
+		var rawContent map[string]interface{}
+		if err := json.Unmarshal(data, &rawContent); err == nil {
+			if contentVal, exists := rawContent["content"]; exists {
+				if contentStr, ok := contentVal.(string); ok {
+					blockJSON.Content = &contentStr
+				}
+			}
+		}
+
+		styleBlock := &MJStyleBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+			Content:  blockJSON.Content,
+		}
+		block = styleBlock
+	case MJMLComponentMjTitle:
+		// Handle content field for title blocks
+		var rawContent map[string]interface{}
+		if err := json.Unmarshal(data, &rawContent); err == nil {
+			if contentVal, exists := rawContent["content"]; exists {
+				if contentStr, ok := contentVal.(string); ok {
+					blockJSON.Content = &contentStr
+				}
+			}
+		}
+
+		titleBlock := &MJTitleBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:       blockJSON.Type,
+			Children:   emailBlockChildren,
+			Content:    blockJSON.Content,
+			Attributes: blockJSON.Attributes,
+		}
+		block = titleBlock
+	case MJMLComponentMjRaw:
+		// Handle content field for raw blocks
+		var rawContent map[string]interface{}
+		if err := json.Unmarshal(data, &rawContent); err == nil {
+			if contentVal, exists := rawContent["content"]; exists {
+				if contentStr, ok := contentVal.(string); ok {
+					blockJSON.Content = &contentStr
+				}
+			}
+		}
+
+		rawBlock := &MJRawBlock{
+			BaseBlock: BaseBlock{
+				ID:         blockJSON.ID,
+				Type:       blockJSON.Type,
+				Children:   children,
+				Attributes: blockJSON.Attributes,
+			},
+			Type:     blockJSON.Type,
+			Children: emailBlockChildren,
+			Content:  blockJSON.Content,
+		}
+		block = rawBlock
+	default:
+		// For other types, create a basic structure
+		// This is a simplified approach - in a full implementation, you'd handle all types
+		return nil, fmt.Errorf("unsupported block type for manual unmarshaling: %s", blockJSON.Type)
+	}
+
+	return block, nil
+}
+
+// Helper function to unmarshal a slice of EmailBlocks
+func UnmarshalEmailBlocks(data []byte) ([]EmailBlock, error) {
+	var rawBlocks []json.RawMessage
+	if err := json.Unmarshal(data, &rawBlocks); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal EmailBlocks array: %w", err)
+	}
+
+	blocks := make([]EmailBlock, len(rawBlocks))
+	for i, rawBlock := range rawBlocks {
+		block, err := UnmarshalEmailBlock(rawBlock)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal block at index %d: %w", i, err)
+		}
+		blocks[i] = block
+	}
+
+	return blocks, nil
 }
 
 // ValidChildrenMap defines valid parent-child relationships for MJML components
