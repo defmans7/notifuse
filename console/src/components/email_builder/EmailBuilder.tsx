@@ -8,7 +8,7 @@ import 'overlayscrollbars/overlayscrollbars.css'
 import { TreePanel } from './panels/TreePanel'
 import { EditPanel } from './panels/EditPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
-import { Preview } from './panels/Preview'
+import { Preview, type PreviewRef } from './panels/Preview'
 import type { EmailBlock, EmailBuilderState, SavedBlock, SaveOperation } from './types'
 import { EmailBlockClass } from './EmailBlockClass'
 
@@ -29,6 +29,7 @@ interface EmailBuilderProps {
   settingsPanelRef?: React.RefObject<HTMLDivElement>
   previewSwitcherRef?: React.RefObject<HTMLDivElement>
   mobileDesktopSwitcherRef?: React.RefObject<HTMLDivElement>
+  templateDataRef?: React.RefObject<PreviewRef>
   forcedViewMode?: 'edit' | 'preview' | null
   onSelectBlock?: (blockId: string | null) => void
   selectedBlockId?: string | null
@@ -50,6 +51,7 @@ const EmailBuilderContent: React.FC<EmailBuilderProps> = ({
   settingsPanelRef,
   previewSwitcherRef,
   mobileDesktopSwitcherRef,
+  templateDataRef,
   forcedViewMode,
   onSelectBlock: externalOnSelectBlock,
   selectedBlockId: externalSelectedBlockId,
@@ -803,6 +805,7 @@ const EmailBuilderContent: React.FC<EmailBuilderProps> = ({
 
       {effectiveViewMode === 'preview' && compilationResults && (
         <Preview
+          ref={templateDataRef}
           html={compilationResults.html}
           mjml={compilationResults.mjml}
           errors={compilationResults.errors}

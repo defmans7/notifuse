@@ -20,6 +20,7 @@ import { workspaceService } from '../../services/api/workspace'
 import type { Template, Workspace, TemplateBlock } from '../../services/api/types'
 import EmailBuilder from '../email_builder/EmailBuilder'
 import type { EmailBlock } from '../email_builder/types'
+import type { PreviewRef } from '../email_builder/panels/Preview'
 import { kebabCase } from 'lodash'
 import IphoneEmailPreview from './PhonePreview'
 import defaultTemplateData from './email-template.json'
@@ -122,6 +123,7 @@ export function CreateTemplateDrawer({
   const settingsPanelRef = useRef<HTMLDivElement>(null)
   const previewSwitcherRef = useRef<HTMLDivElement>(null)
   const mobileDesktopSwitcherRef = useRef<HTMLDivElement>(null)
+  const templateDataRef = useRef<PreviewRef>(null)
   const importExportButtonRef = useRef<HTMLDivElement>(null)
 
   // set the tree apart to avoid rerendering the Email Editor when the tree changes
@@ -668,6 +670,7 @@ export function CreateTemplateDrawer({
                         mobileDesktopSwitcherRef={
                           mobileDesktopSwitcherRef as React.RefObject<HTMLDivElement>
                         }
+                        templateDataRef={templateDataRef as React.RefObject<PreviewRef>}
                         forcedViewMode={forcedViewMode}
                         savedBlocks={workspace.settings.template_blocks || []}
                         onSaveBlock={handleSaveBlock}
@@ -727,9 +730,19 @@ export function CreateTemplateDrawer({
                   // Automatically switch to preview mode when reaching the preview steps
                   setForcedViewMode('preview')
                   break
-                case 6: // Import/Export step
+                case 6: // Template Data step
+                  // Switch to preview mode and open template data editor
+                  setForcedViewMode('preview')
+                  // Open the template data editor using the ref
+                  setTimeout(() => {
+                    templateDataRef.current?.openTemplateDataEditor()
+                  }, 500) // Small delay to ensure preview mode is active
+                  break
+                case 7: // Import/Export step
                   // Switch back to edit mode for import/export step
                   setForcedViewMode('edit')
+                  // Close template data editor if open
+                  templateDataRef.current?.closeTemplateDataEditor()
                   break
                 default:
                   // For other steps, ensure we're in edit mode
@@ -778,6 +791,14 @@ export function CreateTemplateDrawer({
                   'Toggle between mobile and desktop views to see how your email appears on different devices. Mobile view shows a 400px width while desktop shows the full width.',
                 target: () => mobileDesktopSwitcherRef.current!,
                 placement: 'left' as const
+              },
+              {
+                title: 'Template Data & Liquid Templating 💧',
+                description:
+                  'Use the Template Data tab to define dynamic content for your emails. Add variables like {{ name }} or {{ company }} in your email content, then define their values here. The Liquid templating engine supports conditionals, loops, and filters for powerful personalization.',
+                target: () =>
+                  (templateDataRef.current?.getTemplateDataTabRef() as HTMLElement) || null,
+                placement: 'top' as const
               },
               {
                 title: 'Import & Export Templates',
