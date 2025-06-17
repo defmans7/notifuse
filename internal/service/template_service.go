@@ -17,6 +17,47 @@ type TemplateService struct {
 	apiEndpoint string
 }
 
+// updateEmailMetadataBlocks updates mj-title and mj-preview blocks in the email tree
+// based on template name and subject preview
+func (s *TemplateService) updateEmailMetadataBlocks(template *domain.Template) {
+	if template.Email == nil || template.Email.VisualEditorTree == nil {
+		return
+	}
+
+	// Find mj-title and mj-preview blocks and update their content
+	s.updateBlockContentRecursively(template.Email.VisualEditorTree, notifuse_mjml.MJMLComponentMjTitle, template.Name)
+
+	// Use subject preview if available, otherwise use template name as fallback
+	previewText := template.Name
+	if template.Email.SubjectPreview != nil && *template.Email.SubjectPreview != "" {
+		previewText = *template.Email.SubjectPreview
+	}
+	s.updateBlockContentRecursively(template.Email.VisualEditorTree, notifuse_mjml.MJMLComponentMjPreview, previewText)
+}
+
+// updateBlockContentRecursively traverses the email block tree and updates content for blocks of the specified type
+func (s *TemplateService) updateBlockContentRecursively(block notifuse_mjml.EmailBlock, blockType notifuse_mjml.MJMLComponentType, content string) {
+	if block == nil {
+		return
+	}
+
+	// Check if this is the block type we're looking for
+	if block.GetType() == blockType {
+		switch typedBlock := block.(type) {
+		case *notifuse_mjml.MJTitleBlock:
+			typedBlock.Content = &content
+		case *notifuse_mjml.MJPreviewBlock:
+			typedBlock.Content = &content
+		}
+	}
+
+	// Recursively check children
+	children := block.GetChildren()
+	for _, child := range children {
+		s.updateBlockContentRecursively(child, blockType, content)
+	}
+}
+
 func NewTemplateService(repo domain.TemplateRepository, authService domain.AuthService, logger logger.Logger, apiEndpoint string) *TemplateService {
 	return &TemplateService{
 		repo:        repo,
@@ -39,6 +80,9 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, workspaceID string
 	now := time.Now().UTC()
 	template.CreatedAt = now
 	template.UpdatedAt = now
+
+	// Update mj-title and mj-preview blocks with template metadata
+	s.updateEmailMetadataBlocks(template)
 
 	// Validate template after setting required fields
 	if err := template.Validate(); err != nil {
@@ -113,6 +157,9 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, workspaceID string
 
 	// Set version from existing template *before* validation to satisfy the check
 	template.Version = existingTemplate.Version
+
+	// Update mj-title and mj-preview blocks with template metadata
+	s.updateEmailMetadataBlocks(template)
 
 	// Validate template
 	if err := template.Validate(); err != nil {
