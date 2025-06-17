@@ -25,7 +25,7 @@ import IphoneEmailPreview from './PhonePreview'
 import defaultTemplateData from './email-template.json'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faQuestion } from '@fortawesome/free-solid-svg-icons'
-import { Tour } from 'antd/lib'
+import { Tour } from 'antd'
 import { ImportExportButton } from './ImportExportButton'
 import { useAuth } from '../../contexts/AuthContext'
 
