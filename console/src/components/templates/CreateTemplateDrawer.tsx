@@ -39,6 +39,7 @@ interface CreateTemplateDrawerProps {
   forceCategory?: string
 }
 
+const HEADER_HEIGHT = 66
 /**
  * Creates default email blocks from the template JSON
  */
@@ -111,6 +112,9 @@ export function CreateTemplateDrawer({
   const [tourOpen, setTourOpen] = useState(false)
   const [forcedViewMode, setForcedViewMode] = useState<'edit' | 'preview' | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [emailBuilderHeight, setEmailBuilderHeight] = useState<string>(
+    `calc(100vh - ${HEADER_HEIGHT}px)`
+  )
 
   // Refs for tour targets
   const treePanelRef = useRef<HTMLDivElement>(null)
@@ -270,6 +274,12 @@ export function CreateTemplateDrawer({
       }
     }
     setIsOpen(true)
+
+    // Calculate EmailBuilder height after drawer opens
+    setTimeout(() => {
+      // Height calculation: 100vh - drawer header - tabs - some padding
+      setEmailBuilderHeight(`calc(100vh - ${HEADER_HEIGHT}px)`)
+    }, 100)
   }
 
   const handleClose = () => {
@@ -664,6 +674,7 @@ export function CreateTemplateDrawer({
                         onSelectBlock={setSelectedBlockId}
                         selectedBlockId={selectedBlockId}
                         hiddenBlocks={['mj-title', 'mj-preview']}
+                        height={emailBuilderHeight}
                         toolbarActions={
                           <div className="flex gap-2 items-start">
                             <HelpSupportDropdown

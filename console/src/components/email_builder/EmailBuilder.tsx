@@ -33,6 +33,7 @@ interface EmailBuilderProps {
   onSelectBlock?: (blockId: string | null) => void
   selectedBlockId?: string | null
   hiddenBlocks?: string[]
+  height?: string | number
 }
 
 const EmailBuilderContent: React.FC<EmailBuilderProps> = ({
@@ -52,7 +53,8 @@ const EmailBuilderContent: React.FC<EmailBuilderProps> = ({
   forcedViewMode,
   onSelectBlock: externalOnSelectBlock,
   selectedBlockId: externalSelectedBlockId,
-  hiddenBlocks
+  hiddenBlocks,
+  height
 }) => {
   // State for current selection, UI, and history
   const [state, setState] = useState<
@@ -751,7 +753,7 @@ const EmailBuilderContent: React.FC<EmailBuilderProps> = ({
   const canRedo = state.historyIndex < state.history.length - 1
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-50">
+    <div className="flex flex-col w-screen bg-gray-50" style={{ height: height || '100vh' }}>
       {/* Top Toolbar */}
       <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
         {/* Left section - Undo/Redo buttons */}
