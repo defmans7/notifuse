@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Drawer, Typography, Spin, Alert, Tabs } from 'antd'
 import type { Template, MjmlCompileError, Workspace } from '../../services/api/types'
 import { templatesApi } from '../../services/api/template'
-import { BlockInterface } from '../email_editor/Block' // Assuming BlockInterface is here
-import { usePrismjs } from '../email_editor/UI/Widgets/PrismJS'
+import type { EmailBlock } from '../email_builder/types'
+import { Highlight, themes } from 'prism-react-renderer'
 
 const { Text } = Typography
 
@@ -28,9 +28,6 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [activeTabKey, setActiveTabKey] = useState<string>('1') // State for active tab
 
-  const preRef = useRef<HTMLPreElement>(null)
-  usePrismjs(preRef, ['line-numbers'])
-
   // Removed usePrismjs hook call
 
   const fetchPreview = async () => {
@@ -50,7 +47,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
     setActiveTabKey('1') // Reset to HTML tab on new fetch
 
     try {
-      let treeObject: BlockInterface | null = null
+      let treeObject: EmailBlock | null = null
       if (record.email?.visual_editor_tree && typeof record.email.visual_editor_tree === 'string') {
         try {
           treeObject = JSON.parse(record.email.visual_editor_tree)
@@ -63,7 +60,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
           return
         }
       } else if (record.email?.visual_editor_tree) {
-        treeObject = record.email.visual_editor_tree as unknown as BlockInterface
+        treeObject = record.email.visual_editor_tree as unknown as EmailBlock
       }
 
       if (!treeObject) {
@@ -294,52 +291,86 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
 }
 
 const JsonDataViewer = ({ data }: { data: any }) => {
-  const codeRef = useRef<HTMLDivElement>(null)
-  // Apply syntax highlighting
-  usePrismjs(codeRef, ['line-numbers'])
-
   const prettyJson = JSON.stringify(data, null, 2)
 
   return (
-    <div ref={codeRef} className="rounded" style={{ maxWidth: '100%' }}>
-      <pre
-        className="line-numbers"
-        style={{
-          margin: '0',
-          borderRadius: '4px',
-          padding: '10px',
-          fontSize: '12px',
-          wordWrap: 'break-word',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'normal'
-        }}
-      >
-        <code className="language-json">{prettyJson}</code>
-      </pre>
+    <div className="rounded" style={{ maxWidth: '100%' }}>
+      <Highlight theme={themes.github} code={prettyJson} language="json">
+        {({ className, style, tokens, getLineProps, getTokenProps }) => (
+          <pre
+            className={className}
+            style={{
+              ...style,
+              margin: '0',
+              borderRadius: '4px',
+              padding: '10px',
+              fontSize: '12px',
+              wordWrap: 'break-word',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'normal'
+            }}
+          >
+            {tokens.map((line, i) => (
+              <div key={i} {...getLineProps({ line })}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '2em',
+                    userSelect: 'none',
+                    opacity: 0.3
+                  }}
+                >
+                  {i + 1}
+                </span>
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </div>
+            ))}
+          </pre>
+        )}
+      </Highlight>
     </div>
   )
 }
 
 const MJMLPreview = ({ previewMjml }: { previewMjml: string }) => {
-  const preRef = useRef<HTMLPreElement>(null)
-  usePrismjs(preRef, ['line-numbers'])
-
   return (
     <div className="overflow-auto">
-      <pre
-        ref={preRef}
-        className="language-xml"
-        style={{
-          fontSize: '12px',
-          margin: 0,
-          padding: '10px',
-          wordWrap: 'break-word',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'normal'
-        }}
-      >
-        <code className="language-xml">{previewMjml}</code>
-      </pre>
+      <Highlight theme={themes.github} code={previewMjml} language="xml">
+        {({ className, style, tokens, getLineProps, getTokenProps }) => (
+          <pre
+            className={className}
+            style={{
+              ...style,
+              fontSize: '12px',
+              margin: 0,
+              padding: '10px',
+              wordWrap: 'break-word',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'normal'
+            }}
+          >
+            {tokens.map((line, i) => (
+              <div key={i} {...getLineProps({ line })}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '2em',
+                    userSelect: 'none',
+                    opacity: 0.3
+                  }}
+                >
+                  {i + 1}
+                </span>
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </div>
+            ))}
+          </pre>
+        )}
+      </Highlight>
     </div>
   )
 }

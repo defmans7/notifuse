@@ -1,6 +1,7 @@
 import React from 'react'
 import {
   Alert,
+  App,
   Button,
   Form,
   Input,
@@ -9,26 +10,52 @@ import {
   Popover,
   Space,
   Table,
-  Tooltip,
-  App
+  Tooltip
 } from 'antd'
-import { FileManagerProps, StorageObject } from './interfaces'
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { FileManagerProps, StorageObject } from './interfaces'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus } from 'lucide-react'
-import dayjs from '../../lib/dayjs'
 import { filesize } from 'filesize'
 import ButtonFilesSettings from './buttonSettings'
 import {
   S3Client,
   ListObjectsV2Command,
-  ListObjectsV2CommandInput,
+  type ListObjectsV2CommandInput,
   PutObjectCommand,
-  PutObjectCommandInput,
+  type PutObjectCommandInput,
   DeleteObjectCommand,
-  DeleteObjectCommandInput
+  type DeleteObjectCommandInput
 } from '@aws-sdk/client-s3'
 import GetContentType from './fileExtensions'
-import { FileManagerSettings } from '../../services/api/types'
+import dayjs from 'dayjs'
+import timezone from 'dayjs/plugin/timezone'
+import utc from 'dayjs/plugin/utc'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import localizedFormat from 'dayjs/plugin/localizedFormat'
+import customParseFormat from 'dayjs/plugin/customParseFormat'
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore'
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter'
+import isToday from 'dayjs/plugin/isToday'
+import 'dayjs/locale/fr'
+
+// Extend dayjs with plugins
+dayjs.extend(utc)
+dayjs.extend(timezone)
+dayjs.extend(relativeTime)
+dayjs.extend(localizedFormat)
+dayjs.extend(customParseFormat)
+dayjs.extend(isSameOrBefore)
+dayjs.extend(isSameOrAfter)
+dayjs.extend(isToday)
+// Set default locale to French
+dayjs.locale('fr')
+
+// Set default timezone to Europe/Paris
+dayjs.tz.setDefault('Europe/Paris')
+
+export default dayjs
+
 // Common styles
 const styles = {
   folderRow: {
@@ -37,8 +64,7 @@ const styles = {
   },
   filesContainer: {
     position: 'relative' as const,
-    overflow: 'auto' as const,
-    paddingBottom: '40px'
+    overflow: 'auto' as const
   },
   marginBottomSmall: { marginBottom: 16 },
   marginBottomLarge: { marginBottom: 24 },
@@ -49,13 +75,8 @@ const styles = {
   primary: { color: '#1890ff' } // Default antd primary color - replace with actual color if different
 }
 
-// Extend FileManagerProps to include settings and onUpdateSettings
-export interface ExtendedFileManagerProps extends FileManagerProps {
-  settings?: FileManagerSettings
-  onUpdateSettings: (settings: FileManagerSettings) => Promise<void>
-}
-
-export const FileManager = (props: ExtendedFileManagerProps) => {
+export const FileManager = (props: FileManagerProps) => {
+  const { message } = App.useApp()
   const [currentPath, setCurrentPath] = useState(props.currentPath || '')
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [items, setItems] = useState<StorageObject[] | undefined>(undefined)
@@ -66,7 +87,6 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
   const inputFileRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [form] = Form.useForm()
-  const { message } = App.useApp()
 
   const goToPath = (path: string) => {
     // reset selection on path change
@@ -76,11 +96,11 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
   }
 
   const fetchObjects = useCallback(() => {
-    if (!s3ClientRef.current) return
+    if (!s3ClientRef.current || !props.settings?.bucket) return
 
     setIsLoading(true)
     const input: ListObjectsV2CommandInput = {
-      Bucket: props.settings?.bucket || ''
+      Bucket: props.settings.bucket
     }
 
     const command = new ListObjectsV2Command(input)
@@ -94,10 +114,17 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
 
       const newItems = response.Contents.map((x) => {
         const key = x.Key as string
-        let endpoint = (props.settings?.endpoint || '') + '/' + (props.settings?.bucket || '')
 
-        if (props.settings?.cdn_endpoint !== '') {
-          endpoint = props.settings?.cdn_endpoint || ''
+        // Construct the base URL for accessing files
+        let baseUrl = ''
+
+        if (props.settings?.cdn_endpoint && props.settings.cdn_endpoint.trim() !== '') {
+          // Use CDN endpoint if provided
+          baseUrl = props.settings.cdn_endpoint.replace(/\/$/, '') // Remove trailing slash
+        } else if (props.settings?.endpoint && props.settings?.bucket) {
+          // Construct URL from S3 endpoint and bucket
+          const cleanEndpoint = props.settings.endpoint.replace(/\/$/, '') // Remove trailing slash
+          baseUrl = `${cleanEndpoint}/${props.settings.bucket}`
         }
 
         const isFolder = key.endsWith('/')
@@ -139,7 +166,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
             size: x.Size as number,
             size_human: filesize(x.Size || 0, { round: 0 }),
             content_type: GetContentType(key),
-            url: endpoint + '/' + key
+            url: baseUrl ? `${baseUrl}/${key}` : key
           }
         }
 
@@ -154,18 +181,19 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
 
   // init
   useEffect(() => {
-    if (props.settings?.endpoint === '') {
+    // Don't initialize if settings are not provided or endpoint is empty/undefined
+    if (!props.settings || !props.settings.endpoint || props.settings.endpoint === '') {
       return
     }
     if (s3ClientRef.current) return
 
     s3ClientRef.current = new S3Client({
-      endpoint: props.settings?.endpoint || '',
+      endpoint: props.settings.endpoint,
       credentials: {
-        accessKeyId: props.settings?.access_key || '',
-        secretAccessKey: props.settings?.secret_key || ''
+        accessKeyId: props.settings.access_key || '',
+        secretAccessKey: props.settings.secret_key || ''
       },
-      region: props.settings?.region || 'us-east-1'
+      region: props.settings.region || 'us-east-1'
     })
 
     fetchObjects()
@@ -430,6 +458,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
                 <ButtonFilesSettings
                   settings={props.settings}
                   onUpdateSettings={props.onUpdateSettings}
+                  settingsInfo={props.settingsInfo}
                 >
                   <Tooltip title="Storage settings">
                     <Button type="text" size="small">
@@ -497,6 +526,7 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
             size="middle"
             rowKey="key"
             locale={{ emptyText: 'Folder is empty' }}
+            scroll={{ y: props.height ? props.height - 100 : undefined }}
             rowClassName={(record: StorageObject) => {
               return record.is_folder ? 'folder-row' : ''
             }}
@@ -529,7 +559,6 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
               {
                 title: '',
                 key: 'preview',
-                width: 70,
                 render: (item: StorageObject) => {
                   if (item.is_folder) {
                     return (
@@ -547,7 +576,12 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
                             <img src={item.file_info.url} alt="" style={{ maxHeight: '400px' }} />
                           }
                         >
-                          <img src={item.file_info.url} alt="" height="30" />
+                          <img
+                            src={item.file_info.url}
+                            alt=""
+                            height="30"
+                            style={{ maxWidth: '100px', maxHeight: '100px' }}
+                          />
                         </Popover>
                       )}
                     </div>
@@ -564,7 +598,6 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
               {
                 title: 'Size',
                 key: 'size',
-                width: 100,
                 render: (item: StorageObject) => {
                   return (
                     <div onClick={toggleSelectionForItem.bind(null, item)}>
@@ -576,7 +609,6 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
               {
                 title: 'Last modified',
                 key: 'lastModified',
-                width: 120,
                 render: (item: StorageObject) => {
                   return (
                     <Tooltip title={dayjs(item.last_modified).format('llll')}>
@@ -590,7 +622,6 @@ export const FileManager = (props: ExtendedFileManagerProps) => {
               {
                 title: '',
                 key: 'actions',
-                width: 40,
                 align: 'right',
                 render: (item: StorageObject) => {
                   if (item.is_folder) return

@@ -206,7 +206,7 @@ func (h *TemplateHandler) handleCompile(w http.ResponseWriter, r *http.Request) 
 	var req domain.CompileTemplateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode compile request body")
-		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

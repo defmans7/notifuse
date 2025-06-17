@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "./components/email_builder/editor.css";
+@theme {
+  --color-primary: #7763f1;
+}
 
 :root {
   --background: rgb(243, 246, 252);

@@ -27,13 +27,13 @@ import {
 } from '@fortawesome/free-regular-svg-icons'
 import { faTerminal } from '@fortawesome/free-solid-svg-icons'
 import UpsertTransactionalNotificationDrawer from '../components/transactional/UpsertTransactionalNotificationDrawer'
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
 import { useAuth } from '../contexts/AuthContext'
 import SendTemplateModal from '../components/templates/SendTemplateModal'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { templatesApi } from '../services/api/template'
-import { usePrismjs } from '../components/email_editor/UI/Widgets/PrismJS'
+import { Highlight, themes } from 'prism-react-renderer'
 import { Workspace } from '../services/api/types'
 
 const { Title, Paragraph, Text } = Typography
@@ -104,9 +104,7 @@ export function TransactionalNotificationsPage() {
     null
   )
 
-  // Move ref and usePrismjs hook before any conditional returns
-  const preRef = useRef<HTMLPreElement>(null)
-  usePrismjs(preRef, ['line-numbers'])
+  // Removed usePrismjs hook call
 
   // Fetch notifications
   const {
@@ -317,16 +315,9 @@ export function TransactionalNotificationsPage() {
               className="!mb-4"
             />
 
-            <pre
-              ref={preRef}
-              className="language-bash"
-              style={{
-                fontSize: '12px',
-                margin: 0,
-                padding: '10px'
-              }}
-            >
-              <code className="language-bash">{`curl -X POST \\
+            <Highlight
+              theme={themes.github}
+              code={`curl -X POST \\
   "${window.location.origin}/api/transactional.send" \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
@@ -348,8 +339,39 @@ export function TransactionalNotificationsPage() {
       "bcc": ["bcc@example.com"]
     }
   }
-}'`}</code>
-            </pre>
+}'`}
+              language="bash"
+            >
+              {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                <pre
+                  className={className}
+                  style={{
+                    ...style,
+                    fontSize: '12px',
+                    margin: 0,
+                    padding: '10px'
+                  }}
+                >
+                  {tokens.map((line, i) => (
+                    <div key={i} {...getLineProps({ line })}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: '2em',
+                          userSelect: 'none',
+                          opacity: 0.3
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      {line.map((token, key) => (
+                        <span key={key} {...getTokenProps({ token })} />
+                      ))}
+                    </div>
+                  ))}
+                </pre>
+              )}
+            </Highlight>
           </div>
         )}
       </Modal>

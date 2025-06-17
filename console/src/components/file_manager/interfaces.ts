@@ -24,10 +24,23 @@ export interface FileManagerProps {
   acceptItem: (item: StorageObject) => boolean
   withSelection?: boolean
   multiple?: boolean
+  settings?: FileManagerSettings
+  onUpdateSettings: (settings: FileManagerSettings) => Promise<void>
+  settingsInfo?: React.ReactNode
 }
 
 export interface ItemFilter {
   key: string // item key
   value: any
   operator: string // contains equals greaterThan lessThan
+}
+
+export interface FileManagerSettings {
+  endpoint: string
+  access_key: string
+  bucket: string
+  region?: string
+  secret_key?: string
+  encrypted_secret_key?: string
+  cdn_endpoint?: string
 }

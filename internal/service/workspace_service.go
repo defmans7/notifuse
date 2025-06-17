@@ -285,6 +285,22 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.TransactionalEmailProviderID = settings.TransactionalEmailProviderID
 	existingWorkspace.Settings.MarketingEmailProviderID = settings.MarketingEmailProviderID
 	existingWorkspace.Settings.EmailTrackingEnabled = settings.EmailTrackingEnabled
+
+	// Handle template blocks - ensure they have proper timestamps and IDs
+	for i := range settings.TemplateBlocks {
+		block := &settings.TemplateBlocks[i]
+
+		// If this is a new block (no ID), generate one and set created time
+		if block.ID == "" {
+			block.ID = uuid.New().String()
+			block.Created = time.Now()
+		}
+
+		// Always update the Updated timestamp
+		block.Updated = time.Now()
+	}
+	existingWorkspace.Settings.TemplateBlocks = settings.TemplateBlocks
+
 	existingWorkspace.UpdatedAt = time.Now()
 
 	if err := existingWorkspace.Validate(s.secretKey); err != nil {

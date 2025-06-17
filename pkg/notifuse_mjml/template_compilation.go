@@ -113,6 +113,33 @@ type CompileTemplateRequest struct {
 	TrackingSettings TrackingSettings `json:"tracking_settings,omitempty"`
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for CompileTemplateRequest
+func (r *CompileTemplateRequest) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct with the same fields but using json.RawMessage for VisualEditorTree
+	type Alias CompileTemplateRequest
+	aux := &struct {
+		*Alias
+		VisualEditorTree json.RawMessage `json:"visual_editor_tree"`
+	}{
+		Alias: (*Alias)(r),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Unmarshal the VisualEditorTree using our custom function
+	if len(aux.VisualEditorTree) > 0 {
+		block, err := UnmarshalEmailBlock(aux.VisualEditorTree)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal visual_editor_tree: %w", err)
+		}
+		r.VisualEditorTree = block
+	}
+
+	return nil
+}
+
 // Validate ensures that the compile template request has all required fields
 func (r *CompileTemplateRequest) Validate() error {
 	if r.WorkspaceID == "" {

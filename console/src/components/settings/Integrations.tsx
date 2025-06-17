@@ -117,6 +117,9 @@ const EmailIntegration = ({
   const fetchWebhookStatus = async () => {
     if (!workspace?.id || !integration?.id) return
 
+    // Only fetch webhook status for non-SMTP providers
+    if (integration.email_provider.kind === 'smtp') return
+
     setLoadingWebhooks(true)
     try {
       const response = await getWebhookStatus({

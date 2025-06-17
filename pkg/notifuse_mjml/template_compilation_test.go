@@ -1,6 +1,7 @@
 package notifuse_mjml
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -385,4 +386,79 @@ func TestCompileTemplateWithTracking(t *testing.T) {
 
 	t.Logf("Generated MJML:\n%s", *resp.MJML)
 	t.Logf("Generated HTML with tracking length: %d bytes", len(*resp.HTML))
+}
+
+func TestCompileTemplateRequest_UnmarshalJSON(t *testing.T) {
+	// Test JSON that should unmarshal correctly
+	jsonData := `{
+		"workspace_id": "test-workspace", 
+		"message_id": "test-message",
+		"visual_editor_tree": {
+			"id": "mjml-1",
+			"type": "mjml",
+			"children": [
+				{
+					"id": "body-1",
+					"type": "mj-body",
+					"children": [
+						{
+							"id": "section-1",
+							"type": "mj-section",
+							"children": [
+								{
+									"id": "column-1",
+									"type": "mj-column",
+									"children": [
+										{
+											"id": "text-1",
+											"type": "mj-text",
+											"content": "Hello World"
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		"test_data": {"name": "John"},
+		"tracking_settings": {
+			"enable_tracking": true,
+			"utm_source": "email"
+		}
+	}`
+
+	var req CompileTemplateRequest
+	err := json.Unmarshal([]byte(jsonData), &req)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal CompileTemplateRequest: %v", err)
+	}
+
+	// Verify that the fields were unmarshaled correctly
+	if req.WorkspaceID != "test-workspace" {
+		t.Errorf("Expected WorkspaceID to be 'test-workspace', got %s", req.WorkspaceID)
+	}
+	if req.MessageID != "test-message" {
+		t.Errorf("Expected MessageID to be 'test-message', got %s", req.MessageID)
+	}
+	if req.VisualEditorTree == nil {
+		t.Error("Expected VisualEditorTree to be set")
+	} else {
+		if req.VisualEditorTree.GetType() != MJMLComponentMjml {
+			t.Errorf("Expected VisualEditorTree type to be 'mjml', got %s", req.VisualEditorTree.GetType())
+		}
+		if req.VisualEditorTree.GetID() != "mjml-1" {
+			t.Errorf("Expected VisualEditorTree ID to be 'mjml-1', got %s", req.VisualEditorTree.GetID())
+		}
+	}
+	if req.TemplateData["name"] != "John" {
+		t.Errorf("Expected TemplateData name to be 'John', got %v", req.TemplateData["name"])
+	}
+	if !req.TrackingSettings.EnableTracking {
+		t.Error("Expected EnableTracking to be true")
+	}
+	if req.TrackingSettings.UTMSource != "email" {
+		t.Errorf("Expected UTMSource to be 'email', got %s", req.TrackingSettings.UTMSource)
+	}
 }

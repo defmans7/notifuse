@@ -1,20 +1,20 @@
-import { Alert, Button, Form, Input, Modal, App } from 'antd'
+import { Alert, Button, Form, Input, Modal, message } from 'antd'
 import { useState } from 'react'
 import { useForm } from 'antd/lib/form/Form'
-import { FileManagerSettings } from '../../services/api/types'
-import { ListObjectsV2Command, ListObjectsV2CommandInput, S3Client } from '@aws-sdk/client-s3'
+import type { FileManagerSettings } from './interfaces'
+import { ListObjectsV2Command, type ListObjectsV2CommandInput, S3Client } from '@aws-sdk/client-s3'
 
 interface ButtonFilesSettingsProps {
   children: React.ReactNode
   settings?: FileManagerSettings
   onUpdateSettings: (settings: FileManagerSettings) => Promise<void>
+  settingsInfo?: React.ReactNode
 }
 
 const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
   const [loading, setLoading] = useState(false)
   const [form] = useForm()
   const [settingsVisible, setSettingsVisible] = useState(false)
-  const { message } = App.useApp()
 
   const toggleSettings = () => {
     setSettingsVisible(!settingsVisible)
@@ -97,6 +97,7 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
           </Button>
         ]}
       >
+        {props.settingsInfo}
         <Form
           form={form}
           layout="horizontal"
@@ -111,6 +112,7 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
+            banner
           />
 
           <Form.Item label="S3 Endpoint" name="endpoint" rules={[{ type: 'url', required: true }]}>
@@ -149,4 +151,5 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
     </span>
   )
 }
+
 export default ButtonFilesSettings

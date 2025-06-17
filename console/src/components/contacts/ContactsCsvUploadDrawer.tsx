@@ -24,7 +24,6 @@ import Papa from 'papaparse'
 import type { ParseResult } from 'papaparse'
 import { Contact } from '../../services/api/contacts'
 import { contactsApi } from '../../services/api/contacts'
-import { contactListApi } from '../../services/api/contact_list'
 import { List } from '../../services/api/types'
 import { listsApi } from '../../services/api/list'
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/asaskevich/govalidator"
 )
 
@@ -121,6 +122,73 @@ func (b *Integration) Scan(value interface{}) error {
 	return json.Unmarshal(cloned, b)
 }
 
+type TemplateBlock struct {
+	ID      string                   `json:"id"`
+	Name    string                   `json:"name"`
+	Block   notifuse_mjml.EmailBlock `json:"block"`
+	Created time.Time                `json:"created"`
+	Updated time.Time                `json:"updated"`
+}
+
+// MarshalJSON implements custom JSON marshaling for TemplateBlock
+func (tb TemplateBlock) MarshalJSON() ([]byte, error) {
+	// Create a temporary struct with the same fields but Block as interface{}
+	temp := struct {
+		ID      string      `json:"id"`
+		Name    string      `json:"name"`
+		Block   interface{} `json:"block"`
+		Created time.Time   `json:"created"`
+		Updated time.Time   `json:"updated"`
+	}{
+		ID:      tb.ID,
+		Name:    tb.Name,
+		Block:   tb.Block,
+		Created: tb.Created,
+		Updated: tb.Updated,
+	}
+	return json.Marshal(temp)
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for TemplateBlock
+func (tb *TemplateBlock) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a temporary struct
+	temp := struct {
+		ID      string          `json:"id"`
+		Name    string          `json:"name"`
+		Block   json.RawMessage `json:"block"`
+		Created time.Time       `json:"created"`
+		Updated time.Time       `json:"updated"`
+	}{}
+
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// Set the simple fields
+	tb.ID = temp.ID
+	tb.Name = temp.Name
+	tb.Created = temp.Created
+	tb.Updated = temp.Updated
+
+	// Unmarshal the Block using the existing EmailBlock unmarshaling logic
+	if len(temp.Block) > 0 {
+		block, err := notifuse_mjml.UnmarshalEmailBlock(temp.Block)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal template block: %w", err)
+		}
+		tb.Block = block
+	}
+
+	return nil
+}
+
+type SaveOperation string
+
+const (
+	SaveOperationCreate SaveOperation = "create"
+	SaveOperationUpdate SaveOperation = "update"
+)
+
 // WorkspaceSettings contains configurable workspace settings
 type WorkspaceSettings struct {
 	WebsiteURL                   string              `json:"website_url,omitempty"`
@@ -132,6 +200,7 @@ type WorkspaceSettings struct {
 	MarketingEmailProviderID     string              `json:"marketing_email_provider_id,omitempty"`
 	EncryptedSecretKey           string              `json:"encrypted_secret_key,omitempty"`
 	EmailTrackingEnabled         bool                `json:"email_tracking_enabled"`
+	TemplateBlocks               []TemplateBlock     `json:"template_blocks,omitempty"`
 
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
@@ -162,6 +231,19 @@ func (ws *WorkspaceSettings) Validate(passphrase string) error {
 	// FileManager is completely optional, but if any fields are set, validate them
 	if err := ws.FileManager.Validate(passphrase); err != nil {
 		return fmt.Errorf("invalid file manager settings: %w", err)
+	}
+
+	// Validate template blocks if any are present
+	for i, templateBlock := range ws.TemplateBlocks {
+		if templateBlock.Name == "" {
+			return fmt.Errorf("template block at index %d: name is required", i)
+		}
+		if len(templateBlock.Name) > 255 {
+			return fmt.Errorf("template block at index %d: name length must be between 1 and 255", i)
+		}
+		if templateBlock.Block == nil || templateBlock.Block.GetType() == "" {
+			return fmt.Errorf("template block at index %d: block kind is required", i)
+		}
 	}
 
 	return nil

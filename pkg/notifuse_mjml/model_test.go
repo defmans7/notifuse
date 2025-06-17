@@ -946,3 +946,132 @@ func TestUnmarshalEmailBlockWithChildren(t *testing.T) {
 }
 
 // Helper function for tests - using stringPtr from examples.go
+
+func TestUnmarshalEmailBlockWithoutAttributes(t *testing.T) {
+	// Test the specific case shown by the user - blocks without attributes field
+	testJSON := `{
+		"id": "e2f8ab42-c479-4561-8016-9eb72de7931e",
+		"type": "mj-column",
+		"children": [
+			{
+				"id": "7148af9b-7906-40d7-807e-8a111ca22be8",
+				"type": "mj-spacer"
+			}
+		]
+	}`
+
+	block, err := UnmarshalEmailBlock([]byte(testJSON))
+	require.NoError(t, err, "Failed to unmarshal block without attributes")
+	require.NotNil(t, block, "Block should not be nil")
+
+	// Verify the column block
+	assert.Equal(t, "e2f8ab42-c479-4561-8016-9eb72de7931e", block.GetID())
+	assert.Equal(t, MJMLComponentMjColumn, block.GetType())
+
+	// Verify that default attributes are applied
+	attrs := block.GetAttributes()
+	assert.NotNil(t, attrs, "Attributes should not be nil even when not provided")
+	assert.NotEmpty(t, attrs, "Attributes should have default values")
+
+	// Verify the spacer child
+	children := block.GetChildren()
+	require.Len(t, children, 1, "Should have exactly one child")
+
+	spacerChild := children[0]
+	assert.Equal(t, "7148af9b-7906-40d7-807e-8a111ca22be8", spacerChild.GetID())
+	assert.Equal(t, MJMLComponentMjSpacer, spacerChild.GetType())
+
+	// Verify that the spacer also has default attributes
+	spacerAttrs := spacerChild.GetAttributes()
+	assert.NotNil(t, spacerAttrs, "Spacer attributes should not be nil")
+	assert.NotEmpty(t, spacerAttrs, "Spacer should have default attributes")
+
+	// Spacer should have a default height
+	if height, exists := spacerAttrs["height"]; exists {
+		assert.Equal(t, "20px", height, "Spacer should have default height of 20px")
+	}
+
+	// Verify typed attributes are properly set
+	if columnBlock, ok := block.(*MJColumnBlock); ok {
+		assert.NotNil(t, columnBlock.Attributes, "Typed attributes should be set")
+	} else {
+		t.Error("Block should be of type *MJColumnBlock")
+	}
+
+	if spacerBlock, ok := spacerChild.(*MJSpacerBlock); ok {
+		assert.NotNil(t, spacerBlock.Attributes, "Spacer typed attributes should be set")
+	} else {
+		t.Error("Child should be of type *MJSpacerBlock")
+	}
+}
+
+func TestUnmarshalEmailBlockWithPartialAttributes(t *testing.T) {
+	// Test blocks with some attributes present
+	testJSON := `{
+		"id": "test-text-block",
+		"type": "mj-text",
+		"content": "Hello World",
+		"attributes": {
+			"color": "#ff0000",
+			"fontSize": "18px"
+		}
+	}`
+
+	block, err := UnmarshalEmailBlock([]byte(testJSON))
+	require.NoError(t, err, "Failed to unmarshal block with partial attributes")
+	require.NotNil(t, block, "Block should not be nil")
+
+	// Verify the text block
+	assert.Equal(t, "test-text-block", block.GetID())
+	assert.Equal(t, MJMLComponentMjText, block.GetType())
+
+	// Verify that provided attributes are preserved
+	attrs := block.GetAttributes()
+	assert.Equal(t, "#ff0000", attrs["color"])
+	assert.Equal(t, "18px", attrs["fontSize"])
+
+	// Verify that default attributes are still applied for missing ones
+	assert.Equal(t, "1.5", attrs["lineHeight"]) // Default from GetDefaultAttributes
+
+	// Verify content is preserved
+	if textBlock, ok := block.(*MJTextBlock); ok {
+		assert.NotNil(t, textBlock.Content)
+		assert.Equal(t, "Hello World", *textBlock.Content)
+		assert.NotNil(t, textBlock.Attributes, "Typed attributes should be set")
+	} else {
+		t.Error("Block should be of type *MJTextBlock")
+	}
+}
+
+func TestUnmarshalEmailBlockWithEmptyAttributes(t *testing.T) {
+	// Test blocks with empty attributes object
+	testJSON := `{
+		"id": "test-button-block",
+		"type": "mj-button",
+		"content": "Click Me",
+		"attributes": {}
+	}`
+
+	block, err := UnmarshalEmailBlock([]byte(testJSON))
+	require.NoError(t, err, "Failed to unmarshal block with empty attributes")
+	require.NotNil(t, block, "Block should not be nil")
+
+	// Verify the button block
+	assert.Equal(t, "test-button-block", block.GetID())
+	assert.Equal(t, MJMLComponentMjButton, block.GetType())
+
+	// Verify that default attributes are applied
+	attrs := block.GetAttributes()
+	assert.NotEmpty(t, attrs, "Should have default attributes")
+	assert.Equal(t, "#414141", attrs["backgroundColor"]) // Default background color
+	assert.Equal(t, "#ffffff", attrs["color"])           // Default text color
+
+	// Verify content is preserved
+	if buttonBlock, ok := block.(*MJButtonBlock); ok {
+		assert.NotNil(t, buttonBlock.Content)
+		assert.Equal(t, "Click Me", *buttonBlock.Content)
+		assert.NotNil(t, buttonBlock.Attributes, "Typed attributes should be set")
+	} else {
+		t.Error("Block should be of type *MJButtonBlock")
+	}
+}

@@ -266,13 +266,13 @@ func formatSingleAttribute(key string, value interface{}) string {
 		if v == "" {
 			return ""
 		}
-		escapedValue := escapeAttributeValue(v)
+		escapedValue := escapeAttributeValue(v, kebabKey)
 		return fmt.Sprintf(` %s="%s"`, kebabKey, escapedValue)
 	case *string:
 		if v == nil || *v == "" {
 			return ""
 		}
-		escapedValue := escapeAttributeValue(*v)
+		escapedValue := escapeAttributeValue(*v, kebabKey)
 		return fmt.Sprintf(` %s="%s"`, kebabKey, escapedValue)
 	default:
 		// Handle other types (int, float, etc.) by converting to string
@@ -280,7 +280,7 @@ func formatSingleAttribute(key string, value interface{}) string {
 		if strValue == "" {
 			return ""
 		}
-		escapedValue := escapeAttributeValue(strValue)
+		escapedValue := escapeAttributeValue(strValue, kebabKey)
 		return fmt.Sprintf(` %s="%s"`, kebabKey, escapedValue)
 	}
 }
@@ -295,8 +295,16 @@ func camelToKebab(str string) string {
 }
 
 // escapeAttributeValue escapes attribute values for safe HTML output
-func escapeAttributeValue(value string) string {
-	value = strings.ReplaceAll(value, "&", "&amp;")
+// For URL attributes (src, href, action), we don't escape & to preserve URL query parameters
+func escapeAttributeValue(value string, attributeName string) string {
+	// Check if this is a URL attribute and the value looks like a URL
+	isURLAttribute := attributeName == "src" || attributeName == "href" || attributeName == "action"
+	looksLikeURL := strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "//")
+
+	// Only skip escaping ampersands if it's a URL attribute AND the value looks like a URL
+	if !(isURLAttribute && looksLikeURL) {
+		value = strings.ReplaceAll(value, "&", "&amp;")
+	}
 	value = strings.ReplaceAll(value, "\"", "&quot;")
 	value = strings.ReplaceAll(value, "'", "&#39;")
 	value = strings.ReplaceAll(value, "<", "&lt;")

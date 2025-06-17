@@ -1,4 +1,4 @@
-import type { BlockInterface } from '../../components/email_editor/Block'
+import type { EmailBlock } from '../../components/email_builder/types'
 import { Contact } from './contacts'
 import { EmailOptions } from './transactional_notifications'
 
@@ -30,6 +30,15 @@ export interface GetCurrentUserResponse {
   workspaces: Workspace[]
 }
 
+// Template Block type
+export interface TemplateBlock {
+  id: string
+  name: string
+  block: EmailBlock
+  created: string
+  updated: string
+}
+
 // Workspace types
 export interface WorkspaceSettings {
   website_url?: string
@@ -40,6 +49,7 @@ export interface WorkspaceSettings {
   transactional_email_provider_id?: string
   marketing_email_provider_id?: string
   email_tracking_enabled: boolean
+  template_blocks?: TemplateBlock[]
 }
 
 export interface FileManagerSettings {
@@ -374,7 +384,7 @@ export interface EmailTemplate {
   subject: string
   subject_preview?: string
   compiled_preview: string // compiled html
-  visual_editor_tree: BlockInterface
+  visual_editor_tree: EmailBlock
   text?: string
 }
 
@@ -460,7 +470,7 @@ export interface MjmlCompileError {
 export interface CompileTemplateRequest {
   workspace_id: string
   message_id: string
-  visual_editor_tree: BlockInterface
+  visual_editor_tree: EmailBlock
   test_data?: Record<string, any> | null
   tracking_enabled?: boolean
   utm_source?: string

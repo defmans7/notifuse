@@ -66,20 +66,26 @@ func TestCamelToKebab(t *testing.T) {
 
 func TestEscapeAttributeValue(t *testing.T) {
 	tests := []struct {
-		input    string
-		expected string
+		input         string
+		attributeName string
+		expected      string
+		description   string
 	}{
-		{"hello", "hello"},
-		{"hello & world", "hello &amp; world"},
-		{`he said "hello"`, "he said &quot;hello&quot;"},
-		{"it's a test", "it&#39;s a test"},
-		{"<script>", "&lt;script&gt;"},
+		{"hello", "title", "hello", "simple text"},
+		{"hello & world", "title", "hello &amp; world", "text with ampersand - should be escaped"},
+		{`he said "hello"`, "title", "he said &quot;hello&quot;", "text with quotes"},
+		{"it's a test", "title", "it&#39;s a test", "text with apostrophe"},
+		{"<script>", "title", "&lt;script&gt;", "text with angle brackets"},
+		{"https://example.com/image.jpg?param1=value1&param2=value2", "src", "https://example.com/image.jpg?param1=value1&param2=value2", "URL with query params in src - ampersands should NOT be escaped"},
+		{"https://example.com/action?test=1&foo=bar", "href", "https://example.com/action?test=1&foo=bar", "URL with query params in href - ampersands should NOT be escaped"},
+		{"https://example.com/submit?a=1&b=2", "action", "https://example.com/submit?a=1&b=2", "URL with query params in action - ampersands should NOT be escaped"},
+		{"hello & world", "src", "hello &amp; world", "non-URL text in src attribute - ampersands should still be escaped"},
 	}
 
 	for _, test := range tests {
-		result := escapeAttributeValue(test.input)
+		result := escapeAttributeValue(test.input, test.attributeName)
 		if result != test.expected {
-			t.Errorf("escapeAttributeValue(%s) = %s, expected %s", test.input, result, test.expected)
+			t.Errorf("escapeAttributeValue(%q, %q) = %q, expected %q (%s)", test.input, test.attributeName, result, test.expected, test.description)
 		}
 	}
 }

@@ -1,4 +1,4 @@
-import { Layout, Menu, Select, Space, Button, Dropdown } from 'antd'
+import { Layout, Menu, Select, Space, Button, Dropdown, message } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -20,12 +20,15 @@ import { useAuth } from '../contexts/AuthContext'
 import { Workspace } from '../services/api/types'
 import { ContactsCsvUploadProvider } from '../components/contacts/ContactsCsvUploadProvider'
 import { useState } from 'react'
+import { FileManagerProvider } from '../components/file_manager/context'
+import { FileManagerSettings } from '../components/file_manager/interfaces'
+import { workspaceService } from '../services/api/workspace'
 
 const { Content, Sider } = Layout
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
-  const { signout, workspaces, user } = useAuth()
+  const { signout, workspaces, user, refreshWorkspaces } = useAuth()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
 
@@ -62,6 +65,35 @@ export function WorkspaceLayout() {
       to: '/workspace/$workspaceId/contacts',
       params: { workspaceId }
     })
+  }
+
+  // Function to handle workspace settings update
+  const handleUpdateWorkspaceSettings = async (settings: FileManagerSettings): Promise<void> => {
+    const workspace = workspaces.find((w) => w.id === workspaceId)
+    if (!workspace) {
+      message.error('Workspace not found')
+      return
+    }
+
+    try {
+      // Update workspace using workspace service
+      await workspaceService.update({
+        id: workspace.id,
+        name: workspace.name,
+        settings: {
+          ...workspace.settings,
+          file_manager: settings
+        }
+      })
+
+      // Refresh workspaces from context
+      await refreshWorkspaces()
+
+      message.success('Workspace settings updated successfully')
+    } catch (error: any) {
+      console.error('Error updating workspace settings:', error)
+      message.error(`Failed to update workspace settings: ${error.message}`)
+    }
   }
 
   const menuItems = [
@@ -308,7 +340,12 @@ export function WorkspaceLayout() {
             }}
           >
             <Content>
-              <Outlet />
+              <FileManagerProvider
+                settings={workspaces.find((w) => w.id === workspaceId)?.settings.file_manager}
+                onUpdateSettings={handleUpdateWorkspaceSettings}
+              >
+                <Outlet />
+              </FileManagerProvider>
             </Content>
           </Layout>
         </Layout>

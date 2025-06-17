@@ -376,7 +376,7 @@ func TestConverterFunctions() {
 	}
 
 	for _, test := range testValues {
-		escaped := escapeAttributeValue(test)
+		escaped := escapeAttributeValue(test, "title")
 		fmt.Printf("  %s -> %s\n", test, escaped)
 	}
 

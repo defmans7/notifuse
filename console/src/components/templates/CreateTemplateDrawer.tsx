@@ -1,34 +1,33 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Button, Drawer, Form, Input, Select, Space, App, Tabs, Row, Col, Tag } from 'antd'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import {
+  Button,
+  Drawer,
+  Form,
+  Input,
+  Select,
+  Space,
+  App,
+  Tabs,
+  Row,
+  Col,
+  Tag,
+  Dropdown,
+  MenuProps
+} from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
-import type { Template, Workspace, FileManagerSettings } from '../../services/api/types'
-import { Editor } from '../../components/email_editor'
-import { cloneDeep, kebabCase } from 'lodash'
-import IphoneEmailPreview from './PhonePreview'
-import { DesktopWidth, Layout } from '../../components/email_editor/UI/Layout'
-import { SelectedBlockButtonsProp } from '../../components/email_editor/Editor'
-import SelectedBlockButtons from '../../components/email_editor/UI/SelectedBlockButtons'
-import ButtonBlockDefinition from '../../components/email_editor/UI/definitions/Button'
-import ColumnBlockDefinition from '../../components/email_editor/UI/definitions/Column'
-import Columns168BlockDefinition from '../../components/email_editor/UI/definitions/Columns168'
-import Columns204BlockDefinition from '../../components/email_editor/UI/definitions/Columns204'
-import Columns420BlockDefinition from '../../components/email_editor/UI/definitions/Columns420'
-import Columns816BlockDefinition from '../../components/email_editor/UI/definitions/Columns816'
-import Columns888BlockDefinition from '../../components/email_editor/UI/definitions/Columns888'
-import Columns1212BlockDefinition from '../../components/email_editor/UI/definitions/Columns1212'
-import Columns6666BlockDefinition from '../../components/email_editor/UI/definitions/Columns6666'
-import DividerBlockDefinition from '../../components/email_editor/UI/definitions/Divider'
-import HeadingBlockDefinition from '../../components/email_editor/UI/definitions/Heading'
-import ImageBlockDefinition from '../../components/email_editor/UI/definitions/Image'
-import OneColumnBlockDefinition from '../../components/email_editor/UI/definitions/OneColumn'
-import RootBlockDefinition from '../../components/email_editor/UI/definitions/Root'
-import TextBlockDefinition from '../../components/email_editor/UI/definitions/Text'
-import LiquidTemplateBlockDefinition from '../../components/email_editor/UI/definitions/Liquid'
-import { BlockDefinitionInterface, BlockInterface } from '../../components/email_editor/Block'
-import uuid from 'short-uuid'
-import { useAuth } from '../../contexts/AuthContext'
 import { workspaceService } from '../../services/api/workspace'
+import type { Template, Workspace, TemplateBlock } from '../../services/api/types'
+import EmailBuilder from '../email_builder/EmailBuilder'
+import type { EmailBlock } from '../email_builder/types'
+import { kebabCase } from 'lodash'
+import IphoneEmailPreview from './PhonePreview'
+import defaultTemplateData from './email-template.json'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faQuestion } from '@fortawesome/free-solid-svg-icons'
+import { Tour } from 'antd/lib'
+import { ImportExportButton } from './ImportExportButton'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface CreateTemplateDrawerProps {
   workspace: Workspace
@@ -40,101 +39,38 @@ interface CreateTemplateDrawerProps {
   forceCategory?: string
 }
 
-// Combine default block definitions with any custom ones
-const blockDefinitions = {
-  root: RootBlockDefinition,
-  column: ColumnBlockDefinition,
-  oneColumn: OneColumnBlockDefinition,
-  columns168: Columns168BlockDefinition,
-  columns204: Columns204BlockDefinition,
-  columns420: Columns420BlockDefinition,
-  columns816: Columns816BlockDefinition,
-  columns888: Columns888BlockDefinition,
-  columns1212: Columns1212BlockDefinition,
-  columns6666: Columns6666BlockDefinition,
-  image: ImageBlockDefinition,
-  divider: DividerBlockDefinition,
-  button: ButtonBlockDefinition,
-  text: TextBlockDefinition,
-  heading: HeadingBlockDefinition,
-  liquid: LiquidTemplateBlockDefinition
+/**
+ * Creates default email blocks from the template JSON
+ */
+const createDefaultBlocks = (): EmailBlock => {
+  return defaultTemplateData.emailTree as EmailBlock
 }
 
-// Helper function to generate a block from definition
-const generateBlockFromDefinition = (blockDefinition: BlockDefinitionInterface) => {
-  const id = uuid.generate()
+// Help & Support dropdown component
+const HelpSupportDropdown: React.FC<{ onStartTour: () => void }> = ({ onStartTour }) => {
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'tour',
+      label: 'Take a Tour',
+      icon: <FontAwesomeIcon icon={faQuestion} />,
+      onClick: onStartTour
+    }
+  ]
 
-  const block: BlockInterface = {
-    id: id,
-    kind: blockDefinition.kind,
-    path: '', // path is set when rendering
-    children: blockDefinition.children
-      ? blockDefinition.children.map((child: BlockDefinitionInterface) => {
-          return generateBlockFromDefinition(child)
-        })
-      : [],
-    data: cloneDeep(blockDefinition.defaultData)
-  }
-
-  return block
+  return (
+    <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={['click']}>
+      <Button
+        size="small"
+        title="Help & Support"
+        type="primary"
+        ghost
+        icon={<FontAwesomeIcon icon={faQuestion} size="sm" />}
+      >
+        Help
+      </Button>
+    </Dropdown>
+  )
 }
-// Create default blocks
-const createDefaultBlocks = () => {
-  // Create default content blocks
-  const text = generateBlockFromDefinition(TextBlockDefinition)
-  const heading = generateBlockFromDefinition(HeadingBlockDefinition)
-  const logo = generateBlockFromDefinition(ImageBlockDefinition)
-  const divider = generateBlockFromDefinition(DividerBlockDefinition)
-  const btn = generateBlockFromDefinition(ButtonBlockDefinition)
-  const column = generateBlockFromDefinition(OneColumnBlockDefinition)
-
-  // Configure logo
-  logo.data.image.src = 'https://notifuse.com/images/logo.png'
-  logo.data.image.alt = 'Logo'
-  logo.data.image.href = 'https://notifuse.com'
-  logo.data.image.width = '100px'
-
-  // Configure heading
-  heading.data.paddingControl = 'separate'
-  heading.data.paddingTop = '40px'
-  heading.data.paddingBottom = '40px'
-  heading.data.editorData[0].children[0].text =
-    'Hello {{ contact.first_name | default:"there" }} 👋'
-
-  // Configure divider
-  divider.data.paddingControl = 'separate'
-  divider.data.paddingTop = '40px'
-  divider.data.paddingBottom = '20px'
-  divider.data.paddingLeft = '200px'
-  divider.data.paddingRight = '200px'
-
-  // Configure text
-  text.data.editorData[0].children[0].text = 'Welcome to the email editor!'
-
-  // Configure button
-  btn.data.button.backgroundColor = '#4e6cff'
-  btn.data.button.text = '👉 Click me'
-
-  // Add all blocks to column
-  column.children[0].children.push(logo)
-  column.children[0].children.push(heading)
-  column.children[0].children.push(text)
-  column.children[0].children.push(divider)
-  column.children[0].children.push(btn)
-
-  // Create root block with column as child
-  const rootData = cloneDeep(RootBlockDefinition.defaultData)
-  const rootBlock: BlockInterface = {
-    id: 'root',
-    kind: 'root',
-    path: '',
-    children: [column],
-    data: rootData
-  }
-
-  return rootBlock
-}
-
 /**
  * Renders a Tag component with the appropriate color for an email template category
  */
@@ -167,24 +103,34 @@ export function CreateTemplateDrawer({
 }: CreateTemplateDrawerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
-  const { refreshWorkspaces } = useAuth()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<string>('settings')
   const [loading, setLoading] = useState(false)
-  const [editorHeight, setEditorHeight] = useState(0)
   const { message } = App.useApp()
+  const { refreshWorkspaces } = useAuth()
+  const [tourOpen, setTourOpen] = useState(false)
+  const [forcedViewMode, setForcedViewMode] = useState<'edit' | 'preview' | null>(null)
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+
+  // Refs for tour targets
+  const treePanelRef = useRef<HTMLDivElement>(null)
+  const editPanelRef = useRef<HTMLDivElement>(null)
+  const settingsPanelRef = useRef<HTMLDivElement>(null)
+  const previewSwitcherRef = useRef<HTMLDivElement>(null)
+  const mobileDesktopSwitcherRef = useRef<HTMLDivElement>(null)
+  const importExportButtonRef = useRef<HTMLDivElement>(null)
 
   // set the tree apart to avoid rerendering the Email Editor when the tree changes
-  const [visualEditorTree, setVisualEditorTree] = useState<BlockInterface>(() => {
+  const [visualEditorTree, setVisualEditorTree] = useState<EmailBlock>(() => {
     if (template && template.email?.visual_editor_tree) {
       // Check if visual_editor_tree is already an object
       if (typeof template.email.visual_editor_tree === 'object') {
-        return template.email.visual_editor_tree as unknown as BlockInterface
+        return template.email.visual_editor_tree as unknown as EmailBlock
       }
 
       // Otherwise parse it from string
       try {
-        return JSON.parse(template.email.visual_editor_tree) as BlockInterface
+        return JSON.parse(template.email.visual_editor_tree) as EmailBlock
       } catch (error) {
         console.error('Error parsing visual editor tree:', error)
         message.error('Error loading template: Invalid template data')
@@ -215,24 +161,28 @@ export function CreateTemplateDrawer({
     return null
   }, [emailProvider, senderID])
 
-  // Calculate editor height based on drawer dimensions
-  useEffect(() => {
-    if (isOpen && tab === 'template') {
-      const calculateHeight = () => {
-        const doc = document.querySelector('.ant-drawer')
-        const topbarHeight = 65
-        const contentHeight = doc ? parseInt(window.getComputedStyle(doc).height) - topbarHeight : 0
-        setEditorHeight(contentHeight)
-      }
+  const updateWorkspaceMutation = useMutation({
+    mutationFn: (updatedSettings: any) => {
+      return workspaceService.update({
+        id: workspace.id,
+        name: workspace.name,
+        settings: updatedSettings
+      })
+    },
+    onSuccess: async () => {
+      // Invalidate workspace query to refetch latest data
+      queryClient.invalidateQueries({ queryKey: ['workspace', workspace.id] })
+      message.success('Template block saved successfully')
 
-      calculateHeight()
-      window.addEventListener('resize', calculateHeight)
-
-      return () => {
-        window.removeEventListener('resize', calculateHeight)
-      }
+      // Refresh workspaces in AuthContext to immediately update the workspace state
+      // This ensures the EmailBuilder shows the saved blocks without requiring a page refresh
+      await refreshWorkspaces()
+    },
+    onError: (error: any) => {
+      console.error('Failed to update workspace:', error)
+      message.error('Failed to save template block')
     }
-  }, [isOpen, tab])
+  })
 
   const createTemplateMutation = useMutation({
     mutationFn: (values: any) => {
@@ -308,10 +258,10 @@ export function CreateTemplateDrawer({
       // Update the visual editor tree
       if (fromTemplate.email?.visual_editor_tree) {
         if (typeof fromTemplate.email.visual_editor_tree === 'object') {
-          setVisualEditorTree(fromTemplate.email.visual_editor_tree as unknown as BlockInterface)
+          setVisualEditorTree(fromTemplate.email.visual_editor_tree as unknown as EmailBlock)
         } else {
           try {
-            setVisualEditorTree(JSON.parse(fromTemplate.email.visual_editor_tree) as BlockInterface)
+            setVisualEditorTree(JSON.parse(fromTemplate.email.visual_editor_tree) as EmailBlock)
           } catch (error) {
             console.error('Error parsing visual editor tree:', error)
             message.error('Error loading template: Invalid template data')
@@ -331,31 +281,59 @@ export function CreateTemplateDrawer({
     }
   }
 
-  const goNext = () => {
-    setTab('template')
+  const handleImport = (tree: EmailBlock) => {
+    setVisualEditorTree(tree)
   }
 
-  // Function to handle workspace settings update
-  const handleUpdateWorkspaceSettings = async (settings: FileManagerSettings): Promise<void> => {
+  const handleSaveBlock = async (
+    block: EmailBlock,
+    operation: 'create' | 'update' | 'delete',
+    nameOrId: string
+  ) => {
     try {
-      // Update workspace using workspace service
-      await workspaceService.update({
-        id: workspace.id,
-        name: workspace.name,
-        settings: {
-          ...workspace.settings,
-          file_manager: settings
+      const currentTemplateBlocks = workspace.settings.template_blocks || []
+      let updatedTemplateBlocks: TemplateBlock[]
+
+      if (operation === 'create') {
+        // Create new template block
+        const newTemplateBlock: TemplateBlock = {
+          id: '', // Will be generated by the backend
+          name: nameOrId,
+          block: block,
+          created: new Date().toISOString(),
+          updated: new Date().toISOString()
         }
-      })
+        updatedTemplateBlocks = [...currentTemplateBlocks, newTemplateBlock]
+      } else if (operation === 'update') {
+        // Update existing template block
+        updatedTemplateBlocks = currentTemplateBlocks.map((templateBlock) =>
+          templateBlock.id === nameOrId
+            ? { ...templateBlock, block: block, updated: new Date().toISOString() }
+            : templateBlock
+        )
+      } else if (operation === 'delete') {
+        // Delete template block
+        updatedTemplateBlocks = currentTemplateBlocks.filter(
+          (templateBlock) => templateBlock.id !== nameOrId
+        )
+      } else {
+        return // Invalid operation
+      }
 
-      // Refresh workspaces from context
-      await refreshWorkspaces()
+      // Update workspace settings with new template blocks
+      const updatedSettings = {
+        ...workspace.settings,
+        template_blocks: updatedTemplateBlocks
+      }
 
-      message.success('Workspace settings updated successfully')
-    } catch (error: any) {
-      console.error('Error updating workspace settings:', error)
-      message.error(`Failed to update workspace settings: ${error.message}`)
+      await updateWorkspaceMutation.mutateAsync(updatedSettings)
+    } catch (error) {
+      console.error('Failed to save template block:', error)
     }
+  }
+
+  const goNext = () => {
+    setTab('template')
   }
 
   return (
@@ -378,7 +356,7 @@ export function CreateTemplateDrawer({
           closable={true}
           keyboard={false}
           maskClosable={false}
-          width={'95%'}
+          width={'100%'}
           open={isOpen}
           onClose={handleClose}
           className="drawer-no-transition drawer-body-no-padding"
@@ -633,56 +611,183 @@ export function CreateTemplateDrawer({
                     const testData = form.getFieldValue('test_data')
 
                     return (
-                      <Editor
-                        blockDefinitions={blockDefinitions}
-                        userBlocks={[]}
-                        onUserBlocksUpdate={async () => {}}
-                        selectedBlockId={'root'}
-                        value={visualEditorTree}
-                        onChange={setVisualEditorTree}
-                        renderSelectedBlockButtons={(props: SelectedBlockButtonsProp) => (
-                          <SelectedBlockButtons {...props} />
-                        )}
-                        deviceWidth={DesktopWidth}
-                        urlParams={{}}
-                        fileManagerSettings={workspace?.settings.file_manager}
-                        onUpdateFileManagerSettings={handleUpdateWorkspaceSettings}
-                        templateDataValue={JSON.stringify(testData, null, 2)}
-                        onUpdateTemplateData={async (templateData: string) => {
+                      <EmailBuilder
+                        tree={visualEditorTree}
+                        onTreeChange={setVisualEditorTree}
+                        onCompile={async (tree: EmailBlock, testData?: any) => {
                           try {
-                            // Check if templateData is already an object
-                            const parsedData =
-                              typeof templateData === 'object'
-                                ? templateData
-                                : JSON.parse(templateData)
-
-                            form.setFieldsValue({
-                              test_data: parsedData
+                            const response = await templatesApi.compile({
+                              workspace_id: workspace.id,
+                              message_id: 'preview',
+                              visual_editor_tree: tree as any,
+                              test_data: testData || {}
                             })
-                            // Handle template data updates
-                            return Promise.resolve()
-                          } catch (error) {
-                            console.error('Error parsing template data:', error)
-                            message.error('Invalid JSON in template data')
-                            return Promise.reject(error)
+
+                            if (response.error) {
+                              return {
+                                html: '',
+                                mjml: response.mjml || '',
+                                errors: [response.error]
+                              }
+                            }
+
+                            return {
+                              html: response.html || '',
+                              mjml: response.mjml || '',
+                              errors: []
+                            }
+                          } catch (error: any) {
+                            console.error('Compilation error:', error)
+                            return {
+                              html: '',
+                              mjml: '',
+                              errors: [{ message: error.message || 'Compilation failed' }]
+                            }
                           }
                         }}
-                      >
-                        <Layout
-                          workspaceId={workspace.id}
-                          onUpdateMacro={async (macroId: string) => {
-                            console.log('macroId', macroId)
-                          }}
-                          macros={[]}
-                          height={editorHeight}
-                        />
-                      </Editor>
+                        testData={testData}
+                        onTestDataChange={(newTestData) => {
+                          form.setFieldsValue({
+                            test_data: newTestData
+                          })
+                        }}
+                        treePanelRef={treePanelRef as React.RefObject<HTMLDivElement>}
+                        editPanelRef={editPanelRef as React.RefObject<HTMLDivElement>}
+                        settingsPanelRef={settingsPanelRef as React.RefObject<HTMLDivElement>}
+                        previewSwitcherRef={previewSwitcherRef as React.RefObject<HTMLDivElement>}
+                        mobileDesktopSwitcherRef={
+                          mobileDesktopSwitcherRef as React.RefObject<HTMLDivElement>
+                        }
+                        forcedViewMode={forcedViewMode}
+                        savedBlocks={workspace.settings.template_blocks || []}
+                        onSaveBlock={handleSaveBlock}
+                        onSelectBlock={setSelectedBlockId}
+                        selectedBlockId={selectedBlockId}
+                        hiddenBlocks={['mj-title', 'mj-preview']}
+                        toolbarActions={
+                          <div className="flex gap-2 items-start">
+                            <HelpSupportDropdown
+                              onStartTour={() => {
+                                setTourOpen(true)
+                              }}
+                            />
+                            <div ref={importExportButtonRef}>
+                              <ImportExportButton
+                                onImport={handleImport}
+                                // onTestDataImport={handleTestDataImport}
+                                tree={visualEditorTree}
+                                testData={testData}
+                                workspaceId={workspace.id}
+                              />
+                            </div>
+                          </div>
+                        }
+                      />
                     )
                   }}
                 </Form.Item>
               </div>
             </div>
           </Form>
+          <Tour
+            open={tourOpen}
+            onClose={() => {
+              setTourOpen(false)
+              // Reset forced view mode when tour closes
+              setForcedViewMode(null)
+              // Mark tour as seen
+              localStorage.setItem('email-builder-tour-seen', 'true')
+            }}
+            onChange={(current) => {
+              // Change email builder state based on tour step
+              switch (current) {
+                case 2: // Edit panel step (0-indexed)
+                  // Select the body block to demonstrate block selection
+                  const bodyBlock = visualEditorTree.children?.find(
+                    (child) => child.type === 'mj-body'
+                  )
+                  if (bodyBlock) {
+                    setSelectedBlockId(bodyBlock.id)
+                  }
+                  setForcedViewMode('edit')
+                  break
+                case 4: // Preview step (0-indexed)
+                case 5: // Mobile/Desktop preview step
+                  // Automatically switch to preview mode when reaching the preview steps
+                  setForcedViewMode('preview')
+                  break
+                case 6: // Import/Export step
+                  // Switch back to edit mode for import/export step
+                  setForcedViewMode('edit')
+                  break
+                default:
+                  // For other steps, ensure we're in edit mode
+                  setForcedViewMode('edit')
+                  break
+              }
+            }}
+            steps={[
+              {
+                title: 'Welcome to Email Builder! 🎉',
+                description:
+                  "Let's take a quick tour to help you get started with building beautiful emails using MJML.",
+                target: null // Center of screen
+              },
+              {
+                title: 'Email Structure Tree',
+                description:
+                  'This is your email structure tree. You can drag and drop blocks to reorganize your email layout. Click the + buttons to add new blocks, or drag blocks from one section to another.',
+                target: () => treePanelRef.current!,
+                placement: 'right' as const
+              },
+              {
+                title: 'Visual Email Editor',
+                description:
+                  'This is your visual email editor. Click on any element in your email to select it. Selected elements will be highlighted with a blue border and show editing options.',
+                target: () => editPanelRef.current!,
+                placement: 'top' as const
+              },
+              {
+                title: 'Block Settings Panel',
+                description:
+                  'When you select a block, its settings appear here. Modify colors, text, spacing, alignment, and other properties to customize your email design.',
+                target: () => settingsPanelRef.current!,
+                placement: 'left' as const
+              },
+              {
+                title: 'Preview Your Email',
+                description:
+                  'Switch to Preview mode to see how your email will look to recipients. This shows the final rendered version with all styling applied.',
+                target: () => previewSwitcherRef.current!,
+                placement: 'bottom' as const
+              },
+              {
+                title: 'Mobile & Desktop Preview',
+                description:
+                  'Toggle between mobile and desktop views to see how your email appears on different devices. Mobile view shows a 400px width while desktop shows the full width.',
+                target: () => mobileDesktopSwitcherRef.current!,
+                placement: 'left' as const
+              },
+              {
+                title: 'Import & Export Templates',
+                description:
+                  'Use this button to import saved email templates or export your finished emails. You can import JSON/MJML templates or export as HTML, MJML, or JSON for future use.',
+                target: () => importExportButtonRef.current!,
+                placement: 'bottom' as const
+              }
+            ]}
+            indicatorsRender={(current, total) => (
+              <span
+                style={{
+                  color: '#1890ff',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {current + 1} / {total}
+              </span>
+            )}
+          />
         </Drawer>
       )}
     </>
