@@ -306,6 +306,16 @@ func TestTemplateRepository_GetTemplateByID(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "ws-1"
 	template := createTestTemplate()
+
+	// Fix: Marshal and unmarshal the expected template to ensure it has the same
+	// default attributes as the actual result from the database
+	templateJSON, err := json.Marshal(template.Email)
+	require.NoError(t, err)
+	var normalizedEmail domain.EmailTemplate
+	err = json.Unmarshal(templateJSON, &normalizedEmail)
+	require.NoError(t, err)
+	template.Email = &normalizedEmail
+
 	templateID := template.ID
 	version := template.Version
 
