@@ -13,7 +13,7 @@ interface PreviewProps {
   errors?: any[]
   testData?: any
   onTestDataChange: (testData: any) => void
-  mobileDesktopSwitcherRef?: React.RefObject<HTMLDivElement | null>
+  mobileDesktopSwitcherRef?: React.RefObject<HTMLDivElement>
 }
 
 export interface PreviewRef {
