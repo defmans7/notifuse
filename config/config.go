@@ -11,16 +11,23 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Security SecurityConfig
-	Tracing  TracingConfig
-	SMTP     SMTPConfig
-
+	Server          ServerConfig
+	Database        DatabaseConfig
+	Security        SecurityConfig
+	Tracing         TracingConfig
+	SMTP            SMTPConfig
+	Demo            DemoConfig
 	RootEmail       string
 	Environment     string
 	APIEndpoint     string
 	WebhookEndpoint string
+}
+
+type DemoConfig struct {
+	FileManagerEndpoint  string
+	FileManagerBucket    string
+	FileManagerAccessKey string
+	FileManagerSecretKey string
 }
 
 type ServerConfig struct {
@@ -262,6 +269,12 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			PasetoPrivateKeyBytes: privateKeyBytes,
 			PasetoPublicKeyBytes:  publicKeyBytes,
 			SecretKey:             v.GetString("SECRET_KEY"),
+		},
+		Demo: DemoConfig{
+			FileManagerEndpoint:  v.GetString("DEMO_FILE_MANAGER_ENDPOINT"),
+			FileManagerBucket:    v.GetString("DEMO_FILE_MANAGER_BUCKET"),
+			FileManagerAccessKey: v.GetString("DEMO_FILE_MANAGER_ACCESS_KEY"),
+			FileManagerSecretKey: v.GetString("DEMO_FILE_MANAGER_SECRET_KEY"),
 		},
 		Tracing: TracingConfig{
 			Enabled:             v.GetBool("TRACING_ENABLED"),

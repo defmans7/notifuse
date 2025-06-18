@@ -227,10 +227,10 @@ func (s *DemoService) createDemoWorkspace(ctx context.Context) error {
 
 	// Create workspace settings with readonly demo bucket
 	fileManagerSettings := domain.FileManagerSettings{
-		Endpoint:  "https://storage.googleapis.com",
-		Bucket:    "readonlydemo",
-		AccessKey: "GOOG1EXI5J3X3H4XQQJMDP3Y5TYYQZKVHRGTBWENQ4SVZAJXFRZ46KKB33V4G",
-		SecretKey: "hv7YwLhfZdCoFElLsU8O4WMk1LfG/w4Rr7LGTk3m",
+		Endpoint:  s.config.Demo.FileManagerEndpoint,
+		Bucket:    s.config.Demo.FileManagerBucket,
+		AccessKey: s.config.Demo.FileManagerAccessKey,
+		SecretKey: s.config.Demo.FileManagerSecretKey,
 	}
 
 	// Create the demo workspace
