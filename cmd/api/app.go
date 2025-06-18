@@ -559,7 +559,7 @@ func (a *App) InitHandlers() error {
 		a.listService,
 		a.logger,
 	)
-	if a.config.IsDemo() || a.config.IsDevelopment() {
+	if !a.config.IsProduction() {
 		demoHandler := httpHandler.NewDemoHandler(a.demoService, a.logger)
 		demoHandler.RegisterRoutes(a.mux)
 	}

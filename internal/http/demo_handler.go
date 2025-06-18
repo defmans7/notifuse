@@ -2,6 +2,8 @@ package http
 
 import (
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -9,8 +11,10 @@ import (
 
 // DemoHandler handles HTTP requests for demo operations
 type DemoHandler struct {
-	service *service.DemoService
-	logger  logger.Logger
+	service    *service.DemoService
+	logger     logger.Logger
+	lastReset  time.Time
+	resetMutex sync.Mutex
 }
 
 // NewDemoHandler creates a new demo handler
@@ -26,10 +30,20 @@ func (h *DemoHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/demo.reset", h.handleResetDemo)
 }
 
-// handleResetDemo handles the GET request to reset demo data
+// handleResetDemo handles the GET request to reset demo data with rate limiting
 func (h *DemoHandler) handleResetDemo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Rate limiting: enforce minimum time between resets (5 minutes)
+	h.resetMutex.Lock()
+	defer h.resetMutex.Unlock()
+
+	if time.Since(h.lastReset) < 5*time.Minute {
+		h.logger.Warn("Reset request rejected due to rate limiting")
+		WriteJSONError(w, "Reset too frequent. Please wait 5 minutes between resets.", http.StatusTooManyRequests)
 		return
 	}
 
@@ -53,6 +67,9 @@ func (h *DemoHandler) handleResetDemo(w http.ResponseWriter, r *http.Request) {
 		WriteJSONError(w, "Failed to reset demo data", http.StatusInternalServerError)
 		return
 	}
+
+	// Update last reset time
+	h.lastReset = time.Now()
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Demo data reset successfully",

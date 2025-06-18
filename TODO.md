@@ -5,5 +5,4 @@
 - test the docker compose
 - add contact_list reason string
 - docs: installation, email providers, templates, contacts, lists, workspaces, broadcast campaigns, transactional api, notification center
-- demo fixtures with mailpit integration by default (1000 contacts, 1 template newsletter, 1 template transactional, 1 list with 1000 contacts and 1 broadcast draft)
 - redeploy to prod and reset demo

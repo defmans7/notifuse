@@ -164,8 +164,8 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	if e.Subject == "" {
 		return fmt.Errorf("invalid email template: subject is required")
 	}
-	if len(e.Subject) > 32 {
-		return fmt.Errorf("invalid email template: subject length must be between 1 and 32")
+	if len(e.Subject) > 255 {
+		return fmt.Errorf("invalid email template: subject length must be between 1 and 255")
 	}
 	if e.VisualEditorTree.GetType() != notifuse_mjml.MJMLComponentMjml {
 		return fmt.Errorf("invalid email template: visual_editor_tree must have type 'mjml'")
@@ -202,8 +202,8 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	if e.ReplyTo != "" && !govalidator.IsEmail(e.ReplyTo) {
 		return fmt.Errorf("invalid email template: reply_to is not a valid email")
 	}
-	if e.SubjectPreview != nil && len(*e.SubjectPreview) > 32 {
-		return fmt.Errorf("invalid email template: subject_preview length must be between 1 and 32")
+	if e.SubjectPreview != nil && len(*e.SubjectPreview) > 255 {
+		return fmt.Errorf("invalid email template: subject_preview length must be between 1 and 255")
 	}
 
 	return nil

@@ -11,11 +11,12 @@ import (
 )
 
 type Config struct {
-	Server          ServerConfig
-	Database        DatabaseConfig
-	Security        SecurityConfig
-	Tracing         TracingConfig
-	SMTP            SMTPConfig
+	Server   ServerConfig
+	Database DatabaseConfig
+	Security SecurityConfig
+	Tracing  TracingConfig
+	SMTP     SMTPConfig
+
 	RootEmail       string
 	Environment     string
 	APIEndpoint     string
@@ -296,6 +297,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			MetricsExporter: v.GetString("TRACING_METRICS_EXPORTER"),
 			PrometheusPort:  v.GetInt("TRACING_PROMETHEUS_PORT"),
 		},
+
 		RootEmail:       v.GetString("ROOT_EMAIL"),
 		Environment:     v.GetString("ENVIRONMENT"),
 		APIEndpoint:     v.GetString("API_ENDPOINT"),
