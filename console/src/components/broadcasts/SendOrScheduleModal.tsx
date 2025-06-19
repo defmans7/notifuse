@@ -69,9 +69,13 @@ export function SendOrScheduleModal({
       message.success(`Broadcast "${broadcast.name}" sending started`)
       onSuccess()
       onClose()
-    } catch (error) {
+    } catch (error: any) {
       console.error(error)
-      message.error('Failed to send broadcast')
+      const errorMessage =
+        error?.response?.status === 400 && error?.response?.data?.message
+          ? error.response.data.message
+          : 'Failed to send broadcast'
+      message.error(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -116,9 +120,13 @@ export function SendOrScheduleModal({
         message.success(`Broadcast "${broadcast.name}" scheduled successfully`)
         onSuccess()
         onClose()
-      } catch (error) {
+      } catch (error: any) {
         console.error(error)
-        message.error('Failed to schedule broadcast')
+        const errorMessage =
+          error?.response?.status === 400 && error?.response?.data?.message
+            ? error.response.data.message
+            : 'Failed to schedule broadcast'
+        message.error(errorMessage)
       }
     } catch (error) {
       console.error(error)

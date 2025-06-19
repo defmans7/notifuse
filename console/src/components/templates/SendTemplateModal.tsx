@@ -98,7 +98,11 @@ export default function SendTemplateModal({
         message.error(`Failed to send test email: ${response.error || 'Unknown error'}`)
       }
     } catch (error: any) {
-      message.error(`Error: ${error?.message || 'Something went wrong'}`)
+      const errorMessage =
+        error?.response?.status === 400 && error?.response?.data?.message
+          ? error.response.data.message
+          : error?.message || 'Something went wrong'
+      message.error(`Error: ${errorMessage}`)
     } finally {
       setSendLoading(false)
     }
