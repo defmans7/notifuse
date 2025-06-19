@@ -299,6 +299,12 @@ func (s *DemoService) addSampleData(ctx context.Context, workspaceID string) err
 		return err
 	}
 
+	// Step 6: Create sample transactional notifications
+	if err := s.createSampleTransactionalNotifications(ctx, workspaceID); err != nil {
+		s.logger.WithField("error", err.Error()).Warn("Failed to create sample transactional notifications")
+		return err
+	}
+
 	s.logger.WithField("workspace_id", workspaceID).Info("Comprehensive sample data added successfully")
 	return nil
 }
@@ -571,6 +577,40 @@ func (s *DemoService) createSampleTemplates(ctx context.Context, workspaceID str
 
 	if err := s.templateService.CreateTemplate(ctx, workspaceID, welcomeTemplate); err != nil {
 		s.logger.WithField("error", err.Error()).Warn("Failed to create welcome template")
+	}
+
+	// Create password reset template
+	passwordResetMJML := s.createPasswordResetMJMLStructure()
+	passwordResetTestData := domain.MapOfAny{
+		"contact": domain.MapOfAny{
+			"first_name": "Alex",
+			"last_name":  "Johnson",
+			"email":      "alex.johnson@example.com",
+		},
+		"reset_url": "https://demo.notifuse.com/reset-password?token=demo_token_123",
+	}
+
+	// Compile MJML to HTML
+	passwordResetHTML := s.compileTemplateToHTML(workspaceID, "password-reset-preview", passwordResetMJML, passwordResetTestData)
+
+	passwordResetTemplate := &domain.Template{
+		ID:       "password-reset",
+		Name:     "Password Reset",
+		Version:  1,
+		Channel:  "email",
+		Category: string(domain.TemplateCategoryTransactional),
+		Email: &domain.EmailTemplate{
+			Subject:          "Reset your password, {{contact.first_name}}",
+			CompiledPreview:  passwordResetHTML,
+			VisualEditorTree: passwordResetMJML,
+		},
+		TestData:  passwordResetTestData,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := s.templateService.CreateTemplate(ctx, workspaceID, passwordResetTemplate); err != nil {
+		s.logger.WithField("error", err.Error()).Warn("Failed to create password reset template")
 	}
 
 	s.logger.WithField("workspace_id", workspaceID).Info("Sample templates created successfully")
@@ -1100,5 +1140,218 @@ func (s *DemoService) createSampleBroadcast(ctx context.Context, workspaceID str
 	}
 
 	s.logger.WithField("broadcast_id", broadcast.ID).WithField("workspace_id", workspaceID).Info("Sample broadcast created successfully")
+	return nil
+}
+
+// createPasswordResetMJMLStructure creates the MJML structure for the password reset template
+func (s *DemoService) createPasswordResetMJMLStructure() notifuse_mjml.EmailBlock {
+	// Create content strings
+	titleContent := "Reset Your Password"
+	previewContent := "You requested a password reset for your account"
+	headerContent := "Reset Your Password 🔐"
+	mainContent := "Hi {{contact.first_name}},<br><br>We received a request to reset the password for your account. If you made this request, click the button below to set a new password:"
+	buttonContent := "Reset Password"
+	expireContent := "This link will expire in 24 hours for security reasons."
+	footerContent := "If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.<br><br>If you're having trouble with the button above, copy and paste the URL below into your web browser:<br>{{reset_url}}"
+
+	// Create blocks using concrete types
+	title := &notifuse_mjml.MJTitleBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "title",
+			Type: notifuse_mjml.MJMLComponentMjTitle,
+		},
+		Type:    notifuse_mjml.MJMLComponentMjTitle,
+		Content: &titleContent,
+	}
+
+	preview := &notifuse_mjml.MJPreviewBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "preview",
+			Type: notifuse_mjml.MJMLComponentMjPreview,
+		},
+		Type:    notifuse_mjml.MJMLComponentMjPreview,
+		Content: &previewContent,
+	}
+
+	headerText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "header-text",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "28px",
+				"font-weight": "bold",
+				"align":       "center",
+				"color":       "#e74c3c",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &headerContent,
+	}
+
+	mainText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "main-text",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "16px",
+				"line-height": "1.6",
+				"color":       "#34495e",
+				"padding":     "20px 0",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &mainContent,
+	}
+
+	button := &notifuse_mjml.MJButtonBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "reset-button",
+			Type: notifuse_mjml.MJMLComponentMjButton,
+			Attributes: map[string]interface{}{
+				"background-color": "#e74c3c",
+				"color":            "#ffffff",
+				"font-size":        "16px",
+				"font-weight":      "bold",
+				"padding":          "15px 30px",
+				"border-radius":    "6px",
+				"href":             "{{reset_url}}",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjButton,
+		Content: &buttonContent,
+	}
+
+	expireText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "expire-text",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size": "14px",
+				"color":     "#95a5a6",
+				"align":     "center",
+				"padding":   "10px 0",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &expireContent,
+	}
+
+	divider := &notifuse_mjml.MJDividerBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "divider",
+			Type: notifuse_mjml.MJMLComponentMjDivider,
+			Attributes: map[string]interface{}{
+				"border-width": "1px",
+				"border-color": "#ecf0f1",
+				"padding":      "20px 0",
+			},
+		},
+		Type: notifuse_mjml.MJMLComponentMjDivider,
+	}
+
+	footerText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "footer-text",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size": "14px",
+				"color":     "#7f8c8d",
+				"align":     "center",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &footerContent,
+	}
+
+	column := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "main-column",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{headerText, mainText, button, expireText, divider, footerText},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{headerText, mainText, button, expireText, divider, footerText},
+	}
+
+	section := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "main-section",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{column},
+			Attributes: map[string]interface{}{
+				"background-color": "#ffffff",
+				"padding":          "40px 20px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjSection,
+		Children: []notifuse_mjml.EmailBlock{column},
+	}
+
+	head := &notifuse_mjml.MJHeadBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "head",
+			Type:     notifuse_mjml.MJMLComponentMjHead,
+			Children: []interface{}{title, preview},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjHead,
+		Children: []notifuse_mjml.EmailBlock{title, preview},
+	}
+
+	body := &notifuse_mjml.MJBodyBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "body",
+			Type:     notifuse_mjml.MJMLComponentMjBody,
+			Children: []interface{}{section},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjBody,
+		Children: []notifuse_mjml.EmailBlock{section},
+	}
+
+	return &notifuse_mjml.MJMLBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "mjml-root",
+			Type: notifuse_mjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{
+				"lang": "en",
+			},
+			Children: []interface{}{head, body},
+		},
+		Type: notifuse_mjml.MJMLComponentMjml,
+		Attributes: map[string]interface{}{
+			"lang": "en",
+		},
+		Children: []notifuse_mjml.EmailBlock{head, body},
+	}
+}
+
+// createSampleTransactionalNotifications creates sample transactional notifications
+func (s *DemoService) createSampleTransactionalNotifications(ctx context.Context, workspaceID string) error {
+	s.logger.WithField("workspace_id", workspaceID).Info("Creating sample transactional notifications")
+
+	// Create password reset transactional notification
+	passwordResetNotification := domain.TransactionalNotificationCreateParams{
+		ID:          "password_reset",
+		Name:        "Password Reset Email",
+		Description: "Sent when a user requests to reset their password",
+		Channels: domain.ChannelTemplates{
+			domain.TransactionalChannelEmail: domain.ChannelTemplate{
+				TemplateID: "password-reset",
+			},
+		},
+		TrackingSettings: notifuse_mjml.TrackingSettings{
+			EnableTracking: true,
+		},
+		Metadata: domain.MapOfAny{
+			"category": "security",
+			"priority": "high",
+		},
+	}
+
+	_, err := s.transactionalNotificationService.CreateNotification(ctx, workspaceID, passwordResetNotification)
+	if err != nil {
+		s.logger.WithField("error", err.Error()).Warn("Failed to create password reset transactional notification")
+	}
+
+	s.logger.WithField("workspace_id", workspaceID).Info("Sample transactional notifications created successfully")
 	return nil
 }
