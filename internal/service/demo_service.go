@@ -368,7 +368,23 @@ func (s *DemoService) createDemoSMTPIntegration(ctx context.Context, workspaceID
 		return fmt.Errorf("failed to create SMTP integration: %w", err)
 	}
 
-	s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).Info("Demo SMTP integration created successfully")
+	// Get current workspace to update settings
+	workspace, err := s.workspaceService.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace for settings update: %w", err)
+	}
+
+	// Update workspace settings to use this integration for both transactional and marketing emails
+	workspace.Settings.TransactionalEmailProviderID = integrationID
+	workspace.Settings.MarketingEmailProviderID = integrationID
+
+	// Update the workspace with the new settings
+	_, err = s.workspaceService.UpdateWorkspace(ctx, workspaceID, workspace.Name, workspace.Settings)
+	if err != nil {
+		return fmt.Errorf("failed to update workspace settings with email provider IDs: %w", err)
+	}
+
+	s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).Info("Demo SMTP integration created and set as transactional and marketing email provider")
 	return nil
 }
 
