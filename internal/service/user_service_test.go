@@ -81,7 +81,7 @@ func setupUserTest(t *testing.T) (
 		EmailSender:   mockSender,
 		SessionExpiry: 24 * time.Hour,
 		Logger:        mockLogger,
-		IsDevelopment: false,
+		IsProduction:  true,
 		Tracer:        mockTracer,
 	})
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestUserService_SignIn(t *testing.T) {
 	})
 
 	t.Run("development mode returns code directly", func(t *testing.T) {
-		service.isDevelopment = true
+		service.isProduction = false
 		mockSender.shouldError = false // No email sending in dev mode
 		user := &domain.User{
 			ID:    "user123",

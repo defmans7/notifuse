@@ -19,7 +19,7 @@ type UserService struct {
 	emailSender   EmailSender
 	sessionExpiry time.Duration
 	logger        logger.Logger
-	isDevelopment bool
+	isProduction  bool
 	tracer        tracing.Tracer
 }
 
@@ -33,7 +33,7 @@ type UserServiceConfig struct {
 	EmailSender   EmailSender
 	SessionExpiry time.Duration
 	Logger        logger.Logger
-	IsDevelopment bool
+	IsProduction  bool
 	Tracer        tracing.Tracer
 }
 
@@ -50,7 +50,7 @@ func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 		emailSender:   cfg.EmailSender,
 		sessionExpiry: cfg.SessionExpiry,
 		logger:        cfg.Logger,
-		isDevelopment: cfg.IsDevelopment,
+		isProduction:  cfg.IsProduction,
 		tracer:        tracer,
 	}, nil
 }
@@ -118,14 +118,12 @@ func (s *UserService) SignIn(ctx context.Context, input domain.SignInInput) (str
 		return "", err
 	}
 
-	// In development mode, return the code directly
+	// In development/demo mode, return the code directly
 	// In production, send the code via email
-	if s.isDevelopment {
-		s.tracer.AddAttribute(ctx, "mode", "development")
+	if !s.isProduction {
 		return code, nil
 	}
 
-	s.tracer.AddAttribute(ctx, "mode", "production")
 	// Send magic code via email in production
 	if err := s.emailSender.SendMagicCode(user.Email, code); err != nil {
 		s.logger.WithField("user_id", user.ID).WithField("email", user.Email).WithField("error", err.Error()).Error("Failed to send magic code")

@@ -179,7 +179,7 @@ export const ImportExportButton: React.FC<ImportExportButtonProps> = ({
     try {
       // Convert MJML to EmailBlock format using browser-compatible parser
       const emailTree = convertMjmlToJsonBrowser(mjmlContent)
-      console.log('emailTree', emailTree)
+
       // Validate the email tree
       const validation = validateEmailTree(emailTree)
       if (!validation.isValid) {

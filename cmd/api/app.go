@@ -304,7 +304,7 @@ func (a *App) InitServices() error {
 		AuthService:   a.authService,
 		EmailSender:   a.mailer,
 		SessionExpiry: 30 * 24 * time.Hour, // 30 days
-		IsDevelopment: a.config.IsDevelopment(),
+		IsProduction:  a.config.IsProduction(),
 		Logger:        a.logger,
 		Tracer:        tracing.GetTracer(),
 	}
