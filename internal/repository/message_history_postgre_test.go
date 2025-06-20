@@ -968,7 +968,7 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 			GetConnection(gomock.Any(), workspaceID).
 			Return(db, nil)
 
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND template_id = \$2`).
 			WithArgs(broadcastID, templateID).
 			WillReturnError(sql.ErrNoRows)
 
@@ -996,7 +996,7 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 			"total_clicked", "total_bounced", "total_complained", "total_unsubscribed",
 		}).AddRow(10, nil, 2, nil, 3, nil, nil, 1)
 
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND template_id = \$2`).
 			WithArgs(broadcastID, templateID).
 			WillReturnRows(rows)
 

@@ -41,13 +41,12 @@ const (
 
 // BroadcastTestSettings contains configuration for A/B testing
 type BroadcastTestSettings struct {
-	Enabled               bool                 `json:"enabled"`
-	SamplePercentage      int                  `json:"sample_percentage"`
-	AutoSendWinner        bool                 `json:"auto_send_winner"`
-	AutoSendWinnerMetric  TestWinnerMetric     `json:"auto_send_winner_metric,omitempty"`
-	TestDurationHours     int                  `json:"test_duration_hours,omitempty"`
-	AutoWinnerWaitMinutes int                  `json:"auto_winner_wait_minutes,omitempty"`
-	Variations            []BroadcastVariation `json:"variations"`
+	Enabled              bool                 `json:"enabled"`
+	SamplePercentage     int                  `json:"sample_percentage"`
+	AutoSendWinner       bool                 `json:"auto_send_winner"`
+	AutoSendWinnerMetric TestWinnerMetric     `json:"auto_send_winner_metric,omitempty"`
+	TestDurationHours    int                  `json:"test_duration_hours,omitempty"`
+	Variations           []BroadcastVariation `json:"variations"`
 }
 
 // Value implements the driver.Valuer interface for database serialization
@@ -343,15 +342,24 @@ func (b *Broadcast) Validate() error {
 		}
 
 		if b.TestSettings.AutoSendWinner {
+			if b.TestSettings.TestDurationHours <= 0 {
+				return fmt.Errorf("test duration must be greater than 0 hours when auto winner is enabled")
+			}
+
+			if b.TestSettings.TestDurationHours > 168 { // 7 days max
+				return fmt.Errorf("test duration cannot exceed 168 hours (7 days)")
+			}
+
+			// Validate that winner metric is set
+			if b.TestSettings.AutoSendWinnerMetric == "" {
+				return fmt.Errorf("auto send winner metric must be specified when auto winner is enabled")
+			}
+
 			switch b.TestSettings.AutoSendWinnerMetric {
 			case TestWinnerMetricOpenRate, TestWinnerMetricClickRate:
 				// Valid metric
 			default:
 				return fmt.Errorf("invalid test winner metric: %s", b.TestSettings.AutoSendWinnerMetric)
-			}
-
-			if b.TestSettings.TestDurationHours <= 0 {
-				return fmt.Errorf("test duration must be greater than 0 hours")
 			}
 		}
 

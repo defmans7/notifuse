@@ -37,15 +37,16 @@ type BroadcastOrchestratorInterface interface {
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
 type BroadcastOrchestrator struct {
-	messageSender MessageSender
-	broadcastRepo domain.BroadcastRepository
-	templateRepo  domain.TemplateRepository
-	contactRepo   domain.ContactRepository
-	taskRepo      domain.TaskRepository
-	workspaceRepo domain.WorkspaceRepository
-	logger        logger.Logger
-	config        *Config
-	timeProvider  TimeProvider
+	messageSender   MessageSender
+	broadcastRepo   domain.BroadcastRepository
+	templateRepo    domain.TemplateRepository
+	contactRepo     domain.ContactRepository
+	taskRepo        domain.TaskRepository
+	workspaceRepo   domain.WorkspaceRepository
+	abTestEvaluator *ABTestEvaluator
+	logger          logger.Logger
+	config          *Config
+	timeProvider    TimeProvider
 }
 
 // NewBroadcastOrchestrator creates a new broadcast orchestrator
@@ -56,6 +57,7 @@ func NewBroadcastOrchestrator(
 	contactRepo domain.ContactRepository,
 	taskRepo domain.TaskRepository,
 	workspaceRepo domain.WorkspaceRepository,
+	abTestEvaluator *ABTestEvaluator,
 	logger logger.Logger,
 	config *Config,
 	timeProvider TimeProvider,
@@ -69,15 +71,16 @@ func NewBroadcastOrchestrator(
 	}
 
 	return &BroadcastOrchestrator{
-		messageSender: messageSender,
-		broadcastRepo: broadcastRepo,
-		templateRepo:  templateRepo,
-		contactRepo:   contactRepo,
-		taskRepo:      taskRepo,
-		workspaceRepo: workspaceRepo,
-		logger:        logger,
-		config:        config,
-		timeProvider:  timeProvider,
+		messageSender:   messageSender,
+		broadcastRepo:   broadcastRepo,
+		templateRepo:    templateRepo,
+		contactRepo:     contactRepo,
+		taskRepo:        taskRepo,
+		workspaceRepo:   workspaceRepo,
+		abTestEvaluator: abTestEvaluator,
+		logger:          logger,
+		config:          config,
+		timeProvider:    timeProvider,
 	}
 }
 
@@ -571,6 +574,25 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		return false, err
 	}
 
+	// Check if we should perform auto winner evaluation
+	if broadcastState.Phase == "test" && broadcast.Status == domain.BroadcastStatusTestCompleted {
+		if o.shouldEvaluateWinner(broadcast) {
+			if err := o.evaluateWinner(ctx, broadcast, broadcastState); err != nil {
+				// Log error but continue - will fall back to manual selection
+				o.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcast.ID,
+					"error":        err.Error(),
+				}).Error("Auto winner evaluation failed, continuing with manual selection")
+			}
+
+			// Refresh broadcast after potential evaluation
+			broadcast, err = o.broadcastRepo.GetBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
+			if err != nil {
+				return false, err
+			}
+		}
+	}
+
 	// Determine the current phase based on broadcast status and task state
 	if broadcastState.Phase == "" || broadcastState.Phase == "single" {
 		if broadcast.TestSettings.Enabled && len(broadcast.TestSettings.Variations) > 1 {
@@ -968,13 +990,68 @@ func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctx context.Context, b
 		"test_sent_count": broadcastState.TestRecipientOffset,
 	}).Info("A/B test phase completed, awaiting winner selection")
 
-	// Check if auto-send winner is enabled
+	// Log completion - auto evaluation will happen on next task run if enabled
 	if broadcast.TestSettings.AutoSendWinner {
-		// TODO: Implement auto winner selection logic if needed
-		// For now, we'll wait for manual selection
-		o.logger.WithField("broadcast_id", broadcast.ID).Info("Auto-send winner enabled but not implemented, awaiting manual selection")
+		evaluationTime := now.Add(time.Duration(broadcast.TestSettings.TestDurationHours) * time.Hour)
+		o.logger.WithFields(map[string]interface{}{
+			"broadcast_id":  broadcast.ID,
+			"evaluation_at": evaluationTime,
+			"test_duration": broadcast.TestSettings.TestDurationHours,
+		}).Info("A/B test phase completed, auto winner evaluation will occur after test duration")
+	} else {
+		o.logger.WithField("broadcast_id", broadcast.ID).Info("A/B test phase completed, awaiting manual winner selection")
 	}
 
 	// Task should pause here - winner selection will resume it
 	return false // Not all done, waiting for winner selection
+}
+
+// shouldEvaluateWinner checks if auto winner evaluation should be performed
+func (o *BroadcastOrchestrator) shouldEvaluateWinner(broadcast *domain.Broadcast) bool {
+	// Check if auto winner is enabled
+	if !broadcast.TestSettings.AutoSendWinner {
+		return false
+	}
+
+	// Check if test was sent (required for timing calculation)
+	if broadcast.TestSentAt == nil {
+		return false
+	}
+
+	// Calculate evaluation time and check if it has passed
+	evaluationTime := broadcast.TestSentAt.Add(time.Duration(broadcast.TestSettings.TestDurationHours) * time.Hour)
+	now := o.timeProvider.Now()
+
+	if now.Before(evaluationTime) {
+		o.logger.WithFields(map[string]interface{}{
+			"broadcast_id":    broadcast.ID,
+			"current_time":    now,
+			"evaluation_time": evaluationTime,
+			"test_duration":   broadcast.TestSettings.TestDurationHours,
+		}).Debug("Auto evaluation time has not yet arrived")
+		return false
+	}
+
+	return true
+}
+
+// evaluateWinner performs automatic winner evaluation and updates the broadcast
+func (o *BroadcastOrchestrator) evaluateWinner(ctx context.Context, broadcast *domain.Broadcast, broadcastState *domain.SendBroadcastState) error {
+	o.logger.WithField("broadcast_id", broadcast.ID).Info("Performing automatic winner evaluation")
+
+	// Perform the evaluation using the ABTestEvaluator
+	winnerTemplateID, err := o.abTestEvaluator.EvaluateAndSelectWinner(ctx, broadcast.WorkspaceID, broadcast.ID)
+	if err != nil {
+		return fmt.Errorf("auto winner evaluation failed: %w", err)
+	}
+
+	// Update task state to proceed to winner phase
+	broadcastState.Phase = "winner"
+
+	o.logger.WithFields(map[string]interface{}{
+		"broadcast_id":    broadcast.ID,
+		"winner_template": winnerTemplateID,
+	}).Info("Auto winner evaluation completed successfully")
+
+	return nil
 }

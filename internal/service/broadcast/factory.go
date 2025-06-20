@@ -68,6 +68,13 @@ func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 	messageSender := f.CreateMessageSender()
 	timeProvider := NewRealTimeProvider()
 
+	// Create AB test evaluator
+	abTestEvaluator := NewABTestEvaluator(
+		f.messageHistoryRepo,
+		f.broadcastRepo,
+		f.logger,
+	)
+
 	return NewBroadcastOrchestrator(
 		messageSender,
 		f.broadcastRepo,
@@ -75,6 +82,7 @@ func (f *Factory) CreateOrchestrator() BroadcastOrchestratorInterface {
 		f.contactRepo,
 		f.taskRepo,
 		f.workspaceRepo,
+		abTestEvaluator,
 		f.logger,
 		f.config,
 		timeProvider,

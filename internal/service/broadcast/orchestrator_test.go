@@ -46,6 +46,7 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		nil, // abTestEvaluator not needed for tests
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -98,6 +99,7 @@ func TestBroadcastOrchestrator_LoadTemplates(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		nil, // abTestEvaluator not needed for tests
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -189,6 +191,7 @@ func TestBroadcastOrchestrator_ValidateTemplates(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		nil, // abTestEvaluator not needed for tests
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -300,6 +303,7 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		nil, // abTestEvaluator not needed for tests,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -362,6 +366,7 @@ func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		nil, // abTestEvaluator not needed for tests,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -501,6 +506,7 @@ func TestSaveProgressState(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		nil, // abTestEvaluator not needed for tests,
 		mockLogger,
 		nil, // Use default config
 		mockTimeProvider,
@@ -647,7 +653,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					{Contact: &domain.Contact{Email: "user1@example.com"}, ListID: "list-1"},
 					{Contact: &domain.Contact{Email: "user2@example.com"}, ListID: "list-1"},
 				}
-				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 100, 0).Return(recipients, nil)
+				// Expect batch size of 2 because remainingInPhase (2) < FetchBatchSize (100)
+				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 2, 0).Return(recipients, nil)
 
 				// Mock message sending
 				mockMessageSender.EXPECT().SendBatch(
@@ -780,7 +787,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 				recipients := []*domain.ContactWithList{
 					{Contact: &domain.Contact{Email: "user1@example.com"}, ListID: "list-1"},
 				}
-				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 100, 0).Return(recipients, nil)
+				// Expect batch size of 1 because remainingInPhase (1) < FetchBatchSize (100)
+				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 1, 0).Return(recipients, nil)
 
 				// Mock message sending
 				mockMessageSender.EXPECT().SendBatch(
@@ -1105,8 +1113,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 				}
 				mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "workspace-123", "template-1", int64(0)).Return(template, nil)
 
-				// Recipient fetch failure
-				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 100, 0).Return(nil, fmt.Errorf("database error"))
+				// Recipient fetch failure - expect batch size of 2 because remainingInPhase (2) < FetchBatchSize (100)
+				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 2, 0).Return(nil, fmt.Errorf("database error"))
 
 				return mockMessageSender, mockBroadcastRepo, mockTemplateRepo, mockContactRepo, mockTaskRepo, mockWorkspaceRepo, mockLogger, mockTimeProvider
 			},
@@ -1230,7 +1238,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 				recipients := []*domain.ContactWithList{
 					{Contact: &domain.Contact{Email: "user1@example.com"}, ListID: "list-1"},
 				}
-				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 100, 0).Return(recipients, nil)
+				// Expect batch size of 1 because remainingInPhase (1) < FetchBatchSize (100)
+				mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", broadcast.Audience, 1, 0).Return(recipients, nil)
 
 				// Mock message sending
 				mockMessageSender.EXPECT().SendBatch(
@@ -1294,6 +1303,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 				mockContactRepo,
 				mockTaskRepo,
 				mockWorkspaceRepo,
+				nil, // abTestEvaluator not needed for tests,
 				mockLogger,
 				config,
 				mockTimeProvider,

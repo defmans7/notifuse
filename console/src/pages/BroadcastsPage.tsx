@@ -432,186 +432,184 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
 
         {showDetails && (
           <div className="p-6">
-            {/* <Divider /> */}
-
-            <Descriptions
-              bordered={false}
-              size="small"
-              column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
-            >
-              {broadcast.started_at && (
-                <Descriptions.Item label="Started">
-                  {dayjs(broadcast.started_at).fromNow()}
-                </Descriptions.Item>
-              )}
-
-              {broadcast.completed_at && (
-                <Descriptions.Item label="Completed">
-                  {dayjs(broadcast.completed_at).fromNow()}
-                </Descriptions.Item>
-              )}
-
-              {broadcast.paused_at && (
-                <Descriptions.Item label="Paused">
-                  {dayjs(broadcast.paused_at).fromNow()}
-                </Descriptions.Item>
-              )}
-
-              {broadcast.cancelled_at && (
-                <Descriptions.Item label="Cancelled">
-                  {dayjs(broadcast.cancelled_at).fromNow()}
-                </Descriptions.Item>
-              )}
-
-              {/* Audience Information */}
-              {broadcast.audience.segments && broadcast.audience.segments.length > 0 && (
-                <Descriptions.Item label="Segments">
-                  {broadcast.audience.segments.length} segments
-                </Descriptions.Item>
-              )}
-
-              {broadcast.audience.lists && broadcast.audience.lists.length > 0 && (
-                <Descriptions.Item label="Lists">
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {broadcast.audience.lists.map((listId) => {
-                      const list = lists.find((l) => l.id === listId)
-                      return list ? (
-                        <div key={list.id}>{list.name}</div>
-                      ) : (
-                        <div key={listId}>Unknown list ({listId})</div>
-                      )
-                    })}
-                  </Space>
-                </Descriptions.Item>
-              )}
-
-              <Descriptions.Item label="Skip Duplicates">
-                {broadcast.audience.skip_duplicate_emails ? (
-                  <FontAwesomeIcon
-                    icon={faCircleCheck}
-                    className="text-green-500 opacity-70 mt-1"
-                  />
-                ) : (
-                  <FontAwesomeIcon
-                    icon={faCircleXmark}
-                    className="text-orange-500 opacity-70 mt-1"
-                  />
-                )}
-              </Descriptions.Item>
-
-              <Descriptions.Item label="Exclude Unsubscribed">
-                {broadcast.audience.exclude_unsubscribed ? (
-                  <FontAwesomeIcon
-                    icon={faCircleCheck}
-                    className="text-green-500 opacity-70 mt-1"
-                  />
-                ) : (
-                  <FontAwesomeIcon
-                    icon={faCircleXmark}
-                    className="text-orange-500 opacity-70 mt-1"
-                  />
-                )}
-              </Descriptions.Item>
-
-              {broadcast.audience.rate_limit_per_minute && (
-                <Descriptions.Item label="Rate Limit">
-                  {broadcast.audience.rate_limit_per_minute}/min
-                </Descriptions.Item>
-              )}
-
-              {broadcast.utm_parameters &&
-                Object.values(broadcast.utm_parameters).some((v) => v) && (
-                  <Descriptions.Item label="UTM Parameters">
-                    <Tooltip title="utm_source / utm_medium / utm_campaign">
-                      <div>
-                        {broadcast.utm_parameters.source &&
-                          broadcast.utm_parameters.medium &&
-                          broadcast.utm_parameters.campaign && (
-                            <Text>
-                              {broadcast.utm_parameters.source} / {broadcast.utm_parameters.medium}{' '}
-                              / {broadcast.utm_parameters.campaign}
-                            </Text>
-                          )}
-                      </div>
-                    </Tooltip>
-                  </Descriptions.Item>
-                )}
-
-              {/* Schedule Information */}
-              {broadcast.schedule.is_scheduled &&
-                broadcast.schedule.scheduled_date &&
-                broadcast.schedule.scheduled_time && (
-                  <Descriptions.Item label="Scheduled">
-                    {dayjs(
-                      `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
-                    ).format('lll')}
-                    {' in '}
-                    {broadcast.schedule.use_recipient_timezone
-                      ? 'recipients timezone'
-                      : broadcast.schedule.timezone}
-                  </Descriptions.Item>
-                )}
-            </Descriptions>
-
-            <div className="mt-2">
-              <Descriptions
-                bordered={false}
-                size="small"
-                column={{ xxl: 4, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}
-                className="mb-4"
-              >
-                {!broadcast.test_settings.enabled && (
-                  <Descriptions.Item label="Test Sample">
-                    <Badge status="warning" text="A/B Test Disabled" />
-                  </Descriptions.Item>
-                )}
-                {broadcast.test_settings.enabled && (
-                  <Descriptions.Item label="Test Sample">
-                    {broadcast.test_settings.sample_percentage}%
-                  </Descriptions.Item>
-                )}
-
-                {broadcast.test_settings.auto_send_winner &&
-                  broadcast.test_settings.auto_send_winner_metric &&
-                  broadcast.test_settings.test_duration_hours && (
-                    <Descriptions.Item label="Auto-send Winner">
-                      <div className="flex items-center">
-                        <FontAwesomeIcon
-                          icon={faCircleCheck}
-                          className="text-green-500 mr-2"
-                          size="sm"
-                          style={{ opacity: 0.7 }}
-                        />
-                        <span>
-                          After {broadcast.test_settings.test_duration_hours} hours based on highest{' '}
-                          {broadcast.test_settings.auto_send_winner_metric === 'open_rate'
-                            ? 'opens'
-                            : 'clicks'}
-                        </span>
-                      </div>
+            <Row gutter={[24, 16]}>
+              {/* Left Column: Descriptions */}
+              <Col xs={24} lg={12} xl={10}>
+                <Descriptions bordered={false} size="small" column={1}>
+                  {broadcast.started_at && (
+                    <Descriptions.Item label="Started">
+                      {dayjs(broadcast.started_at).fromNow()}
                     </Descriptions.Item>
                   )}
-              </Descriptions>
 
-              <Row gutter={[16, 16]} className="mt-4">
-                {broadcast.test_settings.variations.map((variation, index) => {
-                  // Calculate column width based on number of variations
-                  // Ensure columns are at least 6 units wide (4 per row maximum)
-                  const variationsCount = broadcast.test_settings.variations.length
-                  const colSpan = Math.max(6, Math.floor(24 / variationsCount))
+                  {broadcast.completed_at && (
+                    <Descriptions.Item label="Completed">
+                      {dayjs(broadcast.completed_at).fromNow()}
+                    </Descriptions.Item>
+                  )}
 
-                  return (
-                    <VariationCard
-                      key={index}
-                      variation={variation}
-                      workspace={currentWorkspace}
-                      colSpan={colSpan}
-                      index={index}
-                    />
-                  )
-                })}
-              </Row>
-            </div>
+                  {broadcast.paused_at && (
+                    <Descriptions.Item label="Paused">
+                      {dayjs(broadcast.paused_at).fromNow()}
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.cancelled_at && (
+                    <Descriptions.Item label="Cancelled">
+                      {dayjs(broadcast.cancelled_at).fromNow()}
+                    </Descriptions.Item>
+                  )}
+
+                  {/* Audience Information */}
+                  {broadcast.audience.segments && broadcast.audience.segments.length > 0 && (
+                    <Descriptions.Item label="Segments">
+                      {broadcast.audience.segments.length} segments
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.audience.lists && broadcast.audience.lists.length > 0 && (
+                    <Descriptions.Item label="Lists">
+                      <Space direction="vertical" style={{ width: '100%' }}>
+                        {broadcast.audience.lists.map((listId) => {
+                          const list = lists.find((l) => l.id === listId)
+                          return list ? (
+                            <div key={list.id}>{list.name}</div>
+                          ) : (
+                            <div key={listId}>Unknown list ({listId})</div>
+                          )
+                        })}
+                      </Space>
+                    </Descriptions.Item>
+                  )}
+
+                  <Descriptions.Item label="Skip Duplicates">
+                    {broadcast.audience.skip_duplicate_emails ? (
+                      <FontAwesomeIcon
+                        icon={faCircleCheck}
+                        className="text-green-500 opacity-70 mt-1"
+                      />
+                    ) : (
+                      <FontAwesomeIcon
+                        icon={faCircleXmark}
+                        className="text-orange-500 opacity-70 mt-1"
+                      />
+                    )}
+                  </Descriptions.Item>
+
+                  <Descriptions.Item label="Exclude Unsubscribed">
+                    {broadcast.audience.exclude_unsubscribed ? (
+                      <FontAwesomeIcon
+                        icon={faCircleCheck}
+                        className="text-green-500 opacity-70 mt-1"
+                      />
+                    ) : (
+                      <FontAwesomeIcon
+                        icon={faCircleXmark}
+                        className="text-orange-500 opacity-70 mt-1"
+                      />
+                    )}
+                  </Descriptions.Item>
+
+                  {broadcast.audience.rate_limit_per_minute && (
+                    <Descriptions.Item label="Rate Limit">
+                      {broadcast.audience.rate_limit_per_minute}/min
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.utm_parameters &&
+                    Object.values(broadcast.utm_parameters).some((v) => v) && (
+                      <Descriptions.Item label="UTM Parameters">
+                        <Tooltip title="utm_source / utm_medium / utm_campaign">
+                          <div>
+                            {broadcast.utm_parameters.source &&
+                              broadcast.utm_parameters.medium &&
+                              broadcast.utm_parameters.campaign && (
+                                <Text>
+                                  {broadcast.utm_parameters.source} /{' '}
+                                  {broadcast.utm_parameters.medium} /{' '}
+                                  {broadcast.utm_parameters.campaign}
+                                </Text>
+                              )}
+                          </div>
+                        </Tooltip>
+                      </Descriptions.Item>
+                    )}
+
+                  {/* Schedule Information */}
+                  {broadcast.schedule.is_scheduled &&
+                    broadcast.schedule.scheduled_date &&
+                    broadcast.schedule.scheduled_time && (
+                      <Descriptions.Item label="Scheduled">
+                        {dayjs(
+                          `${broadcast.schedule.scheduled_date} ${broadcast.schedule.scheduled_time}`
+                        ).format('lll')}
+                        {' in '}
+                        {broadcast.schedule.use_recipient_timezone
+                          ? 'recipients timezone'
+                          : broadcast.schedule.timezone}
+                      </Descriptions.Item>
+                    )}
+
+                  {/* A/B Test Settings */}
+                  {!broadcast.test_settings.enabled && (
+                    <Descriptions.Item label="Test Sample">
+                      <Badge status="warning" text="A/B Test Disabled" />
+                    </Descriptions.Item>
+                  )}
+                  {broadcast.test_settings.enabled && (
+                    <Descriptions.Item label="Test Sample">
+                      {broadcast.test_settings.sample_percentage}%
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.test_settings.auto_send_winner &&
+                    broadcast.test_settings.auto_send_winner_metric &&
+                    broadcast.test_settings.test_duration_hours && (
+                      <Descriptions.Item label="Auto-send Winner">
+                        <div className="flex items-center">
+                          <FontAwesomeIcon
+                            icon={faCircleCheck}
+                            className="text-green-500 mr-2"
+                            size="sm"
+                            style={{ opacity: 0.7 }}
+                          />
+                          <span>
+                            After {broadcast.test_settings.test_duration_hours} hours based on
+                            highest{' '}
+                            {broadcast.test_settings.auto_send_winner_metric === 'open_rate'
+                              ? 'opens'
+                              : 'clicks'}
+                          </span>
+                        </div>
+                      </Descriptions.Item>
+                    )}
+                </Descriptions>
+              </Col>
+
+              {/* Right Column: Templates */}
+              <Col xs={24} lg={12} xl={14}>
+                <div className="mb-2 font-medium text-gray-700">Templates</div>
+                <Row gutter={[16, 16]}>
+                  {broadcast.test_settings.variations.map((variation, index) => {
+                    // Calculate column width based on number of variations
+                    // For the right column, we have the full 24 units to work with
+                    const variationsCount = broadcast.test_settings.variations.length
+                    const colSpan =
+                      variationsCount === 1 ? 24 : Math.max(12, Math.floor(24 / variationsCount))
+
+                    return (
+                      <VariationCard
+                        key={index}
+                        variation={variation}
+                        workspace={currentWorkspace}
+                        colSpan={colSpan}
+                        index={index}
+                      />
+                    )
+                  })}
+                </Row>
+              </Col>
+            </Row>
           </div>
         )}
       </div>

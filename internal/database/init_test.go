@@ -207,6 +207,8 @@ func TestInitializeWorkspaceDatabase(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec("CREATE INDEX IF NOT EXISTS webhook_events_recipient_email_idx").
 			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_broadcasts_status_testing").
+			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err = InitializeWorkspaceDatabase(db)
 		assert.NoError(t, err)
