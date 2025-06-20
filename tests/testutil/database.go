@@ -194,7 +194,6 @@ func (dm *DatabaseManager) CleanupTestData() error {
 		"contacts",
 		"transactional_notifications",
 		"webhook_events",
-		"webhook_registrations",
 		"tasks",
 		"workspaces",
 		"users",

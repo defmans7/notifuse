@@ -194,6 +194,11 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 			Email: "test@example.com",
 		}
 
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
 		expiresAt := time.Now().Add(1 * time.Hour)
 
 		ctx := context.WithValue(
@@ -217,6 +222,10 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 		mockAuthRepo.EXPECT().
 			GetUserByID(ctx, userID).
 			Return(user, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(workspace, nil)
 
 		mockWorkspaceRepo.EXPECT().
 			GetUserWorkspace(ctx, userID, workspaceID).
@@ -246,6 +255,11 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 			Email: "test@example.com",
 		}
 
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
 		ctx := context.WithValue(
 			context.WithValue(
 				context.Background(),
@@ -259,6 +273,10 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 		mockAuthRepo.EXPECT().
 			GetUserByID(ctx, userID).
 			Return(user, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(workspace, nil)
 
 		mockWorkspaceRepo.EXPECT().
 			GetUserWorkspace(ctx, userID, workspaceID).
@@ -307,6 +325,11 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 			Email: "test@example.com",
 		}
 
+		workspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
 		expiresAt := time.Now().Add(1 * time.Hour)
 
 		ctx := context.WithValue(
@@ -330,6 +353,10 @@ func TestAuthService_AuthenticateUserForWorkspace(t *testing.T) {
 		mockAuthRepo.EXPECT().
 			GetUserByID(ctx, userID).
 			Return(user, nil)
+
+		mockWorkspaceRepo.EXPECT().
+			GetByID(ctx, workspaceID).
+			Return(workspace, nil)
 
 		mockWorkspaceRepo.EXPECT().
 			GetUserWorkspace(ctx, userID, workspaceID).
