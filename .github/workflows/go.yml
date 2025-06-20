@@ -91,6 +91,9 @@ jobs:
 
       - name: Run integration tests and generate coverage
         env:
+          # Enable integration tests
+          INTEGRATION_TESTS: true
+          # Test database configuration
           TEST_DB_HOST: localhost
           TEST_DB_USER: notifuse_test
           TEST_DB_PASSWORD: test_password
