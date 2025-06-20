@@ -97,6 +97,42 @@ func (dm *DatabaseManager) GetConfig() *config.DatabaseConfig {
 	return dm.config
 }
 
+// GetWorkspaceDB returns a connection to the workspace database
+func (dm *DatabaseManager) GetWorkspaceDB(workspaceID string) (*sql.DB, error) {
+	// Create workspace database configuration
+	workspaceConfig := &config.DatabaseConfig{
+		Host:     dm.config.Host,
+		Port:     dm.config.Port,
+		User:     dm.config.User,
+		Password: dm.config.Password,
+		DBName:   fmt.Sprintf("%s_ws_%s", dm.config.DBName, workspaceID),
+		SSLMode:  dm.config.SSLMode,
+	}
+
+	// Create workspace database if it doesn't exist
+	_, err := dm.systemDB.Exec(fmt.Sprintf("CREATE DATABASE %s", workspaceConfig.DBName))
+	if err != nil {
+		// Database might already exist, that's OK
+		log.Printf("Note: workspace database might already exist: %v", err)
+	}
+
+	// Connect to workspace database
+	workspaceDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		workspaceConfig.Host, workspaceConfig.Port, workspaceConfig.User, workspaceConfig.Password, workspaceConfig.DBName, workspaceConfig.SSLMode)
+
+	workspaceDB, err := sql.Open("postgres", workspaceDSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to workspace database: %w", err)
+	}
+
+	// Test connection
+	if err := workspaceDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping workspace database: %w", err)
+	}
+
+	return workspaceDB, nil
+}
+
 // SeedTestData seeds the database with test data
 func (dm *DatabaseManager) SeedTestData() error {
 	if !dm.isSetup {

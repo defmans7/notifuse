@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -92,6 +93,12 @@ func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	workspace, err := h.workspaceService.GetWorkspace(r.Context(), workspaceID)
 	if err != nil {
+		// Check if it's a workspace not found error (using errors.As to handle wrapped errors)
+		var workspaceNotFoundErr *domain.ErrWorkspaceNotFound
+		if errors.As(err, &workspaceNotFoundErr) {
+			WriteJSONError(w, "Workspace not found", http.StatusNotFound)
+			return
+		}
 		WriteJSONError(w, "Failed to get workspace", http.StatusInternalServerError)
 		return
 	}
@@ -176,6 +183,12 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		req.Settings,
 	)
 	if err != nil {
+		// Check if it's a workspace not found error (using errors.As to handle wrapped errors)
+		var workspaceNotFoundErr *domain.ErrWorkspaceNotFound
+		if errors.As(err, &workspaceNotFoundErr) {
+			WriteJSONError(w, "Workspace not found", http.StatusNotFound)
+			return
+		}
 		WriteJSONError(w, "Failed to update workspace", http.StatusInternalServerError)
 		return
 	}
@@ -206,6 +219,12 @@ func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) 
 
 	err := h.workspaceService.DeleteWorkspace(r.Context(), req.ID)
 	if err != nil {
+		// Check if it's a workspace not found error (using errors.As to handle wrapped errors)
+		var workspaceNotFoundErr *domain.ErrWorkspaceNotFound
+		if errors.As(err, &workspaceNotFoundErr) {
+			WriteJSONError(w, "Workspace not found", http.StatusNotFound)
+			return
+		}
 		WriteJSONError(w, "Failed to delete workspace", http.StatusInternalServerError)
 		return
 	}
@@ -230,6 +249,12 @@ func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request)
 	// Use the new method that includes emails
 	members, err := h.workspaceService.GetWorkspaceMembersWithEmail(r.Context(), workspaceID)
 	if err != nil {
+		// Check if it's a workspace not found error (using errors.As to handle wrapped errors)
+		var workspaceNotFoundErr *domain.ErrWorkspaceNotFound
+		if errors.As(err, &workspaceNotFoundErr) {
+			WriteJSONError(w, "Workspace not found", http.StatusNotFound)
+			return
+		}
 		WriteJSONError(w, "Failed to get workspace members", http.StatusInternalServerError)
 		return
 	}

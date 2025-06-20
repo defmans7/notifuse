@@ -95,7 +95,7 @@ func (r *workspaceRepository) GetByID(ctx context.Context, id string) (*domain.W
 	`
 	workspace, err := domain.ScanWorkspace(r.systemDB.QueryRowContext(ctx, query, id))
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("workspace not found")
+		return nil, &domain.ErrWorkspaceNotFound{WorkspaceID: id}
 	}
 	if err != nil {
 		return nil, err
@@ -167,7 +167,7 @@ func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Work
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("workspace not found")
+		return &domain.ErrWorkspaceNotFound{WorkspaceID: workspace.ID}
 	}
 
 	if err := workspace.AfterLoad(r.secretKey); err != nil {
@@ -206,7 +206,7 @@ func (r *workspaceRepository) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("workspace not found")
+		return &domain.ErrWorkspaceNotFound{WorkspaceID: id}
 	}
 	return nil
 }

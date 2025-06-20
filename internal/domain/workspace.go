@@ -658,6 +658,15 @@ func (e *ErrUnauthorized) Error() string {
 	return e.Message
 }
 
+// ErrWorkspaceNotFound is returned when a workspace is not found
+type ErrWorkspaceNotFound struct {
+	WorkspaceID string
+}
+
+func (e *ErrWorkspaceNotFound) Error() string {
+	return fmt.Sprintf("workspace not found: %s", e.WorkspaceID)
+}
+
 // WorkspaceServiceInterface defines the interface for workspace operations
 type WorkspaceServiceInterface interface {
 	CreateWorkspace(ctx context.Context, id, name, websiteURL, logoURL, coverURL, timezone string, fileManager FileManagerSettings) (*Workspace, error)

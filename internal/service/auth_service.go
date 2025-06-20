@@ -91,7 +91,14 @@ func (s *AuthService) AuthenticateUserForWorkspace(ctx context.Context, workspac
 	if err != nil {
 		return ctx, nil, err
 	}
-	// get workspace user
+
+	// First check if the workspace exists - this will return ErrWorkspaceNotFound if it doesn't exist
+	_, err = s.workspaceRepo.GetByID(ctx, workspaceID)
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	// Then check if the user is a member of the workspace
 	_, err = s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
 	if err != nil {
 		return ctx, nil, err
