@@ -12,6 +12,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/app"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
@@ -21,23 +22,16 @@ var osExit = os.Exit
 // For testing purposes - allows us to mock the signal channel
 var signalNotify = signal.Notify
 
-// AppInterface definition is now in app.go
-
 // NewAppFunc defines the function signature for creating a new app
-type NewAppFunc func(cfg *config.Config, opts ...AppOption) AppInterface
-
-// Default implementation of NewApp
-var NewApp NewAppFunc = func(cfg *config.Config, opts ...AppOption) AppInterface {
-	return NewRealApp(cfg, opts...)
-}
+type NewAppFunc func(cfg *config.Config, opts ...app.AppOption) app.AppInterface
 
 // runServer contains the core server logic, extracted for testability
 func runServer(cfg *config.Config, appLogger logger.Logger) error {
 	// Create app instance
-	app := NewApp(cfg, WithLogger(appLogger))
+	appInstance := app.NewApp(cfg, app.WithLogger(appLogger))
 
 	// Initialize all components
-	if err := app.Initialize(); err != nil {
+	if err := appInstance.Initialize(); err != nil {
 		appLogger.WithField("error", err.Error()).Fatal(err.Error())
 		return err
 	}
@@ -50,7 +44,7 @@ func runServer(cfg *config.Config, appLogger logger.Logger) error {
 	serverError := make(chan error, 1)
 	go func() {
 		appLogger.Info("Server started successfully")
-		serverError <- app.Start()
+		serverError <- appInstance.Start()
 	}()
 
 	// Wait for shutdown signal or server error
@@ -68,7 +62,7 @@ func runServer(cfg *config.Config, appLogger logger.Logger) error {
 		defer cancel()
 
 		// Attempt graceful shutdown
-		if err := app.Shutdown(ctx); err != nil {
+		if err := appInstance.Shutdown(ctx); err != nil {
 			appLogger.WithField("error", err.Error()).Error("Error during shutdown")
 			return err
 		}

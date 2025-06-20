@@ -15,7 +15,8 @@ import {
   Descriptions,
   Progress,
   Popover,
-  Alert
+  Alert,
+  Popconfirm
 } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import {
@@ -73,6 +74,12 @@ const getStatusBadge = (status: BroadcastStatus) => {
       return <Badge status="error" text="Cancelled" />
     case 'failed':
       return <Badge status="error" text="Failed" />
+    case 'testing':
+      return <Badge status="processing" text="A/B Testing" />
+    case 'test_completed':
+      return <Badge status="success" text="Test Completed" />
+    case 'winner_selected':
+      return <Badge status="success" text="Winner Selected" />
     default:
       return <Badge status="default" text={status} />
   }
@@ -84,9 +91,20 @@ interface VariationCardProps {
   workspace: Workspace
   colSpan: number
   index: number
+  broadcast: Broadcast
+  onSelectWinner?: (templateId: string) => void
+  testResults?: any
 }
 
-const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, colSpan, index }) => {
+const VariationCard: React.FC<VariationCardProps> = ({
+  variation,
+  workspace,
+  colSpan,
+  index,
+  broadcast,
+  onSelectWinner,
+  testResults
+}) => {
   const emailProvider = workspace.integrations?.find(
     (i) =>
       i.id ===
@@ -99,24 +117,52 @@ const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, col
     (s) => s.id === variation.template?.email?.sender_id
   )
 
+  // Get test results for this variation
+  const variationResult = testResults?.variation_results?.[variation.template_id]
+  const isWinner = testResults?.winning_template === variation.template_id
+  const isRecommendedWinner = testResults?.recommended_winner === variation.template_id
+  const canSelectWinner =
+    broadcast.status === 'test_completed' && !broadcast.test_settings.auto_send_winner
+
   return (
     <Col span={colSpan} key={index}>
       <Card
         size="small"
-        title={`Variation ${index + 1}: ${variation.template?.name || 'Untitled'}`}
+        title={
+          <Space>
+            {`Variation ${index + 1}: ${variation.template?.name || 'Untitled'}`}
+            {isWinner && <Badge status="success" text="Winner" />}
+            {isRecommendedWinner && !isWinner && <Badge status="processing" text="Recommended" />}
+          </Space>
+        }
         type="inner"
         extra={
-          variation.template ? (
-            <TemplatePreviewDrawer record={variation.template as any} workspace={workspace}>
-              <Button size="small" type="primary" ghost>
+          <Space>
+            {variation.template ? (
+              <TemplatePreviewDrawer record={variation.template as any} workspace={workspace}>
+                <Button size="small" type="primary" ghost>
+                  Preview
+                </Button>
+              </TemplatePreviewDrawer>
+            ) : (
+              <Button size="small" type="primary" ghost disabled>
                 Preview
               </Button>
-            </TemplatePreviewDrawer>
-          ) : (
-            <Button size="small" type="primary" ghost disabled>
-              Preview
-            </Button>
-          )
+            )}
+            {canSelectWinner && variation.template_id && onSelectWinner && (
+              <Popconfirm
+                title="Select Winner"
+                description={`Are you sure you want to select "${variation.template?.name || 'this variation'}" as the winner? The broadcast will be sent to the remaining recipients.`}
+                onConfirm={() => onSelectWinner(variation.template_id)}
+                okText="Yes, Select Winner"
+                cancelText="Cancel"
+              >
+                <Button size="small" type="primary">
+                  Select Winner
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
         }
       >
         <Space direction="vertical" size="small">
@@ -144,7 +190,7 @@ const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, col
             <Text>Reply-to: {variation.template?.email?.reply_to}</Text>
           )}
 
-          {variation.metrics && (
+          {(variation.metrics || variationResult) && (
             <>
               <Divider style={{ margin: '8px 0' }} />
               <div className="grid grid-cols-3 gap-2 mt-2">
@@ -153,7 +199,18 @@ const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, col
                     <FontAwesomeIcon icon={faEye} className="mr-1" style={{ opacity: 0.7 }} /> Opens
                   </div>
                   <div>
-                    {variation.metrics.opens} ({(variation.metrics.open_rate * 100).toFixed(1)}%)
+                    {variationResult ? (
+                      <>
+                        {variationResult.opens} ({(variationResult.open_rate * 100).toFixed(1)}%)
+                      </>
+                    ) : variation.metrics ? (
+                      <>
+                        {variation.metrics.opens} ({(variation.metrics.open_rate * 100).toFixed(1)}
+                        %)
+                      </>
+                    ) : (
+                      '0 (0.0%)'
+                    )}
                   </div>
                 </div>
                 <div>
@@ -166,7 +223,18 @@ const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, col
                     Clicks
                   </div>
                   <div>
-                    {variation.metrics.clicks} ({(variation.metrics.click_rate * 100).toFixed(1)}%)
+                    {variationResult ? (
+                      <>
+                        {variationResult.clicks} ({(variationResult.click_rate * 100).toFixed(1)}%)
+                      </>
+                    ) : variation.metrics ? (
+                      <>
+                        {variation.metrics.clicks} (
+                        {(variation.metrics.click_rate * 100).toFixed(1)}%)
+                      </>
+                    ) : (
+                      '0 (0.0%)'
+                    )}
                   </div>
                 </div>
                 <div>
@@ -179,7 +247,17 @@ const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, col
                     Delivered
                   </div>
                   <div>
-                    {variation.metrics.delivered} of {variation.metrics.recipients}
+                    {variationResult ? (
+                      <>
+                        {variationResult.delivered} of {variationResult.recipients}
+                      </>
+                    ) : variation.metrics ? (
+                      <>
+                        {variation.metrics.delivered} of {variation.metrics.recipients}
+                      </>
+                    ) : (
+                      '0 of 0'
+                    )}
                   </div>
                 </div>
               </div>
@@ -218,6 +296,8 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
   isFirst = false
 }) => {
   const [showDetails, setShowDetails] = useState(isFirst)
+  const queryClient = useQueryClient()
+  const { message } = App.useApp()
 
   // Fetch task associated with this broadcast
   const { data: task, isLoading: isTaskLoading } = useQuery({
@@ -234,6 +314,40 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
           ? 30000 // Refetch every 30 seconds for scheduled broadcasts
           : false // Don't auto-refetch for other statuses
   })
+
+  // Fetch test results if broadcast has A/B testing enabled and is in testing phase
+  const { data: testResults } = useQuery({
+    queryKey: ['testResults', workspaceId, broadcast.id],
+    queryFn: () => {
+      return broadcastApi.getTestResults({
+        workspace_id: workspaceId,
+        id: broadcast.id
+      })
+    },
+    enabled:
+      broadcast.test_settings.enabled &&
+      ['testing', 'test_completed', 'winner_selected'].includes(broadcast.status),
+    refetchInterval: broadcast.status === 'testing' ? 10000 : false // Refetch every 10 seconds during testing
+  })
+
+  // Handler for selecting winner
+  const handleSelectWinner = async (templateId: string) => {
+    try {
+      await broadcastApi.selectWinner({
+        workspace_id: workspaceId,
+        id: broadcast.id,
+        template_id: templateId
+      })
+      message.success(
+        'Winner selected successfully! The broadcast will be sent to remaining recipients.'
+      )
+      queryClient.invalidateQueries({ queryKey: ['broadcasts', workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['testResults', workspaceId, broadcast.id] })
+    } catch (error) {
+      message.error('Failed to select winner')
+      console.error(error)
+    }
+  }
 
   // Helper function to render task status badge
   const getTaskStatusBadge = (status: string) => {
@@ -594,6 +708,41 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                         </div>
                       </Descriptions.Item>
                     )}
+
+                  {/* Test Results Summary */}
+                  {testResults && testResults.test_started_at && (
+                    <Descriptions.Item label="Test Started">
+                      {dayjs(testResults.test_started_at).fromNow()}
+                    </Descriptions.Item>
+                  )}
+
+                  {testResults && testResults.test_completed_at && (
+                    <Descriptions.Item label="Test Completed">
+                      {dayjs(testResults.test_completed_at).fromNow()}
+                    </Descriptions.Item>
+                  )}
+
+                  {testResults && testResults.recommended_winner && (
+                    <Descriptions.Item label="Recommended Winner">
+                      <Space>
+                        <Badge status="processing" text="Recommended" />
+                        {Object.values(testResults.variation_results).find(
+                          (result) => result.template_id === testResults.recommended_winner
+                        )?.template_name || 'Unknown'}
+                      </Space>
+                    </Descriptions.Item>
+                  )}
+
+                  {testResults && testResults.winning_template && (
+                    <Descriptions.Item label="Selected Winner">
+                      <Space>
+                        <Badge status="success" text="Winner" />
+                        {Object.values(testResults.variation_results).find(
+                          (result) => result.template_id === testResults.winning_template
+                        )?.template_name || 'Unknown'}
+                      </Space>
+                    </Descriptions.Item>
+                  )}
                 </Descriptions>
               </Col>
 
@@ -608,6 +757,9 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                         workspace={currentWorkspace}
                         colSpan={24}
                         index={index}
+                        broadcast={broadcast}
+                        onSelectWinner={handleSelectWinner}
+                        testResults={testResults}
                       />
                     )
                   })}

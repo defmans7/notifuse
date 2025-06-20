@@ -90,6 +90,9 @@ export type BroadcastStatus =
   | 'sent'
   | 'cancelled'
   | 'failed'
+  | 'testing'
+  | 'test_completed'
+  | 'winner_selected'
 
 export interface Broadcast {
   id: string
@@ -201,6 +204,39 @@ export interface DeleteBroadcastRequest {
   id: string
 }
 
+export interface GetTestResultsRequest {
+  workspace_id: string
+  id: string
+}
+
+export interface SelectWinnerRequest {
+  workspace_id: string
+  id: string
+  template_id: string
+}
+
+export interface VariationResult {
+  template_id: string
+  template_name: string
+  recipients: number
+  delivered: number
+  opens: number
+  clicks: number
+  open_rate: number
+  click_rate: number
+}
+
+export interface TestResultsResponse {
+  broadcast_id: string
+  status: string
+  test_started_at?: string
+  test_completed_at?: string
+  variation_results: Record<string, VariationResult>
+  recommended_winner?: string
+  winning_template?: string
+  is_auto_send_winner: boolean
+}
+
 export const broadcastApi = {
   list: async (params: ListBroadcastsRequest): Promise<ListBroadcastsResponse> => {
     const searchParams = new URLSearchParams()
@@ -254,5 +290,17 @@ export const broadcastApi = {
 
   delete: async (params: DeleteBroadcastRequest): Promise<{ success: boolean }> => {
     return api.post<{ success: boolean }>('/api/broadcasts.delete', params)
+  },
+
+  getTestResults: async (params: GetTestResultsRequest): Promise<TestResultsResponse> => {
+    const searchParams = new URLSearchParams()
+    searchParams.append('workspace_id', params.workspace_id)
+    searchParams.append('id', params.id)
+
+    return api.get<TestResultsResponse>(`/api/broadcasts.getTestResults?${searchParams.toString()}`)
+  },
+
+  selectWinner: async (params: SelectWinnerRequest): Promise<{ success: boolean }> => {
+    return api.post<{ success: boolean }>('/api/broadcasts.selectWinner', params)
   }
 }
