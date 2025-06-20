@@ -604,12 +604,12 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 					Enabled: true,
 					Variations: []domain.BroadcastVariation{
 						{
-							ID:         "var1",
-							TemplateID: "template1",
+							VariationName: "var1",
+							TemplateID:    "template1",
 						},
 						{
-							ID:         "var2",
-							TemplateID: "template2",
+							VariationName: "var2",
+							TemplateID:    "template2",
 						},
 					},
 				},
@@ -691,8 +691,8 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 					Enabled: true,
 					Variations: []domain.BroadcastVariation{
 						{
-							ID:         "var1",
-							TemplateID: "template1",
+							VariationName: "var1",
+							TemplateID:    "template1",
 						},
 					},
 				},
@@ -967,8 +967,8 @@ func TestBroadcastService_ListBroadcasts(t *testing.T) {
 					Enabled: true,
 					Variations: []domain.BroadcastVariation{
 						{
-							ID:         "var1",
-							TemplateID: "", // Empty template ID
+							VariationName: "var1",
+							TemplateID:    "", // Empty template ID
 						},
 					},
 				},
@@ -2558,7 +2558,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		workspaceID := "ws123"
 		broadcastID := "bcast123"
 		recipientEmail := "test@example.com"
-		variationID := "variation123"
+		templateID := "template123"
 		emailSender := domain.NewEmailSender("test@example.com", "Test Sender")
 
 		// Create the request
@@ -2566,7 +2566,7 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			WorkspaceID:    workspaceID,
 			BroadcastID:    broadcastID,
 			RecipientEmail: recipientEmail,
-			VariationID:    variationID,
+			TemplateID:     templateID,
 		}
 
 		// Mock auth service to authenticate the user
@@ -2583,8 +2583,8 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 			TestSettings: domain.BroadcastTestSettings{
 				Variations: []domain.BroadcastVariation{
 					{
-						ID:         variationID,
-						TemplateID: "template123",
+						VariationName: "variation123",
+						TemplateID:    templateID,
 					},
 				},
 			},
@@ -2728,14 +2728,14 @@ func TestBroadcastService_SendToIndividual(t *testing.T) {
 		workspaceID := "ws123"
 		broadcastID := "bcast123"
 		recipientEmail := "test@example.com"
-		variationID := "variation123"
+		templateID := "template123"
 		emailSender := domain.NewEmailSender("test@example.com", "Test Sender")
 		// Create the request
 		request := &domain.SendToIndividualRequest{
 			WorkspaceID:    workspaceID,
 			BroadcastID:    broadcastID,
 			RecipientEmail: recipientEmail,
-			VariationID:    variationID,
+			TemplateID:     templateID,
 		}
 
 		// Mock auth service to authenticate the user

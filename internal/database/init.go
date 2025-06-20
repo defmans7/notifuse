@@ -154,9 +154,11 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			test_settings JSONB NOT NULL,
 			utm_parameters JSONB,
 			metadata JSONB,
-			winning_variation VARCHAR(32),
+			winning_template VARCHAR(32),
 			test_sent_at TIMESTAMP WITH TIME ZONE,
 			winner_sent_at TIMESTAMP WITH TIME ZONE,
+			test_phase_recipient_count INTEGER DEFAULT 0,
+			winner_phase_recipient_count INTEGER DEFAULT 0,
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			started_at TIMESTAMP WITH TIME ZONE,
@@ -220,6 +222,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS webhook_events_type_idx ON webhook_events (type)`,
 		`CREATE INDEX IF NOT EXISTS webhook_events_timestamp_idx ON webhook_events (timestamp DESC)`,
 		`CREATE INDEX IF NOT EXISTS webhook_events_recipient_email_idx ON webhook_events (recipient_email)`,
+		`CREATE INDEX IF NOT EXISTS idx_broadcasts_status_testing ON broadcasts(status) WHERE status IN ('testing', 'test_completed', 'winner_selected')`,
 	}
 
 	// Run all table creation queries

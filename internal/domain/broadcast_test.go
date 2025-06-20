@@ -69,8 +69,8 @@ func createValidBroadcastWithTest() domain.Broadcast {
 		TestDurationHours:    24,
 		Variations: []domain.BroadcastVariation{
 			{
-				ID:         "variation1",
-				TemplateID: "template123",
+				VariationName: "variation1",
+				TemplateID:    "template123",
 				Metrics: &domain.VariationMetrics{
 					Recipients:   50,
 					Delivered:    48,
@@ -82,8 +82,8 @@ func createValidBroadcastWithTest() domain.Broadcast {
 				},
 			},
 			{
-				ID:         "variation2",
-				TemplateID: "template123",
+				VariationName: "variation2",
+				TemplateID:    "template123",
 				Metrics: &domain.VariationMetrics{
 					Recipients:   50,
 					Delivered:    47,
@@ -263,8 +263,8 @@ func TestBroadcast_Validate(t *testing.T) {
 				variations := make([]domain.BroadcastVariation, 9)
 				for i := 0; i < 9; i++ {
 					variations[i] = domain.BroadcastVariation{
-						ID:         "variation" + string(rune(i+49)),
-						TemplateID: "template123",
+						VariationName: "variation" + string(rune(i+49)),
+						TemplateID:    "template123",
 					}
 				}
 				b.TestSettings.Variations = variations
@@ -846,7 +846,7 @@ func TestSendToIndividualRequest_Validate(t *testing.T) {
 				WorkspaceID:    "workspace123",
 				BroadcastID:    "broadcast123",
 				RecipientEmail: "recipient@123.com",
-				VariationID:    "variation1",
+				TemplateID:     "template1",
 			},
 			wantErr: false,
 		},
@@ -1070,12 +1070,12 @@ func TestBroadcastTestSettings_ValueScan(t *testing.T) {
 		TestDurationHours:    24,
 		Variations: []domain.BroadcastVariation{
 			{
-				ID:         "variation1",
-				TemplateID: "template123",
+				VariationName: "variation1",
+				TemplateID:    "template123",
 			},
 			{
-				ID:         "variation2",
-				TemplateID: "template456",
+				VariationName: "variation2",
+				TemplateID:    "template456",
 			},
 		},
 	}
@@ -1097,7 +1097,7 @@ func TestBroadcastTestSettings_ValueScan(t *testing.T) {
 	assert.Equal(t, original.AutoSendWinnerMetric, scanned.AutoSendWinnerMetric)
 	assert.Equal(t, original.TestDurationHours, scanned.TestDurationHours)
 	assert.Equal(t, len(original.Variations), len(scanned.Variations))
-	assert.Equal(t, original.Variations[0].ID, scanned.Variations[0].ID)
+	assert.Equal(t, original.Variations[0].VariationName, scanned.Variations[0].VariationName)
 	assert.Equal(t, original.Variations[0].TemplateID, scanned.Variations[0].TemplateID)
 
 	// Test scanning nil value
@@ -1116,8 +1116,8 @@ func TestBroadcastTestSettings_ValueScan(t *testing.T) {
 func TestBroadcastVariation_ValueScan(t *testing.T) {
 	// Test serialization
 	original := domain.BroadcastVariation{
-		ID:         "variation1",
-		TemplateID: "template123",
+		VariationName: "variation1",
+		TemplateID:    "template123",
 		Metrics: &domain.VariationMetrics{
 			Recipients:   50,
 			Delivered:    48,
@@ -1140,7 +1140,7 @@ func TestBroadcastVariation_ValueScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the scanned value matches the original
-	assert.Equal(t, original.ID, scanned.ID)
+	assert.Equal(t, original.VariationName, scanned.VariationName)
 	assert.Equal(t, original.TemplateID, scanned.TemplateID)
 	assert.NotNil(t, scanned.Metrics)
 	assert.Equal(t, original.Metrics.Recipients, scanned.Metrics.Recipients)

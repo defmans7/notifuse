@@ -57,6 +57,9 @@ func (h *BroadcastHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/broadcasts.cancel", requireAuth(http.HandlerFunc(h.HandleCancel)))
 	mux.Handle("/api/broadcasts.sendToIndividual", requireAuth(http.HandlerFunc(h.HandleSendToIndividual)))
 	mux.Handle("/api/broadcasts.delete", requireAuth(http.HandlerFunc(h.HandleDelete)))
+	// A/B Testing endpoints
+	mux.Handle("/api/broadcasts.getTestResults", requireAuth(http.HandlerFunc(h.HandleGetTestResults)))
+	mux.Handle("/api/broadcasts.selectWinner", restrictedInDemo(requireAuth(http.HandlerFunc(h.HandleSelectWinner))))
 }
 
 // HandleList handles the broadcast list request
@@ -424,6 +427,74 @@ func (h *BroadcastHandler) HandleDelete(w http.ResponseWriter, r *http.Request) 
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to delete broadcast")
 		WriteJSONError(w, "Failed to delete broadcast", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
+}
+
+// HandleGetTestResults handles the A/B test results request
+func (h *BroadcastHandler) HandleGetTestResults(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req domain.GetTestResultsRequest
+	if err := req.FromURLParams(r.URL.Query()); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	results, err := h.service.GetTestResults(r.Context(), req.WorkspaceID, req.ID)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"workspace_id": req.WorkspaceID,
+			"broadcast_id": req.ID,
+			"error":        err.Error(),
+		}).Error("Failed to get test results")
+		WriteJSONError(w, "Failed to get test results", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, results)
+}
+
+// HandleSelectWinner handles the winner selection request
+func (h *BroadcastHandler) HandleSelectWinner(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req domain.SelectWinnerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err := h.service.SelectWinner(r.Context(), req.WorkspaceID, req.ID, req.TemplateID)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"workspace_id": req.WorkspaceID,
+			"broadcast_id": req.ID,
+			"template_id":  req.TemplateID,
+			"error":        err.Error(),
+		}).Error("Failed to select winner")
+		WriteJSONError(w, "Failed to select winner", http.StatusInternalServerError)
 		return
 	}
 

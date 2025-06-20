@@ -448,9 +448,11 @@ func (a *App) InitServices() error {
 		a.emailService,
 		a.contactRepo,
 		a.templateService,
-		nil, // No taskService yet
+		nil,        // No taskService yet
+		a.taskRepo, // Task repository
 		a.authService,
 		a.eventBus,           // Pass the event bus
+		a.messageHistoryRepo, // Message history repository
 		a.config.APIEndpoint, // API endpoint for tracking URLs
 	)
 

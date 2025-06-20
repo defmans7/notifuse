@@ -51,7 +51,7 @@ export interface Template {
 }
 
 export interface BroadcastVariation {
-  id: string
+  variation_name: string
   template_id: string
   metrics?: VariationMetrics
   template?: Template // Template joined from server when with_templates is true
@@ -109,7 +109,7 @@ export interface Broadcast {
   total_bounced?: number
   total_complained?: number
   total_unsubscribed?: number
-  winning_variation?: string
+  winning_template?: string
   test_sent_at?: string
   winner_sent_at?: string
   created_at: string
@@ -193,7 +193,7 @@ export interface SendToIndividualRequest {
   workspace_id: string
   broadcast_id: string
   recipient_email: string
-  variation_id?: string
+  template_id?: string
 }
 
 export interface DeleteBroadcastRequest {

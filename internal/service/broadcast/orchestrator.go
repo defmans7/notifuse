@@ -436,9 +436,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			Progress: 0,
 			Message:  "Starting broadcast",
 			SendBroadcast: &domain.SendBroadcastState{
-				SentCount:       0,
-				FailedCount:     0,
-				RecipientOffset: 0, // Track how many recipients we've processed
+				SentCount:                 0,
+				FailedCount:               0,
+				RecipientOffset:           0,        // Track how many recipients we've processed
+				Phase:                     "single", // Default phase
+				TestPhaseCompleted:        false,
+				TestRecipientOffset:       0,
+				WinnerPhaseRecipientCount: 0,
 			},
 		}
 	}
@@ -446,9 +450,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	// Initialize the SendBroadcast state if it doesn't exist yet
 	if task.State.SendBroadcast == nil {
 		task.State.SendBroadcast = &domain.SendBroadcastState{
-			SentCount:       0,
-			FailedCount:     0,
-			RecipientOffset: 0,
+			SentCount:                 0,
+			FailedCount:               0,
+			RecipientOffset:           0,
+			Phase:                     "single", // Default phase
+			TestPhaseCompleted:        false,
+			TestRecipientOffset:       0,
+			WinnerPhaseRecipientCount: 0,
 		}
 	}
 
@@ -563,11 +571,70 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		return false, err
 	}
 
-	// Phase 2: Load templates
-	templateIDs := make([]string, len(broadcast.TestSettings.Variations))
-	for i, variation := range broadcast.TestSettings.Variations {
-		templateIDs[i] = variation.TemplateID
+	// Determine the current phase based on broadcast status and task state
+	if broadcastState.Phase == "" || broadcastState.Phase == "single" {
+		if broadcast.TestSettings.Enabled && len(broadcast.TestSettings.Variations) > 1 {
+			// This is an A/B test
+			if broadcast.Status == domain.BroadcastStatusSending {
+				if broadcast.WinningTemplate != "" {
+					// Winner already selected, proceed to winner phase
+					broadcastState.Phase = "winner"
+				} else {
+					// Start test phase
+					broadcastState.Phase = "test"
+				}
+			} else if broadcast.Status == domain.BroadcastStatusWinnerSelected {
+				// Winner has been selected, proceed to winner phase
+				broadcastState.Phase = "winner"
+			}
+		} else {
+			// Single template broadcast
+			broadcastState.Phase = "single"
+		}
 	}
+
+	// Calculate recipient counts based on phase
+	testRecipientCount := 0
+	winnerRecipientCount := 0
+
+	if broadcastState.Phase == "test" || broadcastState.Phase == "winner" {
+		// Calculate test sample size
+		testRecipientCount = (broadcastState.TotalRecipients * broadcast.TestSettings.SamplePercentage) / 100
+		if testRecipientCount < 1 {
+			testRecipientCount = 1 // Minimum test size
+		}
+		winnerRecipientCount = broadcastState.TotalRecipients - testRecipientCount
+
+		// Store calculated counts in state
+		broadcastState.TestPhaseRecipientCount = testRecipientCount
+		broadcastState.WinnerPhaseRecipientCount = winnerRecipientCount
+	}
+
+	// Determine which templates to load based on phase
+	var templateIDs []string
+
+	if broadcastState.Phase == "test" {
+		// Load all variations for testing
+		templateIDs = make([]string, len(broadcast.TestSettings.Variations))
+		for i, variation := range broadcast.TestSettings.Variations {
+			templateIDs[i] = variation.TemplateID
+		}
+	} else if broadcastState.Phase == "winner" {
+		// Load only the winning template
+		if broadcast.WinningTemplate != "" {
+			templateIDs = []string{broadcast.WinningTemplate}
+		} else {
+			return false, fmt.Errorf("winner phase but no winning template selected")
+		}
+	} else {
+		// Single template broadcast
+		templateIDs = make([]string, len(broadcast.TestSettings.Variations))
+		for i, variation := range broadcast.TestSettings.Variations {
+			templateIDs[i] = variation.TemplateID
+		}
+	}
+
+	// Phase 2: Load templates
 
 	templates, templatesErr := o.LoadTemplates(ctx, task.WorkspaceID, templateIDs)
 	if templatesErr != nil {
@@ -602,6 +669,22 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	// Whether we've processed all recipients
 	allDone = false
 
+	// Determine phase-specific limits
+	var recipientLimit int
+	var currentOffset int
+
+	if broadcastState.Phase == "test" {
+		recipientLimit = broadcastState.TestPhaseRecipientCount
+		currentOffset = int(broadcastState.TestRecipientOffset)
+	} else if broadcastState.Phase == "winner" {
+		recipientLimit = broadcastState.WinnerPhaseRecipientCount
+		currentOffset = int(broadcastState.WinnerRecipientOffset)
+	} else {
+		// Single template - process all recipients
+		recipientLimit = broadcastState.TotalRecipients
+		currentOffset = int(broadcastState.RecipientOffset)
+	}
+
 	// Process until timeout or completion
 	for {
 		select {
@@ -614,14 +697,45 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			// Continue processing
 		}
 
+		// Check if phase is complete
+		if broadcastState.Phase == "test" && int(broadcastState.TestRecipientOffset) >= recipientLimit {
+			// Test phase complete - transition to test_completed status
+			allDone = o.handleTestPhaseCompletion(ctx, broadcast, broadcastState)
+			break
+		} else if broadcastState.Phase == "winner" && int(broadcastState.WinnerRecipientOffset) >= recipientLimit {
+			// Winner phase complete
+			allDone = true
+			break
+		} else if broadcastState.Phase == "single" && int(broadcastState.RecipientOffset) >= recipientLimit {
+			// Single template broadcast complete
+			allDone = true
+			break
+		}
+
+		// Calculate remaining recipients for this phase
+		remainingInPhase := recipientLimit - currentOffset
+		batchSize := o.config.FetchBatchSize
+		if remainingInPhase < batchSize {
+			batchSize = remainingInPhase
+		}
+
+		if batchSize <= 0 {
+			// Phase complete
+			if broadcastState.Phase == "test" {
+				allDone = o.handleTestPhaseCompletion(ctx, broadcast, broadcastState)
+			} else {
+				allDone = true
+			}
+			break
+		}
+
 		// Fetch the next batch of recipients
-		currentOffset := int(broadcastState.RecipientOffset)
 		recipients, batchErr := o.FetchBatch(
 			ctx,
 			task.WorkspaceID,
 			broadcastState.BroadcastID,
 			currentOffset,
-			o.config.FetchBatchSize,
+			batchSize,
 		)
 		if batchErr != nil {
 			err = batchErr
@@ -635,9 +749,14 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"offset":       currentOffset,
+				"phase":        broadcastState.Phase,
 			}).Info("No more recipients to process")
 			// codecov:ignore:end
-			allDone = true
+			if broadcastState.Phase == "test" {
+				allDone = o.handleTestPhaseCompletion(ctx, broadcast, broadcastState)
+			} else {
+				allDone = true
+			}
 			break
 		}
 
@@ -671,15 +790,30 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		failedCount += failed
 		processedCount += sent + failed
 
+		// Update phase-specific counters
+		if broadcastState.Phase == "test" {
+			broadcastState.TestRecipientOffset += int64(sent + failed)
+			currentOffset = int(broadcastState.TestRecipientOffset)
+		} else if broadcastState.Phase == "winner" {
+			broadcastState.WinnerRecipientOffset += int64(sent + failed)
+			currentOffset = int(broadcastState.WinnerRecipientOffset)
+		} else {
+			broadcastState.RecipientOffset += int64(sent + failed)
+			currentOffset = int(broadcastState.RecipientOffset)
+		}
+
 		// Log progress at regular intervals
 		if o.timeProvider.Since(lastLogTime) >= o.config.ProgressLogInterval {
 			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
 				"task_id":         task.ID,
 				"broadcast_id":    broadcastState.BroadcastID,
+				"phase":           broadcastState.Phase,
 				"sent_count":      sentCount,
 				"failed_count":    failedCount,
 				"processed_count": processedCount,
+				"phase_offset":    currentOffset,
+				"phase_limit":     recipientLimit,
 				"total_count":     broadcastState.TotalRecipients,
 				"progress":        CalculateProgress(processedCount, broadcastState.TotalRecipients),
 				"elapsed":         o.timeProvider.Since(startTime).String(),
@@ -716,7 +850,6 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		// Update local counters for state
 		broadcastState.SentCount = sentCount
 		broadcastState.FailedCount = failedCount
-		broadcastState.RecipientOffset = int64(processedCount)
 
 		// If we processed fewer recipients than requested, we're done
 		if len(recipients) < o.config.FetchBatchSize {
@@ -741,16 +874,31 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	task.State.Message = message
 	task.Progress = progress
 
-	// If the task is complete, update the broadcast status to "sent"
+	// If the task is complete, update the broadcast status appropriately
 	if allDone {
+		var statusMessage string
 
-		// Update broadcast status to sent
-		broadcast.Status = domain.BroadcastStatusSent
-		broadcast.UpdatedAt = time.Now().UTC()
+		if broadcastState.Phase == "winner" || broadcastState.Phase == "single" {
+			// Winner phase or single template complete - mark as sent
+			broadcast.Status = domain.BroadcastStatusSent
+			broadcast.UpdatedAt = time.Now().UTC()
 
-		// Set completion time
-		completedAt := time.Now().UTC()
-		broadcast.CompletedAt = &completedAt
+			// Set completion time
+			completedAt := time.Now().UTC()
+			broadcast.CompletedAt = &completedAt
+
+			// For winner phase, set winner sent time
+			if broadcastState.Phase == "winner" {
+				broadcast.WinnerSentAt = &completedAt
+			}
+
+			statusMessage = "sent"
+		} else if broadcastState.Phase == "test" {
+			// Test phase complete - should have been handled by handleTestPhaseCompletion
+			// This shouldn't happen, but handle it gracefully
+			o.logger.WithField("broadcast_id", broadcastState.BroadcastID).Warn("Test phase marked as complete in final processing - this should have been handled earlier")
+			return false, nil // Pause task for winner selection
+		}
 
 		// Save the updated broadcast
 		updateErr := o.broadcastRepo.UpdateBroadcast(ctx, broadcast)
@@ -760,9 +908,9 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				"task_id":      task.ID,
 				"broadcast_id": broadcastState.BroadcastID,
 				"error":        updateErr.Error(),
-			}).Error("Failed to update broadcast status to sent")
+			}).Error("Failed to update broadcast status to " + statusMessage)
 			// codecov:ignore:end
-			err = fmt.Errorf("failed to update broadcast status to sent: %w", updateErr)
+			err = fmt.Errorf("failed to update broadcast status to %s: %w", statusMessage, updateErr)
 			return false, err
 		}
 
@@ -772,7 +920,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			"broadcast_id": broadcastState.BroadcastID,
 			"sent_count":   sentCount,
 			"failed_count": failedCount,
-		}).Info("Broadcast marked as sent successfully")
+			"phase":        broadcastState.Phase,
+		}).Info("Broadcast marked as " + statusMessage + " successfully")
 		// codecov:ignore:end
 	}
 
@@ -788,4 +937,44 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 	}).Info("Broadcast processing cycle completed")
 	// codecov:ignore:end
 	return allDone, err
+}
+
+// handleTestPhaseCompletion handles the transition from test phase to test_completed status
+func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctx context.Context, broadcast *domain.Broadcast, broadcastState *domain.SendBroadcastState) bool {
+	// Mark test phase as completed in state
+	broadcastState.TestPhaseCompleted = true
+
+	// Update broadcast status to test_completed
+	broadcast.Status = domain.BroadcastStatusTestCompleted
+	broadcast.UpdatedAt = time.Now().UTC()
+
+	// Set test completion time
+	now := time.Now().UTC()
+	if broadcast.TestSentAt == nil {
+		broadcast.TestSentAt = &now
+	}
+
+	// Save the updated broadcast status
+	if err := o.broadcastRepo.UpdateBroadcast(ctx, broadcast); err != nil {
+		o.logger.WithFields(map[string]interface{}{
+			"broadcast_id": broadcast.ID,
+			"error":        err.Error(),
+		}).Error("Failed to update broadcast status to test_completed")
+		return false // Continue processing despite error
+	}
+
+	o.logger.WithFields(map[string]interface{}{
+		"broadcast_id":    broadcast.ID,
+		"test_sent_count": broadcastState.TestRecipientOffset,
+	}).Info("A/B test phase completed, awaiting winner selection")
+
+	// Check if auto-send winner is enabled
+	if broadcast.TestSettings.AutoSendWinner {
+		// TODO: Implement auto winner selection logic if needed
+		// For now, we'll wait for manual selection
+		o.logger.WithField("broadcast_id", broadcast.ID).Info("Auto-send winner enabled but not implemented, awaiting manual selection")
+	}
+
+	// Task should pause here - winner selection will resume it
+	return false // Not all done, waiting for winner selection
 }

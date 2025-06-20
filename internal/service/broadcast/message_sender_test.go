@@ -462,8 +462,8 @@ func TestSendBatch(t *testing.T) {
 			Enabled: false,
 			Variations: []domain.BroadcastVariation{
 				{
-					ID:         "variation-1",
-					TemplateID: "template-123",
+					VariationName: "variation-1",
+					TemplateID:    "template-123",
 				},
 			},
 		},
@@ -730,8 +730,8 @@ func TestSendBatch_WithFailure(t *testing.T) {
 			Enabled: false,
 			Variations: []domain.BroadcastVariation{
 				{
-					ID:         "variation-1",
-					TemplateID: "template-123",
+					VariationName: "variation-1",
+					TemplateID:    "template-123",
 				},
 			},
 		},
@@ -850,8 +850,8 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 			Enabled: false,
 			Variations: []domain.BroadcastVariation{
 				{
-					ID:         "variation-1",
-					TemplateID: "template-123",
+					VariationName: "variation-1",
+					TemplateID:    "template-123",
 				},
 			},
 		},

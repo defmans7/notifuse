@@ -381,10 +381,10 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 
 		// Determine which variation to use for this contact
 		var templateID string
-		if broadcast.WinningVariation != "" {
+		if broadcast.WinningTemplate != "" {
 			// If there's a winning variation, use it
 			for _, variation := range broadcast.TestSettings.Variations {
-				if variation.ID == broadcast.WinningVariation {
+				if variation.VariationName == broadcast.WinningTemplate {
 					templateID = variation.TemplateID
 					break
 				}

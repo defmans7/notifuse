@@ -19,13 +19,16 @@ import (
 type BroadcastStatus string
 
 const (
-	BroadcastStatusDraft     BroadcastStatus = "draft"
-	BroadcastStatusScheduled BroadcastStatus = "scheduled"
-	BroadcastStatusSending   BroadcastStatus = "sending"
-	BroadcastStatusPaused    BroadcastStatus = "paused"
-	BroadcastStatusSent      BroadcastStatus = "sent"
-	BroadcastStatusCancelled BroadcastStatus = "cancelled"
-	BroadcastStatusFailed    BroadcastStatus = "failed"
+	BroadcastStatusDraft          BroadcastStatus = "draft"
+	BroadcastStatusScheduled      BroadcastStatus = "scheduled"
+	BroadcastStatusSending        BroadcastStatus = "sending"
+	BroadcastStatusPaused         BroadcastStatus = "paused"
+	BroadcastStatusSent           BroadcastStatus = "sent"
+	BroadcastStatusCancelled      BroadcastStatus = "cancelled"
+	BroadcastStatusFailed         BroadcastStatus = "failed"
+	BroadcastStatusTesting        BroadcastStatus = "testing"         // A/B test in progress
+	BroadcastStatusTestCompleted  BroadcastStatus = "test_completed"  // Test done, awaiting winner selection
+	BroadcastStatusWinnerSelected BroadcastStatus = "winner_selected" // Winner chosen, sending to remaining
 )
 
 // TestWinnerMetric defines the metric used to determine the winning A/B test variation
@@ -38,12 +41,13 @@ const (
 
 // BroadcastTestSettings contains configuration for A/B testing
 type BroadcastTestSettings struct {
-	Enabled              bool                 `json:"enabled"`
-	SamplePercentage     int                  `json:"sample_percentage"`
-	AutoSendWinner       bool                 `json:"auto_send_winner"`
-	AutoSendWinnerMetric TestWinnerMetric     `json:"auto_send_winner_metric,omitempty"`
-	TestDurationHours    int                  `json:"test_duration_hours,omitempty"`
-	Variations           []BroadcastVariation `json:"variations"`
+	Enabled               bool                 `json:"enabled"`
+	SamplePercentage      int                  `json:"sample_percentage"`
+	AutoSendWinner        bool                 `json:"auto_send_winner"`
+	AutoSendWinnerMetric  TestWinnerMetric     `json:"auto_send_winner_metric,omitempty"`
+	TestDurationHours     int                  `json:"test_duration_hours,omitempty"`
+	AutoWinnerWaitMinutes int                  `json:"auto_winner_wait_minutes,omitempty"`
+	Variations            []BroadcastVariation `json:"variations"`
 }
 
 // Value implements the driver.Valuer interface for database serialization
@@ -68,9 +72,9 @@ func (b *BroadcastTestSettings) Scan(value interface{}) error {
 
 // BroadcastVariation represents a single variation in an A/B test
 type BroadcastVariation struct {
-	ID         string            `json:"id"`
-	TemplateID string            `json:"template_id"`
-	Metrics    *VariationMetrics `json:"metrics,omitempty"`
+	VariationName string            `json:"variation_name"`
+	TemplateID    string            `json:"template_id"`
+	Metrics       *VariationMetrics `json:"metrics,omitempty"`
 	// joined servers-side
 	Template *Template `json:"template,omitempty"`
 }
@@ -246,26 +250,28 @@ func (s *ScheduleSettings) SetScheduledDateTime(t time.Time, timezone string) er
 
 // Broadcast represents a broadcast message campaign
 type Broadcast struct {
-	ID               string                `json:"id"`
-	WorkspaceID      string                `json:"workspace_id"`
-	Name             string                `json:"name"`
-	ChannelType      string                `json:"channel_type"` // email, sms, push, etc.
-	Status           BroadcastStatus       `json:"status"`       // pending, sending, completed, failed
-	Audience         AudienceSettings      `json:"audience"`
-	Schedule         ScheduleSettings      `json:"schedule"`
-	TestSettings     BroadcastTestSettings `json:"test_settings"`
-	UTMParameters    *UTMParameters        `json:"utm_parameters,omitempty"`
-	Metadata         MapOfAny              `json:"metadata,omitempty"`
-	WinningVariation string                `json:"winning_variation,omitempty"`
-	TestSentAt       *time.Time            `json:"test_sent_at,omitempty"`
-	WinnerSentAt     *time.Time            `json:"winner_sent_at,omitempty"`
-	CreatedAt        time.Time             `json:"created_at"`
-	UpdatedAt        time.Time             `json:"updated_at"`
-	StartedAt        *time.Time            `json:"started_at,omitempty"`
-	CompletedAt      *time.Time            `json:"completed_at,omitempty"`
-	CancelledAt      *time.Time            `json:"cancelled_at,omitempty"`
-	PausedAt         *time.Time            `json:"paused_at,omitempty"`
-	SentAt           *time.Time            `json:"sent_at,omitempty"`
+	ID                        string                `json:"id"`
+	WorkspaceID               string                `json:"workspace_id"`
+	Name                      string                `json:"name"`
+	ChannelType               string                `json:"channel_type"` // email, sms, push, etc.
+	Status                    BroadcastStatus       `json:"status"`       // pending, sending, completed, failed
+	Audience                  AudienceSettings      `json:"audience"`
+	Schedule                  ScheduleSettings      `json:"schedule"`
+	TestSettings              BroadcastTestSettings `json:"test_settings"`
+	UTMParameters             *UTMParameters        `json:"utm_parameters,omitempty"`
+	Metadata                  MapOfAny              `json:"metadata,omitempty"`
+	WinningTemplate           string                `json:"winning_template,omitempty"`
+	TestSentAt                *time.Time            `json:"test_sent_at,omitempty"`
+	WinnerSentAt              *time.Time            `json:"winner_sent_at,omitempty"`
+	TestPhaseRecipientCount   int                   `json:"test_phase_recipient_count"`
+	WinnerPhaseRecipientCount int                   `json:"winner_phase_recipient_count"`
+	CreatedAt                 time.Time             `json:"created_at"`
+	UpdatedAt                 time.Time             `json:"updated_at"`
+	StartedAt                 *time.Time            `json:"started_at,omitempty"`
+	CompletedAt               *time.Time            `json:"completed_at,omitempty"`
+	CancelledAt               *time.Time            `json:"cancelled_at,omitempty"`
+	PausedAt                  *time.Time            `json:"paused_at,omitempty"`
+	SentAt                    *time.Time            `json:"sent_at,omitempty"`
 }
 
 // UTMParameters contains UTM tracking parameters for the broadcast
@@ -315,7 +321,8 @@ func (b *Broadcast) Validate() error {
 	switch b.Status {
 	case BroadcastStatusDraft, BroadcastStatusScheduled, BroadcastStatusSending,
 		BroadcastStatusPaused, BroadcastStatusSent, BroadcastStatusCancelled,
-		BroadcastStatusFailed:
+		BroadcastStatusFailed, BroadcastStatusTesting, BroadcastStatusTestCompleted,
+		BroadcastStatusWinnerSelected:
 		// Valid status
 	default:
 		return fmt.Errorf("invalid broadcast status: %s", b.Status)
@@ -626,7 +633,7 @@ type SendToIndividualRequest struct {
 	WorkspaceID    string `json:"workspace_id"`
 	BroadcastID    string `json:"broadcast_id"`
 	RecipientEmail string `json:"recipient_email"`
-	VariationID    string `json:"variation_id,omitempty"`
+	TemplateID     string `json:"template_id,omitempty"`
 }
 
 // Validate validates the send to individual request
@@ -734,11 +741,80 @@ func ParseBoolParam(s string) (bool, error) {
 	return result, nil
 }
 
-// GetBroadcastRequest is used to extract query parameters for getting a single broadcast
+// GetBroadcastRequest represents the request to get a single broadcast
 type GetBroadcastRequest struct {
 	WorkspaceID   string `json:"workspace_id"`
 	ID            string `json:"id"`
 	WithTemplates bool   `json:"with_templates,omitempty"`
+}
+
+// SelectWinnerRequest represents the request to select a winning variation
+type SelectWinnerRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+	TemplateID  string `json:"template_id"`
+}
+
+// Validate validates the select winner request
+func (r *SelectWinnerRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+	if r.ID == "" {
+		return fmt.Errorf("broadcast id is required")
+	}
+	if r.TemplateID == "" {
+		return fmt.Errorf("template_id is required")
+	}
+	return nil
+}
+
+// GetTestResultsRequest represents the request to get A/B test results
+type GetTestResultsRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+}
+
+// Validate validates the get test results request
+func (r *GetTestResultsRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+	if r.ID == "" {
+		return fmt.Errorf("broadcast id is required")
+	}
+	return nil
+}
+
+// FromURLParams parses URL parameters into the request
+func (r *GetTestResultsRequest) FromURLParams(values url.Values) error {
+	r.WorkspaceID = values.Get("workspace_id")
+	r.ID = values.Get("id")
+	return nil
+}
+
+// VariationResult represents the results for a single A/B test variation
+type VariationResult struct {
+	TemplateID   string  `json:"template_id"`
+	TemplateName string  `json:"template_name"`
+	Recipients   int     `json:"recipients"`
+	Delivered    int     `json:"delivered"`
+	Opens        int     `json:"opens"`
+	Clicks       int     `json:"clicks"`
+	OpenRate     float64 `json:"open_rate"`
+	ClickRate    float64 `json:"click_rate"`
+}
+
+// TestResultsResponse represents the response for A/B test results
+type TestResultsResponse struct {
+	BroadcastID       string                      `json:"broadcast_id"`
+	Status            string                      `json:"status"`
+	TestStartedAt     *time.Time                  `json:"test_started_at,omitempty"`
+	TestCompletedAt   *time.Time                  `json:"test_completed_at,omitempty"`
+	VariationResults  map[string]*VariationResult `json:"variation_results"`
+	RecommendedWinner string                      `json:"recommended_winner,omitempty"`
+	WinningTemplate   string                      `json:"winning_template,omitempty"`
+	IsAutoSendWinner  bool                        `json:"is_auto_send_winner"`
 }
 
 // BroadcastService defines the interface for broadcast operations
@@ -772,6 +848,12 @@ type BroadcastService interface {
 
 	// SendToIndividual sends a broadcast to an individual recipient
 	SendToIndividual(ctx context.Context, request *SendToIndividualRequest) error
+
+	// GetTestResults retrieves A/B test results for a broadcast
+	GetTestResults(ctx context.Context, workspaceID, broadcastID string) (*TestResultsResponse, error)
+
+	// SelectWinner manually selects the winning variation for an A/B test
+	SelectWinner(ctx context.Context, workspaceID, broadcastID, templateID string) error
 }
 
 // BroadcastSender is a minimal interface needed for sending broadcasts,

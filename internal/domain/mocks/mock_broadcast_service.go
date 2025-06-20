@@ -93,6 +93,21 @@ func (mr *MockBroadcastServiceMockRecorder) GetBroadcast(arg0, arg1, arg2 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBroadcast", reflect.TypeOf((*MockBroadcastService)(nil).GetBroadcast), arg0, arg1, arg2)
 }
 
+// GetTestResults mocks base method.
+func (m *MockBroadcastService) GetTestResults(arg0 context.Context, arg1, arg2 string) (*domain.TestResultsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTestResults", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.TestResultsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTestResults indicates an expected call of GetTestResults.
+func (mr *MockBroadcastServiceMockRecorder) GetTestResults(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestResults", reflect.TypeOf((*MockBroadcastService)(nil).GetTestResults), arg0, arg1, arg2)
+}
+
 // ListBroadcasts mocks base method.
 func (m *MockBroadcastService) ListBroadcasts(arg0 context.Context, arg1 domain.ListBroadcastsParams) (*domain.BroadcastListResponse, error) {
 	m.ctrl.T.Helper()
@@ -148,6 +163,20 @@ func (m *MockBroadcastService) ScheduleBroadcast(arg0 context.Context, arg1 *dom
 func (mr *MockBroadcastServiceMockRecorder) ScheduleBroadcast(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleBroadcast", reflect.TypeOf((*MockBroadcastService)(nil).ScheduleBroadcast), arg0, arg1)
+}
+
+// SelectWinner mocks base method.
+func (m *MockBroadcastService) SelectWinner(arg0 context.Context, arg1, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectWinner", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SelectWinner indicates an expected call of SelectWinner.
+func (mr *MockBroadcastServiceMockRecorder) SelectWinner(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectWinner", reflect.TypeOf((*MockBroadcastService)(nil).SelectWinner), arg0, arg1, arg2, arg3)
 }
 
 // SendToIndividual mocks base method.

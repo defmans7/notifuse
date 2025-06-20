@@ -422,7 +422,7 @@ func TestBroadcastRepository_CreateBroadcast_Success(t *testing.T) {
 
 			sqlmock.AnyArg(), // utm_parameters
 			sqlmock.AnyArg(), // metadata
-			sqlmock.AnyArg(), // winning_variation
+			sqlmock.AnyArg(), // winning_template
 			sqlmock.AnyArg(), // test_sent_at
 			sqlmock.AnyArg(), // winner_sent_at
 			sqlmock.AnyArg(), // created_at - timestamp will be added
@@ -511,14 +511,14 @@ func TestBroadcastRepository_GetBroadcast_Success(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"winning_variation",
+		"winning_template",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
 		AddRow(
 			broadcastID, workspaceID, "Test Broadcast", domain.BroadcastStatusDraft,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
-			"", // Use empty string instead of nil for winning_variation
+			"", // Use empty string instead of nil for winning_template
 			nil, nil, time.Now(), time.Now(),
 			nil, nil, nil,
 		)
@@ -562,7 +562,7 @@ func TestBroadcastRepository_GetBroadcast_ScanError(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"winning_variation",
+		"winning_template",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
@@ -663,7 +663,7 @@ func TestBroadcastRepository_UpdateBroadcast_Success(t *testing.T) {
 
 			sqlmock.AnyArg(), // utm_parameters
 			sqlmock.AnyArg(), // metadata
-			sqlmock.AnyArg(), // winning_variation
+			sqlmock.AnyArg(), // winning_template
 			sqlmock.AnyArg(), // test_sent_at
 			sqlmock.AnyArg(), // winner_sent_at
 			sqlmock.AnyArg(), // updated_at
@@ -892,7 +892,7 @@ func TestBroadcastRepository_ListBroadcasts_RowsIterationError(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"winning_variation",
+		"winning_template",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).
@@ -1007,7 +1007,7 @@ func TestBroadcastRepository_ListBroadcasts_WithStatus(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "workspace_id", "name", "status", "audience", "schedule",
 		"test_settings", "utm_parameters", "metadata",
-		"winning_variation",
+		"winning_template",
 		"test_sent_at", "winner_sent_at", "created_at", "updated_at",
 		"started_at", "completed_at", "cancelled_at",
 	}).

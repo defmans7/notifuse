@@ -909,13 +909,13 @@ func (r *MessageHistoryRepository) GetBroadcastStats(ctx context.Context, worksp
 }
 
 // GetBroadcastVariationStats retrieves statistics for a specific variation of a broadcast
-func (r *MessageHistoryRepository) GetBroadcastVariationStats(ctx context.Context, workspaceID string, broadcastID, variationID string) (*domain.MessageHistoryStatusSum, error) {
+func (r *MessageHistoryRepository) GetBroadcastVariationStats(ctx context.Context, workspaceID string, broadcastID, templateID string) (*domain.MessageHistoryStatusSum, error) {
 	// codecov:ignore:start
 	ctx, span := tracing.StartServiceSpan(ctx, "MessageHistoryRepository", "GetBroadcastVariationStats")
 	defer tracing.EndSpan(span, nil)
 	tracing.AddAttribute(ctx, "workspaceID", workspaceID)
 	tracing.AddAttribute(ctx, "broadcastID", broadcastID)
-	tracing.AddAttribute(ctx, "variationID", variationID)
+	tracing.AddAttribute(ctx, "templateID", templateID)
 	// codecov:ignore:end
 
 	// Get the workspace database connection
@@ -934,10 +934,10 @@ func (r *MessageHistoryRepository) GetBroadcastVariationStats(ctx context.Contex
 			SUM(CASE WHEN failed_at IS NOT NULL THEN 1 ELSE 0 END) as total_failed,
 			SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) as total
 		FROM message_history
-		WHERE broadcast_id = $1 AND message_data->>'variation_id' = $2
+		WHERE broadcast_id = $1 AND template_id = $2
 	`
 
-	row := workspaceDB.QueryRowContext(ctx, query, broadcastID, variationID)
+	row := workspaceDB.QueryRowContext(ctx, query, broadcastID, templateID)
 	stats := &domain.MessageHistoryStatusSum{}
 
 	// Use NullInt64 to handle NULL values from database

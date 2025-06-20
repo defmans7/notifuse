@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
+	notifuse_mjml "github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -36,10 +37,10 @@ func (m *MockTemplateService) EXPECT() *MockTemplateServiceMockRecorder {
 }
 
 // CompileTemplate mocks base method.
-func (m *MockTemplateService) CompileTemplate(arg0 context.Context, arg1 domain.CompileTemplateRequest) (*domain.CompileTemplateResponse, error) {
+func (m *MockTemplateService) CompileTemplate(arg0 context.Context, arg1 notifuse_mjml.CompileTemplateRequest) (*notifuse_mjml.CompileTemplateResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CompileTemplate", arg0, arg1)
-	ret0, _ := ret[0].(*domain.CompileTemplateResponse)
+	ret0, _ := ret[0].(*notifuse_mjml.CompileTemplateResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

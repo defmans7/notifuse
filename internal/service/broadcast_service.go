@@ -15,16 +15,18 @@ import (
 
 // BroadcastService handles all broadcast-related operations
 type BroadcastService struct {
-	logger        logger.Logger
-	repo          domain.BroadcastRepository
-	workspaceRepo domain.WorkspaceRepository
-	contactRepo   domain.ContactRepository
-	emailSvc      domain.EmailServiceInterface
-	templateSvc   domain.TemplateService
-	taskService   domain.TaskService
-	authService   domain.AuthService
-	eventBus      domain.EventBus
-	apiEndpoint   string
+	logger             logger.Logger
+	repo               domain.BroadcastRepository
+	workspaceRepo      domain.WorkspaceRepository
+	contactRepo        domain.ContactRepository
+	emailSvc           domain.EmailServiceInterface
+	templateSvc        domain.TemplateService
+	taskService        domain.TaskService
+	taskRepo           domain.TaskRepository
+	authService        domain.AuthService
+	eventBus           domain.EventBus
+	messageHistoryRepo domain.MessageHistoryRepository
+	apiEndpoint        string
 }
 
 // NewBroadcastService creates a new broadcast service
@@ -36,21 +38,25 @@ func NewBroadcastService(
 	contactRepository domain.ContactRepository,
 	templateService domain.TemplateService,
 	taskService domain.TaskService,
+	taskRepository domain.TaskRepository,
 	authService domain.AuthService,
 	eventBus domain.EventBus,
+	messageHistoryRepository domain.MessageHistoryRepository,
 	apiEndpoint string,
 ) *BroadcastService {
 	return &BroadcastService{
-		logger:        logger,
-		repo:          repository,
-		workspaceRepo: workspaceRepository,
-		emailSvc:      emailService,
-		contactRepo:   contactRepository,
-		templateSvc:   templateService,
-		taskService:   taskService,
-		authService:   authService,
-		eventBus:      eventBus,
-		apiEndpoint:   apiEndpoint,
+		logger:             logger,
+		repo:               repository,
+		workspaceRepo:      workspaceRepository,
+		emailSvc:           emailService,
+		contactRepo:        contactRepository,
+		templateSvc:        templateService,
+		taskService:        taskService,
+		taskRepo:           taskRepository,
+		authService:        authService,
+		eventBus:           eventBus,
+		messageHistoryRepo: messageHistoryRepository,
+		apiEndpoint:        apiEndpoint,
 	}
 }
 
@@ -756,12 +762,12 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	}
 
 	// Determine which variation to use
-	variationID := request.VariationID
-	if variationID == "" && len(broadcast.TestSettings.Variations) > 0 {
+	templateID := request.TemplateID
+	if templateID == "" && len(broadcast.TestSettings.Variations) > 0 {
 		// If no variation ID specified, use the first one
-		variationID = broadcast.TestSettings.Variations[0].ID
+		templateID = broadcast.TestSettings.Variations[0].TemplateID
 		s.logger.Debug("No variation specified, using first variation")
-	} else if variationID == "" {
+	} else if templateID == "" {
 		err := fmt.Errorf("broadcast has no variations")
 		s.logger.Error("Cannot send broadcast with no variations")
 		return err
@@ -770,14 +776,14 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	// Find the specified variation
 	var variation *domain.BroadcastVariation
 	for _, v := range broadcast.TestSettings.Variations {
-		if v.ID == variationID {
+		if v.TemplateID == templateID {
 			variation = &v
 			break
 		}
 	}
 
 	if variation == nil {
-		err := fmt.Errorf("variation with ID %s not found in broadcast", variationID)
+		err := fmt.Errorf("variation with ID %s not found in broadcast", templateID)
 		s.logger.Error("Variation not found in broadcast")
 		return err
 	}
@@ -877,17 +883,167 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		request.RecipientEmail,
 		template.Email.Subject,
 		*compiledTemplate.HTML,
-		nil,
+		emailProvider,
 		domain.EmailOptions{
 			ReplyTo: template.Email.ReplyTo,
 		},
 	)
 	if err != nil {
-		s.logger.Error("Failed to send email to individual recipient")
+		s.logger.Error("Failed to send message")
 		return err
 	}
 
-	s.logger.Info("Email sent to individual recipient successfully")
+	now := time.Now().UTC()
+	message := &domain.MessageHistory{
+		ID:              messageID,
+		ContactEmail:    request.RecipientEmail,
+		BroadcastID:     &request.BroadcastID,
+		TemplateID:      template.ID,
+		TemplateVersion: template.Version,
+		Channel:         "email",
+		MessageData: domain.MessageData{
+			Data: templateData,
+		},
+		SentAt:    now,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
 
-	return nil
+	// Record message in history
+	return s.messageHistoryRepo.Create(ctx, request.WorkspaceID, message)
+}
+
+// GetTestResults retrieves A/B test results for a broadcast
+func (s *BroadcastService) GetTestResults(ctx context.Context, workspaceID, broadcastID string) (*domain.TestResultsResponse, error) {
+	// Authenticate user
+	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get broadcast
+	broadcast, err := s.repo.GetBroadcast(ctx, workspaceID, broadcastID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate status - allow both test_completed and winner_selected for viewing results
+	if broadcast.Status != domain.BroadcastStatusTestCompleted &&
+		broadcast.Status != domain.BroadcastStatusWinnerSelected &&
+		broadcast.Status != domain.BroadcastStatusSent {
+		return nil, fmt.Errorf("broadcast test results not available for status: %s", broadcast.Status)
+	}
+
+	// Calculate metrics for each variation using message_history aggregation
+	variationResults := make(map[string]*domain.VariationResult)
+	var recommendedWinner string
+	bestScore := -1.0
+
+	for _, variation := range broadcast.TestSettings.Variations {
+		// Use existing message history repository method with TemplateID
+		stats, err := s.messageHistoryRepo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variation.TemplateID)
+		if err != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"template_id": variation.TemplateID,
+				"error":       err.Error(),
+			}).Warn("Failed to get variation stats")
+			continue // Skip failed variations
+		}
+
+		// Calculate rates (avoid division by zero)
+		openRate := 0.0
+		clickRate := 0.0
+		if stats.TotalDelivered > 0 {
+			openRate = float64(stats.TotalOpened) / float64(stats.TotalDelivered)
+			clickRate = float64(stats.TotalClicked) / float64(stats.TotalDelivered)
+		}
+
+		variationResults[variation.TemplateID] = &domain.VariationResult{
+			TemplateID:   variation.TemplateID,
+			TemplateName: "Template " + variation.TemplateID, // Could fetch actual template name
+			Recipients:   stats.TotalSent,
+			Delivered:    stats.TotalDelivered,
+			Opens:        stats.TotalOpened,
+			Clicks:       stats.TotalClicked,
+			OpenRate:     openRate,
+			ClickRate:    clickRate,
+		}
+
+		// Calculate score for recommendation (if not auto-send winner mode)
+		if !broadcast.TestSettings.AutoSendWinner && broadcast.WinningTemplate == "" {
+			score := (clickRate * 0.7) + (openRate * 0.3)
+			if score > bestScore {
+				bestScore = score
+				recommendedWinner = variation.TemplateID
+			}
+		}
+	}
+
+	return &domain.TestResultsResponse{
+		BroadcastID:       broadcastID,
+		Status:            string(broadcast.Status),
+		TestStartedAt:     broadcast.StartedAt,
+		TestCompletedAt:   broadcast.TestSentAt,
+		VariationResults:  variationResults,
+		RecommendedWinner: recommendedWinner,
+		WinningTemplate:   broadcast.WinningTemplate, // Include actual winner if selected
+		IsAutoSendWinner:  broadcast.TestSettings.AutoSendWinner,
+	}, nil
+}
+
+// SelectWinner manually selects the winning variation for an A/B test
+func (s *BroadcastService) SelectWinner(ctx context.Context, workspaceID, broadcastID, templateID string) error {
+	// Authenticate user
+	ctx, _, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+
+	return s.repo.WithTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
+		// Get broadcast
+		broadcast, err := s.repo.GetBroadcastTx(ctx, tx, workspaceID, broadcastID)
+		if err != nil {
+			return err
+		}
+
+		// Validate status
+		if broadcast.Status != domain.BroadcastStatusTestCompleted {
+			return fmt.Errorf("broadcast is not in test completed state")
+		}
+
+		// Validate template ID
+		validTemplate := false
+		for _, variation := range broadcast.TestSettings.Variations {
+			if variation.TemplateID == templateID {
+				validTemplate = true
+				break
+			}
+		}
+		if !validTemplate {
+			return fmt.Errorf("invalid template ID")
+		}
+
+		// Update broadcast with winning template
+		broadcast.WinningTemplate = templateID // Store the winning TemplateID
+		broadcast.Status = domain.BroadcastStatusWinnerSelected
+		broadcast.UpdatedAt = time.Now().UTC()
+
+		if err := s.repo.UpdateBroadcastTx(ctx, tx, broadcast); err != nil {
+			return err
+		}
+
+		// Resume the associated task by finding it and updating its status
+		task, err := s.taskRepo.GetTaskByBroadcastID(ctx, workspaceID, broadcastID)
+		if err != nil {
+			s.logger.WithField("broadcast_id", broadcastID).Debug("No task found for broadcast")
+			return nil // Not an error if no task exists
+		}
+
+		// Resume the task
+		nextRunAfter := time.Now()
+		task.NextRunAfter = &nextRunAfter
+		task.Status = domain.TaskStatusPending
+
+		return s.taskRepo.Update(ctx, workspaceID, task)
+	})
 }

@@ -529,16 +529,16 @@ func TestMessageHistoryService_GetBroadcastVariationStats(t *testing.T) {
 		name          string
 		workspaceID   string
 		broadcastID   string
-		variationID   string
+		templateID    string
 		setupMocks    func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService)
 		expectedStats *domain.MessageHistoryStatusSum
 		expectedError error
 	}{
 		{
-			name:        "Success with variation stats",
+			name:        "Success with template stats",
 			workspaceID: "workspace-123",
 			broadcastID: "broadcast-123",
-			variationID: "variation-abc",
+			templateID:  "template-abc",
 			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
 				mockAuthService.EXPECT().
 					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
@@ -546,7 +546,7 @@ func TestMessageHistoryService_GetBroadcastVariationStats(t *testing.T) {
 
 				// Let's assume the mock repository has a GetBroadcastVariationStats method
 				mockRepo.EXPECT().
-					GetBroadcastVariationStats(gomock.Any(), "workspace-123", "broadcast-123", "variation-abc").
+					GetBroadcastVariationStats(gomock.Any(), "workspace-123", "broadcast-123", "template-abc").
 					Return(&domain.MessageHistoryStatusSum{
 						TotalSent:         50,
 						TotalDelivered:    48,
@@ -574,7 +574,7 @@ func TestMessageHistoryService_GetBroadcastVariationStats(t *testing.T) {
 			name:        "Authentication error",
 			workspaceID: "workspace-123",
 			broadcastID: "broadcast-123",
-			variationID: "variation-abc",
+			templateID:  "template-abc",
 			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
 				mockAuthService.EXPECT().
 					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
@@ -587,31 +587,31 @@ func TestMessageHistoryService_GetBroadcastVariationStats(t *testing.T) {
 			name:        "Repository error",
 			workspaceID: "workspace-123",
 			broadcastID: "broadcast-123",
-			variationID: "variation-abc",
+			templateID:  "template-abc",
 			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
 				mockAuthService.EXPECT().
 					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
 					Return(context.Background(), nil, nil)
 
 				mockRepo.EXPECT().
-					GetBroadcastVariationStats(gomock.Any(), "workspace-123", "broadcast-123", "variation-abc").
+					GetBroadcastVariationStats(gomock.Any(), "workspace-123", "broadcast-123", "template-abc").
 					Return(nil, errors.New("database error"))
 			},
 			expectedStats: nil,
 			expectedError: errors.New("failed to get broadcast variation stats: database error"),
 		},
 		{
-			name:        "Invalid variation ID",
+			name:        "Invalid template ID",
 			workspaceID: "workspace-123",
 			broadcastID: "broadcast-123",
-			variationID: "",
+			templateID:  "",
 			setupMocks: func(mockRepo *mocks.MockMessageHistoryRepository, mockAuthService *mocks.MockAuthService) {
 				mockAuthService.EXPECT().
 					AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").
 					Return(context.Background(), nil, nil)
 			},
 			expectedStats: nil,
-			expectedError: errors.New("variation ID cannot be empty"),
+			expectedError: errors.New("template ID cannot be empty"),
 		},
 	}
 
@@ -630,7 +630,7 @@ func TestMessageHistoryService_GetBroadcastVariationStats(t *testing.T) {
 			service := NewMessageHistoryService(mockRepo, mockLogger, mockAuthService)
 
 			// Call the method under test
-			stats, err := service.GetBroadcastVariationStats(context.Background(), tc.workspaceID, tc.broadcastID, tc.variationID)
+			stats, err := service.GetBroadcastVariationStats(context.Background(), tc.workspaceID, tc.broadcastID, tc.templateID)
 
 			// Verify expectations
 			if tc.expectedError != nil {

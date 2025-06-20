@@ -907,7 +907,7 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "workspace-123"
 	broadcastID := "broadcast-123"
-	variationID := "variation-123"
+	templateID := "template-123"
 
 	t.Run("successful retrieval", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().
@@ -919,11 +919,11 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 			"total_clicked", "total_bounced", "total_complained", "total_unsubscribed",
 		}).AddRow(10, 8, 2, 5, 3, 1, 0, 1)
 
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
-			WithArgs(broadcastID, variationID).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND template_id = \$2`).
+			WithArgs(broadcastID, templateID).
 			WillReturnRows(rows)
 
-		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, templateID)
 
 		require.NoError(t, err)
 		require.NotNil(t, stats)
@@ -942,7 +942,7 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 			GetConnection(gomock.Any(), workspaceID).
 			Return(nil, errors.New("connection error"))
 
-		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, templateID)
 		require.Error(t, err)
 		require.Nil(t, stats)
 		require.Contains(t, err.Error(), "failed to get workspace connection")
@@ -953,11 +953,11 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 			GetConnection(gomock.Any(), workspaceID).
 			Return(db, nil)
 
-		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
-			WithArgs(broadcastID, variationID).
+		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND template_id = \$2`).
+			WithArgs(broadcastID, templateID).
 			WillReturnError(errors.New("sql error"))
 
-		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, templateID)
 		require.Error(t, err)
 		require.Nil(t, stats)
 		require.Contains(t, err.Error(), "failed to get broadcast variation stats")
@@ -969,10 +969,10 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 			Return(db, nil)
 
 		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
-			WithArgs(broadcastID, variationID).
+			WithArgs(broadcastID, templateID).
 			WillReturnError(sql.ErrNoRows)
 
-		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, templateID)
 		require.NoError(t, err)
 		require.NotNil(t, stats)
 		assert.Equal(t, 0, stats.TotalSent)
@@ -997,10 +997,10 @@ func TestMessageHistoryRepository_GetBroadcastVariationStats(t *testing.T) {
 		}).AddRow(10, nil, 2, nil, 3, nil, nil, 1)
 
 		mock.ExpectQuery(`SELECT .* FROM message_history WHERE broadcast_id = \$1 AND message_data->>'variation_id' = \$2`).
-			WithArgs(broadcastID, variationID).
+			WithArgs(broadcastID, templateID).
 			WillReturnRows(rows)
 
-		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+		stats, err := repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, templateID)
 		require.NoError(t, err)
 		require.NotNil(t, stats)
 		assert.Equal(t, 10, stats.TotalSent)

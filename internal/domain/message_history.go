@@ -141,7 +141,7 @@ type MessageHistoryRepository interface {
 	GetBroadcastStats(ctx context.Context, workspaceID, broadcastID string) (*MessageHistoryStatusSum, error)
 
 	// GetBroadcastVariationStats retrieves statistics for a specific variation of a broadcast
-	GetBroadcastVariationStats(ctx context.Context, workspaceID, broadcastID, variationID string) (*MessageHistoryStatusSum, error)
+	GetBroadcastVariationStats(ctx context.Context, workspaceID, broadcastID, templateID string) (*MessageHistoryStatusSum, error)
 }
 
 // MessageHistoryService defines methods for interacting with message history
@@ -153,7 +153,7 @@ type MessageHistoryService interface {
 	GetBroadcastStats(ctx context.Context, workspaceID, broadcastID string) (*MessageHistoryStatusSum, error)
 
 	// GetBroadcastVariationStats retrieves statistics for a specific variation of a broadcast
-	GetBroadcastVariationStats(ctx context.Context, workspaceID, broadcastID, variationID string) (*MessageHistoryStatusSum, error)
+	GetBroadcastVariationStats(ctx context.Context, workspaceID, broadcastID, templateID string) (*MessageHistoryStatusSum, error)
 }
 
 // MessageListParams contains parameters for listing messages with pagination and filtering

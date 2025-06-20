@@ -75,7 +75,7 @@ func (s *MessageHistoryService) GetBroadcastStats(ctx context.Context, workspace
 }
 
 // GetBroadcastVariationStats retrieves statistics for a specific variation of a broadcast
-func (s *MessageHistoryService) GetBroadcastVariationStats(ctx context.Context, workspaceID, broadcastID, variationID string) (*domain.MessageHistoryStatusSum, error) {
+func (s *MessageHistoryService) GetBroadcastVariationStats(ctx context.Context, workspaceID, broadcastID, templateID string) (*domain.MessageHistoryStatusSum, error) {
 	var err error
 	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -83,11 +83,11 @@ func (s *MessageHistoryService) GetBroadcastVariationStats(ctx context.Context, 
 	}
 
 	// Validate input parameters
-	if variationID == "" {
-		return nil, errors.New("variation ID cannot be empty")
+	if templateID == "" {
+		return nil, errors.New("template ID cannot be empty")
 	}
 
-	stats, err := s.repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, variationID)
+	stats, err := s.repo.GetBroadcastVariationStats(ctx, workspaceID, broadcastID, templateID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get broadcast variation stats: %w", err)
 	}

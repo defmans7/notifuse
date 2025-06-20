@@ -1115,12 +1115,12 @@ func (s *DemoService) createSampleBroadcast(ctx context.Context, workspaceID str
 			AutoSendWinner:   false,
 			Variations: []domain.BroadcastVariation{
 				{
-					ID:         "variation-a",
-					TemplateID: "newsletter-weekly",
+					VariationName: "variation-a",
+					TemplateID:    "newsletter-weekly",
 				},
 				{
-					ID:         "variation-b",
-					TemplateID: "newsletter-weekly",
+					VariationName: "variation-b",
+					TemplateID:    "newsletter-weekly",
 				},
 			},
 		},

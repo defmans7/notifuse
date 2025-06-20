@@ -210,8 +210,8 @@ func TestHandleGet(t *testing.T) {
 		Enabled: true,
 		Variations: []domain.BroadcastVariation{
 			{
-				ID:         "variation1",
-				TemplateID: "template123",
+				VariationName: "variation1",
+				TemplateID:    "template123",
 			},
 		},
 	}
