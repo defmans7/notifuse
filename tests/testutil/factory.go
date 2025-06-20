@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/google/uuid"
 )
 
@@ -315,7 +316,50 @@ func createDefaultEmailTemplate() *domain.EmailTemplate {
 				</mj-section>
 			</mj-body>
 		</mjml>`,
+		VisualEditorTree: createDefaultMJMLBlock(),
 	}
+}
+
+func createDefaultMJMLBlock() notifuse_mjml.EmailBlock {
+	// Create a simple MJML structure using map-based approach for testing
+	baseBlock := notifuse_mjml.BaseBlock{
+		ID:         "mjml-1",
+		Type:       notifuse_mjml.MJMLComponentMjml,
+		Attributes: map[string]interface{}{"version": "4.0.0"},
+	}
+
+	bodyBlock := notifuse_mjml.BaseBlock{
+		ID:         "body-1",
+		Type:       notifuse_mjml.MJMLComponentMjBody,
+		Attributes: map[string]interface{}{},
+	}
+
+	sectionBlock := notifuse_mjml.BaseBlock{
+		ID:         "section-1",
+		Type:       notifuse_mjml.MJMLComponentMjSection,
+		Attributes: map[string]interface{}{},
+	}
+
+	columnBlock := notifuse_mjml.BaseBlock{
+		ID:         "column-1",
+		Type:       notifuse_mjml.MJMLComponentMjColumn,
+		Attributes: map[string]interface{}{},
+	}
+
+	textBlock := notifuse_mjml.BaseBlock{
+		ID:         "text-1",
+		Type:       notifuse_mjml.MJMLComponentMjText,
+		Attributes: map[string]interface{}{},
+		Children:   []interface{}{"Hello Test!"},
+	}
+
+	// Build the hierarchy from bottom up
+	columnBlock.Children = []interface{}{&textBlock}
+	sectionBlock.Children = []interface{}{&columnBlock}
+	bodyBlock.Children = []interface{}{&sectionBlock}
+	baseBlock.Children = []interface{}{&bodyBlock}
+
+	return &baseBlock
 }
 
 func createDefaultAudience() domain.AudienceSettings {

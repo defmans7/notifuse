@@ -251,6 +251,22 @@ func (c *APIClient) GetTemplate(templateID string) (*http.Response, error) {
 	return c.Get("/api/templates.get", params)
 }
 
+func (c *APIClient) UpdateTemplate(template map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/templates.update", template)
+}
+
+func (c *APIClient) DeleteTemplate(workspaceID, templateID string) (*http.Response, error) {
+	deleteReq := map[string]interface{}{
+		"workspace_id": workspaceID,
+		"id":           templateID,
+	}
+	return c.Post("/api/templates.delete", deleteReq)
+}
+
+func (c *APIClient) CompileTemplate(compileReq map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/templates.compile", compileReq)
+}
+
 func (c *APIClient) ListTemplates(params map[string]string) (*http.Response, error) {
 	return c.Get("/api/templates.list", params)
 }

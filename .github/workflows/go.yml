@@ -7,8 +7,54 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    name: Test
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          go get github.com/DATA-DOG/go-sqlmock
+
+      - name: Run unit tests and generate coverage
+        run: |
+          # Create a test .env file
+          echo "PASETO_PRIVATE_KEY=UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw==" >> .env.test
+          echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
+          echo "ROOT_EMAIL=admin@example.com" >> .env.test
+          echo "SECRET_KEY=test-key" >> .env.test
+
+          # Run unit tests (exclude integration tests)
+          go test -race -coverprofile=coverage-unit.txt -covermode=atomic $(go list ./... | grep -v '/tests/integration') -v 
+
+          # Copy to repo root for codecov action
+          cp coverage-unit.txt ../
+
+      - name: Upload unit test coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: Notifuse/notifuse
+          file: coverage-unit.txt
+          fail_ci_if_error: false
+          verbose: true
+          name: codecov-unit-tests
+          flags: unit
+
+  integration-tests:
+    name: Integration Tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,35 +89,49 @@ jobs:
           go mod download
           go get github.com/DATA-DOG/go-sqlmock
 
-      - name: Run tests and generate coverage
+      - name: Run integration tests and generate coverage
         env:
           TEST_DB_HOST: localhost
           TEST_DB_USER: notifuse_test
           TEST_DB_PASSWORD: test_password
+          # Set main database config to use test database
+          DB_HOST: localhost
+          DB_PORT: 5433
+          DB_USER: notifuse_test
+          DB_PASSWORD: test_password
+          DB_NAME: notifuse_test_integration
+          DB_PREFIX: notifuse_test
+          DB_SSLMODE: disable
         run: |
           # Create a test .env file for integration tests
           echo "PASETO_PRIVATE_KEY=UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw==" >> .env.test
           echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
           echo "ROOT_EMAIL=admin@example.com" >> .env.test
           echo "SECRET_KEY=test-key" >> .env.test
+          echo "DB_HOST=localhost" >> .env.test
+          echo "DB_PORT=5433" >> .env.test
+          echo "DB_USER=notifuse_test" >> .env.test
+          echo "DB_PASSWORD=test_password" >> .env.test
+          echo "DB_NAME=notifuse_test_integration" >> .env.test
+          echo "DB_PREFIX=notifuse_test" >> .env.test
+          echo "DB_SSLMODE=disable" >> .env.test
 
           # Wait for PostgreSQL to be ready
           sleep 5
 
-          # Run all tests (both unit and integration) with a single coverage profile
-          go test -race -coverprofile=coverage.txt -covermode=atomic ./... -v 
+          # Run integration tests only
+          go test -race -coverprofile=coverage-integration.txt -covermode=atomic ./tests/integration/... -v 
 
-          # Debug - verify file exists
-          ls -la
-          cp coverage.txt ../ # Copy to repo root for codecov action
+          # Copy to repo root for codecov action
+          cp coverage-integration.txt ../
 
-      - name: Upload coverage reports to Codecov
+      - name: Upload integration test coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: Notifuse/notifuse
-          file: coverage.txt # Now in repo root
+          file: coverage-integration.txt
           fail_ci_if_error: true
           verbose: true
-          name: codecov-umbrella
-          override_branch: main
+          name: codecov-integration-tests
+          flags: integration
