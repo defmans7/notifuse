@@ -14,6 +14,21 @@ jobs:
       run:
         working-directory: ./
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: notifuse_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,12 +44,19 @@ jobs:
           go get github.com/DATA-DOG/go-sqlmock
 
       - name: Run tests and generate coverage
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_USER: notifuse_test
+          TEST_DB_PASSWORD: test_password
         run: |
           # Create a test .env file for integration tests
           echo "PASETO_PRIVATE_KEY=UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw==" >> .env.test
           echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
           echo "ROOT_EMAIL=admin@example.com" >> .env.test
           echo "SECRET_KEY=test-key" >> .env.test
+
+          # Wait for PostgreSQL to be ready
+          sleep 5
 
           # Run all tests (both unit and integration) with a single coverage profile
           go test -race -coverprofile=coverage.txt -covermode=atomic ./... -v 
