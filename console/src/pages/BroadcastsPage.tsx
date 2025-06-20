@@ -103,7 +103,7 @@ const VariationCard: React.FC<VariationCardProps> = ({ variation, workspace, col
     <Col span={colSpan} key={index}>
       <Card
         size="small"
-        title={variation.template?.name || `Variation ${index + 1}`}
+        title={`Variation ${index + 1}: ${variation.template?.name || 'Untitled'}`}
         type="inner"
         extra={
           variation.template ? (
@@ -516,24 +516,35 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                     </Descriptions.Item>
                   )}
 
-                  {broadcast.utm_parameters &&
-                    Object.values(broadcast.utm_parameters).some((v) => v) && (
-                      <Descriptions.Item label="UTM Parameters">
-                        <Tooltip title="utm_source / utm_medium / utm_campaign">
-                          <div>
-                            {broadcast.utm_parameters.source &&
-                              broadcast.utm_parameters.medium &&
-                              broadcast.utm_parameters.campaign && (
-                                <Text>
-                                  {broadcast.utm_parameters.source} /{' '}
-                                  {broadcast.utm_parameters.medium} /{' '}
-                                  {broadcast.utm_parameters.campaign}
-                                </Text>
-                              )}
-                          </div>
-                        </Tooltip>
-                      </Descriptions.Item>
-                    )}
+                  {broadcast.utm_parameters?.source && (
+                    <Descriptions.Item label="UTM Source">
+                      {broadcast.utm_parameters.source}
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.utm_parameters?.medium && (
+                    <Descriptions.Item label="UTM Medium">
+                      {broadcast.utm_parameters.medium}
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.utm_parameters?.campaign && (
+                    <Descriptions.Item label="UTM Campaign">
+                      {broadcast.utm_parameters.campaign}
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.utm_parameters?.term && (
+                    <Descriptions.Item label="UTM Term">
+                      {broadcast.utm_parameters.term}
+                    </Descriptions.Item>
+                  )}
+
+                  {broadcast.utm_parameters?.content && (
+                    <Descriptions.Item label="UTM Content">
+                      {broadcast.utm_parameters.content}
+                    </Descriptions.Item>
+                  )}
 
                   {/* Schedule Information */}
                   {broadcast.schedule.is_scheduled &&
@@ -588,21 +599,14 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
 
               {/* Right Column: Templates */}
               <Col xs={24} lg={12} xl={14}>
-                <div className="mb-2 font-medium text-gray-700">Templates</div>
                 <Row gutter={[16, 16]}>
                   {broadcast.test_settings.variations.map((variation, index) => {
-                    // Calculate column width based on number of variations
-                    // For the right column, we have the full 24 units to work with
-                    const variationsCount = broadcast.test_settings.variations.length
-                    const colSpan =
-                      variationsCount === 1 ? 24 : Math.max(12, Math.floor(24 / variationsCount))
-
                     return (
                       <VariationCard
                         key={index}
                         variation={variation}
                         workspace={currentWorkspace}
-                        colSpan={colSpan}
+                        colSpan={24}
                         index={index}
                       />
                     )
