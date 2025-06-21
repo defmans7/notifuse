@@ -455,10 +455,82 @@ func (c *APIClient) ExecuteTask(request map[string]interface{}) (*http.Response,
 	return c.Post("/api/tasks.execute", request)
 }
 
-// ExecutePendingTasks executes pending tasks (cron endpoint)
+// ExecutePendingTasks executes pending tasks
 func (c *APIClient) ExecutePendingTasks(maxTasks int) (*http.Response, error) {
 	params := map[string]string{
 		"max_tasks": fmt.Sprintf("%d", maxTasks),
 	}
 	return c.Get("/api/cron", params)
+}
+
+// Webhook registration API methods
+
+// RegisterWebhooks registers webhooks with an email provider
+func (c *APIClient) RegisterWebhooks(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/webhooks.register", request)
+}
+
+// GetWebhookStatus gets the status of webhooks for an email provider
+func (c *APIClient) GetWebhookStatus(workspaceID, integrationID string) (*http.Response, error) {
+	params := map[string]string{
+		"workspace_id":   workspaceID,
+		"integration_id": integrationID,
+	}
+	return c.Get("/api/webhooks.status", params)
+}
+
+// Transactional API methods
+
+// CreateTransactionalNotification creates a transactional notification
+func (c *APIClient) CreateTransactionalNotification(notification map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/transactional.create", notification)
+}
+
+// GetTransactionalNotification gets a transactional notification by ID
+func (c *APIClient) GetTransactionalNotification(notificationID string) (*http.Response, error) {
+	params := map[string]string{
+		"id": notificationID,
+	}
+	return c.Get("/api/transactional.get", params)
+}
+
+// ListTransactionalNotifications lists transactional notifications
+func (c *APIClient) ListTransactionalNotifications(params map[string]string) (*http.Response, error) {
+	return c.Get("/api/transactional.list", params)
+}
+
+// UpdateTransactionalNotification updates a transactional notification
+func (c *APIClient) UpdateTransactionalNotification(notificationID string, updates map[string]interface{}) (*http.Response, error) {
+	payload := map[string]interface{}{
+		"workspace_id": c.workspaceID,
+		"id":           notificationID,
+		"updates":      updates,
+	}
+	return c.Post("/api/transactional.update", payload)
+}
+
+// DeleteTransactionalNotification deletes a transactional notification
+func (c *APIClient) DeleteTransactionalNotification(notificationID string) (*http.Response, error) {
+	payload := map[string]interface{}{
+		"workspace_id": c.workspaceID,
+		"id":           notificationID,
+	}
+	return c.Post("/api/transactional.delete", payload)
+}
+
+// SendTransactionalNotification sends a transactional notification
+func (c *APIClient) SendTransactionalNotification(notification map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/transactional.send", map[string]interface{}{
+		"workspace_id": c.workspaceID,
+		"notification": notification,
+	})
+}
+
+// TestTransactionalTemplate tests a transactional template
+func (c *APIClient) TestTransactionalTemplate(request map[string]interface{}) (*http.Response, error) {
+	// Add workspace_id if not already present
+	if request["workspace_id"] == nil {
+		request["workspace_id"] = c.workspaceID
+	}
+	return c.Post("/api/transactional.testTemplate", request)
 }

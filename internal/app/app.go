@@ -45,6 +45,7 @@ type AppInterface interface {
 	GetBroadcastRepository() domain.BroadcastRepository
 	GetMessageHistoryRepository() domain.MessageHistoryRepository
 	GetContactListRepository() domain.ContactListRepository
+	GetTransactionalNotificationRepository() domain.TransactionalNotificationRepository
 
 	// Server status methods
 	IsServerCreated() bool
@@ -792,6 +793,10 @@ func (a *App) GetMessageHistoryRepository() domain.MessageHistoryRepository {
 
 func (a *App) GetContactListRepository() domain.ContactListRepository {
 	return a.contactListRepo
+}
+
+func (a *App) GetTransactionalNotificationRepository() domain.TransactionalNotificationRepository {
+	return a.transactionalNotificationRepo
 }
 
 // SetHandler allows setting a custom HTTP handler

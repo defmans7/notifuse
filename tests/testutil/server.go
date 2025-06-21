@@ -43,6 +43,7 @@ type AppInterface interface {
 	GetBroadcastRepository() domain.BroadcastRepository
 	GetMessageHistoryRepository() domain.MessageHistoryRepository
 	GetContactListRepository() domain.ContactListRepository
+	GetTransactionalNotificationRepository() domain.TransactionalNotificationRepository
 }
 
 // NewServerManager creates a new server manager for testing

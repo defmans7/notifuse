@@ -15,15 +15,16 @@ import (
 
 // TestDataFactory creates test data entities using domain repositories
 type TestDataFactory struct {
-	db                 *sql.DB
-	userRepo           domain.UserRepository
-	workspaceRepo      domain.WorkspaceRepository
-	contactRepo        domain.ContactRepository
-	listRepo           domain.ListRepository
-	templateRepo       domain.TemplateRepository
-	broadcastRepo      domain.BroadcastRepository
-	messageHistoryRepo domain.MessageHistoryRepository
-	contactListRepo    domain.ContactListRepository
+	db                            *sql.DB
+	userRepo                      domain.UserRepository
+	workspaceRepo                 domain.WorkspaceRepository
+	contactRepo                   domain.ContactRepository
+	listRepo                      domain.ListRepository
+	templateRepo                  domain.TemplateRepository
+	broadcastRepo                 domain.BroadcastRepository
+	messageHistoryRepo            domain.MessageHistoryRepository
+	contactListRepo               domain.ContactListRepository
+	transactionalNotificationRepo domain.TransactionalNotificationRepository
 }
 
 // NewTestDataFactory creates a new test data factory with repository dependencies
@@ -37,17 +38,19 @@ func NewTestDataFactory(
 	broadcastRepo domain.BroadcastRepository,
 	messageHistoryRepo domain.MessageHistoryRepository,
 	contactListRepo domain.ContactListRepository,
+	transactionalNotificationRepo domain.TransactionalNotificationRepository,
 ) *TestDataFactory {
 	return &TestDataFactory{
-		db:                 db,
-		userRepo:           userRepo,
-		workspaceRepo:      workspaceRepo,
-		contactRepo:        contactRepo,
-		listRepo:           listRepo,
-		templateRepo:       templateRepo,
-		broadcastRepo:      broadcastRepo,
-		messageHistoryRepo: messageHistoryRepo,
-		contactListRepo:    contactListRepo,
+		db:                            db,
+		userRepo:                      userRepo,
+		workspaceRepo:                 workspaceRepo,
+		contactRepo:                   contactRepo,
+		listRepo:                      listRepo,
+		templateRepo:                  templateRepo,
+		broadcastRepo:                 broadcastRepo,
+		messageHistoryRepo:            messageHistoryRepo,
+		contactListRepo:               contactListRepo,
+		transactionalNotificationRepo: transactionalNotificationRepo,
 	}
 }
 
@@ -976,4 +979,72 @@ func (tdf *TestDataFactory) MarkTaskAsFailed(workspaceID, taskID string, errorMs
 func (tdf *TestDataFactory) MarkTaskAsPaused(workspaceID, taskID string, nextRunAfter time.Time, progress float64, state *domain.TaskState) error {
 	taskRepo := repository.NewTaskRepository(tdf.db)
 	return taskRepo.MarkAsPaused(context.Background(), workspaceID, taskID, nextRunAfter, progress, state)
+}
+
+// CreateTransactionalNotification creates a test transactional notification using the repository
+func (tdf *TestDataFactory) CreateTransactionalNotification(workspaceID string, opts ...TransactionalNotificationOption) (*domain.TransactionalNotification, error) {
+	channels := domain.ChannelTemplates{
+		domain.TransactionalChannelEmail: domain.ChannelTemplate{
+			TemplateID: fmt.Sprintf("tmpl%s", uuid.New().String()[:8]),
+			Settings:   map[string]interface{}{},
+		},
+	}
+
+	notification := &domain.TransactionalNotification{
+		ID:          fmt.Sprintf("txn%s", uuid.New().String()[:8]),
+		Name:        fmt.Sprintf("Test Transactional %s", uuid.New().String()[:8]),
+		Description: "Test transactional notification",
+		Channels:    channels,
+		TrackingSettings: notifuse_mjml.TrackingSettings{
+			EnableTracking: true,
+		},
+		Metadata:  map[string]interface{}{},
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(notification)
+	}
+
+	err := tdf.transactionalNotificationRepo.Create(context.Background(), workspaceID, notification)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transactional notification via repository: %w", err)
+	}
+
+	return notification, nil
+}
+
+type TransactionalNotificationOption func(*domain.TransactionalNotification)
+
+// TransactionalNotification option functions
+func WithTransactionalNotificationName(name string) TransactionalNotificationOption {
+	return func(tn *domain.TransactionalNotification) {
+		tn.Name = name
+	}
+}
+
+func WithTransactionalNotificationID(id string) TransactionalNotificationOption {
+	return func(tn *domain.TransactionalNotification) {
+		tn.ID = id
+	}
+}
+
+func WithTransactionalNotificationDescription(description string) TransactionalNotificationOption {
+	return func(tn *domain.TransactionalNotification) {
+		tn.Description = description
+	}
+}
+
+func WithTransactionalNotificationChannels(channels domain.ChannelTemplates) TransactionalNotificationOption {
+	return func(tn *domain.TransactionalNotification) {
+		tn.Channels = channels
+	}
+}
+
+func WithTransactionalNotificationMetadata(metadata map[string]interface{}) TransactionalNotificationOption {
+	return func(tn *domain.TransactionalNotification) {
+		tn.Metadata = metadata
+	}
 }

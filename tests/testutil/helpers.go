@@ -61,6 +61,7 @@ func NewIntegrationTestSuite(t *testing.T, appFactory func(*config.Config) AppIn
 		app.GetBroadcastRepository(),
 		app.GetMessageHistoryRepository(),
 		app.GetContactListRepository(),
+		app.GetTransactionalNotificationRepository(),
 	)
 
 	// Seed initial test data
