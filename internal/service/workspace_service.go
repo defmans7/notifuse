@@ -150,8 +150,8 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 			SecretKey:            randomSecretKey,
 			EmailTrackingEnabled: true,
 		},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	if err := workspace.Validate(s.secretKey); err != nil {
@@ -175,8 +175,8 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		UserID:      user.ID,
 		WorkspaceID: id,
 		Role:        "owner",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 
 	if err := userWorkspace.Validate(); err != nil {
@@ -200,8 +200,8 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 	contact := &domain.Contact{
 		Email:     userDetails.Email,
 		FirstName: &domain.NullableString{String: userDetails.Name, IsNull: false},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	if err := contact.Validate(); err != nil {
@@ -222,8 +222,8 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		IsDoubleOptin: false,
 		IsPublic:      false,
 		Description:   "This is a test list",
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
 	}
 
 	err = s.listService.CreateList(ctx, id, list)
@@ -293,15 +293,15 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		// If this is a new block (no ID), generate one and set created time
 		if block.ID == "" {
 			block.ID = uuid.New().String()
-			block.Created = time.Now()
+			block.Created = time.Now().UTC()
 		}
 
 		// Always update the Updated timestamp
-		block.Updated = time.Now()
+		block.Updated = time.Now().UTC()
 	}
 	existingWorkspace.Settings.TemplateBlocks = settings.TemplateBlocks
 
-	existingWorkspace.UpdatedAt = time.Now()
+	existingWorkspace.UpdatedAt = time.Now().UTC()
 
 	if err := existingWorkspace.Validate(s.secretKey); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
@@ -386,8 +386,8 @@ func (s *WorkspaceService) AddUserToWorkspace(ctx context.Context, workspaceID s
 		UserID:      userID,
 		WorkspaceID: workspaceID,
 		Role:        role,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 
 	if err := userWorkspace.Validate(); err != nil {
@@ -473,7 +473,7 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 
 	// Update new owner's role to owner
 	newOwnerWorkspace.Role = "owner"
-	newOwnerWorkspace.UpdatedAt = time.Now()
+	newOwnerWorkspace.UpdatedAt = time.Now().UTC()
 	if err := s.repo.AddUserToWorkspace(ctx, newOwnerWorkspace); err != nil {
 		s.logger.WithField("workspace_id", workspaceID).WithField("new_owner_id", newOwnerID).WithField("error", err.Error()).Error("Failed to update new owner's role")
 		return err
@@ -481,7 +481,7 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 
 	// Update current owner's role to member
 	currentOwnerWorkspace.Role = "member"
-	currentOwnerWorkspace.UpdatedAt = time.Now()
+	currentOwnerWorkspace.UpdatedAt = time.Now().UTC()
 	if err := s.repo.AddUserToWorkspace(ctx, currentOwnerWorkspace); err != nil {
 		s.logger.WithField("workspace_id", workspaceID).WithField("current_owner_id", currentOwnerID).WithField("error", err.Error()).Error("Failed to update current owner's role")
 		return err
@@ -553,8 +553,8 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 			UserID:      existingUser.ID,
 			WorkspaceID: workspaceID,
 			Role:        "member", // Always set invited users as members
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
+			CreatedAt:   time.Now().UTC(),
+			UpdatedAt:   time.Now().UTC(),
 		}
 		err = s.repo.AddUserToWorkspace(ctx, userWorkspace)
 		if err != nil {
@@ -569,7 +569,7 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 	// User doesn't exist or there was an error (treat as user doesn't exist for security)
 	// Create an invitation
 	invitationID := uuid.New().String()
-	expiresAt := time.Now().Add(15 * 24 * time.Hour) // 15 days
+	expiresAt := time.Now().UTC().Add(15 * 24 * time.Hour) // 15 days
 
 	invitation := &domain.WorkspaceInvitation{
 		ID:          invitationID,
@@ -577,8 +577,8 @@ func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email 
 		InviterID:   inviter.ID,
 		Email:       email,
 		ExpiresAt:   expiresAt,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 
 	err = s.repo.CreateInvitation(ctx, invitation)
@@ -672,8 +672,8 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 		ID:        uuid.New().String(),
 		Email:     apiEmail,
 		Type:      domain.UserTypeAPIKey,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	err = s.userRepo.CreateUser(ctx, apiUser)
@@ -686,8 +686,8 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 		UserID:      apiUser.ID,
 		WorkspaceID: workspaceID,
 		Role:        "member",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 	err = s.repo.AddUserToWorkspace(ctx, newUserWorkspace)
 	if err != nil {
@@ -791,8 +791,8 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, workspaceID, n
 		Name:          name,
 		Type:          integrationType,
 		EmailProvider: provider,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
 	}
 
 	// Validate the integration
@@ -879,7 +879,7 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, workspaceID, i
 		Type:          existingIntegration.Type, // Type cannot be changed
 		EmailProvider: provider,
 		CreatedAt:     existingIntegration.CreatedAt,
-		UpdatedAt:     time.Now(),
+		UpdatedAt:     time.Now().UTC(),
 	}
 
 	// Validate the updated integration

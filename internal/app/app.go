@@ -36,6 +36,16 @@ type AppInterface interface {
 	GetDB() *sql.DB
 	GetMailer() mailer.Mailer
 
+	// Repository getters for testing
+	GetUserRepository() domain.UserRepository
+	GetWorkspaceRepository() domain.WorkspaceRepository
+	GetContactRepository() domain.ContactRepository
+	GetListRepository() domain.ListRepository
+	GetTemplateRepository() domain.TemplateRepository
+	GetBroadcastRepository() domain.BroadcastRepository
+	GetMessageHistoryRepository() domain.MessageHistoryRepository
+	GetContactListRepository() domain.ContactListRepository
+
 	// Server status methods
 	IsServerCreated() bool
 	WaitForServerStart(ctx context.Context) bool
@@ -749,6 +759,39 @@ func (a *App) GetDB() *sql.DB {
 // GetMailer returns the app's mailer
 func (a *App) GetMailer() mailer.Mailer {
 	return a.mailer
+}
+
+// Repository getters for testing
+func (a *App) GetUserRepository() domain.UserRepository {
+	return a.userRepo
+}
+
+func (a *App) GetWorkspaceRepository() domain.WorkspaceRepository {
+	return a.workspaceRepo
+}
+
+func (a *App) GetContactRepository() domain.ContactRepository {
+	return a.contactRepo
+}
+
+func (a *App) GetListRepository() domain.ListRepository {
+	return a.listRepo
+}
+
+func (a *App) GetTemplateRepository() domain.TemplateRepository {
+	return a.templateRepo
+}
+
+func (a *App) GetBroadcastRepository() domain.BroadcastRepository {
+	return a.broadcastRepo
+}
+
+func (a *App) GetMessageHistoryRepository() domain.MessageHistoryRepository {
+	return a.messageHistoryRepo
+}
+
+func (a *App) GetContactListRepository() domain.ContactListRepository {
+	return a.contactListRepo
 }
 
 // SetHandler allows setting a custom HTTP handler

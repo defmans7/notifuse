@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -10,17 +11,45 @@ import (
 	"github.com/google/uuid"
 )
 
-// TestDataFactory creates test data entities
+// TestDataFactory creates test data entities using domain repositories
 type TestDataFactory struct {
-	db *sql.DB
+	db                 *sql.DB
+	userRepo           domain.UserRepository
+	workspaceRepo      domain.WorkspaceRepository
+	contactRepo        domain.ContactRepository
+	listRepo           domain.ListRepository
+	templateRepo       domain.TemplateRepository
+	broadcastRepo      domain.BroadcastRepository
+	messageHistoryRepo domain.MessageHistoryRepository
+	contactListRepo    domain.ContactListRepository
 }
 
-// NewTestDataFactory creates a new test data factory
-func NewTestDataFactory(db *sql.DB) *TestDataFactory {
-	return &TestDataFactory{db: db}
+// NewTestDataFactory creates a new test data factory with repository dependencies
+func NewTestDataFactory(
+	db *sql.DB,
+	userRepo domain.UserRepository,
+	workspaceRepo domain.WorkspaceRepository,
+	contactRepo domain.ContactRepository,
+	listRepo domain.ListRepository,
+	templateRepo domain.TemplateRepository,
+	broadcastRepo domain.BroadcastRepository,
+	messageHistoryRepo domain.MessageHistoryRepository,
+	contactListRepo domain.ContactListRepository,
+) *TestDataFactory {
+	return &TestDataFactory{
+		db:                 db,
+		userRepo:           userRepo,
+		workspaceRepo:      workspaceRepo,
+		contactRepo:        contactRepo,
+		listRepo:           listRepo,
+		templateRepo:       templateRepo,
+		broadcastRepo:      broadcastRepo,
+		messageHistoryRepo: messageHistoryRepo,
+		contactListRepo:    contactListRepo,
+	}
 }
 
-// CreateUser creates a test user
+// CreateUser creates a test user using the user repository
 func (tdf *TestDataFactory) CreateUser(opts ...UserOption) (*domain.User, error) {
 	user := &domain.User{
 		ID:        uuid.New().String(),
@@ -36,23 +65,23 @@ func (tdf *TestDataFactory) CreateUser(opts ...UserOption) (*domain.User, error)
 		opt(user)
 	}
 
-	query := `
-		INSERT INTO users (id, email, name, type, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`
-	_, err := tdf.db.Exec(query, user.ID, user.Email, user.Name, user.Type, user.CreatedAt, user.UpdatedAt)
+	err := tdf.userRepo.CreateUser(context.Background(), user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("failed to create user via repository: %w", err)
 	}
 
 	return user, nil
 }
 
-// CreateWorkspace creates a test workspace
+// CreateWorkspace creates a test workspace using the workspace repository
 func (tdf *TestDataFactory) CreateWorkspace(opts ...WorkspaceOption) (*domain.Workspace, error) {
 	workspace := &domain.Workspace{
-		ID:        uuid.New().String(),
-		Name:      fmt.Sprintf("Test Workspace %s", uuid.New().String()[:8]),
+		ID:   fmt.Sprintf("test%s", uuid.New().String()[:8]), // Keep it under 20 chars
+		Name: fmt.Sprintf("Test Workspace %s", uuid.New().String()[:8]),
+		Settings: domain.WorkspaceSettings{
+			Timezone:  "UTC",
+			SecretKey: fmt.Sprintf("test-secret-key-%s", uuid.New().String()[:8]),
+		},
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}
@@ -62,21 +91,16 @@ func (tdf *TestDataFactory) CreateWorkspace(opts ...WorkspaceOption) (*domain.Wo
 		opt(workspace)
 	}
 
-	// Note: Using simplified query since Workspace has complex Settings and Integrations fields
-	query := `
-		INSERT INTO workspaces (id, name, settings, integrations, created_at, updated_at)
-		VALUES ($1, $2, '{}', '[]', $3, $4)
-	`
-	_, err := tdf.db.Exec(query, workspace.ID, workspace.Name, workspace.CreatedAt, workspace.UpdatedAt)
+	err := tdf.workspaceRepo.Create(context.Background(), workspace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create workspace: %w", err)
+		return nil, fmt.Errorf("failed to create workspace via repository: %w", err)
 	}
 
 	return workspace, nil
 }
 
-// CreateContact creates a test contact
-func (tdf *TestDataFactory) CreateContact(opts ...ContactOption) (*domain.Contact, error) {
+// CreateContact creates a test contact using the contact repository
+func (tdf *TestDataFactory) CreateContact(workspaceID string, opts ...ContactOption) (*domain.Contact, error) {
 	contact := &domain.Contact{
 		Email:     fmt.Sprintf("contact-%s@example.com", uuid.New().String()[:8]),
 		FirstName: &domain.NullableString{String: "Test", IsNull: false},
@@ -92,29 +116,19 @@ func (tdf *TestDataFactory) CreateContact(opts ...ContactOption) (*domain.Contac
 		opt(contact)
 	}
 
-	query := `
-		INSERT INTO contacts (email, external_id, timezone, language, first_name, last_name, 
-			phone, address_line_1, address_line_2, country, postcode, state, job_title,
-			lifetime_value, orders_count, last_order_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-	`
-	_, err := tdf.db.Exec(query,
-		contact.Email, contact.ExternalID, contact.Timezone, contact.Language,
-		contact.FirstName, contact.LastName, contact.Phone, contact.AddressLine1,
-		contact.AddressLine2, contact.Country, contact.Postcode, contact.State,
-		contact.JobTitle, contact.LifetimeValue, contact.OrdersCount, contact.LastOrderAt,
-		contact.CreatedAt, contact.UpdatedAt)
+	// Use UpsertContact since that's the method available in the repository
+	_, err := tdf.contactRepo.UpsertContact(context.Background(), workspaceID, contact)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create contact: %w", err)
+		return nil, fmt.Errorf("failed to create contact via repository: %w", err)
 	}
 
 	return contact, nil
 }
 
-// CreateList creates a test list
-func (tdf *TestDataFactory) CreateList(opts ...ListOption) (*domain.List, error) {
+// CreateList creates a test list using the list repository
+func (tdf *TestDataFactory) CreateList(workspaceID string, opts ...ListOption) (*domain.List, error) {
 	list := &domain.List{
-		ID:            uuid.New().String(),
+		ID:            fmt.Sprintf("list%s", uuid.New().String()[:8]), // Keep it under 32 chars
 		Name:          fmt.Sprintf("Test List %s", uuid.New().String()[:8]),
 		IsDoubleOptin: false,
 		IsPublic:      false,
@@ -127,23 +141,18 @@ func (tdf *TestDataFactory) CreateList(opts ...ListOption) (*domain.List, error)
 		opt(list)
 	}
 
-	query := `
-		INSERT INTO lists (id, name, is_double_optin, is_public, description, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`
-	_, err := tdf.db.Exec(query, list.ID, list.Name, list.IsDoubleOptin, list.IsPublic,
-		list.Description, list.CreatedAt, list.UpdatedAt)
+	err := tdf.listRepo.CreateList(context.Background(), workspaceID, list)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create list: %w", err)
+		return nil, fmt.Errorf("failed to create list via repository: %w", err)
 	}
 
 	return list, nil
 }
 
-// CreateTemplate creates a test template
-func (tdf *TestDataFactory) CreateTemplate(opts ...TemplateOption) (*domain.Template, error) {
+// CreateTemplate creates a test template using the template repository
+func (tdf *TestDataFactory) CreateTemplate(workspaceID string, opts ...TemplateOption) (*domain.Template, error) {
 	template := &domain.Template{
-		ID:        uuid.New().String(),
+		ID:        fmt.Sprintf("tmpl%s", uuid.New().String()[:8]), // Keep it under 32 chars
 		Name:      fmt.Sprintf("Test Template %s", uuid.New().String()[:8]),
 		Version:   1,
 		Channel:   "email",
@@ -158,23 +167,18 @@ func (tdf *TestDataFactory) CreateTemplate(opts ...TemplateOption) (*domain.Temp
 		opt(template)
 	}
 
-	query := `
-		INSERT INTO templates (id, name, version, channel, email, category, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`
-	_, err := tdf.db.Exec(query, template.ID, template.Name, template.Version,
-		template.Channel, template.Email, template.Category, template.CreatedAt, template.UpdatedAt)
+	err := tdf.templateRepo.CreateTemplate(context.Background(), workspaceID, template)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create template: %w", err)
+		return nil, fmt.Errorf("failed to create template via repository: %w", err)
 	}
 
 	return template, nil
 }
 
-// CreateBroadcast creates a test broadcast
+// CreateBroadcast creates a test broadcast using the broadcast repository
 func (tdf *TestDataFactory) CreateBroadcast(workspaceID string, opts ...BroadcastOption) (*domain.Broadcast, error) {
 	broadcast := &domain.Broadcast{
-		ID:           uuid.New().String(),
+		ID:           fmt.Sprintf("bc%s", uuid.New().String()[:8]), // Keep it under 32 chars
 		WorkspaceID:  workspaceID,
 		Name:         fmt.Sprintf("Test Broadcast %s", uuid.New().String()[:8]),
 		Status:       domain.BroadcastStatusDraft,
@@ -190,18 +194,89 @@ func (tdf *TestDataFactory) CreateBroadcast(workspaceID string, opts ...Broadcas
 		opt(broadcast)
 	}
 
-	query := `
-		INSERT INTO broadcasts (id, workspace_id, name, status, audience, schedule, test_settings, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`
-	_, err := tdf.db.Exec(query, broadcast.ID, broadcast.WorkspaceID, broadcast.Name,
-		broadcast.Status, broadcast.Audience, broadcast.Schedule, broadcast.TestSettings,
-		broadcast.CreatedAt, broadcast.UpdatedAt)
+	err := tdf.broadcastRepo.CreateBroadcast(context.Background(), broadcast)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create broadcast: %w", err)
+		return nil, fmt.Errorf("failed to create broadcast via repository: %w", err)
 	}
 
 	return broadcast, nil
+}
+
+// CreateMessageHistory creates a test message history using the message history repository
+func (tdf *TestDataFactory) CreateMessageHistory(workspaceID string, opts ...MessageHistoryOption) (*domain.MessageHistory, error) {
+	now := time.Now().UTC()
+	message := &domain.MessageHistory{
+		ID:              uuid.New().String(),
+		ContactEmail:    fmt.Sprintf("contact-%s@example.com", uuid.New().String()[:8]),
+		TemplateID:      uuid.New().String(),
+		TemplateVersion: 1,
+		Channel:         "email",
+		MessageData: domain.MessageData{
+			Data: map[string]interface{}{
+				"subject": "Test Message",
+				"body":    "This is a test message",
+			},
+			Metadata: map[string]interface{}{
+				"test": true,
+			},
+		},
+		SentAt:    now,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(message)
+	}
+
+	err := tdf.messageHistoryRepo.Create(context.Background(), workspaceID, message)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create message history via repository: %w", err)
+	}
+
+	return message, nil
+}
+
+// CreateContactList creates a test contact list relationship using the repository
+func (tdf *TestDataFactory) CreateContactList(workspaceID string, opts ...ContactListOption) (*domain.ContactList, error) {
+	contactList := &domain.ContactList{
+		Email:     fmt.Sprintf("contact-%s@example.com", uuid.New().String()[:8]),
+		ListID:    uuid.New().String(),
+		Status:    domain.ContactListStatusActive,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(contactList)
+	}
+
+	err := tdf.contactListRepo.AddContactToList(context.Background(), workspaceID, contactList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create contact list via repository: %w", err)
+	}
+
+	return contactList, nil
+}
+
+// AddUserToWorkspace adds a user to a workspace with the specified role
+func (tdf *TestDataFactory) AddUserToWorkspace(userID, workspaceID, role string) error {
+	userWorkspace := &domain.UserWorkspace{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Role:        role,
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
+	}
+
+	err := tdf.workspaceRepo.AddUserToWorkspace(context.Background(), userWorkspace)
+	if err != nil {
+		return fmt.Errorf("failed to add user to workspace: %w", err)
+	}
+
+	return nil
 }
 
 // Option types for customizing test data
@@ -211,6 +286,8 @@ type ContactOption func(*domain.Contact)
 type ListOption func(*domain.List)
 type TemplateOption func(*domain.Template)
 type BroadcastOption func(*domain.Broadcast)
+type MessageHistoryOption func(*domain.MessageHistory)
+type ContactListOption func(*domain.ContactList)
 
 // User options
 func WithUserEmail(email string) UserOption {
@@ -303,6 +380,162 @@ func WithBroadcastStatus(status domain.BroadcastStatus) BroadcastOption {
 	}
 }
 
+func WithBroadcastABTesting(templateIDs []string) BroadcastOption {
+	return func(b *domain.Broadcast) {
+		if len(templateIDs) >= 2 {
+			b.TestSettings.Enabled = true
+			b.TestSettings.SamplePercentage = 50
+			b.TestSettings.AutoSendWinner = true
+			b.TestSettings.AutoSendWinnerMetric = "open_rate"
+			b.TestSettings.TestDurationHours = 24
+			// Create variations for the templates
+			variations := make([]domain.BroadcastVariation, len(templateIDs))
+			for i, templateID := range templateIDs {
+				variations[i] = domain.BroadcastVariation{
+					VariationName: fmt.Sprintf("Version %c", 'A'+i),
+					TemplateID:    templateID,
+				}
+			}
+			b.TestSettings.Variations = variations
+		}
+	}
+}
+
+// Message history options
+func WithMessageHistoryContactEmail(email string) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		m.ContactEmail = email
+	}
+}
+
+func WithMessageHistoryTemplateID(templateID string) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		m.TemplateID = templateID
+	}
+}
+
+func WithMessageHistoryTemplateVersion(version int64) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		m.TemplateVersion = version
+	}
+}
+
+func WithMessageHistoryChannel(channel string) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		m.Channel = channel
+	}
+}
+
+// ContactList options
+func WithContactListEmail(email string) ContactListOption {
+	return func(cl *domain.ContactList) {
+		cl.Email = email
+	}
+}
+
+func WithContactListListID(listID string) ContactListOption {
+	return func(cl *domain.ContactList) {
+		cl.ListID = listID
+	}
+}
+
+func WithContactListStatus(status domain.ContactListStatus) ContactListOption {
+	return func(cl *domain.ContactList) {
+		cl.Status = status
+	}
+}
+
+// Convenience aliases for cleaner test code
+func WithMessageContact(email string) MessageHistoryOption {
+	return WithMessageHistoryContactEmail(email)
+}
+
+func WithMessageTemplate(templateID string) MessageHistoryOption {
+	return WithMessageHistoryTemplateID(templateID)
+}
+
+func WithMessageChannel(channel string) MessageHistoryOption {
+	return WithMessageHistoryChannel(channel)
+}
+
+func WithMessageBroadcast(broadcastID string) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		m.BroadcastID = &broadcastID
+	}
+}
+
+func WithMessageSentAt(sentAt time.Time) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		m.SentAt = sentAt
+	}
+}
+
+func WithMessageDelivered(delivered bool) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		if delivered {
+			now := time.Now().UTC()
+			m.DeliveredAt = &now
+		} else {
+			m.DeliveredAt = nil
+		}
+	}
+}
+
+func WithMessageOpened(opened bool) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		if opened {
+			now := time.Now().UTC()
+			m.OpenedAt = &now
+			// If opened, also mark as delivered
+			if m.DeliveredAt == nil {
+				m.DeliveredAt = &now
+			}
+		} else {
+			m.OpenedAt = nil
+		}
+	}
+}
+
+func WithMessageClicked(clicked bool) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		if clicked {
+			now := time.Now().UTC()
+			m.ClickedAt = &now
+			// If clicked, also mark as opened and delivered
+			if m.OpenedAt == nil {
+				m.OpenedAt = &now
+			}
+			if m.DeliveredAt == nil {
+				m.DeliveredAt = &now
+			}
+		} else {
+			m.ClickedAt = nil
+		}
+	}
+}
+
+func WithMessageFailed(failed bool) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		if failed {
+			now := time.Now().UTC()
+			m.FailedAt = &now
+		} else {
+			m.FailedAt = nil
+		}
+	}
+}
+
+func WithMessageBounced(bounced bool) MessageHistoryOption {
+	return func(m *domain.MessageHistory) {
+		if bounced {
+			now := time.Now().UTC()
+			m.BouncedAt = &now
+		} else {
+			m.BouncedAt = nil
+		}
+	}
+}
+
 // Helper functions to create default structures
 func createDefaultEmailTemplate() *domain.EmailTemplate {
 	return &domain.EmailTemplate{
@@ -321,45 +554,17 @@ func createDefaultEmailTemplate() *domain.EmailTemplate {
 }
 
 func createDefaultMJMLBlock() notifuse_mjml.EmailBlock {
-	// Create a simple MJML structure using map-based approach for testing
-	baseBlock := notifuse_mjml.BaseBlock{
-		ID:         "mjml-1",
-		Type:       notifuse_mjml.MJMLComponentMjml,
-		Attributes: map[string]interface{}{"version": "4.0.0"},
-	}
-
-	bodyBlock := notifuse_mjml.BaseBlock{
-		ID:         "body-1",
-		Type:       notifuse_mjml.MJMLComponentMjBody,
-		Attributes: map[string]interface{}{},
-	}
-
-	sectionBlock := notifuse_mjml.BaseBlock{
-		ID:         "section-1",
-		Type:       notifuse_mjml.MJMLComponentMjSection,
-		Attributes: map[string]interface{}{},
-	}
-
-	columnBlock := notifuse_mjml.BaseBlock{
-		ID:         "column-1",
-		Type:       notifuse_mjml.MJMLComponentMjColumn,
-		Attributes: map[string]interface{}{},
-	}
-
+	// Create a simple text block for testing - avoid complex nested structures
 	textBlock := notifuse_mjml.BaseBlock{
-		ID:         "text-1",
-		Type:       notifuse_mjml.MJMLComponentMjText,
-		Attributes: map[string]interface{}{},
-		Children:   []interface{}{"Hello Test!"},
+		ID:   "text-1",
+		Type: notifuse_mjml.MJMLComponentMjText,
+		Attributes: map[string]interface{}{
+			"content": "Hello Test!",
+		},
+		Children: []interface{}{},
 	}
 
-	// Build the hierarchy from bottom up
-	columnBlock.Children = []interface{}{&textBlock}
-	sectionBlock.Children = []interface{}{&columnBlock}
-	bodyBlock.Children = []interface{}{&sectionBlock}
-	baseBlock.Children = []interface{}{&bodyBlock}
-
-	return &baseBlock
+	return &textBlock
 }
 
 func createDefaultAudience() domain.AudienceSettings {

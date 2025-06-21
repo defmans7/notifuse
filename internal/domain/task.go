@@ -228,8 +228,8 @@ func (r *CreateTaskRequest) Validate() (*Task, error) {
 		MaxRetries:    r.MaxRetries,
 		RetryInterval: r.RetryInterval,
 		NextRunAfter:  r.NextRunAfter,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
 	}
 
 	// Set defaults if not provided

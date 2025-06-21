@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -45,24 +46,28 @@ func TestUserSignInFlow(t *testing.T) {
 		assert.Contains(t, response, "code")
 		assert.NotEmpty(t, response["code"])
 
-		// Verify user was created in database
-		db := suite.DBManager.GetDB()
-		var userExists bool
-		err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", email).Scan(&userExists)
+		// Verify user was created in database using repository
+		app := suite.ServerManager.GetApp()
+		userRepo := app.GetUserRepository()
+		user, err := userRepo.GetUserByEmail(context.Background(), email)
 		require.NoError(t, err)
-		assert.True(t, userExists, "User should be created in database")
+		require.NotNil(t, user)
+		assert.Equal(t, email, user.Email)
 
-		// Verify session was created
-		var sessionExists bool
-		err = db.QueryRow(`
-			SELECT EXISTS(
-				SELECT 1 FROM user_sessions s 
-				JOIN users u ON s.user_id = u.id 
-				WHERE u.email = $1 AND s.magic_code IS NOT NULL
-			)
-		`, email).Scan(&sessionExists)
+		// Verify session was created using repository
+		sessions, err := userRepo.GetSessionsByUserID(context.Background(), user.ID)
 		require.NoError(t, err)
-		assert.True(t, sessionExists, "Session with magic code should be created")
+		require.NotEmpty(t, sessions, "Session should be created")
+
+		// Find session with magic code
+		hasSessionWithMagicCode := false
+		for _, session := range sessions {
+			if session.MagicCode != "" {
+				hasSessionWithMagicCode = true
+				break
+			}
+		}
+		assert.True(t, hasSessionWithMagicCode, "Session with magic code should be created")
 	})
 
 	t.Run("successful signin for existing user", func(t *testing.T) {
@@ -82,16 +87,15 @@ func TestUserSignInFlow(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
-		// Verify multiple sessions exist for same user
-		db := suite.DBManager.GetDB()
-		var sessionCount int
-		err = db.QueryRow(`
-			SELECT COUNT(*) FROM user_sessions s 
-			JOIN users u ON s.user_id = u.id 
-			WHERE u.email = $1
-		`, email).Scan(&sessionCount)
+		// Verify multiple sessions exist for same user using repository
+		app := suite.ServerManager.GetApp()
+		userRepo := app.GetUserRepository()
+		user, err := userRepo.GetUserByEmail(context.Background(), email)
 		require.NoError(t, err)
-		assert.GreaterOrEqual(t, sessionCount, 2, "Multiple sessions should exist for user")
+
+		sessions, err := userRepo.GetSessionsByUserID(context.Background(), user.ID)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(sessions), 2, "Multiple sessions should exist for user")
 	})
 
 	t.Run("empty email", func(t *testing.T) {
@@ -190,17 +194,19 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 		assert.Equal(t, domain.UserTypeUser, authResponse.User.Type)
 		assert.False(t, authResponse.ExpiresAt.IsZero(), "Token expiration should be set")
 
-		// Verify magic code was cleared from session
-		db := suite.DBManager.GetDB()
-		var magicCode string
-		err = db.QueryRow(`
-			SELECT COALESCE(s.magic_code, '') FROM user_sessions s 
-			JOIN users u ON s.user_id = u.id 
-			WHERE u.email = $1 
-			ORDER BY s.created_at DESC LIMIT 1
-		`, email).Scan(&magicCode)
+		// Verify magic code was cleared from session using repository
+		app := suite.ServerManager.GetApp()
+		userRepo := app.GetUserRepository()
+		user, err := userRepo.GetUserByEmail(context.Background(), email)
 		require.NoError(t, err)
-		assert.Empty(t, magicCode, "Magic code should be cleared after verification")
+
+		sessions, err := userRepo.GetSessionsByUserID(context.Background(), user.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, sessions, "Session should exist")
+
+		// Check that magic code is empty in the most recent session
+		mostRecentSession := sessions[0] // Sessions are ordered by created_at DESC
+		assert.Empty(t, mostRecentSession.MagicCode, "Magic code should be cleared after verification")
 	})
 
 	t.Run("invalid magic code", func(t *testing.T) {
@@ -234,24 +240,33 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 	t.Run("expired magic code", func(t *testing.T) {
 		email := "expired@example.com"
 
-		// Create user and session directly in database with expired code
-		db := suite.DBManager.GetDB()
+		// Create user and session using repositories with expired code
+		app := suite.ServerManager.GetApp()
+		userRepo := app.GetUserRepository()
 
-		// Create user with proper UUID
-		userID := "550e8400-e29b-41d4-a716-446655440001"
-		_, err := db.Exec(`
-			INSERT INTO users (id, email, name, type, created_at, updated_at)
-			VALUES ($1, $2, 'Test User', 'user', NOW(), NOW())
-		`, userID, email)
+		// Create user using repository
+		user := &domain.User{
+			ID:        "550e8400-e29b-41d4-a716-446655440001",
+			Email:     email,
+			Name:      "Test User",
+			Type:      domain.UserTypeUser,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+		err := userRepo.CreateUser(context.Background(), user)
 		require.NoError(t, err)
 
-		// Create session with expired magic code
-		sessionID := "550e8400-e29b-41d4-a716-446655440002"
-		expiredTime := time.Now().Add(-1 * time.Hour) // 1 hour ago
-		_, err = db.Exec(`
-			INSERT INTO user_sessions (id, user_id, expires_at, created_at, magic_code, magic_code_expires_at)
-			VALUES ($1, $2, $3, NOW(), '123456', $4)
-		`, sessionID, userID, time.Now().Add(24*time.Hour), expiredTime)
+		// Create session with expired magic code using repository
+		expiredTime := time.Now().UTC().Add(-1 * time.Hour) // 1 hour ago
+		session := &domain.Session{
+			ID:               "550e8400-e29b-41d4-a716-446655440002",
+			UserID:           user.ID,
+			ExpiresAt:        time.Now().UTC().Add(24 * time.Hour),
+			CreatedAt:        time.Now().UTC(),
+			MagicCode:        "123456",
+			MagicCodeExpires: expiredTime,
+		}
+		err = userRepo.CreateSession(context.Background(), session)
 		require.NoError(t, err)
 
 		// Try to verify expired code
@@ -402,7 +417,6 @@ func TestUserSessionManagement(t *testing.T) {
 	defer suite.Cleanup()
 
 	client := suite.APIClient
-	db := suite.DBManager.GetDB()
 
 	t.Run("multiple sessions for same user", func(t *testing.T) {
 		email := "multisession@example.com"
@@ -416,15 +430,15 @@ func TestUserSessionManagement(t *testing.T) {
 			resp.Body.Close()
 		}
 
-		// Verify multiple sessions exist
-		var sessionCount int
-		err := db.QueryRow(`
-			SELECT COUNT(*) FROM user_sessions s 
-			JOIN users u ON s.user_id = u.id 
-			WHERE u.email = $1
-		`, email).Scan(&sessionCount)
+		// Verify multiple sessions exist using repository
+		app := suite.ServerManager.GetApp()
+		userRepo := app.GetUserRepository()
+		user, err := userRepo.GetUserByEmail(context.Background(), email)
 		require.NoError(t, err)
-		assert.Equal(t, 3, sessionCount, "Should have 3 sessions for user")
+
+		sessions, err := userRepo.GetSessionsByUserID(context.Background(), user.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(sessions), "Should have 3 sessions for user")
 	})
 
 	t.Run("session cleanup after verification", func(t *testing.T) {
@@ -434,24 +448,23 @@ func TestUserSessionManagement(t *testing.T) {
 		token := performCompleteSignInFlow(t, client, email)
 		assert.NotEmpty(t, token)
 
-		// Verify magic code was cleared but session still exists
-		var sessionCount int
-		var magicCodeCount int
-
-		err := db.QueryRow(`
-			SELECT COUNT(*) FROM user_sessions s 
-			JOIN users u ON s.user_id = u.id 
-			WHERE u.email = $1
-		`, email).Scan(&sessionCount)
+		// Verify magic code was cleared but session still exists using repository
+		app := suite.ServerManager.GetApp()
+		userRepo := app.GetUserRepository()
+		user, err := userRepo.GetUserByEmail(context.Background(), email)
 		require.NoError(t, err)
-		assert.GreaterOrEqual(t, sessionCount, 1, "Session should still exist")
 
-		err = db.QueryRow(`
-			SELECT COUNT(*) FROM user_sessions s 
-			JOIN users u ON s.user_id = u.id 
-			WHERE u.email = $1 AND s.magic_code != ''
-		`, email).Scan(&magicCodeCount)
+		sessions, err := userRepo.GetSessionsByUserID(context.Background(), user.ID)
 		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(sessions), 1, "Session should still exist")
+
+		// Count sessions with magic code
+		magicCodeCount := 0
+		for _, session := range sessions {
+			if session.MagicCode != "" {
+				magicCodeCount++
+			}
+		}
 		assert.Equal(t, 0, magicCodeCount, "Magic code should be cleared")
 	})
 
@@ -465,26 +478,25 @@ func TestUserSessionManagement(t *testing.T) {
 		require.NoError(t, err)
 		resp.Body.Close()
 
-		// Check session properties in database
-		var sessionID, userID string
-		var expiresAt, createdAt time.Time
-		var magicCode string
-
-		err = db.QueryRow(`
-			SELECT s.id, s.user_id, s.expires_at, s.created_at, s.magic_code
-			FROM user_sessions s 
-			JOIN users u ON s.user_id = u.id 
-			WHERE u.email = $1 
-			ORDER BY s.created_at DESC LIMIT 1
-		`, email).Scan(&sessionID, &userID, &expiresAt, &createdAt, &magicCode)
+		// Check session properties using repository
+		app := suite.ServerManager.GetApp()
+		userRepo := app.GetUserRepository()
+		user, err := userRepo.GetUserByEmail(context.Background(), email)
 		require.NoError(t, err)
 
-		assert.NotEmpty(t, sessionID, "Session should have ID")
-		assert.NotEmpty(t, userID, "Session should be linked to user")
-		assert.True(t, expiresAt.After(time.Now()), "Session should not be expired")
-		assert.True(t, createdAt.Before(time.Now().Add(time.Minute)), "Session should be recently created")
-		assert.NotEmpty(t, magicCode, "Session should have magic code")
-		assert.Len(t, magicCode, 6, "Magic code should be 6 digits")
+		sessions, err := userRepo.GetSessionsByUserID(context.Background(), user.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, sessions, "Should have at least one session")
+
+		// Get the most recent session (first in the list since they're ordered by created_at DESC)
+		session := sessions[0]
+
+		assert.NotEmpty(t, session.ID, "Session should have ID")
+		assert.Equal(t, user.ID, session.UserID, "Session should be linked to user")
+		assert.True(t, session.ExpiresAt.After(time.Now()), "Session should not be expired")
+		assert.True(t, session.CreatedAt.Before(time.Now().Add(time.Minute)), "Session should be recently created")
+		assert.NotEmpty(t, session.MagicCode, "Session should have magic code")
+		assert.Len(t, session.MagicCode, 6, "Magic code should be 6 digits")
 	})
 }
 

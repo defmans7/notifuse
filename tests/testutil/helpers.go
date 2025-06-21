@@ -49,8 +49,19 @@ func NewIntegrationTestSuite(t *testing.T, appFactory func(*config.Config) AppIn
 	// Setup API client
 	suite.APIClient = NewAPIClient(suite.ServerManager.GetURL())
 
-	// Setup data factory
-	suite.DataFactory = NewTestDataFactory(suite.DBManager.GetDB())
+	// Setup data factory with repositories from the app
+	app := suite.ServerManager.GetApp()
+	suite.DataFactory = NewTestDataFactory(
+		suite.DBManager.GetDB(),
+		app.GetUserRepository(),
+		app.GetWorkspaceRepository(),
+		app.GetContactRepository(),
+		app.GetListRepository(),
+		app.GetTemplateRepository(),
+		app.GetBroadcastRepository(),
+		app.GetMessageHistoryRepository(),
+		app.GetContactListRepository(),
+	)
 
 	// Seed initial test data
 	err = suite.DBManager.SeedTestData()

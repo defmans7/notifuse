@@ -44,25 +44,52 @@ func (c *APIClient) GetWorkspaceID() string {
 	return c.workspaceID
 }
 
-// Login authenticates and sets the token
+// Login authenticates using the magic code flow and sets the token
 func (c *APIClient) Login(email, password string) error {
-	loginReq := map[string]string{
-		"email":    email,
-		"password": password,
+	// Step 1: Sign in to get magic code
+	signinReq := map[string]string{
+		"email": email,
 	}
 
-	resp, err := c.Post("/api/auth.login", loginReq)
+	signinResp, err := c.Post("/api/user.signin", signinReq)
 	if err != nil {
-		return fmt.Errorf("login request failed: %w", err)
+		return fmt.Errorf("signin request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer signinResp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
+	if signinResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(signinResp.Body)
+		return fmt.Errorf("signin failed with status %d: %s", signinResp.StatusCode, string(body))
 	}
 
-	var loginResp struct {
+	var signinResponse map[string]interface{}
+	if err := json.NewDecoder(signinResp.Body).Decode(&signinResponse); err != nil {
+		return fmt.Errorf("failed to decode signin response: %w", err)
+	}
+
+	code, ok := signinResponse["code"].(string)
+	if !ok {
+		return fmt.Errorf("magic code not returned in signin response")
+	}
+
+	// Step 2: Verify the magic code to get auth token
+	verifyReq := map[string]string{
+		"email": email,
+		"code":  code,
+	}
+
+	verifyResp, err := c.Post("/api/user.verify", verifyReq)
+	if err != nil {
+		return fmt.Errorf("verify request failed: %w", err)
+	}
+	defer verifyResp.Body.Close()
+
+	if verifyResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(verifyResp.Body)
+		return fmt.Errorf("verify failed with status %d: %s", verifyResp.StatusCode, string(body))
+	}
+
+	var authResponse struct {
 		Token string `json:"token"`
 		User  struct {
 			ID    string `json:"id"`
@@ -70,11 +97,11 @@ func (c *APIClient) Login(email, password string) error {
 		} `json:"user"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
-		return fmt.Errorf("failed to decode login response: %w", err)
+	if err := json.NewDecoder(verifyResp.Body).Decode(&authResponse); err != nil {
+		return fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
-	c.token = loginResp.Token
+	c.token = authResponse.Token
 	return nil
 }
 
@@ -223,6 +250,55 @@ func (c *APIClient) ListBroadcasts(params map[string]string) (*http.Response, er
 	return c.Get("/api/broadcasts.list", params)
 }
 
+// UpdateBroadcast updates an existing broadcast
+func (c *APIClient) UpdateBroadcast(broadcast map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.update", broadcast)
+}
+
+// ScheduleBroadcast schedules a broadcast for sending
+func (c *APIClient) ScheduleBroadcast(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.schedule", request)
+}
+
+// PauseBroadcast pauses a sending broadcast
+func (c *APIClient) PauseBroadcast(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.pause", request)
+}
+
+// ResumeBroadcast resumes a paused broadcast
+func (c *APIClient) ResumeBroadcast(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.resume", request)
+}
+
+// CancelBroadcast cancels a scheduled broadcast
+func (c *APIClient) CancelBroadcast(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.cancel", request)
+}
+
+// DeleteBroadcast deletes a broadcast
+func (c *APIClient) DeleteBroadcast(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.delete", request)
+}
+
+// SendBroadcastToIndividual sends a broadcast to an individual recipient
+func (c *APIClient) SendBroadcastToIndividual(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.sendToIndividual", request)
+}
+
+// GetBroadcastTestResults retrieves A/B test results for a broadcast
+func (c *APIClient) GetBroadcastTestResults(workspaceID, broadcastID string) (*http.Response, error) {
+	params := map[string]string{
+		"workspace_id": workspaceID,
+		"id":           broadcastID,
+	}
+	return c.Get("/api/broadcasts.getTestResults", params)
+}
+
+// SelectBroadcastWinner manually selects the winning variation for an A/B test
+func (c *APIClient) SelectBroadcastWinner(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/broadcasts.selectWinner", request)
+}
+
 // Contact API helpers
 func (c *APIClient) CreateContact(contact map[string]interface{}) (*http.Response, error) {
 	return c.Post("/api/contacts.upsert", contact)
@@ -297,4 +373,49 @@ func (c *APIClient) GetList(listID string) (*http.Response, error) {
 
 func (c *APIClient) ListLists(params map[string]string) (*http.Response, error) {
 	return c.Get("/api/lists.list", params)
+}
+
+// ContactList API methods
+func (c *APIClient) GetContactListByIDs(workspaceID, email, listID string) (*http.Response, error) {
+	params := map[string]string{
+		"workspace_id": workspaceID,
+		"email":        email,
+		"list_id":      listID,
+	}
+	return c.Get("/api/contactLists.getByIDs", params)
+}
+
+func (c *APIClient) GetContactsByList(workspaceID, listID string) (*http.Response, error) {
+	params := map[string]string{
+		"workspace_id": workspaceID,
+		"list_id":      listID,
+	}
+	return c.Get("/api/contactLists.getContactsByList", params)
+}
+
+func (c *APIClient) GetListsByContact(workspaceID, email string) (*http.Response, error) {
+	params := map[string]string{
+		"workspace_id": workspaceID,
+		"email":        email,
+	}
+	return c.Get("/api/contactLists.getListsByContact", params)
+}
+
+func (c *APIClient) UpdateContactListStatus(workspaceID, email, listID, status string) (*http.Response, error) {
+	updateReq := map[string]interface{}{
+		"workspace_id": workspaceID,
+		"email":        email,
+		"list_id":      listID,
+		"status":       status,
+	}
+	return c.Post("/api/contactLists.updateStatus", updateReq)
+}
+
+func (c *APIClient) RemoveContactFromList(workspaceID, email, listID string) (*http.Response, error) {
+	removeReq := map[string]interface{}{
+		"workspace_id": workspaceID,
+		"email":        email,
+		"list_id":      listID,
+	}
+	return c.Post("/api/contactLists.removeContact", removeReq)
 }

@@ -194,7 +194,7 @@ func (s *ScheduleSettings) ParseScheduledDateTime() (time.Time, error) {
 	}
 
 	// Extract current time to preserve seconds and nanoseconds
-	now := time.Now()
+	now := time.Now().UTC()
 	seconds := now.Second()
 	nanoseconds := now.Nanosecond()
 
@@ -434,8 +434,8 @@ func (r *CreateBroadcastRequest) Validate() (*Broadcast, error) {
 		TestSettings:  r.TestSettings,
 		UTMParameters: r.UTMParameters,
 		Metadata:      r.Metadata,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
 	}
 
 	// Set status to scheduled if the broadcast is scheduled
@@ -487,7 +487,7 @@ func (r *UpdateBroadcastRequest) Validate(existingBroadcast *Broadcast) (*Broadc
 	existingBroadcast.TestSettings = r.TestSettings
 	existingBroadcast.UTMParameters = r.UTMParameters
 	existingBroadcast.Metadata = r.Metadata
-	existingBroadcast.UpdatedAt = time.Now()
+	existingBroadcast.UpdatedAt = time.Now().UTC()
 
 	if err := existingBroadcast.Validate(); err != nil {
 		return nil, err

@@ -55,7 +55,7 @@ func (r *workspaceRepository) Create(ctx context.Context, workspace *domain.Work
 		return fmt.Errorf("workspace with ID %s already exists", workspace.ID)
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	workspace.CreatedAt = now
 	workspace.UpdatedAt = now
 
@@ -135,7 +135,7 @@ func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, er
 }
 
 func (r *workspaceRepository) Update(ctx context.Context, workspace *domain.Workspace) error {
-	workspace.UpdatedAt = time.Now()
+	workspace.UpdatedAt = time.Now().UTC()
 
 	if err := workspace.BeforeSave(r.secretKey); err != nil {
 		return err

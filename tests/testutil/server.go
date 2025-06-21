@@ -9,6 +9,7 @@ import (
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/testkeys"
 )
@@ -32,6 +33,16 @@ type AppInterface interface {
 	GetConfig() *config.Config
 	GetLogger() logger.Logger
 	GetMux() *http.ServeMux
+
+	// Repository getters for testing
+	GetUserRepository() domain.UserRepository
+	GetWorkspaceRepository() domain.WorkspaceRepository
+	GetContactRepository() domain.ContactRepository
+	GetListRepository() domain.ListRepository
+	GetTemplateRepository() domain.TemplateRepository
+	GetBroadcastRepository() domain.BroadcastRepository
+	GetMessageHistoryRepository() domain.MessageHistoryRepository
+	GetContactListRepository() domain.ContactListRepository
 }
 
 // NewServerManager creates a new server manager for testing
