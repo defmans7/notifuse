@@ -67,20 +67,12 @@ jobs:
           POSTGRES_USER: notifuse_test
           POSTGRES_PASSWORD: test_password
           POSTGRES_DB: postgres
-          POSTGRES_INITDB_ARGS: '--auth-host=trust'
+
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          -c max_connections=300
-          -c shared_buffers=128MB
-          -c fsync=off
-          -c synchronous_commit=off
-          -c full_page_writes=off
-          -c checkpoint_segments=32
-          -c checkpoint_completion_target=0.9
-          -c wal_buffers=16MB
         ports:
           - 5433:5432
 
@@ -110,9 +102,6 @@ jobs:
         run: |
           go mod download
           go get github.com/DATA-DOG/go-sqlmock
-          # Install PostgreSQL client for connection testing
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
 
       - name: Run integration tests and generate coverage
         env:
@@ -146,23 +135,9 @@ jobs:
           echo "DB_PREFIX=notifuse_test" >> .env.test
           echo "DB_SSLMODE=disable" >> .env.test
 
-          # Wait for PostgreSQL to be ready and stable
+          # Wait for services to be ready
           echo "Waiting for PostgreSQL to be ready..."
-          for i in {1..60}; do
-            if pg_isready -h localhost -p 5433 -U notifuse_test > /dev/null 2>&1; then
-              echo "PostgreSQL is ready! Waiting a bit more for stability..."
-              sleep 3
-              break
-            fi
-            echo "Waiting for PostgreSQL... ($i/60)"
-            sleep 2
-          done
-
-          # Test PostgreSQL connection
-          psql -h localhost -p 5433 -U notifuse_test -d postgres -c "SELECT version();" || {
-            echo "Failed to connect to PostgreSQL"
-            exit 1
-          }
+          sleep 10
 
           # Wait for Mailhog to be ready
           echo "Waiting for Mailhog to be ready..."
