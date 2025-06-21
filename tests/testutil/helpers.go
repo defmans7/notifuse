@@ -186,3 +186,15 @@ func CleanupTestEnvironment() {
 	os.Unsetenv("TEST_DB_PASSWORD")
 	os.Unsetenv("ENVIRONMENT")
 }
+
+// CleanupAllTestConnections cleans up the global connection pool
+// This should be called at the end of test runs to ensure no connections leak
+func CleanupAllTestConnections() error {
+	return CleanupGlobalTestPool()
+}
+
+// GetTestConnectionCount returns the current number of active test connections
+func GetTestConnectionCount() int {
+	pool := GetGlobalTestPool()
+	return pool.GetConnectionCount()
+}

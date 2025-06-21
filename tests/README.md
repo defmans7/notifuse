@@ -65,6 +65,28 @@ cd tests && docker-compose -f docker-compose.test.yml down -v
 ### Database (PostgreSQL)
 
 - **Host**: localhost
+- **Port**: 5433
+- **User**: notifuse_test
+- **Password**: test_password
+- **Max Connections**: 500 (optimized for concurrent testing)
+- **Shared Buffers**: 256MB
+- **Optimizations**: Configured for high-concurrency integration testing
+
+The test PostgreSQL instance is automatically configured with optimized settings for concurrent testing:
+
+- Increased connection limits (500 max connections)
+- Optimized memory settings
+- Relaxed durability settings for better performance
+- Enhanced logging for debugging
+
+### Performance Optimizations
+
+The test database includes several optimizations:
+
+- `synchronous_commit = 'off'` - Faster commits for tests
+- `work_mem = '32MB'` - More memory for complex queries
+- `max_locks_per_transaction = 256` - Support for concurrent operations
+- `checkpoint_timeout = '15min'` - Reduced checkpoint frequency
 - **Port**: 5433 (to avoid conflicts with development database)
 - **User**: notifuse_test
 - **Password**: test_password

@@ -14,24 +14,29 @@ import (
 
 // DatabaseManager manages test database lifecycle
 type DatabaseManager struct {
-	config   *config.DatabaseConfig
-	db       *sql.DB
-	dbName   string
-	systemDB *sql.DB
-	isSetup  bool
+	config         *config.DatabaseConfig
+	db             *sql.DB
+	dbName         string
+	systemDB       *sql.DB
+	isSetup        bool
+	connectionPool *TestConnectionPool
 }
 
 // NewDatabaseManager creates a new database manager for testing
 func NewDatabaseManager() *DatabaseManager {
+	config := &config.DatabaseConfig{
+		Host:     getEnvOrDefault("TEST_DB_HOST", "localhost"),
+		Port:     5433, // Different port for test DB
+		User:     getEnvOrDefault("TEST_DB_USER", "notifuse_test"),
+		Password: getEnvOrDefault("TEST_DB_PASSWORD", "test_password"),
+		DBName:   fmt.Sprintf("notifuse_test_%d", time.Now().UnixNano()),
+		Prefix:   "notifuse_test",
+		SSLMode:  "disable",
+	}
+
 	return &DatabaseManager{
-		config: &config.DatabaseConfig{
-			Host:     getEnvOrDefault("TEST_DB_HOST", "localhost"),
-			Port:     5433, // Different port for test DB
-			User:     getEnvOrDefault("TEST_DB_USER", "notifuse_test"),
-			Password: getEnvOrDefault("TEST_DB_PASSWORD", "test_password"),
-			DBName:   fmt.Sprintf("notifuse_test_%d", time.Now().UnixNano()),
-			SSLMode:  "disable",
-		},
+		config:         config,
+		connectionPool: GetGlobalTestPool(),
 	}
 }
 
@@ -41,19 +46,11 @@ func (dm *DatabaseManager) Setup() error {
 		return nil
 	}
 
-	// Connect to system database first
-	systemDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
-		dm.config.Host, dm.config.Port, dm.config.User, dm.config.Password, dm.config.SSLMode)
-
+	// Get system connection from pool
 	var err error
-	dm.systemDB, err = sql.Open("postgres", systemDSN)
+	dm.systemDB, err = dm.connectionPool.GetSystemConnection()
 	if err != nil {
-		return fmt.Errorf("failed to connect to system database: %w", err)
-	}
-
-	// Test connection
-	if err := dm.systemDB.Ping(); err != nil {
-		return fmt.Errorf("failed to ping system database: %w", err)
+		return fmt.Errorf("failed to get system connection from pool: %w", err)
 	}
 
 	// Create test database
@@ -64,7 +61,7 @@ func (dm *DatabaseManager) Setup() error {
 
 	dm.dbName = dm.config.DBName
 
-	// Connect to the test database
+	// Connect to the test database - use direct connection for system database
 	testDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		dm.config.Host, dm.config.Port, dm.config.User, dm.config.Password, dm.config.DBName, dm.config.SSLMode)
 
@@ -72,6 +69,12 @@ func (dm *DatabaseManager) Setup() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to test database: %w", err)
 	}
+
+	// Configure connection pool for system test database
+	dm.db.SetMaxOpenConns(5)
+	dm.db.SetMaxIdleConns(2)
+	dm.db.SetConnMaxLifetime(2 * time.Minute)
+	dm.db.SetConnMaxIdleTime(1 * time.Minute)
 
 	// Test connection
 	if err := dm.db.Ping(); err != nil {
@@ -99,35 +102,15 @@ func (dm *DatabaseManager) GetConfig() *config.DatabaseConfig {
 
 // GetWorkspaceDB returns a connection to the workspace database
 func (dm *DatabaseManager) GetWorkspaceDB(workspaceID string) (*sql.DB, error) {
-	// Create workspace database configuration
-	workspaceConfig := &config.DatabaseConfig{
-		Host:     dm.config.Host,
-		Port:     dm.config.Port,
-		User:     dm.config.User,
-		Password: dm.config.Password,
-		DBName:   fmt.Sprintf("%s_ws_%s", dm.config.DBName, workspaceID),
-		SSLMode:  dm.config.SSLMode,
+	// Ensure workspace database exists
+	if err := dm.connectionPool.EnsureWorkspaceDatabase(workspaceID); err != nil {
+		return nil, fmt.Errorf("failed to ensure workspace database exists: %w", err)
 	}
 
-	// Create workspace database if it doesn't exist
-	_, err := dm.systemDB.Exec(fmt.Sprintf("CREATE DATABASE %s", workspaceConfig.DBName))
+	// Get connection from pool
+	workspaceDB, err := dm.connectionPool.GetWorkspaceConnection(workspaceID)
 	if err != nil {
-		// Database might already exist, that's OK
-		log.Printf("Note: workspace database might already exist: %v", err)
-	}
-
-	// Connect to workspace database
-	workspaceDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		workspaceConfig.Host, workspaceConfig.Port, workspaceConfig.User, workspaceConfig.Password, workspaceConfig.DBName, workspaceConfig.SSLMode)
-
-	workspaceDB, err := sql.Open("postgres", workspaceDSN)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to workspace database: %w", err)
-	}
-
-	// Test connection
-	if err := workspaceDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping workspace database: %w", err)
+		return nil, fmt.Errorf("failed to get workspace connection from pool: %w", err)
 	}
 
 	return workspaceDB, nil
@@ -222,7 +205,7 @@ func (dm *DatabaseManager) Cleanup() error {
 		if err != nil {
 			log.Printf("Warning: failed to drop test database: %v", err)
 		}
-		dm.systemDB.Close()
+		// Note: Don't close systemDB as it's managed by the connection pool
 	}
 
 	dm.isSetup = false

@@ -231,10 +231,11 @@ func (a *App) InitDB() error {
 		return fmt.Errorf("failed to initialize database schema: %w", err)
 	}
 
-	// Set connection pool settings
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	// Set connection pool settings based on environment
+	maxOpen, maxIdle, maxLifetime := database.GetConnectionPoolSettings()
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
+	db.SetConnMaxLifetime(maxLifetime)
 
 	a.db = db
 	return nil

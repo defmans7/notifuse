@@ -3,12 +3,26 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/config"
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
+
+// GetConnectionPoolSettings returns connection pool settings based on environment
+func GetConnectionPoolSettings() (maxOpen, maxIdle int, maxLifetime time.Duration) {
+	environment := os.Getenv("ENVIRONMENT")
+
+	// Use smaller pools for test environment to conserve connections
+	if environment == "test" || os.Getenv("INTEGRATION_TESTS") == "true" {
+		return 10, 5, 2 * time.Minute
+	}
+
+	// Production settings
+	return 25, 25, 20 * time.Minute
+}
 
 // GetSystemDSN returns the DSN for the system database
 func GetSystemDSN(cfg *config.DatabaseConfig) string {
@@ -67,11 +81,12 @@ func ConnectToWorkspace(cfg *config.DatabaseConfig, workspaceID string) (*sql.DB
 		return nil, fmt.Errorf("failed to ping workspace database: %w", err)
 	}
 
-	// Set connection pool settings
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(20 * time.Minute)
-	db.SetConnMaxIdleTime(10 * time.Minute)
+	// Set connection pool settings based on environment
+	maxOpen, maxIdle, maxLifetime := GetConnectionPoolSettings()
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
+	db.SetConnMaxLifetime(maxLifetime)
+	db.SetConnMaxIdleTime(maxLifetime / 2)
 
 	return db, nil
 }

@@ -1,0 +1,104 @@
+# Test Infrastructure Makefile
+# This file contains commands for managing test infrastructure with optimized PostgreSQL settings
+
+.PHONY: help start stop restart clean status logs test health
+
+# Default target
+help:
+	@echo "Test Infrastructure Management Commands:"
+	@echo "  start     - Start test infrastructure with optimized PostgreSQL"
+	@echo "  stop      - Stop test infrastructure"
+	@echo "  restart   - Restart test infrastructure"
+	@echo "  clean     - Stop and remove all test volumes"
+	@echo "  status    - Show status of test services"
+	@echo "  logs      - Show logs from test services"
+	@echo "  health    - Check health of test services"
+	@echo "  test      - Run integration tests"
+	@echo "  db-config - Show PostgreSQL configuration"
+	@echo "  db-stats  - Show PostgreSQL connection statistics"
+
+# Start test infrastructure
+start:
+	@echo "🚀 Starting test infrastructure with optimized PostgreSQL..."
+	docker-compose -f docker-compose.test.yml up -d
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 8
+	@echo "✅ Test infrastructure is ready!"
+	@echo "   - PostgreSQL: localhost:5433"
+	@echo "   - MailHog SMTP: localhost:1025"
+	@echo "   - MailHog Web UI: http://localhost:8025"
+
+# Stop test infrastructure
+stop:
+	@echo "🛑 Stopping test infrastructure..."
+	docker-compose -f docker-compose.test.yml down
+	@echo "✅ Test infrastructure stopped!"
+
+# Restart test infrastructure
+restart: stop start
+
+# Clean test infrastructure (remove volumes)
+clean:
+	@echo "🧹 Cleaning test infrastructure..."
+	docker-compose -f docker-compose.test.yml down -v --remove-orphans
+	@echo "✅ Test infrastructure cleaned!"
+
+# Show status of test services
+status:
+	@echo "📊 Test infrastructure status:"
+	docker-compose -f docker-compose.test.yml ps
+
+# Show logs from test services
+logs:
+	@echo "📋 Test infrastructure logs:"
+	docker-compose -f docker-compose.test.yml logs -f
+
+# Check health of test services
+health:
+	@echo "🏥 Checking test infrastructure health..."
+	@echo "PostgreSQL:"
+	@timeout 5s bash -c 'until nc -z localhost 5433; do sleep 1; done' && echo "✅ PostgreSQL is ready" || echo "❌ PostgreSQL is not ready"
+	@echo "MailHog SMTP:"
+	@timeout 5s bash -c 'until nc -z localhost 1025; do sleep 1; done' && echo "✅ MailHog SMTP is ready" || echo "❌ MailHog SMTP is not ready"
+	@echo "MailHog Web UI:"
+	@timeout 5s bash -c 'until nc -z localhost 8025; do sleep 1; done' && echo "✅ MailHog Web UI is ready" || echo "❌ MailHog Web UI is not ready"
+
+# Run integration tests
+test:
+	@echo "🧪 Running integration tests..."
+	@echo "Make sure test infrastructure is running (run 'make start' first)"
+	INTEGRATION_TESTS=true \
+	TEST_DB_HOST=localhost \
+	TEST_DB_PORT=5433 \
+	TEST_DB_USER=notifuse_test \
+	TEST_DB_PASSWORD=test_password \
+	ENVIRONMENT=test \
+	go test -v -timeout 10m ../tests/integration/...
+
+# Show PostgreSQL configuration
+db-config:
+	@echo "🔧 PostgreSQL configuration:"
+	docker-compose -f docker-compose.test.yml exec postgres-test psql -U notifuse_test -d postgres -c "SELECT name, setting, unit, short_desc FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'work_mem', 'maintenance_work_mem', 'effective_cache_size', 'synchronous_commit') ORDER BY name;"
+
+# Show PostgreSQL connection statistics
+db-stats:
+	@echo "📈 PostgreSQL connection statistics:"
+	docker-compose -f docker-compose.test.yml exec postgres-test psql -U notifuse_test -d postgres -c "SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted FROM pg_stat_database WHERE datname NOT IN ('template0', 'template1');"
+	@echo ""
+	@echo "Active connections:"
+	docker-compose -f docker-compose.test.yml exec postgres-test psql -U notifuse_test -d postgres -c "SELECT count(*) as active_connections FROM pg_stat_activity WHERE state = 'active';"
+
+# Quick test (subset of tests)
+test-quick:
+	@echo "⚡ Running quick integration tests..."
+	INTEGRATION_TESTS=true \
+	TEST_DB_HOST=localhost \
+	TEST_DB_PORT=5433 \
+	TEST_DB_USER=notifuse_test \
+	TEST_DB_PASSWORD=test_password \
+	ENVIRONMENT=test \
+	go test -v -timeout 5m -short ../tests/integration/...
+
+# Full test cycle
+test-full: clean start test stop
+	@echo "🎉 Full test cycle completed!" 

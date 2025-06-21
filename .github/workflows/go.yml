@@ -72,6 +72,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --tmpfs /var/lib/postgresql/data:rw,size=1g
         ports:
           - 5433:5432
 

@@ -1048,3 +1048,15 @@ func WithTransactionalNotificationMetadata(metadata map[string]interface{}) Tran
 		tn.Metadata = metadata
 	}
 }
+
+// CleanupWorkspace removes a workspace and its database from the connection pool
+func (tdf *TestDataFactory) CleanupWorkspace(workspaceID string) error {
+	pool := GetGlobalTestPool()
+	return pool.CleanupWorkspace(workspaceID)
+}
+
+// GetConnectionCount returns the current number of active connections in the pool
+func (tdf *TestDataFactory) GetConnectionCount() int {
+	pool := GetGlobalTestPool()
+	return pool.GetConnectionCount()
+}
