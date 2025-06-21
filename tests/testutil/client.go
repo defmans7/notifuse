@@ -419,3 +419,46 @@ func (c *APIClient) RemoveContactFromList(workspaceID, email, listID string) (*h
 	}
 	return c.Post("/api/contactLists.removeContact", removeReq)
 }
+
+// Task-related API methods
+
+// CreateTask creates a new task
+func (c *APIClient) CreateTask(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/tasks.create", request)
+}
+
+// GetTask retrieves a task by ID
+func (c *APIClient) GetTask(workspaceID, taskID string) (*http.Response, error) {
+	params := map[string]string{
+		"workspace_id": workspaceID,
+		"id":           taskID,
+	}
+	return c.Get("/api/tasks.get", params)
+}
+
+// ListTasks retrieves tasks with optional filtering
+func (c *APIClient) ListTasks(params map[string]string) (*http.Response, error) {
+	return c.Get("/api/tasks.list", params)
+}
+
+// DeleteTask deletes a task
+func (c *APIClient) DeleteTask(workspaceID, taskID string) (*http.Response, error) {
+	params := map[string]string{
+		"workspace_id": workspaceID,
+		"id":           taskID,
+	}
+	return c.Post("/api/tasks.delete", nil, params)
+}
+
+// ExecuteTask executes a specific task
+func (c *APIClient) ExecuteTask(request map[string]interface{}) (*http.Response, error) {
+	return c.Post("/api/tasks.execute", request)
+}
+
+// ExecutePendingTasks executes pending tasks (cron endpoint)
+func (c *APIClient) ExecutePendingTasks(maxTasks int) (*http.Response, error) {
+	params := map[string]string{
+		"max_tasks": fmt.Sprintf("%d", maxTasks),
+	}
+	return c.Get("/api/cron", params)
+}

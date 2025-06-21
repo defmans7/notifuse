@@ -417,7 +417,6 @@ func TestEmailHandler_ConcurrentRequests(t *testing.T) {
 	defer suite.Cleanup()
 
 	baseURL := suite.ServerManager.GetURL()
-	client := &http.Client{}
 
 	t.Run("concurrent click redirections", func(t *testing.T) {
 		numRequests := 10
@@ -427,6 +426,13 @@ func TestEmailHandler_ConcurrentRequests(t *testing.T) {
 
 		for i := 0; i < numRequests; i++ {
 			go func(i int) {
+				// Create a separate client for each goroutine to avoid data races
+				client := &http.Client{
+					CheckRedirect: func(req *http.Request, via []*http.Request) error {
+						return http.ErrUseLastResponse
+					},
+				}
+
 				messageID := fmt.Sprintf("msg-%d", i)
 				workspaceID := fmt.Sprintf("ws-%d", i)
 
@@ -441,10 +447,6 @@ func TestEmailHandler_ConcurrentRequests(t *testing.T) {
 				if err != nil {
 					results <- err
 					return
-				}
-
-				client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-					return http.ErrUseLastResponse
 				}
 
 				resp, err := client.Do(req)
@@ -476,6 +478,9 @@ func TestEmailHandler_ConcurrentRequests(t *testing.T) {
 
 		for i := 0; i < numRequests; i++ {
 			go func(i int) {
+				// Create a separate client for each goroutine to avoid potential issues
+				client := &http.Client{}
+
 				messageID := fmt.Sprintf("msg-open-%d", i)
 				workspaceID := fmt.Sprintf("ws-open-%d", i)
 

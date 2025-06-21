@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestBroadcastHandler tests the broadcast handler with proper SMTP email provider configuration.
+// This test suite sets up a Mailhog SMTP server (configured in docker-compose.test.yml) to properly
+// test email sending functionality without skipping tests due to missing email provider configuration.
 
 func TestBroadcastHandler(t *testing.T) {
 	testutil.SkipIfShort(t)
@@ -39,6 +42,10 @@ func TestBroadcastHandler(t *testing.T) {
 	err = factory.AddUserToWorkspace(user.ID, workspace.ID, "owner")
 	require.NoError(t, err)
 
+	// Set up SMTP email provider for testing
+	_, err = factory.SetupWorkspaceWithSMTPProvider(workspace.ID)
+	require.NoError(t, err)
+
 	// Login to get auth token
 	err = client.Login(user.Email, "password")
 	require.NoError(t, err)
@@ -46,6 +53,10 @@ func TestBroadcastHandler(t *testing.T) {
 
 	t.Run("CRUD Operations", func(t *testing.T) {
 		testBroadcastCRUD(t, client, factory, workspace.ID)
+	})
+
+	t.Run("Email Provider Configuration", func(t *testing.T) {
+		testBroadcastEmailProvider(t, client, factory, workspace.ID)
 	})
 
 	t.Run("Lifecycle Operations", func(t *testing.T) {
@@ -411,6 +422,70 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 	})
 }
 
+func testBroadcastEmailProvider(t *testing.T, client *testutil.APIClient, factory *testutil.TestDataFactory, workspaceID string) {
+	t.Run("should have SMTP email provider configured", func(t *testing.T) {
+		// Get workspace to verify email provider configuration
+		resp, err := client.Get("/api/workspaces.get", map[string]string{
+			"id": workspaceID,
+		})
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		workspaceData := result["workspace"].(map[string]interface{})
+		settings := workspaceData["settings"].(map[string]interface{})
+
+		// Verify marketing email provider is configured
+		assert.Contains(t, settings, "marketing_email_provider_id")
+		assert.NotEmpty(t, settings["marketing_email_provider_id"])
+
+		// Verify integrations exist
+		assert.Contains(t, workspaceData, "integrations")
+		integrations := workspaceData["integrations"].([]interface{})
+		assert.Greater(t, len(integrations), 0)
+
+		// Find the email integration
+		var emailIntegration map[string]interface{}
+		for _, integration := range integrations {
+			integData := integration.(map[string]interface{})
+			if integData["type"] == "email" {
+				emailIntegration = integData
+				break
+			}
+		}
+
+		assert.NotNil(t, emailIntegration)
+		assert.Equal(t, "email", emailIntegration["type"])
+
+		// Verify email provider configuration
+		emailProvider := emailIntegration["email_provider"].(map[string]interface{})
+		assert.Equal(t, "smtp", emailProvider["kind"])
+
+		// Verify SMTP settings
+		assert.Contains(t, emailProvider, "smtp")
+		smtpSettings := emailProvider["smtp"].(map[string]interface{})
+		assert.Equal(t, "localhost", smtpSettings["host"])
+		assert.Equal(t, float64(1025), smtpSettings["port"]) // JSON numbers are floats
+		assert.False(t, smtpSettings["use_tls"].(bool))
+
+		// Verify senders
+		assert.Contains(t, emailProvider, "senders")
+		senders := emailProvider["senders"].([]interface{})
+		assert.Greater(t, len(senders), 0)
+
+		sender := senders[0].(map[string]interface{})
+		assert.Contains(t, sender, "email")
+		assert.Contains(t, sender, "name")
+		assert.NotEmpty(t, sender["email"])
+		assert.NotEmpty(t, sender["name"])
+	})
+}
+
 func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *testutil.TestDataFactory, workspaceID string) {
 	t.Run("Schedule Broadcast", func(t *testing.T) {
 		t.Run("should schedule broadcast for immediate sending", func(t *testing.T) {
@@ -427,31 +502,17 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			// For now, expect this to fail because workspace has no email provider configured
-			// In a real scenario, the workspace would need an email provider
-			if resp.StatusCode == http.StatusInternalServerError {
-				var result map[string]interface{}
-				err = json.NewDecoder(resp.Body).Decode(&result)
-				require.NoError(t, err)
+			// With SMTP provider configured, this should succeed
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-				// Check if it's the expected "no email provider" error
-				if errorMsg, ok := result["error"].(string); ok {
-					if strings.Contains(errorMsg, "no marketing email provider configured") ||
-						strings.Contains(errorMsg, "Failed to schedule broadcast") {
-						t.Skip("Skipping schedule test - workspace needs email provider configuration")
-					}
-					assert.Contains(t, errorMsg, "marketing email provider")
-				}
+			var result map[string]interface{}
+			err = json.NewDecoder(resp.Body).Decode(&result)
+			require.NoError(t, err)
+
+			if successInterface, ok := result["success"]; ok && successInterface != nil {
+				assert.True(t, successInterface.(bool))
 			} else {
-				assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-				var result map[string]interface{}
-				err = json.NewDecoder(resp.Body).Decode(&result)
-				require.NoError(t, err)
-
-				if successInterface, ok := result["success"]; ok && successInterface != nil {
-					assert.True(t, successInterface.(bool))
-				}
+				t.Logf("Unexpected response format: %+v", result)
 			}
 		})
 
@@ -474,19 +535,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			// Check if it's the expected email provider error
-			if resp.StatusCode == http.StatusInternalServerError {
-				body, _ := io.ReadAll(resp.Body)
-				bodyStr := string(body)
-				if strings.Contains(bodyStr, "Failed to schedule broadcast") {
-					t.Skip("Skipping schedule test - workspace needs email provider configuration")
-					return
-				}
-				// If it's a different error, fail the test
-				t.Errorf("Unexpected error response: %s", bodyStr)
-				return
-			}
-
+			// With SMTP provider configured, this should succeed
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		})
 
@@ -579,26 +628,14 @@ func testBroadcastABTesting(t *testing.T, client *testutil.APIClient, factory *t
 
 			broadcast, err := factory.CreateBroadcast(workspaceID,
 				testutil.WithBroadcastABTesting([]string{template1.ID, template2.ID}),
-				testutil.WithBroadcastStatus(domain.BroadcastStatusTesting))
+				testutil.WithBroadcastStatus(domain.BroadcastStatusTestCompleted))
 			require.NoError(t, err)
 
 			resp, err := client.GetBroadcastTestResults(workspaceID, broadcast.ID)
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			// Check if it's the expected status error (broadcast not in correct status)
-			if resp.StatusCode == http.StatusInternalServerError {
-				body, _ := io.ReadAll(resp.Body)
-				bodyStr := string(body)
-				if strings.Contains(bodyStr, "Failed to get test results") {
-					t.Skip("Skipping test results - broadcast needs to be in completed testing status")
-					return
-				}
-				// If it's a different error, fail the test
-				t.Errorf("Unexpected error response: %s", bodyStr)
-				return
-			}
-
+			// With SMTP provider configured, this should succeed
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 			var result map[string]interface{}
@@ -678,37 +715,32 @@ func testBroadcastABTesting(t *testing.T, client *testutil.APIClient, factory *t
 func testBroadcastIndividualSend(t *testing.T, client *testutil.APIClient, factory *testutil.TestDataFactory, workspaceID string) {
 	t.Run("Send To Individual", func(t *testing.T) {
 		t.Run("should send to individual successfully", func(t *testing.T) {
-			broadcast, err := factory.CreateBroadcast(workspaceID)
+			// Create templates for A/B testing (requires at least 2)
+			template1, err := factory.CreateTemplate(workspaceID)
 			require.NoError(t, err)
+			template2, err := factory.CreateTemplate(workspaceID)
+			require.NoError(t, err)
+
+			// Create broadcast with A/B testing that includes our templates
+			broadcast, err := factory.CreateBroadcast(workspaceID,
+				testutil.WithBroadcastABTesting([]string{template1.ID, template2.ID}))
+			require.NoError(t, err)
+
 			contact, err := factory.CreateContact(workspaceID)
-			require.NoError(t, err)
-			template, err := factory.CreateTemplate(workspaceID)
 			require.NoError(t, err)
 
 			sendRequest := map[string]interface{}{
 				"workspace_id":    workspaceID,
 				"broadcast_id":    broadcast.ID,
 				"recipient_email": contact.Email,
-				"template_id":     template.ID,
+				"template_id":     template1.ID,
 			}
 
 			resp, err := client.SendBroadcastToIndividual(sendRequest)
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			// Check if it's the expected email provider error
-			if resp.StatusCode == http.StatusInternalServerError {
-				body, _ := io.ReadAll(resp.Body)
-				bodyStr := string(body)
-				if strings.Contains(bodyStr, "Failed to send broadcast") {
-					t.Skip("Skipping individual send test - workspace needs email provider configuration")
-					return
-				}
-				// If it's a different error, fail the test
-				t.Errorf("Unexpected error response: %s", bodyStr)
-				return
-			}
-
+			// With SMTP provider configured, this should succeed
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 			var result map[string]interface{}

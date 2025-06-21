@@ -3,10 +3,12 @@ package testutil
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/google/uuid"
 )
@@ -279,6 +281,126 @@ func (tdf *TestDataFactory) AddUserToWorkspace(userID, workspaceID, role string)
 	return nil
 }
 
+// CreateIntegration creates a test integration using the workspace repository
+func (tdf *TestDataFactory) CreateIntegration(workspaceID string, opts ...IntegrationOption) (*domain.Integration, error) {
+	integration := &domain.Integration{
+		ID:   fmt.Sprintf("integ%s", uuid.New().String()[:8]), // Keep it under 32 chars
+		Name: fmt.Sprintf("Test Integration %s", uuid.New().String()[:8]),
+		Type: domain.IntegrationTypeEmail,
+		EmailProvider: domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
+			SMTP: &domain.SMTPSettings{
+				Host:     "localhost",
+				Port:     1025,
+				Username: "",
+				Password: "",
+				UseTLS:   false,
+			},
+		},
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(integration)
+	}
+
+	// Get workspace and add integration
+	workspace, err := tdf.workspaceRepo.GetByID(context.Background(), workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	workspace.AddIntegration(*integration)
+
+	// Update workspace with the new integration
+	err = tdf.workspaceRepo.Update(context.Background(), workspace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update workspace with integration: %w", err)
+	}
+
+	return integration, nil
+}
+
+// CreateSMTPIntegration creates a test SMTP integration using the workspace repository
+func (tdf *TestDataFactory) CreateSMTPIntegration(workspaceID string, opts ...IntegrationOption) (*domain.Integration, error) {
+	smtpOpts := []IntegrationOption{
+		WithIntegrationEmailProvider(domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("test@example.com", "Test Sender"),
+			},
+			SMTP: &domain.SMTPSettings{
+				Host:     "localhost",
+				Port:     1025,
+				Username: "",
+				Password: "",
+				UseTLS:   false,
+			},
+		}),
+	}
+
+	// Append user-provided options
+	smtpOpts = append(smtpOpts, opts...)
+
+	return tdf.CreateIntegration(workspaceID, smtpOpts...)
+}
+
+// CreateMailhogSMTPIntegration creates an SMTP integration configured for Mailhog
+func (tdf *TestDataFactory) CreateMailhogSMTPIntegration(workspaceID string, opts ...IntegrationOption) (*domain.Integration, error) {
+	mailhogOpts := []IntegrationOption{
+		WithIntegrationName("Mailhog SMTP"),
+		WithIntegrationEmailProvider(domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			Senders: []domain.EmailSender{
+				domain.NewEmailSender("noreply@notifuse.test", "Notifuse Test"),
+			},
+			SMTP: &domain.SMTPSettings{
+				Host:     "localhost", // Mailhog SMTP server
+				Port:     1025,        // Mailhog SMTP port
+				Username: "",          // Mailhog doesn't require auth
+				Password: "",
+				UseTLS:   false, // Mailhog doesn't use TLS by default
+			},
+		}),
+	}
+
+	// Append user-provided options
+	mailhogOpts = append(mailhogOpts, opts...)
+
+	return tdf.CreateIntegration(workspaceID, mailhogOpts...)
+}
+
+// SetupWorkspaceWithSMTPProvider creates a workspace with an SMTP email provider and sets it as the marketing provider
+func (tdf *TestDataFactory) SetupWorkspaceWithSMTPProvider(workspaceID string, opts ...IntegrationOption) (*domain.Integration, error) {
+	// Create Mailhog SMTP integration
+	integration, err := tdf.CreateMailhogSMTPIntegration(workspaceID, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SMTP integration: %w", err)
+	}
+
+	// Get workspace and update settings to use this integration as marketing provider
+	workspace, err := tdf.workspaceRepo.GetByID(context.Background(), workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	// Set the integration as the marketing email provider
+	workspace.Settings.MarketingEmailProviderID = integration.ID
+
+	// Update workspace
+	err = tdf.workspaceRepo.Update(context.Background(), workspace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update workspace settings: %w", err)
+	}
+
+	return integration, nil
+}
+
 // Option types for customizing test data
 type UserOption func(*domain.User)
 type WorkspaceOption func(*domain.Workspace)
@@ -288,6 +410,7 @@ type TemplateOption func(*domain.Template)
 type BroadcastOption func(*domain.Broadcast)
 type MessageHistoryOption func(*domain.MessageHistory)
 type ContactListOption func(*domain.ContactList)
+type IntegrationOption func(*domain.Integration)
 
 // User options
 func WithUserEmail(email string) UserOption {
@@ -536,35 +659,95 @@ func WithMessageBounced(bounced bool) MessageHistoryOption {
 	}
 }
 
+// Integration options
+func WithIntegrationName(name string) IntegrationOption {
+	return func(integration *domain.Integration) {
+		integration.Name = name
+	}
+}
+
+func WithIntegrationType(integrationType domain.IntegrationType) IntegrationOption {
+	return func(integration *domain.Integration) {
+		integration.Type = integrationType
+	}
+}
+
+func WithIntegrationEmailProvider(emailProvider domain.EmailProvider) IntegrationOption {
+	return func(integration *domain.Integration) {
+		integration.EmailProvider = emailProvider
+	}
+}
+
 // Helper functions to create default structures
 func createDefaultEmailTemplate() *domain.EmailTemplate {
 	return &domain.EmailTemplate{
-		Subject: "Test Email Subject",
-		CompiledPreview: `<mjml>
-			<mj-body>
-				<mj-section>
-					<mj-column>
-						<mj-text>Hello Test!</mj-text>
-					</mj-column>
-				</mj-section>
-			</mj-body>
-		</mjml>`,
+		Subject:          "Test Email Subject",
+		CompiledPreview:  `<mjml><mj-head></mj-head><mj-body><mj-section><mj-column><mj-text>Hello Test!</mj-text></mj-column></mj-section></mj-body></mjml>`,
 		VisualEditorTree: createDefaultMJMLBlock(),
 	}
 }
 
 func createDefaultMJMLBlock() notifuse_mjml.EmailBlock {
-	// Create a simple text block for testing - avoid complex nested structures
-	textBlock := notifuse_mjml.BaseBlock{
-		ID:   "text-1",
-		Type: notifuse_mjml.MJMLComponentMjText,
-		Attributes: map[string]interface{}{
-			"content": "Hello Test!",
+	// Create a simple MJML structure using BaseBlock with proper JSON structure
+	// Create a map structure instead of using specific block types to avoid marshaling issues
+	textBlockMap := map[string]interface{}{
+		"id":      "text-1",
+		"type":    "mj-text",
+		"content": "Hello Test!",
+		"attributes": map[string]interface{}{
+			"color":    "#000000",
+			"fontSize": "14px",
 		},
-		Children: []interface{}{},
+		"children": []interface{}{},
 	}
 
-	return &textBlock
+	columnBlockMap := map[string]interface{}{
+		"id":       "column-1",
+		"type":     "mj-column",
+		"children": []interface{}{textBlockMap},
+		"attributes": map[string]interface{}{
+			"width": "100%",
+		},
+	}
+
+	sectionBlockMap := map[string]interface{}{
+		"id":       "section-1",
+		"type":     "mj-section",
+		"children": []interface{}{columnBlockMap},
+		"attributes": map[string]interface{}{
+			"backgroundColor": "#ffffff",
+			"padding":         "20px 0",
+		},
+	}
+
+	bodyBlockMap := map[string]interface{}{
+		"id":       "body-1",
+		"type":     "mj-body",
+		"children": []interface{}{sectionBlockMap},
+		"attributes": map[string]interface{}{
+			"backgroundColor": "#f4f4f4",
+		},
+	}
+
+	mjmlBlockMap := map[string]interface{}{
+		"id":         "mjml-1",
+		"type":       "mjml",
+		"children":   []interface{}{bodyBlockMap},
+		"attributes": map[string]interface{}{},
+	}
+
+	// Convert to JSON and back to create a proper EmailBlock structure
+	jsonData, err := json.Marshal(mjmlBlockMap)
+	if err != nil {
+		panic(err)
+	}
+
+	block, err := notifuse_mjml.UnmarshalEmailBlock(jsonData)
+	if err != nil {
+		panic(err)
+	}
+
+	return block
 }
 
 func createDefaultAudience() domain.AudienceSettings {
@@ -591,4 +774,206 @@ func createDefaultTestSettings() domain.BroadcastTestSettings {
 			},
 		},
 	}
+}
+
+// TaskOption defines options for creating tasks
+type TaskOption func(*domain.Task)
+
+// WithTaskType sets the task type
+func WithTaskType(taskType string) TaskOption {
+	return func(t *domain.Task) {
+		t.Type = taskType
+	}
+}
+
+// WithTaskStatus sets the task status
+func WithTaskStatus(status domain.TaskStatus) TaskOption {
+	return func(t *domain.Task) {
+		t.Status = status
+	}
+}
+
+// WithTaskProgress sets the task progress
+func WithTaskProgress(progress float64) TaskOption {
+	return func(t *domain.Task) {
+		t.Progress = progress
+	}
+}
+
+// WithTaskState sets the task state
+func WithTaskState(state *domain.TaskState) TaskOption {
+	return func(t *domain.Task) {
+		t.State = state
+	}
+}
+
+// WithTaskBroadcastID sets the broadcast ID for the task
+func WithTaskBroadcastID(broadcastID string) TaskOption {
+	return func(t *domain.Task) {
+		t.BroadcastID = &broadcastID
+	}
+}
+
+// WithTaskMaxRetries sets the max retries for the task
+func WithTaskMaxRetries(maxRetries int) TaskOption {
+	return func(t *domain.Task) {
+		t.MaxRetries = maxRetries
+	}
+}
+
+// WithTaskRetryInterval sets the retry interval for the task
+func WithTaskRetryInterval(retryInterval int) TaskOption {
+	return func(t *domain.Task) {
+		t.RetryInterval = retryInterval
+	}
+}
+
+// WithTaskMaxRuntime sets the max runtime for the task
+func WithTaskMaxRuntime(maxRuntime int) TaskOption {
+	return func(t *domain.Task) {
+		t.MaxRuntime = maxRuntime
+	}
+}
+
+// WithTaskNextRunAfter sets when the task should run next
+func WithTaskNextRunAfter(nextRunAfter time.Time) TaskOption {
+	return func(t *domain.Task) {
+		t.NextRunAfter = &nextRunAfter
+	}
+}
+
+// WithTaskErrorMessage sets the error message for the task
+func WithTaskErrorMessage(errorMsg string) TaskOption {
+	return func(t *domain.Task) {
+		t.ErrorMessage = errorMsg
+	}
+}
+
+// CreateTask creates a test task with optional configuration
+func (tdf *TestDataFactory) CreateTask(workspaceID string, opts ...TaskOption) (*domain.Task, error) {
+	// Create default task
+	task := &domain.Task{
+		ID:            uuid.New().String(),
+		WorkspaceID:   workspaceID,
+		Type:          "test_task",
+		Status:        domain.TaskStatusPending,
+		Progress:      0.0,
+		State:         &domain.TaskState{},
+		MaxRuntime:    300, // 5 minutes
+		MaxRetries:    3,
+		RetryInterval: 300, // 5 minutes
+		RetryCount:    0,
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(task)
+	}
+
+	// Create task in database using domain service
+	taskRepo := repository.NewTaskRepository(tdf.db)
+	err := taskRepo.Create(context.Background(), workspaceID, task)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create task: %w", err)
+	}
+
+	return task, nil
+}
+
+// CreateSendBroadcastTask creates a task specifically for sending broadcasts
+func (tdf *TestDataFactory) CreateSendBroadcastTask(workspaceID, broadcastID string, opts ...TaskOption) (*domain.Task, error) {
+	// Create send broadcast state
+	state := &domain.TaskState{
+		SendBroadcast: &domain.SendBroadcastState{
+			BroadcastID:     broadcastID,
+			TotalRecipients: 100,
+			SentCount:       0,
+			FailedCount:     0,
+			ChannelType:     "email",
+			RecipientOffset: 0,
+			EndOffset:       100,
+			Phase:           "single",
+		},
+	}
+
+	// Default options for send broadcast task
+	defaultOpts := []TaskOption{
+		WithTaskType("send_broadcast"),
+		WithTaskState(state),
+		WithTaskBroadcastID(broadcastID),
+		WithTaskMaxRuntime(1800), // 30 minutes for broadcast tasks
+	}
+
+	// Combine default options with provided options
+	allOpts := append(defaultOpts, opts...)
+
+	return tdf.CreateTask(workspaceID, allOpts...)
+}
+
+// CreateTaskWithABTesting creates a task for A/B testing broadcasts
+func (tdf *TestDataFactory) CreateTaskWithABTesting(workspaceID, broadcastID string, opts ...TaskOption) (*domain.Task, error) {
+	// Create A/B testing state
+	state := &domain.TaskState{
+		SendBroadcast: &domain.SendBroadcastState{
+			BroadcastID:               broadcastID,
+			TotalRecipients:           1000,
+			SentCount:                 0,
+			FailedCount:               0,
+			ChannelType:               "email",
+			RecipientOffset:           0,
+			EndOffset:                 1000,
+			Phase:                     "test",
+			TestPhaseCompleted:        false,
+			TestRecipientOffset:       0,
+			WinnerRecipientOffset:     0,
+			TestPhaseRecipientCount:   100, // 10% for A/B testing
+			WinnerPhaseRecipientCount: 900, // 90% for winner
+		},
+	}
+
+	// Default options for A/B testing task
+	defaultOpts := []TaskOption{
+		WithTaskType("send_broadcast"),
+		WithTaskState(state),
+		WithTaskBroadcastID(broadcastID),
+		WithTaskMaxRuntime(3600), // 1 hour for A/B testing tasks
+	}
+
+	// Combine default options with provided options
+	allOpts := append(defaultOpts, opts...)
+
+	return tdf.CreateTask(workspaceID, allOpts...)
+}
+
+// UpdateTaskState updates a task's state and progress
+func (tdf *TestDataFactory) UpdateTaskState(workspaceID, taskID string, progress float64, state *domain.TaskState) error {
+	taskRepo := repository.NewTaskRepository(tdf.db)
+	return taskRepo.SaveState(context.Background(), workspaceID, taskID, progress, state)
+}
+
+// MarkTaskAsRunning marks a task as running with a timeout
+func (tdf *TestDataFactory) MarkTaskAsRunning(workspaceID, taskID string) error {
+	taskRepo := repository.NewTaskRepository(tdf.db)
+	timeoutAfter := time.Now().Add(5 * time.Minute)
+	return taskRepo.MarkAsRunning(context.Background(), workspaceID, taskID, timeoutAfter)
+}
+
+// MarkTaskAsCompleted marks a task as completed
+func (tdf *TestDataFactory) MarkTaskAsCompleted(workspaceID, taskID string) error {
+	taskRepo := repository.NewTaskRepository(tdf.db)
+	return taskRepo.MarkAsCompleted(context.Background(), workspaceID, taskID)
+}
+
+// MarkTaskAsFailed marks a task as failed with an error message
+func (tdf *TestDataFactory) MarkTaskAsFailed(workspaceID, taskID string, errorMsg string) error {
+	taskRepo := repository.NewTaskRepository(tdf.db)
+	return taskRepo.MarkAsFailed(context.Background(), workspaceID, taskID, errorMsg)
+}
+
+// MarkTaskAsPaused marks a task as paused with next run time
+func (tdf *TestDataFactory) MarkTaskAsPaused(workspaceID, taskID string, nextRunAfter time.Time, progress float64, state *domain.TaskState) error {
+	taskRepo := repository.NewTaskRepository(tdf.db)
+	return taskRepo.MarkAsPaused(context.Background(), workspaceID, taskID, nextRunAfter, progress, state)
 }

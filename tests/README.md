@@ -75,6 +75,20 @@ cd tests && docker-compose -f docker-compose.test.yml down -v
 - **SMTP**: localhost:1025
 - **Web UI**: http://localhost:8025
 
+The integration tests now include proper SMTP email provider configuration using MailHog for testing email functionality. This eliminates the need to skip email-related tests and provides comprehensive testing of broadcast sending, scheduling, and A/B testing features.
+
+#### MailHog Configuration in Tests
+
+The test suite automatically configures a MailHog SMTP provider for each workspace:
+
+- **Host**: localhost
+- **Port**: 1025 (SMTP)
+- **Authentication**: None (MailHog doesn't require auth)
+- **TLS**: Disabled (for local testing)
+- **Default Sender**: noreply@notifuse.test
+
+You can view sent emails by accessing the MailHog web UI at http://localhost:8025 during test execution.
+
 ## Test Components
 
 ### DatabaseManager (`testutil/database.go`)
