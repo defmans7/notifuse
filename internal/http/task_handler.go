@@ -45,9 +45,9 @@ func (h *TaskHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/tasks.list", requireAuth(http.HandlerFunc(h.ListTasks)))
 	mux.Handle("/api/tasks.get", requireAuth(http.HandlerFunc(h.GetTask)))
 	mux.Handle("/api/tasks.delete", requireAuth(http.HandlerFunc(h.DeleteTask)))
-	// public route for cron to execute pending tasks
-	mux.Handle("/api/cron", http.HandlerFunc(h.ExecutePendingTasks))
+	// public routes for external systems to trigger task execution
 	mux.Handle("/api/tasks.execute", http.HandlerFunc(h.ExecuteTask))
+	mux.Handle("/api/cron", http.HandlerFunc(h.ExecutePendingTasks))
 }
 
 // CreateTask handles creation of a new task

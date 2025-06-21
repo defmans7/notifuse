@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -32,6 +33,10 @@ func TestMessageHistoryHandler(t *testing.T) {
 	user, err := factory.CreateUser()
 	require.NoError(t, err)
 	workspace, err := factory.CreateWorkspace()
+	require.NoError(t, err)
+
+	// Add user to workspace as owner
+	err = factory.AddUserToWorkspace(user.ID, workspace.ID, "owner")
 	require.NoError(t, err)
 
 	// Login to get auth token
@@ -69,9 +74,18 @@ func testMessagesList(t *testing.T, client *testutil.APIClient, factory *testuti
 		})
 
 		t.Run("should return 400 when workspace_id is missing", func(t *testing.T) {
+			// Clear workspace_id from client to test missing workspace_id scenario
+			originalWorkspaceID := client.GetWorkspaceID()
+			client.SetWorkspaceID("")
+			defer client.SetWorkspaceID(originalWorkspaceID) // Restore for other tests
+
 			resp, err := client.Get("/api/messages.list")
 			require.NoError(t, err)
 			defer resp.Body.Close()
+
+			// Debug: print response status and body
+			body, _ := io.ReadAll(resp.Body)
+			t.Logf("Response status: %d, body: %s", resp.StatusCode, string(body))
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -330,11 +344,20 @@ func testBroadcastStats(t *testing.T, client *testutil.APIClient, factory *testu
 		})
 
 		t.Run("should return 400 when workspace_id is missing", func(t *testing.T) {
+			// Clear workspace_id from client to test missing workspace_id scenario
+			originalWorkspaceID := client.GetWorkspaceID()
+			client.SetWorkspaceID("")
+			defer client.SetWorkspaceID(originalWorkspaceID) // Restore for other tests
+
 			resp, err := client.Get("/api/messages.broadcastStats", map[string]string{
 				"broadcast_id": "test-broadcast-id",
 			})
 			require.NoError(t, err)
 			defer resp.Body.Close()
+
+			// Debug: print response status and body
+			body, _ := io.ReadAll(resp.Body)
+			t.Logf("Response status: %d, body: %s", resp.StatusCode, string(body))
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -384,8 +407,14 @@ func TestMessageHistoryAuthentication(t *testing.T) {
 	client := suite.APIClient
 	factory := suite.DataFactory
 
-	// Create test workspace
+	// Create test user and workspace
+	user, err := factory.CreateUser()
+	require.NoError(t, err)
 	workspace, err := factory.CreateWorkspace()
+	require.NoError(t, err)
+
+	// Add user to workspace as owner
+	err = factory.AddUserToWorkspace(user.ID, workspace.ID, "owner")
 	require.NoError(t, err)
 
 	t.Run("should require authentication", func(t *testing.T) {

@@ -75,6 +75,19 @@ jobs:
         ports:
           - 5433:5432
 
+      mailhog:
+        image: mailhog/mailhog:latest
+        env:
+          MH_STORAGE: memory
+        options: >-
+          --health-cmd "wget --quiet --tries=1 --spider http://localhost:8025/ || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+        ports:
+          - 1025:1025
+          - 8025:8025
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -121,6 +134,17 @@ jobs:
 
           # Wait for PostgreSQL to be ready
           sleep 5
+
+          # Wait for Mailhog to be ready
+          echo "Waiting for Mailhog to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8025/ > /dev/null 2>&1; then
+              echo "Mailhog is ready!"
+              break
+            fi
+            echo "Waiting for Mailhog... ($i/30)"
+            sleep 2
+          done
 
           # Run integration tests only
           go test -race -coverprofile=coverage-integration.txt -covermode=atomic ./tests/integration/... -v 

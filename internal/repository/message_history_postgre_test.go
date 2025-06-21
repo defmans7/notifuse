@@ -1530,9 +1530,8 @@ func TestMessageHistoryRepository_ListMessages(t *testing.T) {
 				message1.UnsubscribedAt, message1.CreatedAt, message1.UpdatedAt,
 			)
 
-		// The implementation incorrectly compares timestamp fields to boolean values
-		mock.ExpectQuery(`SELECT id, external_id, contact_email, broadcast_id, template_id, template_version, channel, status_info, message_data, sent_at, delivered_at, failed_at, opened_at, clicked_at, bounced_at, complained_at, unsubscribed_at, created_at, updated_at FROM message_history WHERE delivered_at = \$1 AND opened_at = \$2 ORDER BY created_at DESC, id DESC LIMIT 11`).
-			WithArgs(true, false).
+		// Boolean filters are correctly implemented as IS NOT NULL / IS NULL checks
+		mock.ExpectQuery(`SELECT id, external_id, contact_email, broadcast_id, template_id, template_version, channel, status_info, message_data, sent_at, delivered_at, failed_at, opened_at, clicked_at, bounced_at, complained_at, unsubscribed_at, created_at, updated_at FROM message_history WHERE delivered_at IS NOT NULL AND opened_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 11`).
 			WillReturnRows(rows)
 
 		messages, nextCursor, err := repo.ListMessages(ctx, workspaceID, params)
@@ -1891,9 +1890,9 @@ func TestMessageHistoryRepository_ListMessages(t *testing.T) {
 				message1.UnsubscribedAt, message1.CreatedAt, message1.UpdatedAt,
 			)
 
-		// The query should include all the filters
-		mock.ExpectQuery(`SELECT id, external_id, contact_email, broadcast_id, template_id, template_version, channel, status_info, message_data, sent_at, delivered_at, failed_at, opened_at, clicked_at, bounced_at, complained_at, unsubscribed_at, created_at, updated_at FROM message_history WHERE channel = \$1 AND contact_email = \$2 AND broadcast_id = \$3 AND template_id = \$4 AND delivered_at = \$5 AND sent_at >= \$6 ORDER BY created_at DESC, id DESC LIMIT 11`).
-			WithArgs("email", "user1@example.com", "broadcast-1", "template-1", true, twoHoursAgo).
+		// The query should include all the filters with IS NOT NULL for boolean delivered filter
+		mock.ExpectQuery(`SELECT id, external_id, contact_email, broadcast_id, template_id, template_version, channel, status_info, message_data, sent_at, delivered_at, failed_at, opened_at, clicked_at, bounced_at, complained_at, unsubscribed_at, created_at, updated_at FROM message_history WHERE channel = \$1 AND contact_email = \$2 AND broadcast_id = \$3 AND template_id = \$4 AND delivered_at IS NOT NULL AND sent_at >= \$5 ORDER BY created_at DESC, id DESC LIMIT 11`).
+			WithArgs("email", "user1@example.com", "broadcast-1", "template-1", twoHoursAgo).
 			WillReturnRows(rows)
 
 		messages, nextCursor, err := repo.ListMessages(ctx, workspaceID, params)

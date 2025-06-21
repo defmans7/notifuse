@@ -599,35 +599,67 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 	}
 
 	if params.IsSent != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"sent_at": *params.IsSent})
+		if *params.IsSent {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"sent_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"sent_at": nil})
+		}
 	}
 
 	if params.IsDelivered != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"delivered_at": *params.IsDelivered})
+		if *params.IsDelivered {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"delivered_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"delivered_at": nil})
+		}
 	}
 
 	if params.IsFailed != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"failed_at": *params.IsFailed})
+		if *params.IsFailed {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"failed_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"failed_at": nil})
+		}
 	}
 
 	if params.IsOpened != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"opened_at": *params.IsOpened})
+		if *params.IsOpened {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"opened_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"opened_at": nil})
+		}
 	}
 
 	if params.IsClicked != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"clicked_at": *params.IsClicked})
+		if *params.IsClicked {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"clicked_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"clicked_at": nil})
+		}
 	}
 
 	if params.IsBounced != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"bounced_at": *params.IsBounced})
+		if *params.IsBounced {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"bounced_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"bounced_at": nil})
+		}
 	}
 
 	if params.IsComplained != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"complained_at": *params.IsComplained})
+		if *params.IsComplained {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"complained_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"complained_at": nil})
+		}
 	}
 
 	if params.IsUnsubscribed != nil {
-		queryBuilder = queryBuilder.Where(sq.Eq{"unsubscribed_at": *params.IsUnsubscribed})
+		if *params.IsUnsubscribed {
+			queryBuilder = queryBuilder.Where(sq.NotEq{"unsubscribed_at": nil})
+		} else {
+			queryBuilder = queryBuilder.Where(sq.Eq{"unsubscribed_at": nil})
+		}
 	}
 
 	// Time range filters
