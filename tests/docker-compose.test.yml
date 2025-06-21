@@ -7,43 +7,15 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: notifuse_test
       POSTGRES_PASSWORD: test_password
-      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - '5433:5432'
     volumes:
-      - postgres_test_data:/var/lib/postgresql/data/pgdata
-      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
+      - postgres_test_data:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U notifuse_test -d postgres']
       interval: 10s
       timeout: 5s
       retries: 5
-    command:
-      [
-        'postgres',
-        '-c',
-        'log_statement=all',
-        '-c',
-        'log_duration=on',
-        '-c',
-        'max_connections=500',
-        '-c',
-        'shared_buffers=256MB',
-        '-c',
-        'effective_cache_size=1GB',
-        '-c',
-        'maintenance_work_mem=64MB',
-        '-c',
-        'checkpoint_completion_target=0.9',
-        '-c',
-        'wal_buffers=16MB',
-        '-c',
-        'default_statistics_target=100',
-        '-c',
-        'random_page_cost=1.1',
-        '-c',
-        'effective_io_concurrency=200'
-      ]
 
   mailhog:
     image: mailhog/mailhog:latest

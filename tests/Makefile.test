@@ -1,12 +1,12 @@
 # Test Infrastructure Makefile
-# This file contains commands for managing test infrastructure with optimized PostgreSQL settings
+# This file contains commands for managing test infrastructure
 
 .PHONY: help start stop restart clean status logs test health
 
 # Default target
 help:
 	@echo "Test Infrastructure Management Commands:"
-	@echo "  start     - Start test infrastructure with optimized PostgreSQL"
+	@echo "  start     - Start test infrastructure"
 	@echo "  stop      - Stop test infrastructure"
 	@echo "  restart   - Restart test infrastructure"
 	@echo "  clean     - Stop and remove all test volumes"
@@ -14,12 +14,11 @@ help:
 	@echo "  logs      - Show logs from test services"
 	@echo "  health    - Check health of test services"
 	@echo "  test      - Run integration tests"
-	@echo "  db-config - Show PostgreSQL configuration"
-	@echo "  db-stats  - Show PostgreSQL connection statistics"
+
 
 # Start test infrastructure
 start:
-	@echo "🚀 Starting test infrastructure with optimized PostgreSQL..."
+	@echo "🚀 Starting test infrastructure..."
 	docker-compose -f docker-compose.test.yml up -d
 	@echo "⏳ Waiting for services to be ready..."
 	@sleep 8
@@ -75,18 +74,7 @@ test:
 	ENVIRONMENT=test \
 	go test -v -timeout 10m ../tests/integration/...
 
-# Show PostgreSQL configuration
-db-config:
-	@echo "🔧 PostgreSQL configuration:"
-	docker-compose -f docker-compose.test.yml exec postgres-test psql -U notifuse_test -d postgres -c "SELECT name, setting, unit, short_desc FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'work_mem', 'maintenance_work_mem', 'effective_cache_size', 'synchronous_commit') ORDER BY name;"
 
-# Show PostgreSQL connection statistics
-db-stats:
-	@echo "📈 PostgreSQL connection statistics:"
-	docker-compose -f docker-compose.test.yml exec postgres-test psql -U notifuse_test -d postgres -c "SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted FROM pg_stat_database WHERE datname NOT IN ('template0', 'template1');"
-	@echo ""
-	@echo "Active connections:"
-	docker-compose -f docker-compose.test.yml exec postgres-test psql -U notifuse_test -d postgres -c "SELECT count(*) as active_connections FROM pg_stat_activity WHERE state = 'active';"
 
 # Quick test (subset of tests)
 test-quick:
