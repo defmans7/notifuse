@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -197,4 +198,87 @@ func CleanupAllTestConnections() error {
 func GetTestConnectionCount() int {
 	pool := GetGlobalTestPool()
 	return pool.GetConnectionCount()
+}
+
+// WaitAndExecuteTasks is a helper method for A/B testing integration tests
+// It executes pending tasks multiple times with delays to simulate real task execution
+func WaitAndExecuteTasks(client *APIClient, rounds int, delayBetweenRounds time.Duration) error {
+	for i := 0; i < rounds; i++ {
+		if i > 0 {
+			time.Sleep(delayBetweenRounds)
+		}
+
+		resp, err := client.ExecutePendingTasks(10)
+		if err != nil {
+			return fmt.Errorf("failed to execute tasks on round %d: %w", i+1, err)
+		}
+		resp.Body.Close()
+	}
+	return nil
+}
+
+// WaitForBroadcastStatus polls a broadcast until it reaches one of the expected statuses
+// This is useful for A/B testing scenarios where we need to wait for phase transitions
+func WaitForBroadcastStatus(client *APIClient, broadcastID string, expectedStatuses []string, timeout time.Duration, pollInterval time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		resp, err := client.GetBroadcast(broadcastID)
+		if err != nil {
+			return "", fmt.Errorf("failed to get broadcast: %w", err)
+		}
+
+		var result map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if err != nil {
+			return "", fmt.Errorf("failed to decode broadcast response: %w", err)
+		}
+
+		if broadcastData, ok := result["broadcast"].(map[string]interface{}); ok {
+			if status, ok := broadcastData["status"].(string); ok {
+				for _, expected := range expectedStatuses {
+					if status == expected {
+						return status, nil
+					}
+				}
+			}
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return "", fmt.Errorf("timeout waiting for broadcast to reach status %v", expectedStatuses)
+}
+
+// VerifyBroadcastWinnerTemplate checks that a broadcast has the expected winning template
+func VerifyBroadcastWinnerTemplate(client *APIClient, broadcastID, expectedTemplateID string) error {
+	resp, err := client.GetBroadcast(broadcastID)
+	if err != nil {
+		return fmt.Errorf("failed to get broadcast: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
+		return fmt.Errorf("failed to decode broadcast response: %w", err)
+	}
+
+	broadcastData, ok := result["broadcast"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("broadcast data not found in response")
+	}
+
+	winningTemplate, ok := broadcastData["winning_template"]
+	if !ok || winningTemplate == nil {
+		return fmt.Errorf("winning_template not set")
+	}
+
+	if winningTemplate.(string) != expectedTemplateID {
+		return fmt.Errorf("expected winning template %s, got %s", expectedTemplateID, winningTemplate.(string))
+	}
+
+	return nil
 }

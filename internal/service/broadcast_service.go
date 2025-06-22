@@ -929,10 +929,12 @@ func (s *BroadcastService) GetTestResults(ctx context.Context, workspaceID, broa
 		return nil, err
 	}
 
-	// Validate status - allow both test_completed and winner_selected for viewing results
+	// Validate status - allow viewing results during active sending and completed states
 	if broadcast.Status != domain.BroadcastStatusTestCompleted &&
 		broadcast.Status != domain.BroadcastStatusWinnerSelected &&
-		broadcast.Status != domain.BroadcastStatusSent {
+		broadcast.Status != domain.BroadcastStatusSent &&
+		broadcast.Status != domain.BroadcastStatusSending &&
+		broadcast.Status != domain.BroadcastStatusTesting {
 		return nil, fmt.Errorf("broadcast test results not available for status: %s", broadcast.Status)
 	}
 
@@ -1014,6 +1016,10 @@ func (s *BroadcastService) SelectWinner(ctx context.Context, workspaceID, broadc
 			validForWinnerSelection = true
 		} else if broadcast.Status == domain.BroadcastStatusTesting && !broadcast.TestSettings.AutoSendWinner {
 			// Allow manual winner selection during test phase when auto_send_winner is false
+			validForWinnerSelection = true
+		} else if broadcast.Status == domain.BroadcastStatusSending && broadcast.TestSettings.Enabled && !broadcast.TestSettings.AutoSendWinner {
+			// Allow manual winner selection during sending phase for A/B tests when auto_send_winner is false
+			// This handles the case where the test phase is very short and the status hasn't been updated to "testing" yet
 			validForWinnerSelection = true
 		}
 

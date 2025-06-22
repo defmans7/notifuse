@@ -593,10 +593,11 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 		}
 	}
 
-	// Determine the current phase based on broadcast status and task state
-	if broadcastState.Phase == "" || broadcastState.Phase == "single" {
-		if broadcast.TestSettings.Enabled && len(broadcast.TestSettings.Variations) > 1 {
-			// This is an A/B test
+	// Determine phase based on broadcast status and test settings
+	if broadcast.TestSettings.Enabled {
+		// A/B testing enabled
+		if broadcastState.Phase == "" {
+			// Initialize phase based on current status
 			if broadcast.Status == domain.BroadcastStatusSending {
 				if broadcast.WinningTemplate != "" {
 					// Winner already selected, proceed to winner phase
@@ -608,6 +609,19 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				} else {
 					// Start test phase
 					broadcastState.Phase = "test"
+					// Update broadcast status to testing when test phase begins
+					if broadcast.Status != domain.BroadcastStatusTesting {
+						broadcast.Status = domain.BroadcastStatusTesting
+						broadcast.UpdatedAt = time.Now().UTC()
+						if err := o.broadcastRepo.UpdateBroadcast(ctx, broadcast); err != nil {
+							o.logger.WithFields(map[string]interface{}{
+								"broadcast_id": broadcast.ID,
+								"error":        err.Error(),
+							}).Error("Failed to update broadcast status to testing")
+							return false, fmt.Errorf("failed to update broadcast status to testing: %w", err)
+						}
+						o.logger.WithField("broadcast_id", broadcast.ID).Info("A/B test phase started - broadcast status updated to testing")
+					}
 				}
 			} else if broadcast.Status == domain.BroadcastStatusWinnerSelected {
 				// Winner has been selected, proceed to winner phase
@@ -617,10 +631,10 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 					broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
 				}
 			}
-		} else {
-			// Single template broadcast
-			broadcastState.Phase = "single"
 		}
+	} else {
+		// Single template broadcast
+		broadcastState.Phase = "single"
 	}
 
 	// Calculate recipient counts based on phase

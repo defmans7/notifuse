@@ -32,6 +32,7 @@ type CircuitBreaker struct {
 	threshold      int
 	cooldownPeriod time.Duration
 	lastFailure    time.Time
+	lastError      error
 	isOpen         bool
 	mutex          sync.RWMutex
 }
@@ -57,6 +58,7 @@ func (cb *CircuitBreaker) IsOpen() bool {
 			cb.mutex.Lock()
 			cb.isOpen = false
 			cb.failures = 0
+			cb.lastError = nil
 			cb.mutex.Unlock()
 			cb.mutex.RLock()
 		}
@@ -71,20 +73,29 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	defer cb.mutex.Unlock()
 
 	cb.failures = 0
+	cb.lastError = nil
 	cb.isOpen = false
 }
 
 // RecordFailure records a failed call and opens circuit if threshold is reached
-func (cb *CircuitBreaker) RecordFailure() {
+func (cb *CircuitBreaker) RecordFailure(err error) {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
 
 	cb.failures++
 	cb.lastFailure = time.Now()
+	cb.lastError = err
 
 	if cb.failures >= cb.threshold {
 		cb.isOpen = true
 	}
+}
+
+// GetLastError returns the last error that caused a failure
+func (cb *CircuitBreaker) GetLastError() error {
+	cb.mutex.RLock()
+	defer cb.mutex.RUnlock()
+	return cb.lastError
 }
 
 // messageSender implements the MessageSender interface
@@ -190,12 +201,17 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 
 	// Check circuit breaker
 	if s.circuitBreaker != nil && s.circuitBreaker.IsOpen() {
-		s.logger.WithFields(map[string]interface{}{
+		lastError := s.circuitBreaker.GetLastError()
+		logFields := map[string]interface{}{
 			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
 			"recipient":    email,
-		}).Warn("Circuit breaker open, skipping send")
-		return NewBroadcastError(ErrCodeCircuitOpen, "circuit breaker is open", true, nil)
+		}
+		if lastError != nil {
+			logFields["last_error"] = lastError.Error()
+		}
+		s.logger.WithFields(logFields).Warn("Circuit breaker open, skipping send")
+		return NewBroadcastError(ErrCodeCircuitOpen, fmt.Sprintf("circuit breaker is open: %v", lastError), true, nil)
 	}
 
 	// Apply rate limiting
@@ -294,7 +310,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	if err != nil {
 		// Record failure in circuit breaker
 		if s.circuitBreaker != nil {
-			s.circuitBreaker.RecordFailure()
+			s.circuitBreaker.RecordFailure(err)
 		}
 
 		s.logger.WithFields(map[string]interface{}{
@@ -343,12 +359,17 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 
 	// Check circuit breaker
 	if s.circuitBreaker != nil && s.circuitBreaker.IsOpen() {
-		s.logger.WithFields(map[string]interface{}{
+		lastError := s.circuitBreaker.GetLastError()
+		logFields := map[string]interface{}{
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 			"recipients":   len(recipients),
-		}).Warn("Circuit breaker open, skipping batch")
-		return 0, 0, NewBroadcastError(ErrCodeCircuitOpen, "circuit breaker is open", true, nil)
+		}
+		if lastError != nil {
+			logFields["last_error"] = lastError.Error()
+		}
+		s.logger.WithFields(logFields).Warn("Circuit breaker open, skipping batch")
+		return 0, 0, NewBroadcastError(ErrCodeCircuitOpen, fmt.Sprintf("circuit breaker is open: %v", lastError), true, nil)
 	}
 
 	// Get the broadcast to determine variations and templates
@@ -509,7 +530,8 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 	// Record success/failure in circuit breaker based on overall success rate
 	if s.circuitBreaker != nil {
 		if failed > sent {
-			s.circuitBreaker.RecordFailure()
+			batchErr := fmt.Errorf("batch failure: %d failed, %d sent", failed, sent)
+			s.circuitBreaker.RecordFailure(batchErr)
 		} else if sent > 0 {
 			s.circuitBreaker.RecordSuccess()
 		}

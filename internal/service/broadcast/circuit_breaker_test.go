@@ -1,6 +1,7 @@
 package broadcast
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func (cb *testCircuitBreaker) RecordSuccess() {
 }
 
 // RecordFailure records a failed call and opens circuit if threshold is reached
-func (cb *testCircuitBreaker) RecordFailure() {
+func (cb *testCircuitBreaker) RecordFailure(err error) {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
 
@@ -73,12 +74,12 @@ func TestCircuitBreakerStandalone(t *testing.T) {
 	assert.False(t, cb.IsOpen())
 
 	// Record failures
-	cb.RecordFailure()
-	cb.RecordFailure()
+	cb.RecordFailure(fmt.Errorf("test error"))
+	cb.RecordFailure(fmt.Errorf("test error"))
 	assert.False(t, cb.IsOpen(), "Circuit should still be closed after 2 failures")
 
 	// Third failure should open the circuit
-	cb.RecordFailure()
+	cb.RecordFailure(fmt.Errorf("test error"))
 	assert.True(t, cb.IsOpen(), "Circuit should be open after 3 failures")
 
 	// Record success should reset the failure count and close the circuit
@@ -86,9 +87,9 @@ func TestCircuitBreakerStandalone(t *testing.T) {
 	assert.False(t, cb.IsOpen(), "Circuit should be closed after success")
 
 	// Test cooldown period
-	cb.RecordFailure()
-	cb.RecordFailure()
-	cb.RecordFailure() // This should open the circuit
+	cb.RecordFailure(fmt.Errorf("test error"))
+	cb.RecordFailure(fmt.Errorf("test error"))
+	cb.RecordFailure(fmt.Errorf("test error")) // This should open the circuit
 	assert.True(t, cb.IsOpen(), "Circuit should be open after 3 failures")
 
 	// Wait for cooldown period to expire
@@ -109,16 +110,16 @@ func TestCircuitBreaker(t *testing.T) {
 	assert.Equal(t, cooldown, cb.cooldownPeriod, "Cooldown period should match the configured value")
 
 	// Test recording failures
-	cb.RecordFailure()
+	cb.RecordFailure(fmt.Errorf("test error"))
 	assert.Equal(t, 1, cb.failures, "Failure count should be incremented")
 	assert.False(t, cb.IsOpen(), "Circuit breaker should still be closed after 1 failure")
 
-	cb.RecordFailure()
+	cb.RecordFailure(fmt.Errorf("test error"))
 	assert.Equal(t, 2, cb.failures, "Failure count should be incremented")
 	assert.True(t, cb.IsOpen(), "Circuit breaker should be open after reaching threshold")
 
 	// Test that additional failures don't change the state
-	cb.RecordFailure()
+	cb.RecordFailure(fmt.Errorf("test error"))
 	assert.Equal(t, 3, cb.failures, "Failure count should be incremented again")
 	assert.True(t, cb.IsOpen(), "Circuit breaker should remain open")
 
@@ -128,8 +129,8 @@ func TestCircuitBreaker(t *testing.T) {
 	assert.False(t, cb.IsOpen(), "Circuit breaker should be closed after success")
 
 	// Test cooldown period
-	cb.RecordFailure()
-	cb.RecordFailure() // This should open the circuit
+	cb.RecordFailure(fmt.Errorf("test error"))
+	cb.RecordFailure(fmt.Errorf("test error")) // This should open the circuit
 	assert.True(t, cb.IsOpen(), "Circuit breaker should be open")
 
 	// Store the lastFailure time
@@ -150,11 +151,11 @@ func TestCircuitBreaker_CustomConfiguration(t *testing.T) {
 	highThresholdCB := NewCircuitBreaker(5, 200*time.Millisecond)
 
 	for i := 0; i < 4; i++ {
-		highThresholdCB.RecordFailure()
+		highThresholdCB.RecordFailure(fmt.Errorf("test error"))
 		assert.False(t, highThresholdCB.IsOpen(), "Circuit should remain closed until threshold is reached")
 	}
 
-	highThresholdCB.RecordFailure() // 5th failure
+	highThresholdCB.RecordFailure(fmt.Errorf("test error"))
 	assert.True(t, highThresholdCB.IsOpen(), "Circuit should open after 5 failures")
 
 	// Test circuit stays open during cooldown

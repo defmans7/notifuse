@@ -651,7 +651,7 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 
 	// Force circuit breaker to open
 	messageSenderImpl := sender.(*messageSender)
-	messageSenderImpl.circuitBreaker.RecordFailure()
+	messageSenderImpl.circuitBreaker.RecordFailure(fmt.Errorf("test error"))
 
 	// Call the method being tested
 	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients,
