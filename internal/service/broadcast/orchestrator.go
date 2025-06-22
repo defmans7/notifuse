@@ -601,6 +601,10 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				if broadcast.WinningTemplate != "" {
 					// Winner already selected, proceed to winner phase
 					broadcastState.Phase = "winner"
+					// Initialize winner offset to start after test recipients if not already set
+					if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
+						broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
+					}
 				} else {
 					// Start test phase
 					broadcastState.Phase = "test"
@@ -608,6 +612,10 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			} else if broadcast.Status == domain.BroadcastStatusWinnerSelected {
 				// Winner has been selected, proceed to winner phase
 				broadcastState.Phase = "winner"
+				// Initialize winner offset to start after test recipients if not already set
+				if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
+					broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
+				}
 			}
 		} else {
 			// Single template broadcast
@@ -725,6 +733,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 			if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
 				// Winner already selected - don't overwrite status, transition to winner phase
 				broadcastState.Phase = "winner"
+				// Initialize winner offset to start after test recipients if not already set
+				if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
+					broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
+				}
+				// Update phase-specific variables after phase transition
+				recipientLimit = broadcastState.WinnerPhaseRecipientCount
+				currentOffset = int(broadcastState.WinnerRecipientOffset)
 				o.logger.WithFields(map[string]interface{}{
 					"broadcast_id":     broadcast.ID,
 					"task_id":          task.ID,
@@ -762,6 +777,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
 					// Winner already selected - transition to winner phase
 					broadcastState.Phase = "winner"
+					// Initialize winner offset to start after test recipients if not already set
+					if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
+						broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
+					}
+					// Update phase-specific variables after phase transition
+					recipientLimit = broadcastState.WinnerPhaseRecipientCount
+					currentOffset = int(broadcastState.WinnerRecipientOffset)
 					o.logger.WithFields(map[string]interface{}{
 						"broadcast_id":     broadcast.ID,
 						"task_id":          task.ID,
@@ -808,6 +830,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task) 
 				if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
 					// Winner already selected - transition to winner phase
 					broadcastState.Phase = "winner"
+					// Initialize winner offset to start after test recipients if not already set
+					if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
+						broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
+					}
+					// Update phase-specific variables after phase transition
+					recipientLimit = broadcastState.WinnerPhaseRecipientCount
+					currentOffset = int(broadcastState.WinnerRecipientOffset)
 					o.logger.WithFields(map[string]interface{}{
 						"broadcast_id":     broadcast.ID,
 						"task_id":          task.ID,

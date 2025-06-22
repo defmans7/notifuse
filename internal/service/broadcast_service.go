@@ -1008,8 +1008,16 @@ func (s *BroadcastService) SelectWinner(ctx context.Context, workspaceID, broadc
 			return err
 		}
 
-		// Validate status
-		if broadcast.Status != domain.BroadcastStatusTestCompleted {
+		// Validate status - allow winner selection during testing phase if auto_send_winner is false
+		validForWinnerSelection := false
+		if broadcast.Status == domain.BroadcastStatusTestCompleted {
+			validForWinnerSelection = true
+		} else if broadcast.Status == domain.BroadcastStatusTesting && !broadcast.TestSettings.AutoSendWinner {
+			// Allow manual winner selection during test phase when auto_send_winner is false
+			validForWinnerSelection = true
+		}
+
+		if !validForWinnerSelection {
 			return fmt.Errorf("broadcast is not in test completed state")
 		}
 
