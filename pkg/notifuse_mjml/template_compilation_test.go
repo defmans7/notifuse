@@ -51,11 +51,11 @@ func TestTrackLinks(t *testing.T) {
 				Endpoint:       "https://track.example.com/redirect",
 				UTMSource:      "email",
 				UTMMedium:      "newsletter",
+				WorkspaceID:    "test-workspace",
+				MessageID:      "test-message",
 			},
 			expectedContains: []string{
-				"https://track.example.com/redirect?url=",
-				"utm_source%3Demail",      // URL-encoded version
-				"utm_medium%3Dnewsletter", // URL-encoded version
+				"https://track.example.com/redirect/visit?mid=test-message&wid=test-workspace&url=",
 			},
 			shouldError: false,
 		},
@@ -136,14 +136,11 @@ func TestTrackLinks(t *testing.T) {
 				UTMCampaign:    "black-friday",
 				UTMContent:     "buy-button",
 				UTMTerm:        "product-sale",
+				WorkspaceID:    "test-workspace",
+				MessageID:      "test-message",
 			},
 			expectedContains: []string{
-				"https://track.example.com/redirect?url=",
-				"utm_source%3Demail",          // URL-encoded version
-				"utm_medium%3Dnewsletter",     // URL-encoded version
-				"utm_campaign%3Dblack-friday", // URL-encoded version
-				"utm_content%3Dbuy-button",    // URL-encoded version
-				"utm_term%3Dproduct-sale",     // URL-encoded version
+				"https://track.example.com/redirect/visit?mid=test-message&wid=test-workspace&url=",
 			},
 			shouldError: false,
 		},
@@ -175,10 +172,11 @@ func TestTrackLinks(t *testing.T) {
 				EnableTracking: true,
 				Endpoint:       "https://track.example.com",
 				UTMSource:      "email",
+				WorkspaceID:    "test-workspace",
+				MessageID:      "test-message",
 			},
 			expectedContains: []string{
-				"https://track.example.com?url=",
-				"utm_source%3Demail",
+				"https://track.example.com/visit?mid=test-message&wid=test-workspace&url=",
 				"class=\"button\"",
 				"<span>Click Here</span>",
 			},
@@ -221,6 +219,8 @@ func TestTrackLinksInvalidHTML(t *testing.T) {
 		EnableTracking: true,
 		Endpoint:       "https://track.example.com",
 		UTMSource:      "email",
+		WorkspaceID:    "test-workspace",
+		MessageID:      "test-message",
 	}
 
 	result, err := TrackLinks(invalidHTML, trackingSettings)
@@ -241,6 +241,8 @@ func TestGetTrackingURL(t *testing.T) {
 		UTMSource:      "email",
 		UTMMedium:      "newsletter",
 		UTMCampaign:    "test-campaign",
+		WorkspaceID:    "test-workspace",
+		MessageID:      "test-message",
 	}
 
 	tests := []struct {
@@ -354,6 +356,8 @@ func TestCompileTemplateWithTracking(t *testing.T) {
 			Endpoint:       "https://track.example.com/redirect",
 			UTMSource:      "email",
 			UTMMedium:      "newsletter",
+			WorkspaceID:    "test-workspace",
+			MessageID:      "test-message",
 		},
 	}
 
@@ -377,11 +381,6 @@ func TestCompileTemplateWithTracking(t *testing.T) {
 	// Check that HTML contains tracking (now HTML-based tracking)
 	if !strings.Contains(*resp.HTML, "track.example.com") {
 		t.Error("Expected HTML to contain tracking URL")
-	}
-
-	// Check for UTM parameters in the HTML
-	if !strings.Contains(*resp.HTML, "utm_source") {
-		t.Error("Expected HTML to contain UTM parameters")
 	}
 
 	t.Logf("Generated MJML:\n%s", *resp.MJML)
@@ -460,5 +459,80 @@ func TestCompileTemplateRequest_UnmarshalJSON(t *testing.T) {
 	}
 	if req.TrackingSettings.UTMSource != "email" {
 		t.Errorf("Expected UTMSource to be 'email', got %s", req.TrackingSettings.UTMSource)
+	}
+}
+
+func TestTrackingPixelPlacement(t *testing.T) {
+	htmlString := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Email</title>
+</head>
+<body>
+    <h1>Hello World</h1>
+    <p>This is a test email.</p>
+</body>
+</html>`
+
+	trackingSettings := TrackingSettings{
+		EnableTracking: true,
+		Endpoint:       "https://track.example.com",
+		WorkspaceID:    "test-workspace",
+		MessageID:      "test-message",
+	}
+
+	result, err := TrackLinks(htmlString, trackingSettings)
+	if err != nil {
+		t.Fatalf("TrackLinks failed: %v", err)
+	}
+
+	// Check that the tracking pixel is inserted before the closing body tag
+	expectedPixel := `<img src="https://track.example.com/open?mid=test-message&wid=test-workspace" alt="" width="1" height="1">`
+	if !strings.Contains(result, expectedPixel) {
+		t.Errorf("Expected tracking pixel to be present in the HTML. Result: %s", result)
+	}
+
+	// Check that the pixel is placed before the closing body tag
+	bodyCloseIndex := strings.Index(result, "</body>")
+	pixelIndex := strings.Index(result, expectedPixel)
+
+	if bodyCloseIndex == -1 {
+		t.Error("Expected closing body tag to be present")
+	}
+
+	if pixelIndex == -1 {
+		t.Error("Expected tracking pixel to be present")
+	}
+
+	if pixelIndex >= bodyCloseIndex {
+		t.Error("Expected tracking pixel to be placed before the closing body tag")
+	}
+}
+
+func TestTrackingPixelWithoutBodyTag(t *testing.T) {
+	// Test fallback behavior when there's no body tag
+	htmlString := `<h1>Hello World</h1><p>This is a test without body tag.</p>`
+
+	trackingSettings := TrackingSettings{
+		EnableTracking: true,
+		Endpoint:       "https://track.example.com",
+		WorkspaceID:    "test-workspace",
+		MessageID:      "test-message",
+	}
+
+	result, err := TrackLinks(htmlString, trackingSettings)
+	if err != nil {
+		t.Fatalf("TrackLinks failed: %v", err)
+	}
+
+	// Check that the tracking pixel is appended to the end as fallback
+	expectedPixel := `<img src="https://track.example.com/open?mid=test-message&wid=test-workspace" alt="" width="1" height="1">`
+	if !strings.Contains(result, expectedPixel) {
+		t.Error("Expected tracking pixel to be present in the HTML")
+	}
+
+	// Check that the pixel is at the end
+	if !strings.HasSuffix(result, expectedPixel) {
+		t.Error("Expected tracking pixel to be at the end when no body tag is present")
 	}
 }

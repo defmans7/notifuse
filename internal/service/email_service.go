@@ -276,6 +276,8 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		UTMCampaign:    request.TrackingSettings.UTMCampaign,
 		UTMContent:     request.TrackingSettings.UTMContent,
 		UTMTerm:        request.TrackingSettings.UTMTerm,
+		WorkspaceID:    request.WorkspaceID,
+		MessageID:      request.MessageID,
 	}
 
 	compileTemplateRequest := domain.CompileTemplateRequest{

@@ -22,6 +22,8 @@ export interface TrackingSettings {
   utm_campaign?: string
   utm_content?: string
   utm_term?: string
+  workspace_id?: string
+  message_id?: string
 }
 
 export interface TransactionalNotification {

@@ -517,6 +517,8 @@ func (s *TransactionalNotificationService) SendNotification(
 		// Prepare message data with contact and custom data
 		notification.TrackingSettings.EnableTracking = workspace.Settings.EmailTrackingEnabled
 		notification.TrackingSettings.Endpoint = s.apiEndpoint
+		notification.TrackingSettings.WorkspaceID = workspaceID
+		notification.TrackingSettings.MessageID = messageID
 
 		contactWithList := domain.ContactWithList{
 			Contact: contact,
@@ -691,6 +693,8 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 	trackingSettings := notifuse_mjml.TrackingSettings{
 		EnableTracking: true,
 		Endpoint:       s.apiEndpoint,
+		WorkspaceID:    workspaceID,
+		MessageID:      messageID,
 	}
 
 	req := domain.TemplateDataRequest{

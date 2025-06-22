@@ -221,6 +221,8 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		UTMCampaign:    broadcast.UTMParameters.Campaign,
 		UTMContent:     broadcast.UTMParameters.Content,
 		UTMTerm:        broadcast.UTMParameters.Term,
+		WorkspaceID:    workspaceID,
+		MessageID:      messageID,
 	}
 
 	// Compile template with the provided data
@@ -420,6 +422,8 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 			UTMMedium:      broadcast.UTMParameters.Medium,
 			UTMCampaign:    broadcast.UTMParameters.Campaign,
 			UTMContent:     broadcast.UTMParameters.Content,
+			WorkspaceID:    workspaceID,
+			MessageID:      messageID,
 		}
 
 		if broadcast.UTMParameters.Content == "" {

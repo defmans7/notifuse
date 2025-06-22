@@ -280,6 +280,8 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 			UTMMedium:      "email",
 			UTMCampaign:    list.Name,
 			UTMContent:     messageID,
+			WorkspaceID:    workspace.ID,
+			MessageID:      messageID,
 		}
 
 		req := domain.TemplateDataRequest{
@@ -436,6 +438,8 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 				UTMMedium:      "email",
 				UTMCampaign:    list.Name,
 				UTMContent:     messageID,
+				WorkspaceID:    workspace.ID,
+				MessageID:      messageID,
 			}
 
 			req := domain.TemplateDataRequest{

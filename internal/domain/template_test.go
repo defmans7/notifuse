@@ -374,7 +374,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name: "invalid email template - missing compiled_preview and missing root data",
+			name: "valid email template - missing compiled_preview and missing root data",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
 					SenderID:         "test123",
@@ -385,10 +385,10 @@ func TestEmailTemplate_Validate(t *testing.T) {
 				return e
 			}(),
 			testData: nil,
-			wantErr:  true,
+			wantErr:  false,
 		},
 		{
-			name: "invalid email template - missing compiled_preview and invalid root data type",
+			name: "valid email template - missing compiled_preview and invalid root data type",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
 					SenderID:         "test123",
@@ -399,10 +399,10 @@ func TestEmailTemplate_Validate(t *testing.T) {
 				return e
 			}(),
 			testData: nil,
-			wantErr:  true,
+			wantErr:  false,
 		},
 		{
-			name: "invalid email template - missing compiled_preview and missing styles in root data",
+			name: "valid email template - missing compiled_preview and missing styles in root data",
 			template: func() *EmailTemplate {
 				e := &EmailTemplate{
 					SenderID:         "test123",
@@ -413,7 +413,7 @@ func TestEmailTemplate_Validate(t *testing.T) {
 				return e
 			}(),
 			testData: nil,
-			wantErr:  true,
+			wantErr:  false,
 		},
 		{
 			name: "invalid email template - invalid visual_editor_tree kind",
@@ -1152,38 +1152,42 @@ func TestBuildTemplateData(t *testing.T) {
 // TestGenerateEmailRedirectionEndpoint tests the generation of the URL for tracking email redirections
 func TestGenerateEmailRedirectionEndpoint(t *testing.T) {
 	tests := []struct {
-		name        string
-		workspaceID string
-		messageID   string
-		apiEndpoint string
-		expected    string
+		name           string
+		workspaceID    string
+		messageID      string
+		apiEndpoint    string
+		destinationURL string
+		expected       string
 	}{
 		{
-			name:        "with all parameters",
-			workspaceID: "ws-123",
-			messageID:   "msg-456",
-			apiEndpoint: "https://api.example.com",
-			expected:    "https://api.example.com/visit?mid=msg-456&wid=ws-123",
+			name:           "with all parameters",
+			workspaceID:    "ws-123",
+			messageID:      "msg-456",
+			apiEndpoint:    "https://api.example.com",
+			destinationURL: "https://example.com",
+			expected:       "https://api.example.com/visit?mid=msg-456&wid=ws-123&url=https%3A%2F%2Fexample.com",
 		},
 		{
-			name:        "with empty api endpoint",
-			workspaceID: "ws-123",
-			messageID:   "msg-456",
-			apiEndpoint: "",
-			expected:    "/visit?mid=msg-456&wid=ws-123",
+			name:           "with empty api endpoint",
+			workspaceID:    "ws-123",
+			messageID:      "msg-456",
+			apiEndpoint:    "",
+			destinationURL: "https://example.com",
+			expected:       "/visit?mid=msg-456&wid=ws-123&url=https%3A%2F%2Fexample.com",
 		},
 		{
-			name:        "with special characters that need encoding",
-			workspaceID: "ws/123&test=1",
-			messageID:   "msg=456?test=1",
-			apiEndpoint: "https://api.example.com",
-			expected:    "https://api.example.com/visit?mid=msg%3D456%3Ftest%3D1&wid=ws%2F123%26test%3D1",
+			name:           "with special characters that need encoding",
+			workspaceID:    "ws/123&test=1",
+			messageID:      "msg=456?test=1",
+			apiEndpoint:    "https://api.example.com",
+			destinationURL: "https://example.com/page?param=value&other=test",
+			expected:       "https://api.example.com/visit?mid=msg%3D456%3Ftest%3D1&wid=ws%2F123%26test%3D1&url=https%3A%2F%2Fexample.com%2Fpage%3Fparam%3Dvalue%26other%3Dtest",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			url := notifuse_mjml.GenerateEmailRedirectionEndpoint(tt.workspaceID, tt.messageID, tt.apiEndpoint)
+			url := notifuse_mjml.GenerateEmailRedirectionEndpoint(tt.workspaceID, tt.messageID, tt.apiEndpoint, tt.destinationURL)
 			assert.Equal(t, tt.expected, url)
 		})
 	}

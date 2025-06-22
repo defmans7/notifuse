@@ -814,6 +814,8 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	trackingSettings := notifuse_mjml.TrackingSettings{
 		Endpoint:       s.apiEndpoint,
 		EnableTracking: workspace.Settings.EmailTrackingEnabled,
+		WorkspaceID:    request.WorkspaceID,
+		MessageID:      messageID,
 	}
 
 	// Add UTM parameters if available

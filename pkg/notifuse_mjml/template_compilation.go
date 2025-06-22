@@ -23,6 +23,8 @@ type TrackingSettings struct {
 	UTMCampaign    string `json:"utm_campaign,omitempty"`
 	UTMContent     string `json:"utm_content,omitempty"`
 	UTMTerm        string `json:"utm_term,omitempty"`
+	WorkspaceID    string `json:"workspace_id,omitempty"`
+	MessageID      string `json:"message_id,omitempty"`
 }
 
 // Value implements the driver.Valuer interface for database storage
@@ -168,12 +170,22 @@ type CompileTemplateResponse struct {
 }
 
 // GenerateEmailRedirectionEndpoint generates the email redirection endpoint URL
-func GenerateEmailRedirectionEndpoint(workspaceID string, messageID string, apiEndpoint string) string {
+func GenerateEmailRedirectionEndpoint(workspaceID string, messageID string, apiEndpoint string, destinationURL string) string {
 	// URL encode the parameters to handle special characters
 	encodedMID := url.QueryEscape(messageID)
 	encodedWID := url.QueryEscape(workspaceID)
-	return fmt.Sprintf("%s/visit?mid=%s&wid=%s",
+	encodedURL := url.QueryEscape(destinationURL)
+	return fmt.Sprintf("%s/visit?mid=%s&wid=%s&url=%s",
+		apiEndpoint, encodedMID, encodedWID, encodedURL)
+}
+
+func GenerateHTMLOpenTrackingPixel(workspaceID string, messageID string, apiEndpoint string) string {
+	// URL encode the parameters to handle special characters
+	encodedMID := url.QueryEscape(messageID)
+	encodedWID := url.QueryEscape(workspaceID)
+	pixelURL := fmt.Sprintf("%s/open?mid=%s&wid=%s",
 		apiEndpoint, encodedMID, encodedWID)
+	return fmt.Sprintf(`<img src="%s" alt="" width="1" height="1">`, pixelURL)
 }
 
 // CompileTemplate compiles a visual editor tree to MJML and HTML
@@ -269,9 +281,27 @@ func TrackLinks(htmlString string, trackingSettings TrackingSettings) (updatedHT
 		// Apply tracking to the URL
 		trackedURL := trackingSettings.GetTrackingURL(originalURL)
 
+		if trackingSettings.EnableTracking {
+			trackedURL = GenerateEmailRedirectionEndpoint(trackingSettings.WorkspaceID, trackingSettings.MessageID, trackingSettings.Endpoint, originalURL)
+		}
+
 		// Return the updated tag
 		return beforeURL + trackedURL + afterURL
 	})
+
+	if trackingSettings.EnableTracking {
+		// Insert tracking pixel at the end of the body tag
+		trackingPixel := GenerateHTMLOpenTrackingPixel(trackingSettings.WorkspaceID, trackingSettings.MessageID, trackingSettings.Endpoint)
+
+		// Find the closing </body> tag and insert the pixel before it
+		bodyCloseRegex := regexp.MustCompile(`(?i)(<\/body>)`)
+		if bodyCloseRegex.MatchString(updatedHTML) {
+			updatedHTML = bodyCloseRegex.ReplaceAllString(updatedHTML, trackingPixel+"$1")
+		} else {
+			// Fallback: if no closing body tag found, append to the end
+			updatedHTML = updatedHTML + trackingPixel
+		}
+	}
 
 	return updatedHTML, nil
 }
