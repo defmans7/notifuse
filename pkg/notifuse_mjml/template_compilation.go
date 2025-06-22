@@ -153,7 +153,7 @@ func (r *CompileTemplateRequest) Validate() error {
 		return fmt.Errorf("invalid compile template request: visual_editor_tree must have type 'mjml'")
 	}
 	if r.VisualEditorTree.GetChildren() == nil {
-		return fmt.Errorf("invalid compile template request: visual_editor_tree root block must have data (styles)")
+		return fmt.Errorf("invalid compile template request: visual_editor_tree root block must have children")
 	}
 
 	return nil

@@ -170,8 +170,8 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	if e.VisualEditorTree.GetType() != notifuse_mjml.MJMLComponentMjml {
 		return fmt.Errorf("invalid email template: visual_editor_tree must have type 'mjml'")
 	}
-	if e.VisualEditorTree.GetAttributes() == nil {
-		return fmt.Errorf("invalid email template: visual_editor_tree root block must have attributes")
+	if e.VisualEditorTree.GetChildren() == nil {
+		return fmt.Errorf("invalid email template: visual_editor_tree root block must have children")
 	}
 	if e.CompiledPreview == "" {
 		// Prepare template data JSON string
