@@ -3,6 +3,7 @@ package broadcast
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -189,16 +190,6 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
 
-	startTime := time.Now()
-	defer func() {
-		s.logger.WithFields(map[string]interface{}{
-			"duration_ms":  time.Since(startTime).Milliseconds(),
-			"broadcast_id": broadcast.ID,
-			"workspace_id": workspaceID,
-			"recipient":    email,
-		}).Debug("Message send completed")
-	}()
-
 	// Check circuit breaker
 	if s.circuitBreaker != nil && s.circuitBreaker.IsOpen() {
 		lastError := s.circuitBreaker.GetLastError()
@@ -340,10 +331,18 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
 	templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error) {
 
-	startTime := time.Now()
+	// Track specific error types for better reporting
+	errorCounts := map[string]int{
+		"template_not_found":   0,
+		"template_data_failed": 0,
+		"send_failed":          0,
+		"empty_email":          0,
+		"context_cancelled":    0,
+	}
+	var firstError error
+
 	defer func() {
 		s.logger.WithFields(map[string]interface{}{
-			"duration_ms":  time.Since(startTime).Milliseconds(),
 			"broadcast_id": broadcastID,
 			"workspace_id": workspaceID,
 			"total":        len(recipients),
@@ -391,12 +390,20 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		// Skip empty emails (shouldn't happen, but just in case)
 		if contact == nil || contact.Email == "" {
 			failed++
+			errorCounts["empty_email"]++
+			if firstError == nil {
+				firstError = fmt.Errorf("contact has empty email")
+			}
 			continue
 		}
 
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
+			errorCounts["context_cancelled"]++
+			if firstError == nil {
+				firstError = ctx.Err()
+			}
 			return sent, failed, ctx.Err()
 		default:
 			// Continue
@@ -430,6 +437,10 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 				"recipient":    contact.Email,
 			}).Error("No template found for recipient")
 			failed++
+			errorCounts["template_not_found"]++
+			if firstError == nil {
+				firstError = fmt.Errorf("template not found for template_id: %s", templateID)
+			}
 			continue
 		}
 
@@ -469,6 +480,10 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 				"error":        err.Error(),
 			}).Error("Failed to build template data")
 			failed++
+			errorCounts["template_data_failed"]++
+			if firstError == nil {
+				firstError = fmt.Errorf("template data build failed: %w", err)
+			}
 			continue
 		}
 
@@ -477,6 +492,10 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++
+			errorCounts["send_failed"]++
+			if firstError == nil {
+				firstError = fmt.Errorf("send failed: %w", err)
+			}
 		} else {
 			sent++
 		}
@@ -530,8 +549,24 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 	// Record success/failure in circuit breaker based on overall success rate
 	if s.circuitBreaker != nil {
 		if failed > sent {
-			batchErr := fmt.Errorf("batch failure: %d failed, %d sent", failed, sent)
-			s.circuitBreaker.RecordFailure(batchErr)
+			// Create detailed error message with breakdown
+			var errorDetails []string
+			for errorType, count := range errorCounts {
+				if count > 0 {
+					errorDetails = append(errorDetails, fmt.Sprintf("%s: %d", errorType, count))
+				}
+			}
+
+			var detailedError error
+			if len(errorDetails) > 0 {
+				detailedError = fmt.Errorf("batch send failed (sent: %d, failed: %d) - errors: %s. First error: %v",
+					sent, failed, strings.Join(errorDetails, ", "), firstError)
+			} else {
+				detailedError = fmt.Errorf("batch send failed (sent: %d, failed: %d). First error: %v",
+					sent, failed, firstError)
+			}
+
+			s.circuitBreaker.RecordFailure(detailedError)
 		} else if sent > 0 {
 			s.circuitBreaker.RecordSuccess()
 		}
