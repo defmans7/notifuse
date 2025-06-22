@@ -143,7 +143,7 @@ func WithLogger(logger logger.Logger) AppOption {
 func NewApp(cfg *config.Config, opts ...AppOption) AppInterface {
 	app := &App{
 		config:        cfg,
-		logger:        logger.NewLogger(), // Default logger
+		logger:        logger.NewLoggerWithLevel(cfg.LogLevel), // Use configured log level
 		mux:           http.NewServeMux(),
 		serverStarted: make(chan struct{}),
 	}

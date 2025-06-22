@@ -79,8 +79,8 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Initialize logger
-	appLogger := logger.NewLogger()
+	// Initialize logger with configured log level
+	appLogger := logger.NewLoggerWithLevel(cfg.LogLevel)
 	appLogger.Info(fmt.Sprintf("Starting API server on %s:%d", cfg.Server.Host, cfg.Server.Port))
 
 	// Run the server

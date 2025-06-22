@@ -2,6 +2,7 @@ package logger
 
 import (
 	"os"
+	"strings"
 
 	"github.com/rs/zerolog"
 )
@@ -23,6 +24,35 @@ type zerologLogger struct {
 }
 
 func NewLogger() Logger {
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	return &zerologLogger{
+		logger: logger,
+	}
+}
+
+// NewLoggerWithLevel creates a new logger with the specified log level
+func NewLoggerWithLevel(level string) Logger {
+	// Set the global log level based on the provided level
+	switch strings.ToLower(level) {
+	case "debug":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "info":
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	case "warn", "warning":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	case "fatal":
+		zerolog.SetGlobalLevel(zerolog.FatalLevel)
+	case "panic":
+		zerolog.SetGlobalLevel(zerolog.PanicLevel)
+	case "disabled", "off":
+		zerolog.SetGlobalLevel(zerolog.Disabled)
+	default:
+		// Default to info level if unknown level is provided
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
+
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	return &zerologLogger{
 		logger: logger,
