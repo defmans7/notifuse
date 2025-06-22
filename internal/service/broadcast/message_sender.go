@@ -412,13 +412,8 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		// Determine which variation to use for this contact
 		var templateID string
 		if broadcast.WinningTemplate != "" {
-			// If there's a winning variation, use it
-			for _, variation := range broadcast.TestSettings.Variations {
-				if variation.VariationName == broadcast.WinningTemplate {
-					templateID = variation.TemplateID
-					break
-				}
-			}
+			// If there's a winning template, use it directly (WinningTemplate contains the templateID)
+			templateID = broadcast.WinningTemplate
 		} else if broadcast.TestSettings.Enabled {
 			// A/B testing is enabled but no winner yet, assign a variation
 			// Use a deterministic approach based on contact's email
