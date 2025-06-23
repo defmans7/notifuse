@@ -180,7 +180,7 @@ type TaskFilter struct {
 // TaskProcessor defines the interface for task execution
 type TaskProcessor interface {
 	// Process executes or continues a task, returns whether the task has been completed
-	Process(ctx context.Context, task *Task) (completed bool, err error)
+	Process(ctxWithTimeout context.Context, task *Task) (completed bool, err error)
 
 	// CanProcess returns whether this processor can handle the given task type
 	CanProcess(taskType string) bool

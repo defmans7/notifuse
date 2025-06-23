@@ -317,72 +317,73 @@ func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.
 	defer tracing.EndSpan(span, nil)
 
 	tracing.AddAttribute(ctx, "task_count", len(tasks))
+	bgCtx := context.Background()
 
 	for _, task := range tasks {
 		// Create a separate context for each task with a timeout
-		taskCtx, cancel := context.WithTimeout(ctx, time.Duration(task.MaxRuntime)*time.Second)
+		taskCtxWithTimeout, cancel := context.WithTimeout(ctx, time.Duration(task.MaxRuntime)*time.Second)
 
 		// Handle the task in a goroutine
-		go func(t *domain.Task, ctx context.Context, cancelFunc context.CancelFunc) {
-			execCtx, execSpan := tracing.StartServiceSpan(ctx, "TaskService", "executeTaskDirectly")
+		go func(t *domain.Task, ctxWithTimeout context.Context, cancelFunc context.CancelFunc) {
+			execCtxWithTimeout, execSpan := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "executeTaskDirectly")
 
 			// Set task attributes
-			tracing.AddAttribute(execCtx, "task_id", t.ID)
-			tracing.AddAttribute(execCtx, "workspace_id", t.WorkspaceID)
-			tracing.AddAttribute(execCtx, "task_type", t.Type)
+			tracing.AddAttribute(execCtxWithTimeout, "task_id", t.ID)
+			tracing.AddAttribute(execCtxWithTimeout, "workspace_id", t.WorkspaceID)
+			tracing.AddAttribute(execCtxWithTimeout, "task_type", t.Type)
 			if t.BroadcastID != nil {
-				tracing.AddAttribute(execCtx, "broadcast_id", *t.BroadcastID)
+				tracing.AddAttribute(execCtxWithTimeout, "broadcast_id", *t.BroadcastID)
 			}
 
 			// Ensure we clean up the context and handle timeout
 			defer func() {
 				// Check if the context expired (timed out)
-				if ctx.Err() == context.DeadlineExceeded {
+				if ctxWithTimeout.Err() == context.DeadlineExceeded {
 					timeoutError := fmt.Errorf("task execution timed out after %d seconds", t.MaxRuntime)
-					tracing.MarkSpanError(execCtx, timeoutError)
+					tracing.MarkSpanError(execCtxWithTimeout, timeoutError)
 					s.logger.WithField("task_id", t.ID).
 						WithField("workspace_id", t.WorkspaceID).
 						WithField("error", timeoutError.Error()).
 						Warn("Task timed out")
 
 					// Mark the task as failed due to timeout
-					if err := s.repo.MarkAsFailed(ctx, t.WorkspaceID, t.ID, timeoutError.Error()); err != nil {
-						tracing.MarkSpanError(execCtx, err)
+					if err := s.repo.MarkAsFailed(bgCtx, t.WorkspaceID, t.ID, timeoutError.Error()); err != nil {
+						tracing.MarkSpanError(execCtxWithTimeout, err)
 						s.logger.WithField("task_id", t.ID).
 							WithField("workspace_id", t.WorkspaceID).
 							WithField("error", err.Error()).
 							Error("Failed to mark timed out task as failed")
 					}
 				}
-				tracing.EndSpan(execSpan, ctx.Err())
+				tracing.EndSpan(execSpan, ctxWithTimeout.Err())
 				cancelFunc()
 			}()
 
-			if err := s.ExecuteTask(execCtx, t.WorkspaceID, t.ID); err != nil {
-				tracing.MarkSpanError(execCtx, err)
+			if err := s.ExecuteTask(execCtxWithTimeout, t.WorkspaceID, t.ID); err != nil {
+				tracing.MarkSpanError(execCtxWithTimeout, err)
 				s.logger.WithField("task_id", t.ID).
 					WithField("workspace_id", t.WorkspaceID).
 					WithField("error", err.Error()).
 					Error("Failed to execute task")
 			}
-		}(task, taskCtx, cancel)
+		}(task, taskCtxWithTimeout, cancel)
 	}
 
 	return nil
 }
 
 // ExecuteTask executes a specific task
-func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string) error {
-	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "ExecuteTask")
+func (s *TaskService) ExecuteTask(ctxWithTimeout context.Context, workspace, taskID string) error {
+	ctxWithTimeout, span := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "ExecuteTask")
 	defer tracing.EndSpan(span, nil)
 
-	tracing.AddAttribute(ctx, "workspace_id", workspace)
-	tracing.AddAttribute(ctx, "task_id", taskID)
+	tracing.AddAttribute(ctxWithTimeout, "workspace_id", workspace)
+	tracing.AddAttribute(ctxWithTimeout, "task_id", taskID)
 
 	// First check if the context is already cancelled
-	if ctx.Err() != nil {
-		tracing.MarkSpanError(ctx, ctx.Err())
-		return ctx.Err()
+	if ctxWithTimeout.Err() != nil {
+		tracing.MarkSpanError(ctxWithTimeout, ctxWithTimeout.Err())
+		return ctxWithTimeout.Err()
 	}
 
 	// Get the task
@@ -391,8 +392,8 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	var err error
 
 	// Wrap the initial setup operations in a transaction
-	err = s.WithTransaction(ctx, func(tx *sql.Tx) error {
-		txCtx, txSpan := tracing.StartServiceSpan(ctx, "TaskService", "ExecuteTaskTransaction")
+	err = s.WithTransaction(ctxWithTimeout, func(tx *sql.Tx) error {
+		txCtx, txSpan := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "ExecuteTaskTransaction")
 		defer tracing.EndSpan(txSpan, nil)
 
 		var taskErr error
@@ -458,7 +459,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	})
 
 	if err != nil {
-		tracing.MarkSpanError(ctx, err)
+		tracing.MarkSpanError(ctxWithTimeout, err)
 		return err
 	}
 
@@ -466,23 +467,24 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	// Set up completion channel and context handling
 	done := make(chan bool, 1)
 	processErr := make(chan error, 1)
+	bgCtx := context.Background()
 
 	// Process the task in a goroutine
 	go func() {
-		procCtx, procSpan := tracing.StartServiceSpan(ctx, "TaskService", "ProcessTask")
+		procCtxWithTimeout, procSpan := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "ProcessTask")
 		defer tracing.EndSpan(procSpan, nil)
 
-		tracing.AddAttribute(procCtx, "task_id", taskID)
-		tracing.AddAttribute(procCtx, "workspace_id", workspace)
-		tracing.AddAttribute(procCtx, "task_type", task.Type)
+		tracing.AddAttribute(procCtxWithTimeout, "task_id", taskID)
+		tracing.AddAttribute(procCtxWithTimeout, "workspace_id", workspace)
+		tracing.AddAttribute(procCtxWithTimeout, "task_type", task.Type)
 		if task.BroadcastID != nil {
-			tracing.AddAttribute(procCtx, "broadcast_id", *task.BroadcastID)
+			tracing.AddAttribute(procCtxWithTimeout, "broadcast_id", *task.BroadcastID)
 		}
 
 		// Check if context was cancelled before we even start
-		if procCtx.Err() != nil {
-			tracing.MarkSpanError(procCtx, procCtx.Err())
-			processErr <- procCtx.Err()
+		if procCtxWithTimeout.Err() != nil {
+			tracing.MarkSpanError(procCtxWithTimeout, procCtxWithTimeout.Err())
+			processErr <- procCtxWithTimeout.Err()
 			return
 		}
 
@@ -490,15 +492,15 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 		startTime := time.Now()
 
 		// Call the processor
-		completed, err := processor.Process(procCtx, task)
+		completed, err := processor.Process(procCtxWithTimeout, task)
 
 		// Calculate elapsed time
 		elapsed := time.Since(startTime)
-		tracing.AddAttribute(procCtx, "elapsed_time_ms", elapsed.Milliseconds())
-		tracing.AddAttribute(procCtx, "task_completed", completed)
+		tracing.AddAttribute(procCtxWithTimeout, "elapsed_time_ms", elapsed.Milliseconds())
+		tracing.AddAttribute(procCtxWithTimeout, "task_completed", completed)
 
 		if err != nil {
-			tracing.MarkSpanError(procCtx, err)
+			tracing.MarkSpanError(procCtxWithTimeout, err)
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
 				"workspace_id": workspace,
@@ -521,14 +523,14 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 	case completed := <-done:
 		if completed {
 			// Task was completed successfully
-			completeCtx, completeSpan := tracing.StartServiceSpan(ctx, "TaskService", "MarkTaskCompleted")
+			completeCtxWithTimeout, completeSpan := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "MarkTaskCompleted")
 			defer tracing.EndSpan(completeSpan, nil)
 
-			tracing.AddAttribute(completeCtx, "task_id", taskID)
-			tracing.AddAttribute(completeCtx, "workspace_id", workspace)
+			tracing.AddAttribute(completeCtxWithTimeout, "task_id", taskID)
+			tracing.AddAttribute(completeCtxWithTimeout, "workspace_id", workspace)
 
-			if err := s.repo.MarkAsCompleted(completeCtx, workspace, taskID); err != nil {
-				tracing.MarkSpanError(completeCtx, err)
+			if err := s.repo.MarkAsCompleted(bgCtx, workspace, taskID); err != nil {
+				tracing.MarkSpanError(completeCtxWithTimeout, err)
 				s.logger.WithFields(map[string]interface{}{
 					"task_id":      taskID,
 					"workspace_id": workspace,
@@ -546,18 +548,18 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			}).Info("Task completed successfully")
 		} else {
 			// Mark task as paused for next run
-			pauseCtx, pauseSpan := tracing.StartServiceSpan(ctx, "TaskService", "MarkTaskPaused")
+			pauseCtxWithTimeout, pauseSpan := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "MarkTaskPaused")
 			defer tracing.EndSpan(pauseSpan, nil)
 
-			tracing.AddAttribute(pauseCtx, "task_id", taskID)
-			tracing.AddAttribute(pauseCtx, "workspace_id", workspace)
+			tracing.AddAttribute(pauseCtxWithTimeout, "task_id", taskID)
+			tracing.AddAttribute(pauseCtxWithTimeout, "workspace_id", workspace)
 
 			nextRun := time.Now()
-			tracing.AddAttribute(pauseCtx, "next_run", nextRun.Format(time.RFC3339))
-			tracing.AddAttribute(pauseCtx, "progress", task.Progress)
+			tracing.AddAttribute(pauseCtxWithTimeout, "next_run", nextRun.Format(time.RFC3339))
+			tracing.AddAttribute(pauseCtxWithTimeout, "progress", task.Progress)
 
-			if err := s.repo.MarkAsPaused(pauseCtx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
-				tracing.MarkSpanError(pauseCtx, err)
+			if err := s.repo.MarkAsPaused(bgCtx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
+				tracing.MarkSpanError(pauseCtxWithTimeout, err)
 				s.logger.WithFields(map[string]interface{}{
 					"task_id":      taskID,
 					"workspace_id": workspace,
@@ -577,15 +579,15 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 		}
 	case err := <-processErr:
 		// Task failed with an error
-		failCtx, failSpan := tracing.StartServiceSpan(ctx, "TaskService", "MarkTaskFailed")
+		failCtxWithTimeout, failSpan := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "MarkTaskFailed")
 		defer tracing.EndSpan(failSpan, nil)
 
-		tracing.AddAttribute(failCtx, "task_id", taskID)
-		tracing.AddAttribute(failCtx, "workspace_id", workspace)
-		tracing.AddAttribute(failCtx, "error", err.Error())
+		tracing.AddAttribute(failCtxWithTimeout, "task_id", taskID)
+		tracing.AddAttribute(failCtxWithTimeout, "workspace_id", workspace)
+		tracing.AddAttribute(failCtxWithTimeout, "error", err.Error())
 
-		if markErr := s.repo.MarkAsFailed(failCtx, workspace, taskID, err.Error()); markErr != nil {
-			tracing.MarkSpanError(failCtx, markErr)
+		if markErr := s.repo.MarkAsFailed(bgCtx, workspace, taskID, err.Error()); markErr != nil {
+			tracing.MarkSpanError(failCtxWithTimeout, markErr)
 			s.logger.WithFields(map[string]interface{}{
 				"task_id":      taskID,
 				"workspace_id": workspace,
@@ -595,15 +597,15 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			return fmt.Errorf("failed to mark task as failed: %w", markErr)
 		}
 		return err
-	case <-ctx.Done():
+	case <-ctxWithTimeout.Done():
 		// Task timed out or context was cancelled
-		timeoutCtx, timeoutSpan := tracing.StartServiceSpan(ctx, "TaskService", "HandleTaskTimeout")
+		timeoutCtx, timeoutSpan := tracing.StartServiceSpan(ctxWithTimeout, "TaskService", "HandleTaskTimeout")
 
 		tracing.AddAttribute(timeoutCtx, "task_id", taskID)
 		tracing.AddAttribute(timeoutCtx, "workspace_id", workspace)
-		tracing.AddAttribute(timeoutCtx, "context_error", ctx.Err().Error())
+		tracing.AddAttribute(timeoutCtx, "context_error", ctxWithTimeout.Err().Error())
 
-		if ctx.Err() == context.DeadlineExceeded {
+		if ctxWithTimeout.Err() == context.DeadlineExceeded {
 			// This is a timeout
 			timeoutErr := &domain.ErrTaskTimeout{
 				TaskID:     taskID,
@@ -625,7 +627,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 				tracing.AddAttribute(timeoutCtx, "max_retries", task.MaxRetries)
 				tracing.AddAttribute(timeoutCtx, "next_run", nextRun.Format(time.RFC3339))
 
-				if err := s.repo.MarkAsPaused(timeoutCtx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
+				if err := s.repo.MarkAsPaused(bgCtx, task.WorkspaceID, task.ID, nextRun, task.Progress, task.State); err != nil {
 					tracing.MarkSpanError(timeoutCtx, err)
 					s.logger.WithFields(map[string]interface{}{
 						"task_id":      taskID,
@@ -651,7 +653,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 				// No retries left, mark as failed
 				tracing.AddAttribute(timeoutCtx, "retries_exhausted", true)
 
-				if err := s.repo.MarkAsFailed(timeoutCtx, workspace, taskID, timeoutErr.Error()); err != nil {
+				if err := s.repo.MarkAsFailed(bgCtx, workspace, taskID, timeoutErr.Error()); err != nil {
 					tracing.MarkSpanError(timeoutCtx, err)
 					s.logger.WithFields(map[string]interface{}{
 						"task_id":      taskID,
@@ -682,7 +684,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			}
 			tracing.MarkSpanError(timeoutCtx, cancelErr)
 
-			if err := s.repo.MarkAsFailed(timeoutCtx, workspace, taskID, cancelErr.Error()); err != nil {
+			if err := s.repo.MarkAsFailed(bgCtx, workspace, taskID, cancelErr.Error()); err != nil {
 				tracing.MarkSpanError(timeoutCtx, err)
 				s.logger.WithFields(map[string]interface{}{
 					"task_id":      taskID,
