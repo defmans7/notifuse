@@ -299,7 +299,7 @@ func (r *SendEmailRequest) Validate() error {
 // EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
-	SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, emailOptions EmailOptions) error
+	SendEmail(ctxWithTimeout context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, emailOptions EmailOptions) error
 	SendEmailForTemplate(ctx context.Context, request SendEmailRequest) error
 	VisitLink(ctx context.Context, messageID string, workspaceID string) error
 	OpenEmail(ctx context.Context, messageID string, workspaceID string) error

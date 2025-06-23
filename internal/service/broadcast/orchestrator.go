@@ -32,7 +32,7 @@ type BroadcastOrchestratorInterface interface {
 	FetchBatch(ctx context.Context, workspaceID, broadcastID string, offset, limit int) ([]*domain.ContactWithList, error)
 
 	// SaveProgressState saves the current task progress to the repository
-	SaveProgressState(ctx context.Context, workspaceID, taskID, broadcastID string, totalRecipients, sentCount, failedCount, processedCount int, lastSaveTime time.Time, startTime time.Time) (time.Time, error)
+	SaveProgressState(ctxWithTimeout context.Context, workspaceID, taskID, broadcastID string, totalRecipients, sentCount, failedCount, processedCount int, lastSaveTime time.Time, startTime time.Time) (time.Time, error)
 }
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
@@ -323,7 +323,7 @@ func FormatProgressMessage(processed, total int, elapsed time.Duration) string {
 
 // SaveProgressState saves the current task progress to the repository
 func (o *BroadcastOrchestrator) SaveProgressState(
-	ctx context.Context,
+	ctxWithTimeout context.Context,
 	workspaceID, taskID, broadcastID string,
 	totalRecipients, sentCount, failedCount, processedCount int,
 	lastSaveTime time.Time,
@@ -351,7 +351,7 @@ func (o *BroadcastOrchestrator) SaveProgressState(
 	}
 
 	// Save state
-	err := o.taskRepo.SaveState(ctx, workspaceID, taskID, progress, state)
+	err := o.taskRepo.SaveState(context.Background(), workspaceID, taskID, progress, state)
 	if err != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
@@ -1010,7 +1010,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 		}
 
 		// Save the updated broadcast
-		updateErr := o.broadcastRepo.UpdateBroadcast(ctxWithTimeout, broadcast)
+		updateErr := o.broadcastRepo.UpdateBroadcast(context.Background(), broadcast)
 		if updateErr != nil {
 			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
@@ -1049,7 +1049,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 }
 
 // handleTestPhaseCompletion handles the transition from test phase to test_completed status
-func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctx context.Context, broadcast *domain.Broadcast, broadcastState *domain.SendBroadcastState) bool {
+func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctxWithTimeout context.Context, broadcast *domain.Broadcast, broadcastState *domain.SendBroadcastState) bool {
 	// Mark test phase as completed in state
 	broadcastState.TestPhaseCompleted = true
 
@@ -1064,7 +1064,7 @@ func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctx context.Context, b
 	}
 
 	// Save the updated broadcast status
-	if err := o.broadcastRepo.UpdateBroadcast(ctx, broadcast); err != nil {
+	if err := o.broadcastRepo.UpdateBroadcast(context.Background(), broadcast); err != nil {
 		o.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcast.ID,
 			"error":        err.Error(),

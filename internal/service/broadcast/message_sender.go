@@ -23,7 +23,7 @@ type MessageSender interface {
 		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error
 
 	// SendBatch sends messages to a batch of recipients
-	SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
+	SendBatch(ctxWithTimeout context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
 		templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error)
 }
 
@@ -187,7 +187,7 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 }
 
 // SendToRecipient sends a message to a single recipient
-func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
+func (s *messageSender) SendToRecipient(ctxWithTimeout context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
 
 	// Check circuit breaker
@@ -206,7 +206,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	}
 
 	// Apply rate limiting
-	if err := s.enforceRateLimit(ctx); err != nil {
+	if err := s.enforceRateLimit(ctxWithTimeout); err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
@@ -283,7 +283,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 
 	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
 	err = s.emailService.SendEmail(
-		ctx,
+		ctxWithTimeout,
 		workspaceID,
 		messageID,
 		true, // is marketing
@@ -328,7 +328,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 }
 
 // SendBatch sends messages to a batch of recipients
-func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
+func (s *messageSender) SendBatch(ctxWithTimeout context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
 	templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error) {
 
 	// Track specific error types for better reporting
@@ -372,7 +372,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 	}
 
 	// Get the broadcast to determine variations and templates
-	broadcast, err := s.broadcastRepo.GetBroadcast(ctx, workspaceID, broadcastID)
+	broadcast, err := s.broadcastRepo.GetBroadcast(ctxWithTimeout, workspaceID, broadcastID)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
@@ -399,12 +399,12 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 
 		// Check context cancellation
 		select {
-		case <-ctx.Done():
+		case <-ctxWithTimeout.Done():
 			errorCounts["context_cancelled"]++
 			if firstError == nil {
-				firstError = ctx.Err()
+				firstError = ctxWithTimeout.Err()
 			}
-			return sent, failed, ctx.Err()
+			return sent, failed, ctxWithTimeout.Err()
 		default:
 			// Continue
 		}
@@ -483,7 +483,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		}
 
 		// Send to the recipient
-		err = s.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider)
+		err = s.SendToRecipient(ctxWithTimeout, workspaceID, trackingEnabled, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider)
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++
@@ -522,7 +522,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		}
 
 		// Record the message
-		if err := s.messageHistoryRepo.Create(ctx, workspaceID, message); err != nil {
+		if err := s.messageHistoryRepo.Create(ctxWithTimeout, workspaceID, message); err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
 				"workspace_id": workspaceID,
