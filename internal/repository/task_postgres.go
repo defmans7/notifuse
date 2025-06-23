@@ -636,18 +636,9 @@ func (r *TaskRepository) SaveStateTx(ctx context.Context, tx *sql.Tx, workspace,
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
 
-	result, err := tx.ExecContext(ctx, sqlQuery, args...)
+	_, err = tx.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to save task state: %w", err)
-	}
-
-	// Check if the task was found and is running
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("task not found or not in running state")
 	}
 
 	return nil
