@@ -941,3 +941,22 @@ func (r *TaskRepository) GetTaskByBroadcastIDTx(ctx context.Context, tx *sql.Tx,
 
 	return &task, nil
 }
+
+func (r *TaskRepository) DeleteAll(ctx context.Context, workspace string) error {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	query := psql.Delete("tasks").
+		Where(sq.Eq{"workspace_id": workspace})
+
+	sqlQuery, args, err := query.ToSql()
+	if err != nil {
+		return fmt.Errorf("failed to build delete query: %w", err)
+	}
+
+	_, err = r.systemDB.ExecContext(ctx, sqlQuery, args...)
+	if err != nil {
+		return fmt.Errorf("failed to delete tasks: %w", err)
+	}
+
+	return nil
+}

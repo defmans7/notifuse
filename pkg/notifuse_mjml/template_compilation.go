@@ -192,7 +192,7 @@ func GenerateHTMLOpenTrackingPixel(workspaceID string, messageID string, apiEndp
 func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse, err error) {
 	// Prepare template data JSON string
 	var templateDataStr string
-	if req.TemplateData != nil && len(req.TemplateData) > 0 {
+	if len(req.TemplateData) > 0 {
 		jsonDataBytes, err := json.Marshal(req.TemplateData)
 		if err != nil {
 			return &CompileTemplateResponse{

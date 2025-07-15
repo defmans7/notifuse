@@ -469,15 +469,17 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
       extra={
         <Space>
           {(broadcast.status === 'draft' || broadcast.status === 'scheduled') && (
-            <Tooltip title="Edit Broadcast">
-              <UpsertBroadcastDrawer
-                workspace={currentWorkspace!}
-                broadcast={broadcast}
-                lists={lists}
-                buttonContent={<FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />}
-                buttonProps={{ size: 'small', type: 'text' }}
-              />
-            </Tooltip>
+            <UpsertBroadcastDrawer
+              workspace={currentWorkspace!}
+              broadcast={broadcast}
+              lists={lists}
+              buttonContent={
+                <Tooltip title="Edit Broadcast">
+                  <FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />
+                </Tooltip>
+              }
+              buttonProps={{ size: 'small', type: 'text' }}
+            />
           )}
           {broadcast.status === 'sending' && (
             <Button type="text" size="small" onClick={() => onPause(broadcast)}>

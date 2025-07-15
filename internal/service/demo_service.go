@@ -146,12 +146,7 @@ func (s *DemoService) ResetDemo(ctx context.Context) error {
 		return fmt.Errorf("failed to delete existing workspaces: %w", err)
 	}
 
-	// Step 2: Delete all tasks from the system database
-	if err := s.deleteAllTasks(ctx); err != nil {
-		return fmt.Errorf("failed to delete existing tasks: %w", err)
-	}
-
-	// Step 3: Create a new demo workspace
+	// Step 2: Create a new demo workspace
 	if err := s.createDemoWorkspace(ctx); err != nil {
 		return fmt.Errorf("failed to create demo workspace: %w", err)
 	}
@@ -177,23 +172,13 @@ func (s *DemoService) deleteAllWorkspaces(ctx context.Context) error {
 			s.logger.WithField("workspace_id", workspace.ID).WithField("error", err.Error()).Error("Failed to delete workspace")
 			// Continue with other workspaces even if one fails
 		}
+		if err := s.taskRepo.DeleteAll(ctx, workspace.ID); err != nil {
+			s.logger.WithField("workspace_id", workspace.ID).WithField("error", err.Error()).Error("Failed to delete tasks")
+			// Continue with other workspaces even if one fails
+		}
 	}
 
 	s.logger.WithField("count", len(workspaces)).Info("Finished deleting workspaces")
-	return nil
-}
-
-// deleteAllTasks deletes all tasks from the system database
-func (s *DemoService) deleteAllTasks(ctx context.Context) error {
-	s.logger.Info("Deleting all existing tasks")
-
-	// Since tasks are workspace-specific and we've deleted all workspaces,
-	// we need to clean up any remaining tasks in the system database
-	// This is a simplified approach - in a real implementation you might want
-	// to query and delete tasks more systematically
-
-	// For now, we'll log this step as tasks should be cleaned up with workspace deletion
-	s.logger.Info("Tasks cleanup completed (handled by workspace deletion)")
 	return nil
 }
 
@@ -355,9 +340,10 @@ func (s *DemoService) createDemoSMTPIntegration(ctx context.Context, workspaceID
 		},
 		Senders: []domain.EmailSender{
 			{
-				ID:    uuid.New().String(),
-				Email: "demo@notifuse.com",
-				Name:  "Notifuse Demo",
+				ID:        uuid.New().String(),
+				Email:     "demo@notifuse.com",
+				Name:      "Notifuse Demo",
+				IsDefault: true,
 			},
 		},
 	}
@@ -544,6 +530,39 @@ func (s *DemoService) createSampleTemplates(ctx context.Context, workspaceID str
 
 	if err := s.templateService.CreateTemplate(ctx, workspaceID, newsletterTemplate); err != nil {
 		s.logger.WithField("error", err.Error()).Warn("Failed to create newsletter template")
+	}
+
+	// Create newsletter template v2
+	newsletterV2MJML := s.createNewsletterV2MJMLStructure()
+	newsletterV2TestData := domain.MapOfAny{
+		"contact": domain.MapOfAny{
+			"first_name": "Sarah",
+			"last_name":  "Wilson",
+			"email":      "sarah.wilson@example.com",
+		},
+	}
+
+	// Compile MJML to HTML
+	newsletterV2HTML := s.compileTemplateToHTML(workspaceID, "newsletter-v2-preview", newsletterV2MJML, newsletterV2TestData)
+
+	newsletterV2Template := &domain.Template{
+		ID:       "newsletter-weekly-v2",
+		Name:     "Weekly Newsletter v2",
+		Version:  2,
+		Channel:  "email",
+		Category: string(domain.TemplateCategoryMarketing),
+		Email: &domain.EmailTemplate{
+			Subject:          "🚀 {{contact.first_name}}, This Week's Top Stories & Updates!",
+			CompiledPreview:  newsletterV2HTML,
+			VisualEditorTree: newsletterV2MJML,
+		},
+		TestData:  newsletterV2TestData,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := s.templateService.CreateTemplate(ctx, workspaceID, newsletterV2Template); err != nil {
+		s.logger.WithField("error", err.Error()).Warn("Failed to create newsletter v2 template")
 	}
 
 	// Create welcome email template
@@ -923,6 +942,394 @@ func (s *DemoService) createNewsletterMJMLStructure() notifuse_mjml.EmailBlock {
 	}
 }
 
+// createNewsletterV2MJMLStructure creates the MJML structure for the newsletter v2 template (modern card-based design)
+func (s *DemoService) createNewsletterV2MJMLStructure() notifuse_mjml.EmailBlock {
+	// Create the text content blocks with different styling and content
+	titleContent := "Weekly Digest"
+	previewContent := "Your personalized weekly roundup of insights and updates"
+	heroContent := "Stay Ahead of the Curve 📈"
+	introContent := "Hey {{contact.first_name}},<br><br>Here's your curated weekly digest packed with the latest trends, insights, and updates tailored just for you."
+
+	// Feature stories content
+	feature1Title := "🎯 Featured Story"
+	feature1Content := "Breaking: New industry standards are reshaping how we approach digital transformation. Here's what you need to know."
+
+	feature2Title := "💡 Quick Tips"
+	feature2Content := "5 productivity hacks that successful professionals swear by. Simple changes, big impact."
+
+	feature3Title := "🔥 Trending Now"
+	feature3Content := "The tools and strategies everyone's talking about this week. Don't miss out on the conversation."
+
+	buttonContent := "Explore More"
+
+	// Create title and preview blocks
+	title := &notifuse_mjml.MJTitleBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "title",
+			Type: notifuse_mjml.MJMLComponentMjTitle,
+		},
+		Type:    notifuse_mjml.MJMLComponentMjTitle,
+		Content: &titleContent,
+	}
+
+	preview := &notifuse_mjml.MJPreviewBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "preview",
+			Type: notifuse_mjml.MJMLComponentMjPreview,
+		},
+		Type:    notifuse_mjml.MJMLComponentMjPreview,
+		Content: &previewContent,
+	}
+
+	// Create hero section
+	heroText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "hero-text",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "32px",
+				"font-weight": "bold",
+				"align":       "center",
+				"color":       "#1a202c",
+				"padding":     "20px 0",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &heroContent,
+	}
+
+	introText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "intro-text",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "16px",
+				"line-height": "1.6",
+				"color":       "#4a5568",
+				"align":       "center",
+				"padding":     "0 20px 30px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &introContent,
+	}
+
+	// Create feature cards
+	feature1TitleText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "feature1-title",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "18px",
+				"font-weight": "bold",
+				"color":       "#2d3748",
+				"padding":     "10px 20px 5px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &feature1Title,
+	}
+
+	feature1ContentText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "feature1-content",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "14px",
+				"line-height": "1.5",
+				"color":       "#4a5568",
+				"padding":     "0 20px 20px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &feature1Content,
+	}
+
+	feature2TitleText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "feature2-title",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "18px",
+				"font-weight": "bold",
+				"color":       "#2d3748",
+				"padding":     "10px 20px 5px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &feature2Title,
+	}
+
+	feature2ContentText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "feature2-content",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "14px",
+				"line-height": "1.5",
+				"color":       "#4a5568",
+				"padding":     "0 20px 20px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &feature2Content,
+	}
+
+	feature3TitleText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "feature3-title",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "18px",
+				"font-weight": "bold",
+				"color":       "#2d3748",
+				"padding":     "10px 20px 5px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &feature3Title,
+	}
+
+	feature3ContentText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "feature3-content",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size":   "14px",
+				"line-height": "1.5",
+				"color":       "#4a5568",
+				"padding":     "0 20px 20px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &feature3Content,
+	}
+
+	// Create CTA button
+	button := &notifuse_mjml.MJButtonBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "cta-button",
+			Type: notifuse_mjml.MJMLComponentMjButton,
+			Attributes: map[string]interface{}{
+				"background-color": "#667eea",
+				"color":            "#ffffff",
+				"font-size":        "16px",
+				"font-weight":      "bold",
+				"padding":          "15px 30px",
+				"border-radius":    "8px",
+				"href":             "https://demo.notifuse.com/weekly-digest?utm_source={{utm_source}}&utm_medium={{utm_medium}}&utm_campaign={{utm_campaign}}",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjButton,
+		Content: &buttonContent,
+	}
+
+	// Create footer
+	footerContent := "You're receiving this because you subscribed to our weekly digest.<br><a href=\"{{unsubscribe_url}}\">Unsubscribe</a> | <a href=\"https://demo.notifuse.com/preferences\">Manage Preferences</a>"
+	footerText := &notifuse_mjml.MJTextBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "footer-text",
+			Type: notifuse_mjml.MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"font-size": "12px",
+				"color":     "#a0aec0",
+				"align":     "center",
+				"padding":   "20px",
+			},
+		},
+		Type:    notifuse_mjml.MJMLComponentMjText,
+		Content: &footerContent,
+	}
+
+	// Create columns and sections
+	heroColumn := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "hero-column",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{heroText, introText},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{heroText, introText},
+	}
+
+	// Create feature columns (side by side layout)
+	feature1Column := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "feature1-column",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{feature1TitleText, feature1ContentText},
+			Attributes: map[string]interface{}{
+				"width":            "50%",
+				"background-color": "#f7fafc",
+				"border-radius":    "8px",
+				"padding":          "15px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{feature1TitleText, feature1ContentText},
+	}
+
+	feature2Column := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "feature2-column",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{feature2TitleText, feature2ContentText},
+			Attributes: map[string]interface{}{
+				"width":            "50%",
+				"background-color": "#f7fafc",
+				"border-radius":    "8px",
+				"padding":          "15px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{feature2TitleText, feature2ContentText},
+	}
+
+	feature3Column := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "feature3-column",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{feature3TitleText, feature3ContentText},
+			Attributes: map[string]interface{}{
+				"background-color": "#f7fafc",
+				"border-radius":    "8px",
+				"padding":          "15px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{feature3TitleText, feature3ContentText},
+	}
+
+	ctaColumn := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "cta-column",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{button},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{button},
+	}
+
+	footerColumn := &notifuse_mjml.MJColumnBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "footer-column",
+			Type:     notifuse_mjml.MJMLComponentMjColumn,
+			Children: []interface{}{footerText},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjColumn,
+		Children: []notifuse_mjml.EmailBlock{footerText},
+	}
+
+	// Create sections
+	heroSection := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "hero-section",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{heroColumn},
+			Attributes: map[string]interface{}{
+				"background-color": "#ffffff",
+				"padding":          "30px 20px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjSection,
+		Children: []notifuse_mjml.EmailBlock{heroColumn},
+	}
+
+	featuresSection := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "features-section",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{feature1Column, feature2Column},
+			Attributes: map[string]interface{}{
+				"background-color": "#ffffff",
+				"padding":          "20px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjSection,
+		Children: []notifuse_mjml.EmailBlock{feature1Column, feature2Column},
+	}
+
+	feature3Section := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "feature3-section",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{feature3Column},
+			Attributes: map[string]interface{}{
+				"background-color": "#ffffff",
+				"padding":          "20px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjSection,
+		Children: []notifuse_mjml.EmailBlock{feature3Column},
+	}
+
+	ctaSection := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "cta-section",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{ctaColumn},
+			Attributes: map[string]interface{}{
+				"background-color": "#ffffff",
+				"padding":          "30px 20px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjSection,
+		Children: []notifuse_mjml.EmailBlock{ctaColumn},
+	}
+
+	footerSection := &notifuse_mjml.MJSectionBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "footer-section",
+			Type:     notifuse_mjml.MJMLComponentMjSection,
+			Children: []interface{}{footerColumn},
+			Attributes: map[string]interface{}{
+				"background-color": "#edf2f7",
+				"padding":          "20px",
+			},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjSection,
+		Children: []notifuse_mjml.EmailBlock{footerColumn},
+	}
+
+	// Create head and body
+	head := &notifuse_mjml.MJHeadBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "head",
+			Type:     notifuse_mjml.MJMLComponentMjHead,
+			Children: []interface{}{title, preview},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjHead,
+		Children: []notifuse_mjml.EmailBlock{title, preview},
+	}
+
+	body := &notifuse_mjml.MJBodyBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:       "body",
+			Type:     notifuse_mjml.MJMLComponentMjBody,
+			Children: []interface{}{heroSection, featuresSection, feature3Section, ctaSection, footerSection},
+		},
+		Type:     notifuse_mjml.MJMLComponentMjBody,
+		Children: []notifuse_mjml.EmailBlock{heroSection, featuresSection, feature3Section, ctaSection, footerSection},
+	}
+
+	// Create root MJML block
+	return &notifuse_mjml.MJMLBlock{
+		BaseBlock: notifuse_mjml.BaseBlock{
+			ID:   "mjml-root",
+			Type: notifuse_mjml.MJMLComponentMjml,
+			Attributes: map[string]interface{}{
+				"lang": "en",
+			},
+			Children: []interface{}{head, body},
+		},
+		Type: notifuse_mjml.MJMLComponentMjml,
+		Attributes: map[string]interface{}{
+			"lang": "en",
+		},
+		Children: []notifuse_mjml.EmailBlock{head, body},
+	}
+}
+
 // createWelcomeMJMLStructure creates the MJML structure for the welcome template
 func (s *DemoService) createWelcomeMJMLStructure() notifuse_mjml.EmailBlock {
 	// Create content strings
@@ -1111,7 +1518,7 @@ func (s *DemoService) createSampleBroadcast(ctx context.Context, workspaceID str
 		},
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled:          true,
-			SamplePercentage: 50,
+			SamplePercentage: 10,
 			AutoSendWinner:   false,
 			Variations: []domain.BroadcastVariation{
 				{
@@ -1120,7 +1527,7 @@ func (s *DemoService) createSampleBroadcast(ctx context.Context, workspaceID str
 				},
 				{
 					VariationName: "variation-b",
-					TemplateID:    "newsletter-weekly",
+					TemplateID:    "newsletter-weekly-v2",
 				},
 			},
 		},

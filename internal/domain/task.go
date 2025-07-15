@@ -139,6 +139,7 @@ type TaskRepository interface {
 
 	// Delete removes a task
 	Delete(ctx context.Context, workspace, id string) error
+	DeleteAll(ctx context.Context, workspace string) error
 
 	// List retrieves tasks with optional filtering
 	List(ctx context.Context, workspace string, filter TaskFilter) ([]*Task, int, error)

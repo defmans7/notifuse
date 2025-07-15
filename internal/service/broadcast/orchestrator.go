@@ -598,7 +598,8 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 		// A/B testing enabled
 		if broadcastState.Phase == "" {
 			// Initialize phase based on current status
-			if broadcast.Status == domain.BroadcastStatusSending {
+			switch broadcast.Status {
+			case domain.BroadcastStatusSending:
 				if broadcast.WinningTemplate != "" {
 					// Winner already selected, proceed to winner phase
 					broadcastState.Phase = "winner"
@@ -623,7 +624,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 						o.logger.WithField("broadcast_id", broadcast.ID).Info("A/B test phase started - broadcast status updated to testing")
 					}
 				}
-			} else if broadcast.Status == domain.BroadcastStatusWinnerSelected {
+			case domain.BroadcastStatusWinnerSelected:
 				// Winner has been selected, proceed to winner phase
 				broadcastState.Phase = "winner"
 				// Initialize winner offset to start after test recipients if not already set

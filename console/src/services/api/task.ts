@@ -169,7 +169,7 @@ export const taskApi = {
       })
 
       // Find the task with the matching broadcast_id
-      const task = response.tasks.find((task) => task.broadcast_id === broadcast_id)
+      const task = response.tasks?.find((task) => task.broadcast_id === broadcast_id)
       return task || null
     } catch (error) {
       console.error('Error finding task by broadcast ID:', error)
