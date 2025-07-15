@@ -96,18 +96,18 @@ func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) LoadTemplates(arg0, ar
 }
 
 // Process mocks base method.
-func (m *MockBroadcastOrchestratorInterface) Process(arg0 context.Context, arg1 *domain.Task) (bool, error) {
+func (m *MockBroadcastOrchestratorInterface) Process(arg0 context.Context, arg1 *domain.Task, arg2 time.Time) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Process", arg0, arg1)
+	ret := m.ctrl.Call(m, "Process", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Process indicates an expected call of Process.
-func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) Process(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) Process(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).Process), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).Process), arg0, arg1, arg2)
 }
 
 // SaveProgressState mocks base method.

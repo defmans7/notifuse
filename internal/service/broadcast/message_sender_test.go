@@ -198,7 +198,8 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	)
 
 	// Test
-	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider)
+	timeoutAt := time.Now().Add(30 * time.Second)
+	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 }
 
@@ -270,7 +271,8 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 	)
 
 	// Test - this should fail due to template compilation issues
-	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider)
+	timeoutAt := time.Now().Add(30 * time.Second)
+	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider, timeoutAt)
 	assert.Error(t, err)
 	broadcastErr, ok := err.(*BroadcastError)
 	assert.True(t, ok)
@@ -316,12 +318,13 @@ func TestWithMockMessageSender(t *testing.T) {
 
 	// Set expectations on the mock
 	messageID := "test-message-id"
+	timeoutAt := time.Now().Add(30 * time.Second)
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil).
+		SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt).
 		Return(nil)
 
 	// Use the mock (normally this would be in the system under test)
-	err := mockSender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil)
+	err := mockSender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt)
 
 	// Verify the result
 	assert.NoError(t, err)

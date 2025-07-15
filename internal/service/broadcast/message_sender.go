@@ -20,11 +20,11 @@ import (
 type MessageSender interface {
 	// SendToRecipient sends a message to a single recipient
 	SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
-		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error
+		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider, timeoutAt time.Time) error
 
 	// SendBatch sends messages to a batch of recipients
-	SendBatch(ctxWithTimeout context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
-		templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error)
+	SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
+		templates map[string]*domain.Template, emailProvider *domain.EmailProvider, timeoutAt time.Time) (sent int, failed int, err error)
 }
 
 // CircuitBreaker provides circuit breaking functionality
@@ -187,8 +187,8 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 }
 
 // SendToRecipient sends a message to a single recipient
-func (s *messageSender) SendToRecipient(ctxWithTimeout context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
-	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider) error {
+func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
+	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider, timeoutAt time.Time) error {
 
 	// Check circuit breaker
 	if s.circuitBreaker != nil && s.circuitBreaker.IsOpen() {
@@ -206,7 +206,7 @@ func (s *messageSender) SendToRecipient(ctxWithTimeout context.Context, workspac
 	}
 
 	// Apply rate limiting
-	if err := s.enforceRateLimit(ctxWithTimeout); err != nil {
+	if err := s.enforceRateLimit(ctx); err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcast.ID,
 			"workspace_id": workspaceID,
@@ -283,7 +283,7 @@ func (s *messageSender) SendToRecipient(ctxWithTimeout context.Context, workspac
 
 	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
 	err = s.emailService.SendEmail(
-		ctxWithTimeout,
+		ctx,
 		workspaceID,
 		messageID,
 		true, // is marketing
@@ -328,8 +328,8 @@ func (s *messageSender) SendToRecipient(ctxWithTimeout context.Context, workspac
 }
 
 // SendBatch sends messages to a batch of recipients
-func (s *messageSender) SendBatch(ctxWithTimeout context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
-	templates map[string]*domain.Template, emailProvider *domain.EmailProvider) (sent int, failed int, err error) {
+func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
+	templates map[string]*domain.Template, emailProvider *domain.EmailProvider, timeoutAt time.Time) (sent int, failed int, err error) {
 
 	// Track specific error types for better reporting
 	errorCounts := map[string]int{
@@ -372,7 +372,7 @@ func (s *messageSender) SendBatch(ctxWithTimeout context.Context, workspaceID st
 	}
 
 	// Get the broadcast to determine variations and templates
-	broadcast, err := s.broadcastRepo.GetBroadcast(ctxWithTimeout, workspaceID, broadcastID)
+	broadcast, err := s.broadcastRepo.GetBroadcast(ctx, workspaceID, broadcastID)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,
@@ -397,16 +397,11 @@ func (s *messageSender) SendBatch(ctxWithTimeout context.Context, workspaceID st
 			continue
 		}
 
-		// Check context cancellation
-		select {
-		case <-ctxWithTimeout.Done():
-			errorCounts["context_cancelled"]++
-			if firstError == nil {
-				firstError = ctxWithTimeout.Err()
-			}
-			return sent, failed, ctxWithTimeout.Err()
-		default:
-			// Continue
+		// Check time-based timeout instead of context cancellation
+		if time.Now().After(timeoutAt) {
+			// Note: This is NOT an error - just time limit reached
+			s.logger.WithField("broadcast_id", broadcastID).Info("Time limit reached in batch processing")
+			return sent, failed, nil // Return current progress, no error
 		}
 
 		// Determine which variation to use for this contact
@@ -483,7 +478,7 @@ func (s *messageSender) SendBatch(ctxWithTimeout context.Context, workspaceID st
 		}
 
 		// Send to the recipient
-		err = s.SendToRecipient(ctxWithTimeout, workspaceID, trackingEnabled, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider)
+		err = s.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider, timeoutAt)
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++
@@ -522,7 +517,7 @@ func (s *messageSender) SendBatch(ctxWithTimeout context.Context, workspaceID st
 		}
 
 		// Record the message
-		if err := s.messageHistoryRepo.Create(ctxWithTimeout, workspaceID, message); err != nil {
+		if err := s.messageHistoryRepo.Create(ctx, workspaceID, message); err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
 				"workspace_id": workspaceID,

@@ -17,7 +17,7 @@ type BroadcastOrchestratorInterface interface {
 	CanProcess(taskType string) bool
 
 	// Process executes or continues a broadcast sending task
-	Process(ctxWithTimeout context.Context, task *domain.Task) (bool, error)
+	Process(ctx context.Context, task *domain.Task, timeoutAt time.Time) (bool, error)
 
 	// LoadTemplates loads all templates for a broadcast's variations
 	LoadTemplates(ctx context.Context, workspaceID string, templateIDs []string) (map[string]*domain.Template, error)
@@ -32,7 +32,7 @@ type BroadcastOrchestratorInterface interface {
 	FetchBatch(ctx context.Context, workspaceID, broadcastID string, offset, limit int) ([]*domain.ContactWithList, error)
 
 	// SaveProgressState saves the current task progress to the repository
-	SaveProgressState(ctxWithTimeout context.Context, workspaceID, taskID, broadcastID string, totalRecipients, sentCount, failedCount, processedCount int, lastSaveTime time.Time, startTime time.Time) (time.Time, error)
+	SaveProgressState(ctx context.Context, workspaceID, taskID, broadcastID string, totalRecipients, sentCount, failedCount, processedCount int, lastSaveTime time.Time, startTime time.Time) (time.Time, error)
 }
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
@@ -323,7 +323,7 @@ func FormatProgressMessage(processed, total int, elapsed time.Duration) string {
 
 // SaveProgressState saves the current task progress to the repository
 func (o *BroadcastOrchestrator) SaveProgressState(
-	ctxWithTimeout context.Context,
+	ctx context.Context,
 	workspaceID, taskID, broadcastID string,
 	totalRecipients, sentCount, failedCount, processedCount int,
 	lastSaveTime time.Time,
@@ -377,7 +377,7 @@ func (o *BroadcastOrchestrator) SaveProgressState(
 }
 
 // Process executes or continues a broadcast sending task
-func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *domain.Task) (bool, error) {
+func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, timeoutAt time.Time) (bool, error) {
 	o.logger.WithField("task_id", task.ID).Info("Processing send_broadcast task")
 
 	// Store initial state for use in the defer function
@@ -400,7 +400,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 			}).Info("Task failed on last retry attempt, marking broadcast as failed")
 
 			// Get the broadcast
-			broadcast, getBroadcastErr := o.broadcastRepo.GetBroadcast(ctxWithTimeout, task.WorkspaceID, broadcastID)
+			broadcast, getBroadcastErr := o.broadcastRepo.GetBroadcast(ctx, task.WorkspaceID, broadcastID)
 			if getBroadcastErr != nil {
 				o.logger.WithFields(map[string]interface{}{
 					"task_id":      task.ID,
@@ -415,7 +415,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 			broadcast.UpdatedAt = time.Now().UTC()
 
 			// Save the updated broadcast
-			updateErr := o.broadcastRepo.UpdateBroadcast(ctxWithTimeout, broadcast)
+			updateErr := o.broadcastRepo.UpdateBroadcast(ctx, broadcast)
 			if updateErr != nil {
 				o.logger.WithFields(map[string]interface{}{
 					"task_id":      task.ID,
@@ -495,7 +495,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 
 	// Phase 1: Get recipient count if not already set
 	if broadcastState.TotalRecipients == 0 {
-		count, countErr := o.GetTotalRecipientCount(ctxWithTimeout, task.WorkspaceID, broadcastState.BroadcastID)
+		count, countErr := o.GetTotalRecipientCount(ctx, task.WorkspaceID, broadcastState.BroadcastID)
 		if countErr != nil {
 			// codecov:ignore:start
 			o.logger.WithFields(map[string]interface{}{
@@ -549,7 +549,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 	}
 
 	// Get the workspace to retrieve email provider settings
-	workspace, workspaceErr := o.workspaceRepo.GetByID(ctxWithTimeout, task.WorkspaceID)
+	workspace, workspaceErr := o.workspaceRepo.GetByID(ctx, task.WorkspaceID)
 	if workspaceErr != nil {
 		err = fmt.Errorf("failed to get workspace: %w", workspaceErr)
 		return false, err
@@ -569,7 +569,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 	}
 
 	// Get the broadcast to access its template variations
-	broadcast, err := o.broadcastRepo.GetBroadcast(ctxWithTimeout, task.WorkspaceID, broadcastState.BroadcastID)
+	broadcast, err := o.broadcastRepo.GetBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
 	if err != nil {
 		return false, err
 	}
@@ -577,7 +577,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 	// Check if we should perform auto winner evaluation
 	if broadcastState.Phase == "test" && broadcast.Status == domain.BroadcastStatusTestCompleted {
 		if o.shouldEvaluateWinner(broadcast) {
-			if err := o.evaluateWinner(ctxWithTimeout, broadcast, broadcastState); err != nil {
+			if err := o.evaluateWinner(ctx, broadcast, broadcastState); err != nil {
 				// Log error but continue - will fall back to manual selection
 				o.logger.WithFields(map[string]interface{}{
 					"broadcast_id": broadcast.ID,
@@ -586,7 +586,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 			}
 
 			// Refresh broadcast after potential evaluation
-			broadcast, err = o.broadcastRepo.GetBroadcast(ctxWithTimeout, task.WorkspaceID, broadcastState.BroadcastID)
+			broadcast, err = o.broadcastRepo.GetBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID)
 			if err != nil {
 				return false, err
 			}
@@ -614,7 +614,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 					if broadcast.Status != domain.BroadcastStatusTesting {
 						broadcast.Status = domain.BroadcastStatusTesting
 						broadcast.UpdatedAt = time.Now().UTC()
-						if err := o.broadcastRepo.UpdateBroadcast(ctxWithTimeout, broadcast); err != nil {
+						if err := o.broadcastRepo.UpdateBroadcast(ctx, broadcast); err != nil {
 							o.logger.WithFields(map[string]interface{}{
 								"broadcast_id": broadcast.ID,
 								"error":        err.Error(),
@@ -681,7 +681,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 
 	// Phase 2: Load templates
 
-	templates, templatesErr := o.LoadTemplates(ctxWithTimeout, task.WorkspaceID, templateIDs)
+	templates, templatesErr := o.LoadTemplates(ctx, task.WorkspaceID, templateIDs)
 	if templatesErr != nil {
 		// codecov:ignore:start
 		o.logger.WithFields(map[string]interface{}{
@@ -708,8 +708,8 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 	}
 
 	// Phase 3: Process recipients in batches with a timeout
-	processCtxWithTimeout, cancel := context.WithTimeout(ctxWithTimeout, o.config.MaxProcessTime)
-	defer cancel()
+	// Use the timeoutAt parameter passed from task service
+	processTimeoutAt := timeoutAt
 
 	// Whether we've processed all recipients
 	allDone = false
@@ -732,14 +732,11 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 
 	// Process until timeout or completion
 	for {
-		select {
-		case <-processCtxWithTimeout.Done():
-			// We've hit the time limit, break out of the loop
-			o.logger.WithField("task_id", task.ID).Info("Processing time limit reached")
-			allDone = false
+		// Check time-based timeout
+		if time.Now().After(processTimeoutAt) {
+			o.logger.WithField("task_id", task.ID).Info("Processing time limit reached - pausing task")
+			allDone = false // Task will be paused and resumed in next cron run
 			break
-		default:
-			// Continue processing
 		}
 
 		// Check if phase is complete
@@ -765,7 +762,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 				continue
 			} else {
 				// No winner selected yet - mark test as complete and await winner selection
-				allDone = o.handleTestPhaseCompletion(ctxWithTimeout, broadcast, broadcastState)
+				allDone = o.handleTestPhaseCompletion(ctx, broadcast, broadcastState)
 				break
 			}
 		} else if broadcastState.Phase == "winner" && int(broadcastState.WinnerRecipientOffset) >= recipientLimit {
@@ -809,7 +806,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 					continue
 				} else {
 					// No winner selected yet - mark test as complete
-					allDone = o.handleTestPhaseCompletion(ctxWithTimeout, broadcast, broadcastState)
+					allDone = o.handleTestPhaseCompletion(ctx, broadcast, broadcastState)
 				}
 			} else {
 				allDone = true
@@ -819,7 +816,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 
 		// Fetch the next batch of recipients
 		recipients, batchErr := o.FetchBatch(
-			ctxWithTimeout,
+			ctx,
 			task.WorkspaceID,
 			broadcastState.BroadcastID,
 			currentOffset,
@@ -862,7 +859,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 					continue
 				} else {
 					// No winner selected yet - mark test as complete
-					allDone = o.handleTestPhaseCompletion(ctxWithTimeout, broadcast, broadcastState)
+					allDone = o.handleTestPhaseCompletion(ctx, broadcast, broadcastState)
 				}
 			} else {
 				allDone = true
@@ -872,7 +869,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 
 		// Process this batch of recipients
 		sent, failed, sendErr := o.messageSender.SendBatch(
-			ctxWithTimeout,
+			ctx,
 			task.WorkspaceID,
 			workspace.Settings.SecretKey,
 			workspace.Settings.EmailTrackingEnabled,
@@ -880,6 +877,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 			recipients,
 			templates,
 			emailProvider,
+			processTimeoutAt,
 		)
 
 		// Handle errors during sending
@@ -935,7 +933,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 		// Save progress to the task
 		var saveErr error
 		lastSaveTime, saveErr = o.SaveProgressState(
-			ctxWithTimeout,
+			ctx,
 			task.WorkspaceID,
 			task.ID,
 			broadcastState.BroadcastID,
@@ -1050,7 +1048,7 @@ func (o *BroadcastOrchestrator) Process(ctxWithTimeout context.Context, task *do
 }
 
 // handleTestPhaseCompletion handles the transition from test phase to test_completed status
-func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctxWithTimeout context.Context, broadcast *domain.Broadcast, broadcastState *domain.SendBroadcastState) bool {
+func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctx context.Context, broadcast *domain.Broadcast, broadcastState *domain.SendBroadcastState) bool {
 	// Mark test phase as completed in state
 	broadcastState.TestPhaseCompleted = true
 

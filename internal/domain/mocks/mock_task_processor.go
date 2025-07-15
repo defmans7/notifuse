@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
 	gomock "github.com/golang/mock/gomock"
@@ -50,16 +51,16 @@ func (mr *MockTaskProcessorMockRecorder) CanProcess(arg0 interface{}) *gomock.Ca
 }
 
 // Process mocks base method.
-func (m *MockTaskProcessor) Process(arg0 context.Context, arg1 *domain.Task) (bool, error) {
+func (m *MockTaskProcessor) Process(arg0 context.Context, arg1 *domain.Task, arg2 time.Time) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Process", arg0, arg1)
+	ret := m.ctrl.Call(m, "Process", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Process indicates an expected call of Process.
-func (mr *MockTaskProcessorMockRecorder) Process(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockTaskProcessorMockRecorder) Process(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockTaskProcessor)(nil).Process), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockTaskProcessor)(nil).Process), arg0, arg1, arg2)
 }
