@@ -35,7 +35,7 @@ func setupTestEnvironment(t *testing.T) (
 
 	// Ensure mock message sender implements the correct interface
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 
@@ -201,10 +201,11 @@ func TestProcess_HappyPath(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
 	fmt.Printf("Task before process: %+v\n", task)
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 
 	// Verify
 	fmt.Printf("Task after process: %+v\n", task)
@@ -288,9 +289,10 @@ func TestProcess_NilTaskState(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 
 	// Verify
 	require.NoError(t, err)
@@ -383,9 +385,10 @@ func TestProcess_NilSendBroadcastState(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 
 	// Verify
 	require.NoError(t, err)
@@ -463,9 +466,10 @@ func TestProcess_MissingBroadcastID(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 
 	// Verify
 	require.Error(t, err)
@@ -554,9 +558,10 @@ func TestProcess_ZeroRecipients(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 
 	// Verify
 	require.NoError(t, err)
@@ -648,9 +653,10 @@ func TestProcess_GetTotalRecipientCountError(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 
 	// Verify
 	require.Error(t, err)
@@ -752,9 +758,10 @@ func TestProcess_LastRetryError(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 
 	// Verify
 	require.Error(t, err)
@@ -844,10 +851,11 @@ func TestProcess_LoadTemplatesError(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 
 	// Execute
 	fmt.Printf("Task before process: %+v\n", task)
-	completed, err := orchestrator.Process(ctx, task)
+	completed, err := orchestrator.Process(ctx, task, timeoutAt)
 	fmt.Printf("Task after process (error: %v): %+v\n", err, task)
 
 	// Verify

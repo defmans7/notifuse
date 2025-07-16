@@ -193,7 +193,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 		// Configure processor to return an error
 		processingError := fmt.Errorf("processing failed")
 		mockProcessor.EXPECT().
-			Process(gomock.Any(), task).
+			Process(gomock.Any(), task, gomock.Any()).
 			Return(false, processingError)
 
 		// Mark as failed should succeed
@@ -311,7 +311,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 
 		// Configure processor to successfully complete the task
 		mockProcessor.EXPECT().
-			Process(gomock.Any(), task).
+			Process(gomock.Any(), task, gomock.Any()).
 			Return(true, nil)
 
 		// Mark as completed should succeed
@@ -372,7 +372,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 
 		// Configure processor to return partial completion
 		mockProcessor.EXPECT().
-			Process(gomock.Any(), task).
+			Process(gomock.Any(), task, gomock.Any()).
 			Return(false, nil)
 
 		// Mark as paused should be called for a partial completion

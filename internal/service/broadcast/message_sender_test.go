@@ -338,12 +338,13 @@ func TestWithMockMessageSender(t *testing.T) {
 	}
 
 	// Set up expectations with specific return values
+	timeoutAt = time.Now().Add(30 * time.Second)
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil).
+		SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt).
 		Return(1, 0, nil)
 
 	// Use the mock
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -389,14 +390,15 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	}
 
 	// Set up mock to return an error
+	timeoutAt := time.Now().Add(30 * time.Second)
 	mockError := errors.New("send failed: service unavailable")
 	messageID := "test-message-id"
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil).
+		SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt).
 		Return(mockError)
 
 	// Call the method
-	err := mockSender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil)
+	err := mockSender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt)
 
 	// Verify error handling
 	assert.Error(t, err)
@@ -413,10 +415,10 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	batchError := errors.New("batch processing failed")
 
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil).
+		SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt).
 		Return(0, 0, batchError)
 
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt)
 	assert.Error(t, err)
 	assert.Equal(t, batchError, err)
 	assert.Equal(t, 0, sent)
@@ -444,6 +446,7 @@ func TestSendBatch(t *testing.T) {
 
 	// Setup test data
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 	workspaceID := "workspace-123"
 	broadcastID := "broadcast-123"
 	tracking := true
@@ -544,7 +547,7 @@ func TestSendBatch(t *testing.T) {
 		},
 	}
 	templates := map[string]*domain.Template{"template-123": template}
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, sent)
 	assert.Equal(t, 0, failed)
@@ -569,6 +572,7 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 
 	// Setup test data
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 	workspaceID := "workspace-123"
 	workspaceSecretKey := "secret-key"
 	trackingEnabled := true
@@ -592,7 +596,7 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 
 	// Call the method being tested with empty recipients
 	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, []*domain.ContactWithList{},
-		map[string]*domain.Template{}, emailProvider)
+		map[string]*domain.Template{}, emailProvider, timeoutAt)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -620,6 +624,7 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 
 	// Setup test data
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 	workspaceID := "workspace-123"
 	workspaceSecretKey := "secret-key"
 	trackingEnabled := true
@@ -658,7 +663,7 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 
 	// Call the method being tested
 	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients,
-		map[string]*domain.Template{}, emailProvider)
+		map[string]*domain.Template{}, emailProvider, timeoutAt)
 
 	// Verify results
 	assert.Error(t, err)
@@ -712,6 +717,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 
 	// Setup test data
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 	workspaceID := "workspace-123"
 	broadcastID := "broadcast-123"
 	tracking := true
@@ -805,7 +811,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		},
 	}
 	templates := map[string]*domain.Template{"template-123": template}
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, sent)
 	assert.Equal(t, 1, failed)
@@ -832,6 +838,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 
 	// Setup test data
 	ctx := context.Background()
+	timeoutAt := time.Now().Add(30 * time.Second)
 	workspaceID := "workspace-123"
 	broadcastID := "broadcast-123"
 	tracking := true
@@ -925,7 +932,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 		},
 	}
 	templates := map[string]*domain.Template{"template-123": template}
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, sent)
 	assert.Equal(t, 0, failed)

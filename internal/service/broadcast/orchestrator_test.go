@@ -666,6 +666,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					recipients,
 					gomock.Any(),
 					gomock.Any(),
+					gomock.Any(),
 				).Return(2, 0, nil)
 
 				// Mock task state saving
@@ -798,6 +799,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					true,
 					"broadcast-123",
 					recipients,
+					gomock.Any(),
 					gomock.Any(),
 					gomock.Any(),
 				).Return(1, 0, nil)
@@ -1251,6 +1253,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					recipients,
 					gomock.Any(),
 					gomock.Any(),
+					gomock.Any(),
 				).Return(1, 0, nil)
 
 				// Mock task state saving
@@ -1311,7 +1314,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 
 			// Execute
 			ctx := context.Background()
-			done, err := orchestrator.Process(ctx, tc.task)
+			timeoutAt := time.Now().Add(30 * time.Second)
+			done, err := orchestrator.Process(ctx, tc.task, timeoutAt)
 
 			// Verify
 			assert.Equal(t, tc.expectedDone, done)

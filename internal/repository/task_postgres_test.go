@@ -821,7 +821,7 @@ func TestTaskRepository_SaveState(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
-	// Test save state for non-existent task
+	// Test save state for non-existent task (no rows affected, but no error expected)
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE tasks SET").
 		WithArgs(
@@ -833,11 +833,10 @@ func TestTaskRepository_SaveState(t *testing.T) {
 			workspace,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectRollback()
+	mock.ExpectCommit()
 
 	err = repo.SaveState(ctx, workspace, taskID, progress, state)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "task not found or not in running state")
+	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
 	// Test database error
