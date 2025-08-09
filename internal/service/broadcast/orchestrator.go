@@ -484,8 +484,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	// Track progress
 	sentCount := broadcastState.SentCount
 	failedCount := broadcastState.FailedCount
-	// Use sentCount as the actual number of messages processed
-	processedCount := sentCount
+	// Use sent + failed as the number of recipients processed/attempted
+	processedCount := sentCount + failedCount
 	startTime := o.timeProvider.Now()
 	lastSaveTime := o.timeProvider.Now()
 	lastLogTime := o.timeProvider.Now()
@@ -876,8 +876,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 		broadcastState.RecipientOffset += int64(sent + failed)
 		currentOffset = int(broadcastState.RecipientOffset)
 
-		// Use sentCount as the actual number of messages processed
-		processedCount = sentCount
+		// Use sent + failed as the number of recipients processed/attempted
+		processedCount = sentCount + failedCount
 
 		// Log progress at regular intervals
 		if o.timeProvider.Since(lastLogTime) >= o.config.ProgressLogInterval {
@@ -927,24 +927,12 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 		broadcastState.SentCount = sentCount
 		broadcastState.FailedCount = failedCount
 
-		// If we processed fewer recipients than requested, we're done
-		if len(recipients) < o.config.FetchBatchSize {
-			// codecov:ignore:start
-			o.logger.WithFields(map[string]interface{}{
-				"task_id":      task.ID,
-				"broadcast_id": broadcastState.BroadcastID,
-				"offset":       currentOffset,
-				"count":        len(recipients),
-			}).Info("Reached end of recipient list")
-			// codecov:ignore:end
-			allDone = true
-			break
-		}
+		// Continue to next batch; do not prematurely mark done based on returned count
 	}
 
 	// Update task state with the latest progress data
-	// Use sentCount as the actual number of messages processed for final progress
-	processedCount = sentCount
+	// Use sent + failed as the number of recipients processed/attempted for final progress
+	processedCount = sentCount + failedCount
 	progress := CalculateProgress(processedCount, broadcastState.TotalRecipients)
 	message := FormatProgressMessage(processedCount, broadcastState.TotalRecipients, time.Since(startTime))
 
