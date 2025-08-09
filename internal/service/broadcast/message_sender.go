@@ -2,7 +2,9 @@ package broadcast
 
 import (
 	"context"
+	crand "crypto/rand"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -424,15 +426,22 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		// Determine which variation to use for this contact
 		var templateID string
 		if broadcast.WinningTemplate != "" {
-			// If there's a winning template, use it directly (WinningTemplate contains the templateID)
+			// Winner selected: use it directly
 			templateID = broadcast.WinningTemplate
 		} else if broadcast.TestSettings.Enabled {
-			// A/B testing is enabled but no winner yet, assign a variation
-			// Use a deterministic approach based on contact's email
-			hashValue := int(contact.Email[0]) % len(broadcast.TestSettings.Variations)
-			templateID = broadcast.TestSettings.Variations[hashValue].TemplateID
+			// Test phase (no winner yet): pick a random variation per recipient
+			if len(broadcast.TestSettings.Variations) > 0 {
+				var idx int
+				if r, err := crand.Int(crand.Reader, big.NewInt(int64(len(broadcast.TestSettings.Variations)))); err == nil {
+					idx = int(r.Int64())
+				} else {
+					// Fallback: deterministic mapping if randomness fails
+					idx = int(contact.Email[0]) % len(broadcast.TestSettings.Variations)
+				}
+				templateID = broadcast.TestSettings.Variations[idx].TemplateID
+			}
 		} else if len(broadcast.TestSettings.Variations) > 0 {
-			// Not A/B testing, use the first variation
+			// Not A/B testing: use the first variation
 			templateID = broadcast.TestSettings.Variations[0].TemplateID
 		}
 

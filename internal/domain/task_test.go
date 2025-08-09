@@ -444,7 +444,7 @@ func TestCreateTaskRequest_Validate(t *testing.T) {
 		assert.Equal(t, 0.0, task.Progress)
 		assert.Nil(t, task.State)
 		assert.Equal(t, "", task.ErrorMessage)
-		assert.Equal(t, 300, task.MaxRuntime)    // Default value
+		assert.Equal(t, 50, task.MaxRuntime)     // Default value
 		assert.Equal(t, 3, task.MaxRetries)      // Default value
 		assert.Equal(t, 300, task.RetryInterval) // Default value
 		assert.Equal(t, 0, task.RetryCount)
@@ -562,7 +562,7 @@ func TestCreateTaskRequest_Validate(t *testing.T) {
 		task, err := req.Validate()
 		require.NoError(t, err)
 		require.NotNil(t, task)
-		assert.Equal(t, 300, task.MaxRuntime) // Default value
+		assert.Equal(t, 50, task.MaxRuntime) // Default value
 	})
 
 	t.Run("negative max_runtime gets default", func(t *testing.T) {
@@ -575,7 +575,7 @@ func TestCreateTaskRequest_Validate(t *testing.T) {
 		task, err := req.Validate()
 		require.NoError(t, err)
 		require.NotNil(t, task)
-		assert.Equal(t, 300, task.MaxRuntime) // Default value
+		assert.Equal(t, 50, task.MaxRuntime) // Default value
 	})
 
 	t.Run("zero max_retries gets default", func(t *testing.T) {

@@ -306,14 +306,14 @@ func CalculateProgress(processed, total int) float64 {
 func FormatProgressMessage(processed, total int, elapsed time.Duration) string {
 	progress := CalculateProgress(processed, total)
 
-	// Calculate remaining time if we have processed more than 5%
+	// Calculate remaining time when in progress (not completed) and we have enough data
 	var eta string
-	if progress > 5.0 && processed > 0 {
-		estimatedTotal := elapsed.Seconds() * float64(total) / float64(processed)
-		remaining := estimatedTotal - elapsed.Seconds() + 10 // add 10 seconds to the remaining time to avoid underflow
-
-		eta = fmt.Sprintf(", ETA: %s", FormatDuration(time.Duration(remaining)*time.Second))
-
+	if progress > 5.0 && processed > 0 && processed < total {
+		estimatedTotalSeconds := elapsed.Seconds() * float64(total) / float64(processed)
+		remainingSeconds := estimatedTotalSeconds - elapsed.Seconds()
+		if remainingSeconds > 0 {
+			eta = fmt.Sprintf(", ETA: %s", FormatDuration(time.Duration(remainingSeconds)*time.Second))
+		}
 	}
 
 	return fmt.Sprintf("Processed %d/%d recipients (%.1f%%)%s",
