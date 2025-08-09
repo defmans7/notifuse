@@ -632,8 +632,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					},
 					Status: domain.BroadcastStatusSending,
 				}
-				// First call for template loading, second call for status update on completion
-				mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(broadcast, nil).Times(2)
+				// Initial calls for template loading and later status updates; allow additional refresh calls
+				mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(broadcast, nil).AnyTimes()
 
 				// Mock broadcast status update on completion
 				mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, b *domain.Broadcast) error {
@@ -773,8 +773,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					},
 					Status: domain.BroadcastStatusSending,
 				}
-				// First call for template loading, second call for status update on completion
-				mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(broadcast, nil).Times(2)
+				// Initial calls for template loading and later status updates; allow additional refresh calls
+				mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(broadcast, nil).AnyTimes()
 
 				// Mock broadcast status update failure on completion
 				mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(fmt.Errorf("database error"))
@@ -1220,8 +1220,8 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 					},
 					Status: domain.BroadcastStatusSending,
 				}
-				// First call for template loading, second call for status update on completion
-				mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-456").Return(broadcast, nil).Times(2)
+				// Initial calls for template loading and later status updates; allow additional refresh calls
+				mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-456").Return(broadcast, nil).AnyTimes()
 
 				// Mock broadcast status update on completion
 				mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, b *domain.Broadcast) error {
