@@ -516,11 +516,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 			TemplateVersion: templates[templateID].Version,
 			Channel:         "email",
 			MessageData: domain.MessageData{
-				Data: map[string]interface{}{
-					"broadcast_id": broadcastID,
-					"email":        contact.Email,
-					"template_id":  templateID,
-				},
+				Data: recipientData,
 			},
 			SentAt:    now,
 			CreatedAt: now,
