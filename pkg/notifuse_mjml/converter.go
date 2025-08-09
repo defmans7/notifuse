@@ -34,7 +34,11 @@ func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData
 			// Process Liquid templating for mj-text, mj-button, mj-title, mj-preview, and mj-raw blocks
 			blockType := block.GetType()
 			if blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton || blockType == MJMLComponentMjTitle || blockType == MJMLComponentMjPreview || blockType == MJMLComponentMjRaw {
-				processedContent, err := processLiquidContent(content, templateData, block.GetID())
+				parsedData, parseErr := parseTemplateDataString(templateData)
+				if parseErr != nil {
+					return "", fmt.Errorf("template data parsing failed for block %s: %v", block.GetID(), parseErr)
+				}
+				processedContent, err := processLiquidContent(content, parsedData, block.GetID())
 				if err != nil {
 					// Return error instead of just logging
 					return "", fmt.Errorf("liquid processing failed for block %s: %v", block.GetID(), err)
@@ -96,12 +100,17 @@ func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) 
 			// Process Liquid templating for mj-text, mj-button, mj-title, mj-preview, and mj-raw blocks
 			blockType := block.GetType()
 			if blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton || blockType == MJMLComponentMjTitle || blockType == MJMLComponentMjPreview || blockType == MJMLComponentMjRaw {
-				processedContent, err := processLiquidContent(content, templateData, block.GetID())
-				if err != nil {
-					// Log error but continue with original content
-					fmt.Printf("Warning: Liquid processing failed for block %s: %v\n", block.GetID(), err)
+				parsedData, parseErr := parseTemplateDataString(templateData)
+				if parseErr != nil {
+					fmt.Printf("Warning: Template data parsing failed for block %s: %v\n", block.GetID(), parseErr)
 				} else {
-					content = processedContent
+					processedContent, err := processLiquidContent(content, parsedData, block.GetID())
+					if err != nil {
+						// Log error but continue with original content
+						fmt.Printf("Warning: Liquid processing failed for block %s: %v\n", block.GetID(), err)
+					} else {
+						content = processedContent
+					}
 				}
 			}
 
@@ -139,8 +148,27 @@ func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) 
 	return fmt.Sprintf("%s\n%s\n%s", openTag, strings.Join(childrenMJML, "\n"), closeTag)
 }
 
+// ProcessLiquidTemplate processes Liquid templating in any content (public function)
+func ProcessLiquidTemplate(content string, templateData map[string]interface{}, context string) (string, error) {
+	return processLiquidContent(content, templateData, context)
+}
+
+// parseTemplateDataString parses JSON string to map[string]interface{} for internal MJML functions
+func parseTemplateDataString(templateData string) (map[string]interface{}, error) {
+	if templateData == "" {
+		return make(map[string]interface{}), nil
+	}
+
+	var jsonData map[string]interface{}
+	err := json.Unmarshal([]byte(templateData), &jsonData)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JSON in templateData: %w", err)
+	}
+	return jsonData, nil
+}
+
 // processLiquidContent processes Liquid templating in content
-func processLiquidContent(content, templateData, blockID string) (string, error) {
+func processLiquidContent(content string, templateData map[string]interface{}, blockID string) (string, error) {
 	// Check if content contains Liquid templating markup
 	if !strings.Contains(content, "{{") && !strings.Contains(content, "{%") {
 		return content, nil // No Liquid markup found, return original content
@@ -149,15 +177,11 @@ func processLiquidContent(content, templateData, blockID string) (string, error)
 	// Create Liquid engine
 	engine := liquid.NewEngine()
 
-	// Parse template data JSON
+	// Use provided template data or initialize empty map if nil
 	var jsonData map[string]interface{}
-	if templateData != "" {
-		err := json.Unmarshal([]byte(templateData), &jsonData)
-		if err != nil {
-			return content, fmt.Errorf("invalid JSON in templateData for block (ID: %s): %w", blockID, err)
-		}
+	if templateData != nil {
+		jsonData = templateData
 	} else {
-		// Initialize empty map if templateData is empty
 		jsonData = make(map[string]interface{})
 	}
 

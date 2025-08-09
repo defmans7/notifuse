@@ -937,3 +937,107 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 	assert.Equal(t, 1, sent)
 	assert.Equal(t, 0, failed)
 }
+
+// TestSendToRecipientWithLiquidSubject tests sending email with Liquid templating in subject
+func TestSendToRecipientWithLiquidSubject(t *testing.T) {
+	// Create mock controller
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mocks
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).Return().AnyTimes()
+
+	// Create message sender
+	sender := NewMessageSender(
+		mockBroadcastRepository,
+		mockMessageHistoryRepo,
+		mockTemplateRepo,
+		mockEmailService,
+		mockLogger,
+		DefaultConfig(),
+		"https://api.test.com",
+	)
+
+	// Test data
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	messageID := "message-123"
+	email := "test@example.com"
+	tracking := true
+
+	// Mock email provider and sender
+	emailProvider := &domain.EmailProvider{
+		Kind: "sendgrid",
+	}
+	emailSender := domain.EmailSender{
+		ID:    "sender-123",
+		Email: "sender@example.com",
+		Name:  "Test Sender",
+	}
+	emailProvider.Senders = append(emailProvider.Senders, emailSender)
+
+	// Mock broadcast
+	broadcast := &domain.Broadcast{
+		ID: "broadcast-123",
+		UTMParameters: &domain.UTMParameters{
+			Source:   "newsletter",
+			Medium:   "email",
+			Campaign: "welcome",
+		},
+	}
+
+	// Template with Liquid templating in subject
+	template := &domain.Template{
+		ID: "template-123",
+		Email: &domain.EmailTemplate{
+			SenderID:         emailSender.ID,
+			Subject:          "Welcome {{firstName}}! Your {{company}} account is ready",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Hello {{firstName}}")),
+		},
+	}
+
+	// Template data with variables for Liquid processing
+	templateData := domain.MapOfAny{
+		"firstName": "John",
+		"lastName":  "Doe",
+		"company":   "ACME Corp",
+		"email":     email,
+	}
+
+	timeoutAt := time.Now().Add(5 * time.Minute)
+
+	// Set up mock expectations - expect processed subject
+	mockEmailService.EXPECT().
+		SendEmail(
+			ctx,
+			workspaceID,
+			messageID,
+			true, // is marketing
+			emailSender.Email,
+			emailSender.Name,
+			email,
+			"Welcome John! Your ACME Corp account is ready", // Expected processed subject
+			gomock.Any(), // content
+			emailProvider,
+			domain.EmailOptions{},
+		).
+		Return(nil)
+
+	// Call the method
+	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, messageID, email, template, templateData, emailProvider, timeoutAt)
+
+	// Verify
+	assert.NoError(t, err)
+}

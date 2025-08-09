@@ -32,7 +32,7 @@ type BroadcastOrchestratorInterface interface {
 	FetchBatch(ctx context.Context, workspaceID, broadcastID string, offset, limit int) ([]*domain.ContactWithList, error)
 
 	// SaveProgressState saves the current task progress to the repository
-	SaveProgressState(ctx context.Context, workspaceID, taskID, broadcastID string, totalRecipients, sentCount, failedCount, processedCount int, lastSaveTime time.Time, startTime time.Time) (time.Time, error)
+	SaveProgressState(ctx context.Context, workspaceID, taskID string, broadcastState *domain.SendBroadcastState, sentCount, failedCount, processedCount int, lastSaveTime time.Time, startTime time.Time) (time.Time, error)
 }
 
 // BroadcastOrchestrator is the main processor for sending broadcasts
@@ -310,11 +310,10 @@ func FormatProgressMessage(processed, total int, elapsed time.Duration) string {
 	var eta string
 	if progress > 5.0 && processed > 0 {
 		estimatedTotal := elapsed.Seconds() * float64(total) / float64(processed)
-		remaining := estimatedTotal - elapsed.Seconds()
+		remaining := estimatedTotal - elapsed.Seconds() + 10 // add 10 seconds to the remaining time to avoid underflow
 
-		if remaining > 0 {
-			eta = fmt.Sprintf(", ETA: %s", FormatDuration(time.Duration(remaining)*time.Second))
-		}
+		eta = fmt.Sprintf(", ETA: %s", FormatDuration(time.Duration(remaining)*time.Second))
+
 	}
 
 	return fmt.Sprintf("Processed %d/%d recipients (%.1f%%)%s",
@@ -324,8 +323,9 @@ func FormatProgressMessage(processed, total int, elapsed time.Duration) string {
 // SaveProgressState saves the current task progress to the repository
 func (o *BroadcastOrchestrator) SaveProgressState(
 	ctx context.Context,
-	workspaceID, taskID, broadcastID string,
-	totalRecipients, sentCount, failedCount, processedCount int,
+	workspaceID, taskID string,
+	broadcastState *domain.SendBroadcastState,
+	sentCount, failedCount, processedCount int,
 	lastSaveTime time.Time,
 	startTime time.Time,
 ) (time.Time, error) {
@@ -333,21 +333,19 @@ func (o *BroadcastOrchestrator) SaveProgressState(
 
 	// Calculate progress
 	elapsedSinceStart := currentTime.Sub(startTime)
-	progress := CalculateProgress(processedCount, totalRecipients)
-	message := FormatProgressMessage(processedCount, totalRecipients, elapsedSinceStart)
+	progress := CalculateProgress(processedCount, broadcastState.TotalRecipients)
+	message := FormatProgressMessage(processedCount, broadcastState.TotalRecipients, elapsedSinceStart)
 
-	// Create state
+	// Create a copy of the broadcast state and update counters
+	updatedBroadcastState := *broadcastState // Copy the struct
+	updatedBroadcastState.SentCount = sentCount
+	updatedBroadcastState.FailedCount = failedCount
+
+	// Create state with preserved A/B testing fields
 	state := &domain.TaskState{
-		Progress: progress,
-		Message:  message,
-		SendBroadcast: &domain.SendBroadcastState{
-			BroadcastID:     broadcastID,
-			TotalRecipients: totalRecipients,
-			SentCount:       sentCount,
-			FailedCount:     failedCount,
-			ChannelType:     "email", // Hardcoded for now
-			RecipientOffset: int64(processedCount),
-		},
+		Progress:      progress,
+		Message:       message,
+		SendBroadcast: &updatedBroadcastState,
 	}
 
 	// Save state
@@ -444,7 +442,6 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 				RecipientOffset:           0,        // Track how many recipients we've processed
 				Phase:                     "single", // Default phase
 				TestPhaseCompleted:        false,
-				TestRecipientOffset:       0,
 				WinnerPhaseRecipientCount: 0,
 			},
 		}
@@ -458,7 +455,6 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 			RecipientOffset:           0,
 			Phase:                     "single", // Default phase
 			TestPhaseCompleted:        false,
-			TestRecipientOffset:       0,
 			WinnerPhaseRecipientCount: 0,
 		}
 	}
@@ -488,7 +484,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	// Track progress
 	sentCount := broadcastState.SentCount
 	failedCount := broadcastState.FailedCount
-	processedCount := int(broadcastState.RecipientOffset)
+	// Use sentCount as the actual number of messages processed
+	processedCount := sentCount
 	startTime := o.timeProvider.Now()
 	lastSaveTime := o.timeProvider.Now()
 	lastLogTime := o.timeProvider.Now()
@@ -603,10 +600,6 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 				if broadcast.WinningTemplate != "" {
 					// Winner already selected, proceed to winner phase
 					broadcastState.Phase = "winner"
-					// Initialize winner offset to start after test recipients if not already set
-					if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
-						broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
-					}
 				} else {
 					// Start test phase
 					broadcastState.Phase = "test"
@@ -627,10 +620,6 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 			case domain.BroadcastStatusWinnerSelected:
 				// Winner has been selected, proceed to winner phase
 				broadcastState.Phase = "winner"
-				// Initialize winner offset to start after test recipients if not already set
-				if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
-					broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
-				}
 			}
 		}
 	} else {
@@ -718,16 +707,17 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	var recipientLimit int
 	var currentOffset int
 
+	// All phases use the same RecipientOffset for continuity
+	currentOffset = int(broadcastState.RecipientOffset)
+
 	if broadcastState.Phase == "test" {
 		recipientLimit = broadcastState.TestPhaseRecipientCount
-		currentOffset = int(broadcastState.TestRecipientOffset)
 	} else if broadcastState.Phase == "winner" {
-		recipientLimit = broadcastState.WinnerPhaseRecipientCount
-		currentOffset = int(broadcastState.WinnerRecipientOffset)
+		// Winner phase processes remaining recipients after test phase
+		recipientLimit = broadcastState.TotalRecipients
 	} else {
 		// Single template - process all recipients
 		recipientLimit = broadcastState.TotalRecipients
-		currentOffset = int(broadcastState.RecipientOffset)
 	}
 
 	// Process until timeout or completion
@@ -740,18 +730,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 		}
 
 		// Check if phase is complete
-		if broadcastState.Phase == "test" && int(broadcastState.TestRecipientOffset) >= recipientLimit {
+		if broadcastState.Phase == "test" && currentOffset >= recipientLimit {
 			// IMPORTANT: Check if winner has already been selected to avoid race condition
 			if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
 				// Winner already selected - don't overwrite status, transition to winner phase
 				broadcastState.Phase = "winner"
-				// Initialize winner offset to start after test recipients if not already set
-				if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
-					broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
-				}
 				// Update phase-specific variables after phase transition
-				recipientLimit = broadcastState.WinnerPhaseRecipientCount
-				currentOffset = int(broadcastState.WinnerRecipientOffset)
+				recipientLimit = broadcastState.TotalRecipients
 				o.logger.WithFields(map[string]interface{}{
 					"broadcast_id":     broadcast.ID,
 					"task_id":          task.ID,
@@ -765,11 +750,11 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 				allDone = o.handleTestPhaseCompletion(ctx, broadcast, broadcastState)
 				break
 			}
-		} else if broadcastState.Phase == "winner" && int(broadcastState.WinnerRecipientOffset) >= recipientLimit {
+		} else if broadcastState.Phase == "winner" && currentOffset >= recipientLimit {
 			// Winner phase complete
 			allDone = true
 			break
-		} else if broadcastState.Phase == "single" && int(broadcastState.RecipientOffset) >= recipientLimit {
+		} else if broadcastState.Phase == "single" && currentOffset >= recipientLimit {
 			// Single template broadcast complete
 			allDone = true
 			break
@@ -789,13 +774,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 				if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
 					// Winner already selected - transition to winner phase
 					broadcastState.Phase = "winner"
-					// Initialize winner offset to start after test recipients if not already set
-					if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
-						broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
-					}
 					// Update phase-specific variables after phase transition
-					recipientLimit = broadcastState.WinnerPhaseRecipientCount
-					currentOffset = int(broadcastState.WinnerRecipientOffset)
+					recipientLimit = broadcastState.TotalRecipients
 					o.logger.WithFields(map[string]interface{}{
 						"broadcast_id":     broadcast.ID,
 						"task_id":          task.ID,
@@ -842,13 +822,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 				if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
 					// Winner already selected - transition to winner phase
 					broadcastState.Phase = "winner"
-					// Initialize winner offset to start after test recipients if not already set
-					if broadcastState.WinnerRecipientOffset == 0 && broadcastState.TestRecipientOffset > 0 {
-						broadcastState.WinnerRecipientOffset = broadcastState.TestRecipientOffset
-					}
 					// Update phase-specific variables after phase transition
-					recipientLimit = broadcastState.WinnerPhaseRecipientCount
-					currentOffset = int(broadcastState.WinnerRecipientOffset)
+					recipientLimit = broadcastState.TotalRecipients
 					o.logger.WithFields(map[string]interface{}{
 						"broadcast_id":     broadcast.ID,
 						"task_id":          task.ID,
@@ -896,19 +871,13 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 		// Update progress counters
 		sentCount += sent
 		failedCount += failed
-		processedCount += sent + failed
 
-		// Update phase-specific counters
-		if broadcastState.Phase == "test" {
-			broadcastState.TestRecipientOffset += int64(sent + failed)
-			currentOffset = int(broadcastState.TestRecipientOffset)
-		} else if broadcastState.Phase == "winner" {
-			broadcastState.WinnerRecipientOffset += int64(sent + failed)
-			currentOffset = int(broadcastState.WinnerRecipientOffset)
-		} else {
-			broadcastState.RecipientOffset += int64(sent + failed)
-			currentOffset = int(broadcastState.RecipientOffset)
-		}
+		// Update recipient offset - used across all phases for continuity
+		broadcastState.RecipientOffset += int64(sent + failed)
+		currentOffset = int(broadcastState.RecipientOffset)
+
+		// Use sentCount as the actual number of messages processed
+		processedCount = sentCount
 
 		// Log progress at regular intervals
 		if o.timeProvider.Since(lastLogTime) >= o.config.ProgressLogInterval {
@@ -936,8 +905,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 			ctx,
 			task.WorkspaceID,
 			task.ID,
-			broadcastState.BroadcastID,
-			broadcastState.TotalRecipients,
+			broadcastState,
 			sentCount,
 			failedCount,
 			processedCount,
@@ -975,6 +943,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	}
 
 	// Update task state with the latest progress data
+	// Use sentCount as the actual number of messages processed for final progress
+	processedCount = sentCount
 	progress := CalculateProgress(processedCount, broadcastState.TotalRecipients)
 	message := FormatProgressMessage(processedCount, broadcastState.TotalRecipients, time.Since(startTime))
 
@@ -1073,7 +1043,7 @@ func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctx context.Context, b
 
 	o.logger.WithFields(map[string]interface{}{
 		"broadcast_id":    broadcast.ID,
-		"test_sent_count": broadcastState.TestRecipientOffset,
+		"test_sent_count": broadcastState.RecipientOffset,
 	}).Info("A/B test phase completed, awaiting winner selection")
 
 	// Log completion - auto evaluation will happen on next task run if enabled

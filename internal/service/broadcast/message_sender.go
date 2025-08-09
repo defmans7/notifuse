@@ -281,6 +281,23 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeSenderNotFound, "sender not found", true, nil)
 	}
 
+	// Process subject line through Liquid templating if it contains Liquid tags
+	processedSubject, err := notifuse_mjml.ProcessLiquidTemplate(
+		template.Email.Subject,
+		data,
+		"email_subject",
+	)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"broadcast_id": broadcast.ID,
+			"workspace_id": workspaceID,
+			"recipient":    email,
+			"subject":      template.Email.Subject,
+			"error":        err.Error(),
+		}).Error("Failed to process subject line with Liquid templating")
+		return NewBroadcastError(ErrCodeTemplateCompile, "failed to process subject with Liquid", true, err)
+	}
+
 	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
 	err = s.emailService.SendEmail(
 		ctx,
@@ -290,7 +307,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		emailSender.Email,
 		emailSender.Name,
 		email,
-		template.Email.Subject,
+		processedSubject,
 		*compiledTemplate.HTML,
 		emailProvider,
 		domain.EmailOptions{

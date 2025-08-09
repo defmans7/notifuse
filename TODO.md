@@ -8,3 +8,4 @@
 - check redirection urls for click tracking
 - test click / open tracking
 - random ab template per recipient and not per batch of 100
+- contact object is persisted with message log

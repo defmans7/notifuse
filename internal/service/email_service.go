@@ -317,7 +317,24 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 	// Get necessary email information from the template
 	fromEmail := emailSender.Email
 	fromName := emailSender.Name
-	subject := template.Email.Subject
+
+	// Process subject line through Liquid templating if it contains Liquid tags
+	subject, err := notifuse_mjml.ProcessLiquidTemplate(
+		template.Email.Subject,
+		request.MessageData.Data,
+		"email_subject",
+	)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":       err.Error(),
+			"message_id":  request.MessageID,
+			"template_id": request.TemplateConfig.TemplateID,
+			"subject":     template.Email.Subject,
+		}).Error("Failed to process subject line with Liquid templating")
+		tracing.MarkSpanError(ctx, err)
+		return fmt.Errorf("failed to process subject with Liquid: %w", err)
+	}
+
 	htmlContent := *compiledTemplate.HTML
 	now := time.Now().UTC()
 

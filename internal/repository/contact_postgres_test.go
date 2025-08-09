@@ -1391,7 +1391,8 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		rows := sqlmock.NewRows([]string{"count"}).AddRow(25)
 
 		// Expect query with JOINS for list filtering and excludeUnsubscribed
-		mock.ExpectQuery(`SELECT COUNT\(DISTINCT c\.email\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1,\$2\) AND cl\.status <> \$3 AND cl\.status <> \$4 AND cl\.status <> \$5`).
+		// Note: SkipDuplicateEmails is false, so we expect COUNT(*) not COUNT(DISTINCT)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1,\$2\) AND cl\.status <> \$3 AND cl\.status <> \$4 AND cl\.status <> \$5`).
 			WithArgs("list1", "list2",
 				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
@@ -1431,7 +1432,8 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		rows := sqlmock.NewRows([]string{"count"}).AddRow(100)
 
 		// Expect simple count query without filtering
-		mock.ExpectQuery(`SELECT COUNT\(DISTINCT c\.email\) FROM contacts c`).
+		// Note: SkipDuplicateEmails is false, so we expect COUNT(*) not COUNT(DISTINCT)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c`).
 			WillReturnRows(rows)
 
 		// Call the method being tested
@@ -1440,6 +1442,46 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		// Assertions
 		require.NoError(t, err)
 		assert.Equal(t, 100, count)
+	})
+
+	t.Run("should count distinct emails when SkipDuplicateEmails is true", func(t *testing.T) {
+		// Create a mock workspace database
+		mockDB, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+
+		// Create a new repository with the mock DB
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
+
+		repo := NewContactRepository(workspaceRepo)
+
+		// Create test audience settings with SkipDuplicateEmails enabled
+		audience := domain.AudienceSettings{
+			Lists:               []string{"list1"},
+			ExcludeUnsubscribed: true,
+			SkipDuplicateEmails: true,
+		}
+
+		// Set up expectations for the count query
+		rows := sqlmock.NewRows([]string{"count"}).AddRow(90)
+
+		// Expect query with DISTINCT when SkipDuplicateEmails is true
+		mock.ExpectQuery(`SELECT COUNT\(DISTINCT c\.email\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
+			WithArgs("list1",
+				domain.ContactListStatusUnsubscribed,
+				domain.ContactListStatusBounced,
+				domain.ContactListStatusComplained).
+			WillReturnRows(rows)
+
+		// Call the method being tested
+		count, err := repo.CountContactsForBroadcast(context.Background(), "workspace123", audience)
+
+		// Assertions
+		require.NoError(t, err)
+		assert.Equal(t, 90, count)
 	})
 
 	t.Run("should handle database connection error", func(t *testing.T) {

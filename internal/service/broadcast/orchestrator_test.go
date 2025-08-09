@@ -533,10 +533,24 @@ func TestSaveProgressState(t *testing.T) {
 		SaveState(ctx, workspaceID, taskID, gomock.Any(), gomock.Any()).
 		Return(nil)
 
+	// Create broadcast state
+	broadcastState := &domain.SendBroadcastState{
+		BroadcastID:               broadcastID,
+		TotalRecipients:           totalRecipients,
+		SentCount:                 sentCount,
+		FailedCount:               failedCount,
+		ChannelType:               "email",
+		RecipientOffset:           int64(processedCount),
+		Phase:                     "test",
+		TestPhaseCompleted:        false,
+		TestPhaseRecipientCount:   50,
+		WinnerPhaseRecipientCount: 50,
+	}
+
 	// Execute
 	newSaveTime, err := orchestrator.SaveProgressState(
-		ctx, workspaceID, taskID, broadcastID,
-		totalRecipients, sentCount, failedCount, processedCount,
+		ctx, workspaceID, taskID, broadcastState,
+		sentCount, failedCount, processedCount,
 		lastSaveTime, startTime,
 	)
 

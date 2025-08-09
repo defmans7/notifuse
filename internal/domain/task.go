@@ -76,8 +76,6 @@ type SendBroadcastState struct {
 	// New fields for A/B testing phases
 	Phase                     string `json:"phase"` // "test", "winner", or "single"
 	TestPhaseCompleted        bool   `json:"test_phase_completed"`
-	TestRecipientOffset       int64  `json:"test_recipient_offset"`
-	WinnerRecipientOffset     int64  `json:"winner_recipient_offset"`
 	TestPhaseRecipientCount   int    `json:"test_phase_recipient_count"`
 	WinnerPhaseRecipientCount int    `json:"winner_phase_recipient_count"`
 }
@@ -112,7 +110,7 @@ type TaskService interface {
 	ListTasks(ctx context.Context, workspace string, filter TaskFilter) (*TaskListResponse, error)
 	DeleteTask(ctx context.Context, workspace, id string) error
 	ExecutePendingTasks(ctx context.Context, maxTasks int) error
-	ExecuteTask(ctx context.Context, workspace, taskID string) error
+	ExecuteTask(ctx context.Context, workspace, taskID string, timeoutAt time.Time) error
 	SubscribeToBroadcastEvents(eventBus EventBus)
 }
 
@@ -193,7 +191,7 @@ type TaskExecutor interface {
 	ExecutePendingTasks(ctx context.Context, maxTasks int) error
 
 	// ExecuteTask executes a specific task
-	ExecuteTask(ctx context.Context, workspaceID, taskID string) error
+	ExecuteTask(ctx context.Context, workspaceID, taskID string, timeoutAt time.Time) error
 
 	// RegisterProcessor registers a task processor for a specific task type
 	RegisterProcessor(processor TaskProcessor)
@@ -235,7 +233,7 @@ func (r *CreateTaskRequest) Validate() (*Task, error) {
 
 	// Set defaults if not provided
 	if task.MaxRuntime <= 0 {
-		task.MaxRuntime = 300 // 5 minutes default
+		task.MaxRuntime = 50 // 50 seconds default
 	}
 
 	if task.MaxRetries <= 0 {

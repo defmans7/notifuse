@@ -48,7 +48,10 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 
 		// Configure service mock to return success
 		mockTaskService.EXPECT().
-			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			GetTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			Return(&domain.Task{MaxRuntime: 60}, nil)
+		mockTaskService.EXPECT().
+			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID, gomock.Any()).
 			Return(nil)
 
 		// Call handler
@@ -125,8 +128,8 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 			ID:     reqBody.ID,
 		}
 		mockTaskService.EXPECT().
-			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
-			Return(notFoundErr)
+			GetTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			Return(nil, notFoundErr)
 
 		// Call handler
 		req := httptest.NewRequest(http.MethodPost, "/api/tasks.execute", bytes.NewBuffer(reqJSON))
@@ -155,7 +158,10 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 			Err:    errors.New("unsupported_task_type"),
 		}
 		mockTaskService.EXPECT().
-			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			GetTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			Return(&domain.Task{MaxRuntime: 60}, nil)
+		mockTaskService.EXPECT().
+			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID, gomock.Any()).
 			Return(execErr)
 
 		// Call handler
@@ -185,7 +191,10 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 			Err:    errors.New("internal error"),
 		}
 		mockTaskService.EXPECT().
-			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			GetTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			Return(&domain.Task{MaxRuntime: 60}, nil)
+		mockTaskService.EXPECT().
+			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID, gomock.Any()).
 			Return(execErr)
 
 		// Call handler
@@ -214,7 +223,10 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 			MaxRuntime: 60,
 		}
 		mockTaskService.EXPECT().
-			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			GetTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			Return(&domain.Task{MaxRuntime: 60}, nil)
+		mockTaskService.EXPECT().
+			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID, gomock.Any()).
 			Return(timeoutErr)
 
 		// Call handler

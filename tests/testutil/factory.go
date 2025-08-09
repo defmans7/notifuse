@@ -862,7 +862,7 @@ func (tdf *TestDataFactory) CreateTask(workspaceID string, opts ...TaskOption) (
 		Status:        domain.TaskStatusPending,
 		Progress:      0.0,
 		State:         &domain.TaskState{},
-		MaxRuntime:    300, // 5 minutes
+		MaxRuntime:    50, // 50 seconds
 		MaxRetries:    3,
 		RetryInterval: 300, // 5 minutes
 		RetryCount:    0,
@@ -906,7 +906,7 @@ func (tdf *TestDataFactory) CreateSendBroadcastTask(workspaceID, broadcastID str
 		WithTaskType("send_broadcast"),
 		WithTaskState(state),
 		WithTaskBroadcastID(broadcastID),
-		WithTaskMaxRuntime(1800), // 30 minutes for broadcast tasks
+		WithTaskMaxRuntime(50), // 50 seconds for broadcast tasks
 	}
 
 	// Combine default options with provided options
@@ -929,8 +929,6 @@ func (tdf *TestDataFactory) CreateTaskWithABTesting(workspaceID, broadcastID str
 			EndOffset:                 1000,
 			Phase:                     "test",
 			TestPhaseCompleted:        false,
-			TestRecipientOffset:       0,
-			WinnerRecipientOffset:     0,
 			TestPhaseRecipientCount:   100, // 10% for A/B testing
 			WinnerPhaseRecipientCount: 900, // 90% for winner
 		},
@@ -941,7 +939,7 @@ func (tdf *TestDataFactory) CreateTaskWithABTesting(workspaceID, broadcastID str
 		WithTaskType("send_broadcast"),
 		WithTaskState(state),
 		WithTaskBroadcastID(broadcastID),
-		WithTaskMaxRuntime(3600), // 1 hour for A/B testing tasks
+		WithTaskMaxRuntime(50), // 50 seconds for A/B testing tasks
 	}
 
 	// Combine default options with provided options

@@ -200,16 +200,25 @@ const VariationCard: React.FC<VariationCardProps> = ({
                   </div>
                   <div>
                     {variationResult ? (
-                      <>
-                        {variationResult.opens} ({(variationResult.open_rate * 100).toFixed(1)}%)
-                      </>
+                      <Tooltip
+                        title={`${variationResult.opens} opens out of ${variationResult.recipients} recipients`}
+                      >
+                        <span className="cursor-help">
+                          {(variationResult.open_rate * 100).toFixed(1)}%
+                        </span>
+                      </Tooltip>
                     ) : variation.metrics ? (
-                      <>
-                        {variation.metrics.opens} ({(variation.metrics.open_rate * 100).toFixed(1)}
-                        %)
-                      </>
+                      <Tooltip
+                        title={`${variation.metrics.opens} opens out of ${variation.metrics.recipients} recipients`}
+                      >
+                        <span className="cursor-help">
+                          {(variation.metrics.open_rate * 100).toFixed(1)}%
+                        </span>
+                      </Tooltip>
                     ) : (
-                      '0 (0.0%)'
+                      <Tooltip title="0 opens out of 0 recipients">
+                        <span className="cursor-help">0.0%</span>
+                      </Tooltip>
                     )}
                   </div>
                 </div>
@@ -224,16 +233,25 @@ const VariationCard: React.FC<VariationCardProps> = ({
                   </div>
                   <div>
                     {variationResult ? (
-                      <>
-                        {variationResult.clicks} ({(variationResult.click_rate * 100).toFixed(1)}%)
-                      </>
+                      <Tooltip
+                        title={`${variationResult.clicks} clicks out of ${variationResult.recipients} recipients`}
+                      >
+                        <span className="cursor-help">
+                          {(variationResult.click_rate * 100).toFixed(1)}%
+                        </span>
+                      </Tooltip>
                     ) : variation.metrics ? (
-                      <>
-                        {variation.metrics.clicks} (
-                        {(variation.metrics.click_rate * 100).toFixed(1)}%)
-                      </>
+                      <Tooltip
+                        title={`${variation.metrics.clicks} clicks out of ${variation.metrics.recipients} recipients`}
+                      >
+                        <span className="cursor-help">
+                          {(variation.metrics.click_rate * 100).toFixed(1)}%
+                        </span>
+                      </Tooltip>
                     ) : (
-                      '0 (0.0%)'
+                      <Tooltip title="0 clicks out of 0 recipients">
+                        <span className="cursor-help">0.0%</span>
+                      </Tooltip>
                     )}
                   </div>
                 </div>
@@ -248,15 +266,37 @@ const VariationCard: React.FC<VariationCardProps> = ({
                   </div>
                   <div>
                     {variationResult ? (
-                      <>
-                        {variationResult.delivered} of {variationResult.recipients}
-                      </>
+                      <Tooltip
+                        title={`${variationResult.delivered || 0} successfully delivered out of ${variationResult.recipients || 0} total recipients`}
+                      >
+                        <span className="cursor-help">
+                          {variationResult.recipients && variationResult.recipients > 0
+                            ? (
+                                (variationResult.delivered / variationResult.recipients) *
+                                100
+                              ).toFixed(1)
+                            : '0.0'}
+                          %
+                        </span>
+                      </Tooltip>
                     ) : variation.metrics ? (
-                      <>
-                        {variation.metrics.delivered} of {variation.metrics.recipients}
-                      </>
+                      <Tooltip
+                        title={`${variation.metrics.delivered || 0} successfully delivered out of ${variation.metrics.recipients || 0} total recipients`}
+                      >
+                        <span className="cursor-help">
+                          {variation.metrics.recipients && variation.metrics.recipients > 0
+                            ? (
+                                (variation.metrics.delivered / variation.metrics.recipients) *
+                                100
+                              ).toFixed(1)
+                            : '0.0'}
+                          %
+                        </span>
+                      </Tooltip>
                     ) : (
-                      '0 of 0'
+                      <Tooltip title="0 delivered out of 0 recipients">
+                        <span className="cursor-help">0.0%</span>
+                      </Tooltip>
                     )}
                   </div>
                 </div>

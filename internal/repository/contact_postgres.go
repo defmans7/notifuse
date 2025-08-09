@@ -1306,7 +1306,14 @@ func (r *contactRepository) CountContactsForBroadcast(
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 	// Start building the count query
-	query := psql.Select("COUNT(DISTINCT c.email)").
+	// Use DISTINCT only if audience settings require deduplication, otherwise count all rows
+	var countExpression string
+	if audience.SkipDuplicateEmails {
+		countExpression = "COUNT(DISTINCT c.email)"
+	} else {
+		countExpression = "COUNT(*)"
+	}
+	query := psql.Select(countExpression).
 		From("contacts c")
 
 	// Handle lists filtering

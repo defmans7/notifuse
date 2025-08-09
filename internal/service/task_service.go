@@ -18,7 +18,7 @@ import (
 )
 
 // Maximum time a task can run before timing out
-const defaultMaxTaskRuntime = 55 // 55 seconds
+const defaultMaxTaskRuntime = 50 // 50 seconds
 
 // TaskService manages task execution and state
 type TaskService struct {
@@ -216,9 +216,18 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 	}
 
 	tracing.AddAttribute(ctx, "execution_mode", "http")
+
+	// Use a wait group to wait for all HTTP requests to complete
+	var wg sync.WaitGroup
+
 	// Execute tasks using HTTP roundtrips
 	for _, task := range tasks {
+		// Add to wait group before launching goroutine
+		wg.Add(1)
+
 		go func(t *domain.Task) {
+			defer wg.Done() // Signal completion when goroutine finishes
+
 			taskCtx, taskSpan := tracing.StartServiceSpan(ctx, "TaskService", "DispatchTaskExecution")
 			defer tracing.EndSpan(taskSpan, nil)
 
@@ -307,6 +316,9 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 		}(task)
 	}
 
+	// Wait for all HTTP requests to complete
+	wg.Wait()
+
 	return nil
 }
 
@@ -316,14 +328,24 @@ func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.
 	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "executeTasksDirectly")
 	defer tracing.EndSpan(span, nil)
 
+	now := time.Now()
+
 	tracing.AddAttribute(ctx, "task_count", len(tasks))
+
+	// Use a wait group to wait for all goroutines to complete
+	var wg sync.WaitGroup
 
 	for _, task := range tasks {
 		// Calculate timeout time instead of using context timeout
-		timeoutAt := time.Now().Add(time.Duration(task.MaxRuntime) * time.Second)
+		timeoutAt := now.Add(time.Duration(task.MaxRuntime) * time.Second)
+
+		// Add to wait group before launching goroutine
+		wg.Add(1)
 
 		// Handle the task in a goroutine
 		go func(t *domain.Task, timeout time.Time) {
+			defer wg.Done() // Signal completion when goroutine finishes
+
 			execCtx, execSpan := tracing.StartServiceSpan(ctx, "TaskService", "executeTaskDirectly")
 
 			// Set task attributes
@@ -340,7 +362,7 @@ func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.
 				tracing.EndSpan(execSpan, nil)
 			}()
 
-			if err := s.ExecuteTask(execCtx, t.WorkspaceID, t.ID); err != nil {
+			if err := s.ExecuteTask(execCtx, t.WorkspaceID, t.ID, timeout); err != nil {
 				tracing.MarkSpanError(execCtx, err)
 				s.logger.WithField("task_id", t.ID).
 					WithField("workspace_id", t.WorkspaceID).
@@ -350,11 +372,14 @@ func (s *TaskService) executeTasksDirectly(ctx context.Context, tasks []*domain.
 		}(task, timeoutAt)
 	}
 
+	// Wait for all goroutines to complete
+	wg.Wait()
+
 	return nil
 }
 
 // ExecuteTask executes a specific task
-func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string) error {
+func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string, timeoutAt time.Time) error {
 	ctx, span := tracing.StartServiceSpan(ctx, "TaskService", "ExecuteTask")
 	defer tracing.EndSpan(span, nil)
 
@@ -417,8 +442,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string)
 			}
 		}
 
-		// Set timeout
-		timeoutAt := time.Now().Add(time.Duration(task.MaxRuntime) * time.Second)
+		// Use the passed timeoutAt parameter
 		tracing.AddAttribute(txCtx, "timeout_at", timeoutAt.Format(time.RFC3339))
 
 		// Mark task as running within the same transaction
@@ -703,7 +727,7 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 					RecipientOffset: 0,
 				},
 			},
-			MaxRuntime:    600, // 10 minutes
+			MaxRuntime:    50, // 50 seconds
 			MaxRetries:    3,
 			RetryInterval: 300, // 5 minutes
 		}

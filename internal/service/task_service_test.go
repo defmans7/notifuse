@@ -58,7 +58,8 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			Return(nil, notFoundErr)
 
 		// Call the method under test
-		err := taskService.ExecuteTask(ctx, workspaceID, taskID)
+		timeoutAt := time.Now().Add(60 * time.Second) // 60 seconds timeout for test
+		err := taskService.ExecuteTask(ctx, workspaceID, taskID, timeoutAt)
 
 		// Verify returned error is of type ErrNotFound
 		assert.Error(t, err)
@@ -88,7 +89,8 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			Return(task, nil)
 
 		// Call the method under test
-		err := taskService.ExecuteTask(ctx, workspaceID, taskID)
+		timeoutAt := time.Now().Add(60 * time.Second) // 60 seconds timeout for test
+		err := taskService.ExecuteTask(ctx, workspaceID, taskID, timeoutAt)
 
 		// Verify returned error is of type ErrTaskExecution
 		assert.Error(t, err)
@@ -137,7 +139,8 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			Return(markingError)
 
 		// Call the method under test
-		err := taskService.ExecuteTask(ctx, workspaceID, taskID)
+		timeoutAt := time.Now().Add(60 * time.Second) // 60 seconds timeout for test
+		err := taskService.ExecuteTask(ctx, workspaceID, taskID, timeoutAt)
 
 		// Verify returned error is of type ErrTaskExecution with the correct reason
 		assert.Error(t, err)
@@ -202,7 +205,8 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			Return(nil)
 
 		// Call the method under test
-		err := procTaskService.ExecuteTask(ctx, workspaceID, taskID)
+		timeoutAt := time.Now().Add(60 * time.Second) // 60 seconds timeout for test
+		err := procTaskService.ExecuteTask(ctx, workspaceID, taskID, timeoutAt)
 
 		// Verify returned error is of type ErrTaskExecution
 		assert.Error(t, err)
@@ -257,7 +261,8 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			Return(nil)
 
 		// Call the method with the timed out context
-		err := taskService.ExecuteTask(timeoutCtx, workspaceID, taskID)
+		timeoutAt := time.Now().Add(60 * time.Second) // 60 seconds timeout for test
+		err := taskService.ExecuteTask(timeoutCtx, workspaceID, taskID, timeoutAt)
 
 		// Verify returned error is of type ErrTaskTimeout
 		assert.Error(t, err)
@@ -320,7 +325,8 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			Return(nil)
 
 		// Call the method under test
-		err := procTaskService.ExecuteTask(ctx, workspaceID, taskID)
+		timeoutAt := time.Now().Add(60 * time.Second) // 60 seconds timeout for test
+		err := procTaskService.ExecuteTask(ctx, workspaceID, taskID, timeoutAt)
 
 		// Verify no error returned
 		assert.NoError(t, err)
@@ -388,7 +394,8 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 			})
 
 		// Call the method under test
-		err := procTaskService.ExecuteTask(ctx, workspaceID, taskID)
+		timeoutAt := time.Now().Add(60 * time.Second) // 60 seconds timeout for test
+		err := procTaskService.ExecuteTask(ctx, workspaceID, taskID, timeoutAt)
 
 		// Verify no error returned
 		assert.NoError(t, err)
@@ -865,7 +872,7 @@ func TestTaskService_BroadcastEventHandlers(t *testing.T) {
 				assert.Equal(t, "send_broadcast", task.Type)
 				assert.Equal(t, domain.TaskStatusPending, task.Status)
 				assert.Equal(t, broadcastID, *task.BroadcastID)
-				assert.Equal(t, 600, task.MaxRuntime) // 10 minutes
+				assert.Equal(t, 50, task.MaxRuntime) // 10 minutes
 				assert.Equal(t, 3, task.MaxRetries)
 				assert.Equal(t, 300, task.RetryInterval) // 5 minutes
 				return nil
@@ -1820,7 +1827,7 @@ func TestTaskService_HandleBroadcastScheduledExtended(t *testing.T) {
 				assert.Equal(t, "send_broadcast", task.Type)
 				assert.Equal(t, domain.TaskStatusPending, task.Status)
 				assert.Equal(t, broadcastID, *task.BroadcastID)
-				assert.Equal(t, 600, task.MaxRuntime) // 10 minutes
+				assert.Equal(t, 50, task.MaxRuntime) // 10 minutes
 				assert.Equal(t, 3, task.MaxRetries)
 				assert.Equal(t, 300, task.RetryInterval) // 5 minutes
 				assert.NotNil(t, task.NextRunAfter)      // Should have a future execution time

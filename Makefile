@@ -1,16 +1,13 @@
-.PHONY: build test run clean keygen test-service test-repo test-http dev coverage docker-build docker-run docker-stop docker-clean docker-logs docker-compose-up docker-compose-down docker-compose-build
+.PHONY: build test-unit run clean keygen test-service test-repo test-http dev coverage docker-build docker-run docker-stop docker-clean docker-logs docker-compose-up docker-compose-down docker-compose-build
 
 build:
 	go build -o bin/server ./cmd/api
 
-test:
-	go test -v ./...
+test-unit:
+	go test -v ./internal/domain  ./internal/http ./internal/service ./internal/service/broadcast ./internal/repository
 
 test-domain:
 	go test -v ./internal/domain
-
-test-handler:
-	go test -v ./internal/http
 
 test-service:
 	go test -v ./internal/service ./internal/service/broadcast

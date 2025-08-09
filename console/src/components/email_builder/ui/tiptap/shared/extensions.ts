@@ -468,11 +468,17 @@ export const InlineDocument = Node.create({
 export const createRichExtensions = () => [
   // Use StarterKit for basic functionality and commands
   StarterKit.configure({
-    // Disable headings and lists - only paragraphs for email compatibility
+    // Disable headings for email compatibility, but enable lists
     heading: false,
-    bulletList: false,
-    orderedList: false,
-    listItem: false,
+    bulletList: {
+      HTMLAttributes: {}
+    },
+    orderedList: {
+      HTMLAttributes: {}
+    },
+    listItem: {
+      HTMLAttributes: {}
+    },
     // Configure the built-in extensions to accept more HTML
     bold: {
       HTMLAttributes: {}

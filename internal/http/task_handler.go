@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -169,6 +170,8 @@ func (h *TaskHandler) ExecutePendingTasks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	startTime := time.Now()
+
 	var executeRequest domain.ExecutePendingTasksRequest
 	if err := executeRequest.FromURLParams(r.URL.Query()); err != nil {
 		WriteJSONError(w, err.Error(), http.StatusBadRequest)
@@ -182,10 +185,13 @@ func (h *TaskHandler) ExecutePendingTasks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	elapsed := time.Since(startTime)
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":   true,
 		"message":   "Task execution initiated",
 		"max_tasks": executeRequest.MaxTasks,
+		"elapsed":   elapsed.String(),
 	})
 }
 
@@ -207,7 +213,17 @@ func (h *TaskHandler) ExecuteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.taskService.ExecuteTask(r.Context(), executeRequest.WorkspaceID, executeRequest.ID); err != nil {
+	// Get the task to calculate timeout
+	task, err := h.taskService.GetTask(r.Context(), executeRequest.WorkspaceID, executeRequest.ID)
+	if err != nil {
+		WriteJSONError(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Calculate timeout based on task's MaxRuntime
+	timeoutAt := time.Now().Add(time.Duration(task.MaxRuntime) * time.Second)
+
+	if err := h.taskService.ExecuteTask(r.Context(), executeRequest.WorkspaceID, executeRequest.ID, timeoutAt); err != nil {
 		// Handle different error types with appropriate status codes
 		switch e := err.(type) {
 		case *domain.ErrNotFound:
