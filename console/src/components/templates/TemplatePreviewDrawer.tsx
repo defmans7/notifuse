@@ -4,6 +4,7 @@ import type { Template, MjmlCompileError, Workspace } from '../../services/api/t
 import { templatesApi } from '../../services/api/template'
 import type { EmailBlock } from '../email_builder/types'
 import { Highlight, themes } from 'prism-react-renderer'
+import { Liquid } from 'liquidjs'
 
 const { Text } = Typography
 
@@ -27,6 +28,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   const [mjmlError, setMjmlError] = useState<MjmlCompileError | null>(null)
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [activeTabKey, setActiveTabKey] = useState<string>('1') // State for active tab
+  const [processedSubject, setProcessedSubject] = useState<string | null>(null)
 
   // Removed usePrismjs hook call
 
@@ -116,8 +118,30 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
       setMjmlError(null)
       setIsLoading(false)
       setActiveTabKey('1')
+      setProcessedSubject(null)
     }
   }, [isOpen, record.id, record.version, workspace.id]) // Keep original dependencies
+
+  // Process subject with Liquid using provided template data
+  useEffect(() => {
+    if (!isOpen) return
+
+    const subject = record.email?.subject || ''
+    const data = templateData || record.test_data || {}
+
+    try {
+      if (subject && (subject.includes('{{') || subject.includes('{%'))) {
+        const engine = new Liquid()
+        const rendered = engine.parseAndRenderSync(subject, data)
+        setProcessedSubject(rendered)
+      } else {
+        setProcessedSubject(subject)
+      }
+    } catch (_e) {
+      // Fallback to raw subject on any rendering error
+      setProcessedSubject(subject)
+    }
+  }, [isOpen, record.email?.subject, templateData, record.test_data])
 
   const items = []
 
@@ -198,7 +222,7 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
         )}
         <div>
           <Text strong>Subject: </Text>
-          <Text>{record.email?.subject}</Text>
+          <Text>{processedSubject ?? record.email?.subject}</Text>
         </div>
         {record.email?.subject_preview && (
           <div>
