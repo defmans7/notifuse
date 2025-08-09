@@ -18,3 +18,4 @@ coverage:
     - '**/pkg/logger/testing.go'
     - '**/http/middleware/tracing.go'
     - '**/internal/tracing/**'
+    - '**/tests/**'

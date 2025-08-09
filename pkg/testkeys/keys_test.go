@@ -2,6 +2,7 @@ package testkeys
 
 import (
 	"encoding/base64"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -70,4 +71,44 @@ func TestGenerateValidPasetoKeys(t *testing.T) {
 	hardcodedKeys, _ := GetHardcodedTestKeys()
 	assert.NotEqual(t, hardcodedKeys.PrivateKeyB64, keys.PrivateKeyB64, "Generated keys should be different from hardcoded")
 	assert.NotEqual(t, hardcodedKeys.PublicKeyB64, keys.PublicKeyB64, "Generated keys should be different from hardcoded")
+}
+
+func TestGenerateRandomKeyBytes_UsesRandomSource(t *testing.T) {
+	original := readRandom
+	defer func() { readRandom = original }()
+
+	// Stub randomness to fill with a constant value
+	readRandom = func(b []byte) (int, error) {
+		for i := range b {
+			b[i] = 0xAB
+		}
+		return len(b), nil
+	}
+
+	length := 32
+	got := GenerateRandomKeyBytes(length)
+
+	require.Len(t, got, length)
+	for i := 0; i < length; i++ {
+		assert.Equal(t, byte(0xAB), got[i])
+	}
+}
+
+func TestGenerateRandomKeyBytes_FallbackOnError(t *testing.T) {
+	original := readRandom
+	defer func() { readRandom = original }()
+
+	// Force an error so the fallback pattern is used
+	readRandom = func(b []byte) (int, error) {
+		return 0, errors.New("random failure")
+	}
+
+	length := 64
+	got := GenerateRandomKeyBytes(length)
+
+	require.Len(t, got, length)
+	// Expect fallback pattern: byte(i % 256)
+	for i := 0; i < length; i++ {
+		assert.Equal(t, byte(i%256), got[i])
+	}
 }

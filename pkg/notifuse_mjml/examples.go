@@ -123,8 +123,8 @@ func CreateEmailWithImage() *MJMLBlock {
 	mjml := CreateSimpleEmail()
 
 	// Find the body and add an image section
-	if len(mjml.Children) > 1 {
-		if body, ok := mjml.Children[1].(*MJBodyBlock); ok {
+	if len(mjml.BaseBlock.Children) > 1 {
+		if body, ok := mjml.BaseBlock.Children[1].(*MJBodyBlock); ok {
 			// Create new section with image
 			imageSection := &MJSectionBlock{
 				BaseBlock: NewBaseBlock("image-section-1", MJMLComponentMjSection),
@@ -167,8 +167,8 @@ func CreateSocialEmail() *MJMLBlock {
 	mjml := CreateSimpleEmail()
 
 	// Find the body and add a social section
-	if len(mjml.Children) > 1 {
-		if body, ok := mjml.Children[1].(*MJBodyBlock); ok {
+	if len(mjml.BaseBlock.Children) > 1 {
+		if body, ok := mjml.BaseBlock.Children[1].(*MJBodyBlock); ok {
 			// Create social section
 			socialSection := &MJSectionBlock{
 				BaseBlock: NewBaseBlock("social-section-1", MJMLComponentMjSection),

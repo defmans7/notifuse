@@ -9,6 +9,10 @@ import (
 	"fmt"
 )
 
+// readRandom is a variable to allow overriding the randomness source in tests.
+// In production code it defaults to crypto/rand.Read.
+var readRandom = rand.Read
+
 // Hardcoded keys for testing - DO NOT USE IN PRODUCTION
 const (
 	HardcodedPrivateKeyB64 = "UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw=="
@@ -83,7 +87,7 @@ func GenerateValidPasetoKeys() (*TestKeys, error) {
 // GenerateRandomKeyBytes generates random bytes for testing keys
 func GenerateRandomKeyBytes(length int) []byte {
 	bytes := make([]byte, length)
-	_, err := rand.Read(bytes)
+	_, err := readRandom(bytes)
 	if err != nil {
 		// For testing, fallback to a fixed pattern if random fails
 		for i := 0; i < length; i++ {
