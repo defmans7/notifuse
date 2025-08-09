@@ -380,12 +380,12 @@ func testRaceConditionPrevention(t *testing.T, client *testutil.APIClient, facto
 		finalStatus := finalBroadcastData["status"].(string)
 
 		// CRITICAL ASSERTION: Status should NOT be "test_completed"
-		// It should be "winner_selected" or "sending" (not stuck)
+		// It should be "winner_selected", "sending" or "sent" (not stuck)
 		assert.NotEqual(t, "test_completed", finalStatus,
 			"Race condition detected: broadcast status was overwritten back to test_completed")
 
-		// Should be progressing with winner phase
-		assert.Contains(t, []string{"winner_selected", "sending"}, finalStatus)
+		// Should be progressing with or have completed winner phase
+		assert.Contains(t, []string{"winner_selected", "sending", "sent"}, finalStatus)
 
 		// Verify winning template is preserved
 		if winningTemplate, ok := finalBroadcastData["winning_template"]; ok && winningTemplate != nil {
@@ -542,8 +542,8 @@ func testManualWinnerSelectionDuringTestPhase(t *testing.T, client *testutil.API
 		finalBroadcastData := getBroadcastResult2["broadcast"].(map[string]interface{})
 		finalStatus := finalBroadcastData["status"].(string)
 
-		// Should be in winner phase, not stuck in test
-		assert.Contains(t, []string{"winner_selected", "sending"}, finalStatus)
+		// Should be in or past winner phase, not stuck in test
+		assert.Contains(t, []string{"winner_selected", "sending", "sent"}, finalStatus)
 
 		// Verify correct winner
 		if winningTemplate, ok := finalBroadcastData["winning_template"]; ok && winningTemplate != nil {

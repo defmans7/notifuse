@@ -1024,6 +1024,20 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 
 // handleTestPhaseCompletion handles the transition from test phase to test_completed status
 func (o *BroadcastOrchestrator) handleTestPhaseCompletion(ctx context.Context, broadcast *domain.Broadcast, broadcastState *domain.SendBroadcastState) bool {
+	// Re-fetch latest broadcast state to avoid race with concurrent winner selection
+	if latest, err := o.broadcastRepo.GetBroadcast(ctx, broadcast.WorkspaceID, broadcast.ID); err == nil && latest != nil {
+		if latest.WinningTemplate != "" || latest.Status == domain.BroadcastStatusWinnerSelected {
+			// Winner was selected concurrently; transition to winner phase instead of marking test_completed
+			broadcastState.Phase = "winner"
+			o.logger.WithFields(map[string]interface{}{
+				"broadcast_id":     latest.ID,
+				"winning_template": latest.WinningTemplate,
+				"broadcast_status": string(latest.Status),
+			}).Info("Concurrent winner selection detected during test completion - transitioning to winner phase")
+			return false
+		}
+	}
+
 	// Mark test phase as completed in state
 	broadcastState.TestPhaseCompleted = true
 
