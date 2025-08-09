@@ -86,8 +86,11 @@ func (l *zerologLogger) WithField(key string, value interface{}) Logger {
 }
 
 func (l *zerologLogger) WithFields(fields map[string]interface{}) Logger {
+	// Build a new logger with the provided fields without mutating the receiver
+	ctx := l.logger.With()
 	for key, value := range fields {
-		l.logger = l.logger.With().Interface(key, value).Logger()
+		ctx = ctx.Interface(key, value)
 	}
-	return l
+	newLogger := ctx.Logger()
+	return &zerologLogger{logger: newLogger}
 }
