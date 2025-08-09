@@ -192,6 +192,12 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider, timeoutAt time.Time) error {
 
+	// Ensure UTM parameters object is present to avoid nil dereference
+	if broadcast.UTMParameters == nil {
+		empty := &domain.UTMParameters{}
+		broadcast.UTMParameters = empty
+	}
+
 	// Check circuit breaker
 	if s.circuitBreaker != nil && s.circuitBreaker.IsOpen() {
 		lastError := s.circuitBreaker.GetLastError()
@@ -399,6 +405,19 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 			"error":        err.Error(),
 		}).Error("Failed to get broadcast for sending")
 		return 0, 0, NewBroadcastError(ErrCodeBroadcastNotFound, "broadcast not found", false, err)
+	}
+	if broadcast == nil {
+		// Defensive: repository returned nil without error
+		s.logger.WithFields(map[string]interface{}{
+			"broadcast_id": broadcastID,
+			"workspace_id": workspaceID,
+		}).Error("Nil broadcast returned from repository")
+		return 0, 0, NewBroadcastError(ErrCodeBroadcastNotFound, "broadcast not found", false, fmt.Errorf("nil broadcast"))
+	}
+
+	// Ensure UTM parameters is non-nil for downstream usage
+	if broadcast.UTMParameters == nil {
+		broadcast.UTMParameters = &domain.UTMParameters{}
 	}
 
 	// Send to each recipient

@@ -711,6 +711,10 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	currentOffset = int(broadcastState.RecipientOffset)
 
 	if broadcastState.Phase == "test" {
+		// If a winner has already been selected manually while test is running, transition immediately
+		if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
+			broadcastState.Phase = "winner"
+		}
 		recipientLimit = broadcastState.TestPhaseRecipientCount
 	} else if broadcastState.Phase == "winner" {
 		// Winner phase processes remaining recipients after test phase
@@ -722,6 +726,19 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 
 	// Process until timeout or completion
 	for {
+		// Refresh broadcast each iteration to observe external changes (e.g., manual winner selection)
+		if refreshed, refreshErr := o.broadcastRepo.GetBroadcast(ctx, task.WorkspaceID, broadcastState.BroadcastID); refreshErr == nil && refreshed != nil {
+			broadcast = refreshed
+			// If currently in test phase and a winner was selected meanwhile, transition to winner phase
+			if broadcastState.Phase == "test" && (broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected) {
+				broadcastState.Phase = "winner"
+				recipientLimit = broadcastState.TotalRecipients
+				o.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcast.ID,
+					"task_id":      task.ID,
+				}).Info("Winner selected during test phase - transitioning to winner phase")
+			}
+		}
 		// Check time-based timeout
 		if time.Now().After(processTimeoutAt) {
 			o.logger.WithField("task_id", task.ID).Info("Processing time limit reached - pausing task")
