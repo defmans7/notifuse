@@ -2490,3 +2490,120 @@ func TestParseNullableTime(t *testing.T) {
 		})
 	}
 }
+
+func TestGetContactsRequest_FromQueryParams_WithContactListsAndStatuses(t *testing.T) {
+	params := url.Values{
+		"workspace_id":        []string{"ws_123"},
+		"with_contact_lists":  []string{"true"},
+		"list_id":             []string{"list_456"},
+		"contact_list_status": []string{"active"},
+	}
+
+	req := &GetContactsRequest{}
+	err := req.FromQueryParams(params)
+	assert.NoError(t, err)
+	assert.Equal(t, "ws_123", req.WorkspaceID)
+	assert.Equal(t, true, req.WithContactLists)
+	assert.Equal(t, "list_456", req.ListID)
+	assert.Equal(t, "active", req.ContactListStatus)
+
+	// Invalid boolean should error
+	paramsInvalid := url.Values{
+		"workspace_id":       []string{"ws_123"},
+		"with_contact_lists": []string{"notabool"},
+	}
+	req2 := &GetContactsRequest{}
+	err = req2.FromQueryParams(paramsInvalid)
+	assert.Error(t, err)
+}
+
+func TestScanContact_SetsDBTimestamps(t *testing.T) {
+	now := time.Now()
+	scanner := &contactMockScanner{
+		data: []interface{}{
+			"test@example.com",                            // Email
+			sql.NullString{String: "", Valid: false},      // ExternalID
+			sql.NullString{String: "", Valid: false},      // Timezone
+			sql.NullString{String: "", Valid: false},      // Language
+			sql.NullString{String: "", Valid: false},      // FirstName
+			sql.NullString{String: "", Valid: false},      // LastName
+			sql.NullString{String: "", Valid: false},      // Phone
+			sql.NullString{String: "", Valid: false},      // AddressLine1
+			sql.NullString{String: "", Valid: false},      // AddressLine2
+			sql.NullString{String: "", Valid: false},      // Country
+			sql.NullString{String: "", Valid: false},      // Postcode
+			sql.NullString{String: "", Valid: false},      // State
+			sql.NullString{String: "", Valid: false},      // JobTitle
+			sql.NullFloat64{Float64: 0, Valid: false},     // LifetimeValue
+			sql.NullFloat64{Float64: 0, Valid: false},     // OrdersCount
+			sql.NullTime{Time: time.Time{}, Valid: false}, // LastOrderAt
+			sql.NullString{String: "", Valid: false},      // CustomString1
+			sql.NullString{String: "", Valid: false},      // CustomString2
+			sql.NullString{String: "", Valid: false},      // CustomString3
+			sql.NullString{String: "", Valid: false},      // CustomString4
+			sql.NullString{String: "", Valid: false},      // CustomString5
+			sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber1
+			sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber2
+			sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber3
+			sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber4
+			sql.NullFloat64{Float64: 0, Valid: false},     // CustomNumber5
+			sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime1
+			sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime2
+			sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime3
+			sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime4
+			sql.NullTime{Time: time.Time{}, Valid: false}, // CustomDatetime5
+			[]byte("null"), // CustomJSON1
+			[]byte("null"), // CustomJSON2
+			[]byte("null"), // CustomJSON3
+			[]byte("null"), // CustomJSON4
+			[]byte("null"), // CustomJSON5
+			now,            // CreatedAt
+			now,            // UpdatedAt
+		},
+	}
+
+	contact, err := ScanContact(scanner)
+	assert.NoError(t, err)
+	assert.Equal(t, now, contact.CreatedAt)
+	assert.Equal(t, now, contact.UpdatedAt)
+	assert.Equal(t, contact.CreatedAt, contact.DBCreatedAt)
+	assert.Equal(t, contact.UpdatedAt, contact.DBUpdatedAt)
+}
+
+func TestContact_Merge_DBTimeStamps(t *testing.T) {
+	base := &Contact{Email: "test@example.com"}
+	other := &Contact{Email: "test@example.com"}
+	dbCreated := time.Now().Add(-time.Hour)
+	dbUpdated := time.Now()
+	other.DBCreatedAt = dbCreated
+	other.DBUpdatedAt = dbUpdated
+
+	base.Merge(other)
+	assert.Equal(t, dbCreated, base.DBCreatedAt)
+	assert.Equal(t, dbUpdated, base.DBUpdatedAt)
+}
+
+func TestBatchImportContactsRequest_Validate_ErrorIndex(t *testing.T) {
+	req := BatchImportContactsRequest{
+		WorkspaceID: "ws_123",
+		Contacts:    json.RawMessage(`[{"email":"valid@example.com"},{"email":"invalid-email"}]`),
+	}
+	_, _, err := req.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid contact at index 1")
+}
+
+func TestComputeEmailHMAC_DeterministicAndKeySensitive(t *testing.T) {
+	email := "test@example.com"
+	key1 := "k1"
+	key2 := "k2"
+
+	// Deterministic for same inputs
+	h1 := ComputeEmailHMAC(email, key1)
+	h2 := ComputeEmailHMAC(email, key1)
+	assert.Equal(t, h1, h2)
+
+	// Different keys produce different HMACs
+	h3 := ComputeEmailHMAC(email, key2)
+	assert.NotEqual(t, h1, h3)
+}

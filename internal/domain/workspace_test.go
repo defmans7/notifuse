@@ -3,9 +3,11 @@ package domain
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/asaskevich/govalidator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -3001,4 +3003,184 @@ func TestWorkspace_SecretKeyHandling(t *testing.T) {
 		assert.Error(t, err, "Should fail to decrypt with wrong passphrase")
 		assert.NotEqual(t, hexEncodedKey, workspace.Settings.SecretKey)
 	})
+}
+
+// Additional coverage improvements below
+
+func TestIntegrations_ValueAndScan(t *testing.T) {
+	// Empty integrations should serialize to nil value
+	var empty Integrations
+	val, err := empty.Value()
+	assert.NoError(t, err)
+	assert.Nil(t, val)
+
+	// Non-empty round-trip via Value/Scan
+	ints := Integrations{
+		{
+			ID:   "int-1",
+			Name: "Integration 1",
+			Type: IntegrationTypeEmail,
+		},
+	}
+	v, err := ints.Value()
+	require.NoError(t, err)
+	bytesVal, ok := v.([]byte)
+	require.True(t, ok)
+
+	var scanned Integrations
+	err = scanned.Scan(bytesVal)
+	require.NoError(t, err)
+	assert.Len(t, scanned, 1)
+	assert.Equal(t, "int-1", scanned[0].ID)
+}
+
+func TestIntegration_ValueAndScan(t *testing.T) {
+	orig := Integration{ID: "int-1", Name: "Name", Type: IntegrationTypeEmail}
+	v, err := orig.Value()
+	require.NoError(t, err)
+	bytesVal, ok := v.([]byte)
+	require.True(t, ok)
+
+	var scanned Integration
+	err = scanned.Scan(bytesVal)
+	require.NoError(t, err)
+	assert.Equal(t, orig.ID, scanned.ID)
+	assert.Equal(t, orig.Name, scanned.Name)
+	assert.Equal(t, orig.Type, scanned.Type)
+}
+
+func TestIntegration_Validate(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	// Valid
+	valid := Integration{
+		ID:   "int-1",
+		Name: "Good",
+		Type: IntegrationTypeEmail,
+		EmailProvider: EmailProvider{
+			Kind:    EmailProviderKindSMTP,
+			Senders: []EmailSender{{ID: "default", Email: "test@example.com", Name: "Sender", IsDefault: true}},
+			SMTP:    &SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p"},
+		},
+	}
+	assert.NoError(t, valid.Validate(passphrase))
+
+	// Missing fields
+	missingID := Integration{Name: "n", Type: IntegrationTypeEmail}
+	assert.Error(t, missingID.Validate(passphrase))
+	missingName := Integration{ID: "x", Type: IntegrationTypeEmail}
+	assert.Error(t, missingName.Validate(passphrase))
+	missingType := Integration{ID: "x", Name: "n"}
+	assert.Error(t, missingType.Validate(passphrase))
+
+	// Invalid provider config
+	badProvider := Integration{
+		ID:   "x",
+		Name: "n",
+		Type: IntegrationTypeEmail,
+		EmailProvider: EmailProvider{
+			Kind:    EmailProviderKindSMTP,
+			Senders: []EmailSender{{ID: "default", Email: "test@example.com", Name: "Sender", IsDefault: true}},
+			// SMTP is nil -> invalid
+		},
+	}
+	err := badProvider.Validate(passphrase)
+	assert.Error(t, err)
+}
+
+func TestIntegration_BeforeAfterSave_Secrets(t *testing.T) {
+	passphrase := "test-passphrase"
+	intg := Integration{
+		ID:   "i",
+		Name: "n",
+		Type: IntegrationTypeEmail,
+		EmailProvider: EmailProvider{
+			Kind:    EmailProviderKindSMTP,
+			Senders: []EmailSender{{ID: "default", Email: "test@example.com", Name: "Sender", IsDefault: true}},
+			SMTP:    &SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "secret"},
+		},
+	}
+
+	// Encrypt
+	assert.NoError(t, intg.BeforeSave(passphrase))
+	assert.Empty(t, intg.EmailProvider.SMTP.Password)
+	assert.NotEmpty(t, intg.EmailProvider.SMTP.EncryptedPassword)
+
+	// Decrypt
+	assert.NoError(t, intg.AfterLoad(passphrase))
+	assert.Equal(t, "secret", intg.EmailProvider.SMTP.Password)
+}
+
+func TestTemplateBlock_MarshalUnmarshal(t *testing.T) {
+	now := time.Now()
+	blockJSON := []byte(`{"id":"b1","type":"mj-text","content":"Hello","attributes":{"fontSize":"16px"}}`)
+	blk, err := notifuse_mjml.UnmarshalEmailBlock(blockJSON)
+	require.NoError(t, err)
+
+	tb := TemplateBlock{ID: "tb1", Name: "Text Block", Block: blk, Created: now, Updated: now}
+	data, err := json.Marshal(tb)
+	require.NoError(t, err)
+
+	var out TemplateBlock
+	require.NoError(t, json.Unmarshal(data, &out))
+	assert.Equal(t, "tb1", out.ID)
+	assert.Equal(t, "Text Block", out.Name)
+	assert.NotNil(t, out.Block)
+	assert.Equal(t, notifuse_mjml.MJMLComponentMjText, out.Block.GetType())
+}
+
+// dummyEmptyTypeBlock implements notifuse_mjml.EmailBlock but returns empty type
+type dummyEmptyTypeBlock struct{}
+
+func (d dummyEmptyTypeBlock) GetID() string                            { return "dummy" }
+func (d dummyEmptyTypeBlock) GetType() notifuse_mjml.MJMLComponentType { return "" }
+func (d dummyEmptyTypeBlock) GetChildren() []notifuse_mjml.EmailBlock  { return nil }
+func (d dummyEmptyTypeBlock) GetAttributes() map[string]interface{}    { return nil }
+
+func TestWorkspaceSettings_Validate_TemplateBlocks(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	// Valid
+	blockJSON := []byte(`{"id":"b1","type":"mj-text","content":"Hello"}`)
+	blk, err := notifuse_mjml.UnmarshalEmailBlock(blockJSON)
+	require.NoError(t, err)
+	settings := WorkspaceSettings{Timezone: "UTC", TemplateBlocks: []TemplateBlock{{ID: "t1", Name: "Block", Block: blk}}}
+	assert.NoError(t, settings.Validate(passphrase))
+
+	// Missing name
+	settings = WorkspaceSettings{Timezone: "UTC", TemplateBlocks: []TemplateBlock{{ID: "t1", Name: "", Block: blk}}}
+	assert.Error(t, settings.Validate(passphrase))
+
+	// Name too long
+	longName := strings.Repeat("a", 256)
+	settings = WorkspaceSettings{Timezone: "UTC", TemplateBlocks: []TemplateBlock{{ID: "t1", Name: longName, Block: blk}}}
+	assert.Error(t, settings.Validate(passphrase))
+
+	// Nil block
+	settings = WorkspaceSettings{Timezone: "UTC", TemplateBlocks: []TemplateBlock{{ID: "t1", Name: "Block", Block: nil}}}
+	assert.Error(t, settings.Validate(passphrase))
+
+	// Block with empty type
+	settings = WorkspaceSettings{Timezone: "UTC", TemplateBlocks: []TemplateBlock{{ID: "t1", Name: "Block", Block: dummyEmptyTypeBlock{}}}}
+	assert.Error(t, settings.Validate(passphrase))
+}
+
+func TestWorkspace_MarshalJSON_DefaultIntegrations(t *testing.T) {
+	w := Workspace{ID: "w1", Name: "n1", Settings: WorkspaceSettings{Timezone: "UTC"}, Integrations: nil}
+	data, err := w.MarshalJSON()
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "\"integrations\":[]")
+}
+
+func TestWorkspace_BeforeSave_MissingSecretKey(t *testing.T) {
+	ws := &Workspace{ID: "w1", Name: "n1", Settings: WorkspaceSettings{Timezone: "UTC"}}
+	err := ws.BeforeSave("pass")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "workspace secret key is missing")
+}
+
+func TestWorkspace_AfterLoad_MissingEncryptedSecretKey(t *testing.T) {
+	ws := &Workspace{ID: "w1", Name: "n1", Settings: WorkspaceSettings{Timezone: "UTC", EncryptedSecretKey: ""}}
+	err := ws.AfterLoad("pass")
+	assert.Error(t, err)
 }
