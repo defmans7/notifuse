@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -655,4 +657,250 @@ func TestWorkspaceRepository_Update_Postgres(t *testing.T) {
 	err = repo.Update(context.Background(), wNoSecret)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "secret key")
+}
+
+func TestWorkspaceRepository_checkWorkspaceIDExists_Postgres(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewWorkspaceRepository(db, &config.DatabaseConfig{Prefix: "notifuse"}, "secret-key").(*workspaceRepository)
+
+	// exists = true
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+		WithArgs("ws_exists").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	exists, err := repo.checkWorkspaceIDExists(context.Background(), "ws_exists")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	// exists = false
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+		WithArgs("ws_missing").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	exists, err = repo.checkWorkspaceIDExists(context.Background(), "ws_missing")
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	// db error
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+		WithArgs("boom").
+		WillReturnError(fmt.Errorf("db error"))
+	_, err = repo.checkWorkspaceIDExists(context.Background(), "boom")
+	require.Error(t, err)
+}
+
+func TestWorkspaceRepository_Create_Postgres_ErrorsBeforeDBCreation(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewWorkspaceRepository(db, &config.DatabaseConfig{Prefix: "notifuse"}, "secret-key").(*workspaceRepository)
+
+	// 1) ID already exists -> early error
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+		WithArgs("dup").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	dup := &domain.Workspace{ID: "dup", Name: "Dup", Settings: domain.WorkspaceSettings{Timezone: "UTC", SecretKey: "s"}}
+	err := repo.Create(context.Background(), dup)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+
+	// 2) BeforeSave error (missing secret key)
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+		WithArgs("no-secret").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	noSecret := &domain.Workspace{ID: "no-secret", Name: "NS", Settings: domain.WorkspaceSettings{Timezone: "UTC"}}
+	err = repo.Create(context.Background(), noSecret)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "secret key")
+
+	// 3) Insert error
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+		WithArgs("insert-fail").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	good := &domain.Workspace{ID: "insert-fail", Name: "Good", Settings: domain.WorkspaceSettings{Timezone: "UTC", SecretKey: "supersecret"}}
+	mock.ExpectExec(`\s*INSERT INTO workspaces \(id, name, settings, integrations, created_at, updated_at\)\s+VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)`).
+		WithArgs(good.ID, good.Name, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnError(fmt.Errorf("insert failed"))
+	err = repo.Create(context.Background(), good)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "insert failed")
+}
+
+func TestWorkspaceRepository_Delete_Postgres(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	dbConfig := &config.DatabaseConfig{User: "postgres", Prefix: "notifuse"}
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key").(*workspaceRepository)
+
+	workspaceID := "ws1"
+	safeID := strings.ReplaceAll(workspaceID, "-", "_")
+	dbName := fmt.Sprintf("%s_ws_%s", dbConfig.Prefix, safeID)
+
+	// Error from DeleteDatabase (revoke fails)
+	revokeQuery := fmt.Sprintf(`
+		REVOKE ALL PRIVILEGES ON DATABASE %s FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s;
+		REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM %s;
+		REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+		REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM %s;`,
+		dbName, dbName, dbConfig.User, dbConfig.User, dbConfig.User)
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
+		WillReturnError(fmt.Errorf("perm denied"))
+	err := repo.Delete(context.Background(), workspaceID)
+	require.Error(t, err)
+
+	// Successful delete path
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	terminateQuery := fmt.Sprintf(`
+		SELECT pg_terminate_backend(pid) 
+		FROM pg_stat_activity 
+		WHERE datname = '%s' 
+		AND pid <> pg_backend_pid()`, dbName)
+	mock.ExpectExec(regexp.QuoteMeta(terminateQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// user_workspaces
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	// invitations
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	// workspace row
+	mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err = repo.Delete(context.Background(), workspaceID)
+	require.NoError(t, err)
+
+	// Not found on final delete
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(terminateQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.Delete(context.Background(), workspaceID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+
+	// Error on intermediate deletes
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(terminateQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnError(fmt.Errorf("uw error"))
+	err = repo.Delete(context.Background(), workspaceID)
+	require.Error(t, err)
+
+	// Next: fail invitations
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(terminateQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnError(fmt.Errorf("inv error"))
+	err = repo.Delete(context.Background(), workspaceID)
+	require.Error(t, err)
+
+	// Next: fail workspace delete exec
+	mock.ExpectExec(regexp.QuoteMeta(revokeQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(terminateQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`DELETE FROM user_workspaces WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM workspace_invitations WHERE workspace_id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM workspaces WHERE id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnError(fmt.Errorf("ws del error"))
+	err = repo.Delete(context.Background(), workspaceID)
+	require.Error(t, err)
+}
+
+func TestWorkspaceRepository_WithWorkspaceTransaction(t *testing.T) {
+	// system DB is not used in this test
+	systemDB, _, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	repo := NewWorkspaceRepository(systemDB, &config.DatabaseConfig{Prefix: "notifuse"}, "secret-key").(*workspaceRepository)
+	workspaceID := "ws_tx"
+
+	// Create a mock workspace DB and put it in the connection pool
+	wsDB, wsMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer wsDB.Close()
+	repo.connectionPools.Store(workspaceID, wsDB)
+
+	ctx := context.Background()
+
+	// success: begin -> exec -> commit
+	wsMock.ExpectBegin()
+	wsMock.ExpectExec(`SELECT 1`).WillReturnResult(sqlmock.NewResult(0, 0))
+	wsMock.ExpectCommit()
+
+	err = repo.WithWorkspaceTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
+		_, e := tx.ExecContext(ctx, "SELECT 1")
+		return e
+	})
+	require.NoError(t, err)
+
+	// fn returns error -> rollback
+	wsMock.ExpectBegin()
+	wsMock.ExpectRollback()
+
+	err = repo.WithWorkspaceTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
+		return fmt.Errorf("fn error")
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fn error")
+
+	// begin error
+	wsMock.ExpectBegin().WillReturnError(fmt.Errorf("begin fail"))
+	err = repo.WithWorkspaceTransaction(ctx, workspaceID, func(tx *sql.Tx) error { return nil })
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "begin")
+
+	// commit error
+	wsMock.ExpectBegin()
+	wsMock.ExpectExec(`SELECT 1`).WillReturnResult(sqlmock.NewResult(0, 0))
+	wsMock.ExpectCommit().WillReturnError(fmt.Errorf("commit fail"))
+	err = repo.WithWorkspaceTransaction(ctx, workspaceID, func(tx *sql.Tx) error {
+		_, e := tx.ExecContext(ctx, "SELECT 1")
+		return e
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "commit")
 }
