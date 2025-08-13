@@ -2,10 +2,17 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"database/sql"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -494,6 +501,162 @@ func TestAppInitHandlers(t *testing.T) {
 	// we can only check that the mux has routes registered
 	assert.NotNil(t, app.GetMux(), "HTTP mux should be initialized")
 	// We could add more specific assertions by checking specific routes if needed
+}
+
+// generateSelfSignedCert creates a temporary self-signed certificate and key for TLS tests
+func generateSelfSignedCert(t *testing.T) (certFile string, keyFile string) {
+	t.Helper()
+
+	// Generate a private key
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate private key: %v", err)
+	}
+
+	// Create a template for the certificate
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		t.Fatalf("failed to generate serial number: %v", err)
+	}
+
+	tmpl := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Notifuse Test"},
+		},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// Self-sign the certificate
+	derBytes, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+
+	// Write cert to temp file
+	certOut, err := os.CreateTemp("", "notifuse_test_cert_*.pem")
+	if err != nil {
+		t.Fatalf("failed to create temp cert file: %v", err)
+	}
+	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		t.Fatalf("failed to write cert file: %v", err)
+	}
+	certOut.Close()
+
+	// Write key to temp file
+	keyOut, err := os.CreateTemp("", "notifuse_test_key_*.pem")
+	if err != nil {
+		t.Fatalf("failed to create temp key file: %v", err)
+	}
+	if err := pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)}); err != nil {
+		t.Fatalf("failed to write key file: %v", err)
+	}
+	keyOut.Close()
+
+	return certOut.Name(), keyOut.Name()
+}
+
+// TestAppStartTLS covers the TLS branch and tracing-enabled middleware path
+func TestAppStartTLS(t *testing.T) {
+	// Use a special config with high port number to avoid conflicts
+	cfg := createTestConfig()
+	cfg.Server.Port = 20000 + (time.Now().Nanosecond() % 1000)
+	cfg.Server.SSL.Enabled = true
+
+	// Enable tracing to hit tracing middleware branch (exporters disabled)
+	cfg.Tracing.Enabled = true
+	cfg.Tracing.TraceExporter = "none"
+	cfg.Tracing.MetricsExporter = "none"
+
+	// Generate self-signed certs
+	certPath, keyPath := generateSelfSignedCert(t)
+	defer os.Remove(certPath)
+	defer os.Remove(keyPath)
+	cfg.Server.SSL.CertFile = certPath
+	cfg.Server.SSL.KeyFile = keyPath
+
+	// Create app
+	app := NewApp(cfg)
+
+	// Start server in goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- app.Start()
+	}()
+
+	// Wait for server to be initialized with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	started := app.WaitForServerStart(ctx)
+	require.True(t, started, "Server should have started within timeout")
+
+	// Shutdown the server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer shutdownCancel()
+	err := app.Shutdown(shutdownCtx)
+	assert.NoError(t, err)
+
+	// Check for any server errors
+	select {
+	case err := <-errCh:
+		if err != nil && err != http.ErrServerClosed {
+			t.Fatalf("Server error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timed out waiting for server to stop")
+	}
+}
+
+// TestSetHandler verifies both successful set and panic on non-ServeMux
+func TestSetHandler(t *testing.T) {
+	cfg := createTestConfig()
+	app := NewApp(cfg)
+
+	// Happy path with *http.ServeMux
+	mux := http.NewServeMux()
+	app.(*App).SetHandler(mux)
+	assert.Equal(t, mux, app.GetMux())
+
+	// Panic path with non-*http.ServeMux handler
+	badHandler := http.NotFoundHandler()
+	assert.Panics(t, func() {
+		// We need concrete *App to call SetHandler since it type asserts internally
+		app.(*App).SetHandler(badHandler)
+	})
+}
+
+// TestWaitForServerStartNilChannel forces nil channel to cover error path
+func TestWaitForServerStartNilChannel(t *testing.T) {
+	cfg := createTestConfig()
+	appInterface := NewApp(cfg)
+	appImpl := appInterface.(*App)
+
+	// Force nil channel under lock
+	appImpl.serverMu.Lock()
+	appImpl.serverStarted = nil
+	appImpl.serverMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	ok := appImpl.WaitForServerStart(ctx)
+	assert.False(t, ok)
+}
+
+// TestAppInitTracingEnabled ensures InitTracing covers enabled branch without exporters
+func TestAppInitTracingEnabled(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Tracing.Enabled = true
+	cfg.Tracing.TraceExporter = "none"
+	cfg.Tracing.MetricsExporter = "none"
+
+	app := NewApp(cfg)
+	err := app.InitTracing()
+	assert.NoError(t, err)
 }
 
 // AppMockForRunServer is a mock App for testing the runServer function
