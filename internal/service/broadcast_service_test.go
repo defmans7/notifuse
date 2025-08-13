@@ -345,3 +345,135 @@ func TestBroadcastService_SelectWinner_SetsWinnerAndResumesTask(t *testing.T) {
 	err := d.svc.SelectWinner(ctx, workspaceID, broadcastID, winner)
 	require.NoError(t, err)
 }
+
+func TestBroadcastService_SetTaskService_SetsField(t *testing.T) {
+	d := setupBroadcastSvc(t)
+	defer d.ctrl.Finish()
+
+	// Create a new mock task service and set it
+	newTaskSvc := domainmocks.NewMockTaskService(d.ctrl)
+	d.svc.SetTaskService(newTaskSvc)
+
+	// Since tests are in the same package, we can assert internal field
+	assert.Equal(t, newTaskSvc, d.svc.taskService)
+}
+
+func TestBroadcastService_GetBroadcast_Success(t *testing.T) {
+	d := setupBroadcastSvc(t)
+	defer d.ctrl.Finish()
+
+	ctx := context.Background()
+	workspaceID := "w1"
+	broadcastID := "b1"
+	authOK(d.authService, ctx, workspaceID)
+
+	expected := testBroadcast(workspaceID, broadcastID)
+	d.repo.EXPECT().GetBroadcast(ctx, workspaceID, broadcastID).Return(expected, nil)
+
+	b, err := d.svc.GetBroadcast(ctx, workspaceID, broadcastID)
+	require.NoError(t, err)
+	assert.Equal(t, expected, b)
+}
+
+func TestBroadcastService_UpdateBroadcast_Success(t *testing.T) {
+	d := setupBroadcastSvc(t)
+	defer d.ctrl.Finish()
+
+	ctx := context.Background()
+	req := &domain.UpdateBroadcastRequest{
+		WorkspaceID: "w1",
+		ID:          "b1",
+		Name:        "Updated Name",
+		Audience:    domain.AudienceSettings{Segments: []string{"seg1"}},
+		Schedule:    domain.ScheduleSettings{IsScheduled: false},
+		TestSettings: domain.BroadcastTestSettings{
+			Enabled:    false,
+			Variations: []domain.BroadcastVariation{{VariationName: "A", TemplateID: "tplA"}},
+		},
+	}
+	authOK(d.authService, ctx, req.WorkspaceID)
+
+	existing := testBroadcast(req.WorkspaceID, req.ID)
+	existing.Status = domain.BroadcastStatusDraft
+
+	d.repo.EXPECT().GetBroadcast(ctx, req.WorkspaceID, req.ID).Return(existing, nil)
+	d.repo.EXPECT().UpdateBroadcast(ctx, gomock.Any()).Return(nil)
+
+	updated, err := d.svc.UpdateBroadcast(ctx, req)
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.Equal(t, req.Name, updated.Name)
+}
+
+func TestBroadcastService_ListBroadcasts_WithTemplates(t *testing.T) {
+	d := setupBroadcastSvc(t)
+	defer d.ctrl.Finish()
+
+	ctx := context.Background()
+	params := domain.ListBroadcastsParams{WorkspaceID: "w1", WithTemplates: true}
+	authOK(d.authService, ctx, params.WorkspaceID)
+
+	b := testBroadcast(params.WorkspaceID, "b1")
+	// Ensure there is a variation to load template for
+	b.TestSettings.Variations = []domain.BroadcastVariation{{VariationName: "A", TemplateID: "tplA"}}
+	resp := &domain.BroadcastListResponse{Broadcasts: []*domain.Broadcast{b}, TotalCount: 1}
+
+	d.repo.EXPECT().ListBroadcasts(ctx, gomock.Any()).Return(resp, nil)
+
+	// Template returned
+	tmpl := &domain.Template{ID: "tplA", Email: &domain.EmailTemplate{Subject: "S", SenderID: "sender"}}
+	d.templateSvc.EXPECT().GetTemplateByID(ctx, params.WorkspaceID, "tplA", int64(0)).Return(tmpl, nil)
+
+	out, err := d.svc.ListBroadcasts(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Len(t, out.Broadcasts, 1)
+	v := out.Broadcasts[0].TestSettings.Variations[0]
+	require.NotNil(t, v.Template)
+	assert.Equal(t, "tplA", v.Template.ID)
+}
+
+func TestBroadcastService_CancelBroadcast_Success(t *testing.T) {
+	d := setupBroadcastSvc(t)
+	defer d.ctrl.Finish()
+
+	ctx := context.Background()
+	req := &domain.CancelBroadcastRequest{WorkspaceID: "w1", ID: "b1"}
+	authOK(d.authService, ctx, req.WorkspaceID)
+
+	// Transaction wrapper
+	d.repo.EXPECT().WithTransaction(ctx, req.WorkspaceID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, fn func(*sql.Tx) error) error { return fn(nil) },
+	)
+
+	scheduled := testBroadcast(req.WorkspaceID, req.ID)
+	scheduled.Status = domain.BroadcastStatusScheduled
+
+	d.repo.EXPECT().GetBroadcastTx(gomock.Any(), gomock.Any(), req.WorkspaceID, req.ID).Return(scheduled, nil)
+	d.repo.EXPECT().UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	// Publish event and ack
+	d.eventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Do(
+		func(_ context.Context, _ domain.EventPayload, ack domain.EventAckCallback) { ack(nil) },
+	)
+
+	err := d.svc.CancelBroadcast(ctx, req)
+	require.NoError(t, err)
+}
+
+func TestBroadcastService_DeleteBroadcast_Success(t *testing.T) {
+	d := setupBroadcastSvc(t)
+	defer d.ctrl.Finish()
+
+	ctx := context.Background()
+	req := &domain.DeleteBroadcastRequest{WorkspaceID: "w1", ID: "b1"}
+	authOK(d.authService, ctx, req.WorkspaceID)
+
+	b := testBroadcast(req.WorkspaceID, req.ID)
+	b.Status = domain.BroadcastStatusDraft // deletable
+	d.repo.EXPECT().GetBroadcast(ctx, req.WorkspaceID, req.ID).Return(b, nil)
+	d.repo.EXPECT().DeleteBroadcast(ctx, req.WorkspaceID, req.ID).Return(nil)
+
+	err := d.svc.DeleteBroadcast(ctx, req)
+	require.NoError(t, err)
+}
