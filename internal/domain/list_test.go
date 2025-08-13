@@ -2,6 +2,7 @@ package domain
 
 import (
 	"database/sql"
+	"net/url"
 	"testing"
 	"time"
 
@@ -239,6 +240,32 @@ func (m *listMockScanner) Scan(dest ...interface{}) error {
 func TestErrListNotFound_Error(t *testing.T) {
 	err := &ErrListNotFound{Message: "test error message"}
 	assert.Equal(t, "test error message", err.Error())
+}
+
+func TestUnsubscribeFromListsRequest_FromURLParams_ExistingFile(t *testing.T) {
+	vals := url.Values{}
+	vals.Set("workspace_id", "wid")
+	vals.Set("email", "user@example.com")
+	vals.Set("email_hmac", "hmac")
+	vals.Set("mid", "msg-1")
+	vals["list_ids"] = []string{"l1", "l2"}
+
+	var req UnsubscribeFromListsRequest
+	if err := req.FromURLParams(vals); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if req.WorkspaceID != "wid" || req.Email != "user@example.com" || req.MessageID != "msg-1" {
+		t.Fatalf("parsed fields mismatch: %+v", req)
+	}
+	if len(req.ListIDs) != 2 || req.ListIDs[0] != "l1" || req.ListIDs[1] != "l2" {
+		t.Fatalf("expected list ids [l1 l2], got %#v", req.ListIDs)
+	}
+
+	// missing required field
+	bad := url.Values{}
+	if err := req.FromURLParams(bad); err == nil {
+		t.Fatalf("expected error on missing fields")
+	}
 }
 
 func TestCreateListRequest_Validate(t *testing.T) {

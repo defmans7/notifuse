@@ -1196,3 +1196,58 @@ func TestMailjetSettings_MultiKeyEncryptionWithSamePassphrase(t *testing.T) {
 	err = settings.DecryptSecretKey("wrong-passphrase")
 	assert.Error(t, err)
 }
+
+func TestEmailProvider_GetSender_Behavior(t *testing.T) {
+	defaultSender := EmailSender{ID: "id-default", Email: "default@example.com", Name: "Default", IsDefault: true}
+	otherSender := EmailSender{ID: "id-1", Email: "one@example.com", Name: "One", IsDefault: false}
+
+	ep := &EmailProvider{Senders: []EmailSender{defaultSender, otherSender}}
+
+	// by id
+	s := ep.GetSender("id-1")
+	assert.NotNil(t, s)
+	assert.Equal(t, "id-1", s.ID)
+
+	// default when id empty
+	s = ep.GetSender("")
+	assert.NotNil(t, s)
+	assert.Equal(t, "id-default", s.ID)
+
+	// default when id not found
+	s = ep.GetSender("missing")
+	assert.NotNil(t, s)
+	assert.Equal(t, "id-default", s.ID)
+
+	// nil when no senders
+	empty := &EmailProvider{}
+	assert.Nil(t, empty.GetSender(""))
+}
+
+func TestSendEmailRequest_Validate_Cases(t *testing.T) {
+	validContact := &Contact{Email: "user@example.com"}
+	validProvider := &EmailProvider{Kind: EmailProviderKindSMTP, SMTP: &SMTPSettings{Host: "smtp.example.com", Port: 25, Username: "u"}}
+
+	tests := []struct {
+		name    string
+		req     SendEmailRequest
+		wantErr bool
+	}{
+		{"missing workspace", SendEmailRequest{}, true},
+		{"missing message", SendEmailRequest{WorkspaceID: "w"}, true},
+		{"missing contact", SendEmailRequest{WorkspaceID: "w", MessageID: "m"}, true},
+		{"missing provider", SendEmailRequest{WorkspaceID: "w", MessageID: "m", Contact: validContact}, true},
+		{"missing template id", SendEmailRequest{WorkspaceID: "w", MessageID: "m", Contact: validContact, EmailProvider: validProvider}, true},
+		{"valid", SendEmailRequest{WorkspaceID: "w", MessageID: "m", Contact: validContact, EmailProvider: validProvider, TemplateConfig: ChannelTemplate{TemplateID: "tpl"}}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.req.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

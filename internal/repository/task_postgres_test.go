@@ -306,6 +306,42 @@ func TestTaskRepository_Delete(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestTaskRepository_DeleteAll(t *testing.T) {
+	db, mock, repo := setupTaskMock(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	workspace := "test-workspace"
+
+	// Successful delete of all tasks for a workspace
+	mock.ExpectExec("DELETE FROM tasks WHERE").
+		WithArgs(workspace).
+		WillReturnResult(sqlmock.NewResult(0, 5))
+
+	err := repo.DeleteAll(ctx, workspace)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	// Zero rows affected should still be a success
+	mock.ExpectExec("DELETE FROM tasks WHERE").
+		WithArgs(workspace).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.DeleteAll(ctx, workspace)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	// Database error should be surfaced
+	mock.ExpectExec("DELETE FROM tasks WHERE").
+		WithArgs(workspace).
+		WillReturnError(fmt.Errorf("database error"))
+
+	err = repo.DeleteAll(ctx, workspace)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to delete tasks")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestTaskRepository_List(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
 	defer db.Close()

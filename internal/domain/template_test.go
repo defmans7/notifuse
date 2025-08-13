@@ -1253,3 +1253,12 @@ func TestTemplateDataRequest_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestEmailTemplate_UnmarshalJSON_Minimal_ExistingFile(t *testing.T) {
+	// Minimal JSON with a valid empty mjml root
+	data := []byte(`{"subject":"Hello","compiled_preview":"<mjml></mjml>","visual_editor_tree":{"id":"root","type":"mjml","children":[]}}`)
+	var et EmailTemplate
+	if err := et.UnmarshalJSON(data); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -10,8 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/internal/repository/testutil"
+	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
 func TestWorkspaceRepository_GetByID(t *testing.T) {
@@ -484,4 +490,169 @@ func TestWorkspaceRepository_Delete(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "permission denied")
 	})
+}
+
+// Tests below exercise the real repository implementation against a mocked SQL database
+
+func TestWorkspaceRepository_GetByID_Postgres(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	dbConfig := &config.DatabaseConfig{Prefix: "notifuse"}
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
+
+	workspaceID := "ws_123"
+	createdAt := time.Now().Truncate(time.Second)
+	updatedAt := createdAt
+
+	enc, err := crypto.EncryptString("mysecret", "secret-key")
+	require.NoError(t, err)
+
+	settings := domain.WorkspaceSettings{Timezone: "UTC", EncryptedSecretKey: enc}
+	settingsJSON, err := json.Marshal(settings)
+	require.NoError(t, err)
+
+	rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+		AddRow(workspaceID, "Test WS", settingsJSON, nil, createdAt, updatedAt)
+
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+WHERE id = \$1`).
+		WithArgs(workspaceID).
+		WillReturnRows(rows)
+
+	w, err := repo.GetByID(context.Background(), workspaceID)
+	require.NoError(t, err)
+	assert.Equal(t, workspaceID, w.ID)
+	assert.Equal(t, "Test WS", w.Name)
+	assert.Equal(t, "UTC", w.Settings.Timezone)
+	assert.Equal(t, "mysecret", w.Settings.SecretKey)
+
+	// not found
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+WHERE id = \$1`).
+		WithArgs("missing").
+		WillReturnError(sql.ErrNoRows)
+
+	_, err = repo.GetByID(context.Background(), "missing")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+
+	// db error
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+WHERE id = \$1`).
+		WithArgs("boom").
+		WillReturnError(fmt.Errorf("db error"))
+
+	_, err = repo.GetByID(context.Background(), "boom")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
+
+func TestWorkspaceRepository_List_Postgres(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	dbConfig := &config.DatabaseConfig{Prefix: "notifuse"}
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
+
+	enc1, err := crypto.EncryptString("s1", "secret-key")
+	require.NoError(t, err)
+	enc2, err := crypto.EncryptString("s2", "secret-key")
+	require.NoError(t, err)
+
+	s1, _ := json.Marshal(domain.WorkspaceSettings{Timezone: "Europe/London", EncryptedSecretKey: enc1})
+	s2, _ := json.Marshal(domain.WorkspaceSettings{Timezone: "UTC", EncryptedSecretKey: enc2})
+
+	newer := time.Now().Truncate(time.Second)
+	older := newer.Add(-time.Hour)
+
+	rows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"}).
+		AddRow("w2", "Workspace 2", s1, nil, newer, newer).
+		AddRow("w1", "Workspace 1", s2, nil, older, older)
+
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+ORDER BY created_at DESC`).
+		WillReturnRows(rows)
+
+	list, err := repo.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, list, 2)
+	assert.Equal(t, "w2", list[0].ID)
+	assert.Equal(t, "s1", list[0].Settings.SecretKey)
+	assert.Equal(t, "w1", list[1].ID)
+	assert.Equal(t, "s2", list[1].Settings.SecretKey)
+
+	// empty result
+	emptyRows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"})
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+ORDER BY created_at DESC`).
+		WillReturnRows(emptyRows)
+
+	list, err = repo.List(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, list)
+
+	// db error
+	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+ORDER BY created_at DESC`).
+		WillReturnError(fmt.Errorf("db err"))
+
+	_, err = repo.List(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db err")
+}
+
+func TestWorkspaceRepository_Update_Postgres(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	dbConfig := &config.DatabaseConfig{Prefix: "notifuse"}
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key")
+
+	w := &domain.Workspace{
+		ID:   "ws1",
+		Name: "Updated Name",
+		Settings: domain.WorkspaceSettings{
+			Timezone:  "UTC",
+			SecretKey: "supersecret",
+		},
+		Integrations: []domain.Integration{},
+	}
+
+	mock.ExpectExec(`UPDATE workspaces\s+SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4\s+WHERE id = \$5`).
+		WithArgs(w.Name, sqlmock.AnyArg(), nil, sqlmock.AnyArg(), w.ID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.Update(context.Background(), w)
+	require.NoError(t, err)
+	assert.Equal(t, "supersecret", w.Settings.SecretKey)
+
+	// not found (0 rows affected)
+	mock.ExpectExec(`UPDATE workspaces\s+SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4\s+WHERE id = \$5`).
+		WithArgs(w.Name, sqlmock.AnyArg(), nil, sqlmock.AnyArg(), "missing").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	wMissing := *w
+	wMissing.ID = "missing"
+	err = repo.Update(context.Background(), &wMissing)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+
+	// db error during update
+	mock.ExpectExec(`UPDATE workspaces\s+SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4\s+WHERE id = \$5`).
+		WithArgs(w.Name, sqlmock.AnyArg(), nil, sqlmock.AnyArg(), w.ID).
+		WillReturnError(fmt.Errorf("update failed"))
+
+	err = repo.Update(context.Background(), w)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "update failed")
+
+	// error getting affected rows
+	mock.ExpectExec(`UPDATE workspaces\s+SET name = \$1, settings = \$2, integrations = \$3, updated_at = \$4\s+WHERE id = \$5`).
+		WithArgs(w.Name, sqlmock.AnyArg(), nil, sqlmock.AnyArg(), w.ID).
+		WillReturnResult(sqlmock.NewErrorResult(fmt.Errorf("rows affected error")))
+
+	err = repo.Update(context.Background(), w)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rows affected error")
+
+	// before save validation error (missing secret key)
+	wNoSecret := &domain.Workspace{ID: "ws1", Name: "Updated Name", Settings: domain.WorkspaceSettings{Timezone: "UTC"}}
+	err = repo.Update(context.Background(), wNoSecret)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "secret key")
 }
