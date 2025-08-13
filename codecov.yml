@@ -19,3 +19,5 @@ coverage:
     - '**/http/middleware/tracing.go'
     - '**/internal/tracing/**'
     - '**/tests/**'
+    - '**/tests/**'
+    - '**/testutil/**'
