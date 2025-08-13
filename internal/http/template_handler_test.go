@@ -691,11 +691,37 @@ func createTestTextBlockHandler(id, textContent string) notifusemjml.EmailBlock 
 }
 
 func TestHandleCompile_ServiceError(t *testing.T) {
-	// This test remains commented out due to auth middleware complexities
+	mockService, _, serverURL, secretKey, cleanup := setupTemplateHandlerTest(t)
+	defer cleanup()
+
+	// Prepare request that passes validation but service returns error
+	payload := domain.CompileTemplateRequest{
+		WorkspaceID:      "workspace123",
+		MessageID:        "msg-1",
+		VisualEditorTree: createTestRootBlockHandler(createTestTextBlockHandler("t1", "hi")),
+		TemplateData:     map[string]interface{}{"contact": map[string]interface{}{"first_name": "John"}},
+	}
+
+	// We don't assert logger calls here to avoid tight coupling with log behavior
+	mockService.EXPECT().CompileTemplate(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("compile error"))
+
+	url := fmt.Sprintf("%s/api/templates.compile", serverURL)
+	token := createTestToken(secretKey)
+	resp := sendRequest(t, http.MethodPost, url, token, payload)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 func TestHandleCompile_MethodNotAllowed(t *testing.T) {
-	// This test can remain commented out
+	_, _, serverURL, secretKey, cleanup := setupTemplateHandlerTest(t)
+	defer cleanup()
+
+	url := fmt.Sprintf("%s/api/templates.compile", serverURL)
+	token := createTestToken(secretKey)
+	resp := sendRequest(t, http.MethodGet, url, token, nil)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }
 
 // Note: Testing the auth middleware itself requires a different setup,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -2122,4 +2123,13 @@ func TestWriteJSON(t *testing.T) {
 
 	// Check data
 	assert.Equal(t, "value", response["key"])
+}
+
+func TestGetBytesFromBody(t *testing.T) {
+	// Prepare a body
+	content := "hello world"
+	rc := io.NopCloser(strings.NewReader(content))
+	// Call helper
+	got := getBytesFromBody(rc)
+	assert.Equal(t, []byte(content), got)
 }

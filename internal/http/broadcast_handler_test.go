@@ -1694,3 +1694,131 @@ func TestRegisterRoutes(t *testing.T) {
 		assert.NotNil(t, match, "Route should be registered: "+route)
 	}
 }
+
+// Tests for A/B testing endpoints: HandleGetTestResults and HandleSelectWinner
+func TestHandleGetTestResults(t *testing.T) {
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
+
+	t.Run("Success", func(t *testing.T) {
+		now := time.Now()
+		resp := &domain.TestResultsResponse{
+			BroadcastID:     "broadcast123",
+			Status:          "completed",
+			TestStartedAt:   &now,
+			TestCompletedAt: &now,
+			VariationResults: map[string]*domain.VariationResult{
+				"templateA": {TemplateID: "templateA", TemplateName: "A", Recipients: 100, Delivered: 100, Opens: 50, Clicks: 10, OpenRate: 0.5, ClickRate: 0.1},
+			},
+		}
+
+		mockService.EXPECT().GetTestResults(gomock.Any(), "workspace123", "broadcast123").Return(resp, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.getTestResults?workspace_id=workspace123&id=broadcast123", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleGetTestResults(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var body map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &body)
+		assert.NoError(t, err)
+		assert.Equal(t, "broadcast123", body["broadcast_id"])
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.getTestResults?workspace_id=workspace123", nil) // missing id
+		w := httptest.NewRecorder()
+		handler.HandleGetTestResults(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("ServiceError", func(t *testing.T) {
+		withFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(withFields)
+		withFields.EXPECT().Error("Failed to get test results")
+
+		mockService.EXPECT().GetTestResults(gomock.Any(), "workspace123", "broadcast123").Return(nil, errors.New("db error"))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.getTestResults?workspace_id=workspace123&id=broadcast123", nil)
+		w := httptest.NewRecorder()
+		handler.HandleGetTestResults(w, req)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.getTestResults?workspace_id=workspace123&id=broadcast123", nil)
+		w := httptest.NewRecorder()
+		handler.HandleGetTestResults(w, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+}
+
+func TestHandleSelectWinner(t *testing.T) {
+	handler, mockService, _, mockLogger, ctrl := setupBroadcastHandler(t)
+	defer ctrl.Finish()
+
+	t.Run("Success", func(t *testing.T) {
+		reqBody := domain.SelectWinnerRequest{WorkspaceID: "workspace123", ID: "broadcast123", TemplateID: "templateA"}
+		b, _ := json.Marshal(reqBody)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.selectWinner", bytes.NewBuffer(b))
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		mockService.EXPECT().SelectWinner(gomock.Any(), "workspace123", "broadcast123", "templateA").Return(nil)
+
+		w := httptest.NewRecorder()
+		handler.HandleSelectWinner(w, httpReq)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var body map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &body)
+		assert.True(t, body["success"].(bool))
+	})
+
+	t.Run("InvalidJSON", func(t *testing.T) {
+		lf := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", gomock.Any()).Return(lf)
+		lf.EXPECT().Error("Failed to decode request body")
+
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.selectWinner", bytes.NewBuffer([]byte("{invalid")))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.HandleSelectWinner(w, httpReq)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		// Missing required fields
+		reqBody := map[string]string{"workspace_id": "workspace123"}
+		b, _ := json.Marshal(reqBody)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.selectWinner", bytes.NewBuffer(b))
+		httpReq.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.HandleSelectWinner(w, httpReq)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("ServiceError", func(t *testing.T) {
+		withFields := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(withFields)
+		withFields.EXPECT().Error("Failed to select winner")
+
+		reqBody := domain.SelectWinnerRequest{WorkspaceID: "workspace123", ID: "broadcast123", TemplateID: "templateA"}
+		b, _ := json.Marshal(reqBody)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/broadcasts.selectWinner", bytes.NewBuffer(b))
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		mockService.EXPECT().SelectWinner(gomock.Any(), "workspace123", "broadcast123", "templateA").Return(errors.New("svc error"))
+
+		w := httptest.NewRecorder()
+		handler.HandleSelectWinner(w, httpReq)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodGet, "/api/broadcasts.selectWinner", nil)
+		w := httptest.NewRecorder()
+		handler.HandleSelectWinner(w, httpReq)
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+}

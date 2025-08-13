@@ -811,3 +811,69 @@ func TestListHandler_HandleStats(t *testing.T) {
 		})
 	}
 }
+
+func TestListHandler_HandleSubscribe(t *testing.T) {
+	mockService, _, handler := setupListHandlerTest(t)
+
+	t.Run("Success", func(t *testing.T) {
+		req := domain.SubscribeToListsRequest{
+			WorkspaceID: "workspace123",
+			Contact:     domain.Contact{Email: "user@example.com"},
+			ListIDs:     []string{"list1"},
+		}
+		mockService.EXPECT().SubscribeToLists(gomock.Any(), &req, true).Return(nil)
+
+		var buf bytes.Buffer
+		_ = json.NewEncoder(&buf).Encode(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/lists.subscribe", &buf)
+		rr := httptest.NewRecorder()
+		handler.handleSubscribe(rr, httpReq)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		_ = json.NewDecoder(rr.Body).Decode(&resp)
+		assert.True(t, resp["success"].(bool))
+	})
+
+	t.Run("InvalidJSON", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/lists.subscribe", bytes.NewBufferString("{invalid"))
+		rr := httptest.NewRecorder()
+		handler.handleSubscribe(rr, httpReq)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		req := map[string]interface{}{
+			"workspace_id": "workspace123",
+			// missing email/list_ids
+		}
+		var buf bytes.Buffer
+		_ = json.NewEncoder(&buf).Encode(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/lists.subscribe", &buf)
+		rr := httptest.NewRecorder()
+		handler.handleSubscribe(rr, httpReq)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("ServiceError", func(t *testing.T) {
+		req := domain.SubscribeToListsRequest{
+			WorkspaceID: "workspace123",
+			Contact:     domain.Contact{Email: "user@example.com"},
+			ListIDs:     []string{"list1"},
+		}
+		mockService.EXPECT().SubscribeToLists(gomock.Any(), &req, true).Return(errors.New("svc error"))
+
+		var buf bytes.Buffer
+		_ = json.NewEncoder(&buf).Encode(req)
+		httpReq := httptest.NewRequest(http.MethodPost, "/api/lists.subscribe", &buf)
+		rr := httptest.NewRecorder()
+		handler.handleSubscribe(rr, httpReq)
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
+
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodGet, "/api/lists.subscribe", nil)
+		rr := httptest.NewRecorder()
+		handler.handleSubscribe(rr, httpReq)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+}
