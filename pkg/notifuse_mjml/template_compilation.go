@@ -183,7 +183,7 @@ func GenerateHTMLOpenTrackingPixel(workspaceID string, messageID string, apiEndp
 	// URL encode the parameters to handle special characters
 	encodedMID := url.QueryEscape(messageID)
 	encodedWID := url.QueryEscape(workspaceID)
-	pixelURL := fmt.Sprintf("%s/open?mid=%s&wid=%s",
+	pixelURL := fmt.Sprintf("%s/opens?mid=%s&wid=%s",
 		apiEndpoint, encodedMID, encodedWID)
 	return fmt.Sprintf(`<img src="%s" alt="" width="1" height="1">`, pixelURL)
 }
