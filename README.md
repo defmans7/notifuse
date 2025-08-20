@@ -111,33 +111,60 @@ Notifuse can be configured through environment variables or configuration files:
 
 ```env
 # Server configuration
-SERVER_PORT=4000
-SERVER_HOST=127.0.0.1
-ROOT_EMAIL=your@email.com
+SERVER_PORT=8080
+SERVER_HOST=0.0.0.0
+ROOT_EMAIL=your-email@example.com
+CORS_ALLOW_ORIGIN=*
 ENVIRONMENT=production
-API_ENDPOINT=https://your_endpoint.website.com
-LOG_LEVEL=info
+API_ENDPOINT=notifuse.your_website.com
 
 # Database configuration
 DB_HOST=localhost
 DB_PORT=5432
-DB_USER=postgre
+DB_USER=postgres
 DB_PASSWORD=
 DB_PREFIX=notifuse
 DB_NAME=${DB_PREFIX}_system
-DB_SSLMODE=disable
+DB_SSLMODE=require
 
-# System email configuration
+# Other configurations can be added here
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USERNAME=your-username
 SMTP_PASSWORD=your-password
-SMTP_FROM=noreply@example.com
+SMTP_FROM_EMAIL=noreply@example.com
+SMTP_FROM_NAME=Notifuse
 
-# Security configuration
-PASETO_PRIVATE_KEY="generated_private_key_here"
-PASETO_PUBLIC_KEY="generated_public_key_here"
-SECRET_KEY="your_complex_secret_key_here"
+# Security
+PASETO_PRIVATE_KEY="base64:your-private-key"
+PASETO_PUBLIC_KEY="base64:your-public-key"
+SECRET_KEY="your_secret_key_for_db_secrets_encryption"
+
+# Tracing
+TRACING_ENABLED=true
+TRACING_SERVICE_NAME=notifuse
+TRACING_SAMPLING_PROBABILITY=
+# Trace exporter configuration: jaeger | zipkin | stackdriver | datadog | xray | none
+TRACING_TRACE_EXPORTER="none"
+# Jaeger settings
+TRACING_JAEGER_ENDPOINT="http://localhost:14268/api/traces"
+# Zipkin settings
+TRACING_ZIPKIN_ENDPOINT="http://localhost:9411/api/v2/spans"
+# Stackdriver settings
+TRACING_STACKDRIVER_PROJECT_ID=""
+# Azure Monitor settings
+TRACING_AZURE_INSTRUMENTATION_KEY=""
+# Datadog settings
+TRACING_DATADOG_AGENT_ADDRESS="localhost:8126"
+TRACING_DATADOG_API_KEY=""
+# AWS X-Ray settings
+TRACING_XRAY_REGION="us-west-2"
+# General agent endpoint (for exporters that support a common agent)
+TRACING_AGENT_ENDPOINT="localhost:6831"
+# Metrics exporter configuration: stackdriver | prometheus | datadog
+TRACING_METRICS_EXPORTER="prometheus"
+# Prometheus settings
+TRACING_PROMETHEUS_PORT=9464
 ```
 
 ## 📚 Documentation
