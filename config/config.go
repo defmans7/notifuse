@@ -139,7 +139,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_SSLMODE", "require")
 	v.SetDefault("ENVIRONMENT", "production")
 	v.SetDefault("LOG_LEVEL", "warn")
-	v.SetDefault("VERSION", "1.0")
+	v.SetDefault("VERSION", "3.1")
 
 	// SMTP defaults
 	v.SetDefault("SMTP_PORT", 587)
