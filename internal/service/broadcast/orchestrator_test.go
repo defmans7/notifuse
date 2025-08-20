@@ -2,6 +2,7 @@ package broadcast_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -1343,6 +1344,405 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBroadcastOrchestrator_Process_ABTestStartSetsTestingAndCompletesTestPhase(t *testing.T) {
+	// Covers phase initialization when A/B testing is enabled (lines 594-622) and recipient limit selection (713-722)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Logger expectations
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	// Time provider
+	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	mockTimeProvider.EXPECT().Now().Return(baseTime).AnyTimes()
+	mockTimeProvider.EXPECT().Since(gomock.Any()).Return(5 * time.Second).AnyTimes()
+
+	// Workspace with email provider
+	workspace := &domain.Workspace{
+		ID: "workspace-123",
+		Settings: domain.WorkspaceSettings{
+			SecretKey:                "secret-key",
+			EmailTrackingEnabled:     true,
+			MarketingEmailProviderID: "marketing-provider-id",
+		},
+		Integrations: []domain.Integration{
+			{ID: "marketing-provider-id", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSES, SES: &domain.AmazonSESSettings{AccessKey: "ak", SecretKey: "sk", Region: "us-east-1"}}},
+		},
+	}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-123").Return(workspace, nil)
+
+	// Broadcast with A/B testing enabled, status sending so phase becomes test, and must update status to testing
+	bcast := &domain.Broadcast{
+		ID:          "broadcast-123",
+		WorkspaceID: "workspace-123",
+		Audience:    domain.AudienceSettings{Lists: []string{"list-1"}},
+		Status:      domain.BroadcastStatusSending,
+		TestSettings: domain.BroadcastTestSettings{
+			Enabled:    true,
+			Variations: []domain.BroadcastVariation{{TemplateID: "template-1"}},
+			// sample percentage set to ensure testRecipientCount calculation
+			SamplePercentage: 100,
+		},
+	}
+	// GetBroadcast can be called multiple times
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(bcast, nil).AnyTimes()
+
+	// Expect status update to testing, then to test_completed
+	mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, b *domain.Broadcast) error {
+		if b.Status == domain.BroadcastStatusTesting || b.Status == domain.BroadcastStatusTestCompleted {
+			return nil
+		}
+		return fmt.Errorf("unexpected status: %s", b.Status)
+	}).Times(2)
+
+	// Template
+	tpl := &domain.Template{ID: "template-1", Email: &domain.EmailTemplate{Subject: "S", SenderID: "s", VisualEditorTree: &notifuse_mjml.MJMLBlock{BaseBlock: notifuse_mjml.BaseBlock{ID: "root", Type: notifuse_mjml.MJMLComponentMjml}}}}
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "workspace-123", "template-1", int64(0)).Return(tpl, nil)
+
+	// Contacts - since sample 100% and totalRecipients preset below = 1, expect limit 1
+	recipients := []*domain.ContactWithList{{Contact: &domain.Contact{Email: "a@b.com"}, ListID: "list-1"}}
+	mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", bcast.Audience, 1, 0).Return(recipients, nil)
+
+	// Send batch
+	mockMessageSender.EXPECT().SendBatch(gomock.Any(), "workspace-123", "secret-key", true, "broadcast-123", recipients, gomock.Any(), gomock.Any(), gomock.Any()).Return(1, 0, nil)
+
+	// Save state
+	mockTaskRepo.EXPECT().SaveState(gomock.Any(), "workspace-123", "task-123", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	config := &broadcast.Config{FetchBatchSize: 100, MaxProcessTime: 30 * time.Second, ProgressLogInterval: 5 * time.Second}
+	orchestrator := broadcast.NewBroadcastOrchestrator(mockMessageSender, mockBroadcastRepo, mockTemplateRepo, mockContactRepo, mockTaskRepo, mockWorkspaceRepo, nil, mockLogger, config, mockTimeProvider)
+
+	ctx := context.Background()
+	task := &domain.Task{
+		ID:          "task-123",
+		WorkspaceID: "workspace-123",
+		Type:        "send_broadcast",
+		BroadcastID: stringPtr("broadcast-123"),
+		State:       &domain.TaskState{Progress: 0, Message: "Starting", SendBroadcast: &domain.SendBroadcastState{BroadcastID: "broadcast-123", TotalRecipients: 1, RecipientOffset: 0}},
+		RetryCount:  0,
+		MaxRetries:  3,
+	}
+
+	done, err := orchestrator.Process(ctx, task, time.Now().Add(30*time.Second))
+	require.NoError(t, err)
+	// Test phase completes and waits for winner selection
+	assert.False(t, done)
+}
+
+func TestBroadcastOrchestrator_Process_WinnerPhaseMissingTemplate_Error(t *testing.T) {
+	// Covers winner phase with no winning template selected (lines 650-662)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockTimeProvider.EXPECT().Now().Return(time.Now()).AnyTimes()
+
+	workspace := &domain.Workspace{
+		ID: "workspace-123",
+		Settings: domain.WorkspaceSettings{
+			SecretKey:                "k",
+			EmailTrackingEnabled:     true,
+			MarketingEmailProviderID: "marketing-provider-id",
+		},
+		Integrations: []domain.Integration{
+			{ID: "marketing-provider-id", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSES, SES: &domain.AmazonSESSettings{AccessKey: "ak", SecretKey: "sk", Region: "us-east-1"}}},
+		},
+	}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-123").Return(workspace, nil)
+
+	bcast := &domain.Broadcast{ID: "broadcast-123", WorkspaceID: "workspace-123", Audience: domain.AudienceSettings{}, Status: domain.BroadcastStatusWinnerSelected, TestSettings: domain.BroadcastTestSettings{Enabled: true}}
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(bcast, nil)
+
+	// Expect the UpdateBroadcast call when the error occurs and status is set to failed
+	mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	config := &broadcast.Config{FetchBatchSize: 100, MaxProcessTime: 30 * time.Second}
+	orchestrator := broadcast.NewBroadcastOrchestrator(mockMessageSender, mockBroadcastRepo, mockTemplateRepo, mockContactRepo, mockTaskRepo, mockWorkspaceRepo, nil, mockLogger, config, mockTimeProvider)
+
+	ctx := context.Background()
+	task := &domain.Task{ID: "task-123", WorkspaceID: "workspace-123", Type: "send_broadcast", BroadcastID: stringPtr("broadcast-123"), State: &domain.TaskState{SendBroadcast: &domain.SendBroadcastState{BroadcastID: "broadcast-123", TotalRecipients: 1, Phase: "winner"}}}
+
+	done, err := orchestrator.Process(ctx, task, time.Now().Add(10*time.Second))
+	assert.False(t, done)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "winner phase but no winning template selected")
+}
+
+func TestBroadcastOrchestrator_Process_ValidateTemplatesFailure(t *testing.T) {
+	// Covers template validation failure path (lines 687-697)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockTimeProvider.EXPECT().Now().Return(time.Now()).AnyTimes()
+
+	workspace := &domain.Workspace{
+		ID: "workspace-123",
+		Settings: domain.WorkspaceSettings{
+			SecretKey:                "k",
+			EmailTrackingEnabled:     true,
+			MarketingEmailProviderID: "marketing-provider-id",
+		},
+		Integrations: []domain.Integration{
+			{ID: "marketing-provider-id", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSES, SES: &domain.AmazonSESSettings{AccessKey: "a", SecretKey: "b", Region: "us-east-1"}}},
+		},
+	}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-123").Return(workspace, nil)
+
+	bcast := &domain.Broadcast{ID: "broadcast-123", WorkspaceID: "workspace-123", Audience: domain.AudienceSettings{}, Status: domain.BroadcastStatusSending, TestSettings: domain.BroadcastTestSettings{Variations: []domain.BroadcastVariation{{TemplateID: "tpl1"}}}}
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(bcast, nil).AnyTimes()
+
+	// Expect the UpdateBroadcast call when the error occurs and status is set to failed
+	mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	// Load template that will fail validation (missing subject)
+	badTpl := &domain.Template{ID: "tpl1", Email: &domain.EmailTemplate{SenderID: "s", VisualEditorTree: &notifuse_mjml.MJMLBlock{BaseBlock: notifuse_mjml.BaseBlock{ID: "root", Type: notifuse_mjml.MJMLComponentMjml}}}}
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "workspace-123", "tpl1", int64(0)).Return(badTpl, nil)
+
+	config := &broadcast.Config{FetchBatchSize: 100, MaxProcessTime: 30 * time.Second}
+	orchestrator := broadcast.NewBroadcastOrchestrator(mockMessageSender, mockBroadcastRepo, mockTemplateRepo, mockContactRepo, mockTaskRepo, mockWorkspaceRepo, nil, mockLogger, config, mockTimeProvider)
+
+	ctx := context.Background()
+	task := &domain.Task{ID: "task-123", WorkspaceID: "workspace-123", Type: "send_broadcast", BroadcastID: stringPtr("broadcast-123"), State: &domain.TaskState{SendBroadcast: &domain.SendBroadcastState{BroadcastID: "broadcast-123", TotalRecipients: 2}}}
+
+	_, err := orchestrator.Process(ctx, task, time.Now().Add(10*time.Second))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "template missing subject")
+}
+
+func TestBroadcastOrchestrator_Process_BatchSizeZeroTriggersPhaseCompletion(t *testing.T) {
+	// Covers lines 787-811 by configuring FetchBatchSize=0 so batchSize<=0 path is taken
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockTimeProvider.EXPECT().Now().Return(time.Now()).AnyTimes()
+
+	workspace := &domain.Workspace{ID: "w", Settings: domain.WorkspaceSettings{SecretKey: "k", MarketingEmailProviderID: "pid"}, Integrations: []domain.Integration{{ID: "pid", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSES, SES: &domain.AmazonSESSettings{AccessKey: "a", SecretKey: "b", Region: "us-east-1"}}}}}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "w").Return(workspace, nil)
+
+	bcast := &domain.Broadcast{ID: "b", WorkspaceID: "w", Audience: domain.AudienceSettings{}, Status: domain.BroadcastStatusSending, TestSettings: domain.BroadcastTestSettings{Enabled: true, Variations: []domain.BroadcastVariation{{TemplateID: "tpl"}}, SamplePercentage: 100}}
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "w", "b").Return(bcast, nil).AnyTimes()
+
+	// First UpdateBroadcast to testing during phase init, second to test_completed in handleTestPhaseCompletion
+	mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	tpl := &domain.Template{ID: "tpl", Email: &domain.EmailTemplate{Subject: "s", SenderID: "x", VisualEditorTree: &notifuse_mjml.MJMLBlock{BaseBlock: notifuse_mjml.BaseBlock{ID: "root", Type: notifuse_mjml.MJMLComponentMjml}}}}
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "w", "tpl", int64(0)).Return(tpl, nil)
+
+	// No SaveState expectations needed; allow any
+	mockTaskRepo.EXPECT().SaveState(gomock.Any(), "w", "t", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	config := &broadcast.Config{FetchBatchSize: 0, MaxProcessTime: 30 * time.Second}
+	orchestrator := broadcast.NewBroadcastOrchestrator(mockMessageSender, mockBroadcastRepo, mockTemplateRepo, mockContactRepo, mockTaskRepo, mockWorkspaceRepo, nil, mockLogger, config, mockTimeProvider)
+
+	ctx := context.Background()
+	task := &domain.Task{ID: "t", WorkspaceID: "w", Type: "send_broadcast", BroadcastID: stringPtr("b"), State: &domain.TaskState{SendBroadcast: &domain.SendBroadcastState{BroadcastID: "b", TotalRecipients: 1}}}
+
+	done, err := orchestrator.Process(ctx, task, time.Now().Add(10*time.Second))
+	// Not done because test phase completes and waits for winner selection
+	assert.False(t, done)
+	require.NoError(t, err)
+}
+
+func TestBroadcastOrchestrator_Process_EmptyRecipientsTriggersTestCompletion(t *testing.T) {
+	// Covers lines 828-859 where recipient fetch returns empty list
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockTimeProvider.EXPECT().Now().Return(time.Now()).AnyTimes()
+
+	workspace := &domain.Workspace{ID: "w", Settings: domain.WorkspaceSettings{SecretKey: "k", MarketingEmailProviderID: "pid"}, Integrations: []domain.Integration{{ID: "pid", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSES, SES: &domain.AmazonSESSettings{AccessKey: "a", SecretKey: "b", Region: "us-east-1"}}}}}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "w").Return(workspace, nil)
+
+	bcast := &domain.Broadcast{ID: "b", WorkspaceID: "w", Audience: domain.AudienceSettings{Lists: []string{"l"}}, Status: domain.BroadcastStatusSending, TestSettings: domain.BroadcastTestSettings{Enabled: true, Variations: []domain.BroadcastVariation{{TemplateID: "tpl"}}, SamplePercentage: 100}}
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "w", "b").Return(bcast, nil).AnyTimes()
+
+	// Update to testing then to test_completed
+	mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	tpl := &domain.Template{ID: "tpl", Email: &domain.EmailTemplate{Subject: "s", SenderID: "x", VisualEditorTree: &notifuse_mjml.MJMLBlock{BaseBlock: notifuse_mjml.BaseBlock{ID: "root", Type: notifuse_mjml.MJMLComponentMjml}}}}
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "w", "tpl", int64(0)).Return(tpl, nil)
+
+	// Return empty recipients
+	mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "w", bcast.Audience, 1, 0).Return([]*domain.ContactWithList{}, nil)
+
+	mockTaskRepo.EXPECT().SaveState(gomock.Any(), "w", "t", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	config := &broadcast.Config{FetchBatchSize: 100, MaxProcessTime: 30 * time.Second}
+	orchestrator := broadcast.NewBroadcastOrchestrator(mockMessageSender, mockBroadcastRepo, mockTemplateRepo, mockContactRepo, mockTaskRepo, mockWorkspaceRepo, nil, mockLogger, config, mockTimeProvider)
+
+	ctx := context.Background()
+	task := &domain.Task{ID: "t", WorkspaceID: "w", Type: "send_broadcast", BroadcastID: stringPtr("b"), State: &domain.TaskState{SendBroadcast: &domain.SendBroadcastState{BroadcastID: "b", TotalRecipients: 1}}}
+
+	done, err := orchestrator.Process(ctx, task, time.Now().Add(10*time.Second))
+	assert.False(t, done)
+	require.NoError(t, err)
+}
+
+func TestBroadcastOrchestrator_Process_AutoWinnerEvaluationPath(t *testing.T) {
+	// Covers lines 574-591: auto winner evaluation when test completed and time passed
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+	msgRepo := domainmocks.NewMockMessageHistoryRepository(ctrl)
+
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Fixed time to satisfy shouldEvaluateWinner
+	base := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	mockTimeProvider.EXPECT().Now().Return(base).AnyTimes()
+	mockTimeProvider.EXPECT().Since(gomock.Any()).Return(5 * time.Second).AnyTimes()
+
+	workspace := &domain.Workspace{ID: "w", Settings: domain.WorkspaceSettings{SecretKey: "k", EmailTrackingEnabled: true, MarketingEmailProviderID: "pid"}, Integrations: []domain.Integration{{ID: "pid", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSES, SES: &domain.AmazonSESSettings{AccessKey: "a", SecretKey: "b", Region: "us-east-1"}}}}}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "w").Return(workspace, nil)
+
+	bcast := &domain.Broadcast{
+		ID:          "b",
+		WorkspaceID: "w",
+		Audience:    domain.AudienceSettings{Lists: []string{"l"}},
+		Status:      domain.BroadcastStatusTestCompleted,
+		TestSentAt:  &time.Time{},
+		TestSettings: domain.BroadcastTestSettings{
+			Enabled:              true,
+			AutoSendWinner:       true,
+			AutoSendWinnerMetric: domain.TestWinnerMetricOpenRate,
+			TestDurationHours:    1,
+			Variations:           []domain.BroadcastVariation{{TemplateID: "tplA"}, {TemplateID: "tplB"}},
+		},
+	}
+	// Set TestSentAt to 2 hours ago to satisfy shouldEvaluateWinner
+	testSentAt := base.Add(-2 * time.Hour)
+	bcast.TestSentAt = &testSentAt
+
+	// Build evaluator and allow transaction update to winner selected
+	abEval := broadcast.NewABTestEvaluator(msgRepo, mockBroadcastRepo, mockLogger)
+
+	// Stats prefer tplB
+	msgRepo.EXPECT().GetBroadcastVariationStats(gomock.Any(), "w", "b", "tplA").Return(&domain.MessageHistoryStatusSum{TotalDelivered: 100, TotalOpened: 10}, nil)
+	msgRepo.EXPECT().GetBroadcastVariationStats(gomock.Any(), "w", "b", "tplB").Return(&domain.MessageHistoryStatusSum{TotalDelivered: 100, TotalOpened: 60}, nil)
+
+	// Transaction and update during evaluation
+	mockBroadcastRepo.EXPECT().WithTransaction(gomock.Any(), "w", gomock.Any()).DoAndReturn(func(_ context.Context, _ string, fn func(*sql.Tx) error) error { return fn(nil) })
+	mockBroadcastRepo.EXPECT().UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	// After evaluation, phase becomes winner; ensure we can proceed with winner phase template
+	// Provide winning template id in refreshed broadcast
+	bcastAfter := *bcast
+	bcastAfter.Status = domain.BroadcastStatusWinnerSelected
+	bcastAfter.WinningTemplate = "tplB"
+
+	// Orchestrator loads broadcast initially, then refreshes after evaluation
+	callCount := 0
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "w", "b").DoAndReturn(func(_ context.Context, _, _ string) (*domain.Broadcast, error) {
+		callCount++
+		if callCount <= 2 {
+			return bcast, nil // Initial calls
+		}
+		return &bcastAfter, nil // After evaluation
+	}).AnyTimes()
+
+	// Template load for tplB
+	tplB := &domain.Template{ID: "tplB", Email: &domain.EmailTemplate{Subject: "s", SenderID: "x", VisualEditorTree: &notifuse_mjml.MJMLBlock{BaseBlock: notifuse_mjml.BaseBlock{ID: "root", Type: notifuse_mjml.MJMLComponentMjml}}}}
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "w", "tplB", int64(0)).Return(tplB, nil)
+
+	// Recipient batch for winner phase (totalRecipients preset to 1 in task below)
+	mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "w", bcast.Audience, 1, 0).Return([]*domain.ContactWithList{{Contact: &domain.Contact{Email: "w@x.com"}}}, nil)
+
+	// Send
+	mockMessageSender.EXPECT().SendBatch(gomock.Any(), "w", "k", true, "b", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(1, 0, nil)
+
+	// Save state
+	mockTaskRepo.EXPECT().SaveState(gomock.Any(), "w", "t", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	// Final broadcast update to Sent
+	mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(nil)
+
+	config := &broadcast.Config{FetchBatchSize: 100, MaxProcessTime: 30 * time.Second, ProgressLogInterval: 5 * time.Second}
+	orchestrator := broadcast.NewBroadcastOrchestrator(mockMessageSender, mockBroadcastRepo, mockTemplateRepo, mockContactRepo, mockTaskRepo, mockWorkspaceRepo, abEval, mockLogger, config, mockTimeProvider)
+
+	ctx := context.Background()
+	task := &domain.Task{ID: "t", WorkspaceID: "w", Type: "send_broadcast", BroadcastID: stringPtr("b"), State: &domain.TaskState{SendBroadcast: &domain.SendBroadcastState{BroadcastID: "b", TotalRecipients: 1, Phase: "test"}}}
+
+	done, err := orchestrator.Process(ctx, task, time.Now().Add(30*time.Second))
+	require.NoError(t, err)
+	assert.True(t, done)
 }
 
 // Helper function to create string pointer

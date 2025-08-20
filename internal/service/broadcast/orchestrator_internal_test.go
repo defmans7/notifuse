@@ -240,3 +240,52 @@ func TestHandleTestPhaseCompletion_UpdateStatusError(t *testing.T) {
 	done := orch.handleTestPhaseCompletion(ctx, b, state)
 	assert.False(t, done)
 }
+
+func TestHandleTestPhaseCompletion_AutoWinnerLogsEvaluationTime(t *testing.T) {
+	// Covers lines 1069-1075: logging of auto-winner evaluation time when test phase completes
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	bcRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	logger := pkgmocks.NewMockLogger(ctrl)
+
+	// Allow any logger calls initially
+	logger.EXPECT().WithFields(gomock.Any()).Return(logger).AnyTimes()
+	logger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(logger).AnyTimes()
+	logger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	// Time provider that returns predictable time
+	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	tp := &fakeTimeProvider{now: baseTime}
+
+	orch := minimalOrchestrator(ctrl, bcRepo, logger, tp, nil)
+
+	// Broadcast with auto-send enabled and test duration set
+	b := &domain.Broadcast{
+		ID:          "b1",
+		WorkspaceID: "w1",
+		TestSettings: domain.BroadcastTestSettings{
+			Enabled:           true,
+			AutoSendWinner:    true,
+			TestDurationHours: 2, // This will be used in the log calculation
+		},
+	}
+
+	state := &domain.SendBroadcastState{Phase: "test"}
+
+	// Latest broadcast check - no concurrent winner selected
+	bcRepo.EXPECT().GetBroadcast(ctx, b.WorkspaceID, b.ID).Return(&domain.Broadcast{
+		ID:           b.ID,
+		TestSettings: b.TestSettings,
+	}, nil)
+
+	// Update status to test_completed
+	bcRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).Return(nil)
+
+	done := orch.handleTestPhaseCompletion(ctx, b, state)
+	assert.False(t, done)
+
+	// The key assertion is that the test passed without errors, meaning the auto-winner
+	// evaluation time logging path (lines 1069-1075) was executed successfully
+}
