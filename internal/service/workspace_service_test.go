@@ -778,21 +778,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil).Times(2)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(workspace, nil).Times(2)
 
-		// For first integration
-		webhookStatus1 := &domain.WebhookRegistrationStatus{
-			EmailProviderKind: domain.EmailProviderKindSMTP,
-			IsRegistered:      true,
-		}
-		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, "integration-1").Return(webhookStatus1, nil)
-		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, "integration-1").Return(nil)
-
-		// For second integration
-		webhookStatus2 := &domain.WebhookRegistrationStatus{
-			EmailProviderKind: domain.EmailProviderKindSMTP,
-			IsRegistered:      true,
-		}
-		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, "integration-2").Return(webhookStatus2, nil)
-		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, "integration-2").Return(nil)
+		// No webhook operations expected for SMTP integrations
 
 		// Once for each integration deletion
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil).Times(2)
@@ -843,13 +829,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(userWorkspace, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(workspace, nil)
 
-		// The integration deletion fails
-		webhookStatus := &domain.WebhookRegistrationStatus{
-			EmailProviderKind: domain.EmailProviderKindSMTP,
-			IsRegistered:      true,
-		}
-		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, "integration-1").Return(webhookStatus, nil)
-		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, "integration-1").Return(errors.New("webhook error"))
+		// No webhook operations expected for SMTP integrations
 		// The update fails
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(errors.New("integration delete error"))
 
@@ -984,25 +964,8 @@ func TestWorkspaceService_CreateIntegration(t *testing.T) {
 			return nil
 		})
 
-		// Expect webhook registration call for email integration
+		// No webhook registration expected for SMTP provider
 		mockConfig.APIEndpoint = "https://api.example.com"
-		// Webhook config is provided for reference only, we use gomock.Any() since ID is random
-		_ = &domain.WebhookRegistrationConfig{
-			IntegrationID: "integration123", // This will be a random UUID, so use Any matcher
-			EventTypes: []domain.EmailEventType{
-				domain.EmailEventDelivered,
-				domain.EmailEventBounce,
-				domain.EmailEventComplaint,
-			},
-		}
-		mockWebhookRegService.EXPECT().RegisterWebhooks(
-			ctx,
-			workspaceID,
-			gomock.Any(), // Use Any for the config since integrationID is random
-		).Return(&domain.WebhookRegistrationStatus{
-			EmailProviderKind: domain.EmailProviderKindSMTP,
-			IsRegistered:      true,
-		}, nil)
 
 		integrationID, err := service.CreateIntegration(ctx, workspaceID, integrationName, domain.IntegrationTypeEmail, provider)
 		require.NoError(t, err)
@@ -1328,21 +1291,7 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
 
-		// Expect webhook status check
-		webhookStatus := &domain.WebhookRegistrationStatus{
-			EmailProviderKind: domain.EmailProviderKindSMTP,
-			IsRegistered:      true,
-			Endpoints: []domain.WebhookEndpointStatus{
-				{
-					URL:    "https://api.example.com/webhooks",
-					Active: true,
-				},
-			},
-		}
-		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, integrationID).Return(webhookStatus, nil)
-
-		// Expect webhook unregistration
-		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, integrationID).Return(nil)
+		// No webhook operations expected for SMTP provider
 
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
 			// Verify the integration was removed from the workspace
@@ -1440,25 +1389,7 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
 
-		// Expect webhook status check
-		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, integrationID).Return(&domain.WebhookRegistrationStatus{
-			EmailProviderKind: domain.EmailProviderKindSMTP,
-			IsRegistered:      true,
-			Endpoints: []domain.WebhookEndpointStatus{
-				{
-					URL:    "https://api.example.com/webhooks",
-					Active: true,
-				},
-			},
-		}, nil)
-
-		// Skip logger checks
-
-		// The unregistration fails
-		webhookError := errors.New("failed to unregister webhooks")
-		mockWebhookRegService.EXPECT().UnregisterWebhooks(ctx, workspaceID, integrationID).Return(webhookError)
-
-		// Skip logger checks
+		// No webhook operations expected for SMTP provider
 
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
 
@@ -1500,11 +1431,7 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
 		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
 
-		// Expect webhook status check
-		mockWebhookRegService.EXPECT().GetWebhookStatus(ctx, workspaceID, integrationID).Return(&domain.WebhookRegistrationStatus{
-			EmailProviderKind: domain.EmailProviderKindSMTP,
-			IsRegistered:      false, // Not registered
-		}, nil)
+		// No webhook operations expected for SMTP provider
 
 		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
 			// Verify the reference was removed from settings

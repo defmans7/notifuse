@@ -58,7 +58,6 @@ Notifuse follows clean architecture principles with clear separation of concerns
 ### Database
 
 - **PostgreSQL**: Primary data storage with Squirrel query builder
-- **Migrations**: Database schema management and versioning
 
 ## 📁 Project Structure
 
@@ -73,8 +72,6 @@ Notifuse follows clean architecture principles with clear separation of concerns
 ├── console/               # React-based admin interface
 ├── notification_center/   # Embeddable notification widget
 ├── pkg/                   # Public packages
-├── docs/                  # Documentation (Mintlify)
-├── homepage/              # Marketing website (Astro)
 └── config/                # Configuration files
 ```
 
@@ -113,29 +110,38 @@ make build
 Notifuse can be configured through environment variables or configuration files:
 
 ```env
-# Database
-DATABASE_URL=postgres://user:password@localhost/notifuse
+# Server configuration
+SERVER_PORT=4000
+SERVER_HOST=127.0.0.1
+ROOT_EMAIL=your@email.com
+ENVIRONMENT=production
+API_ENDPOINT=https://your_endpoint.website.com
 
-# Email Providers
-SENDGRID_API_KEY=your_sendgrid_key
-MAILGUN_API_KEY=your_mailgun_key
-AWS_ACCESS_KEY_ID=your_aws_key
+# Database configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgre
+DB_PASSWORD=
+DB_PREFIX=notifuse
+DB_NAME=${DB_PREFIX}_system
+DB_SSLMODE=disable
 
-# File Storage
-S3_BUCKET=your-bucket-name
-S3_REGION=us-east-1
+# System email configuration
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your-username
+SMTP_PASSWORD=your-password
+SMTP_FROM=noreply@example.com
 
-# Application
-APP_PORT=8080
-APP_ENV=production
+# Security configuration
+PASETO_PRIVATE_KEY="generated_private_key_here"
+PASETO_PUBLIC_KEY="generated_public_key_here"
+SECRET_KEY="your_complex_secret_key_here"
 ```
 
 ## 📚 Documentation
 
 - **[Complete Documentation](https://docs.notifuse.com)** - Comprehensive guides and tutorials
-- **[API Reference](https://docs.notifuse.com/api-reference)** - REST API documentation
-- **[Self-Hosting Guide](https://docs.notifuse.com/deployment)** - Deployment and configuration
-- **[Developer Guide](https://docs.notifuse.com/development)** - Contributing and customization
 
 ## 🤝 Contributing
 
@@ -156,7 +162,6 @@ Notifuse is released under the [Elastic License 2.0](LICENSE).
 - **Documentation**: [docs.notifuse.com](https://docs.notifuse.com)
 - **Email Support**: [hello@notifuse.com](mailto:hello@notifuse.com)
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Notifuse/notifuse/issues)
-- **Community**: [Join our Discord](https://discord.gg/notifuse)
 
 ## 🌟 Why Choose Notifuse?
 
@@ -169,4 +174,4 @@ Notifuse is released under the [Elastic License 2.0](LICENSE).
 
 ---
 
-**Ready to get started?** [Try the live demo](https://demo.notifuse.com) or [deploy your own instance](https://docs.notifuse.com/deployment/docker) in minutes.
+**Ready to get started?** [Try the live demo](https://demo.notifuse.com) or [deploy your own instance](https://docs.notifuse.com) in minutes.

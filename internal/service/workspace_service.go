@@ -810,8 +810,8 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, workspaceID, n
 		return "", err
 	}
 
-	// If this is an email integration, register webhooks
-	if integrationType == domain.IntegrationTypeEmail && s.webhookRegService != nil {
+	// If this is an email integration, register webhooks (except for SMTP which doesn't support webhooks)
+	if integrationType == domain.IntegrationTypeEmail && s.webhookRegService != nil && provider.Kind != domain.EmailProviderKindSMTP {
 		// Define the events to register
 		eventTypes := []domain.EmailEventType{
 			domain.EmailEventDelivered,
@@ -934,8 +934,8 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 		return fmt.Errorf("integration not found")
 	}
 
-	// Before removing the integration, attempt to unregister webhooks for email integrations
-	if integration.Type == domain.IntegrationTypeEmail && s.webhookRegService != nil {
+	// Before removing the integration, attempt to unregister webhooks for email integrations (except SMTP which doesn't support webhooks)
+	if integration.Type == domain.IntegrationTypeEmail && s.webhookRegService != nil && integration.EmailProvider.Kind != domain.EmailProviderKindSMTP {
 		// Try to get webhook status to check what's registered
 		status, err := s.webhookRegService.GetWebhookStatus(ctx, workspaceID, integrationID)
 		if err != nil {
