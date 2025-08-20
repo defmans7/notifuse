@@ -116,6 +116,7 @@ SERVER_HOST=127.0.0.1
 ROOT_EMAIL=your@email.com
 ENVIRONMENT=production
 API_ENDPOINT=https://your_endpoint.website.com
+LOG_LEVEL=info
 
 # Database configuration
 DB_HOST=localhost

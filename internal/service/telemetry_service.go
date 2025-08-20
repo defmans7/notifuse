@@ -71,7 +71,6 @@ func NewTelemetryService(config TelemetryServiceConfig) *TelemetryService {
 // SendMetricsForAllWorkspaces collects and sends telemetry metrics for all workspaces
 func (t *TelemetryService) SendMetricsForAllWorkspaces(ctx context.Context) error {
 	if !t.enabled {
-		t.logger.Debug("Telemetry is disabled, skipping metrics collection")
 		return nil
 	}
 
@@ -81,15 +80,10 @@ func (t *TelemetryService) SendMetricsForAllWorkspaces(ctx context.Context) erro
 		return fmt.Errorf("failed to list workspaces: %w", err)
 	}
 
-	t.logger.WithField("workspace_count", len(workspaces)).Info("Collecting telemetry metrics for workspaces")
-
 	// Collect and send metrics for each workspace
 	for _, workspace := range workspaces {
 		if err := t.sendMetricsForWorkspace(ctx, workspace.ID); err != nil {
-			// Log error but continue with other workspaces
-			t.logger.WithField("workspace_id", workspace.ID).
-				WithField("error", err).
-				Error("Failed to send telemetry metrics for workspace")
+			// Continue with other workspaces on error
 		}
 	}
 
@@ -112,53 +106,30 @@ func (t *TelemetryService) sendMetricsForWorkspace(ctx context.Context, workspac
 	// Get workspace database connection
 	db, err := t.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
-		t.logger.WithField("workspace_id", workspaceID).
-			WithField("error", err).
-			Warn("Failed to get workspace database connection for telemetry")
 		// Continue without database metrics
 	} else {
 		// Count contacts
-		if contactsCount, err := t.countContacts(ctx, db); err != nil {
-			t.logger.WithField("workspace_id", workspaceID).
-				WithField("error", err).
-				Warn("Failed to count contacts for telemetry")
-		} else {
+		if contactsCount, err := t.countContacts(ctx, db); err == nil {
 			metrics.ContactsCount = contactsCount
 		}
 
 		// Count broadcasts
-		if broadcastsCount, err := t.countBroadcasts(ctx, db); err != nil {
-			t.logger.WithField("workspace_id", workspaceID).
-				WithField("error", err).
-				Warn("Failed to count broadcasts for telemetry")
-		} else {
+		if broadcastsCount, err := t.countBroadcasts(ctx, db); err == nil {
 			metrics.BroadcastsCount = broadcastsCount
 		}
 
 		// Count transactional notifications
-		if transactionalCount, err := t.countTransactional(ctx, db); err != nil {
-			t.logger.WithField("workspace_id", workspaceID).
-				WithField("error", err).
-				Warn("Failed to count transactional notifications for telemetry")
-		} else {
+		if transactionalCount, err := t.countTransactional(ctx, db); err == nil {
 			metrics.TransactionalCount = transactionalCount
 		}
 
 		// Count messages
-		if messagesCount, err := t.countMessages(ctx, db); err != nil {
-			t.logger.WithField("workspace_id", workspaceID).
-				WithField("error", err).
-				Warn("Failed to count messages for telemetry")
-		} else {
+		if messagesCount, err := t.countMessages(ctx, db); err == nil {
 			metrics.MessagesCount = messagesCount
 		}
 
 		// Count lists
-		if listsCount, err := t.countLists(ctx, db); err != nil {
-			t.logger.WithField("workspace_id", workspaceID).
-				WithField("error", err).
-				Warn("Failed to count lists for telemetry")
-		} else {
+		if listsCount, err := t.countLists(ctx, db); err == nil {
 			metrics.ListsCount = listsCount
 		}
 	}
@@ -242,29 +213,14 @@ func (t *TelemetryService) sendMetrics(ctx context.Context, metrics TelemetryMet
 	// Send request (will fail silently if endpoint is offline due to 5s timeout)
 	resp, err := t.httpClient.Do(req)
 	if err != nil {
-		// Log the error but don't return it to fail silently
-		t.logger.WithField("workspace_id_sha1", metrics.WorkspaceIDSHA1).
-			WithField("error", err).
-			Debug("Failed to send telemetry metrics (endpoint may be offline)")
 		return nil // Fail silently as requested
 	}
 	defer resp.Body.Close()
 
 	// Check response status
 	if resp.StatusCode >= 400 {
-		t.logger.WithField("workspace_id_sha1", metrics.WorkspaceIDSHA1).
-			WithField("status_code", resp.StatusCode).
-			Debug("Telemetry endpoint returned error status")
 		return nil // Fail silently as requested
 	}
-
-	t.logger.WithField("workspace_id_sha1", metrics.WorkspaceIDSHA1).
-		WithField("contacts_count", metrics.ContactsCount).
-		WithField("broadcasts_count", metrics.BroadcastsCount).
-		WithField("transactional_count", metrics.TransactionalCount).
-		WithField("messages_count", metrics.MessagesCount).
-		WithField("lists_count", metrics.ListsCount).
-		Debug("Successfully sent telemetry metrics")
 
 	return nil
 }
@@ -272,7 +228,6 @@ func (t *TelemetryService) sendMetrics(ctx context.Context, metrics TelemetryMet
 // StartDailyScheduler starts a goroutine that sends telemetry metrics daily
 func (t *TelemetryService) StartDailyScheduler(ctx context.Context) {
 	if !t.enabled {
-		t.logger.Debug("Telemetry is disabled, not starting daily scheduler")
 		return
 	}
 
@@ -280,18 +235,12 @@ func (t *TelemetryService) StartDailyScheduler(ctx context.Context) {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 
-		t.logger.Info("Started daily telemetry scheduler")
-
 		for {
 			select {
 			case <-ctx.Done():
-				t.logger.Info("Stopping daily telemetry scheduler")
 				return
 			case <-ticker.C:
-				t.logger.Debug("Daily telemetry tick - collecting metrics")
-				if err := t.SendMetricsForAllWorkspaces(ctx); err != nil {
-					t.logger.WithField("error", err).Error("Failed to send daily telemetry metrics")
-				}
+				t.SendMetricsForAllWorkspaces(ctx)
 			}
 		}
 	}()
