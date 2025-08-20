@@ -235,6 +235,11 @@ func (r *workspaceRepository) GetConnection(ctx context.Context, workspaceID str
 	return db, nil
 }
 
+// GetSystemConnection returns a connection to the system database
+func (r *workspaceRepository) GetSystemConnection(ctx context.Context) (*sql.DB, error) {
+	return r.systemDB, nil
+}
+
 // WithWorkspaceTransaction executes a function within a database transaction
 func (r *workspaceRepository) WithWorkspaceTransaction(ctx context.Context, workspaceID string, fn func(*sql.Tx) error) error {
 	// Get the workspace database connection

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -18,11 +17,15 @@ import (
 // TelemetryMetrics represents the metrics data sent to the telemetry endpoint
 type TelemetryMetrics struct {
 	WorkspaceIDSHA1    string `json:"workspace_id_sha1"`
+	WorkspaceCreatedAt string `json:"workspace_created_at"`
+	WorkspaceUpdatedAt string `json:"workspace_updated_at"`
+	LastMessageAt      string `json:"last_message_at"`
 	ContactsCount      int    `json:"contacts_count"`
 	BroadcastsCount    int    `json:"broadcasts_count"`
 	TransactionalCount int    `json:"transactional_count"`
 	MessagesCount      int    `json:"messages_count"`
 	ListsCount         int    `json:"lists_count"`
+	UsersCount         int    `json:"users_count"`
 	APIEndpoint        string `json:"api_endpoint"`
 
 	// Integration flags - boolean for each email provider
@@ -45,6 +48,7 @@ type TelemetryServiceConfig struct {
 	Enabled       bool
 	APIEndpoint   string
 	WorkspaceRepo domain.WorkspaceRepository
+	TelemetryRepo domain.TelemetryRepository
 	Logger        logger.Logger
 	HTTPClient    *http.Client
 }
@@ -54,6 +58,7 @@ type TelemetryService struct {
 	enabled       bool
 	apiEndpoint   string
 	workspaceRepo domain.WorkspaceRepository
+	telemetryRepo domain.TelemetryRepository
 	logger        logger.Logger
 	httpClient    *http.Client
 }
@@ -72,6 +77,7 @@ func NewTelemetryService(config TelemetryServiceConfig) *TelemetryService {
 		enabled:       config.Enabled,
 		apiEndpoint:   config.APIEndpoint,
 		workspaceRepo: config.WorkspaceRepo,
+		telemetryRepo: config.TelemetryRepo,
 		logger:        config.Logger,
 		httpClient:    httpClient,
 	}
@@ -108,101 +114,28 @@ func (t *TelemetryService) sendMetricsForWorkspace(ctx context.Context, workspac
 
 	// Collect metrics
 	metrics := TelemetryMetrics{
-		WorkspaceIDSHA1: workspaceIDSHA1,
-		APIEndpoint:     t.apiEndpoint,
+		WorkspaceIDSHA1:    workspaceIDSHA1,
+		WorkspaceCreatedAt: workspace.CreatedAt.Format(time.RFC3339),
+		WorkspaceUpdatedAt: workspace.UpdatedAt.Format(time.RFC3339),
+		APIEndpoint:        t.apiEndpoint,
 	}
 
 	// Set integration flags from workspace integrations
 	t.setIntegrationFlagsFromWorkspace(workspace, &metrics)
 
-	// Get workspace database connection for counting metrics
-	db, err := t.workspaceRepo.GetConnection(ctx, workspace.ID)
-	if err != nil {
-		// Continue without database metrics
-	} else {
-		// Count contacts
-		if contactsCount, err := t.countContacts(ctx, db); err == nil {
-			metrics.ContactsCount = contactsCount
-		}
-
-		// Count broadcasts
-		if broadcastsCount, err := t.countBroadcasts(ctx, db); err == nil {
-			metrics.BroadcastsCount = broadcastsCount
-		}
-
-		// Count transactional notifications
-		if transactionalCount, err := t.countTransactional(ctx, db); err == nil {
-			metrics.TransactionalCount = transactionalCount
-		}
-
-		// Count messages
-		if messagesCount, err := t.countMessages(ctx, db); err == nil {
-			metrics.MessagesCount = messagesCount
-		}
-
-		// Count lists
-		if listsCount, err := t.countLists(ctx, db); err == nil {
-			metrics.ListsCount = listsCount
-		}
+	// Get telemetry metrics from repository
+	if telemetryMetrics, err := t.telemetryRepo.GetWorkspaceMetrics(ctx, workspace.ID); err == nil {
+		metrics.ContactsCount = telemetryMetrics.ContactsCount
+		metrics.BroadcastsCount = telemetryMetrics.BroadcastsCount
+		metrics.TransactionalCount = telemetryMetrics.TransactionalCount
+		metrics.MessagesCount = telemetryMetrics.MessagesCount
+		metrics.ListsCount = telemetryMetrics.ListsCount
+		metrics.UsersCount = telemetryMetrics.UsersCount
+		metrics.LastMessageAt = telemetryMetrics.LastMessageAt
 	}
 
 	// Send metrics to telemetry endpoint
 	return t.sendMetrics(ctx, metrics)
-}
-
-// countContacts counts the total number of contacts in a workspace
-func (t *TelemetryService) countContacts(ctx context.Context, db *sql.DB) (int, error) {
-	query := `SELECT COUNT(*) FROM contacts`
-	var count int
-	err := db.QueryRowContext(ctx, query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count contacts: %w", err)
-	}
-	return count, nil
-}
-
-// countBroadcasts counts the total number of broadcasts in a workspace
-func (t *TelemetryService) countBroadcasts(ctx context.Context, db *sql.DB) (int, error) {
-	query := `SELECT COUNT(*) FROM broadcasts`
-	var count int
-	err := db.QueryRowContext(ctx, query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count broadcasts: %w", err)
-	}
-	return count, nil
-}
-
-// countTransactional counts the total number of transactional notifications in a workspace
-func (t *TelemetryService) countTransactional(ctx context.Context, db *sql.DB) (int, error) {
-	query := `SELECT COUNT(*) FROM transactional_notifications WHERE deleted_at IS NULL`
-	var count int
-	err := db.QueryRowContext(ctx, query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count transactional notifications: %w", err)
-	}
-	return count, nil
-}
-
-// countMessages counts the total number of messages in a workspace
-func (t *TelemetryService) countMessages(ctx context.Context, db *sql.DB) (int, error) {
-	query := `SELECT COUNT(*) FROM message_history`
-	var count int
-	err := db.QueryRowContext(ctx, query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count messages: %w", err)
-	}
-	return count, nil
-}
-
-// countLists counts the total number of lists in a workspace
-func (t *TelemetryService) countLists(ctx context.Context, db *sql.DB) (int, error) {
-	query := `SELECT COUNT(*) FROM lists`
-	var count int
-	err := db.QueryRowContext(ctx, query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count lists: %w", err)
-	}
-	return count, nil
 }
 
 // setIntegrationFlagsFromWorkspace sets boolean flags for each integration type from workspace integrations

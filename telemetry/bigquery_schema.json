@@ -12,6 +12,24 @@
     "description": "SHA1 hash of the workspace ID"
   },
   {
+    "name": "workspace_created_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "When the workspace was created"
+  },
+  {
+    "name": "workspace_updated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "When the workspace was last updated"
+  },
+  {
+    "name": "last_message_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "When the last message was sent from the workspace"
+  },
+  {
     "name": "contacts_count",
     "type": "INTEGER",
     "mode": "NULLABLE",
@@ -40,6 +58,12 @@
     "type": "INTEGER",
     "mode": "NULLABLE",
     "description": "Number of lists in the workspace"
+  },
+  {
+    "name": "users_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of users in the workspace"
   },
   {
     "name": "api_endpoint",

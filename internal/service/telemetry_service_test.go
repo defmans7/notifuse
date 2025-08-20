@@ -21,6 +21,7 @@ func TestTelemetryService_SendMetricsForAllWorkspaces(t *testing.T) {
 
 	// Create mock repositories
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTelemetryRepo := mocks.NewMockTelemetryRepository(ctrl)
 
 	// Create a test HTTP server
 	var receivedRequests int
@@ -51,6 +52,7 @@ func TestTelemetryService_SendMetricsForAllWorkspaces(t *testing.T) {
 		Enabled:       true,
 		APIEndpoint:   "https://api.example.com",
 		WorkspaceRepo: mockWorkspaceRepo,
+		TelemetryRepo: mockTelemetryRepo,
 		Logger:        logger.NewLoggerWithLevel("debug"),
 		HTTPClient:    httpClient,
 	}
@@ -65,9 +67,25 @@ func TestTelemetryService_SendMetricsForAllWorkspaces(t *testing.T) {
 
 	mockWorkspaceRepo.EXPECT().List(gomock.Any()).Return(workspaces, nil)
 
-	// Mock database connections returning errors to test graceful handling
-	mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace1").Return(nil, assert.AnError)
-	mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace2").Return(nil, assert.AnError)
+	// Mock telemetry repository calls
+	mockTelemetryRepo.EXPECT().GetWorkspaceMetrics(gomock.Any(), "workspace1").Return(&domain.TelemetryMetrics{
+		ContactsCount:      10,
+		BroadcastsCount:    5,
+		TransactionalCount: 3,
+		MessagesCount:      25,
+		ListsCount:         2,
+		UsersCount:         1,
+		LastMessageAt:      "2023-01-01T00:00:00Z",
+	}, nil)
+	mockTelemetryRepo.EXPECT().GetWorkspaceMetrics(gomock.Any(), "workspace2").Return(&domain.TelemetryMetrics{
+		ContactsCount:      15,
+		BroadcastsCount:    8,
+		TransactionalCount: 4,
+		MessagesCount:      30,
+		ListsCount:         3,
+		UsersCount:         2,
+		LastMessageAt:      "2023-01-02T00:00:00Z",
+	}, nil)
 
 	// Execute
 	ctx := context.Background()

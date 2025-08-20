@@ -32,6 +32,12 @@ func (m *MockWorkspaceRepository) GetConnection(ctx context.Context, workspaceID
 	return db, args.Error(1)
 }
 
+func (m *MockWorkspaceRepository) GetSystemConnection(ctx context.Context) (*sql.DB, error) {
+	args := m.Called(ctx)
+	db, _ := args.Get(0).(*sql.DB)
+	return db, args.Error(1)
+}
+
 func (m *MockWorkspaceRepository) Create(ctx context.Context, workspace *domain.Workspace) error {
 	args := m.Called(ctx, workspace)
 	return args.Error(0)

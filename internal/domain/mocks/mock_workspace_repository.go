@@ -180,6 +180,21 @@ func (mr *MockWorkspaceRepositoryMockRecorder) GetInvitationByID(arg0, arg1 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInvitationByID", reflect.TypeOf((*MockWorkspaceRepository)(nil).GetInvitationByID), arg0, arg1)
 }
 
+// GetSystemConnection mocks base method.
+func (m *MockWorkspaceRepository) GetSystemConnection(arg0 context.Context) (*sql.DB, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSystemConnection", arg0)
+	ret0, _ := ret[0].(*sql.DB)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSystemConnection indicates an expected call of GetSystemConnection.
+func (mr *MockWorkspaceRepositoryMockRecorder) GetSystemConnection(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSystemConnection", reflect.TypeOf((*MockWorkspaceRepository)(nil).GetSystemConnection), arg0)
+}
+
 // GetUserWorkspace mocks base method.
 func (m *MockWorkspaceRepository) GetUserWorkspace(arg0 context.Context, arg1, arg2 string) (*domain.UserWorkspace, error) {
 	m.ctrl.T.Helper()

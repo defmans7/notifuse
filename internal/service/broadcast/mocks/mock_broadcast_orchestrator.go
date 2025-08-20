@@ -111,18 +111,18 @@ func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) Process(arg0, arg1, ar
 }
 
 // SaveProgressState mocks base method.
-func (m *MockBroadcastOrchestratorInterface) SaveProgressState(arg0 context.Context, arg1, arg2, arg3 string, arg4, arg5, arg6, arg7 int, arg8, arg9 time.Time) (time.Time, error) {
+func (m *MockBroadcastOrchestratorInterface) SaveProgressState(arg0 context.Context, arg1, arg2 string, arg3 *domain.SendBroadcastState, arg4, arg5, arg6 int, arg7, arg8 time.Time) (time.Time, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveProgressState", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+	ret := m.ctrl.Call(m, "SaveProgressState", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 	ret0, _ := ret[0].(time.Time)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SaveProgressState indicates an expected call of SaveProgressState.
-func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) SaveProgressState(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 interface{}) *gomock.Call {
+func (mr *MockBroadcastOrchestratorInterfaceMockRecorder) SaveProgressState(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveProgressState", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).SaveProgressState), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveProgressState", reflect.TypeOf((*MockBroadcastOrchestratorInterface)(nil).SaveProgressState), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 }
 
 // ValidateTemplates mocks base method.

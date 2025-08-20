@@ -16,11 +16,15 @@ import (
 // TelemetryMetrics represents the metrics data sent to the telemetry endpoint
 type TelemetryMetrics struct {
 	WorkspaceIDSHA1    string `json:"workspace_id_sha1"`
+	WorkspaceCreatedAt string `json:"workspace_created_at"`
+	WorkspaceUpdatedAt string `json:"workspace_updated_at"`
+	LastMessageAt      string `json:"last_message_at"`
 	ContactsCount      int    `json:"contacts_count"`
 	BroadcastsCount    int    `json:"broadcasts_count"`
 	TransactionalCount int    `json:"transactional_count"`
 	MessagesCount      int    `json:"messages_count"`
 	ListsCount         int    `json:"lists_count"`
+	UsersCount         int    `json:"users_count"`
 	APIEndpoint        string `json:"api_endpoint"`
 
 	// Integration flags - boolean for each email provider
@@ -37,11 +41,15 @@ type TelemetryMetrics struct {
 type LogEntry struct {
 	Timestamp          time.Time `json:"timestamp"`
 	WorkspaceIDSHA1    string    `json:"workspace_id_sha1"`
+	WorkspaceCreatedAt string    `json:"workspace_created_at"`
+	WorkspaceUpdatedAt string    `json:"workspace_updated_at"`
+	LastMessageAt      string    `json:"last_message_at"`
 	ContactsCount      int       `json:"contacts_count"`
 	BroadcastsCount    int       `json:"broadcasts_count"`
 	TransactionalCount int       `json:"transactional_count"`
 	MessagesCount      int       `json:"messages_count"`
 	ListsCount         int       `json:"lists_count"`
+	UsersCount         int       `json:"users_count"`
 	APIEndpoint        string    `json:"api_endpoint"`
 	Source             string    `json:"source"`
 	EventType          string    `json:"event_type"`

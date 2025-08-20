@@ -46,6 +46,7 @@ type AppInterface interface {
 	GetMessageHistoryRepository() domain.MessageHistoryRepository
 	GetContactListRepository() domain.ContactListRepository
 	GetTransactionalNotificationRepository() domain.TransactionalNotificationRepository
+	GetTelemetryRepository() domain.TelemetryRepository
 
 	// Server status methods
 	IsServerCreated() bool
@@ -81,6 +82,7 @@ type App struct {
 	transactionalNotificationRepo domain.TransactionalNotificationRepository
 	messageHistoryRepo            domain.MessageHistoryRepository
 	webhookEventRepo              domain.WebhookEventRepository
+	telemetryRepo                 domain.TelemetryRepository
 
 	// Services
 	authService                      *service.AuthService
@@ -288,6 +290,7 @@ func (a *App) InitRepositories() error {
 	a.transactionalNotificationRepo = repository.NewTransactionalNotificationRepository(a.workspaceRepo)
 	a.messageHistoryRepo = repository.NewMessageHistoryRepository(a.workspaceRepo)
 	a.webhookEventRepo = repository.NewWebhookEventRepository(a.workspaceRepo)
+	a.telemetryRepo = repository.NewTelemetryRepository(a.workspaceRepo)
 
 	return nil
 }
@@ -531,6 +534,7 @@ func (a *App) InitServices() error {
 		Enabled:       a.config.Telemetry,
 		APIEndpoint:   a.config.APIEndpoint,
 		WorkspaceRepo: a.workspaceRepo,
+		TelemetryRepo: a.telemetryRepo,
 		Logger:        a.logger,
 		HTTPClient:    httpClient, // Reuse the HTTP client created above
 	}
@@ -828,6 +832,10 @@ func (a *App) GetContactListRepository() domain.ContactListRepository {
 
 func (a *App) GetTransactionalNotificationRepository() domain.TransactionalNotificationRepository {
 	return a.transactionalNotificationRepo
+}
+
+func (a *App) GetTelemetryRepository() domain.TelemetryRepository {
+	return a.telemetryRepo
 }
 
 // SetHandler allows setting a custom HTTP handler

@@ -642,6 +642,7 @@ type WorkspaceRepository interface {
 
 	// Database management
 	GetConnection(ctx context.Context, workspaceID string) (*sql.DB, error)
+	GetSystemConnection(ctx context.Context) (*sql.DB, error)
 	CreateDatabase(ctx context.Context, workspaceID string) error
 	DeleteDatabase(ctx context.Context, workspaceID string) error
 
