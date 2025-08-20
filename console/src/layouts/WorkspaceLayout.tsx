@@ -293,34 +293,47 @@ export function WorkspaceLayout() {
               }}
             >
               {!collapsed && (
-                <Dropdown
-                  menu={{
-                    items: [
-                      {
-                        key: 'logout',
-                        label: (
-                          <Space>
-                            <FontAwesomeIcon
-                              icon={faRightFromBracket}
-                              size="sm"
-                              style={{ opacity: 0.7 }}
-                            />
-                            Logout
-                          </Space>
-                        ),
-                        onClick: () => signout()
-                      }
-                    ]
-                  }}
-                  trigger={['click']}
-                  placement="bottomRight"
-                >
-                  <Button type="text" block>
-                    <div style={{ padding: '4px 8px', color: '#595959', cursor: 'pointer' }}>
-                      {user?.email}
-                    </div>
-                  </Button>
-                </Dropdown>
+                <>
+                  <Dropdown
+                    menu={{
+                      items: [
+                        {
+                          key: 'logout',
+                          label: (
+                            <Space>
+                              <FontAwesomeIcon
+                                icon={faRightFromBracket}
+                                size="sm"
+                                style={{ opacity: 0.7 }}
+                              />
+                              Logout
+                            </Space>
+                          ),
+                          onClick: () => signout()
+                        }
+                      ]
+                    }}
+                    trigger={['click']}
+                    placement="bottomRight"
+                  >
+                    <Button type="text" block>
+                      <div style={{ padding: '4px 8px', color: '#595959', cursor: 'pointer' }}>
+                        {user?.email}
+                      </div>
+                    </Button>
+                  </Dropdown>
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      marginTop: '8px',
+                      fontSize: '9px',
+                      color: '#000',
+                      opacity: 0.7
+                    }}
+                  >
+                    v{window.VERSION || '1.0'}
+                  </div>
+                </>
               )}
               {collapsed && (
                 <Button

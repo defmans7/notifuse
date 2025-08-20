@@ -16,15 +16,17 @@ type RootHandler struct {
 	notificationCenterDir string
 	logger                logger.Logger
 	apiEndpoint           string
+	version               string
 }
 
 // NewRootHandler creates a root handler that serves both console and notification center static files
-func NewRootHandler(consoleDir string, notificationCenterDir string, logger logger.Logger, apiEndpoint string) *RootHandler {
+func NewRootHandler(consoleDir string, notificationCenterDir string, logger logger.Logger, apiEndpoint string, version string) *RootHandler {
 	return &RootHandler{
 		consoleDir:            consoleDir,
 		notificationCenterDir: notificationCenterDir,
 		logger:                logger,
 		apiEndpoint:           apiEndpoint,
+		version:               version,
 	}
 }
 
@@ -66,7 +68,7 @@ func (h *RootHandler) serveConfigJS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
-	configJS := fmt.Sprintf("window.API_ENDPOINT = %q;", h.apiEndpoint)
+	configJS := fmt.Sprintf("window.API_ENDPOINT = %q;\nwindow.VERSION = %q;", h.apiEndpoint, h.version)
 	w.Write([]byte(configJS))
 }
 

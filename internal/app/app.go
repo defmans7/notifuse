@@ -99,6 +99,7 @@ type App struct {
 	messageHistoryService            *service.MessageHistoryService
 	notificationCenterService        *service.NotificationCenterService
 	demoService                      *service.DemoService
+	telemetryService                 *service.TelemetryService
 	// providers
 	postmarkService  *service.PostmarkService
 	mailgunService   *service.MailgunService
@@ -525,6 +526,16 @@ func (a *App) InitServices() error {
 		a.taskRepo,
 	)
 
+	// Initialize telemetry service
+	telemetryConfig := service.TelemetryServiceConfig{
+		Enabled:       a.config.Telemetry,
+		APIEndpoint:   a.config.APIEndpoint,
+		WorkspaceRepo: a.workspaceRepo,
+		Logger:        a.logger,
+		HTTPClient:    httpClient, // Reuse the HTTP client created above
+	}
+	a.telemetryService = service.NewTelemetryService(telemetryConfig)
+
 	return nil
 }
 
@@ -540,7 +551,7 @@ func (a *App) InitHandlers() error {
 		a.config,
 		a.config.Security.PasetoPublicKey,
 		a.logger)
-	rootHandler := httpHandler.NewRootHandler("console/dist", "notification_center/dist", a.logger, a.config.APIEndpoint)
+	rootHandler := httpHandler.NewRootHandler("console/dist", "notification_center/dist", a.logger, a.config.APIEndpoint, a.config.Version)
 	workspaceHandler := httpHandler.NewWorkspaceHandler(
 		a.workspaceService,
 		a.authService,
@@ -639,6 +650,12 @@ func (a *App) Start() error {
 	// Signal that the server has been created and is about to start
 	close(serverStarted)
 
+	// Start daily telemetry scheduler
+	if a.telemetryService != nil {
+		ctx := context.Background()
+		a.telemetryService.StartDailyScheduler(ctx)
+	}
+
 	// Start the server based on SSL configuration
 	if a.config.Server.SSL.Enabled {
 		a.logger.WithField("cert_file", a.config.Server.SSL.CertFile).Info("SSL enabled")
@@ -692,10 +709,8 @@ func (a *App) WaitForServerStart(ctx context.Context) bool {
 	// If the channel is nil, that's a logic error - just wait on the context
 	if started == nil {
 		a.logger.Error("serverStarted channel is nil - server initialization error")
-		select {
-		case <-ctx.Done():
-			return false
-		}
+		<-ctx.Done()
+		return false
 	}
 
 	// Wait for signal or timeout
@@ -709,6 +724,8 @@ func (a *App) WaitForServerStart(ctx context.Context) bool {
 
 // Initialize sets up all components of the application
 func (a *App) Initialize() error {
+	a.logger.WithField("version", a.config.Version).Info("Starting Notifuse application")
+
 	if err := a.InitTracing(); err != nil {
 		return err
 	}
@@ -734,6 +751,16 @@ func (a *App) Initialize() error {
 	}
 
 	a.logger.Info("Application successfully initialized")
+
+	// Send startup telemetry metrics
+	if a.telemetryService != nil {
+		go func() {
+			ctx := context.Background()
+			if err := a.telemetryService.SendMetricsForAllWorkspaces(ctx); err != nil {
+				a.logger.WithField("error", err).Error("Failed to send startup telemetry metrics")
+			}
+		}()
+	}
 
 	return nil
 }

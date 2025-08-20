@@ -40,6 +40,24 @@ export function SendOrScheduleModal({
 
   const hasMarketingEmailProvider = workspace?.settings?.marketing_email_provider_id
 
+  // Helper function to extract error message from API response
+  const getErrorMessage = (error: any, defaultMessage: string): string => {
+    // Try to extract message from various possible response structures
+    // Check for 'error' field first (used by WriteJSONError in backend)
+    if (error?.response?.data?.error) {
+      return error.response.data.error
+    }
+    // Check for 'message' field (used by some other handlers)
+    if (error?.response?.data?.message) {
+      return error.response.data.message
+    }
+    // Fallback to general error message
+    if (error?.message) {
+      return error.message
+    }
+    return defaultMessage
+  }
+
   // Reset form when modal opens
   const handleOpen = () => {
     // Get the default timezone from broadcast or workspace or fall back to UTC
@@ -71,10 +89,7 @@ export function SendOrScheduleModal({
       onClose()
     } catch (error: any) {
       console.error(error)
-      const errorMessage =
-        error?.response?.status === 400 && error?.response?.data?.message
-          ? error.response.data.message
-          : 'Failed to send broadcast'
+      const errorMessage = getErrorMessage(error, 'Failed to send broadcast')
       message.error(errorMessage)
     } finally {
       setLoading(false)
@@ -122,10 +137,7 @@ export function SendOrScheduleModal({
         onClose()
       } catch (error: any) {
         console.error(error)
-        const errorMessage =
-          error?.response?.status === 400 && error?.response?.data?.message
-            ? error.response.data.message
-            : 'Failed to schedule broadcast'
+        const errorMessage = getErrorMessage(error, 'Failed to schedule broadcast')
         message.error(errorMessage)
       }
     } catch (error) {

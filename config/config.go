@@ -17,11 +17,13 @@ type Config struct {
 	Tracing         TracingConfig
 	SMTP            SMTPConfig
 	Demo            DemoConfig
+	Telemetry       bool
 	RootEmail       string
 	Environment     string
 	APIEndpoint     string
 	WebhookEndpoint string
 	LogLevel        string
+	Version         string
 }
 
 type DemoConfig struct {
@@ -137,6 +139,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_SSLMODE", "require")
 	v.SetDefault("ENVIRONMENT", "production")
 	v.SetDefault("LOG_LEVEL", "warn")
+	v.SetDefault("VERSION", "1.0")
 
 	// SMTP defaults
 	v.SetDefault("SMTP_PORT", 587)
@@ -175,6 +178,9 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	// Default metrics exporter config
 	v.SetDefault("TRACING_METRICS_EXPORTER", "none")
 	v.SetDefault("TRACING_PROMETHEUS_PORT", 9464)
+
+	// Default telemetry config
+	v.SetDefault("TELEMETRY", true)
 
 	// Load environment file if specified
 	if opts.EnvFile != "" {
@@ -278,6 +284,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			FileManagerAccessKey: v.GetString("DEMO_FILE_MANAGER_ACCESS_KEY"),
 			FileManagerSecretKey: v.GetString("DEMO_FILE_MANAGER_SECRET_KEY"),
 		},
+		Telemetry: v.GetBool("TELEMETRY"),
 		Tracing: TracingConfig{
 			Enabled:             v.GetBool("TRACING_ENABLED"),
 			ServiceName:         v.GetString("TRACING_SERVICE_NAME"),
@@ -318,6 +325,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		APIEndpoint:     v.GetString("API_ENDPOINT"),
 		WebhookEndpoint: v.GetString("WEBHOOK_ENDPOINT"),
 		LogLevel:        v.GetString("LOG_LEVEL"),
+		Version:         v.GetString("VERSION"),
 	}
 
 	if config.WebhookEndpoint == "" {

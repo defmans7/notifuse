@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,6 +10,15 @@ import (
 	"aidanwoods.dev/go-paseto"
 	"github.com/Notifuse/notifuse/internal/domain"
 )
+
+// writeJSONError writes a JSON error response with the given message and status code
+func writeJSONError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error": message,
+	})
+}
 
 // AuthConfig holds the configuration for the auth middleware
 type AuthConfig struct {
@@ -29,14 +39,14 @@ func (ac *AuthConfig) RequireAuth() func(http.Handler) http.Handler {
 			// Get the Authorization header
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, "Authorization header is required", http.StatusUnauthorized)
+				writeJSONError(w, "Authorization header is required", http.StatusUnauthorized)
 				return
 			}
 
 			// Check if it's a Bearer token
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+				writeJSONError(w, "Invalid authorization header format", http.StatusUnauthorized)
 				return
 			}
 
@@ -49,21 +59,21 @@ func (ac *AuthConfig) RequireAuth() func(http.Handler) http.Handler {
 			// Verify token and get claims
 			verified, err := parser.ParseV4Public(ac.PublicKey, token, nil)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
+				writeJSONError(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
 				return
 			}
 
 			// Get user ID from claims
 			userID, err := verified.GetString(string(domain.UserIDKey))
 			if err != nil {
-				http.Error(w, "User ID not found in token", http.StatusUnauthorized)
+				writeJSONError(w, "User ID not found in token", http.StatusUnauthorized)
 				return
 			}
 
 			// Get user type from claims
 			userType, err := verified.GetString(string(domain.UserTypeKey))
 			if err != nil {
-				http.Error(w, "User type not found in token", http.StatusUnauthorized)
+				writeJSONError(w, "User type not found in token", http.StatusUnauthorized)
 				return
 			}
 
@@ -72,7 +82,7 @@ func (ac *AuthConfig) RequireAuth() func(http.Handler) http.Handler {
 			if userType == string(domain.UserTypeUser) {
 				sessionID, err = verified.GetString(string(domain.SessionIDKey))
 				if err != nil {
-					http.Error(w, "Session ID not found in token", http.StatusUnauthorized)
+					writeJSONError(w, "Session ID not found in token", http.StatusUnauthorized)
 					return
 				}
 			}
@@ -101,7 +111,7 @@ func RestrictedInDemo(isDemo bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isDemo {
-				http.Error(w, "This operation is not allowed in demo mode", http.StatusBadRequest)
+				writeJSONError(w, "This operation is not allowed in demo mode", http.StatusBadRequest)
 				return
 			}
 			next.ServeHTTP(w, r)
