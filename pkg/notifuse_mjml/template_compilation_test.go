@@ -487,7 +487,7 @@ func TestTrackingPixelPlacement(t *testing.T) {
 	}
 
 	// Check that the tracking pixel is inserted before the closing body tag
-	expectedPixel := `<img src="https://track.example.com/open?mid=test-message&wid=test-workspace" alt="" width="1" height="1">`
+	expectedPixel := `<img src="https://track.example.com/opens?mid=test-message&wid=test-workspace" alt="" width="1" height="1">`
 	if !strings.Contains(result, expectedPixel) {
 		t.Errorf("Expected tracking pixel to be present in the HTML. Result: %s", result)
 	}
@@ -526,7 +526,7 @@ func TestTrackingPixelWithoutBodyTag(t *testing.T) {
 	}
 
 	// Check that the tracking pixel is appended to the end as fallback
-	expectedPixel := `<img src="https://track.example.com/open?mid=test-message&wid=test-workspace" alt="" width="1" height="1">`
+	expectedPixel := `<img src="https://track.example.com/opens?mid=test-message&wid=test-workspace" alt="" width="1" height="1">`
 	if !strings.Contains(result, expectedPixel) {
 		t.Error("Expected tracking pixel to be present in the HTML")
 	}
