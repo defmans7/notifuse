@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -67,7 +68,11 @@ func init() {
 	// Initialize Google Cloud Logging client
 	ctx := context.Background()
 	var err error
-	loggingClient, err = logging.NewClient(ctx, "")
+	projectID := os.Getenv("GCP_PROJECT")
+	if projectID == "" {
+		log.Fatalf("GCP_PROJECT environment variable is not set")
+	}
+	loggingClient, err = logging.NewClient(ctx, projectID)
 	if err != nil {
 		log.Fatalf("Failed to create logging client: %v", err)
 	}
