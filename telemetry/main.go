@@ -155,40 +155,13 @@ func receiveTelemetry(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	// Count active integrations for logging
-	integrationCount := 0
-	if metrics.Mailgun {
-		integrationCount++
+	// Print the complete logEntry JSON for debugging
+	logEntryJSON, err := json.MarshalIndent(logEntry, "", "  ")
+	if err != nil {
+		log.Printf("Failed to marshal logEntry to JSON: %v", err)
+	} else {
+		log.Printf("LogEntry JSON:\n%s", string(logEntryJSON))
 	}
-	if metrics.AmazonSES {
-		integrationCount++
-	}
-	if metrics.Mailjet {
-		integrationCount++
-	}
-	if metrics.SendGrid {
-		integrationCount++
-	}
-	if metrics.Postmark {
-		integrationCount++
-	}
-	if metrics.SMTP {
-		integrationCount++
-	}
-	if metrics.S3 {
-		integrationCount++
-	}
-
-	// Log basic info to stdout for Cloud Functions logs
-	log.Printf("Received telemetry for workspace %s: contacts=%d, broadcasts=%d, transactional=%d, messages=%d, lists=%d, integrations=%d",
-		metrics.WorkspaceIDSHA1,
-		metrics.ContactsCount,
-		metrics.BroadcastsCount,
-		metrics.TransactionalCount,
-		metrics.MessagesCount,
-		metrics.ListsCount,
-		integrationCount,
-	)
 
 	// Return success response
 	w.Header().Set("Content-Type", "application/json")
