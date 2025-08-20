@@ -148,7 +148,7 @@ func (r *telemetryRepository) GetLastMessageAt(ctx context.Context, db *sql.DB) 
 			  WHERE created_at IS NOT NULL 
 			  ORDER BY created_at DESC, id DESC 
 			  LIMIT 1`
-	
+
 	var lastMessageAt sql.NullTime
 	err := db.QueryRowContext(ctx, query).Scan(&lastMessageAt)
 	if err != nil {
