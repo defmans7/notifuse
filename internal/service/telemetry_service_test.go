@@ -142,3 +142,75 @@ func TestTelemetryService_HardcodedEndpoint(t *testing.T) {
 	// Verify that the hardcoded endpoint is used
 	assert.Equal(t, "https://telemetry.notifuse.com", TelemetryEndpoint)
 }
+
+func TestTelemetryService_SetIntegrationFlags(t *testing.T) {
+	config := TelemetryServiceConfig{
+		Enabled:     true,
+		APIEndpoint: "https://api.example.com",
+		Logger:      logger.NewLoggerWithLevel("debug"),
+	}
+
+	service := NewTelemetryService(config)
+
+	// Test workspace with various integrations
+	workspace := &domain.Workspace{
+		ID:   "test-workspace",
+		Name: "Test Workspace",
+		Integrations: domain.Integrations{
+			{
+				ID:   "mailgun-integration",
+				Name: "Mailgun",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindMailgun,
+				},
+			},
+			{
+				ID:   "ses-integration",
+				Name: "Amazon SES",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSES,
+				},
+			},
+			{
+				ID:   "smtp-integration",
+				Name: "SMTP",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSMTP,
+				},
+			},
+		},
+	}
+
+	// Test the integration flag setting
+	metrics := TelemetryMetrics{}
+	service.setIntegrationFlagsFromWorkspace(workspace, &metrics)
+
+	// Verify that the correct flags are set
+	assert.True(t, metrics.Mailgun, "Mailgun flag should be true")
+	assert.True(t, metrics.AmazonSES, "AmazonSES flag should be true")
+	assert.True(t, metrics.SMTP, "SMTP flag should be true")
+	assert.False(t, metrics.Mailjet, "Mailjet flag should be false")
+	assert.False(t, metrics.SendGrid, "SendGrid flag should be false")
+	assert.False(t, metrics.Postmark, "Postmark flag should be false")
+
+	// Test empty workspace
+	emptyWorkspace := &domain.Workspace{
+		ID:           "empty-workspace",
+		Name:         "Empty Workspace",
+		Integrations: domain.Integrations{},
+	}
+
+	emptyMetrics := TelemetryMetrics{}
+	service.setIntegrationFlagsFromWorkspace(emptyWorkspace, &emptyMetrics)
+
+	// Verify all flags are false
+	assert.False(t, emptyMetrics.Mailgun, "All flags should be false for empty workspace")
+	assert.False(t, emptyMetrics.AmazonSES, "All flags should be false for empty workspace")
+	assert.False(t, emptyMetrics.SMTP, "All flags should be false for empty workspace")
+	assert.False(t, emptyMetrics.Mailjet, "All flags should be false for empty workspace")
+	assert.False(t, emptyMetrics.SendGrid, "All flags should be false for empty workspace")
+	assert.False(t, emptyMetrics.Postmark, "All flags should be false for empty workspace")
+}

@@ -24,6 +24,15 @@ type TelemetryMetrics struct {
 	MessagesCount      int    `json:"messages_count"`
 	ListsCount         int    `json:"lists_count"`
 	APIEndpoint        string `json:"api_endpoint"`
+
+	// Integration flags - boolean for each email provider
+	Mailgun   bool `json:"mailgun"`
+	AmazonSES bool `json:"amazonses"`
+	Mailjet   bool `json:"mailjet"`
+	SendGrid  bool `json:"sendgrid"`
+	Postmark  bool `json:"postmark"`
+	SMTP      bool `json:"smtp"`
+	S3        bool `json:"s3"`
 }
 
 const (
@@ -82,7 +91,7 @@ func (t *TelemetryService) SendMetricsForAllWorkspaces(ctx context.Context) erro
 
 	// Collect and send metrics for each workspace
 	for _, workspace := range workspaces {
-		if err := t.sendMetricsForWorkspace(ctx, workspace.ID); err != nil {
+		if err := t.sendMetricsForWorkspace(ctx, workspace); err != nil {
 			// Continue with other workspaces on error
 		}
 	}
@@ -91,10 +100,10 @@ func (t *TelemetryService) SendMetricsForAllWorkspaces(ctx context.Context) erro
 }
 
 // sendMetricsForWorkspace collects and sends telemetry metrics for a specific workspace
-func (t *TelemetryService) sendMetricsForWorkspace(ctx context.Context, workspaceID string) error {
+func (t *TelemetryService) sendMetricsForWorkspace(ctx context.Context, workspace *domain.Workspace) error {
 	// Create SHA1 hash of workspace ID
 	hasher := sha1.New()
-	hasher.Write([]byte(workspaceID))
+	hasher.Write([]byte(workspace.ID))
 	workspaceIDSHA1 := hex.EncodeToString(hasher.Sum(nil))
 
 	// Collect metrics
@@ -103,8 +112,11 @@ func (t *TelemetryService) sendMetricsForWorkspace(ctx context.Context, workspac
 		APIEndpoint:     t.apiEndpoint,
 	}
 
-	// Get workspace database connection
-	db, err := t.workspaceRepo.GetConnection(ctx, workspaceID)
+	// Set integration flags from workspace integrations
+	t.setIntegrationFlagsFromWorkspace(workspace, &metrics)
+
+	// Get workspace database connection for counting metrics
+	db, err := t.workspaceRepo.GetConnection(ctx, workspace.ID)
 	if err != nil {
 		// Continue without database metrics
 	} else {
@@ -140,7 +152,7 @@ func (t *TelemetryService) sendMetricsForWorkspace(ctx context.Context, workspac
 
 // countContacts counts the total number of contacts in a workspace
 func (t *TelemetryService) countContacts(ctx context.Context, db *sql.DB) (int, error) {
-	query := `SELECT COUNT(DISTINCT email) FROM contacts`
+	query := `SELECT COUNT(*) FROM contacts`
 	var count int
 	err := db.QueryRowContext(ctx, query).Scan(&count)
 	if err != nil {
@@ -184,13 +196,46 @@ func (t *TelemetryService) countMessages(ctx context.Context, db *sql.DB) (int, 
 
 // countLists counts the total number of lists in a workspace
 func (t *TelemetryService) countLists(ctx context.Context, db *sql.DB) (int, error) {
-	query := `SELECT COUNT(*) FROM lists WHERE deleted_at IS NULL`
+	query := `SELECT COUNT(*) FROM lists`
 	var count int
 	err := db.QueryRowContext(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count lists: %w", err)
 	}
 	return count, nil
+}
+
+// setIntegrationFlagsFromWorkspace sets boolean flags for each integration type from workspace integrations
+func (t *TelemetryService) setIntegrationFlagsFromWorkspace(workspace *domain.Workspace, metrics *TelemetryMetrics) {
+	// Iterate through workspace integrations and set flags based on email provider kind
+	for _, integration := range workspace.Integrations {
+		if integration.Type == domain.IntegrationTypeEmail {
+			switch integration.EmailProvider.Kind {
+			case domain.EmailProviderKindMailgun:
+				metrics.Mailgun = true
+			case domain.EmailProviderKindSES:
+				metrics.AmazonSES = true
+			case domain.EmailProviderKindMailjet:
+				metrics.Mailjet = true
+			case domain.EmailProviderKindPostmark:
+				metrics.Postmark = true
+			case domain.EmailProviderKindSMTP:
+				metrics.SMTP = true
+			case domain.EmailProviderKindSparkPost:
+				metrics.SendGrid = true // SparkPost maps to SendGrid for telemetry
+			}
+		}
+	}
+
+	// Check if S3-compatible file storage is configured
+	if t.isS3FileStorageConfigured(&workspace.Settings.FileManager) {
+		metrics.S3 = true
+	}
+}
+
+// isS3FileStorageConfigured checks if S3-compatible file storage is configured in workspace settings
+func (t *TelemetryService) isS3FileStorageConfigured(fileManager *domain.FileManagerSettings) bool {
+	return fileManager.Endpoint != "" && fileManager.Bucket != "" && fileManager.AccessKey != ""
 }
 
 // sendMetrics sends the collected metrics to the telemetry endpoint
