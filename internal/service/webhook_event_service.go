@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -408,11 +409,13 @@ func (s *WebhookEventService) processMailgunWebhook(integrationID string, rawPay
 	// First unmarshal into a map to access all fields
 	var jsonData map[string]interface{}
 	if err := json.Unmarshal(rawPayload, &jsonData); err != nil {
+		log.Printf("failed to unmarshal Mailgun webhook payload: %w, %v", err, string(rawPayload))
 		return nil, fmt.Errorf("failed to unmarshal Mailgun webhook payload: %w", err)
 	}
 
 	var payload domain.MailgunWebhookPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
+		log.Printf("failed to unmarshal Mailgun webhook payload: %w, %v", err, string(rawPayload))
 		return nil, fmt.Errorf("failed to unmarshal Mailgun webhook payload: %w", err)
 	}
 
