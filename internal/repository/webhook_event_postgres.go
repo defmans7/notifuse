@@ -60,7 +60,7 @@ func (r *webhookEventRepository) StoreEvents(ctx context.Context, workspaceID st
 	now := time.Now()
 
 	// Batch size limit to avoid hitting Postgres parameter limits (max 65535 parameters)
-	const batchSize = 1000 // Each event uses 13 parameters, so ~4000 events would hit the limit
+	const batchSize = 1000 // Each event uses 13 parameters, so ~5000 events would hit the limit
 
 	// Process in batches
 	for i := 0; i < len(events); i += batchSize {
@@ -70,11 +70,11 @@ func (r *webhookEventRepository) StoreEvents(ctx context.Context, workspaceID st
 		}
 
 		currentBatch := events[i:end]
-		args := make([]interface{}, 0, len(currentBatch)*15)
+		args := make([]interface{}, 0, len(currentBatch)*13)
 
 		// Generate placeholders and collect args for this batch
 		for j, event := range currentBatch {
-			paramOffset := j * 15
+			paramOffset := j * 13
 			placeholders[j] = fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d)",
 				paramOffset+1, paramOffset+2, paramOffset+3, paramOffset+4, paramOffset+5,
 				paramOffset+6, paramOffset+7, paramOffset+8, paramOffset+9, paramOffset+10,
