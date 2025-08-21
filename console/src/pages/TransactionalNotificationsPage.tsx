@@ -377,11 +377,12 @@ export function TransactionalNotificationsPage() {
     "id": "${currentApiNotification.id}",
     "channels": ["email"],
     "contact": {
-      "email": "recipient@example.com"
-      // other optional contact fields here
+      "email": "recipient@example.com",
+      "first_name": "John",
+      "last_name": "Doe"
     },
     "data": {
-      // Your template variables here
+      "your_template_variable": "value"
     },
     "email_options": {
       "reply_to": "reply@example.com",

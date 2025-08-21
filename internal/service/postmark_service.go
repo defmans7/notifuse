@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -75,7 +74,7 @@ func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.Pos
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
-	log.Printf("Request: %+v", string(jsonData))
+	// log.Printf("Request: %+v", string(jsonData))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.postmarkapp.com/webhooks", bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -96,7 +95,7 @@ func (s *PostmarkService) RegisterWebhook(ctx context.Context, config domain.Pos
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("Response: %+v", string(body))
+		// log.Printf("Response: %+v", string(body))
 		s.logger.Error(fmt.Sprintf("Postmark API returned non-OK status code %d: %s", resp.StatusCode, string(body)))
 		return nil, fmt.Errorf("API returned non-OK status code %d", resp.StatusCode)
 	}
@@ -550,6 +549,9 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 			{
 				"Name":  "Message-ID",
 				"Value": messageID,
+			},
+			{
+				"X-PM-KeepID": "true",
 			},
 		},
 	}
