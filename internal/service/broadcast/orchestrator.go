@@ -647,20 +647,21 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	// Determine which templates to load based on phase
 	var templateIDs []string
 
-	if broadcastState.Phase == "test" {
+	switch broadcastState.Phase {
+	case "test":
 		// Load all variations for testing
 		templateIDs = make([]string, len(broadcast.TestSettings.Variations))
 		for i, variation := range broadcast.TestSettings.Variations {
 			templateIDs[i] = variation.TemplateID
 		}
-	} else if broadcastState.Phase == "winner" {
+	case "winner":
 		// Load only the winning template
 		if broadcast.WinningTemplate != "" {
 			templateIDs = []string{broadcast.WinningTemplate}
 		} else {
 			return false, fmt.Errorf("winner phase but no winning template selected")
 		}
-	} else {
+	default:
 		// Single template broadcast
 		templateIDs = make([]string, len(broadcast.TestSettings.Variations))
 		for i, variation := range broadcast.TestSettings.Variations {
@@ -710,16 +711,21 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	// All phases use the same RecipientOffset for continuity
 	currentOffset = int(broadcastState.RecipientOffset)
 
+	// If a winner has already been selected manually while test is running, transition immediately
 	if broadcastState.Phase == "test" {
-		// If a winner has already been selected manually while test is running, transition immediately
 		if broadcast.WinningTemplate != "" || broadcast.Status == domain.BroadcastStatusWinnerSelected {
 			broadcastState.Phase = "winner"
 		}
+	}
+
+	// Set recipient limit based on current phase (after potential transition)
+	switch broadcastState.Phase {
+	case "test":
 		recipientLimit = broadcastState.TestPhaseRecipientCount
-	} else if broadcastState.Phase == "winner" {
+	case "winner":
 		// Winner phase processes remaining recipients after test phase
 		recipientLimit = broadcastState.TotalRecipients
-	} else {
+	default:
 		// Single template - process all recipients
 		recipientLimit = broadcastState.TotalRecipients
 	}
@@ -961,7 +967,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 	if allDone {
 		var statusMessage string
 
-		if broadcastState.Phase == "winner" || broadcastState.Phase == "single" {
+		switch broadcastState.Phase {
+		case "winner", "single":
 			// Winner phase or single template complete - mark as sent
 			broadcast.Status = domain.BroadcastStatusSent
 			broadcast.UpdatedAt = time.Now().UTC()
@@ -976,7 +983,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 			}
 
 			statusMessage = "sent"
-		} else if broadcastState.Phase == "test" {
+		case "test":
 			// Test phase complete - should have been handled by handleTestPhaseCompletion
 			// This shouldn't happen, but handle it gracefully
 			o.logger.WithField("broadcast_id", broadcastState.BroadcastID).Warn("Test phase marked as complete in final processing - this should have been handled earlier")

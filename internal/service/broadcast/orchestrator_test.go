@@ -1745,6 +1745,205 @@ func TestBroadcastOrchestrator_Process_AutoWinnerEvaluationPath(t *testing.T) {
 	assert.True(t, done)
 }
 
+// TestBroadcastOrchestrator_Process_ABTestWinnerPhaseProcessesRemainingRecipients
+// This test reproduces and verifies the fix for the bug where the winner phase
+// would not process remaining recipients after test phase completion.
+// Scenario: 2 recipients, 50% test phase (1 recipient), winner selection, then winner phase should process remaining 1 recipient.
+func TestBroadcastOrchestrator_Process_ABTestWinnerPhaseProcessesRemainingRecipients(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mocks
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepo := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+
+	// Mock time provider
+	base := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+	mockTimeProvider.EXPECT().Now().Return(base).AnyTimes()
+	mockTimeProvider.EXPECT().Since(gomock.Any()).Return(time.Minute).AnyTimes()
+
+	// Setup workspace with email provider
+	workspace := &domain.Workspace{
+		ID: "workspace-123",
+		Settings: domain.WorkspaceSettings{
+			SecretKey:                "secret-key",
+			EmailTrackingEnabled:     true,
+			MarketingEmailProviderID: "marketing-provider-id",
+		},
+		Integrations: []domain.Integration{
+			{
+				ID:   "marketing-provider-id",
+				Type: domain.IntegrationTypeEmail,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSES,
+					SES: &domain.AmazonSESSettings{
+						AccessKey: "access-key",
+						SecretKey: "secret-key",
+						Region:    "us-east-1",
+					},
+				},
+			},
+		},
+	}
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-123").Return(workspace, nil).AnyTimes()
+
+	// Setup broadcast with A/B testing enabled
+	bcast := &domain.Broadcast{
+		ID:              "broadcast-123",
+		WorkspaceID:     "workspace-123",
+		Audience:        domain.AudienceSettings{Lists: []string{"list-1"}},
+		Status:          domain.BroadcastStatusWinnerSelected, // Winner already selected
+		WinningTemplate: "template-B",                         // Winner is template B
+		TestSettings: domain.BroadcastTestSettings{
+			Enabled:          true,
+			SamplePercentage: 50, // 50% test phase
+			Variations: []domain.BroadcastVariation{
+				{TemplateID: "template-A"},
+				{TemplateID: "template-B"},
+			},
+		},
+	}
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-123", "broadcast-123").Return(bcast, nil).AnyTimes()
+
+	// Setup templates - we need to mock both in case the phase transition doesn't work initially
+	templateA := &domain.Template{
+		ID: "template-A",
+		Email: &domain.EmailTemplate{
+			Subject:  "Test Subject A",
+			SenderID: "sender-1",
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:   "root",
+					Type: notifuse_mjml.MJMLComponentMjml,
+				},
+			},
+		},
+	}
+	templateB := &domain.Template{
+		ID: "template-B",
+		Email: &domain.EmailTemplate{
+			Subject:  "Test Subject B",
+			SenderID: "sender-1",
+			VisualEditorTree: &notifuse_mjml.MJMLBlock{
+				BaseBlock: notifuse_mjml.BaseBlock{
+					ID:   "root",
+					Type: notifuse_mjml.MJMLComponentMjml,
+				},
+			},
+		},
+	}
+
+	// Mock template loading - might load all variations first, then just winner
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "workspace-123", "template-A", int64(0)).Return(templateA, nil).AnyTimes()
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "workspace-123", "template-B", int64(0)).Return(templateB, nil).AnyTimes()
+
+	// Setup recipients: winner phase should fetch from offset=1 (after test phase processed 1 recipient)
+	// This is the key part of the test - ensuring the winner phase processes the remaining recipient
+	recipient := &domain.ContactWithList{
+		Contact: &domain.Contact{
+			Email: "recipient2@example.com",
+		},
+		ListID: "list-1",
+	}
+	mockContactRepo.EXPECT().GetContactsForBroadcast(
+		gomock.Any(),
+		"workspace-123",
+		bcast.Audience,
+		1, // limit: remaining recipients in phase
+		1, // offset: should be 1 (after test phase processed first recipient)
+	).Return([]*domain.ContactWithList{recipient}, nil)
+
+	// Mock successful sending
+	mockMessageSender.EXPECT().SendBatch(
+		gomock.Any(),
+		"workspace-123",
+		"secret-key",
+		true,
+		"broadcast-123",
+		[]*domain.ContactWithList{recipient},
+		gomock.Any(), // templates
+		gomock.Any(), // email provider
+		gomock.Any(), // timeout
+	).Return(1, 0, nil) // 1 sent, 0 failed
+
+	// Mock task state saving
+	mockTaskRepo.EXPECT().SaveState(gomock.Any(), "workspace-123", "task-123", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	// Mock final broadcast status update to "sent"
+	mockBroadcastRepo.EXPECT().UpdateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, b *domain.Broadcast) error {
+		assert.Equal(t, domain.BroadcastStatusSent, b.Status)
+		return nil
+	})
+
+	// Mock logger calls
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	// Create orchestrator
+	config := &broadcast.Config{
+		FetchBatchSize:      100,
+		MaxProcessTime:      30 * time.Second,
+		ProgressLogInterval: 5 * time.Second,
+	}
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastRepo,
+		mockTemplateRepo,
+		mockContactRepo,
+		mockTaskRepo,
+		mockWorkspaceRepo,
+		nil, // abTestEvaluator not needed for this test
+		mockLogger,
+		config,
+		mockTimeProvider,
+	)
+
+	// Create task that simulates resuming after test phase completion
+	// This is the key: RecipientOffset=1 means test phase already processed 1 recipient
+	// Phase="test" but winner is already selected, so should transition to "winner"
+	task := &domain.Task{
+		ID:          "task-123",
+		WorkspaceID: "workspace-123",
+		Type:        "send_broadcast",
+		BroadcastID: stringPtr("broadcast-123"),
+		State: &domain.TaskState{
+			SendBroadcast: &domain.SendBroadcastState{
+				BroadcastID:               "broadcast-123",
+				TotalRecipients:           2, // Total of 2 recipients
+				TestPhaseRecipientCount:   1, // Test phase processes 1 recipient (50% of 2)
+				WinnerPhaseRecipientCount: 1, // Winner phase should process remaining 1 recipient
+				RecipientOffset:           1, // Test phase already processed 1 recipient
+				SentCount:                 1, // Test phase sent to 1 recipient
+				FailedCount:               0,
+				Phase:                     "test", // Should transition to "winner" when processing starts
+				TestPhaseCompleted:        true,
+			},
+		},
+	}
+
+	// Process the task
+	ctx := context.Background()
+	timeout := time.Now().Add(30 * time.Second)
+	done, err := orchestrator.Process(ctx, task, timeout)
+
+	// Verify results
+	require.NoError(t, err)
+	assert.True(t, done, "Task should be marked as done")
+	assert.Equal(t, "winner", task.State.SendBroadcast.Phase, "Phase should be 'winner'")
+	assert.Equal(t, int64(2), task.State.SendBroadcast.RecipientOffset, "Should have processed 2 recipients total")
+	assert.Equal(t, 2, task.State.SendBroadcast.SentCount, "Should have sent to 2 recipients total")
+	assert.Equal(t, 100.0, task.Progress, "Task progress should be 100%")
+}
+
 // Helper function to create string pointer
 func stringPtr(s string) *string {
 	return &s

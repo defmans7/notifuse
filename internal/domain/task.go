@@ -72,7 +72,6 @@ type SendBroadcastState struct {
 	FailedCount     int    `json:"failed_count"`
 	ChannelType     string `json:"channel_type"`
 	RecipientOffset int64  `json:"recipient_offset"`
-	EndOffset       int64  `json:"end_offset"`
 	// New fields for A/B testing phases
 	Phase                     string `json:"phase"` // "test", "winner", or "single"
 	TestPhaseCompleted        bool   `json:"test_phase_completed"`

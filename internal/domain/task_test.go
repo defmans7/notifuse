@@ -59,7 +59,6 @@ func TestTaskState_Value(t *testing.T) {
 				FailedCount:     10,
 				ChannelType:     "email",
 				RecipientOffset: 750,
-				EndOffset:       1000,
 			},
 		}
 		value, err := state.Value()
@@ -84,7 +83,6 @@ func TestTaskState_Value(t *testing.T) {
 		assert.Equal(t, float64(10), broadcastMap["failed_count"])
 		assert.Equal(t, "email", broadcastMap["channel_type"])
 		assert.Equal(t, float64(750), broadcastMap["recipient_offset"])
-		assert.Equal(t, float64(1000), broadcastMap["end_offset"])
 	})
 }
 
@@ -134,8 +132,7 @@ func TestTaskState_Scan(t *testing.T) {
 				"sent_count": 300,
 				"failed_count": 5,
 				"channel_type": "email",
-				"recipient_offset": 300,
-				"end_offset": 500
+				"recipient_offset": 300
 			}
 		}`)
 
@@ -151,7 +148,6 @@ func TestTaskState_Scan(t *testing.T) {
 		assert.Equal(t, 5, state.SendBroadcast.FailedCount)
 		assert.Equal(t, "email", state.SendBroadcast.ChannelType)
 		assert.Equal(t, int64(300), state.SendBroadcast.RecipientOffset)
-		assert.Equal(t, int64(500), state.SendBroadcast.EndOffset)
 	})
 
 	t.Run("invalid type", func(t *testing.T) {
@@ -469,7 +465,6 @@ func TestCreateTaskRequest_Validate(t *testing.T) {
 				FailedCount:     0,
 				ChannelType:     "email",
 				RecipientOffset: 0,
-				EndOffset:       1000,
 			},
 		}
 
@@ -658,7 +653,6 @@ func TestCreateTaskRequest_Validate(t *testing.T) {
 				FailedCount:     0,
 				ChannelType:     "sms",
 				RecipientOffset: 0,
-				EndOffset:       500,
 			},
 		}
 

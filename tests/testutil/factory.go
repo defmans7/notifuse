@@ -896,7 +896,6 @@ func (tdf *TestDataFactory) CreateSendBroadcastTask(workspaceID, broadcastID str
 			FailedCount:     0,
 			ChannelType:     "email",
 			RecipientOffset: 0,
-			EndOffset:       100,
 			Phase:           "single",
 		},
 	}
@@ -926,7 +925,6 @@ func (tdf *TestDataFactory) CreateTaskWithABTesting(workspaceID, broadcastID str
 			FailedCount:               0,
 			ChannelType:               "email",
 			RecipientOffset:           0,
-			EndOffset:                 1000,
 			Phase:                     "test",
 			TestPhaseCompleted:        false,
 			TestPhaseRecipientCount:   100, // 10% for A/B testing

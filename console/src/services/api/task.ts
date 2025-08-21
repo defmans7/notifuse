@@ -11,7 +11,6 @@ export interface SendBroadcastState {
   failed_count: number
   channel_type: string
   recipient_offset: number
-  end_offset: number
 }
 
 export interface TaskState {
