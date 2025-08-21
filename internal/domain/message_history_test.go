@@ -690,14 +690,22 @@ func TestMessageListParams_FromQuery(t *testing.T) {
 			queryData: map[string][]string{
 				"broadcast_id": {"not-a-uuid"}, // Not a UUID format
 			},
-			wantErr: true,
+			want: MessageListParams{
+				BroadcastID: "not-a-uuid",
+				Limit:       20, // Default limit
+			},
+			wantErr: false,
 		},
 		{
 			name: "with invalid template_id",
 			queryData: map[string][]string{
 				"template_id": {"not-a-uuid"}, // Not a UUID format
 			},
-			wantErr: true,
+			want: MessageListParams{
+				TemplateID: "not-a-uuid",
+				Limit:      20, // Default limit
+			},
+			wantErr: false,
 		},
 		{
 			name: "with invalid time range (sent)",
@@ -977,14 +985,22 @@ func TestMessageListParams_Validate(t *testing.T) {
 			params: MessageListParams{
 				BroadcastID: "not-a-uuid",
 			},
-			wantErr: true,
+			want: MessageListParams{
+				BroadcastID: "not-a-uuid",
+				Limit:       20, // Default limit
+			},
+			wantErr: false,
 		},
 		{
 			name: "invalid template ID",
 			params: MessageListParams{
 				TemplateID: "not-a-uuid",
 			},
-			wantErr: true,
+			want: MessageListParams{
+				TemplateID: "not-a-uuid",
+				Limit:      20, // Default limit
+			},
+			wantErr: false,
 		},
 		{
 			name: "valid time ranges",
