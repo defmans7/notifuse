@@ -545,14 +545,8 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 		"To":       to,
 		"Subject":  subject,
 		"HtmlBody": content,
-		"Headers": []map[string]string{
-			{
-				"Name":  "Message-ID",
-				"Value": messageID,
-			},
-			{
-				"X-PM-KeepID": "true",
-			},
+		"Metadata": map[string]string{
+			"notifuse_message_id": messageID,
 		},
 	}
 

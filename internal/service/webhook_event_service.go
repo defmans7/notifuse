@@ -291,16 +291,10 @@ func (s *WebhookEventService) processPostmarkWebhook(integrationID string, rawPa
 	var timestamp time.Time
 	var notifuseMessageID string
 
-	// Check for custom Message-ID header in the Headers field
-	if headersData, ok := jsonData["Headers"].([]interface{}); ok {
-		for _, header := range headersData {
-			if headerMap, ok := header.(map[string]interface{}); ok {
-				if name, ok := headerMap["Name"].(string); ok && name == "Message-ID" {
-					if value, ok := headerMap["Value"].(string); ok {
-						notifuseMessageID = value
-					}
-				}
-			}
+	// Check for notifuse_message_id in metadata
+	if payload.Metadata != nil {
+		if msgID, ok := payload.Metadata["notifuse_message_id"]; ok {
+			notifuseMessageID = msgID
 		}
 	}
 
