@@ -599,12 +599,37 @@ func (s *WebhookEventService) processSparkPostWebhook(integrationID string, rawP
 
 // processMailjetWebhook processes a webhook event from Mailjet
 func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPayload []byte) (events []*domain.WebhookEvent, err error) {
-
-	var payload domain.MailjetWebhookPayload
-	if err := json.Unmarshal(rawPayload, &payload); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal Mailjet webhook payload: %w", err)
+	// Mailjet can send either a single object or an array of events
+	// First try to unmarshal as an array
+	var payloadArray []domain.MailjetWebhookPayload
+	if err := json.Unmarshal(rawPayload, &payloadArray); err == nil {
+		// Successfully unmarshaled as array, process each event
+		var allEvents []*domain.WebhookEvent
+		for _, payload := range payloadArray {
+			event, err := s.processSingleMailjetEvent(integrationID, payload, rawPayload)
+			if err != nil {
+				return nil, err
+			}
+			allEvents = append(allEvents, event)
+		}
+		return allEvents, nil
 	}
 
+	// If array unmarshal failed, try as single object
+	var payload domain.MailjetWebhookPayload
+	if err := json.Unmarshal(rawPayload, &payload); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Mailjet webhook payload as single object or array: %w", err)
+	}
+
+	// Process single event
+	event, err := s.processSingleMailjetEvent(integrationID, payload, rawPayload)
+	if err != nil {
+		return nil, err
+	}
+	return []*domain.WebhookEvent{event}, nil
+}
+
+func (s *WebhookEventService) processSingleMailjetEvent(integrationID string, payload domain.MailjetWebhookPayload, rawPayload []byte) (*domain.WebhookEvent, error) {
 	var eventType domain.EmailEventType
 	var recipientEmail, messageID string
 	var bounceType, bounceCategory, bounceDiagnostic, complaintFeedbackType string
@@ -700,7 +725,7 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 		event.ComplaintFeedbackType = complaintFeedbackType
 	}
 
-	return []*domain.WebhookEvent{event}, nil
+	return event, nil
 }
 
 // processSMTPWebhook processes a webhook event from a generic SMTP provider

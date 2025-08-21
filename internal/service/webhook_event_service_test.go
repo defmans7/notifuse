@@ -960,6 +960,142 @@ func TestProcessMailjetWebhook(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, events)
 	})
+
+	t.Run("Array Payload - Multiple Events", func(t *testing.T) {
+		// Create test array payload with multiple events
+		payloads := []domain.MailjetWebhookPayload{
+			{
+				Event:     "sent",
+				Time:      1672574400, // 2023-01-01T12:00:00Z
+				Email:     "test1@example.com",
+				MessageID: 12345,
+				CustomID:  "msg-1",
+			},
+			{
+				Event:      "bounce",
+				Time:       1672574401, // 2023-01-01T12:00:01Z
+				Email:      "test2@example.com",
+				MessageID:  12346,
+				HardBounce: true,
+				Comment:    "Mailbox does not exist",
+				Error:      "550",
+				CustomID:   "msg-2",
+			},
+			{
+				Event:     "spam",
+				Time:      1672574402, // 2023-01-01T12:00:02Z
+				Email:     "test3@example.com",
+				MessageID: 12347,
+				Source:    "FBL",
+				CustomID:  "msg-3",
+			},
+		}
+		rawPayload, err := json.Marshal(payloads)
+		require.NoError(t, err)
+
+		// Call method
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.NotNil(t, events)
+		assert.Len(t, events, 3)
+
+		// Check first event (sent)
+		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailjet, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test1@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "msg-1", events[0].MessageID) // Should use CustomID
+
+		// Check second event (bounce)
+		assert.Equal(t, domain.EmailEventBounce, events[1].Type)
+		assert.Equal(t, domain.EmailProviderKindMailjet, events[1].EmailProviderKind)
+		assert.Equal(t, integrationID, events[1].IntegrationID)
+		assert.Equal(t, "test2@example.com", events[1].RecipientEmail)
+		assert.Equal(t, "msg-2", events[1].MessageID) // Should use CustomID
+		assert.Equal(t, "HardBounce", events[1].BounceType)
+		assert.Equal(t, "Permanent", events[1].BounceCategory)
+		assert.Equal(t, "Mailbox does not exist: 550", events[1].BounceDiagnostic)
+
+		// Check third event (spam)
+		assert.Equal(t, domain.EmailEventComplaint, events[2].Type)
+		assert.Equal(t, domain.EmailProviderKindMailjet, events[2].EmailProviderKind)
+		assert.Equal(t, integrationID, events[2].IntegrationID)
+		assert.Equal(t, "test3@example.com", events[2].RecipientEmail)
+		assert.Equal(t, "msg-3", events[2].MessageID) // Should use CustomID
+		assert.Equal(t, "FBL", events[2].ComplaintFeedbackType)
+	})
+
+	t.Run("Array Payload - Single Event", func(t *testing.T) {
+		// Create test array payload with single event
+		payloads := []domain.MailjetWebhookPayload{
+			{
+				Event:     "sent",
+				Time:      1672574400, // 2023-01-01T12:00:00Z
+				Email:     "test@example.com",
+				MessageID: 12345,
+				CustomID:  "msg-1",
+			},
+		}
+		rawPayload, err := json.Marshal(payloads)
+		require.NoError(t, err)
+
+		// Call method
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.NotNil(t, events)
+		assert.Len(t, events, 1)
+		assert.Equal(t, domain.EmailEventDelivered, events[0].Type)
+		assert.Equal(t, domain.EmailProviderKindMailjet, events[0].EmailProviderKind)
+		assert.Equal(t, integrationID, events[0].IntegrationID)
+		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
+		assert.Equal(t, "msg-1", events[0].MessageID) // Should use CustomID
+	})
+
+	t.Run("Array Payload - Empty Array", func(t *testing.T) {
+		// Create empty array payload
+		payloads := []domain.MailjetWebhookPayload{}
+		rawPayload, err := json.Marshal(payloads)
+		require.NoError(t, err)
+
+		// Call method
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.Len(t, events, 0)
+	})
+
+	t.Run("Array Payload - One Invalid Event", func(t *testing.T) {
+		// Create test array payload with one invalid event
+		payloads := []domain.MailjetWebhookPayload{
+			{
+				Event:     "sent",
+				Time:      1672574400, // 2023-01-01T12:00:00Z
+				Email:     "test1@example.com",
+				MessageID: 12345,
+			},
+			{
+				Event:     "unknown", // Invalid event type
+				Time:      1672574401,
+				Email:     "test2@example.com",
+				MessageID: 12346,
+			},
+		}
+		rawPayload, err := json.Marshal(payloads)
+		require.NoError(t, err)
+
+		// Call method
+		events, err := service.processMailjetWebhook(integrationID, rawPayload)
+
+		// Assert - should fail on the invalid event
+		assert.Error(t, err)
+		assert.Nil(t, events)
+		assert.Contains(t, err.Error(), "unsupported Mailjet event type: unknown")
+	})
 }
 
 func TestProcessSMTPWebhook(t *testing.T) {
