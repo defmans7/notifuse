@@ -10,6 +10,7 @@ import {
 } from '@fortawesome/free-regular-svg-icons'
 import { faArrowPointer, faTriangleExclamation, faBan } from '@fortawesome/free-solid-svg-icons'
 import { getBroadcastStats } from '../../services/api/messages_history'
+import { useNavigate } from '@tanstack/react-router'
 
 interface BroadcastStatsProps {
   workspaceId: string
@@ -17,6 +18,8 @@ interface BroadcastStatsProps {
 }
 
 export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps) {
+  const navigate = useNavigate()
+
   const { data, isLoading } = useQuery({
     queryKey: ['broadcast-stats', workspaceId, broadcastId],
     queryFn: async () => {
@@ -39,7 +42,24 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
 
   const getRate = (numerator: number, denominator: number) => {
     if (denominator === 0) return '-'
-    return `${((numerator / denominator) * 100).toFixed(1)}%`
+    const percentage = (numerator / denominator) * 100
+    if (percentage === 0 || percentage >= 10) {
+      return `${Math.round(percentage)}%`
+    }
+    return `${percentage.toFixed(1)}%`
+  }
+
+  // Function to navigate to logs page with specific filter
+  const navigateToLogs = (filterType: string) => {
+    const searchParams = new URLSearchParams()
+    searchParams.set('broadcast_id', broadcastId)
+
+    if (filterType !== 'sent') {
+      searchParams.set(filterType, 'true')
+    }
+
+    const url = `/workspace/${workspaceId}/logs?${searchParams.toString()}`
+    navigate({ to: url as any })
   }
 
   // Formatter function for statistics that handles loading state
@@ -53,8 +73,11 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
   return (
     <Row gutter={[16, 16]} wrap className="flex-nowrap overflow-x-auto">
       <Col span={3}>
-        <Tooltip title={`${stats.total_sent} total emails sent`}>
-          <div>
+        <Tooltip title={`${stats.total_sent} total emails sent - Click to view details`}>
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('sent')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">
@@ -74,8 +97,13 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         </Tooltip>
       </Col>
       <Col span={3}>
-        <Tooltip title={`${stats.total_delivered} emails successfully delivered`}>
-          <div>
+        <Tooltip
+          title={`${stats.total_delivered} emails successfully delivered - Click to view details`}
+        >
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('is_delivered')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">
@@ -95,8 +123,11 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         </Tooltip>
       </Col>
       <Col span={3}>
-        <Tooltip title={`${stats.total_opened} total opens`}>
-          <div>
+        <Tooltip title={`${stats.total_opened} total opens - Click to view details`}>
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('is_opened')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">
@@ -116,8 +147,11 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         </Tooltip>
       </Col>
       <Col span={3}>
-        <Tooltip title={`${stats.total_clicked} total clicks`}>
-          <div>
+        <Tooltip title={`${stats.total_clicked} total clicks - Click to view details`}>
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('is_clicked')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">
@@ -137,8 +171,11 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         </Tooltip>
       </Col>
       <Col span={3}>
-        <Tooltip title={`${stats.total_failed} emails failed to send`}>
-          <div>
+        <Tooltip title={`${stats.total_failed} emails failed to send - Click to view details`}>
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('is_failed')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">
@@ -158,8 +195,11 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         </Tooltip>
       </Col>
       <Col span={3}>
-        <Tooltip title={`${stats.total_bounced} emails bounced back`}>
-          <div>
+        <Tooltip title={`${stats.total_bounced} emails bounced back - Click to view details`}>
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('is_bounced')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">
@@ -179,8 +219,11 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         </Tooltip>
       </Col>
       <Col span={3}>
-        <Tooltip title={`${stats.total_complained} total complaints`}>
-          <div>
+        <Tooltip title={`${stats.total_complained} total complaints - Click to view details`}>
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('is_complained')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">
@@ -200,8 +243,11 @@ export function BroadcastStats({ workspaceId, broadcastId }: BroadcastStatsProps
         </Tooltip>
       </Col>
       <Col span={3}>
-        <Tooltip title={`${stats.total_unsubscribed} total unsubscribes`}>
-          <div>
+        <Tooltip title={`${stats.total_unsubscribed} total unsubscribes - Click to view details`}>
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+            onClick={() => navigateToLogs('is_unsubscribed')}
+          >
             <Statistic
               title={
                 <Space className="font-medium">

@@ -322,15 +322,8 @@ func (p *MessageListParams) Validate() error {
 		return fmt.Errorf("invalid contact email format")
 	}
 
-	// Validate broadcast ID if provided
-	if p.BroadcastID != "" && !govalidator.IsUUID(p.BroadcastID) {
-		return fmt.Errorf("invalid broadcast ID format")
-	}
-
-	// Validate template ID if provided
-	if p.TemplateID != "" && !govalidator.IsUUID(p.TemplateID) {
-		return fmt.Errorf("invalid template ID format")
-	}
+	// Note: BroadcastID and TemplateID are not validated as UUIDs
+	// They can be any non-empty string format
 
 	// Validate time ranges
 	if p.SentAfter != nil && p.SentBefore != nil {
