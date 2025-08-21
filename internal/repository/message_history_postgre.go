@@ -470,7 +470,7 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 		query := fmt.Sprintf(`
 			UPDATE message_history 
 			SET %s = updates.timestamp, 
-				status_info = COALESCE(updates.status_info, status_info), 
+				status_info = COALESCE(updates.status_info, message_history.status_info), 
 				updated_at = $1::TIMESTAMP WITH TIME ZONE
 			FROM (VALUES %s) AS updates(id, timestamp, status_info)
 			WHERE message_history.id = updates.id AND %s IS NULL
