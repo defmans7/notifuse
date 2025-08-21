@@ -624,13 +624,15 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 	}
 
 	// Map Mailjet event types to our event types
+	// According to Mailjet documentation at https://dev.mailjet.com/email/guides/webhooks/
 	switch payload.Event {
 	case "sent":
+		// Mailjet's "sent" event means the message was successfully delivered
 		eventType = domain.EmailEventDelivered
-	case "bounce", "blocked":
+	case "bounce":
 		eventType = domain.EmailEventBounce
 
-		// Set bounce details
+		// Set bounce details based on Mailjet's bounce classification
 		if payload.HardBounce {
 			bounceType = "HardBounce"
 			bounceCategory = "Permanent"
@@ -640,15 +642,34 @@ func (s *WebhookEventService) processMailjetWebhook(integrationID string, rawPay
 		}
 
 		bounceDiagnostic = payload.Comment
-		if payload.ErrorCode != "" {
+		if payload.Error != "" {
 			if bounceDiagnostic != "" {
 				bounceDiagnostic += ": "
 			}
-			bounceDiagnostic += payload.ErrorCode
+			bounceDiagnostic += payload.Error
+		}
+	case "blocked":
+		// Blocked messages are treated as bounces
+		eventType = domain.EmailEventBounce
+		bounceType = "Blocked"
+		bounceCategory = "Blocked"
+		bounceDiagnostic = payload.Comment
+		if payload.Error != "" {
+			if bounceDiagnostic != "" {
+				bounceDiagnostic += ": "
+			}
+			bounceDiagnostic += payload.Error
 		}
 	case "spam":
 		eventType = domain.EmailEventComplaint
-		complaintFeedbackType = "abuse"
+		complaintFeedbackType = "spam"
+		if payload.Source != "" {
+			complaintFeedbackType = payload.Source
+		}
+	case "unsub":
+		// Unsubscribe events can be treated as complaints for tracking purposes
+		eventType = domain.EmailEventComplaint
+		complaintFeedbackType = "unsubscribe"
 	default:
 		return nil, fmt.Errorf("unsupported Mailjet event type: %s", payload.Event)
 	}

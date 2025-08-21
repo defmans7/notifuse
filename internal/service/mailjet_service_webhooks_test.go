@@ -58,7 +58,7 @@ func TestMailjetService_UpdateWebhook(t *testing.T) {
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
 				// Verify request
 				assert.Equal(t, "PUT", req.Method)
-				assert.Equal(t, "https://api.mailjet.com/v3/eventcallback/123", req.URL.String())
+				assert.Equal(t, "https://api.mailjet.com/v3/REST/eventcallbackurl/123", req.URL.String())
 
 				// Verify auth header
 				username, password, ok := req.BasicAuth()

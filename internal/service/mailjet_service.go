@@ -33,7 +33,7 @@ func NewMailjetService(httpClient domain.HTTPClient, authService domain.AuthServ
 // ListWebhooks retrieves all registered webhooks
 func (s *MailjetService) ListWebhooks(ctx context.Context, config domain.MailjetSettings) (*domain.MailjetWebhookResponse, error) {
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.mailjet.com/v3/eventcallback", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.mailjet.com/v3/REST/eventcallbackurl", nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for listing Mailjet webhooks: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -76,7 +76,7 @@ func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.Mailje
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.mailjet.com/v3/eventcallback", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.mailjet.com/v3/REST/eventcallbackurl", bytes.NewBuffer(requestBody))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for creating Mailjet webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -113,7 +113,7 @@ func (s *MailjetService) CreateWebhook(ctx context.Context, config domain.Mailje
 // GetWebhook retrieves a webhook by ID
 func (s *MailjetService) GetWebhook(ctx context.Context, config domain.MailjetSettings, webhookID int64) (*domain.MailjetWebhook, error) {
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.mailjet.com/v3/eventcallback/%d", webhookID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.mailjet.com/v3/REST/eventcallbackurl/%d", webhookID), nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for getting Mailjet webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -165,7 +165,7 @@ func (s *MailjetService) UpdateWebhook(ctx context.Context, config domain.Mailje
 		return nil, fmt.Errorf("failed to marshal webhook configuration: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("https://api.mailjet.com/v3/eventcallback/%d", webhookID), bytes.NewBuffer(requestBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("https://api.mailjet.com/v3/REST/eventcallbackurl/%d", webhookID), bytes.NewBuffer(requestBody))
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for updating Mailjet webhook: %v", err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -206,7 +206,7 @@ func (s *MailjetService) DeleteWebhook(ctx context.Context, config domain.Mailje
 	webhookIDStr := strconv.FormatInt(webhookID, 10)
 	s.logger = s.logger.WithField("webhook_id", webhookIDStr)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("https://api.mailjet.com/v3/eventcallback/%d", webhookID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("https://api.mailjet.com/v3/REST/eventcallbackurl/%d", webhookID), nil)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create request for deleting Mailjet webhook: %v", err))
 		return fmt.Errorf("failed to create request: %w", err)
@@ -260,12 +260,17 @@ func (s *MailjetService) RegisterWebhooks(
 			mailjetEvents = append(mailjetEvents, domain.MailjetEventSent)
 			registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
 		case domain.EmailEventBounce:
+			// Register both bounce and blocked events for comprehensive bounce tracking
 			mailjetEvents = append(mailjetEvents, domain.MailjetEventBounce)
 			mailjetEvents = append(mailjetEvents, domain.MailjetEventBlocked)
 			registeredEvents = append(registeredEvents, domain.EmailEventBounce)
+			registeredEvents = append(registeredEvents, domain.EmailEventBounce) // One entry for each webhook
 		case domain.EmailEventComplaint:
+			// Register both spam and unsubscribe events for complaint tracking
 			mailjetEvents = append(mailjetEvents, domain.MailjetEventSpam)
+			mailjetEvents = append(mailjetEvents, domain.MailjetEventUnsub)
 			registeredEvents = append(registeredEvents, domain.EmailEventComplaint)
+			registeredEvents = append(registeredEvents, domain.EmailEventComplaint) // One entry for each webhook
 		}
 	}
 
@@ -295,17 +300,23 @@ func (s *MailjetService) RegisterWebhooks(
 		}
 	}
 
-	// Create a new webhook
-	// Mailjet allows us to create a single webhook for multiple event types
-	webhookConfig := domain.MailjetWebhook{
-		Endpoint:  webhookURL,
-		EventType: string(mailjetEvents[0]), // The primary event type
-		Status:    "active",
-	}
+	// Create webhooks for each event type
+	// According to Mailjet documentation, each webhook handles one event type
+	var createdWebhooks []domain.MailjetWebhook
+	for _, eventType := range mailjetEvents {
+		webhookConfig := domain.MailjetWebhook{
+			Endpoint:  webhookURL,
+			EventType: string(eventType),
+			Status:    "alive",
+			Version:   2,     // Use version 2 as recommended by Mailjet documentation
+			IsBackup:  false, // This is not a backup webhook
+		}
 
-	webhook, err := s.CreateWebhook(ctx, *providerConfig.Mailjet, webhookConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Mailjet webhook: %w", err)
+		webhook, err := s.CreateWebhook(ctx, *providerConfig.Mailjet, webhookConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Mailjet webhook for event %s: %w", eventType, err)
+		}
+		createdWebhooks = append(createdWebhooks, *webhook)
 	}
 
 	// Create webhook registration status
@@ -319,14 +330,16 @@ func (s *MailjetService) RegisterWebhooks(
 		},
 	}
 
-	// Add endpoints for each event type
-	for _, eventType := range registeredEvents {
-		status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
-			WebhookID: strconv.FormatInt(webhook.ID, 10),
-			URL:       webhookURL,
-			EventType: eventType,
-			Active:    webhook.Status == "active",
-		})
+	// Add endpoints for each created webhook
+	for i, webhook := range createdWebhooks {
+		if i < len(registeredEvents) {
+			status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
+				WebhookID: strconv.FormatInt(webhook.ID, 10),
+				URL:       webhookURL,
+				EventType: registeredEvents[i],
+				Active:    webhook.Status == "alive",
+			})
+		}
 	}
 
 	return status, nil
@@ -364,6 +377,7 @@ func (s *MailjetService) GetWebhookStatus(
 
 	// Look for webhooks that match our integration
 	for _, webhook := range existingWebhooks.Data {
+
 		if strings.Contains(webhook.Endpoint, fmt.Sprintf("workspace_id=%s", workspaceID)) &&
 			strings.Contains(webhook.Endpoint, fmt.Sprintf("integration_id=%s", integrationID)) {
 
@@ -376,24 +390,23 @@ func (s *MailjetService) GetWebhookStatus(
 					WebhookID: strconv.FormatInt(webhook.ID, 10),
 					URL:       webhook.Endpoint,
 					EventType: domain.EmailEventDelivered,
-					Active:    webhook.Status == "active",
+					Active:    webhook.Status == "alive",
 				})
 			case domain.MailjetEventBounce, domain.MailjetEventBlocked:
 				status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
 					WebhookID: strconv.FormatInt(webhook.ID, 10),
 					URL:       webhook.Endpoint,
 					EventType: domain.EmailEventBounce,
-					Active:    webhook.Status == "active",
+					Active:    webhook.Status == "alive",
 				})
-			case domain.MailjetEventSpam:
+			case domain.MailjetEventSpam, domain.MailjetEventUnsub:
 				status.Endpoints = append(status.Endpoints, domain.WebhookEndpointStatus{
 					WebhookID: strconv.FormatInt(webhook.ID, 10),
 					URL:       webhook.Endpoint,
 					EventType: domain.EmailEventComplaint,
-					Active:    webhook.Status == "active",
+					Active:    webhook.Status == "alive",
 				})
 			}
-			break
 		}
 	}
 

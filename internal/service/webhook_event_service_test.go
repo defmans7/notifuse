@@ -884,7 +884,7 @@ func TestProcessMailjetWebhook(t *testing.T) {
 			MessageID:  12345,
 			HardBounce: true,
 			Comment:    "Mailbox does not exist",
-			ErrorCode:  "550",
+			Error:      "550",
 		}
 		rawPayload, err := json.Marshal(payload)
 		require.NoError(t, err)
@@ -927,7 +927,7 @@ func TestProcessMailjetWebhook(t *testing.T) {
 		assert.Equal(t, integrationID, events[0].IntegrationID)
 		assert.Equal(t, "test@example.com", events[0].RecipientEmail)
 		assert.Equal(t, "12345", events[0].MessageID)
-		assert.Equal(t, "abuse", events[0].ComplaintFeedbackType)
+		assert.Equal(t, "spam", events[0].ComplaintFeedbackType)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {

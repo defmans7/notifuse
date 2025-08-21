@@ -56,7 +56,7 @@ func TestMailjetService_GetWebhookStatus(t *testing.T) {
 		mockEmptyClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if strings.Contains(req.URL.String(), "eventcallback") && req.Method == "GET" {
+				if strings.Contains(req.URL.String(), "eventcallbackurl") && req.Method == "GET" {
 					emptyResponse := domain.MailjetWebhookResponse{
 						Count: 0,
 						Data:  []domain.MailjetWebhook{},
@@ -96,7 +96,7 @@ func TestMailjetService_GetWebhookStatus(t *testing.T) {
 		mockRegisteredClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if strings.Contains(req.URL.String(), "eventcallback") && req.Method == "GET" {
+				if strings.Contains(req.URL.String(), "eventcallbackurl") && req.Method == "GET" {
 					webhooksResponse := domain.MailjetWebhookResponse{
 						Count: 3,
 						Data: []domain.MailjetWebhook{
@@ -104,19 +104,19 @@ func TestMailjetService_GetWebhookStatus(t *testing.T) {
 								ID:        101,
 								EventType: string(domain.MailjetEventSent),
 								Endpoint:  webhookURL,
-								Status:    "active",
+								Status:    "alive",
 							},
 							{
 								ID:        102,
 								EventType: string(domain.MailjetEventBounce),
 								Endpoint:  webhookURL,
-								Status:    "active",
+								Status:    "alive",
 							},
 							{
 								ID:        103,
 								EventType: string(domain.MailjetEventClick),
 								Endpoint:  "https://other-endpoint.com/webhook", // Different integration
-								Status:    "active",
+								Status:    "alive",
 							},
 						},
 						Total: 3,
@@ -139,12 +139,20 @@ func TestMailjetService_GetWebhookStatus(t *testing.T) {
 		assert.Equal(t, domain.EmailProviderKindMailjet, status.EmailProviderKind)
 		assert.True(t, status.IsRegistered)
 
-		// The service implementation will only process the first matching webhook
-		// and it adds endpoint for domain.EmailEventDelivered because of domain.MailjetEventSent
-		assert.Len(t, status.Endpoints, 1, "Should have just one endpoint corresponding to the first matching webhook")
+		// The service implementation processes all matching webhooks
+		// First webhook (ID 101) is MailjetEventSent -> EmailEventDelivered
+		// Second webhook (ID 102) is MailjetEventBounce -> EmailEventBounce
+		assert.Len(t, status.Endpoints, 2, "Should have two endpoints corresponding to the matching webhooks")
+
+		// Check first endpoint (sent event)
 		assert.Equal(t, domain.EmailEventDelivered, status.Endpoints[0].EventType)
 		assert.Equal(t, webhookURL, status.Endpoints[0].URL)
 		assert.Equal(t, "101", status.Endpoints[0].WebhookID)
+
+		// Check second endpoint (bounce event)
+		assert.Equal(t, domain.EmailEventBounce, status.Endpoints[1].EventType)
+		assert.Equal(t, webhookURL, status.Endpoints[1].URL)
+		assert.Equal(t, "102", status.Endpoints[1].WebhookID)
 	})
 
 	t.Run("Missing provider configuration", func(t *testing.T) {

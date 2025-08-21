@@ -64,13 +64,13 @@ func TestMailjetService_ListWebhooks(t *testing.T) {
 					ID:        123,
 					EventType: string(domain.MailjetEventBounce),
 					Endpoint:  "https://example.com/webhook1",
-					Status:    "active",
+					Status:    "alive",
 				},
 				{
 					ID:        456,
 					EventType: string(domain.MailjetEventClick),
 					Endpoint:  "https://example.com/webhook2",
-					Status:    "active",
+					Status:    "alive",
 				},
 			},
 			Total: 2,
@@ -82,7 +82,7 @@ func TestMailjetService_ListWebhooks(t *testing.T) {
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
 				// Verify request
 				assert.Equal(t, "GET", req.Method)
-				assert.Equal(t, "https://api.mailjet.com/v3/eventcallback", req.URL.String())
+				assert.Equal(t, "https://api.mailjet.com/v3/REST/eventcallbackurl", req.URL.String())
 
 				// Verify auth header
 				username, password, ok := req.BasicAuth()
@@ -172,7 +172,7 @@ func TestMailjetService_CreateWebhook(t *testing.T) {
 	webhookToCreate := domain.MailjetWebhook{
 		EventType: string(domain.MailjetEventBounce),
 		Endpoint:  "https://example.com/webhook",
-		Status:    "active",
+		Status:    "alive",
 	}
 
 	ctx := context.Background()
@@ -183,7 +183,7 @@ func TestMailjetService_CreateWebhook(t *testing.T) {
 			ID:        123,
 			EventType: string(domain.MailjetEventBounce),
 			Endpoint:  "https://example.com/webhook",
-			Status:    "active",
+			Status:    "alive",
 		}
 
 		// Setup mock expectations
@@ -192,7 +192,7 @@ func TestMailjetService_CreateWebhook(t *testing.T) {
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
 				// Verify request
 				assert.Equal(t, "POST", req.Method)
-				assert.Equal(t, "https://api.mailjet.com/v3/eventcallback", req.URL.String())
+				assert.Equal(t, "https://api.mailjet.com/v3/REST/eventcallbackurl", req.URL.String())
 
 				// Verify auth header
 				username, password, ok := req.BasicAuth()
@@ -288,7 +288,7 @@ func TestMailjetService_GetWebhook(t *testing.T) {
 					ID:        123,
 					EventType: string(domain.MailjetEventBounce),
 					Endpoint:  "https://example.com/webhook",
-					Status:    "active",
+					Status:    "alive",
 				},
 			},
 		}
@@ -299,7 +299,7 @@ func TestMailjetService_GetWebhook(t *testing.T) {
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
 				// Verify request
 				assert.Equal(t, "GET", req.Method)
-				assert.Equal(t, "https://api.mailjet.com/v3/eventcallback/123", req.URL.String())
+				assert.Equal(t, "https://api.mailjet.com/v3/REST/eventcallbackurl/123", req.URL.String())
 
 				// Verify auth header
 				username, password, ok := req.BasicAuth()
@@ -372,7 +372,7 @@ func TestMailjetService_DeleteWebhook(t *testing.T) {
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
 				// Verify request
 				assert.Equal(t, "DELETE", req.Method)
-				assert.Equal(t, "https://api.mailjet.com/v3/eventcallback/123", req.URL.String())
+				assert.Equal(t, "https://api.mailjet.com/v3/REST/eventcallbackurl/123", req.URL.String())
 
 				// Verify auth header
 				username, password, ok := req.BasicAuth()

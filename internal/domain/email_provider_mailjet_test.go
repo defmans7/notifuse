@@ -162,7 +162,7 @@ func TestMailjetServiceInterface(t *testing.T) {
 	webhook := domain.MailjetWebhook{
 		Endpoint:  "https://example.com/webhook",
 		EventType: string(domain.MailjetEventBounce),
-		Status:    "active",
+		Status:    "alive",
 		Version:   1,
 	}
 

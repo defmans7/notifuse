@@ -10,55 +10,64 @@ import (
 //go:generate mockgen -destination mocks/mock_mailjet_service.go -package mocks github.com/Notifuse/notifuse/internal/domain MailjetServiceInterface
 
 // MailjetWebhookPayload represents the webhook payload from Mailjet
+// According to https://dev.mailjet.com/email/guides/webhooks/
 type MailjetWebhookPayload struct {
-	Event          string `json:"event"`
-	Time           int64  `json:"time"`
-	MessageID      int64  `json:"MessageID"`
-	MessageGUID    string `json:"Message_GUID"`
-	Email          string `json:"email"`
-	CustomID       string `json:"CustomID,omitempty"`
-	Payload        string `json:"Payload,omitempty"`
+	Event     string `json:"event"`
+	Time      int64  `json:"time"`
+	MessageID int64  `json:"MessageID"`
+	Email     string `json:"email"`
+
+	// Message identification
+	MjCampaignID int64  `json:"mj_campaign_id,omitempty"`
+	MjContactID  int64  `json:"mj_contact_id,omitempty"`
+	CustomID     string `json:"CustomID,omitempty"`
+	MessageUUID  string `json:"MessageUUID,omitempty"`
+
+	// Campaign information
 	CustomCampaign string `json:"CustomCampaign,omitempty"`
-	MessageSentID  int64  `json:"mj_message_id,omitempty"`
+	Payload        string `json:"Payload,omitempty"`
 
 	// Bounce specific fields
 	Blocked        bool   `json:"blocked,omitempty"`
 	HardBounce     bool   `json:"hard_bounce,omitempty"`
 	ErrorRelatedTo string `json:"error_related_to,omitempty"`
-	ErrorCode      string `json:"error,omitempty"`
-	Origin         string `json:"origin,omitempty"`
+	Error          string `json:"error,omitempty"`
 
 	// Complaint specific fields
 	Source string `json:"source,omitempty"`
 
-	// Bounce & Complaint common fields
-	Comment    string `json:"comment,omitempty"`
-	StatusCode int    `json:"Status_code,omitempty"`
-	StateID    int    `json:"StateID,omitempty"`
-	State      string `json:"State,omitempty"`
+	// Common fields
+	Comment string `json:"comment,omitempty"`
+
+	// Click/Open specific fields
+	URL       string `json:"url,omitempty"`
+	UserAgent string `json:"user_agent,omitempty"`
 }
 
 // MailjetWebhook represents a webhook configuration in Mailjet
+// According to https://dev.mailjet.com/email/reference/webhook#v3_post_eventcallbackurl
 type MailjetWebhook struct {
 	ID        int64  `json:"ID,omitempty"`
 	APIKey    string `json:"APIKey,omitempty"`
 	Endpoint  string `json:"Url"`
 	EventType string `json:"EventType"`
-	Status    string `json:"Status"`
+	Status    string `json:"Status,omitempty"`
 	Version   int    `json:"Version"`
+	IsBackup  bool   `json:"IsBackup,omitempty"`
 }
 
 // MailjetWebhookEventType represents the available event types for webhooks
 type MailjetWebhookEventType string
 
 const (
+	// Event types as defined in Mailjet documentation
+	MailjetEventSent    MailjetWebhookEventType = "sent"
 	MailjetEventBounce  MailjetWebhookEventType = "bounce"
-	MailjetEventSpam    MailjetWebhookEventType = "spam"
 	MailjetEventBlocked MailjetWebhookEventType = "blocked"
+	MailjetEventSpam    MailjetWebhookEventType = "spam"
 	MailjetEventUnsub   MailjetWebhookEventType = "unsub"
 	MailjetEventClick   MailjetWebhookEventType = "click"
 	MailjetEventOpen    MailjetWebhookEventType = "open"
-	MailjetEventSent    MailjetWebhookEventType = "sent"
 )
 
 // MailjetWebhookResponse represents a response for webhook operations

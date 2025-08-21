@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,22 +70,6 @@ func TestMailjetService_TestWebhook(t *testing.T) {
 }
 
 func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mocks
-	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-
-	// Set up logger expectations
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-
-	// Create service with mocks
-	service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
-
 	// Test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
@@ -97,6 +82,21 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 	}
 
 	t.Run("successful registration", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
 		// Create email provider config
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
@@ -116,33 +116,42 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 			Total: 0,
 		}
 
-		// Response for created webhook
-		createdWebhook := domain.MailjetWebhook{
-			ID:        1001,
-			EventType: string(domain.MailjetEventSent),
-			Endpoint:  expectedWebhookURL,
-			Status:    "active",
-		}
-
-		// Setup mock for ListWebhooks
+		// Setup mock to handle all HTTP requests
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallback") {
+				// Handle ListWebhooks (GET)
+				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusOK, emptyResponse), nil
 				}
-				return nil, errors.New("unexpected request")
-			})
+				// Handle CreateWebhook (POST) - return different webhook based on request body
+				if req.Method == "POST" && strings.Contains(req.URL.String(), "eventcallbackurl") {
+					// Parse the request body to determine event type
+					body, _ := io.ReadAll(req.Body)
+					req.Body = io.NopCloser(bytes.NewReader(body)) // Reset body for potential re-reading
 
-		// Setup mock for CreateWebhook
-		mockHTTPClient.EXPECT().
-			Do(gomock.Any()).
-			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "POST" && strings.Contains(req.URL.String(), "eventcallback") {
-					return mockMailjetResponse(t, http.StatusCreated, createdWebhook), nil
+					var webhookReq domain.MailjetWebhook
+					json.Unmarshal(body, &webhookReq)
+
+					// Return a webhook with the same event type as requested
+					responseWebhook := domain.MailjetWebhook{
+						ID:        1001 + int64(len(webhookReq.EventType)), // Different ID for each webhook
+						EventType: webhookReq.EventType,
+						Endpoint:  expectedWebhookURL,
+						Status:    "alive",
+					}
+					return mockMailjetResponse(t, http.StatusCreated, responseWebhook), nil
+				}
+				// Handle DeleteWebhook (DELETE) - just return success
+				if req.Method == "DELETE" && strings.Contains(req.URL.String(), "eventcallbackurl") {
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(strings.NewReader("{}")),
+						Header:     make(http.Header),
+					}, nil
 				}
 				return nil, errors.New("unexpected request")
-			})
+			}).AnyTimes()
 
 		// Call the service method
 		status, err := service.RegisterWebhooks(ctx, workspaceID, integrationID, baseURL, eventTypes, providerConfig)
@@ -166,6 +175,22 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 	})
 
 	t.Run("missing configuration", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		// Call with nil provider config
 		status, err := service.RegisterWebhooks(ctx, workspaceID, integrationID, baseURL, eventTypes, nil)
 
@@ -189,6 +214,22 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 	})
 
 	t.Run("list webhooks error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
 			Mailjet: &domain.MailjetSettings{
@@ -200,7 +241,7 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 		// Setup mock for ListWebhooks to return error
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
-			Return(nil, errors.New("network error"))
+			Return(nil, errors.New("network error")).AnyTimes()
 
 		// Call the service method
 		status, err := service.RegisterWebhooks(ctx, workspaceID, integrationID, baseURL, eventTypes, providerConfig)
@@ -212,6 +253,22 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 	})
 
 	t.Run("create webhook error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
 			Mailjet: &domain.MailjetSettings{
@@ -231,21 +288,21 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallback") {
+				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusOK, emptyResponse), nil
 				}
 				return nil, errors.New("unexpected request")
-			})
+			}).AnyTimes()
 
 		// Setup mock for CreateWebhook to return error
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "POST" && strings.Contains(req.URL.String(), "eventcallback") {
+				if req.Method == "POST" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusBadRequest, nil), nil
 				}
 				return nil, errors.New("unexpected request")
-			})
+			}).AnyTimes()
 
 		// Call the service method
 		status, err := service.RegisterWebhooks(ctx, workspaceID, integrationID, baseURL, eventTypes, providerConfig)
@@ -258,27 +315,26 @@ func TestMailjetService_RegisterWebhooksProvider(t *testing.T) {
 }
 
 func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mocks
-	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-
-	// Set up logger expectations
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-
-	// Create service with mocks
-	service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
-
 	// Test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
 	integrationID := "integration-456"
 
 	t.Run("successful status check with webhooks", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
 		// Create email provider config
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
@@ -299,19 +355,19 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 					ID:        101,
 					EventType: string(domain.MailjetEventSent),
 					Endpoint:  webhookURL,
-					Status:    "active",
+					Status:    "alive",
 				},
 				{
 					ID:        102,
 					EventType: string(domain.MailjetEventBounce),
 					Endpoint:  webhookURL,
-					Status:    "active",
+					Status:    "alive",
 				},
 				{
 					ID:        103,
 					EventType: string(domain.MailjetEventSpam),
 					Endpoint:  webhookURL,
-					Status:    "active",
+					Status:    "alive",
 				},
 			},
 			Total: 3,
@@ -321,11 +377,11 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallback") {
+				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusOK, webhooksResponse), nil
 				}
 				return nil, errors.New("unexpected request")
-			})
+			}).AnyTimes()
 
 		// Call the service method
 		status, err := service.GetWebhookStatus(ctx, workspaceID, integrationID, providerConfig)
@@ -347,6 +403,21 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 	})
 
 	t.Run("no webhooks registered", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		// Create email provider config
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
@@ -367,11 +438,11 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallback") {
+				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusOK, emptyResponse), nil
 				}
 				return nil, errors.New("unexpected request")
-			})
+			}).AnyTimes()
 
 		// Call the service method
 		status, err := service.GetWebhookStatus(ctx, workspaceID, integrationID, providerConfig)
@@ -385,6 +456,21 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 	})
 
 	t.Run("missing configuration", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		// Call with nil provider config
 		status, err := service.GetWebhookStatus(ctx, workspaceID, integrationID, nil)
 
@@ -408,6 +494,21 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 	})
 
 	t.Run("list webhooks error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
 			Mailjet: &domain.MailjetSettings{
@@ -419,7 +520,7 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 		// Setup mock for ListWebhooks to return error
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
-			Return(nil, errors.New("network error"))
+			Return(nil, errors.New("network error")).AnyTimes()
 
 		// Call the service method
 		status, err := service.GetWebhookStatus(ctx, workspaceID, integrationID, providerConfig)
@@ -432,28 +533,27 @@ func TestMailjetService_GetWebhookStatusProvider(t *testing.T) {
 }
 
 func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mocks
-	mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-
-	// Set up logger expectations
-	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-
-	// Create service with mocks
-	service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
-
 	// Test data
 	ctx := context.Background()
 	workspaceID := "workspace-123"
 	integrationID := "integration-456"
 
 	t.Run("successful unregistration", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
 		// Create email provider config
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
@@ -474,46 +574,36 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 					ID:        101,
 					EventType: string(domain.MailjetEventSent),
 					Endpoint:  webhookURL,
-					Status:    "active",
+					Status:    "alive",
 				},
 				{
 					ID:        102,
 					EventType: string(domain.MailjetEventBounce),
 					Endpoint:  webhookURL,
-					Status:    "active",
+					Status:    "alive",
 				},
 			},
 			Total: 2,
 		}
 
-		// Setup mock for ListWebhooks
+		// Setup mock to handle all HTTP requests
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallback") {
+				// Handle ListWebhooks (GET)
+				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusOK, webhooksResponse), nil
 				}
-				return nil, errors.New("unexpected request")
-			})
-
-		// Setup mock for DeleteWebhook
-		mockHTTPClient.EXPECT().
-			Do(gomock.Any()).
-			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "DELETE" && strings.Contains(req.URL.String(), "eventcallback/101") {
-					return mockMailjetResponse(t, http.StatusNoContent, nil), nil
+				// Handle DeleteWebhook (DELETE) - accept any webhook ID
+				if req.Method == "DELETE" && strings.Contains(req.URL.String(), "eventcallbackurl") {
+					return &http.Response{
+						StatusCode: http.StatusNoContent,
+						Body:       io.NopCloser(strings.NewReader("")),
+						Header:     make(http.Header),
+					}, nil
 				}
 				return nil, errors.New("unexpected request")
-			})
-
-		mockHTTPClient.EXPECT().
-			Do(gomock.Any()).
-			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "DELETE" && strings.Contains(req.URL.String(), "eventcallback/102") {
-					return mockMailjetResponse(t, http.StatusNoContent, nil), nil
-				}
-				return nil, errors.New("unexpected request")
-			})
+			}).AnyTimes()
 
 		// Call the service method
 		err := service.UnregisterWebhooks(ctx, workspaceID, integrationID, providerConfig)
@@ -523,6 +613,22 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 	})
 
 	t.Run("no webhooks to unregister", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		// Create email provider config
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
@@ -543,11 +649,11 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallback") {
+				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusOK, emptyResponse), nil
 				}
 				return nil, errors.New("unexpected request")
-			})
+			}).AnyTimes()
 
 		// Call the service method
 		err := service.UnregisterWebhooks(ctx, workspaceID, integrationID, providerConfig)
@@ -557,6 +663,22 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 	})
 
 	t.Run("missing configuration", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		// Call with nil provider config
 		err := service.UnregisterWebhooks(ctx, workspaceID, integrationID, nil)
 
@@ -578,6 +700,22 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 	})
 
 	t.Run("list webhooks error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
 			Mailjet: &domain.MailjetSettings{
@@ -589,7 +727,7 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 		// Setup mock for ListWebhooks to return error
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
-			Return(nil, errors.New("network error"))
+			Return(nil, errors.New("network error")).AnyTimes()
 
 		// Call the service method
 		err := service.UnregisterWebhooks(ctx, workspaceID, integrationID, providerConfig)
@@ -600,6 +738,22 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 	})
 
 	t.Run("delete webhook error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mocks
+		mockHTTPClient := mocks.NewMockHTTPClient(ctrl)
+		mockAuthService := mocks.NewMockAuthService(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		// Set up logger expectations
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+		// Create service with mocks
+		service := NewMailjetService(mockHTTPClient, mockAuthService, mockLogger)
+
 		// Create email provider config
 		providerConfig := &domain.EmailProvider{
 			Kind: domain.EmailProviderKindMailjet,
@@ -620,26 +774,26 @@ func TestMailjetService_UnregisterWebhooksProvider(t *testing.T) {
 					ID:        101,
 					EventType: string(domain.MailjetEventSent),
 					Endpoint:  webhookURL,
-					Status:    "active",
+					Status:    "alive",
 				},
 			},
 			Total: 1,
 		}
 
-		// Setup mock for ListWebhooks
+		// Setup mock to handle all HTTP requests
 		mockHTTPClient.EXPECT().
 			Do(gomock.Any()).
 			DoAndReturn(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallback") {
+				// Handle ListWebhooks (GET)
+				if req.Method == "GET" && strings.Contains(req.URL.String(), "eventcallbackurl") {
 					return mockMailjetResponse(t, http.StatusOK, webhooksResponse), nil
 				}
+				// Handle DeleteWebhook (DELETE) - return error
+				if req.Method == "DELETE" && strings.Contains(req.URL.String(), "eventcallbackurl") {
+					return nil, errors.New("network error")
+				}
 				return nil, errors.New("unexpected request")
-			})
-
-		// Setup mock for DeleteWebhook to return error
-		mockHTTPClient.EXPECT().
-			Do(gomock.Any()).
-			Return(nil, errors.New("network error"))
+			}).AnyTimes()
 
 		// Call the service method
 		err := service.UnregisterWebhooks(ctx, workspaceID, integrationID, providerConfig)
