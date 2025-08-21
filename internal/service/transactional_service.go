@@ -732,6 +732,16 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		return fmt.Errorf("template compilation failed: %s", errMsg)
 	}
 
+	// Process subject line through Liquid templating if it contains Liquid tags
+	processedSubject, err := notifuse_mjml.ProcessLiquidTemplate(
+		template.Email.Subject,
+		messageData,
+		"email_subject",
+	)
+	if err != nil {
+		return fmt.Errorf("failed to process subject with Liquid: %w", err)
+	}
+
 	// Send the email
 	err = s.emailService.SendEmail(
 		ctx,
@@ -741,7 +751,7 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		emailSender.Email,
 		emailSender.Name,
 		recipientEmail,
-		template.Email.Subject,
+		processedSubject,
 		*compiledResult.HTML,
 		emailProvider,
 		emailOptions,
