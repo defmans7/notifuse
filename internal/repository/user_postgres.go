@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,6 +47,11 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 		user.UpdatedAt,
 	)
 	if err != nil {
+		// Check for duplicate key constraint violation (PostgreSQL error code 23505)
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") ||
+			strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return &domain.ErrUserExists{Message: "user already exists"}
+		}
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 	return nil

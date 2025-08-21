@@ -111,6 +111,15 @@ func (e *ErrUserNotFound) Error() string {
 	return e.Message
 }
 
+// ErrUserExists is returned when trying to create a user that already exists
+type ErrUserExists struct {
+	Message string
+}
+
+func (e *ErrUserExists) Error() string {
+	return e.Message
+}
+
 // ErrSessionNotFound is returned when a session is not found
 type ErrSessionNotFound struct {
 	Message string

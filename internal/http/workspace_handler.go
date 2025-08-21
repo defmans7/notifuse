@@ -338,7 +338,7 @@ func (h *WorkspaceHandler) handleCreateAPIKey(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		WriteJSONError(w, "Failed to create API key", http.StatusInternalServerError)
+		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

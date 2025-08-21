@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -678,6 +679,12 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 
 	err = s.userRepo.CreateUser(ctx, apiUser)
 	if err != nil {
+		// Check if this is a duplicate user error
+		var userExistsErr *domain.ErrUserExists
+		if errors.As(err, &userExistsErr) {
+			s.logger.WithField("workspace_id", workspaceID).WithField("user_email", apiUser.Email).Error("API user already exists")
+			return "", "", fmt.Errorf("this user already exists")
+		}
 		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiUser.ID).WithField("error", err.Error()).Error("Failed to create API user")
 		return "", "", err
 	}

@@ -179,9 +179,9 @@ export function WorkspaceMembers({
 
       // Refresh the members list
       onMembersChange()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create API key', error)
-      message.error('Failed to create API key')
+      message.error(error.message || 'Failed to create API key')
     } finally {
       setCreatingApiKey(false)
     }

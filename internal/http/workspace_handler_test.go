@@ -1312,7 +1312,7 @@ func TestWorkspaceHandler_HandleCreateAPIKey_ServiceError(t *testing.T) {
 	var response map[string]string
 	err = json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, "Failed to create API key", response["error"])
+	assert.Equal(t, "service error", response["error"])
 }
 
 func TestWorkspaceHandler_HandleRemoveMember(t *testing.T) {

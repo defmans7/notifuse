@@ -25,7 +25,7 @@ import {
   faPaperPlane,
   faEye
 } from '@fortawesome/free-regular-svg-icons'
-import { faTerminal } from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faCopy } from '@fortawesome/free-solid-svg-icons'
 import UpsertTransactionalNotificationDrawer from '../components/transactional/UpsertTransactionalNotificationDrawer'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
@@ -149,6 +149,43 @@ export function TransactionalNotificationsPage() {
   const handleShowApiModal = (notification: TransactionalNotification) => {
     setCurrentApiNotification(notification)
     setApiModalOpen(true)
+  }
+
+  const handleCopyCommand = () => {
+    if (!currentApiNotification) return
+
+    const curlCommand = `curl -X POST \\
+  "${window.location.origin}/api/transactional.send" \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+  "workspace_id": "${workspaceId}",
+  "notification": {
+    "id": "${currentApiNotification.id}",
+    "channels": ["email"],
+    "contact": {
+      "email": "recipient@example.com"
+      // other optional contact fields here
+    },
+    "data": {
+      // Your template variables here
+    },
+    "email_options": {
+      "reply_to": "reply@example.com",
+      "cc": ["cc@example.com"],
+      "bcc": ["bcc@example.com"]
+    }
+  }
+}'`
+
+    navigator.clipboard
+      .writeText(curlCommand)
+      .then(() => {
+        message.success('Curl command copied to clipboard!')
+      })
+      .catch(() => {
+        message.error('Failed to copy to clipboard')
+      })
   }
 
   if (notificationsError) {
@@ -300,7 +337,20 @@ export function TransactionalNotificationsPage() {
         title="API Command"
         open={apiModalOpen}
         onCancel={() => setApiModalOpen(false)}
-        footer={null}
+        footer={[
+          <Button
+            key="copy"
+            type="primary"
+            ghost
+            icon={<FontAwesomeIcon icon={faCopy} />}
+            onClick={handleCopyCommand}
+          >
+            Copy
+          </Button>,
+          <Button key="close" onClick={() => setApiModalOpen(false)}>
+            Close
+          </Button>
+        ]}
         width={800}
       >
         {currentApiNotification && (

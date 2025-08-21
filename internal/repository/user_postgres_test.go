@@ -52,6 +52,23 @@ func TestCreateUser(t *testing.T) {
 	err = repo.CreateUser(context.Background(), userWithError)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create user")
+
+	// Test case 3: Duplicate key constraint violation
+	duplicateUser := &domain.User{
+		ID:    uuid.New().String(),
+		Email: "duplicate@example.com",
+		Name:  "Duplicate User",
+		Type:  domain.UserTypeUser,
+	}
+
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)`).
+		WithArgs(duplicateUser.ID, duplicateUser.Email, duplicateUser.Name, duplicateUser.Type, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnError(errors.New("pq: duplicate key value violates unique constraint \"users_email_key\""))
+
+	err = repo.CreateUser(context.Background(), duplicateUser)
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUserExists{}, err)
+	assert.Equal(t, "user already exists", err.Error())
 }
 
 func TestGetUserByEmail(t *testing.T) {

@@ -63,6 +63,11 @@ func TestErrUserNotFound_Error(t *testing.T) {
 	assert.Equal(t, "test error", err.Error())
 }
 
+func TestErrUserExists_Error(t *testing.T) {
+	err := &ErrUserExists{Message: "user already exists"}
+	assert.Equal(t, "user already exists", err.Error())
+}
+
 func TestErrSessionNotFound_Error(t *testing.T) {
 	err := &ErrSessionNotFound{Message: "test error"}
 	assert.Equal(t, "test error", err.Error())
