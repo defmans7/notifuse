@@ -581,6 +581,15 @@ func BuildTemplateData(req TemplateDataRequest) (MapOfAny, error) {
 
 		templateData["contact"] = contactData
 
+		notificationCenterParams := url.Values{}
+		notificationCenterParams.Set("email", req.ContactWithList.Contact.Email)
+		notificationCenterParams.Set("email_hmac", emailHMAC)
+		notificationCenterParams.Set("wid", req.WorkspaceID)
+
+		notificationCenterURL := fmt.Sprintf("%s/notification-center?%s",
+			req.TrackingSettings.Endpoint, notificationCenterParams.Encode())
+		templateData["notification_center_url"] = notificationCenterURL
+
 	} else {
 		// Create empty contact object if none provided
 		templateData["contact"] = MapOfAny{}

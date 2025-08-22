@@ -1102,6 +1102,15 @@ func TestBuildTemplateData(t *testing.T) {
 		assert.Contains(t, confirmURL, "lname=Newsletter")
 		assert.Contains(t, confirmURL, "wid=ws-123")
 		assert.Contains(t, confirmURL, "mid=msg-456")
+
+		// Check notification center URL
+		notificationCenterURL, ok := data["notification_center_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, notificationCenterURL, "https://api.example.com/notification-center")
+		assert.Contains(t, notificationCenterURL, "email=test%40example.com")
+		assert.Contains(t, notificationCenterURL, "wid=ws-123")
+		assert.NotContains(t, notificationCenterURL, "action=") // Should not contain action parameter
+		assert.NotContains(t, notificationCenterURL, "lid=")    // Should not contain list ID
 	})
 
 	t.Run("with minimal data", func(t *testing.T) {
@@ -1154,9 +1163,69 @@ func TestBuildTemplateData(t *testing.T) {
 		// No unsubscribe URL should be present
 		_, exists := data["unsubscribe_url"]
 		assert.False(t, exists)
+
+		// No notification center URL should be present (no contact)
+		_, exists = data["notification_center_url"]
+		assert.False(t, exists)
 	})
 
-	// We'll skip the third test case since it would require mocking
+	t.Run("with contact but no list (transactional email)", func(t *testing.T) {
+		// Setup test data with contact but no list
+		workspaceID := "ws-123"
+		messageID := "msg-456"
+		workspaceSecretKey := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+		contactWithList := ContactWithList{
+			Contact: &Contact{
+				Email:     "test@example.com",
+				FirstName: &NullableString{String: "John", IsNull: false},
+				LastName:  &NullableString{String: "Doe", IsNull: false},
+			},
+			ListID:   "", // No list
+			ListName: "",
+		}
+		trackingSettings := notifuse_mjml.TrackingSettings{
+			Endpoint:    "https://api.example.com",
+			UTMSource:   "app",
+			UTMMedium:   "email",
+			UTMCampaign: "transactional",
+		}
+
+		req := TemplateDataRequest{
+			WorkspaceID:        workspaceID,
+			WorkspaceSecretKey: workspaceSecretKey,
+			ContactWithList:    contactWithList,
+			MessageID:          messageID,
+			TrackingSettings:   trackingSettings,
+			Broadcast:          nil,
+		}
+		data, err := BuildTemplateData(req)
+
+		// Assertions
+		assert.NoError(t, err)
+		assert.NotNil(t, data)
+
+		// Check contact data exists
+		contactData, ok := data["contact"].(MapOfAny)
+		assert.True(t, ok)
+		assert.Equal(t, "test@example.com", contactData["email"])
+
+		// Check notification center URL is present even without list
+		notificationCenterURL, ok := data["notification_center_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, notificationCenterURL, "https://api.example.com/notification-center")
+		assert.Contains(t, notificationCenterURL, "email=test%40example.com")
+		assert.Contains(t, notificationCenterURL, "wid=ws-123")
+		assert.NotContains(t, notificationCenterURL, "lid=") // Should not contain list ID
+
+		// No list-specific URLs should be present
+		_, exists := data["unsubscribe_url"]
+		assert.False(t, exists)
+		_, exists = data["confirm_subscription_url"]
+		assert.False(t, exists)
+	})
+
+	// We'll skip other test cases since they would require mocking
 }
 
 // TestGenerateEmailRedirectionEndpoint tests the generation of the URL for tracking email redirections

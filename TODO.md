@@ -1,5 +1,6 @@
 # TODO
 
+- test double optin
 - test list welcome email / unsub email
 - test schedule sending
 - test the docker compose
