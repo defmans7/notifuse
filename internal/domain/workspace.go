@@ -447,6 +447,31 @@ func (w *Workspace) GetEmailProvider(isMarketing bool) (*EmailProvider, error) {
 	return &integration.EmailProvider, nil
 }
 
+// GetEmailProviderWithIntegrationID returns both the email provider and integration ID based on provider type
+func (w *Workspace) GetEmailProviderWithIntegrationID(isMarketing bool) (*EmailProvider, string, error) {
+	var integrationID string
+
+	// Get integration ID from settings based on provider type
+	if isMarketing {
+		integrationID = w.Settings.MarketingEmailProviderID
+	} else {
+		integrationID = w.Settings.TransactionalEmailProviderID
+	}
+
+	// If no integration ID is configured, return nil
+	if integrationID == "" {
+		return nil, "", nil
+	}
+
+	// Find the integration by ID
+	integration := w.GetIntegrationByID(integrationID)
+	if integration == nil {
+		return nil, "", fmt.Errorf("integration with ID %s not found", integrationID)
+	}
+
+	return &integration.EmailProvider, integrationID, nil
+}
+
 func (w *Workspace) MarshalJSON() ([]byte, error) {
 	type Alias Workspace
 	if w.Integrations == nil {

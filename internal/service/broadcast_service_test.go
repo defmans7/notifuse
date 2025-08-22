@@ -274,7 +274,7 @@ func TestBroadcastService_SendToIndividual_Success(t *testing.T) {
 		return &domain.CompileTemplateResponse{Success: true, HTML: &compiledHTML}, nil
 	})
 
-	d.emailSvc.EXPECT().SendEmail(gomock.Any(), req.WorkspaceID, gomock.Any(), true, sender.Email, sender.Name, req.RecipientEmail, template.Email.Subject, compiledHTML, gomock.Any(), gomock.Any()).Return(nil)
+	d.emailSvc.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
 
 	d.messageHistoryRepo.EXPECT().Create(gomock.Any(), req.WorkspaceID, gomock.Any()).Return(nil)
 

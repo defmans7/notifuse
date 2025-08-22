@@ -525,13 +525,18 @@ func (s *PostmarkService) filterPostmarkWebhooks(
 }
 
 // SendEmail sends an email using Postmark
-func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
-	if provider.Postmark == nil {
+func (s *PostmarkService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
+	if request.Provider.Postmark == nil {
 		return fmt.Errorf("Postmark provider is not configured")
 	}
 
 	// Make sure we have a server token
-	if provider.Postmark.ServerToken == "" {
+	if request.Provider.Postmark.ServerToken == "" {
 		s.logger.Error("Postmark server token is empty")
 		return fmt.Errorf("Postmark server token is required")
 	}
@@ -541,19 +546,19 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 
 	// Prepare the request body
 	requestBody := map[string]interface{}{
-		"From":     fmt.Sprintf("%s <%s>", fromName, fromAddress),
-		"To":       to,
-		"Subject":  subject,
-		"HtmlBody": content,
+		"From":     fmt.Sprintf("%s <%s>", request.FromName, request.FromAddress),
+		"To":       request.To,
+		"Subject":  request.Subject,
+		"HtmlBody": request.Content,
 		"Metadata": map[string]string{
-			"notifuse_message_id": messageID,
+			"notifuse_message_id": request.MessageID,
 		},
 	}
 
 	// Add CC if specified
-	if len(emailOptions.CC) > 0 {
+	if len(request.EmailOptions.CC) > 0 {
 		var ccAddresses []string
-		for _, ccAddr := range emailOptions.CC {
+		for _, ccAddr := range request.EmailOptions.CC {
 			if ccAddr != "" {
 				ccAddresses = append(ccAddresses, ccAddr)
 			}
@@ -564,9 +569,9 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 	}
 
 	// Add BCC if specified
-	if len(emailOptions.BCC) > 0 {
+	if len(request.EmailOptions.BCC) > 0 {
 		var bccAddresses []string
-		for _, bccAddr := range emailOptions.BCC {
+		for _, bccAddr := range request.EmailOptions.BCC {
 			if bccAddr != "" {
 				bccAddresses = append(bccAddresses, bccAddr)
 			}
@@ -577,8 +582,8 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 	}
 
 	// Add ReplyTo if specified
-	if emailOptions.ReplyTo != "" {
-		requestBody["ReplyTo"] = emailOptions.ReplyTo
+	if request.EmailOptions.ReplyTo != "" {
+		requestBody["ReplyTo"] = request.EmailOptions.ReplyTo
 	}
 
 	// Convert to JSON
@@ -596,7 +601,7 @@ func (s *PostmarkService) SendEmail(ctx context.Context, workspaceID string, mes
 	// Add headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Postmark-Server-Token", provider.Postmark.ServerToken)
+	req.Header.Set("X-Postmark-Server-Token", request.Provider.Postmark.ServerToken)
 
 	// Use the injected HTTP client
 	resp, err := s.httpClient.Do(req)

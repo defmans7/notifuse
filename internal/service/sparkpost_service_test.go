@@ -1054,7 +1054,19 @@ func TestSparkPostService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service method
-		err := sparkPostService.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := sparkPostService.SendEmail(ctx, request)
 
 		// Verify results
 		assert.NoError(t, err)
@@ -1067,7 +1079,19 @@ func TestSparkPostService_SendEmail(t *testing.T) {
 		provider := &domain.EmailProvider{}
 
 		// Call the service method
-		err := sparkPostService.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := sparkPostService.SendEmail(ctx, request)
 
 		// Verify results
 		assert.Error(t, err)
@@ -1092,7 +1116,19 @@ func TestSparkPostService_SendEmail(t *testing.T) {
 			Return(nil, expectedErr)
 
 		// Call the service method
-		err := sparkPostService.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := sparkPostService.SendEmail(ctx, request)
 
 		// Verify results
 		assert.Error(t, err)
@@ -1116,7 +1152,19 @@ func TestSparkPostService_SendEmail(t *testing.T) {
 			Return(mockHTTPResponse(http.StatusBadRequest, `{"errors":[{"message":"Invalid recipient address"}]}`), nil)
 
 		// Call the service method
-		err := sparkPostService.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := sparkPostService.SendEmail(ctx, request)
 
 		// Verify results
 		assert.Error(t, err)
@@ -1141,7 +1189,19 @@ func TestSparkPostService_SendEmail(t *testing.T) {
 			Return(mockHTTPResponse(http.StatusOK, `{"results":{"id":"test-transmission-id"}}`), nil)
 
 		// Call the service method
-		err := sparkPostService.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := sparkPostService.SendEmail(ctx, request)
 
 		// Verify results - should succeed in sandbox mode
 		assert.NoError(t, err)

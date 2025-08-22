@@ -498,7 +498,19 @@ func TestMailjetService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Assertions
 		require.NoError(t, err)
@@ -511,7 +523,19 @@ func TestMailjetService_SendEmail(t *testing.T) {
 		provider := &domain.EmailProvider{}
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Assertions
 		require.Error(t, err)
@@ -536,7 +560,19 @@ func TestMailjetService_SendEmail(t *testing.T) {
 			Return(nil, expectedErr)
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Assertions
 		require.Error(t, err)
@@ -566,7 +602,19 @@ func TestMailjetService_SendEmail(t *testing.T) {
 			Return(mockHTTPResponse(t, http.StatusBadRequest, errorResp), nil)
 
 		// Call the service method
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Assertions
 		require.Error(t, err)

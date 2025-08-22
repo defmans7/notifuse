@@ -35,7 +35,7 @@ func setupTestEnvironment(t *testing.T) (
 
 	// Ensure mock message sender implements the correct interface
 	mockMessageSender.EXPECT().
-		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendToRecipient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		AnyTimes()
 

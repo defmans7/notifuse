@@ -743,7 +743,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	}
 
 	// Check if workspace has a marketing email provider configured
-	emailProvider, err := workspace.GetEmailProvider(true) // true for marketing emails
+	emailProvider, integrationID, err := workspace.GetEmailProviderWithIntegrationID(true) // true for marketing emails
 	if err != nil {
 		s.logger.Error("Failed to get email provider configuration")
 		return fmt.Errorf("failed to get email provider: %w", err)
@@ -874,22 +874,24 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return fmt.Errorf("template compilation failed: %s", errMsg)
 	}
 
-	// Send the email
-	err = s.emailSvc.SendEmail(
-		ctx,
-		request.WorkspaceID,
-		messageID,
-		true, // is marketing
-		emailSender.Email,
-		emailSender.Name,
-		request.RecipientEmail,
-		template.Email.Subject,
-		*compiledTemplate.HTML,
-		emailProvider,
-		domain.EmailOptions{
+	// Create SendEmailProviderRequest
+	emailRequest := domain.SendEmailProviderRequest{
+		WorkspaceID:   request.WorkspaceID,
+		IntegrationID: integrationID,
+		MessageID:     messageID,
+		FromAddress:   emailSender.Email,
+		FromName:      emailSender.Name,
+		To:            request.RecipientEmail,
+		Subject:       template.Email.Subject,
+		Content:       *compiledTemplate.HTML,
+		Provider:      emailProvider,
+		EmailOptions: domain.EmailOptions{
 			ReplyTo: template.Email.ReplyTo,
 		},
-	)
+	}
+
+	// Send the email
+	err = s.emailSvc.SendEmail(ctx, emailRequest, true)
 	if err != nil {
 		s.logger.Error("Failed to send message")
 		return err

@@ -70,7 +70,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call the method
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, invalidProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      invalidProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Verify error
 		require.Error(t, err)
@@ -95,7 +107,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call the method
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Verify error
 		require.Error(t, err)
@@ -121,7 +145,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call the method - should fail at client creation
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
@@ -145,7 +181,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with CC and BCC - should fail at client creation but parameters are validated
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{CC: cc, BCC: bcc})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{CC: cc, BCC: bcc},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
@@ -172,7 +220,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		ccWithEmpty := []string{"cc1@example.com", "", "cc2@example.com"}
 		bccWithEmpty := []string{"", "bcc1@example.com", ""}
 
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{CC: ccWithEmpty, BCC: bccWithEmpty})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{CC: ccWithEmpty, BCC: bccWithEmpty},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
@@ -196,7 +256,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with reply-to
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{ReplyTo: replyTo})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{ReplyTo: replyTo},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
@@ -220,7 +292,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call without reply-to (empty string)
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
@@ -259,7 +343,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call the method
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, providerNoTLS, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      providerNoTLS,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
@@ -284,7 +380,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Call with invalid from address
 		invalidFromAddress := "invalid-email"
-		err := service.SendEmail(ctx, messageID, workspaceID, invalidFromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   invalidFromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
@@ -309,82 +417,100 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Call with invalid to address
 		invalidToAddress := "invalid-email"
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, invalidToAddress, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            invalidToAddress,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SMTP client")
 	})
 
 	t.Run("empty message ID", func(t *testing.T) {
-		// Create mock factory that fails to avoid nil client issues
-		mockFactory := mocks.NewMockSMTPClientFactory(ctrl)
-		mockFactory.EXPECT().CreateClient(
-			validProvider.SMTP.Host,
-			validProvider.SMTP.Port,
-			validProvider.SMTP.Username,
-			validProvider.SMTP.Password,
-			validProvider.SMTP.UseTLS,
-		).Return(nil, fmt.Errorf("connection error"))
-
-		// Create service
+		// Create service (no mock needed since validation fails before SMTP logic)
 		service := &SMTPService{
 			logger:        mockLogger,
-			clientFactory: mockFactory,
+			clientFactory: nil, // Not needed since validation fails first
 		}
 
 		// Call with empty message ID
-		err := service.SendEmail(ctx, "", workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to create SMTP client")
+		assert.Contains(t, err.Error(), "message ID is required")
 	})
 
 	t.Run("empty subject", func(t *testing.T) {
-		// Create mock factory that fails to avoid nil client issues
-		mockFactory := mocks.NewMockSMTPClientFactory(ctrl)
-		mockFactory.EXPECT().CreateClient(
-			validProvider.SMTP.Host,
-			validProvider.SMTP.Port,
-			validProvider.SMTP.Username,
-			validProvider.SMTP.Password,
-			validProvider.SMTP.UseTLS,
-		).Return(nil, fmt.Errorf("connection error"))
-
-		// Create service
+		// Create service (no mock needed since validation fails before SMTP logic)
 		service := &SMTPService{
 			logger:        mockLogger,
-			clientFactory: mockFactory,
+			clientFactory: nil, // Not needed since validation fails first
 		}
 
 		// Call with empty subject
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, "", content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       "",
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to create SMTP client")
+		assert.Contains(t, err.Error(), "subject is required")
 	})
 
 	t.Run("empty content", func(t *testing.T) {
-		// Create mock factory that fails to avoid nil client issues
-		mockFactory := mocks.NewMockSMTPClientFactory(ctrl)
-		mockFactory.EXPECT().CreateClient(
-			validProvider.SMTP.Host,
-			validProvider.SMTP.Port,
-			validProvider.SMTP.Username,
-			validProvider.SMTP.Password,
-			validProvider.SMTP.UseTLS,
-		).Return(nil, fmt.Errorf("connection error"))
-
-		// Create service
+		// Create service (no mock needed since validation fails before SMTP logic)
 		service := &SMTPService{
 			logger:        mockLogger,
-			clientFactory: mockFactory,
+			clientFactory: nil, // Not needed since validation fails first
 		}
 
 		// Call with empty content
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, "", validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       "",
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to create SMTP client")
+		assert.Contains(t, err.Error(), "content is required")
 	})
 
 	t.Run("successful email sending", func(t *testing.T) {
@@ -411,7 +537,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Call the method - this will fail when trying to use the nil client
 		// but we can verify the factory was called correctly
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// This will error because we returned nil client, but that's expected
 		// The important thing is that the factory was called with correct parameters
@@ -436,7 +574,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with CC and BCC - verify factory is called with correct parameters
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{CC: cc, BCC: bcc})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{CC: cc, BCC: bcc},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Will error due to nil client, but factory was called correctly
 		require.Error(t, err)
@@ -460,7 +610,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with ReplyTo - verify factory is called correctly
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{ReplyTo: replyTo})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{ReplyTo: replyTo},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Will error due to nil client, but factory was called correctly
 		require.Error(t, err)
@@ -484,7 +646,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with various parameters to ensure factory is called correctly
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Will error due to nil client, but factory was called correctly
 		require.Error(t, err)
@@ -516,7 +690,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Call with invalid from address format
 		invalidFromAddress := "invalid-email-format"
-		err := service.SendEmail(ctx, messageID, workspaceID, invalidFromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   invalidFromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at message composition stage with "invalid sender" error
 		require.Error(t, err)
@@ -546,7 +732,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Call with invalid to address format
 		invalidToAddress := "invalid-email-format"
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, invalidToAddress, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            invalidToAddress,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at message composition stage with "invalid recipient" error
 		require.Error(t, err)
@@ -576,7 +774,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Call with invalid CC address format
 		invalidCC := []string{"valid@example.com", "invalid-email-format"}
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{CC: invalidCC})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{CC: invalidCC},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at message composition stage with "invalid CC recipient" error
 		require.Error(t, err)
@@ -606,7 +816,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 
 		// Call with invalid BCC address format
 		invalidBCC := []string{"valid@example.com", "invalid-email-format"}
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{BCC: invalidBCC})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{BCC: invalidBCC},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at message composition stage with "invalid BCC recipient" error
 		require.Error(t, err)
@@ -635,7 +857,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with all valid parameters including CC, BCC, and ReplyTo
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{CC: cc, BCC: bcc, ReplyTo: replyTo})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{CC: cc, BCC: bcc, ReplyTo: replyTo},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at DialAndSend stage (connection error), but message composition should succeed
 		// The error should be about sending, not about message composition
@@ -665,7 +899,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with empty CC and BCC arrays
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at DialAndSend stage, but message composition should succeed
 		require.Error(t, err)
@@ -697,7 +943,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		mixedCC := []string{"", "valid1@example.com", "", "valid2@example.com", ""}
 		mixedBCC := []string{"valid3@example.com", "", "valid4@example.com"}
 
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{CC: mixedCC, BCC: mixedBCC, ReplyTo: replyTo})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{CC: mixedCC, BCC: mixedBCC, ReplyTo: replyTo},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at DialAndSend stage, but message composition should succeed
 		require.Error(t, err)
@@ -726,7 +984,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call with reply-to header
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{ReplyTo: replyTo})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{ReplyTo: replyTo},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at DialAndSend stage, but message composition should succeed
 		require.Error(t, err)
@@ -755,7 +1025,19 @@ func TestSMTPService_SendEmail(t *testing.T) {
 		}
 
 		// Call without reply-to header (empty string)
-		err := service.SendEmail(ctx, messageID, workspaceID, fromAddress, fromName, to, subject, content, validProvider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      validProvider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Should fail at DialAndSend stage, but message composition should succeed
 		require.Error(t, err)

@@ -602,50 +602,55 @@ func mapMailgunEventType(eventType string) domain.EmailEventType {
 }
 
 // SendEmail sends an email using Mailgun
-func (s *MailgunService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
-	if provider.Mailgun == nil {
+func (s *MailgunService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
+	if request.Provider.Mailgun == nil {
 		return fmt.Errorf("Mailgun provider is not configured")
 	}
 
 	// Determine endpoint based on region
 	endpoint := ""
-	if strings.ToLower(provider.Mailgun.Region) == "eu" {
+	if strings.ToLower(request.Provider.Mailgun.Region) == "eu" {
 		endpoint = "https://api.eu.mailgun.net/v3"
 	} else {
 		endpoint = "https://api.mailgun.net/v3"
 	}
 
 	// Format the API URL
-	apiURL := fmt.Sprintf("%s/%s/messages", endpoint, provider.Mailgun.Domain)
+	apiURL := fmt.Sprintf("%s/%s/messages", endpoint, request.Provider.Mailgun.Domain)
 
 	// Create the form data for the email
 	form := url.Values{}
-	form.Add("from", fmt.Sprintf("%s <%s>", fromName, fromAddress))
-	form.Add("to", to)
-	form.Add("subject", subject)
-	form.Add("html", content)
+	form.Add("from", fmt.Sprintf("%s <%s>", request.FromName, request.FromAddress))
+	form.Add("to", request.To)
+	form.Add("subject", request.Subject)
+	form.Add("html", request.Content)
 
 	// Add cc recipients if provided
-	for _, ccAddress := range emailOptions.CC {
+	for _, ccAddress := range request.EmailOptions.CC {
 		if ccAddress != "" {
 			form.Add("cc", ccAddress)
 		}
 	}
 
 	// Add bcc recipients if provided
-	for _, bccAddress := range emailOptions.BCC {
+	for _, bccAddress := range request.EmailOptions.BCC {
 		if bccAddress != "" {
 			form.Add("bcc", bccAddress)
 		}
 	}
 
 	// Add reply-to if provided
-	if emailOptions.ReplyTo != "" {
-		form.Add("h:Reply-To", emailOptions.ReplyTo)
+	if request.EmailOptions.ReplyTo != "" {
+		form.Add("h:Reply-To", request.EmailOptions.ReplyTo)
 	}
 
 	// Add messageID as a custom variable for tracking
-	form.Add("v:notifuse_message_id", messageID)
+	form.Add("v:notifuse_message_id", request.MessageID)
 
 	// Create the request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(form.Encode()))
@@ -655,7 +660,7 @@ func (s *MailgunService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	// Set basic auth header
-	req.SetBasicAuth("api", provider.Mailgun.APIKey)
+	req.SetBasicAuth("api", request.Provider.Mailgun.APIKey)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send the request

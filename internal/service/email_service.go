@@ -122,23 +122,25 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 	// Send email with the provider details
 	messageID := uuid.New().String()
 
-	err = s.SendEmail(
-		ctx,
-		workspaceID,
-		messageID,
-		false, // Use transactional provider type
-		defaultSender.Email,
-		defaultSender.Name,
-		to,
-		subject,
-		content,
-		&provider,
-		domain.EmailOptions{
+	// Create SendEmailProviderRequest for testing
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   workspaceID,
+		IntegrationID: "test-integration", // For testing purposes
+		MessageID:     messageID,
+		FromAddress:   defaultSender.Email,
+		FromName:      defaultSender.Name,
+		To:            to,
+		Subject:       subject,
+		Content:       content,
+		Provider:      &provider,
+		EmailOptions: domain.EmailOptions{
 			ReplyTo: "",
 			CC:      nil,
 			BCC:     nil,
 		},
-	)
+	}
+
+	err = s.SendEmail(ctx, request, false)
 
 	if err != nil {
 		tracing.MarkSpanError(ctx, err)
@@ -149,30 +151,34 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 }
 
 // SendEmail sends an email using the specified provider
-func (s *EmailService) SendEmail(ctx context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *domain.EmailProvider, options domain.EmailOptions) error {
-
+func (s *EmailService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest, isMarketing bool) error {
 	if s.isDemo {
 		return nil
 	}
 
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
 	// If fromAddress is not provided, use the first sender's email from the provider
-	if fromAddress == "" && len(provider.Senders) > 0 {
-		fromAddress = provider.Senders[0].Email
+	if request.FromAddress == "" && len(request.Provider.Senders) > 0 {
+		request.FromAddress = request.Provider.Senders[0].Email
 	}
 
 	// If fromName is not provided, use the first sender's name from the provider
-	if fromName == "" && len(provider.Senders) > 0 {
-		fromName = provider.Senders[0].Name
+	if request.FromName == "" && len(request.Provider.Senders) > 0 {
+		request.FromName = request.Provider.Senders[0].Name
 	}
 
 	// Get the appropriate provider service
-	providerService, err := s.getProviderService(provider.Kind)
+	providerService, err := s.getProviderService(request.Provider.Kind)
 	if err != nil {
 		return err
 	}
 
 	// Delegate to the provider-specific implementation
-	return providerService.SendEmail(ctx, workspaceID, messageID, fromAddress, fromName, to, subject, content, provider, options)
+	return providerService.SendEmail(ctx, request)
 }
 
 // getProviderService returns the appropriate email provider service based on provider kind
@@ -379,19 +385,21 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		request.EmailOptions.ReplyTo = template.Email.ReplyTo
 	}
 
-	err = s.SendEmail(
-		ctx,
-		request.WorkspaceID,
-		request.MessageID,
-		false, // Use transactional provider type
-		fromEmail,
-		fromName,
-		request.Contact.Email, // To address
-		subject,
-		htmlContent,
-		request.EmailProvider,
-		request.EmailOptions,
-	)
+	// Create SendEmailProviderRequest
+	providerRequest := domain.SendEmailProviderRequest{
+		WorkspaceID:   request.WorkspaceID,
+		IntegrationID: request.IntegrationID,
+		MessageID:     request.MessageID,
+		FromAddress:   fromEmail,
+		FromName:      fromName,
+		To:            request.Contact.Email,
+		Subject:       subject,
+		Content:       htmlContent,
+		Provider:      request.EmailProvider,
+		EmailOptions:  request.EmailOptions,
+	}
+
+	err = s.SendEmail(ctx, providerRequest, false)
 
 	if err != nil {
 		// Update message history with error status

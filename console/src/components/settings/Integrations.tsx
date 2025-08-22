@@ -288,9 +288,11 @@ const EmailIntegration = ({
               </Space>
             ) : null}
           </div>
-          {emailProviders
-            .find((p) => p.kind === integration.email_provider.kind)
-            ?.getIcon('', 24) || <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />}
+          <Tooltip title={integration.id}>
+            {emailProviders
+              .find((p) => p.kind === integration.email_provider.kind)
+              ?.getIcon('', 24) || <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />}
+          </Tooltip>
         </>
       }
     >
@@ -1144,9 +1146,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       items.push(
         <Descriptions.Item key="region" label="AWS Region">
           {provider.ses.region}
-        </Descriptions.Item>,
-        <Descriptions.Item key="sandbox" label="Sandbox Mode">
-          {provider.ses.sandbox_mode ? 'Enabled' : 'Disabled'}
         </Descriptions.Item>
       )
     } else if (provider.kind === 'sparkpost' && provider.sparkpost) {

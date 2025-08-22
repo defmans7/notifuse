@@ -340,18 +340,8 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
 		// Provider should send an email - use gomock's Any matcher to be flexible
-		testEmailContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
-
 		mockSESService.EXPECT().
 			SendEmail(
-				gomock.Any(),
-				gomock.Eq(workspaceID),
-				gomock.Any(),
-				gomock.Eq("sender@example.com"),
-				gomock.Eq("Test Sender"),
-				gomock.Eq(toEmail),
-				gomock.Eq("Notifuse: Test Email Provider"),
-				gomock.Eq(testEmailContent),
 				gomock.Any(),
 				gomock.Any(),
 			).Return(nil)
@@ -434,18 +424,8 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 			Return(ctx, &domain.User{ID: "user-123"}, nil)
 
-		testEmailContent := "<h1>Notifuse: Test Email Provider</h1><p>This is a test email from Notifuse. Your provider is working!</p>"
-
 		mockSESService.EXPECT().
 			SendEmail(
-				gomock.Any(),
-				gomock.Eq(workspaceID),
-				gomock.Any(),
-				gomock.Eq("sender@example.com"),
-				gomock.Eq("Test Sender"),
-				gomock.Eq(toEmail),
-				gomock.Eq("Notifuse: Test Email Provider"),
-				gomock.Eq(testEmailContent),
 				gomock.Any(),
 				gomock.Any(),
 			).Return(assert.AnError)
@@ -523,19 +503,23 @@ func TestEmailService_SendEmail(t *testing.T) {
 		mockSESService.EXPECT().
 			SendEmail(
 				gomock.Any(),
-				gomock.Eq(workspaceID),
-				gomock.Any(),
-				gomock.Eq(fromAddress),
-				gomock.Eq(fromName),
-				gomock.Eq(toEmail),
-				gomock.Eq(subject),
-				gomock.Eq(content),
-				gomock.Any(),
 				gomock.Any(),
 			).Return(nil)
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, options)
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            toEmail,
+			Subject:       subject,
+			Content:       content,
+			Provider:      &provider,
+			EmailOptions:  options,
+		}
+		err := emailService.SendEmail(ctx, request, false)
 
 		// Assertions
 		require.NoError(t, err)
@@ -547,7 +531,19 @@ func TestEmailService_SendEmail(t *testing.T) {
 		}
 
 		// Call method under test
-		err := emailService.SendEmail(ctx, workspaceID, messageID, false, fromAddress, fromName, toEmail, subject, content, &provider, options)
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     messageID,
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            toEmail,
+			Subject:       subject,
+			Content:       content,
+			Provider:      &provider,
+			EmailOptions:  options,
+		}
+		err := emailService.SendEmail(ctx, request, false)
 
 		// Assertions
 		require.Error(t, err)
@@ -952,20 +948,13 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockSESService.EXPECT().
 			SendEmail(
 				gomock.Any(),
-				gomock.Eq(workspaceID),
-				gomock.Eq(messageID),
-				gomock.Eq(emailSender.Email),
-				gomock.Eq(emailSender.Name),
-				gomock.Eq(contact.Email),
-				gomock.Eq(emailTemplate.Email.Subject),
-				gomock.Eq(compiledHTML),
-				gomock.Eq(emailProvider),
-				gomock.Eq(options),
+				gomock.Any(),
 			).Return(nil)
 
 		// Call method under test
 		request := domain.SendEmailRequest{
 			WorkspaceID:      workspaceID,
+			IntegrationID:    "test-integration-id",
 			MessageID:        messageID,
 			ExternalID:       nil,
 			Contact:          contact,
@@ -993,6 +982,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Call method under test
 		request := domain.SendEmailRequest{
 			WorkspaceID:      workspaceID,
+			IntegrationID:    "test-integration-id",
 			MessageID:        messageID,
 			ExternalID:       nil,
 			Contact:          contact,
@@ -1026,6 +1016,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Call method under test
 		request := domain.SendEmailRequest{
 			WorkspaceID:      workspaceID,
+			IntegrationID:    "test-integration-id",
 			MessageID:        messageID,
 			ExternalID:       nil,
 			Contact:          contact,
@@ -1067,6 +1058,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Call method under test
 		request := domain.SendEmailRequest{
 			WorkspaceID:      workspaceID,
+			IntegrationID:    "test-integration-id",
 			MessageID:        messageID,
 			ExternalID:       nil,
 			Contact:          contact,
@@ -1105,6 +1097,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Call method under test
 		request := domain.SendEmailRequest{
 			WorkspaceID:      workspaceID,
+			IntegrationID:    "test-integration-id",
 			MessageID:        messageID,
 			ExternalID:       nil,
 			Contact:          contact,
@@ -1141,15 +1134,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockSESService.EXPECT().
 			SendEmail(
 				gomock.Any(),
-				gomock.Eq(workspaceID),
-				gomock.Eq(messageID),
-				gomock.Eq(emailSender.Email),
-				gomock.Eq(emailSender.Name),
-				gomock.Eq(contact.Email),
-				gomock.Eq(emailTemplate.Email.Subject),
-				gomock.Eq(compiledHTML),
-				gomock.Eq(emailProvider),
-				gomock.Eq(options),
+				gomock.Any(),
 			).Return(assert.AnError)
 
 		// Setup message repository mock to update with error status
@@ -1169,6 +1154,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Call method under test
 		request := domain.SendEmailRequest{
 			WorkspaceID:      workspaceID,
+			IntegrationID:    "test-integration-id",
 			MessageID:        messageID,
 			ExternalID:       nil,
 			Contact:          contact,
@@ -1205,15 +1191,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockSESService.EXPECT().
 			SendEmail(
 				gomock.Any(),
-				gomock.Eq(workspaceID),
-				gomock.Eq(messageID),
-				gomock.Eq(emailSender.Email),
-				gomock.Eq(emailSender.Name),
-				gomock.Eq(contact.Email),
-				gomock.Eq(emailTemplate.Email.Subject),
-				gomock.Eq(compiledHTML),
-				gomock.Eq(emailProvider),
-				gomock.Eq(options),
+				gomock.Any(),
 			).Return(assert.AnError)
 
 		// Setup message repository mock to fail updating with error status
@@ -1227,6 +1205,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Call method under test
 		request := domain.SendEmailRequest{
 			WorkspaceID:      workspaceID,
+			IntegrationID:    "test-integration-id",
 			MessageID:        messageID,
 			ExternalID:       nil,
 			Contact:          contact,

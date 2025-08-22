@@ -21,11 +21,11 @@ import (
 // MessageSender is the interface for sending messages to recipients
 type MessageSender interface {
 	// SendToRecipient sends a message to a single recipient
-	SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
+	SendToRecipient(ctx context.Context, workspaceID string, integrationID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 		template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider, timeoutAt time.Time) error
 
 	// SendBatch sends messages to a batch of recipients
-	SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
+	SendBatch(ctx context.Context, workspaceID string, integrationID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
 		templates map[string]*domain.Template, emailProvider *domain.EmailProvider, timeoutAt time.Time) (sent int, failed int, err error)
 }
 
@@ -189,7 +189,7 @@ func (s *messageSender) enforceRateLimit(ctx context.Context) error {
 }
 
 // SendToRecipient sends a message to a single recipient
-func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
+func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, integrationID string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider, timeoutAt time.Time) error {
 
 	// Ensure UTM parameters object is present to avoid nil dereference
@@ -306,22 +306,24 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeTemplateCompile, "failed to process subject with Liquid", true, err)
 	}
 
-	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
-	err = s.emailService.SendEmail(
-		ctx,
-		workspaceID,
-		messageID,
-		true, // is marketing
-		emailSender.Email,
-		emailSender.Name,
-		email,
-		processedSubject,
-		*compiledTemplate.HTML,
-		emailProvider,
-		domain.EmailOptions{
+	// Create SendEmailProviderRequest
+	emailRequest := domain.SendEmailProviderRequest{
+		WorkspaceID:   workspaceID,
+		IntegrationID: integrationID,
+		MessageID:     messageID,
+		FromAddress:   emailSender.Email,
+		FromName:      emailSender.Name,
+		To:            email,
+		Subject:       processedSubject,
+		Content:       *compiledTemplate.HTML,
+		Provider:      emailProvider,
+		EmailOptions: domain.EmailOptions{
 			ReplyTo: template.Email.ReplyTo,
 		},
-	)
+	}
+
+	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
+	err = s.emailService.SendEmail(ctx, emailRequest, true)
 
 	if err != nil {
 		// Record failure in circuit breaker
@@ -353,7 +355,7 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 }
 
 // SendBatch sends messages to a batch of recipients
-func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
+func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integrationID string, workspaceSecretKey string, trackingEnabled bool, broadcastID string, recipients []*domain.ContactWithList,
 	templates map[string]*domain.Template, emailProvider *domain.EmailProvider, timeoutAt time.Time) (sent int, failed int, err error) {
 
 	// Track specific error types for better reporting
@@ -523,7 +525,7 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, works
 		}
 
 		// Send to the recipient
-		err = s.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider, timeoutAt)
+		err = s.SendToRecipient(ctx, workspaceID, integrationID, trackingEnabled, broadcast, messageID, contact.Email, templates[templateID], recipientData, emailProvider, timeoutAt)
 		if err != nil {
 			// SendToRecipient already logs errors
 			failed++

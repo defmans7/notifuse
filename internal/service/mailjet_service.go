@@ -465,8 +465,13 @@ func (s *MailjetService) TestWebhook(ctx context.Context, config domain.MailjetS
 }
 
 // SendEmail sends an email using Mailjet
-func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
-	if provider.Mailjet == nil {
+func (s *MailjetService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
+	if request.Provider.Mailjet == nil {
 		return fmt.Errorf("Mailjet provider is not configured")
 	}
 
@@ -504,22 +509,22 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 			Email string `json:"Email"`
 			Name  string `json:"Name,omitempty"`
 		}{
-			Email: fromAddress,
-			Name:  fromName,
+			Email: request.FromAddress,
+			Name:  request.FromName,
 		},
 		To: []EmailRecipient{
 			{
-				Email: to,
+				Email: request.To,
 			},
 		},
-		Subject:  subject,
-		HTMLPart: content,
-		CustomID: messageID,
+		Subject:  request.Subject,
+		HTMLPart: request.Content,
+		CustomID: request.MessageID,
 	}
 
 	// Add CC recipients if specified
-	if len(emailOptions.CC) > 0 {
-		for _, ccAddr := range emailOptions.CC {
+	if len(request.EmailOptions.CC) > 0 {
+		for _, ccAddr := range request.EmailOptions.CC {
 			if ccAddr != "" {
 				message.Cc = append(message.Cc, EmailRecipient{Email: ccAddr})
 			}
@@ -527,8 +532,8 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	// Add BCC recipients if specified
-	if len(emailOptions.BCC) > 0 {
-		for _, bccAddr := range emailOptions.BCC {
+	if len(request.EmailOptions.BCC) > 0 {
+		for _, bccAddr := range request.EmailOptions.BCC {
 			if bccAddr != "" {
 				message.Bcc = append(message.Bcc, EmailRecipient{Email: bccAddr})
 			}
@@ -541,14 +546,14 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	// Add Reply-To if specified
-	if emailOptions.ReplyTo != "" {
-		message.Headers["Reply-To"] = emailOptions.ReplyTo
+	if request.EmailOptions.ReplyTo != "" {
+		message.Headers["Reply-To"] = request.EmailOptions.ReplyTo
 	}
 
 	// Set up the email payload
 	emailReq := EmailRequest{
 		Messages:    []EmailMessage{message},
-		SandboxMode: provider.Mailjet.SandboxMode,
+		SandboxMode: request.Provider.Mailjet.SandboxMode,
 	}
 
 	// Convert to JSON
@@ -565,7 +570,7 @@ func (s *MailjetService) SendEmail(ctx context.Context, workspaceID string, mess
 	}
 
 	// Set auth and headers
-	req.SetBasicAuth(provider.Mailjet.APIKey, provider.Mailjet.SecretKey)
+	req.SetBasicAuth(request.Provider.Mailjet.APIKey, request.Provider.Mailjet.SecretKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request

@@ -173,17 +173,9 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	// Setup mock expectations - SendToRecipient only calls emailService.SendEmail
 	mockEmailService.EXPECT().
 		SendEmail(
-			ctx,
-			workspaceID,
-			gomock.Any(), // messageID
-			true,         // isMarketing
-			gomock.Any(), // fromAddress
-			gomock.Any(), // fromName
-			gomock.Any(), // to
-			gomock.Any(), // subject
-			gomock.Any(), // content
-			gomock.Any(), // emailProvider
-			gomock.Any(), // emailOptions
+			gomock.Any(), // ctx
+			gomock.Any(), // SendEmailProviderRequest
+			gomock.Any(), // isMarketing
 		).Return(nil)
 
 	// Create message sender
@@ -199,7 +191,7 @@ func TestSendToRecipientSuccess(t *testing.T) {
 
 	// Test
 	timeoutAt := time.Now().Add(30 * time.Second)
-	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider, timeoutAt)
+	err := sender.SendToRecipient(ctx, workspaceID, "test-integration-id", tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 }
 
@@ -272,7 +264,7 @@ func TestSendToRecipientCompileFailure(t *testing.T) {
 
 	// Test - this should fail due to template compilation issues
 	timeoutAt := time.Now().Add(30 * time.Second)
-	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider, timeoutAt)
+	err := sender.SendToRecipient(ctx, workspaceID, "test-integration-id", tracking, broadcast, "message-123", "test@example.com", template, map[string]interface{}{}, emailProvider, timeoutAt)
 	assert.Error(t, err)
 	broadcastErr, ok := err.(*BroadcastError)
 	assert.True(t, ok)
@@ -320,11 +312,11 @@ func TestWithMockMessageSender(t *testing.T) {
 	messageID := "test-message-id"
 	timeoutAt := time.Now().Add(30 * time.Second)
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt).
+		SendToRecipient(ctx, workspaceID, "test-integration-id", trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt).
 		Return(nil)
 
 	// Use the mock (normally this would be in the system under test)
-	err := mockSender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt)
+	err := mockSender.SendToRecipient(ctx, workspaceID, "test-integration-id", trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt)
 
 	// Verify the result
 	assert.NoError(t, err)
@@ -340,11 +332,11 @@ func TestWithMockMessageSender(t *testing.T) {
 	// Set up expectations with specific return values
 	timeoutAt = time.Now().Add(30 * time.Second)
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt).
+		SendBatch(ctx, workspaceID, "test-integration-id", workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt).
 		Return(1, 0, nil)
 
 	// Use the mock
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, "test-integration-id", workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -394,11 +386,11 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	mockError := errors.New("send failed: service unavailable")
 	messageID := "test-message-id"
 	mockSender.EXPECT().
-		SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt).
+		SendToRecipient(ctx, workspaceID, "test-integration-id", trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt).
 		Return(mockError)
 
 	// Call the method
-	err := mockSender.SendToRecipient(ctx, workspaceID, trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt)
+	err := mockSender.SendToRecipient(ctx, workspaceID, "test-integration-id", trackingEnabled, broadcast, messageID, recipientEmail, template, templateData, nil, timeoutAt)
 
 	// Verify error handling
 	assert.Error(t, err)
@@ -415,10 +407,10 @@ func TestErrorHandlingWithMock(t *testing.T) {
 	batchError := errors.New("batch processing failed")
 
 	mockSender.EXPECT().
-		SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt).
+		SendBatch(ctx, workspaceID, "test-integration-id", workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt).
 		Return(0, 0, batchError)
 
-	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt)
+	sent, failed, err := mockSender.SendBatch(ctx, workspaceID, "test-integration-id", workspaceSecretKey, trackingEnabled, broadcast.ID, mockContacts, mockTemplates, nil, timeoutAt)
 	assert.Error(t, err)
 	assert.Equal(t, batchError, err)
 	assert.Equal(t, 0, sent)
@@ -498,17 +490,9 @@ func TestSendBatch(t *testing.T) {
 
 	mockEmailService.EXPECT().
 		SendEmail(
-			ctx,
-			workspaceID,
-			gomock.Any(), // messageID
-			true,         // isMarketing
-			gomock.Any(), // fromAddress
-			gomock.Any(), // fromName
-			gomock.Any(), // to
-			gomock.Any(), // subject
-			gomock.Any(), // content
-			gomock.Any(), // emailProvider
-			gomock.Any(), // emailOptions
+			gomock.Any(), // ctx
+			gomock.Any(), // SendEmailProviderRequest
+			gomock.Any(), // isMarketing
 		).Return(nil).Times(2)
 
 	mockMessageHistoryRepo.EXPECT().
@@ -547,7 +531,7 @@ func TestSendBatch(t *testing.T) {
 		},
 	}
 	templates := map[string]*domain.Template{"template-123": template}
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "test-integration-id", "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, sent)
 	assert.Equal(t, 0, failed)
@@ -595,7 +579,7 @@ func TestSendBatch_EmptyRecipients(t *testing.T) {
 	)
 
 	// Call the method being tested with empty recipients
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, []*domain.ContactWithList{},
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "test-integration-id", workspaceSecretKey, trackingEnabled, broadcastID, []*domain.ContactWithList{},
 		map[string]*domain.Template{}, emailProvider, timeoutAt)
 
 	// Verify results
@@ -662,7 +646,7 @@ func TestSendBatch_CircuitBreakerOpen(t *testing.T) {
 	messageSenderImpl.circuitBreaker.RecordFailure(fmt.Errorf("test error"))
 
 	// Call the method being tested
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, workspaceSecretKey, trackingEnabled, broadcastID, recipients,
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "test-integration-id", workspaceSecretKey, trackingEnabled, broadcastID, recipients,
 		map[string]*domain.Template{}, emailProvider, timeoutAt)
 
 	// Verify results
@@ -769,17 +753,9 @@ func TestSendBatch_WithFailure(t *testing.T) {
 
 	mockEmailService.EXPECT().
 		SendEmail(
-			ctx,
-			workspaceID,
-			gomock.Any(), // messageID
-			true,         // isMarketing
-			gomock.Any(), // fromAddress
-			gomock.Any(), // fromName
-			gomock.Any(), // to
-			gomock.Any(), // subject
-			gomock.Any(), // content
-			gomock.Any(), // emailProvider
-			gomock.Any(), // emailOptions
+			gomock.Any(), // ctx
+			gomock.Any(), // SendEmailProviderRequest
+			gomock.Any(), // isMarketing
 		).Return(fmt.Errorf("email service unavailable")).Times(1)
 
 	mockMessageHistoryRepo.EXPECT().
@@ -811,7 +787,7 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		},
 	}
 	templates := map[string]*domain.Template{"template-123": template}
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "test-integration-id", "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, sent)
 	assert.Equal(t, 1, failed)
@@ -890,17 +866,9 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 
 	mockEmailService.EXPECT().
 		SendEmail(
-			ctx,
-			workspaceID,
-			gomock.Any(), // messageID
-			true,         // isMarketing
-			gomock.Any(), // fromAddress
-			gomock.Any(), // fromName
-			gomock.Any(), // to
-			gomock.Any(), // subject
-			gomock.Any(), // content
-			gomock.Any(), // emailProvider
-			gomock.Any(), // emailOptions
+			gomock.Any(), // ctx
+			gomock.Any(), // SendEmailProviderRequest
+			gomock.Any(), // isMarketing
 		).Return(nil)
 
 	mockMessageHistoryRepo.EXPECT().
@@ -932,7 +900,7 @@ func TestSendBatch_RecordMessageFails(t *testing.T) {
 		},
 	}
 	templates := map[string]*domain.Template{"template-123": template}
-	sent, failed, err := sender.SendBatch(ctx, workspaceID, "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "test-integration-id", "secret-key-123", tracking, broadcastID, recipients, templates, emailProvider, timeoutAt)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, sent)
 	assert.Equal(t, 0, failed)
@@ -1021,22 +989,14 @@ func TestSendToRecipientWithLiquidSubject(t *testing.T) {
 	// Set up mock expectations - expect processed subject
 	mockEmailService.EXPECT().
 		SendEmail(
-			ctx,
-			workspaceID,
-			messageID,
-			true, // is marketing
-			emailSender.Email,
-			emailSender.Name,
-			email,
-			"Welcome John! Your ACME Corp account is ready", // Expected processed subject
-			gomock.Any(), // content
-			emailProvider,
-			domain.EmailOptions{},
+			gomock.Any(), // ctx
+			gomock.Any(), // SendEmailProviderRequest
+			gomock.Any(), // isMarketing
 		).
 		Return(nil)
 
 	// Call the method
-	err := sender.SendToRecipient(ctx, workspaceID, tracking, broadcast, messageID, email, template, templateData, emailProvider, timeoutAt)
+	err := sender.SendToRecipient(ctx, workspaceID, "test-integration-id", tracking, broadcast, messageID, email, template, templateData, emailProvider, timeoutAt)
 
 	// Verify
 	assert.NoError(t, err)

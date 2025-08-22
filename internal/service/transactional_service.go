@@ -742,20 +742,22 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		return fmt.Errorf("failed to process subject with Liquid: %w", err)
 	}
 
+	// Create SendEmailProviderRequest
+	emailRequest := domain.SendEmailProviderRequest{
+		WorkspaceID:   workspaceID,
+		IntegrationID: integrationID,
+		MessageID:     messageID,
+		FromAddress:   emailSender.Email,
+		FromName:      emailSender.Name,
+		To:            recipientEmail,
+		Subject:       processedSubject,
+		Content:       *compiledResult.HTML,
+		Provider:      emailProvider,
+		EmailOptions:  emailOptions,
+	}
+
 	// Send the email
-	err = s.emailService.SendEmail(
-		ctx,
-		workspaceID,
-		messageID,
-		false, // Use transactional for testing
-		emailSender.Email,
-		emailSender.Name,
-		recipientEmail,
-		processedSubject,
-		*compiledResult.HTML,
-		emailProvider,
-		emailOptions,
-	)
+	err = s.emailService.SendEmail(ctx, emailRequest, false)
 
 	if err != nil {
 		return fmt.Errorf("failed to send test email: %w", err)

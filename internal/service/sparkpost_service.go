@@ -761,13 +761,19 @@ func (s *SparkPostService) directDeleteWebhook(ctx context.Context, settings *do
 }
 
 // SendEmail sends an email using SparkPost
-func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, options domain.EmailOptions) error {
-	if provider.SparkPost == nil {
+func (s *SparkPostService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
+	if request.Provider.SparkPost == nil {
 		return fmt.Errorf("SparkPost provider is not configured")
 	}
 
 	// Check for sandbox mode
-	if provider.SparkPost.SandboxMode {
+	to := request.To
+	if request.Provider.SparkPost.SandboxMode {
 		s.logger.Info("SparkPost is in sandbox mode, email will be accepted but not delivered")
 		to = to + ".sink.sparkpostmail.com"
 	}
@@ -816,14 +822,14 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 		},
 		Content: Content{
 			From: From{
-				Name:  fromName,
-				Email: fromAddress,
+				Name:  request.FromName,
+				Email: request.FromAddress,
 			},
-			Subject: subject,
-			HTML:    content,
+			Subject: request.Subject,
+			HTML:    request.Content,
 		},
 		Metadata: map[string]interface{}{
-			"notifuse_message_id": messageID,
+			"notifuse_message_id": request.MessageID,
 		},
 	}
 
@@ -832,12 +838,12 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	emailReq.Options.ClickTracking = false
 
 	// Add replyTo if specified
-	if options.ReplyTo != "" {
-		emailReq.Content.ReplyTo = options.ReplyTo
+	if request.EmailOptions.ReplyTo != "" {
+		emailReq.Content.ReplyTo = request.EmailOptions.ReplyTo
 	}
 
 	// Add CC recipients if specified
-	for _, ccAddress := range options.CC {
+	for _, ccAddress := range request.EmailOptions.CC {
 		if ccAddress != "" {
 			emailReq.Recipients = append(emailReq.Recipients, Recipient{
 				Address: Address{
@@ -848,7 +854,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	}
 
 	// Add BCC recipients if specified
-	for _, bccAddress := range options.BCC {
+	for _, bccAddress := range request.EmailOptions.BCC {
 		if bccAddress != "" {
 			emailReq.Recipients = append(emailReq.Recipients, Recipient{
 				Address: Address{
@@ -865,7 +871,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	}
 
 	// Construct the API URL
-	endpoint := provider.SparkPost.Endpoint
+	endpoint := request.Provider.SparkPost.Endpoint
 	if endpoint == "" {
 		endpoint = "https://api.sparkpost.com"
 	}
@@ -879,7 +885,7 @@ func (s *SparkPostService) SendEmail(ctx context.Context, workspaceID string, me
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", provider.SparkPost.APIKey))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", request.Provider.SparkPost.APIKey))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request

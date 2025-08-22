@@ -258,12 +258,59 @@ type EmailOptions struct {
 	ReplyTo string
 }
 
+// SendEmailProviderRequest encapsulates all parameters needed to send an email via a provider
+type SendEmailProviderRequest struct {
+	WorkspaceID   string         `validate:"required"`
+	IntegrationID string         `validate:"required"`
+	MessageID     string         `validate:"required"`
+	FromAddress   string         `validate:"required"`
+	FromName      string         `validate:"required"`
+	To            string         `validate:"required"`
+	Subject       string         `validate:"required"`
+	Content       string         `validate:"required"`
+	Provider      *EmailProvider `validate:"required"`
+	EmailOptions  EmailOptions
+}
+
+// Validate ensures all required fields are present and valid
+func (r *SendEmailProviderRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace ID is required")
+	}
+	if r.IntegrationID == "" {
+		return fmt.Errorf("integration ID is required")
+	}
+	if r.MessageID == "" {
+		return fmt.Errorf("message ID is required")
+	}
+	if r.FromAddress == "" {
+		return fmt.Errorf("from address is required")
+	}
+	if r.FromName == "" {
+		return fmt.Errorf("from name is required")
+	}
+	if r.To == "" {
+		return fmt.Errorf("to address is required")
+	}
+	if r.Subject == "" {
+		return fmt.Errorf("subject is required")
+	}
+	if r.Content == "" {
+		return fmt.Errorf("content is required")
+	}
+	if r.Provider == nil {
+		return fmt.Errorf("email provider is required")
+	}
+	return nil
+}
+
 // SendEmailRequest encapsulates all parameters needed to send an email using a template
 type SendEmailRequest struct {
 	// Core identification
-	WorkspaceID string `validate:"required"`
-	MessageID   string `validate:"required"`
-	ExternalID  *string
+	WorkspaceID   string `validate:"required"`
+	IntegrationID string `validate:"required"`
+	MessageID     string `validate:"required"`
+	ExternalID    *string
 
 	// Target and content
 	Contact        *Contact        `validate:"required"`
@@ -280,6 +327,9 @@ type SendEmailRequest struct {
 func (r *SendEmailRequest) Validate() error {
 	if r.WorkspaceID == "" {
 		return fmt.Errorf("workspace ID is required")
+	}
+	if r.IntegrationID == "" {
+		return fmt.Errorf("integration ID is required")
 	}
 	if r.MessageID == "" {
 		return fmt.Errorf("message ID is required")
@@ -299,12 +349,12 @@ func (r *SendEmailRequest) Validate() error {
 // EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
-	SendEmail(ctxWithTimeout context.Context, workspaceID string, messageID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, emailOptions EmailOptions) error
+	SendEmail(ctx context.Context, request SendEmailProviderRequest, isMarketing bool) error
 	SendEmailForTemplate(ctx context.Context, request SendEmailRequest) error
 	VisitLink(ctx context.Context, messageID string, workspaceID string) error
 	OpenEmail(ctx context.Context, messageID string, workspaceID string) error
 }
 
 type EmailProviderService interface {
-	SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress string, fromName string, to string, subject string, content string, provider *EmailProvider, emailOptions EmailOptions) error
+	SendEmail(ctx context.Context, request SendEmailProviderRequest) error
 }

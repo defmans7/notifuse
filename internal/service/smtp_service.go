@@ -65,18 +65,23 @@ func NewSMTPService(logger logger.Logger) *SMTPService {
 }
 
 // SendEmail sends an email using SMTP
-func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspaceID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
-	if provider.SMTP == nil {
+func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
+	if request.Provider.SMTP == nil {
 		return fmt.Errorf("SMTP settings required")
 	}
 
 	// Create a client directly
 	client, err := s.clientFactory.CreateClient(
-		provider.SMTP.Host,
-		provider.SMTP.Port,
-		provider.SMTP.Username,
-		provider.SMTP.Password,
-		provider.SMTP.UseTLS,
+		request.Provider.SMTP.Host,
+		request.Provider.SMTP.Port,
+		request.Provider.SMTP.Username,
+		request.Provider.SMTP.Password,
+		request.Provider.SMTP.UseTLS,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create SMTP client: %w", err)
@@ -89,15 +94,15 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	// Create and configure the message
 	msg := mail.NewMsg(mail.WithNoDefaultUserAgent())
 
-	if err := msg.FromFormat(fromName, fromAddress); err != nil {
+	if err := msg.FromFormat(request.FromName, request.FromAddress); err != nil {
 		return fmt.Errorf("invalid sender: %w", err)
 	}
-	if err := msg.To(to); err != nil {
+	if err := msg.To(request.To); err != nil {
 		return fmt.Errorf("invalid recipient: %w", err)
 	}
 
 	// Add CC recipients if specified
-	for _, ccAddr := range emailOptions.CC {
+	for _, ccAddr := range request.EmailOptions.CC {
 		if ccAddr != "" {
 			if err := msg.Cc(ccAddr); err != nil {
 				return fmt.Errorf("invalid CC recipient: %w", err)
@@ -106,7 +111,7 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	}
 
 	// Add BCC recipients if specified
-	for _, bccAddr := range emailOptions.BCC {
+	for _, bccAddr := range request.EmailOptions.BCC {
 		if bccAddr != "" {
 			if err := msg.Bcc(bccAddr); err != nil {
 				return fmt.Errorf("invalid BCC recipient: %w", err)
@@ -115,20 +120,20 @@ func (s *SMTPService) SendEmail(ctx context.Context, messageID string, workspace
 	}
 
 	// Add Reply-To if specified
-	if emailOptions.ReplyTo != "" {
-		if err := msg.ReplyTo(emailOptions.ReplyTo); err != nil {
+	if request.EmailOptions.ReplyTo != "" {
+		if err := msg.ReplyTo(request.EmailOptions.ReplyTo); err != nil {
 			return fmt.Errorf("invalid reply-to address: %w", err)
 		}
 	}
 
 	// Add message ID tracking header
-	msg.SetGenHeader("X-Message-ID", messageID)
+	msg.SetGenHeader("X-Message-ID", request.MessageID)
 
 	// Remove User-Agent and X-Mailer headers
 	// msg.SetUserAgent("")
 
-	msg.Subject(subject)
-	msg.SetBodyString(mail.TypeTextHTML, content)
+	msg.Subject(request.Subject)
+	msg.SetBodyString(mail.TypeTextHTML, request.Content)
 
 	// Send the email directly
 	if err := client.DialAndSend(msg); err != nil {

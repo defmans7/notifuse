@@ -1530,18 +1530,19 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			})
 
 		// Call the method
-		err := service.SendEmail(
-			context.Background(),
-			workspaceID,
-			"test-message-id",
-			fromAddress,
-			fromName,
-			to,
-			subject,
-			content,
-			providerConfig,
-			domain.EmailOptions{},
-		)
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      providerConfig,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(context.Background(), request)
 
 		// Verify results
 		assert.NoError(t, err)
@@ -1553,20 +1554,21 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		workspaceID := "workspace-123"
 
 		// Call with nil Postmark config
-		err := service.SendEmail(
-			context.Background(),
-			workspaceID,
-			"test-message-id",
-			"sender@example.com",
-			"Sender",
-			"recipient@example.com",
-			"Subject",
-			"Content",
-			&domain.EmailProvider{
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   "sender@example.com",
+			FromName:      "Sender",
+			To:            "recipient@example.com",
+			Subject:       "Subject",
+			Content:       "Content",
+			Provider: &domain.EmailProvider{
 				Kind: domain.EmailProviderKindPostmark,
 			},
-			domain.EmailOptions{},
-		)
+			EmailOptions: domain.EmailOptions{},
+		}
+		err := service.SendEmail(context.Background(), request)
 
 		// Verify results
 		assert.Error(t, err)
@@ -1587,18 +1589,19 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 		}
 
 		// Call with empty server token
-		err := service.SendEmail(
-			context.Background(),
-			workspaceID,
-			"test-message-id",
-			"sender@example.com",
-			"Sender",
-			"recipient@example.com",
-			"Subject",
-			"Content",
-			providerConfig,
-			domain.EmailOptions{},
-		)
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   "sender@example.com",
+			FromName:      "Sender",
+			To:            "recipient@example.com",
+			Subject:       "Subject",
+			Content:       "Content",
+			Provider:      providerConfig,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(context.Background(), request)
 
 		// Verify results
 		assert.Error(t, err)
@@ -1624,18 +1627,19 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			Return(nil, errors.New("network error"))
 
 		// Call the method
-		err := service.SendEmail(
-			context.Background(),
-			workspaceID,
-			"test-message-id",
-			"sender@example.com",
-			"Sender",
-			"recipient@example.com",
-			"Subject",
-			"Content",
-			providerConfig,
-			domain.EmailOptions{},
-		)
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   "sender@example.com",
+			FromName:      "Sender",
+			To:            "recipient@example.com",
+			Subject:       "Subject",
+			Content:       "Content",
+			Provider:      providerConfig,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(context.Background(), request)
 
 		// Verify results
 		assert.Error(t, err)
@@ -1661,18 +1665,19 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			Return(createMockResponse(http.StatusBadRequest, `{"ErrorCode":400,"Message":"Invalid email"}`), nil)
 
 		// Call the method
-		err := service.SendEmail(
-			context.Background(),
-			workspaceID,
-			"test-message-id",
-			"sender@example.com",
-			"Sender",
-			"recipient@example.com",
-			"Subject",
-			"Content",
-			providerConfig,
-			domain.EmailOptions{},
-		)
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   "sender@example.com",
+			FromName:      "Sender",
+			To:            "recipient@example.com",
+			Subject:       "Subject",
+			Content:       "Content",
+			Provider:      providerConfig,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(context.Background(), request)
 
 		// Verify results
 		assert.Error(t, err)
@@ -1704,18 +1709,19 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 			Return(resp, nil)
 
 		// Call the method
-		err := service.SendEmail(
-			context.Background(),
-			workspaceID,
-			"test-message-id",
-			"sender@example.com",
-			"Sender",
-			"recipient@example.com",
-			"Subject",
-			"Content",
-			providerConfig,
-			domain.EmailOptions{},
-		)
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   "sender@example.com",
+			FromName:      "Sender",
+			To:            "recipient@example.com",
+			Subject:       "Subject",
+			Content:       "Content",
+			Provider:      providerConfig,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(context.Background(), request)
 
 		// Verify results
 		assert.Error(t, err)

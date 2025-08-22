@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -706,18 +707,23 @@ func (s *SESService) UnregisterWebhooks(
 }
 
 // SendEmail sends an email using AWS SES
-func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageID string, fromAddress, fromName, to, subject, content string, provider *domain.EmailProvider, emailOptions domain.EmailOptions) error {
-	if provider.SES == nil {
+func (s *SESService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) error {
+	// Validate the request
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+
+	if request.Provider.SES == nil {
 		return fmt.Errorf("SES provider is not configured")
 	}
 
 	// Make sure we have credentials
-	if provider.SES.AccessKey == "" || provider.SES.SecretKey == "" {
+	if request.Provider.SES.AccessKey == "" || request.Provider.SES.SecretKey == "" {
 		return ErrInvalidAWSCredentials
 	}
 
 	// Get SES email client using the factory method for testability
-	sess, err := s.sessionFactory(*provider.SES)
+	sess, err := s.sessionFactory(*request.Provider.SES)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to create AWS session: %v", err))
 		return fmt.Errorf("failed to create AWS session: %w", err)
@@ -726,17 +732,17 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	sesEmailClient := s.sesEmailClientFactory(sess)
 
 	// Format the "From" header with name and email
-	fromHeader := fmt.Sprintf("%s <%s>", fromName, fromAddress)
+	fromHeader := fmt.Sprintf("%s <%s>", request.FromName, request.FromAddress)
 
 	// Create the destination with required addresses
 	destination := &ses.Destination{
-		ToAddresses: []*string{aws.String(to)},
+		ToAddresses: []*string{aws.String(request.To)},
 	}
 
 	// Add CC addresses if provided
-	if len(emailOptions.CC) > 0 {
+	if len(request.EmailOptions.CC) > 0 {
 		var ccAddresses []*string
-		for _, ccAddress := range emailOptions.CC {
+		for _, ccAddress := range request.EmailOptions.CC {
 			if ccAddress != "" {
 				ccAddresses = append(ccAddresses, aws.String(ccAddress))
 			}
@@ -747,9 +753,9 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	}
 
 	// Add BCC addresses if provided
-	if len(emailOptions.BCC) > 0 {
+	if len(request.EmailOptions.BCC) > 0 {
 		var bccAddresses []*string
-		for _, bccAddress := range emailOptions.BCC {
+		for _, bccAddress := range request.EmailOptions.BCC {
 			if bccAddress != "" {
 				bccAddresses = append(bccAddresses, aws.String(bccAddress))
 			}
@@ -766,28 +772,30 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 			Body: &ses.Body{
 				Html: &ses.Content{
 					Charset: aws.String("UTF-8"),
-					Data:    aws.String(content),
+					Data:    aws.String(request.Content),
 				},
 			},
 			Subject: &ses.Content{
 				Charset: aws.String("UTF-8"),
-				Data:    aws.String(subject),
+				Data:    aws.String(request.Subject),
 			},
 		},
 		Source: aws.String(fromHeader),
 	}
 
 	// Add ReplyTo if provided
-	if emailOptions.ReplyTo != "" {
-		input.ReplyToAddresses = []*string{aws.String(emailOptions.ReplyTo)}
+	if request.EmailOptions.ReplyTo != "" {
+		input.ReplyToAddresses = []*string{aws.String(request.EmailOptions.ReplyTo)}
 	}
 
-	// Add configuration set if it exists
-	configSetName := fmt.Sprintf("notifuse-%s", workspaceID)
-	configSets, err := s.ListConfigurationSets(ctx, *provider.SES)
+	// Add configuration set if it exists - use integrationID instead of workspaceID
+	configSetName := fmt.Sprintf("notifuse-%s", request.IntegrationID)
+	configSets, err := s.ListConfigurationSets(ctx, *request.Provider.SES)
+	log.Printf("configSets: %v", configSets)
 	if err == nil {
 		for _, set := range configSets {
 			if set == configSetName {
+				log.Printf("using configuration set: %s", configSetName)
 				input.ConfigurationSetName = aws.String(configSetName)
 				break
 			}
@@ -795,11 +803,11 @@ func (s *SESService) SendEmail(ctx context.Context, workspaceID string, messageI
 	}
 
 	// Add custom messageID as a tag
-	if messageID != "" {
+	if request.MessageID != "" {
 		input.Tags = []*ses.MessageTag{
 			{
 				Name:  aws.String("notifuse_message_id"),
-				Value: aws.String(messageID),
+				Value: aws.String(request.MessageID),
 			},
 		}
 	}

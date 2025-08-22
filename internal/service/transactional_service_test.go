@@ -21,7 +21,7 @@ type mockEmailService struct {
 	logger logger.Logger
 }
 
-func (m *mockEmailService) SendEmail(ctx context.Context, workspaceID string, isMarketing bool, fromAddress string, fromName string, to string, subject string, content string, optionalProvider *domain.EmailProvider, replyTo string, cc []string, bcc []string) error {
+func (m *mockEmailService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest, isMarketing bool) error {
 	return nil
 }
 
@@ -1196,16 +1196,8 @@ func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
 	mockEmailService.EXPECT().
 		SendEmail(
 			gomock.Any(),
-			gomock.Eq(workspaceID),
-			gomock.Any(), // messageID
+			gomock.Any(), // SendEmailProviderRequest
 			gomock.Any(), // isMarketing
-			gomock.Eq("sender@example.com"),
-			gomock.Eq("Test Sender"),
-			gomock.Eq(recipientEmail),
-			gomock.Eq(template.Email.Subject),
-			gomock.Eq(htmlResult),
-			gomock.Any(), // emailProvider
-			gomock.Any(), // emailOptions
 		).Return(nil)
 
 	// Expect message history creation

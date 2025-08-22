@@ -675,6 +675,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 				mockMessageSender.EXPECT().SendBatch(
 					gomock.Any(),
 					"workspace-123",
+					"marketing-provider-id",
 					"secret-key",
 					true,
 					"broadcast-123",
@@ -810,7 +811,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 				mockMessageSender.EXPECT().SendBatch(
 					gomock.Any(),
 					"workspace-123",
-					"secret-key",
+					"marketing-provider-id", "secret-key",
 					true,
 					"broadcast-123",
 					recipients,
@@ -1262,7 +1263,7 @@ func TestBroadcastOrchestrator_Process(t *testing.T) {
 				mockMessageSender.EXPECT().SendBatch(
 					gomock.Any(),
 					"workspace-123",
-					"secret-key",
+					"marketing-provider-id", "secret-key",
 					true,
 					"broadcast-456",
 					recipients,
@@ -1419,7 +1420,7 @@ func TestBroadcastOrchestrator_Process_ABTestStartSetsTestingAndCompletesTestPha
 	mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "workspace-123", bcast.Audience, 1, 0).Return(recipients, nil)
 
 	// Send batch
-	mockMessageSender.EXPECT().SendBatch(gomock.Any(), "workspace-123", "secret-key", true, "broadcast-123", recipients, gomock.Any(), gomock.Any(), gomock.Any()).Return(1, 0, nil)
+	mockMessageSender.EXPECT().SendBatch(gomock.Any(), "workspace-123", "marketing-provider-id", "secret-key", true, "broadcast-123", recipients, gomock.Any(), gomock.Any(), gomock.Any()).Return(1, 0, nil)
 
 	// Save state
 	mockTaskRepo.EXPECT().SaveState(gomock.Any(), "workspace-123", "task-123", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -1726,7 +1727,7 @@ func TestBroadcastOrchestrator_Process_AutoWinnerEvaluationPath(t *testing.T) {
 	mockContactRepo.EXPECT().GetContactsForBroadcast(gomock.Any(), "w", bcast.Audience, 1, 0).Return([]*domain.ContactWithList{{Contact: &domain.Contact{Email: "w@x.com"}}}, nil)
 
 	// Send
-	mockMessageSender.EXPECT().SendBatch(gomock.Any(), "w", "k", true, "b", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(1, 0, nil)
+	mockMessageSender.EXPECT().SendBatch(gomock.Any(), "w", "pid", "k", true, "b", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(1, 0, nil)
 
 	// Save state
 	mockTaskRepo.EXPECT().SaveState(gomock.Any(), "w", "t", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -1863,7 +1864,7 @@ func TestBroadcastOrchestrator_Process_ABTestWinnerPhaseProcessesRemainingRecipi
 	mockMessageSender.EXPECT().SendBatch(
 		gomock.Any(),
 		"workspace-123",
-		"secret-key",
+		"marketing-provider-id", "secret-key",
 		true,
 		"broadcast-123",
 		[]*domain.ContactWithList{recipient},

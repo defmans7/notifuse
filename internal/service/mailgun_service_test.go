@@ -690,7 +690,19 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Verify results
 		require.NoError(t, err)
@@ -724,7 +736,19 @@ func TestMailgunService_SendEmail(t *testing.T) {
 			})
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Verify results
 		require.NoError(t, err)
@@ -737,7 +761,19 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		provider := &domain.EmailProvider{}
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Verify error
 		assert.Error(t, err)
@@ -765,7 +801,19 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Verify error handling
 		assert.Error(t, err)
@@ -799,7 +847,19 @@ func TestMailgunService_SendEmail(t *testing.T) {
 		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 		// Call the service
-		err := service.SendEmail(ctx, workspaceID, "test-message-id", fromAddress, fromName, to, subject, content, provider, domain.EmailOptions{})
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   fromAddress,
+			FromName:      fromName,
+			To:            to,
+			Subject:       subject,
+			Content:       content,
+			Provider:      provider,
+			EmailOptions:  domain.EmailOptions{},
+		}
+		err := service.SendEmail(ctx, request)
 
 		// Verify error handling
 		assert.Error(t, err)

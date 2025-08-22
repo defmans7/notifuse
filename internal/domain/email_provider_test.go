@@ -1234,10 +1234,50 @@ func TestSendEmailRequest_Validate_Cases(t *testing.T) {
 	}{
 		{"missing workspace", SendEmailRequest{}, true},
 		{"missing message", SendEmailRequest{WorkspaceID: "w"}, true},
-		{"missing contact", SendEmailRequest{WorkspaceID: "w", MessageID: "m"}, true},
-		{"missing provider", SendEmailRequest{WorkspaceID: "w", MessageID: "m", Contact: validContact}, true},
-		{"missing template id", SendEmailRequest{WorkspaceID: "w", MessageID: "m", Contact: validContact, EmailProvider: validProvider}, true},
-		{"valid", SendEmailRequest{WorkspaceID: "w", MessageID: "m", Contact: validContact, EmailProvider: validProvider, TemplateConfig: ChannelTemplate{TemplateID: "tpl"}}, false},
+		{"missing integration", SendEmailRequest{WorkspaceID: "w", MessageID: "m"}, true},
+		{"missing contact", SendEmailRequest{WorkspaceID: "w", IntegrationID: "integration-123", MessageID: "m"}, true},
+		{"missing provider", SendEmailRequest{WorkspaceID: "w", IntegrationID: "integration-123", MessageID: "m", Contact: validContact}, true},
+		{"missing template id", SendEmailRequest{WorkspaceID: "w", IntegrationID: "integration-123", MessageID: "m", Contact: validContact, EmailProvider: validProvider}, true},
+		{"valid", SendEmailRequest{WorkspaceID: "w", IntegrationID: "integration-123", MessageID: "m", Contact: validContact, EmailProvider: validProvider, TemplateConfig: ChannelTemplate{TemplateID: "tpl"}}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.req.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSendEmailProviderRequest_Validate(t *testing.T) {
+	validProvider := &EmailProvider{
+		Kind: EmailProviderKindSES,
+		SES: &AmazonSESSettings{
+			Region:    "us-east-1",
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		},
+	}
+
+	tests := []struct {
+		name    string
+		req     SendEmailProviderRequest
+		wantErr bool
+	}{
+		{"missing workspace", SendEmailProviderRequest{}, true},
+		{"missing integration", SendEmailProviderRequest{WorkspaceID: "w"}, true},
+		{"missing message", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i"}, true},
+		{"missing from address", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i", MessageID: "m"}, true},
+		{"missing from name", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i", MessageID: "m", FromAddress: "from@example.com"}, true},
+		{"missing to", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i", MessageID: "m", FromAddress: "from@example.com", FromName: "From"}, true},
+		{"missing subject", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i", MessageID: "m", FromAddress: "from@example.com", FromName: "From", To: "to@example.com"}, true},
+		{"missing content", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i", MessageID: "m", FromAddress: "from@example.com", FromName: "From", To: "to@example.com", Subject: "Subject"}, true},
+		{"missing provider", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i", MessageID: "m", FromAddress: "from@example.com", FromName: "From", To: "to@example.com", Subject: "Subject", Content: "Content"}, true},
+		{"valid", SendEmailProviderRequest{WorkspaceID: "w", IntegrationID: "i", MessageID: "m", FromAddress: "from@example.com", FromName: "From", To: "to@example.com", Subject: "Subject", Content: "Content", Provider: validProvider}, false},
 	}
 
 	for _, tc := range tests {

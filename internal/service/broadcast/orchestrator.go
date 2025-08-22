@@ -552,8 +552,8 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 		return false, err
 	}
 
-	// Get the email provider using the workspace's GetEmailProvider method
-	emailProvider, providerErr := workspace.GetEmailProvider(true)
+	// Get the email provider and integration ID using the workspace's GetEmailProviderWithIntegrationID method
+	emailProvider, integrationID, providerErr := workspace.GetEmailProviderWithIntegrationID(true)
 	if providerErr != nil {
 		err = providerErr
 		return false, err
@@ -869,6 +869,7 @@ func (o *BroadcastOrchestrator) Process(ctx context.Context, task *domain.Task, 
 		sent, failed, sendErr := o.messageSender.SendBatch(
 			ctx,
 			task.WorkspaceID,
+			integrationID,
 			workspace.Settings.SecretKey,
 			workspace.Settings.EmailTrackingEnabled,
 			broadcastState.BroadcastID,
