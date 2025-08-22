@@ -550,7 +550,7 @@ func TestCreateEventDestination_Success(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
 		},
@@ -580,7 +580,7 @@ func TestCreateEventDestination_InvalidSNSDestination(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination:       nil,
 	}
 
@@ -599,7 +599,7 @@ func TestCreateEventDestination_EmptyTopicARN(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "",
 		},
@@ -620,7 +620,7 @@ func TestCreateEventDestination_AWSError(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
 		},
@@ -645,7 +645,7 @@ func TestUpdateEventDestination_Success(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
 		},
@@ -674,7 +674,7 @@ func TestUpdateEventDestination_Error(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
 		},
@@ -738,7 +738,7 @@ func TestListEventDestinations_Success(t *testing.T) {
 			{
 				Name:               aws.String("destination-1"),
 				Enabled:            aws.Bool(true),
-				MatchingEventTypes: aws.StringSlice([]string{"Delivery", "Bounce"}),
+				MatchingEventTypes: aws.StringSlice([]string{"send", "bounce"}),
 				SNSDestination: &ses.SNSDestination{
 					TopicARN: aws.String("arn:aws:sns:us-east-1:123456789012:topic-1"),
 				},
@@ -746,7 +746,7 @@ func TestListEventDestinations_Success(t *testing.T) {
 			{
 				Name:               aws.String("destination-2"),
 				Enabled:            aws.Bool(false),
-				MatchingEventTypes: aws.StringSlice([]string{"Complaint"}),
+				MatchingEventTypes: aws.StringSlice([]string{"complaint"}),
 				SNSDestination: &ses.SNSDestination{
 					TopicARN: aws.String("arn:aws:sns:us-east-1:123456789012:topic-2"),
 				},
@@ -768,7 +768,7 @@ func TestListEventDestinations_Success(t *testing.T) {
 	assert.Equal(t, "destination-1", result[0].Name)
 	assert.Equal(t, configSetName, result[0].ConfigurationSetName)
 	assert.True(t, result[0].Enabled)
-	assert.Equal(t, []string{"Delivery", "Bounce"}, result[0].MatchingEventTypes)
+	assert.Equal(t, []string{"send", "bounce"}, result[0].MatchingEventTypes)
 	assert.Equal(t, "arn:aws:sns:us-east-1:123456789012:topic-1", result[0].SNSDestination.TopicARN)
 }
 
@@ -783,7 +783,7 @@ func TestListEventDestinations_SkipNonSNS(t *testing.T) {
 			{
 				Name:               aws.String("destination-1"),
 				Enabled:            aws.Bool(true),
-				MatchingEventTypes: aws.StringSlice([]string{"Delivery"}),
+				MatchingEventTypes: aws.StringSlice([]string{"send"}),
 				SNSDestination: &ses.SNSDestination{
 					TopicARN: aws.String("arn:aws:sns:us-east-1:123456789012:topic-1"),
 				},
@@ -791,7 +791,7 @@ func TestListEventDestinations_SkipNonSNS(t *testing.T) {
 			{
 				Name:               aws.String("destination-2"),
 				Enabled:            aws.Bool(true),
-				MatchingEventTypes: aws.StringSlice([]string{"Bounce"}),
+				MatchingEventTypes: aws.StringSlice([]string{"bounce"}),
 				SNSDestination:     nil, // This should be skipped
 			},
 		},
@@ -946,7 +946,7 @@ func TestSetupEventDestination_NewDestination(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
 		},
@@ -978,7 +978,7 @@ func TestSetupEventDestination_ExistingDestination(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
 		},
@@ -992,7 +992,7 @@ func TestSetupEventDestination_ExistingDestination(t *testing.T) {
 				{
 					Name:               aws.String("test-destination"),
 					Enabled:            aws.Bool(true),
-					MatchingEventTypes: aws.StringSlice([]string{"Delivery"}),
+					MatchingEventTypes: aws.StringSlice([]string{"send"}),
 					SNSDestination: &ses.SNSDestination{
 						TopicARN: aws.String("arn:aws:sns:us-east-1:123456789012:test-topic"),
 					},
@@ -1019,7 +1019,7 @@ func TestSetupEventDestination_ListError(t *testing.T) {
 		ConfigurationSetName: "test-config-set",
 		Name:                 "test-destination",
 		Enabled:              true,
-		MatchingEventTypes:   []string{"Delivery", "Bounce"},
+		MatchingEventTypes:   []string{"send", "bounce"},
 		SNSDestination: &domain.SESTopicConfig{
 			TopicARN: "arn:aws:sns:us-east-1:123456789012:test-topic",
 		},
@@ -1260,7 +1260,7 @@ func TestGetWebhookStatus_RegisteredWebhooks(t *testing.T) {
 				{
 					Name:               aws.String("test-destination"),
 					Enabled:            aws.Bool(true),
-					MatchingEventTypes: aws.StringSlice([]string{"Delivery", "Bounce"}),
+					MatchingEventTypes: aws.StringSlice([]string{"send", "bounce"}),
 					SNSDestination: &ses.SNSDestination{
 						TopicARN: aws.String("arn:aws:sns:us-east-1:123456789012:test-topic"),
 					},
@@ -1427,7 +1427,7 @@ func TestUnregisterWebhooks_Success(t *testing.T) {
 				{
 					Name:               aws.String(destinationName),
 					Enabled:            aws.Bool(true),
-					MatchingEventTypes: aws.StringSlice([]string{"Delivery"}),
+					MatchingEventTypes: aws.StringSlice([]string{"send"}),
 					SNSDestination: &ses.SNSDestination{
 						TopicARN: aws.String(topicARN),
 					},
@@ -1535,7 +1535,7 @@ func TestUnregisterWebhooks_PartialFailure(t *testing.T) {
 				{
 					Name:               aws.String(destinationName),
 					Enabled:            aws.Bool(true),
-					MatchingEventTypes: aws.StringSlice([]string{"Delivery"}),
+					MatchingEventTypes: aws.StringSlice([]string{"send"}),
 					SNSDestination: &ses.SNSDestination{
 						TopicARN: aws.String(topicARN),
 					},

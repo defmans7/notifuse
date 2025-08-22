@@ -1,6 +1,8 @@
 # TODO
 
-- test webhooks for email providers
+- test amazon ses production
+- test list welcome email / unsub email
+- test schedule sending
 - test the docker compose
 - docs: installation, email providers, templates, contacts, lists, workspaces, broadcast campaigns, transactional api, notification center
 

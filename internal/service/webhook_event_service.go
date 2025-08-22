@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -153,6 +154,47 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 	if err := json.Unmarshal(rawPayload, &snsPayload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal SES webhook payload: %w", err)
 	}
+
+	// Handle subscription confirmation
+	if snsPayload.Type == "SubscriptionConfirmation" {
+		s.logger.WithField("integration_id", integrationID).
+			WithField("topic_arn", snsPayload.TopicARN).
+			Info("Processing SNS subscription confirmation")
+
+		// Make a GET request to the SubscribeURL to confirm the subscription
+		resp, err := http.Get(snsPayload.SubscribeURL)
+		if err != nil {
+			s.logger.WithField("error", err.Error()).
+				WithField("integration_id", integrationID).
+				Error("Failed to confirm subscription")
+			return nil, fmt.Errorf("failed to confirm subscription: %w", err)
+		}
+		defer resp.Body.Close()
+
+		s.logger.WithField("integration_id", integrationID).
+			WithField("topic_arn", snsPayload.TopicARN).
+			WithField("status_code", resp.StatusCode).
+			Info("SNS subscription confirmed successfully")
+
+		// Return empty events slice for subscription confirmations
+		return []*domain.WebhookEvent{}, nil
+	}
+
+	// Handle unsubscribe confirmation
+	if snsPayload.Type == "UnsubscribeConfirmation" {
+		s.logger.WithField("integration_id", integrationID).
+			WithField("topic_arn", snsPayload.TopicARN).
+			Info("Received SNS unsubscribe confirmation")
+		return []*domain.WebhookEvent{}, nil
+	}
+
+	// // Only process "Notification" type messages for actual email events
+	// if snsPayload.Type != "Notification" {
+	// 	s.logger.WithField("integration_id", integrationID).
+	// 		WithField("message_type", snsPayload.Type).
+	// 		Warn("Received unsupported SNS message type")
+	// 	return []*domain.WebhookEvent{}, nil
+	// }
 
 	// Then, parse the actual notification based on the message type
 	messageBytes := []byte(snsPayload.Message)
