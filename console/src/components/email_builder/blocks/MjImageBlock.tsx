@@ -234,7 +234,7 @@ export class MjImageBlock extends BaseEmailBlock {
           <StringPopoverInput
             value={currentAttributes.href || ''}
             onChange={(value) => onUpdate({ href: value || undefined })}
-            placeholder="Enter link URL"
+            placeholder="Enter link URL or {{ url }}"
             buttonText="Set link"
             validateUri={true}
           />

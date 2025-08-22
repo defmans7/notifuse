@@ -313,18 +313,6 @@ export const WebhookEventsTab: React.FC<WebhookEventsTabProps> = ({ workspaceId,
             Clear All
           </Button>
         )}
-
-        {onRefresh && (
-          <Tooltip title="Refresh">
-            <Button
-              type="text"
-              size="small"
-              icon={<FontAwesomeIcon icon={faRefresh} />}
-              onClick={onRefresh}
-              className="opacity-70 hover:opacity-100"
-            />
-          </Tooltip>
-        )}
       </Space>
     )
   }
@@ -412,6 +400,25 @@ export const WebhookEventsTab: React.FC<WebhookEventsTabProps> = ({ workspaceId,
     }
   ]
 
+  const actionColumn = {
+    title: (
+      <>
+        <Tooltip title="Refresh">
+          <Button
+            type="text"
+            size="small"
+            icon={<FontAwesomeIcon icon={faRefresh} />}
+            onClick={onRefresh}
+            className="opacity-70 hover:opacity-100"
+          />
+        </Tooltip>
+      </>
+    ),
+    key: 'actions',
+    width: 100,
+    render: null
+  }
+
   // Additional bounce-specific columns
   const bounceColumns = [
     {
@@ -470,7 +477,7 @@ export const WebhookEventsTab: React.FC<WebhookEventsTabProps> = ({ workspaceId,
   }
 
   // Determine if we should show additional columns
-  const allColumns = [...columns, ...getAdditionalColumns(allEvents)]
+  const allColumns = [...columns, ...getAdditionalColumns(allEvents), actionColumn]
 
   return (
     <div>

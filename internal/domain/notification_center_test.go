@@ -90,6 +90,26 @@ func TestNotificationCenterRequest_FromURLValues(t *testing.T) {
 			},
 		},
 		{
+			name: "valid url values with confirm action and optional fields",
+			urlValues: url.Values{
+				"email":        []string{"test@example.com"},
+				"email_hmac":   []string{"hmac_value"},
+				"workspace_id": []string{"workspace_123"},
+				"action":       []string{"confirm"},
+				"lid":          []string{"list_456"},
+				"mid":          []string{"msg_789"},
+			},
+			wantErr: false,
+			expected: NotificationCenterRequest{
+				Email:       "test@example.com",
+				EmailHMAC:   "hmac_value",
+				WorkspaceID: "workspace_123",
+				Action:      "confirm",
+				ListID:      "list_456",
+				MessageID:   "msg_789",
+			},
+		},
+		{
 			name: "missing email",
 			urlValues: url.Values{
 				"email_hmac":   []string{"hmac_value"},
@@ -132,6 +152,9 @@ func TestNotificationCenterRequest_FromURLValues(t *testing.T) {
 				assert.Equal(t, tt.expected.Email, request.Email)
 				assert.Equal(t, tt.expected.EmailHMAC, request.EmailHMAC)
 				assert.Equal(t, tt.expected.WorkspaceID, request.WorkspaceID)
+				assert.Equal(t, tt.expected.Action, request.Action)
+				assert.Equal(t, tt.expected.ListID, request.ListID)
+				assert.Equal(t, tt.expected.MessageID, request.MessageID)
 			}
 		})
 	}

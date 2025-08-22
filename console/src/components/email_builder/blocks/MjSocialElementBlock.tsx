@@ -164,12 +164,12 @@ export class MjSocialElementBlock extends BaseEmailBlock {
         </InputLayout>
 
         <InputLayout label="Link URL">
-          <Input
-            size="small"
+          <StringPopoverInput
             value={currentAttributes.href || ''}
-            onChange={(e) => onUpdate({ href: e.target.value || undefined })}
-            placeholder="https://example.com"
-            style={{ width: '100%' }}
+            onChange={(value) => onUpdate({ href: value || undefined })}
+            placeholder="https://example.com or {{ url }}"
+            buttonText="Set link URL"
+            validateUri={true}
           />
         </InputLayout>
 

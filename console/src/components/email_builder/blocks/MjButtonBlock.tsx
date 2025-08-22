@@ -212,7 +212,7 @@ export class MjButtonBlock extends BaseEmailBlock {
           <StringPopoverInput
             value={currentAttributes.href || ''}
             onChange={(value) => onUpdate({ href: value || undefined })}
-            placeholder="Enter button link URL"
+            placeholder="Enter button link URL or {{ url }}"
             buttonText="Set link"
             validateUri={true}
           />

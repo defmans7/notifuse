@@ -1092,6 +1092,16 @@ func TestBuildTemplateData(t *testing.T) {
 		assert.Contains(t, trackingPixelURL, "https://api.example.com/opens")
 		assert.Contains(t, trackingPixelURL, "mid=msg-456")
 		assert.Contains(t, trackingPixelURL, "wid=ws-123")
+
+		// Check confirm subscription URL
+		confirmURL, ok := data["confirm_subscription_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, confirmURL, "https://api.example.com/notification-center?action=confirm")
+		assert.Contains(t, confirmURL, "email=test%40example.com")
+		assert.Contains(t, confirmURL, "lid=list-789")
+		assert.Contains(t, confirmURL, "lname=Newsletter")
+		assert.Contains(t, confirmURL, "wid=ws-123")
+		assert.Contains(t, confirmURL, "mid=msg-456")
 	})
 
 	t.Run("with minimal data", func(t *testing.T) {

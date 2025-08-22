@@ -43,6 +43,9 @@ func (h *NotificationCenterHandler) handlePreferences(w http.ResponseWriter, r *
 		return
 	}
 
+	// Note: Confirmation action is now handled by the frontend via AJAX
+	// The frontend will detect action=confirm and make a POST request to /subscribe
+
 	// Get notification center data for the contact
 	response, err := h.service.GetContactPreferences(r.Context(), req.WorkspaceID, req.Email, req.EmailHMAC)
 	if err != nil {

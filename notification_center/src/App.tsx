@@ -36,6 +36,11 @@ function App() {
   const [allLists, setAllLists] = useState<Array<List & { status?: string }>>([])
   const [language, setLanguage] = useState<Language>(getLanguage())
   const [showLanguageMenu, setShowLanguageMenu] = useState(false)
+  const [confirmationResult, setConfirmationResult] = useState<{
+    success: boolean
+    message: string
+    listId?: string
+  } | null>(null)
   const languageMenuRef = useRef<HTMLDivElement>(null)
 
   // Translation helper function
@@ -54,6 +59,47 @@ function App() {
           setError(t('missingParameters'))
           setLoading(false)
           return
+        }
+
+        // Handle confirmation action
+        if (params.action === 'confirm' && params.lid) {
+          try {
+            // Make a POST request to subscribe endpoint with HMAC authentication
+            const confirmResponse = await fetch('/api/subscribe', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                workspace_id: params.wid,
+                contact: {
+                  email: params.email,
+                  email_hmac: params.email_hmac
+                },
+                list_ids: [params.lid]
+              })
+            })
+
+            if (confirmResponse.ok) {
+              setConfirmationResult({
+                success: true,
+                message: 'Subscription confirmed successfully!',
+                listId: params.lid
+              })
+            } else {
+              const errorData = await confirmResponse.json()
+              setConfirmationResult({
+                success: false,
+                message: errorData.error || 'Failed to confirm subscription'
+              })
+            }
+          } catch (err) {
+            console.error('Failed to confirm subscription:', err)
+            setConfirmationResult({
+              success: false,
+              message: 'Failed to confirm subscription'
+            })
+          }
         }
 
         // Load notification center data
@@ -415,6 +461,22 @@ function App() {
                   {notificationData.contact.first_name || notificationData.contact.email}
                 </div>
               </div>
+
+              {/* Confirmation result */}
+              {confirmationResult && (
+                <div
+                  className={`mb-6 p-4 rounded-sm border ${
+                    confirmationResult.success
+                      ? 'bg-green-50 border-green-200 text-green-800'
+                      : 'bg-red-50 border-red-200 text-red-800'
+                  }`}
+                >
+                  <div className="font-medium">
+                    {confirmationResult.success ? '✓ Success!' : '✗ Error'}
+                  </div>
+                  <div className="mt-1 text-sm">{confirmationResult.message}</div>
+                </div>
+              )}
 
               {/* All Lists section with toggles - showing both public and private lists */}
               {allLists.length > 0 && (

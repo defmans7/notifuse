@@ -90,6 +90,7 @@ export function parseNotificationCenterParams(): NotificationCenterParams | null
     wid: searchParams.get('wid') || undefined,
     email: searchParams.get('email') || undefined,
     email_hmac: searchParams.get('email_hmac') || undefined,
+    lid: searchParams.get('lid') || undefined,
     mid: searchParams.get('mid') || undefined,
     action: searchParams.get('action') || undefined
   }

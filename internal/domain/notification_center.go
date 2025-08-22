@@ -17,6 +17,9 @@ type NotificationCenterRequest struct {
 	Email       string `json:"email"`
 	EmailHMAC   string `json:"email_hmac"`
 	WorkspaceID string `json:"workspace_id"`
+	Action      string `json:"action,omitempty"`     // Optional action (e.g., "confirm", "unsubscribe")
+	ListID      string `json:"list_id,omitempty"`    // List ID for actions
+	MessageID   string `json:"message_id,omitempty"` // Message ID for tracking
 }
 
 func (r *NotificationCenterRequest) Validate() error {
@@ -36,6 +39,9 @@ func (r *NotificationCenterRequest) FromURLValues(values url.Values) error {
 	r.Email = values.Get("email")
 	r.EmailHMAC = values.Get("email_hmac")
 	r.WorkspaceID = values.Get("workspace_id")
+	r.Action = values.Get("action")
+	r.ListID = values.Get("lid")
+	r.MessageID = values.Get("mid")
 	return r.Validate()
 }
 

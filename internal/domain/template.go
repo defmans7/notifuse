@@ -644,6 +644,20 @@ func BuildTemplateData(req TemplateDataRequest) (MapOfAny, error) {
 		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?%s",
 			req.TrackingSettings.Endpoint, oneclickParams.Encode())
 		templateData["oneclick_unsubscribe_url"] = oneclickUnsubscribeURL
+
+		// Build confirmation URL query params for double opt-in
+		confirmParams := url.Values{}
+		confirmParams.Set("action", "confirm")
+		confirmParams.Set("lid", req.ContactWithList.ListID)
+		confirmParams.Set("lname", req.ContactWithList.ListName)
+		confirmParams.Set("wid", req.WorkspaceID)
+		confirmParams.Set("mid", req.MessageID)
+		confirmParams.Set("email", req.ContactWithList.Contact.Email)
+		confirmParams.Set("email_hmac", emailHMAC)
+
+		confirmURL := fmt.Sprintf("%s/notification-center?%s",
+			req.TrackingSettings.Endpoint, confirmParams.Encode())
+		templateData["confirm_subscription_url"] = confirmURL
 	}
 
 	// Add tracking data
