@@ -79,14 +79,14 @@ type SESDeliveryNotification struct {
 
 // SESMail represents the mail part of an SES notification
 type SESMail struct {
-	Timestamp        string            `json:"timestamp"`
-	MessageID        string            `json:"messageId"`
-	Source           string            `json:"source"`
-	Destination      []string          `json:"destination"`
-	HeadersTruncated bool              `json:"headersTruncated"`
-	Headers          []SESHeader       `json:"headers"`
-	CommonHeaders    SESCommonHeaders  `json:"commonHeaders"`
-	Tags             map[string]string `json:"tags"`
+	Timestamp        string              `json:"timestamp"`
+	MessageID        string              `json:"messageId"`
+	Source           string              `json:"source"`
+	Destination      []string            `json:"destination"`
+	HeadersTruncated bool                `json:"headersTruncated"`
+	Headers          []SESHeader         `json:"headers"`
+	CommonHeaders    SESCommonHeaders    `json:"commonHeaders"`
+	Tags             map[string][]string `json:"tags"`
 }
 
 // SESHeader represents a header in an SES notification

@@ -220,8 +220,8 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 
 		// Check for notifuse_message_id in tags
 		if len(bounceNotification.Mail.Tags) > 0 {
-			if id, ok := bounceNotification.Mail.Tags["notifuse_message_id"]; ok {
-				notifuseMessageID = id
+			if ids, ok := bounceNotification.Mail.Tags["notifuse_message_id"]; ok && len(ids) > 0 {
+				notifuseMessageID = ids[0]
 			}
 		}
 
@@ -244,8 +244,8 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 
 			// Check for notifuse_message_id in tags
 			if len(complaintNotification.Mail.Tags) > 0 {
-				if id, ok := complaintNotification.Mail.Tags["notifuse_message_id"]; ok {
-					notifuseMessageID = id
+				if ids, ok := complaintNotification.Mail.Tags["notifuse_message_id"]; ok && len(ids) > 0 {
+					notifuseMessageID = ids[0]
 				}
 			}
 
@@ -267,8 +267,8 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 
 				// Check for notifuse_message_id in tags
 				if len(deliveryNotification.Mail.Tags) > 0 {
-					if id, ok := deliveryNotification.Mail.Tags["notifuse_message_id"]; ok {
-						notifuseMessageID = id
+					if ids, ok := deliveryNotification.Mail.Tags["notifuse_message_id"]; ok && len(ids) > 0 {
+						notifuseMessageID = ids[0]
 					}
 				}
 
