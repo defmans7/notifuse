@@ -22,8 +22,17 @@ const ImportFontInput: React.FC<ImportFontInputProps> = ({
     href: value?.href || ''
   })
 
+  const isLiquidExpression = (value: string): boolean => {
+    // Check if the value contains liquid template syntax like {{ var }}
+    return /\{\{[^}]+\}\}/.test(value)
+  }
+
   const isValidUrl = (url: string): boolean => {
     if (!url.trim()) return false
+
+    // Allow liquid expressions to bypass URL validation
+    if (isLiquidExpression(url)) return true
+
     try {
       new URL(url)
       return true
@@ -126,11 +135,13 @@ const ImportFontInput: React.FC<ImportFontInputProps> = ({
           size="small"
           value={inputValues.href}
           onChange={(e) => setInputValues((prev) => ({ ...prev, href: e.target.value }))}
-          placeholder="https://fonts.googleapis.com/css?family=..."
+          placeholder="https://fonts.googleapis.com/css?family=... or {{ font_url }}"
           status={inputValues.href && !isValidUrl(inputValues.href) ? 'error' : undefined}
         />
         {inputValues.href && !isValidUrl(inputValues.href) && (
-          <div className="text-xs text-red-500 mt-1">Invalid URL format</div>
+          <div className="text-xs text-red-500 mt-1">
+            Invalid URL format. Use a valid URL or liquid expression like {`{{ variable }}`}
+          </div>
         )}
       </div>
 

@@ -21,8 +21,17 @@ const StringPopoverInput: React.FC<StringPopoverInputProps> = ({
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState(value || '')
 
+  const isLiquidExpression = (value: string): boolean => {
+    // Check if the value contains liquid template syntax like {{ var }}
+    return /\{\{[^}]+\}\}/.test(value)
+  }
+
   const isValidUri = (uri: string): boolean => {
     if (!validateUri || !uri.trim()) return true
+
+    // Allow liquid expressions to bypass URL validation
+    if (isLiquidExpression(uri)) return true
+
     try {
       new URL(uri)
       return true
@@ -73,7 +82,9 @@ const StringPopoverInput: React.FC<StringPopoverInputProps> = ({
         status={validateUri && inputValue && !isCurrentValueValid ? 'error' : undefined}
       />
       {validateUri && inputValue && !isCurrentValueValid && (
-        <div className="text-xs text-red-500 mt-1">Invalid URL format</div>
+        <div className="text-xs text-red-500 mt-1">
+          Invalid URL format. Use a valid URL or liquid expression like {`{{ variable }}`}
+        </div>
       )}
       <div className="flex justify-end gap-2 mt-2">
         <Button size="small" onClick={handleCancel}>
@@ -93,7 +104,8 @@ const StringPopoverInput: React.FC<StringPopoverInputProps> = ({
 
   if (value) {
     const isValueValid = isValidUri(value)
-    const shouldRenderAsLink = validateUri && isValueValid && value.trim()
+    const isLiquid = isLiquidExpression(value)
+    const shouldRenderAsLink = validateUri && isValueValid && value.trim() && !isLiquid
 
     return (
       <div className="space-y-2">
@@ -115,10 +127,15 @@ const StringPopoverInput: React.FC<StringPopoverInputProps> = ({
         ) : (
           <span
             className={`text-xs block break-all ${
-              validateUri && !isValueValid ? 'text-red-500' : 'text-slate-600'
+              isLiquid
+                ? 'text-purple-600 font-mono'
+                : validateUri && !isValueValid
+                ? 'text-red-500'
+                : 'text-slate-600'
             }`}
           >
             {value}
+            {isLiquid && <span className="ml-1 text-xs text-purple-400">(liquid)</span>}
           </span>
         )}
 

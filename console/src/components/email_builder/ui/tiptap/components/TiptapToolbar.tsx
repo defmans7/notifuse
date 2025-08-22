@@ -329,14 +329,14 @@ export const LinkButton: React.FC<LinkButtonProps> = ({ editor, title }) => {
   const getPlaceholder = () => {
     switch (linkType) {
       case 'email':
-        return 'user@example.com'
+        return 'user@example.com or {{ contact.email }}'
       case 'phone':
-        return '+1234567890'
+        return '+1234567890 or {{ contact.phone }}'
       case 'anchor':
         return 'section-name'
       case 'url':
       default:
-        return 'https://example.com'
+        return 'https://example.com or {{ url }}'
     }
   }
 
