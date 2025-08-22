@@ -1,6 +1,7 @@
 # TODO
 
 - add refresh on broadcast page + message + webhooks + lists + contacts
+- add integration id tooltip on integration name
 - test reply to from templates in transactional api
 - test amazon ses production
 - test list welcome email / unsub email

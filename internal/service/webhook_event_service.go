@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -188,6 +189,10 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 		return []*domain.WebhookEvent{}, nil
 	}
 
+	if strings.Contains(snsPayload.Message, "Successfully validated SNS topic") {
+		return []*domain.WebhookEvent{}, nil
+	}
+
 	// // Only process "Notification" type messages for actual email events
 	// if snsPayload.Type != "Notification" {
 	// 	s.logger.WithField("integration_id", integrationID).
@@ -279,7 +284,11 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 					timestamp = time.Now()
 				}
 			} else {
-				return nil, fmt.Errorf("unrecognized SES notification: %v", snsPayload)
+				// fail silently to avoid SNS subscription pause
+				s.logger.WithField("integration_id", integrationID).
+					WithField("payload", string(rawPayload)).
+					Warn("unrecognized SES notification")
+				return []*domain.WebhookEvent{}, nil
 			}
 		}
 	}
