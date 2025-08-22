@@ -37,7 +37,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 	// Setup SES test payload
 	t.Run("SES webhook processing", func(t *testing.T) {
 		payload := domain.SESWebhookPayload{
-			Message: `{"notificationType":"Bounce","bounce":{"bounceType":"Permanent","bounceSubType":"General","bouncedRecipients":[{"emailAddress":"test@example.com","diagnosticCode":"554"}],"timestamp":"2023-01-01T12:00:00Z"},"mail":{"messageId":"message1"}}`,
+			Message: `{"eventType":"Bounce","bounce":{"bounceType":"Permanent","bounceSubType":"General","bouncedRecipients":[{"emailAddress":"test@example.com","diagnosticCode":"554"}],"timestamp":"2023-01-01T12:00:00Z"},"mail":{"messageId":"message1"}}`,
 		}
 		rawPayload, err := json.Marshal(payload)
 		require.NoError(t, err)
@@ -216,7 +216,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 	t.Run("Store event error", func(t *testing.T) {
 		// Setup test payload
 		payload := domain.SESWebhookPayload{
-			Message: `{"notificationType":"Bounce","bounce":{"bounceType":"Permanent","bounceSubType":"General","bouncedRecipients":[{"emailAddress":"test@example.com","diagnosticCode":"554"}],"timestamp":"2023-01-01T12:00:00Z"},"mail":{"messageId":"message1"}}`,
+			Message: `{"eventType":"Bounce","bounce":{"bounceType":"Permanent","bounceSubType":"General","bouncedRecipients":[{"emailAddress":"test@example.com","diagnosticCode":"554"}],"timestamp":"2023-01-01T12:00:00Z"},"mail":{"messageId":"message1"}}`,
 		}
 		rawPayload, err := json.Marshal(payload)
 		require.NoError(t, err)
@@ -347,7 +347,7 @@ func TestProcessSESWebhook(t *testing.T) {
 
 	// Create test bounce payload
 	payload := domain.SESWebhookPayload{
-		Message: `{"notificationType":"Bounce","bounce":{"bounceType":"Permanent","bounceSubType":"General","bouncedRecipients":[{"emailAddress":"test@example.com","diagnosticCode":"554"}],"timestamp":"2023-01-01T12:00:00Z"},"mail":{"messageId":"message1"}}`,
+		Message: `{"eventType":"Bounce","bounce":{"bounceType":"Permanent","bounceSubType":"General","bouncedRecipients":[{"emailAddress":"test@example.com","diagnosticCode":"554"}],"timestamp":"2023-01-01T12:00:00Z"},"mail":{"messageId":"message1"}}`,
 	}
 	rawPayload, err := json.Marshal(payload)
 	require.NoError(t, err)

@@ -213,7 +213,7 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 
 	// Try to unmarshal as bounce notification
 	var bounceNotification domain.SESBounceNotification
-	if err := json.Unmarshal(messageBytes, &bounceNotification); err == nil && bounceNotification.NotificationType == "Bounce" {
+	if err := json.Unmarshal(messageBytes, &bounceNotification); err == nil && bounceNotification.EventType == "Bounce" {
 		eventType = domain.EmailEventBounce
 		if len(bounceNotification.Bounce.BouncedRecipients) > 0 {
 			recipientEmail = bounceNotification.Bounce.BouncedRecipients[0].EmailAddress
@@ -239,7 +239,7 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 	} else {
 		// Try to unmarshal as complaint notification
 		var complaintNotification domain.SESComplaintNotification
-		if err := json.Unmarshal(messageBytes, &complaintNotification); err == nil && complaintNotification.NotificationType == "Complaint" {
+		if err := json.Unmarshal(messageBytes, &complaintNotification); err == nil && complaintNotification.EventType == "Complaint" {
 			eventType = domain.EmailEventComplaint
 			if len(complaintNotification.Complaint.ComplainedRecipients) > 0 {
 				recipientEmail = complaintNotification.Complaint.ComplainedRecipients[0].EmailAddress
@@ -263,7 +263,7 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 		} else {
 			// Try to unmarshal as delivery notification
 			var deliveryNotification domain.SESDeliveryNotification
-			if err := json.Unmarshal(messageBytes, &deliveryNotification); err == nil && deliveryNotification.NotificationType == "Delivery" {
+			if err := json.Unmarshal(messageBytes, &deliveryNotification); err == nil && deliveryNotification.EventType == "Delivery" {
 				eventType = domain.EmailEventDelivered
 				if len(deliveryNotification.Delivery.Recipients) > 0 {
 					recipientEmail = deliveryNotification.Delivery.Recipients[0]

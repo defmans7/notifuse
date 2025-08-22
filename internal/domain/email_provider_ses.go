@@ -58,23 +58,23 @@ type SESMessageAttribute struct {
 
 // SESBounceNotification represents an SES bounce notification
 type SESBounceNotification struct {
-	NotificationType string    `json:"notificationType"`
-	Bounce           SESBounce `json:"bounce"`
-	Mail             SESMail   `json:"mail"`
+	EventType string    `json:"eventType"`
+	Bounce    SESBounce `json:"bounce"`
+	Mail      SESMail   `json:"mail"`
 }
 
 // SESComplaintNotification represents an SES complaint notification
 type SESComplaintNotification struct {
-	NotificationType string       `json:"notificationType"`
-	Complaint        SESComplaint `json:"complaint"`
-	Mail             SESMail      `json:"mail"`
+	EventType string       `json:"eventType"`
+	Complaint SESComplaint `json:"complaint"`
+	Mail      SESMail      `json:"mail"`
 }
 
 // SESDeliveryNotification represents an SES delivery notification
 type SESDeliveryNotification struct {
-	NotificationType string      `json:"notificationType"`
-	Delivery         SESDelivery `json:"delivery"`
-	Mail             SESMail     `json:"mail"`
+	EventType string      `json:"eventType"`
+	Delivery  SESDelivery `json:"delivery"`
+	Mail      SESMail     `json:"mail"`
 }
 
 // SESMail represents the mail part of an SES notification
@@ -140,6 +140,7 @@ type SESDelivery struct {
 	ProcessingTimeMillis int      `json:"processingTimeMillis"`
 	Recipients           []string `json:"recipients"`
 	SMTPResponse         string   `json:"smtpResponse"`
+	RemoteMtaIP          string   `json:"remoteMtaIp"`
 	ReportingMTA         string   `json:"reportingMTA"`
 }
 
