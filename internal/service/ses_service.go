@@ -450,7 +450,7 @@ func (s *SESService) RegisterWebhooks(
 	for _, eventType := range eventTypes {
 		switch eventType {
 		case domain.EmailEventDelivered:
-			sesEventTypes = append(sesEventTypes, "send")
+			sesEventTypes = append(sesEventTypes, "delivery")
 			registeredEvents = append(registeredEvents, domain.EmailEventDelivered)
 		case domain.EmailEventBounce:
 			sesEventTypes = append(sesEventTypes, "bounce")
@@ -510,8 +510,8 @@ func (s *SESService) RegisterWebhooks(
 			"workspace_id":      workspaceID,
 			"aws_region":        providerConfig.SES.Region,
 			"delivery_topic":    topicARN,
-			"bounce_topic":      "",
-			"complaint_topic":   "",
+			"bounce_topic":      topicARN,
+			"complaint_topic":   topicARN,
 		},
 	}
 

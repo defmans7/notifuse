@@ -1,5 +1,7 @@
 # TODO
 
+- add refresh on broadcast page + message + webhooks + lists + contacts
+- test reply to from templates in transactional api
 - test amazon ses production
 - test list welcome email / unsub email
 - test schedule sending
