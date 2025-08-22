@@ -21,6 +21,7 @@ import type { List, TemplateReference, Workspace } from '../services/api/types'
 import { CreateListDrawer } from '../components/lists/ListDrawer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare, faTrashCan } from '@fortawesome/free-regular-svg-icons'
+import { faRefresh } from '@fortawesome/free-solid-svg-icons'
 import { Check, X } from 'lucide-react'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { CreateTemplateDrawer } from '../components/templates/CreateTemplateDrawer'
@@ -133,6 +134,11 @@ export function ListsPage() {
     setConfirmationInput('')
   }
 
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['lists', workspaceId] })
+    message.success('Lists refreshed')
+  }
+
   const hasLists = !isLoading && data?.lists && data.lists.length > 0
 
   if (!workspace) {
@@ -143,7 +149,20 @@ export function ListsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div className="text-2xl font-medium">Lists</div>
-        {(isLoading || hasLists) && <CreateListDrawer workspaceId={workspaceId} />}
+        {(isLoading || hasLists) && (
+          <Space>
+            <Tooltip title="Refresh">
+              <Button
+                type="text"
+                size="small"
+                icon={<FontAwesomeIcon icon={faRefresh} />}
+                onClick={handleRefresh}
+                className="opacity-70 hover:opacity-100"
+              />
+            </Tooltip>
+            <CreateListDrawer workspaceId={workspaceId} />
+          </Space>
+        )}
       </div>
 
       {isLoading ? (

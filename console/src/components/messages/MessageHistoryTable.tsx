@@ -7,7 +7,8 @@ import {
   faCircleXmark,
   faArrowPointer,
   faBan,
-  faTriangleExclamation
+  faTriangleExclamation,
+  faRefresh
 } from '@fortawesome/free-solid-svg-icons'
 import { faEye, faFaceFrown } from '@fortawesome/free-regular-svg-icons'
 import dayjs from '../../lib/dayjs'
@@ -71,6 +72,7 @@ interface MessageHistoryTableProps {
   isLoadingMore: boolean
   nextCursor?: string
   onLoadMore: () => void
+  onRefresh?: () => void
   show_email?: boolean
   bordered?: boolean
   size?: 'small' | 'middle' | 'large'
@@ -83,6 +85,7 @@ export function MessageHistoryTable({
   isLoadingMore,
   nextCursor,
   onLoadMore,
+  onRefresh,
   show_email = true,
   bordered = false,
   size = 'small',
@@ -230,9 +233,21 @@ export function MessageHistoryTable({
 
   // Add actions column
   const actionsColumn = {
-    title: '',
+    title: onRefresh ? (
+      <Tooltip title="Refresh">
+        <Button
+          type="text"
+          size="small"
+          icon={<FontAwesomeIcon icon={faRefresh} />}
+          onClick={onRefresh}
+          className="opacity-70 hover:opacity-100"
+        />
+      </Tooltip>
+    ) : (
+      ''
+    ),
     key: 'actions',
-    width: 30,
+    width: 50,
     render: (record: MessageHistory) => {
       if (!record.template_id) {
         return null

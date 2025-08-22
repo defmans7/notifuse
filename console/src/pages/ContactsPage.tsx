@@ -16,7 +16,7 @@ import { ContactColumnsSelector, JsonViewer } from '../components/contacts/Conta
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEye, faHourglass } from '@fortawesome/free-regular-svg-icons'
 import { faCircleCheck, faFaceFrown } from '@fortawesome/free-regular-svg-icons'
-import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faBan, faTriangleExclamation, faRefresh } from '@fortawesome/free-solid-svg-icons'
 import { ContactDetailsDrawer } from '../components/contacts/ContactDetailsDrawer'
 import dayjs from '../lib/dayjs'
 import { useAuth } from '../contexts/AuthContext'
@@ -268,6 +268,16 @@ export function ContactsPage() {
     queryClient,
     workspaceId
   ])
+
+  const handleRefresh = () => {
+    // Reset accumulated contacts and cursor
+    setAllContacts([])
+    setCurrentCursor(undefined)
+    // Reset and refetch the query
+    queryClient.resetQueries({ queryKey: ['contacts', workspaceId] })
+    queryClient.invalidateQueries({ queryKey: ['lists', workspaceId] })
+    refetch()
+  }
 
   if (!currentWorkspace) {
     return <div>Loading...</div>
@@ -584,7 +594,16 @@ export function ContactsPage() {
     },
     {
       title: (
-        <>
+        <Space size="small">
+          <Tooltip title="Refresh">
+            <Button
+              type="text"
+              size="small"
+              icon={<FontAwesomeIcon icon={faRefresh} />}
+              onClick={handleRefresh}
+              className="opacity-70 hover:opacity-100"
+            />
+          </Tooltip>
           <ContactColumnsSelector
             columns={allColumns.map((col) => ({
               ...col,
@@ -592,10 +611,10 @@ export function ContactsPage() {
             }))}
             onColumnVisibilityChange={handleColumnVisibilityChange}
           />
-        </>
+        </Space>
       ),
       key: 'actions',
-      width: 50,
+      width: 80,
       fixed: 'right' as const,
       onHeaderCell: () => ({
         className: '!bg-white'

@@ -17,7 +17,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import React, { useState, useMemo, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleCheck, faCircleXmark } from '@fortawesome/free-regular-svg-icons'
-import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faTriangleExclamation, faRefresh } from '@fortawesome/free-solid-svg-icons'
 import dayjs from '../../lib/dayjs'
 
 const { Title, Text } = Typography
@@ -76,9 +76,10 @@ interface Filter {
 
 interface WebhookEventsTabProps {
   workspaceId: string
+  onRefresh?: () => void
 }
 
-export const WebhookEventsTab: React.FC<WebhookEventsTabProps> = ({ workspaceId }) => {
+export const WebhookEventsTab: React.FC<WebhookEventsTabProps> = ({ workspaceId, onRefresh }) => {
   const { workspaces } = useAuth()
   const [currentCursor, setCurrentCursor] = useState<string | undefined>(undefined)
   const [allEvents, setAllEvents] = useState<WebhookEvent[]>([])
@@ -311,6 +312,18 @@ export const WebhookEventsTab: React.FC<WebhookEventsTabProps> = ({ workspaceId 
           <Button size="small" onClick={clearAllFilters}>
             Clear All
           </Button>
+        )}
+
+        {onRefresh && (
+          <Tooltip title="Refresh">
+            <Button
+              type="text"
+              size="small"
+              icon={<FontAwesomeIcon icon={faRefresh} />}
+              onClick={onRefresh}
+              className="opacity-70 hover:opacity-100"
+            />
+          </Tooltip>
         )}
       </Space>
     )

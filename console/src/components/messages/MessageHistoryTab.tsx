@@ -487,6 +487,9 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
         nextCursor={messagesData?.next_cursor}
         onLoadMore={handleLoadMore}
         show_email={true}
+        onRefresh={() => {
+          queryClient.resetQueries({ queryKey: ['messages-history', workspaceId, apiFilters] })
+        }}
         bordered={true}
         size="middle"
       />

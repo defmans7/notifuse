@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -791,11 +790,10 @@ func (s *SESService) SendEmail(ctx context.Context, request domain.SendEmailProv
 	// Add configuration set if it exists - use integrationID instead of workspaceID
 	configSetName := fmt.Sprintf("notifuse-%s", request.IntegrationID)
 	configSets, err := s.ListConfigurationSets(ctx, *request.Provider.SES)
-	log.Printf("configSets: %v", configSets)
+
 	if err == nil {
 		for _, set := range configSets {
 			if set == configSetName {
-				log.Printf("using configuration set: %s", configSetName)
 				input.ConfigurationSetName = aws.String(configSetName)
 				break
 			}

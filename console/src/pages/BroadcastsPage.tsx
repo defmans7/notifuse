@@ -44,7 +44,8 @@ import {
   faBan,
   faChevronDown,
   faChevronUp,
-  faSpinner
+  faSpinner,
+  faRefresh
 } from '@fortawesome/free-solid-svg-icons'
 import React, { useState } from 'react'
 import dayjs from '../lib/dayjs'
@@ -936,6 +937,12 @@ export function BroadcastsPage() {
     setBroadcastToSchedule(null)
   }
 
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['broadcasts', workspaceId] })
+    queryClient.invalidateQueries({ queryKey: ['lists', workspaceId] })
+    message.success('Broadcasts refreshed')
+  }
+
   const hasBroadcasts = !isLoading && data?.broadcasts && data.broadcasts.length > 0
   const hasMarketingEmailProvider = currentWorkspace?.settings?.marketing_email_provider_id
 
@@ -944,11 +951,22 @@ export function BroadcastsPage() {
       <div className="flex justify-between items-center mb-6">
         <div className="text-2xl font-medium">Broadcasts</div>
         {currentWorkspace && hasBroadcasts && (
-          <UpsertBroadcastDrawer
-            workspace={currentWorkspace}
-            lists={lists}
-            buttonContent={<>Create Broadcast</>}
-          />
+          <Space>
+            <Tooltip title="Refresh">
+              <Button
+                type="text"
+                size="small"
+                icon={<FontAwesomeIcon icon={faRefresh} />}
+                onClick={handleRefresh}
+                className="opacity-70 hover:opacity-100"
+              />
+            </Tooltip>
+            <UpsertBroadcastDrawer
+              workspace={currentWorkspace}
+              lists={lists}
+              buttonContent={<>Create Broadcast</>}
+            />
+          </Space>
         )}
       </div>
 
