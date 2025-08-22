@@ -1,5 +1,6 @@
 import { Typography, Tabs } from 'antd'
 import { useParams } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { MessageHistoryTab } from '../components/messages/MessageHistoryTab'
 import { WebhookEventsTab } from '../components/webhooks/WebhookEventsTab'
 
@@ -7,9 +8,14 @@ const { Text } = Typography
 
 export function LogsPage() {
   const { workspaceId } = useParams({ strict: false })
+  const queryClient = useQueryClient()
 
   if (!workspaceId) {
     return <div>Loading...</div>
+  }
+
+  const handleRefreshWebhookEvents = () => {
+    queryClient.invalidateQueries({ queryKey: ['webhook-events', workspaceId] })
   }
 
   return (
@@ -30,7 +36,9 @@ export function LogsPage() {
           {
             key: 'webhooks',
             label: 'Webhooks',
-            children: <WebhookEventsTab workspaceId={workspaceId} />
+            children: (
+              <WebhookEventsTab workspaceId={workspaceId} onRefresh={handleRefreshWebhookEvents} />
+            )
           }
         ]}
       />
