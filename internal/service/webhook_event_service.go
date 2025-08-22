@@ -279,7 +279,7 @@ func (s *WebhookEventService) processSESWebhook(integrationID string, rawPayload
 					timestamp = time.Now()
 				}
 			} else {
-				return nil, fmt.Errorf("unrecognized SES notification type")
+				return nil, fmt.Errorf("unrecognized SES notification: %v", snsPayload)
 			}
 		}
 	}
