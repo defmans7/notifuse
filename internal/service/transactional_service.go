@@ -558,8 +558,8 @@ func (s *TransactionalNotificationService) SendNotification(
 		// Send the message based on channel type
 		if channel == domain.TransactionalChannelEmail {
 
-			// Get the email provider using the workspace's GetEmailProvider method
-			emailProvider, err := workspace.GetEmailProvider(false)
+			// Get the email provider and integration ID using the workspace's GetEmailProviderWithIntegrationID method
+			emailProvider, integrationID, err := workspace.GetEmailProviderWithIntegrationID(false)
 			if err != nil {
 				tracing.MarkSpanError(childCtx, err)
 				childSpan.End()
@@ -576,12 +576,14 @@ func (s *TransactionalNotificationService) SendNotification(
 
 			childSpan.AddAttributes(
 				trace.StringAttribute("provider.kind", string(emailProvider.Kind)),
+				trace.StringAttribute("integration_id", integrationID),
 			)
 
 			notification.TrackingSettings.EnableTracking = workspace.Settings.EmailTrackingEnabled
 
 			request := domain.SendEmailRequest{
 				WorkspaceID:      workspaceID,
+				IntegrationID:    integrationID,
 				MessageID:        messageID,
 				ExternalID:       params.ExternalID,
 				Contact:          contact,
