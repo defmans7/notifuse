@@ -1062,6 +1062,24 @@ func (s *BroadcastService) SelectWinner(ctx context.Context, workspaceID, broadc
 		task.NextRunAfter = &nextRunAfter
 		task.Status = domain.TaskStatusPending
 
-		return s.taskRepo.Update(ctx, workspaceID, task)
+		if updateErr := s.taskRepo.Update(ctx, workspaceID, task); updateErr != nil {
+			return updateErr
+		}
+
+		// Immediately trigger task execution after winner selection
+		// Note: We always trigger here since winner selection should immediately resume sending
+		go func() {
+			// Small delay to ensure transaction is committed
+			time.Sleep(100 * time.Millisecond)
+			if execErr := s.taskService.ExecutePendingTasks(context.Background(), 1); execErr != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"task_id":      task.ID,
+					"error":        execErr.Error(),
+				}).Error("Failed to trigger immediate task execution after winner selection")
+			}
+		}()
+
+		return nil
 	})
 }

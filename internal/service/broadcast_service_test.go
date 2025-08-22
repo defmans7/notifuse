@@ -342,8 +342,14 @@ func TestBroadcastService_SelectWinner_SetsWinnerAndResumesTask(t *testing.T) {
 	d.taskRepo.EXPECT().GetTaskByBroadcastID(ctx, workspaceID, broadcastID).Return(task, nil)
 	d.taskRepo.EXPECT().Update(ctx, workspaceID, gomock.Any()).Return(nil)
 
+	// Expect ExecutePendingTasks to be called in goroutine (may happen after test completes)
+	d.taskService.EXPECT().ExecutePendingTasks(gomock.Any(), 1).Return(nil).AnyTimes()
+
 	err := d.svc.SelectWinner(ctx, workspaceID, broadcastID, winner)
 	require.NoError(t, err)
+
+	// Give goroutine time to complete
+	time.Sleep(200 * time.Millisecond)
 }
 
 func TestBroadcastService_SetTaskService_SetsField(t *testing.T) {

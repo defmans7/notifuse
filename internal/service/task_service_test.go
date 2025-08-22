@@ -37,6 +37,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	// Setup transaction mocking for all tests
 	mockRepo.EXPECT().
@@ -171,6 +172,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 
 		// Create a new task service instance for this test
 		procTaskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+		procTaskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 		// Register a processor for the task type
 		mockProcessor := mocks.NewMockTaskProcessor(procCtrl)
@@ -292,6 +294,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 
 		// Create a new task service instance for this test
 		procTaskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+		procTaskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 		// Register a processor for the task type
 		mockProcessor := mocks.NewMockTaskProcessor(procCtrl)
@@ -354,6 +357,7 @@ func TestTaskService_ExecuteTask(t *testing.T) {
 
 		// Create a new task service instance for this test
 		procTaskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+		procTaskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 		// Register a processor for the task type
 		mockProcessor := mocks.NewMockTaskProcessor(procCtrl)
@@ -417,6 +421,7 @@ func TestTaskService_CreateTask(t *testing.T) {
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Sets default values when not provided", func(t *testing.T) {
 		// Setup
@@ -523,6 +528,7 @@ func TestTaskService_ListTasks(t *testing.T) {
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Returns tasks with pagination info", func(t *testing.T) {
 		// Setup
@@ -632,6 +638,7 @@ func TestTaskService_GetTask(t *testing.T) {
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Returns task when found", func(t *testing.T) {
 		// Setup
@@ -696,6 +703,7 @@ func TestTaskService_DeleteTask(t *testing.T) {
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Deletes task successfully", func(t *testing.T) {
 		// Setup
@@ -750,6 +758,7 @@ func TestTaskService_RegisterProcessor(t *testing.T) {
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Registers processor for supported task types", func(t *testing.T) {
 		// Create a processor that only supports certain task types
@@ -830,6 +839,9 @@ func TestTaskService_BroadcastEventHandlers(t *testing.T) {
 	mockEventBus.EXPECT().Subscribe(domain.EventBroadcastSent, gomock.Any()).Times(1)
 	mockEventBus.EXPECT().Subscribe(domain.EventBroadcastFailed, gomock.Any()).Times(1)
 	mockEventBus.EXPECT().Subscribe(domain.EventBroadcastCancelled, gomock.Any()).Times(1)
+
+	// Disable auto-execution for testing to avoid goroutine issues
+	taskService.SetAutoExecuteImmediate(false)
 
 	// Subscribe to events
 	taskService.SubscribeToBroadcastEvents(mockEventBus)
@@ -944,6 +956,7 @@ func TestTaskService_ExecutePendingTasks(t *testing.T) {
 	t.Run("Uses HTTP execution when API endpoint is configured", func(t *testing.T) {
 		// Create TaskService with API endpoint
 		taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+		taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 		// Setup
 		ctx := context.Background()
@@ -1004,6 +1017,7 @@ func TestTaskService_ExecutePendingTasks(t *testing.T) {
 
 		// Create TaskService without API endpoint
 		taskService := NewTaskService(localRepo, localLogger, mockAuthService, "")
+		taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 		// Setup
 		ctx := context.Background()
@@ -1058,6 +1072,7 @@ func TestTaskService_ExecutePendingTasks(t *testing.T) {
 	t.Run("Handles GetNextBatch error", func(t *testing.T) {
 		// Create TaskService
 		taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+		taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 		// Setup
 		ctx := context.Background()
@@ -1080,6 +1095,7 @@ func TestTaskService_ExecutePendingTasks(t *testing.T) {
 	t.Run("Uses default maxTasks when 0 is provided", func(t *testing.T) {
 		// Create TaskService
 		taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+		taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 		// Setup
 		ctx := context.Background()
@@ -1115,6 +1131,7 @@ func TestTaskService_HandleBroadcastResumed(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Successfully resumes a task for resumed broadcast", func(t *testing.T) {
 		// Setup
@@ -1264,6 +1281,7 @@ func TestTaskService_HandleBroadcastSent(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Successfully completes a task for sent broadcast", func(t *testing.T) {
 		// Setup
@@ -1406,6 +1424,7 @@ func TestTaskService_HandleBroadcastFailed(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Successfully marks task as failed for failed broadcast", func(t *testing.T) {
 		// Setup
@@ -1589,6 +1608,7 @@ func TestTaskService_HandleBroadcastCancelled(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Successfully marks task as failed for cancelled broadcast", func(t *testing.T) {
 		// Setup
@@ -1732,6 +1752,7 @@ func TestTaskService_HandleBroadcastScheduledExtended(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	taskService := NewTaskService(mockRepo, mockLogger, mockAuthService, apiEndpoint)
+	taskService.SetAutoExecuteImmediate(false) // Disable for testing
 
 	t.Run("Updates existing task when found for immediate sending", func(t *testing.T) {
 		// Setup

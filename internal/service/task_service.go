@@ -28,6 +28,9 @@ type TaskService struct {
 	processors  map[string]domain.TaskProcessor
 	lock        sync.RWMutex
 	apiEndpoint string
+	// autoExecuteImmediate controls whether tasks are automatically executed when set to immediate
+	// This is mainly used to disable auto-execution during testing
+	autoExecuteImmediate bool
 }
 
 // WithTransaction executes a function within a transaction
@@ -47,12 +50,21 @@ func (s *TaskService) WithTransaction(ctx context.Context, fn func(*sql.Tx) erro
 func NewTaskService(repository domain.TaskRepository, logger logger.Logger, authService *AuthService, apiEndpoint string) *TaskService {
 
 	return &TaskService{
-		repo:        repository,
-		logger:      logger,
-		authService: authService,
-		processors:  make(map[string]domain.TaskProcessor),
-		apiEndpoint: apiEndpoint,
+		repo:                 repository,
+		logger:               logger,
+		authService:          authService,
+		processors:           make(map[string]domain.TaskProcessor),
+		apiEndpoint:          apiEndpoint,
+		autoExecuteImmediate: true, // Enable auto-execution by default
 	}
+}
+
+// SetAutoExecuteImmediate sets whether tasks should be automatically executed immediately
+// This is mainly used for testing to disable auto-execution
+func (s *TaskService) SetAutoExecuteImmediate(enabled bool) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.autoExecuteImmediate = enabled
 }
 
 // RegisterProcessor registers a task processor for a specific task type
@@ -692,6 +704,21 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 					}).Error("Failed to update task for scheduled broadcast")
 					return updateErr
 				}
+
+				// Immediately trigger task execution after the transaction commits
+				if s.autoExecuteImmediate {
+					go func() {
+						// Small delay to ensure transaction is committed
+						time.Sleep(100 * time.Millisecond)
+						if execErr := s.ExecutePendingTasks(context.Background(), 1); execErr != nil {
+							s.logger.WithFields(map[string]interface{}{
+								"broadcast_id": broadcastID,
+								"task_id":      existingTask.ID,
+								"error":        execErr.Error(),
+							}).Error("Failed to trigger immediate task execution")
+						}
+					}()
+				}
 			}
 
 			return nil
@@ -754,6 +781,21 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 			"broadcast_id": broadcastID,
 			"workspace_id": payload.WorkspaceID,
 		}).Info("Successfully created task for scheduled broadcast")
+
+		// If the broadcast is set to send immediately, trigger task execution
+		if sendNow && status == string(domain.BroadcastStatusSending) && s.autoExecuteImmediate {
+			// Immediately trigger task execution after the transaction commits
+			go func() {
+				// Small delay to ensure transaction is committed
+				time.Sleep(100 * time.Millisecond)
+				if execErr := s.ExecutePendingTasks(context.Background(), 1); execErr != nil {
+					s.logger.WithFields(map[string]interface{}{
+						"broadcast_id": broadcastID,
+						"error":        execErr.Error(),
+					}).Error("Failed to trigger immediate task execution for new task")
+				}
+			}()
+		}
 
 		return nil
 	})
@@ -873,6 +915,23 @@ func (s *TaskService) handleBroadcastResumed(ctx context.Context, payload domain
 			"broadcast_id": broadcastID,
 			"task_id":      task.ID,
 		}).Info("Successfully resumed task for resumed broadcast")
+
+		// Check if broadcast should start immediately
+		startNow, _ := payload.Data["start_now"].(bool)
+		if startNow && s.autoExecuteImmediate {
+			// Immediately trigger task execution
+			go func() {
+				// Small delay to ensure transaction is committed
+				time.Sleep(100 * time.Millisecond)
+				if execErr := s.ExecutePendingTasks(context.Background(), 1); execErr != nil {
+					s.logger.WithFields(map[string]interface{}{
+						"broadcast_id": broadcastID,
+						"task_id":      task.ID,
+						"error":        execErr.Error(),
+					}).Error("Failed to trigger immediate task execution for resumed broadcast")
+				}
+			}()
+		}
 	}
 }
 
