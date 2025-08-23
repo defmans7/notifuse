@@ -253,7 +253,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 			return fmt.Errorf("failed to subscribe to list: %w", err)
 		}
 
-		marketingEmailProvider, err := workspace.GetEmailProvider(true)
+		marketingEmailProvider, integrationID, err := workspace.GetEmailProviderWithIntegrationID(true)
 		if err != nil {
 			s.logger.WithField("workspace_id", workspace.ID).Error(fmt.Sprintf("Failed to get marketing email provider: %v", err))
 			return fmt.Errorf("failed to get marketing email provider: %w", err)
@@ -308,6 +308,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 
 			request := domain.SendEmailRequest{
 				WorkspaceID:      workspace.ID,
+				IntegrationID:    integrationID,
 				MessageID:        messageID,
 				ExternalID:       nil,
 				Contact:          contact,
@@ -330,6 +331,7 @@ func (s *ListService) SubscribeToLists(ctx context.Context, payload *domain.Subs
 
 			request := domain.SendEmailRequest{
 				WorkspaceID:      workspace.ID,
+				IntegrationID:    integrationID,
 				MessageID:        messageID,
 				ExternalID:       nil,
 				Contact:          contact,
@@ -389,7 +391,7 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 	}
 
 	// Get email provider for sending confirmation emails
-	marketingEmailProvider, err := workspace.GetEmailProvider(true)
+	marketingEmailProvider, integrationID, err := workspace.GetEmailProviderWithIntegrationID(true)
 	if err != nil {
 		s.logger.WithField("workspace_id", workspace.ID).Error(fmt.Sprintf("Failed to get marketing email provider: %v", err))
 		// We'll continue even if we can't get the email provider
@@ -463,6 +465,7 @@ func (s *ListService) UnsubscribeFromLists(ctx context.Context, payload *domain.
 
 			request := domain.SendEmailRequest{
 				WorkspaceID:      workspace.ID,
+				IntegrationID:    integrationID,
 				MessageID:        messageID,
 				ExternalID:       nil,
 				Contact:          contact,
