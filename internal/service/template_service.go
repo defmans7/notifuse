@@ -99,11 +99,14 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, workspaceID string
 }
 
 func (s *TemplateService) GetTemplateByID(ctx context.Context, workspaceID string, id string, version int64) (*domain.Template, error) {
-	// Authenticate user for workspace
-	var err error
-	ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	// Check if this is a system call that should bypass authentication
+	if ctx.Value("system_call") == nil {
+		// Authenticate user for workspace for regular calls
+		var err error
+		ctx, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to authenticate user: %w", err)
+		}
 	}
 
 	// Get template by ID

@@ -227,6 +227,23 @@ func TestTemplateService_GetTemplateByID(t *testing.T) {
 		assert.ErrorIs(t, err, authErr)
 	})
 
+	t.Run("System Call Bypasses Authentication", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		templateService, mockRepo, _, _ := setupTemplateServiceTest(ctrl)
+
+		// Create a system context that should bypass authentication
+		systemCtx := context.WithValue(ctx, "system_call", true)
+
+		// No auth service call expected since this is a system call
+		mockRepo.EXPECT().GetTemplateByID(systemCtx, workspaceID, templateID, version).Return(expectedTemplate, nil)
+
+		template, err := templateService.GetTemplateByID(systemCtx, workspaceID, templateID, version)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedTemplate, template)
+	})
+
 	t.Run("Not Found", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
