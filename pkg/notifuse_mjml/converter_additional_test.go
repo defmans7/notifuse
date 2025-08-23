@@ -175,3 +175,154 @@ func TestGetBlockContent_AllTypes(t *testing.T) {
 		t.Fatalf("expected empty content, got %q", c)
 	}
 }
+
+func TestOptimizedTemplateDataParsing(t *testing.T) {
+	// Test that template data is parsed only once per conversion, not multiple times per block
+	// This is a regression test for the optimization where we parse template data once and pass it through
+
+	// Create a nested structure that would trigger multiple parsings in the old implementation
+	text1 := &MJTextBlock{
+		BaseBlock: BaseBlock{
+			ID:   "text1",
+			Type: MJMLComponentMjText,
+			Attributes: map[string]interface{}{
+				"href": "{{ base_url }}/text1",
+			},
+		},
+		Content: stringPtr("Hello {{ user.name }}"),
+	}
+
+	button1 := &MJButtonBlock{
+		BaseBlock: BaseBlock{
+			ID:   "btn1",
+			Type: MJMLComponentMjButton,
+			Attributes: map[string]interface{}{
+				"href": "{{ base_url }}/button",
+			},
+		},
+		Content: stringPtr("Click {{ cta_text }}"),
+	}
+
+	column := &MJColumnBlock{
+		BaseBlock: BaseBlock{
+			ID:       "col1",
+			Type:     MJMLComponentMjColumn,
+			Children: []interface{}{text1, button1},
+		},
+	}
+
+	section := &MJSectionBlock{
+		BaseBlock: BaseBlock{
+			ID:       "sec1",
+			Type:     MJMLComponentMjSection,
+			Children: []interface{}{column},
+			Attributes: map[string]interface{}{
+				"backgroundUrl": "{{ base_url }}/background.jpg",
+			},
+		},
+	}
+
+	body := &MJBodyBlock{
+		BaseBlock: BaseBlock{
+			ID:       "body1",
+			Type:     MJMLComponentMjBody,
+			Children: []interface{}{section},
+		},
+	}
+
+	root := &MJMLBlock{
+		BaseBlock: BaseBlock{
+			ID:       "root",
+			Type:     MJMLComponentMjml,
+			Children: []interface{}{body},
+		},
+	}
+
+	templateData := `{
+		"user": {"name": "John Doe"},
+		"base_url": "https://example.com",
+		"cta_text": "Get Started"
+	}`
+
+	// Convert with template data
+	result, err := ConvertJSONToMJMLWithData(root, templateData)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify all liquid expressions were processed correctly
+	expectedStrings := []string{
+		"Hello John Doe",                                      // Content processing
+		"Click Get Started",                                   // Content processing
+		`href="https://example.com/text1"`,                    // Attribute processing
+		`href="https://example.com/button"`,                   // Attribute processing
+		`background-url="https://example.com/background.jpg"`, // Attribute processing
+	}
+
+	for _, expected := range expectedStrings {
+		if !strings.Contains(result, expected) {
+			t.Errorf("Expected result to contain '%s', got: %s", expected, result)
+		}
+	}
+}
+
+func TestFormatAttributesWithLiquid(t *testing.T) {
+	templateData := map[string]interface{}{
+		"base_url": "https://example.com",
+		"color":    "#ff0000",
+	}
+
+	attrs := map[string]interface{}{
+		"href":            "{{ base_url }}/profile",   // Should be processed
+		"src":             "{{ base_url }}/image.jpg", // Should be processed
+		"backgroundColor": "{{ color }}",              // Should NOT be processed (not URL attribute)
+		"fontSize":        "16px",                     // Should not be processed
+	}
+
+	result := formatAttributesWithLiquid(attrs, templateData, "test-block")
+
+	// Check that URL attributes were processed
+	if !strings.Contains(result, `href="https://example.com/profile"`) {
+		t.Errorf("href attribute not processed correctly: %s", result)
+	}
+	if !strings.Contains(result, `src="https://example.com/image.jpg"`) {
+		t.Errorf("src attribute not processed correctly: %s", result)
+	}
+
+	// Check that non-URL attributes were NOT processed
+	if !strings.Contains(result, `background-color="{{ color }}"`) {
+		t.Errorf("backgroundColor should not be processed, got: %s", result)
+	}
+	if !strings.Contains(result, `font-size="16px"`) {
+		t.Errorf("fontSize should be included as-is, got: %s", result)
+	}
+}
+
+func TestTemplateDataParsingErrorHandling(t *testing.T) {
+	// Test error handling for invalid template data
+	text := &MJTextBlock{
+		BaseBlock: BaseBlock{ID: "text1", Type: MJMLComponentMjText},
+		Content:   stringPtr("Hello {{ name }}"),
+	}
+	body := &MJBodyBlock{
+		BaseBlock: BaseBlock{ID: "body1", Type: MJMLComponentMjBody, Children: []interface{}{text}},
+	}
+	root := &MJMLBlock{
+		BaseBlock: BaseBlock{ID: "root", Type: MJMLComponentMjml, Children: []interface{}{body}},
+	}
+
+	// Test with invalid JSON
+	_, err := ConvertJSONToMJMLWithData(root, "{invalid json")
+	if err == nil {
+		t.Fatal("Expected error for invalid JSON template data")
+	}
+	if !strings.Contains(err.Error(), "template data parsing failed") {
+		t.Errorf("Expected template data parsing error, got: %v", err)
+	}
+
+	// Test with valid JSON but liquid processing error in error-handling function
+	_, err = ConvertJSONToMJMLWithData(root, `{"name": "John"}`)
+	if err != nil {
+		t.Fatalf("Unexpected error with valid data: %v", err)
+	}
+}

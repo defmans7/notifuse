@@ -16,11 +16,26 @@ func ConvertJSONToMJML(tree EmailBlock) string {
 
 // ConvertJSONToMJMLWithData converts an EmailBlock JSON tree to MJML string with template data
 func ConvertJSONToMJMLWithData(tree EmailBlock, templateData string) (string, error) {
-	return convertBlockToMJMLWithError(tree, 0, templateData)
+	// Parse template data once at the beginning
+	parsedData, parseErr := parseTemplateDataString(templateData)
+	if parseErr != nil {
+		return "", fmt.Errorf("template data parsing failed: %v", parseErr)
+	}
+	return convertBlockToMJMLWithErrorAndParsedData(tree, 0, templateData, parsedData)
 }
 
 // convertBlockToMJMLWithError recursively converts a single EmailBlock to MJML string with error handling
 func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData string) (string, error) {
+	// Parse template data once at the beginning
+	parsedData, parseErr := parseTemplateDataString(templateData)
+	if parseErr != nil {
+		return "", fmt.Errorf("template data parsing failed: %v", parseErr)
+	}
+	return convertBlockToMJMLWithErrorAndParsedData(block, indentLevel, templateData, parsedData)
+}
+
+// convertBlockToMJMLWithErrorAndParsedData recursively converts a single EmailBlock to MJML string with error handling and pre-parsed data
+func convertBlockToMJMLWithErrorAndParsedData(block EmailBlock, indentLevel int, templateData string, parsedData map[string]interface{}) (string, error) {
 	indent := strings.Repeat("  ", indentLevel)
 	tagName := string(block.GetType())
 	children := block.GetChildren()
@@ -34,10 +49,6 @@ func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData
 			// Process Liquid templating for mj-text, mj-button, mj-title, mj-preview, and mj-raw blocks
 			blockType := block.GetType()
 			if blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton || blockType == MJMLComponentMjTitle || blockType == MJMLComponentMjPreview || blockType == MJMLComponentMjRaw {
-				parsedData, parseErr := parseTemplateDataString(templateData)
-				if parseErr != nil {
-					return "", fmt.Errorf("template data parsing failed for block %s: %v", block.GetID(), parseErr)
-				}
 				processedContent, err := processLiquidContent(content, parsedData, block.GetID())
 				if err != nil {
 					// Return error instead of just logging
@@ -48,7 +59,7 @@ func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData
 			}
 
 			// Block with content - don't escape for mj-raw, mj-text, and mj-button (they can contain HTML)
-			attributeString := formatAttributes(block.GetAttributes())
+			attributeString := formatAttributesWithLiquid(block.GetAttributes(), parsedData, block.GetID())
 			if blockType == MJMLComponentMjRaw || blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton {
 				return fmt.Sprintf("%s<%s%s>%s</%s>", indent, tagName, attributeString, content, tagName), nil
 			} else {
@@ -56,7 +67,7 @@ func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData
 			}
 		} else {
 			// Self-closing block or empty block
-			attributeString := formatAttributes(block.GetAttributes())
+			attributeString := formatAttributesWithLiquid(block.GetAttributes(), parsedData, block.GetID())
 			if attributeString != "" {
 				return fmt.Sprintf("%s<%s%s />", indent, tagName, attributeString), nil
 			} else {
@@ -66,7 +77,7 @@ func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData
 	}
 
 	// Block with children
-	attributeString := formatAttributes(block.GetAttributes())
+	attributeString := formatAttributesWithLiquid(block.GetAttributes(), parsedData, block.GetID())
 	openTag := fmt.Sprintf("%s<%s%s>", indent, tagName, attributeString)
 	closeTag := fmt.Sprintf("%s</%s>", indent, tagName)
 
@@ -74,7 +85,7 @@ func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData
 	var childrenMJML []string
 	for _, child := range children {
 		if child != nil {
-			childMJML, err := convertBlockToMJMLWithError(child, indentLevel+1, templateData)
+			childMJML, err := convertBlockToMJMLWithErrorAndParsedData(child, indentLevel+1, templateData, parsedData)
 			if err != nil {
 				return "", err
 			}
@@ -87,6 +98,16 @@ func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData
 
 // convertBlockToMJML recursively converts a single EmailBlock to MJML string
 func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) string {
+	// Parse template data once at the beginning
+	parsedData, parseErr := parseTemplateDataString(templateData)
+	if parseErr != nil {
+		parsedData = nil // Continue with nil data if parsing fails
+	}
+	return convertBlockToMJMLWithParsedData(block, indentLevel, templateData, parsedData)
+}
+
+// convertBlockToMJMLWithParsedData recursively converts a single EmailBlock to MJML string with pre-parsed data
+func convertBlockToMJMLWithParsedData(block EmailBlock, indentLevel int, templateData string, parsedData map[string]interface{}) string {
 	indent := strings.Repeat("  ", indentLevel)
 	tagName := string(block.GetType())
 	children := block.GetChildren()
@@ -100,10 +121,7 @@ func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) 
 			// Process Liquid templating for mj-text, mj-button, mj-title, mj-preview, and mj-raw blocks
 			blockType := block.GetType()
 			if blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton || blockType == MJMLComponentMjTitle || blockType == MJMLComponentMjPreview || blockType == MJMLComponentMjRaw {
-				parsedData, parseErr := parseTemplateDataString(templateData)
-				if parseErr != nil {
-					fmt.Printf("Warning: Template data parsing failed for block %s: %v\n", block.GetID(), parseErr)
-				} else {
+				if parsedData != nil {
 					processedContent, err := processLiquidContent(content, parsedData, block.GetID())
 					if err != nil {
 						// Log error but continue with original content
@@ -115,7 +133,7 @@ func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) 
 			}
 
 			// Block with content - don't escape for mj-raw, mj-text, and mj-button (they can contain HTML)
-			attributeString := formatAttributes(block.GetAttributes())
+			attributeString := formatAttributesWithLiquid(block.GetAttributes(), parsedData, block.GetID())
 			if blockType == MJMLComponentMjRaw || blockType == MJMLComponentMjText || blockType == MJMLComponentMjButton {
 				return fmt.Sprintf("%s<%s%s>%s</%s>", indent, tagName, attributeString, content, tagName)
 			} else {
@@ -123,7 +141,7 @@ func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) 
 			}
 		} else {
 			// Self-closing block or empty block
-			attributeString := formatAttributes(block.GetAttributes())
+			attributeString := formatAttributesWithLiquid(block.GetAttributes(), parsedData, block.GetID())
 			if attributeString != "" {
 				return fmt.Sprintf("%s<%s%s />", indent, tagName, attributeString)
 			} else {
@@ -133,7 +151,7 @@ func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) 
 	}
 
 	// Block with children
-	attributeString := formatAttributes(block.GetAttributes())
+	attributeString := formatAttributesWithLiquid(block.GetAttributes(), parsedData, block.GetID())
 	openTag := fmt.Sprintf("%s<%s%s>", indent, tagName, attributeString)
 	closeTag := fmt.Sprintf("%s</%s>", indent, tagName)
 
@@ -141,7 +159,7 @@ func convertBlockToMJML(block EmailBlock, indentLevel int, templateData string) 
 	var childrenMJML []string
 	for _, child := range children {
 		if child != nil {
-			childrenMJML = append(childrenMJML, convertBlockToMJML(child, indentLevel+1, templateData))
+			childrenMJML = append(childrenMJML, convertBlockToMJMLWithParsedData(child, indentLevel+1, templateData, parsedData))
 		}
 	}
 
@@ -231,6 +249,11 @@ func getBlockContent(block EmailBlock) string {
 
 // formatAttributes formats attributes object into MJML attribute string
 func formatAttributes(attributes map[string]interface{}) string {
+	return formatAttributesWithLiquid(attributes, nil, "")
+}
+
+// formatAttributesWithLiquid formats attributes object into MJML attribute string with liquid processing
+func formatAttributesWithLiquid(attributes map[string]interface{}, templateData map[string]interface{}, blockID string) string {
 	if len(attributes) == 0 {
 		return ""
 	}
@@ -238,7 +261,7 @@ func formatAttributes(attributes map[string]interface{}) string {
 	var attrPairs []string
 	for key, value := range attributes {
 		if shouldIncludeAttribute(value) {
-			if attr := formatSingleAttribute(key, value); attr != "" {
+			if attr := formatSingleAttributeWithLiquid(key, value, templateData, blockID); attr != "" {
 				attrPairs = append(attrPairs, attr)
 			}
 		}
@@ -271,6 +294,11 @@ func shouldIncludeAttribute(value interface{}) bool {
 
 // formatSingleAttribute formats a single attribute key-value pair
 func formatSingleAttribute(key string, value interface{}) string {
+	return formatSingleAttributeWithLiquid(key, value, nil, "")
+}
+
+// formatSingleAttributeWithLiquid formats a single attribute key-value pair with liquid processing
+func formatSingleAttributeWithLiquid(key string, value interface{}, templateData map[string]interface{}, blockID string) string {
 	// Convert camelCase to kebab-case for MJML attributes
 	kebabKey := camelToKebab(key)
 
@@ -290,13 +318,15 @@ func formatSingleAttribute(key string, value interface{}) string {
 		if v == "" {
 			return ""
 		}
-		escapedValue := escapeAttributeValue(v, kebabKey)
+		processedValue := processAttributeValue(v, kebabKey, templateData, blockID)
+		escapedValue := escapeAttributeValue(processedValue, kebabKey)
 		return fmt.Sprintf(` %s="%s"`, kebabKey, escapedValue)
 	case *string:
 		if v == nil || *v == "" {
 			return ""
 		}
-		escapedValue := escapeAttributeValue(*v, kebabKey)
+		processedValue := processAttributeValue(*v, kebabKey, templateData, blockID)
+		escapedValue := escapeAttributeValue(processedValue, kebabKey)
 		return fmt.Sprintf(` %s="%s"`, kebabKey, escapedValue)
 	default:
 		// Handle other types (int, float, etc.) by converting to string
@@ -304,9 +334,32 @@ func formatSingleAttribute(key string, value interface{}) string {
 		if strValue == "" {
 			return ""
 		}
-		escapedValue := escapeAttributeValue(strValue, kebabKey)
+		processedValue := processAttributeValue(strValue, kebabKey, templateData, blockID)
+		escapedValue := escapeAttributeValue(processedValue, kebabKey)
 		return fmt.Sprintf(` %s="%s"`, kebabKey, escapedValue)
 	}
+}
+
+// processAttributeValue processes attribute values through liquid templating if applicable
+func processAttributeValue(value, attributeKey string, templateData map[string]interface{}, blockID string) string {
+	// Only process liquid templates for URL-related attributes that might contain dynamic content
+	isURLAttribute := attributeKey == "href" || attributeKey == "src" || attributeKey == "action" ||
+		attributeKey == "background-url" || strings.HasSuffix(attributeKey, "-url")
+
+	// If templateData is nil or this isn't a URL attribute, return as-is
+	if templateData == nil || !isURLAttribute {
+		return value
+	}
+
+	// Process liquid content for URL attributes
+	processedValue, err := processLiquidContent(value, templateData, fmt.Sprintf("%s.%s", blockID, attributeKey))
+	if err != nil {
+		// If liquid processing fails, return original value and log warning
+		fmt.Printf("Warning: Liquid processing failed for attribute %s in block %s: %v\n", attributeKey, blockID, err)
+		return value
+	}
+
+	return processedValue
 }
 
 // camelToKebab converts camelCase to kebab-case
