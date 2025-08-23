@@ -203,19 +203,22 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, workspaceID string
 }
 
 func (s *TemplateService) CompileTemplate(ctx context.Context, payload domain.CompileTemplateRequest) (*domain.CompileTemplateResponse, error) {
-	// Check if user is already authenticated in context
-	if user := ctx.Value("authenticated_user"); user == nil {
-		// Authenticate user for workspace
-		var user *domain.User
-		var err error
-		ctx, user, err = s.authService.AuthenticateUserForWorkspace(ctx, payload.WorkspaceID)
-		if err != nil {
-			// Return standard Go error for non-compilation issues
-			return nil, fmt.Errorf("failed to authenticate user: %w", err)
-		}
+	// Check if this is a system call that should bypass authentication
+	if ctx.Value("system_call") == nil {
+		// Check if user is already authenticated in context
+		if user := ctx.Value("authenticated_user"); user == nil {
+			// Authenticate user for workspace
+			var user *domain.User
+			var err error
+			ctx, user, err = s.authService.AuthenticateUserForWorkspace(ctx, payload.WorkspaceID)
+			if err != nil {
+				// Return standard Go error for non-compilation issues
+				return nil, fmt.Errorf("failed to authenticate user: %w", err)
+			}
 
-		// Store user in context for future use
-		ctx = context.WithValue(ctx, "authenticated_user", user)
+			// Store user in context for future use
+			ctx = context.WithValue(ctx, "authenticated_user", user)
+		}
 	}
 
 	payload.TrackingSettings.Endpoint = s.apiEndpoint

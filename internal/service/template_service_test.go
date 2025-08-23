@@ -780,6 +780,37 @@ func TestCompileTemplate_AuthError(t *testing.T) {
 	assert.ErrorIs(t, err, authErr, "Original auth error should be wrapped")
 }
 
+func TestCompileTemplate_SystemCallBypassesAuth(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthService := domainmocks.NewMockAuthService(ctrl)
+	mockRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockLogger := &MockLogger{}
+
+	svc := service.NewTemplateService(mockRepo, mockAuthService, mockLogger, "https://api.example.com")
+
+	// Create a system context that should bypass authentication
+	ctx := context.WithValue(context.Background(), "system_call", true)
+	workspaceID := "ws_123"
+	testTree := createValidTestTree(createTestTextBlock("txt1", "Test"))
+
+	// No auth service call expected since this is a system call
+
+	// --- Act ---
+	resp, err := svc.CompileTemplate(ctx, domain.CompileTemplateRequest{
+		WorkspaceID:      workspaceID,
+		VisualEditorTree: testTree,
+		TemplateData:     nil,
+		TrackingSettings: notifuse_mjml.TrackingSettings{},
+	})
+
+	// --- Assert ---
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.Success)
+}
+
 func TestCompileTemplate_InvalidTreeData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -295,8 +295,8 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		TrackingSettings: trackingSettings,
 	}
 
-	// Compile the template with the message data
-	compiledTemplate, err := s.templateService.CompileTemplate(ctx, compileTemplateRequest)
+	// Compile the template with the message data (use system context to bypass authentication)
+	compiledTemplate, err := s.templateService.CompileTemplate(systemCtx, compileTemplateRequest)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"error":       err.Error(),
