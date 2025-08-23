@@ -17,6 +17,9 @@ import { broadcastApi } from '../../services/api/broadcast'
 import type { Workspace } from '../../services/api/types'
 import dayjs from '../../lib/dayjs'
 
+// Feature flag for recipient timezone functionality
+const ENABLE_RECIPIENT_TIMEZONE = false
+
 interface SendOrScheduleModalProps {
   broadcast: Broadcast | null
   visible: boolean
@@ -282,16 +285,19 @@ export function SendOrScheduleModal({
                   </Select>
                 </Form.Item>
               </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="use_recipient_timezone"
-                  valuePropName="checked"
-                  label="Use recipient timezone"
-                  tooltip="If enabled, the broadcast will be sent according to each recipient's timezone"
-                >
-                  <Switch />
-                </Form.Item>
-              </Col>
+              {/* Feature flag for recipient timezone - disabled until backend implementation is complete */}
+              {ENABLE_RECIPIENT_TIMEZONE && (
+                <Col span={12}>
+                  <Form.Item
+                    name="use_recipient_timezone"
+                    valuePropName="checked"
+                    label="Use recipient timezone"
+                    tooltip="If enabled, the broadcast will be sent according to each recipient's timezone"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              )}
             </Row>
           </>
         )}
