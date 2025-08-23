@@ -30,6 +30,58 @@ import { Tour } from 'antd'
 import { ImportExportButton } from './ImportExportButton'
 import { useAuth } from '../../contexts/AuthContext'
 
+/**
+ * Validates liquid template tags in a string to ensure they are properly closed
+ * @param text - The text to validate
+ * @returns Object with isValid boolean and error message if invalid
+ */
+const validateLiquidTags = (text: string): { isValid: boolean; error?: string } => {
+  if (!text) return { isValid: true }
+
+  // Find all opening double curly braces
+  const openingTags = text.match(/\{\{/g) || []
+  // Find all closing double curly braces
+  const closingTags = text.match(/\}\}/g) || []
+
+  if (openingTags.length !== closingTags.length) {
+    return {
+      isValid: false,
+      error: `Unclosed liquid tag detected. Found ${openingTags.length} opening tags ({{) but ${closingTags.length} closing tags (}})`
+    }
+  }
+
+  // Check for proper nesting by tracking position
+  let openCount = 0
+  let i = 0
+
+  while (i < text.length - 1) {
+    if (text.slice(i, i + 2) === '{{') {
+      openCount++
+      i += 2
+    } else if (text.slice(i, i + 2) === '}}') {
+      if (openCount === 0) {
+        return {
+          isValid: false,
+          error: 'Found closing liquid tag (}}) without matching opening tag ({{)'
+        }
+      }
+      openCount--
+      i += 2
+    } else {
+      i++
+    }
+  }
+
+  if (openCount > 0) {
+    return {
+      isValid: false,
+      error: `${openCount} liquid tag(s) not properly closed. Make sure each {{ has a matching }}`
+    }
+  }
+
+  return { isValid: true }
+}
+
 interface CreateTemplateDrawerProps {
   workspace: Workspace
   template?: Template
@@ -572,14 +624,36 @@ export function CreateTemplateDrawer({
                       <Form.Item
                         name={['email', 'subject']}
                         label="Email subject"
-                        rules={[{ required: true, type: 'string' }]}
+                        rules={[
+                          { required: true, type: 'string' },
+                          {
+                            validator: (_, value) => {
+                              const validation = validateLiquidTags(value)
+                              if (!validation.isValid) {
+                                return Promise.reject(new Error(validation.error))
+                              }
+                              return Promise.resolve()
+                            }
+                          }
+                        ]}
                       >
                         <Input placeholder="Templating markup allowed" />
                       </Form.Item>
                       <Form.Item
                         name={['email', 'subject_preview']}
                         label="Subject preview"
-                        rules={[{ required: true, type: 'string' }]}
+                        rules={[
+                          { required: true, type: 'string' },
+                          {
+                            validator: (_, value) => {
+                              const validation = validateLiquidTags(value)
+                              if (!validation.isValid) {
+                                return Promise.reject(new Error(validation.error))
+                              }
+                              return Promise.resolve()
+                            }
+                          }
+                        ]}
                       >
                         <Input placeholder="Templating markup allowed" />
                       </Form.Item>
