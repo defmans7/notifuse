@@ -64,33 +64,27 @@ function App() {
         // Handle confirmation action
         if (params.action === 'confirm' && params.lid) {
           try {
-            // Make a POST request to subscribe endpoint with HMAC authentication
-            const confirmResponse = await fetch('/api/subscribe', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
+            // Use the existing API client to subscribe to lists
+            const response = await subscribeToLists({
+              workspace_id: params.wid,
+              contact: {
+                id: '', // Will be populated by the backend
+                email: params.email,
+                email_hmac: params.email_hmac
               },
-              body: JSON.stringify({
-                workspace_id: params.wid,
-                contact: {
-                  email: params.email,
-                  email_hmac: params.email_hmac
-                },
-                list_ids: [params.lid]
-              })
+              list_ids: [params.lid]
             })
 
-            if (confirmResponse.ok) {
+            if (response.success) {
               setConfirmationResult({
                 success: true,
                 message: 'Subscription confirmed successfully!',
                 listId: params.lid
               })
             } else {
-              const errorData = await confirmResponse.json()
               setConfirmationResult({
                 success: false,
-                message: errorData.error || 'Failed to confirm subscription'
+                message: 'Failed to confirm subscription'
               })
             }
           } catch (err) {
