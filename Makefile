@@ -1,4 +1,4 @@
-.PHONY: build test-unit run clean keygen test-service test-repo test-http dev coverage docker-build docker-run docker-stop docker-clean docker-logs docker-publish docker-compose-up docker-compose-down docker-compose-build
+.PHONY: build test-unit run clean keygen test-service test-repo test-http dev coverage docker-build docker-run docker-stop docker-clean docker-logs docker-buildx-setup docker-publish docker-compose-up docker-compose-down docker-compose-build
 
 build:
 	go build -o bin/server ./cmd/api
@@ -69,10 +69,26 @@ docker-logs:
 	@echo "Showing Docker container logs..."
 	docker logs -f notifuse
 
+docker-buildx-setup:
+	@echo "Setting up Docker buildx for multi-platform builds..."
+	@docker buildx create --name notifuse-builder --use --bootstrap 2>/dev/null || \
+		docker buildx use notifuse-builder 2>/dev/null || \
+		echo "Buildx builder already exists and is active"
+	@docker buildx inspect --bootstrap
+
 docker-publish:
-	@echo "Building and publishing Docker image to Docker Hub..."
-	docker build -t notifuse/notifuse:latest .
-	docker push notifuse/notifuse:latest
+	@echo "Building and publishing multi-platform Docker image to Docker Hub..."
+	@if [ -z "$(word 2,$(MAKECMDGOALS))" ]; then \
+		echo "Building with tag: latest for amd64 and arm64"; \
+		docker buildx build --platform linux/amd64,linux/arm64 -t notifuse/notifuse:latest --push .; \
+	else \
+		echo "Building with tag: $(word 2,$(MAKECMDGOALS)) for amd64 and arm64"; \
+		docker buildx build --platform linux/amd64,linux/arm64 -t notifuse/notifuse:$(word 2,$(MAKECMDGOALS)) --push .; \
+	fi
+
+# This prevents make from trying to run the tag as a target
+%:
+	@:
 
 # Docker compose commands
 docker-compose-up:
