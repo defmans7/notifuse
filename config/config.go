@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const VERSION = "3.1"
+
 type Config struct {
 	Server          ServerConfig
 	Database        DatabaseConfig
@@ -139,7 +141,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_SSLMODE", "require")
 	v.SetDefault("ENVIRONMENT", "production")
 	v.SetDefault("LOG_LEVEL", "info")
-	v.SetDefault("VERSION", "3.1")
+	v.SetDefault("VERSION", VERSION)
 
 	// SMTP defaults
 	v.SetDefault("SMTP_PORT", 587)

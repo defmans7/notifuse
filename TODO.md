@@ -1,6 +1,7 @@
 # TODO
 
-- docs: email providers, templates, contacts, lists, workspaces, broadcast campaigns, transactional api, notification center
+- docs: email providers
+- docker hub publish image
 
 ## Eventual features
 

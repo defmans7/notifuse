@@ -1,4 +1,4 @@
-.PHONY: build test-unit run clean keygen test-service test-repo test-http dev coverage docker-build docker-run docker-stop docker-clean docker-logs docker-compose-up docker-compose-down docker-compose-build
+.PHONY: build test-unit run clean keygen test-service test-repo test-http dev coverage docker-build docker-run docker-stop docker-clean docker-logs docker-publish docker-compose-up docker-compose-down docker-compose-build
 
 build:
 	go build -o bin/server ./cmd/api
@@ -68,6 +68,11 @@ docker-clean: docker-stop
 docker-logs:
 	@echo "Showing Docker container logs..."
 	docker logs -f notifuse
+
+docker-publish:
+	@echo "Building and publishing Docker image to Docker Hub..."
+	docker build -t notifuse/notifuse:latest .
+	docker push notifuse/notifuse:latest
 
 # Docker compose commands
 docker-compose-up:
