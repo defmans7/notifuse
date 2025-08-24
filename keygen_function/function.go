@@ -3,6 +3,7 @@ package keygenfunction
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -57,10 +58,41 @@ func serveLogo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
 
-	// Read the logo.png file from the filesystem
-	logoData, err := os.ReadFile("logo.png")
+	// Try different possible paths for the logo file
+	possiblePaths := []string{
+		"logo.png",
+		"./logo.png",
+		"serverless_function_source_code/logo.png",
+		"/workspace/logo.png",
+		"/tmp/logo.png",
+	}
+
+	var logoData []byte
+	var err error
+
+	for _, path := range possiblePaths {
+		logoData, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+
 	if err != nil {
-		http.Error(w, "Logo not found", http.StatusNotFound)
+		// Debug: list current directory contents
+		files, _ := os.ReadDir(".")
+		var fileList []string
+		for _, file := range files {
+			fileList = append(fileList, file.Name())
+		}
+
+		// Also check serverless_function_source_code directory
+		sourceFiles, _ := os.ReadDir("serverless_function_source_code")
+		var sourceFileList []string
+		for _, file := range sourceFiles {
+			sourceFileList = append(sourceFileList, file.Name())
+		}
+
+		http.Error(w, fmt.Sprintf("Logo not found. Current directory files: %v, Source directory files: %v", fileList, sourceFileList), http.StatusNotFound)
 		return
 	}
 
