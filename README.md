@@ -4,6 +4,8 @@
 [![Go](https://github.com/Notifuse/notifuse/actions/workflows/go.yml/badge.svg)](https://github.com/Notifuse/notifuse/actions/workflows/go.yml)
 [![codecov](https://codecov.io/gh/Notifuse/notifuse/graph/badge.svg?token=VZ0HBEM9OZ)](https://codecov.io/gh/Notifuse/notifuse)
 
+**[🎯 Try the Live Demo](https://demo.notifuse.com/signin?email=demo@notifuse.com)**
+
 **The open-source alternative to Mailchimp, Brevo, Mailjet, Listmonk, Mailerlite, and Klaviyo, Loop.so, etc.**
 
 Notifuse is a modern, self-hosted email marketing platform that allows you to send newsletters and transactional emails at a fraction of the cost. Built with Go and React, it provides enterprise-grade features with the flexibility of open-source software.
@@ -75,97 +77,9 @@ Notifuse follows clean architecture principles with clear separation of concerns
 └── config/                # Configuration files
 ```
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
-### Using Docker Compose (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/Notifuse/notifuse.git
-cd notifuse
-
-# Start with Docker Compose
-docker-compose up -d
-
-# Access the console
-open http://localhost:8080
-```
-
-### Manual Installation
-
-```bash
-# Install dependencies
-go mod download
-cd console && npm install
-
-# Build the application
-make build
-
-# Run the server
-./bin/notifuse
-```
-
-## 🔧 Configuration
-
-Notifuse can be configured through environment variables or configuration files:
-
-```env
-# Server configuration
-SERVER_PORT=8080
-SERVER_HOST=0.0.0.0
-ROOT_EMAIL=your-email@example.com
-CORS_ALLOW_ORIGIN=*
-ENVIRONMENT=production
-API_ENDPOINT=notifuse.your_website.com
-
-# Database configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=
-DB_PREFIX=notifuse
-DB_NAME=${DB_PREFIX}_system
-DB_SSLMODE=require
-
-# Other configurations can be added here
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USERNAME=your-username
-SMTP_PASSWORD=your-password
-SMTP_FROM_EMAIL=noreply@example.com
-SMTP_FROM_NAME=Notifuse
-
-# Security
-PASETO_PRIVATE_KEY="base64:your-private-key"
-PASETO_PUBLIC_KEY="base64:your-public-key"
-SECRET_KEY="your_secret_key_for_db_secrets_encryption"
-
-# Tracing
-TRACING_ENABLED=true
-TRACING_SERVICE_NAME=notifuse
-TRACING_SAMPLING_PROBABILITY=
-# Trace exporter configuration: jaeger | zipkin | stackdriver | datadog | xray | none
-TRACING_TRACE_EXPORTER="none"
-# Jaeger settings
-TRACING_JAEGER_ENDPOINT="http://localhost:14268/api/traces"
-# Zipkin settings
-TRACING_ZIPKIN_ENDPOINT="http://localhost:9411/api/v2/spans"
-# Stackdriver settings
-TRACING_STACKDRIVER_PROJECT_ID=""
-# Azure Monitor settings
-TRACING_AZURE_INSTRUMENTATION_KEY=""
-# Datadog settings
-TRACING_DATADOG_AGENT_ADDRESS="localhost:8126"
-TRACING_DATADOG_API_KEY=""
-# AWS X-Ray settings
-TRACING_XRAY_REGION="us-west-2"
-# General agent endpoint (for exporters that support a common agent)
-TRACING_AGENT_ENDPOINT="localhost:6831"
-# Metrics exporter configuration: stackdriver | prometheus | datadog
-TRACING_METRICS_EXPORTER="prometheus"
-# Prometheus settings
-TRACING_PROMETHEUS_PORT=9464
-```
+For installation instructions, configuration options, and detailed setup guides, visit our comprehensive documentation at **[docs.notifuse.com](https://docs.notifuse.com)**.
 
 ## 📚 Documentation
 
@@ -183,7 +97,7 @@ We welcome contributions! Please see our [Contributing Guide](https://docs.notif
 
 ## 📄 License
 
-Notifuse is released under the [Elastic License 2.0](LICENSE).
+Notifuse is released under the [GNU Affero General Public License v3.0](LICENSE).
 
 ## 🆘 Support
 
@@ -202,4 +116,4 @@ Notifuse is released under the [Elastic License 2.0](LICENSE).
 
 ---
 
-**Ready to get started?** [Try the live demo](https://demo.notifuse.com) or [deploy your own instance](https://docs.notifuse.com) in minutes.
+**Ready to get started?** [Try the live demo](https://demo.notifuse.com/signin?email=demo@notifuse.com) or [deploy your own instance](https://docs.notifuse.com) in minutes.
