@@ -1,7 +1,6 @@
 # TODO
 
-- test the docker compose
-- docs: installation, email providers, templates, contacts, lists, workspaces, broadcast campaigns, transactional api, notification center
+- docs: email providers, templates, contacts, lists, workspaces, broadcast campaigns, transactional api, notification center
 
 ## Eventual features
 

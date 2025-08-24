@@ -1,11 +1,13 @@
 package keygenfunction
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+	"time"
 )
 
 func TestKeygenHandler(t *testing.T) {
@@ -50,20 +52,78 @@ func TestKeygenHandler(t *testing.T) {
 		t.Errorf("Failed to decode JSON response: %v", err)
 	}
 
-	// Verify keys are not empty
-	if keyPair.PrivateKey == "" {
-		t.Error("Private key should not be empty")
+	// Verify metadata
+	if keyPair.Algorithm != "PASETO v4" {
+		t.Errorf("Expected algorithm 'PASETO v4', got %s", keyPair.Algorithm)
 	}
-	if keyPair.PublicKey == "" {
-		t.Error("Public key should not be empty")
+	if keyPair.KeyType != "asymmetric" {
+		t.Errorf("Expected keyType 'asymmetric', got %s", keyPair.KeyType)
+	}
+	if time.Since(keyPair.GeneratedAt) > time.Minute {
+		t.Error("GeneratedAt timestamp should be recent")
 	}
 
-	// Verify keys are base64 encoded (basic check)
-	if !strings.Contains(keyPair.PrivateKey, "=") && len(keyPair.PrivateKey) < 10 {
-		t.Error("Private key doesn't look like base64")
+	// Verify private key data
+	if keyPair.PrivateKey.Base64 == "" {
+		t.Error("Private key base64 should not be empty")
 	}
-	if !strings.Contains(keyPair.PublicKey, "=") && len(keyPair.PublicKey) < 10 {
-		t.Error("Public key doesn't look like base64")
+	if keyPair.PrivateKey.Hex == "" {
+		t.Error("Private key hex should not be empty")
+	}
+	if keyPair.PrivateKey.ByteLength == 0 {
+		t.Error("Private key byte length should not be zero")
+	}
+
+	// Verify public key data
+	if keyPair.PublicKey.Base64 == "" {
+		t.Error("Public key base64 should not be empty")
+	}
+	if keyPair.PublicKey.Hex == "" {
+		t.Error("Public key hex should not be empty")
+	}
+	if keyPair.PublicKey.ByteLength == 0 {
+		t.Error("Public key byte length should not be zero")
+	}
+
+	// Verify base64 encoding validity
+	_, err = base64.StdEncoding.DecodeString(keyPair.PrivateKey.Base64)
+	if err != nil {
+		t.Errorf("Private key base64 is invalid: %v", err)
+	}
+	_, err = base64.StdEncoding.DecodeString(keyPair.PublicKey.Base64)
+	if err != nil {
+		t.Errorf("Public key base64 is invalid: %v", err)
+	}
+
+	// Verify hex encoding validity
+	_, err = hex.DecodeString(keyPair.PrivateKey.Hex)
+	if err != nil {
+		t.Errorf("Private key hex is invalid: %v", err)
+	}
+	_, err = hex.DecodeString(keyPair.PublicKey.Hex)
+	if err != nil {
+		t.Errorf("Public key hex is invalid: %v", err)
+	}
+
+	// Verify that base64 and hex represent the same data
+	privateBase64Bytes, _ := base64.StdEncoding.DecodeString(keyPair.PrivateKey.Base64)
+	privateHexBytes, _ := hex.DecodeString(keyPair.PrivateKey.Hex)
+	if string(privateBase64Bytes) != string(privateHexBytes) {
+		t.Error("Private key base64 and hex should represent the same data")
+	}
+
+	publicBase64Bytes, _ := base64.StdEncoding.DecodeString(keyPair.PublicKey.Base64)
+	publicHexBytes, _ := hex.DecodeString(keyPair.PublicKey.Hex)
+	if string(publicBase64Bytes) != string(publicHexBytes) {
+		t.Error("Public key base64 and hex should represent the same data")
+	}
+
+	// Verify byte lengths match actual decoded data
+	if len(privateBase64Bytes) != keyPair.PrivateKey.ByteLength {
+		t.Errorf("Private key byte length mismatch: expected %d, got %d", len(privateBase64Bytes), keyPair.PrivateKey.ByteLength)
+	}
+	if len(publicBase64Bytes) != keyPair.PublicKey.ByteLength {
+		t.Errorf("Public key byte length mismatch: expected %d, got %d", len(publicBase64Bytes), keyPair.PublicKey.ByteLength)
 	}
 }
 

@@ -2,11 +2,13 @@ package keygenfunction
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
 	"os"
+	"time"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
@@ -17,8 +19,17 @@ func init() {
 }
 
 type KeyPair struct {
-	PrivateKey string `json:"privateKey"`
-	PublicKey  string `json:"publicKey"`
+	PrivateKey  KeyData   `json:"privateKey"`
+	PublicKey   KeyData   `json:"publicKey"`
+	GeneratedAt time.Time `json:"generatedAt"`
+	KeyType     string    `json:"keyType"`
+	Algorithm   string    `json:"algorithm"`
+}
+
+type KeyData struct {
+	Base64     string `json:"base64"`
+	Hex        string `json:"hex"`
+	ByteLength int    `json:"byteLength"`
 }
 
 // KeygenHandler serves both the HTML page and handles key generation
@@ -105,14 +116,25 @@ func generateKeys(w http.ResponseWriter, r *http.Request) {
 	secretKey := paseto.NewV4AsymmetricSecretKey()
 	publicKey := secretKey.Public()
 
-	// Convert keys to base64 for storage
-	privateKeyBase64 := base64.StdEncoding.EncodeToString(secretKey.ExportBytes())
-	publicKeyBase64 := base64.StdEncoding.EncodeToString(publicKey.ExportBytes())
+	// Export raw bytes
+	privateKeyBytes := secretKey.ExportBytes()
+	publicKeyBytes := publicKey.ExportBytes()
 
-	// Create response
+	// Create response with multiple encoding formats
 	keyPair := KeyPair{
-		PrivateKey: privateKeyBase64,
-		PublicKey:  publicKeyBase64,
+		PrivateKey: KeyData{
+			Base64:     base64.StdEncoding.EncodeToString(privateKeyBytes),
+			Hex:        hex.EncodeToString(privateKeyBytes),
+			ByteLength: len(privateKeyBytes),
+		},
+		PublicKey: KeyData{
+			Base64:     base64.StdEncoding.EncodeToString(publicKeyBytes),
+			Hex:        hex.EncodeToString(publicKeyBytes),
+			ByteLength: len(publicKeyBytes),
+		},
+		GeneratedAt: time.Now().UTC(),
+		KeyType:     "asymmetric",
+		Algorithm:   "PASETO v4",
 	}
 
 	// Set response headers
@@ -346,6 +368,50 @@ const htmlTemplate = `
             margin-top: 20px;
             color: #721c24;
         }
+        
+        .key-metadata {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .key-metadata p {
+            margin: 5px 0;
+            color: #1565c0;
+        }
+        
+        .format-tabs {
+            display: flex;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .format-tab {
+            background: transparent;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #666;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .format-tab:hover {
+            color: #667eea;
+        }
+        
+        .format-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .key-info {
+            margin-top: 8px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -374,19 +440,47 @@ const htmlTemplate = `
         </div>
         
         <div class="results" id="results">
+            <div class="key-metadata" id="key-metadata">
+                <p><strong>Generated:</strong> <span id="generated-at"></span></p>
+                <p><strong>Algorithm:</strong> <span id="algorithm"></span></p>
+                <p><strong>Type:</strong> <span id="key-type"></span></p>
+            </div>
+            
             <div class="key-section private">
                 <h3>Private Key</h3>
-                <div class="key-display" id="private-key">
-                    <button class="copy-btn" onclick="copyToClipboard('private-key-text', this)">Copy</button>
-                    <span id="private-key-text"></span>
+                <div class="format-tabs">
+                    <button class="format-tab active" onclick="switchFormat('private', 'base64')">Base64</button>
+                    <button class="format-tab" onclick="switchFormat('private', 'hex')">Hex</button>
+                </div>
+                <div class="key-display" id="private-key-base64">
+                    <button class="copy-btn" onclick="copyToClipboard('private-key-base64-text', this)">Copy</button>
+                    <span id="private-key-base64-text"></span>
+                </div>
+                <div class="key-display" id="private-key-hex" style="display: none;">
+                    <button class="copy-btn" onclick="copyToClipboard('private-key-hex-text', this)">Copy</button>
+                    <span id="private-key-hex-text"></span>
+                </div>
+                <div class="key-info">
+                    <small>Length: <span id="private-key-length"></span> bytes</small>
                 </div>
             </div>
             
             <div class="key-section public">
                 <h3>Public Key</h3>
-                <div class="key-display" id="public-key">
-                    <button class="copy-btn" onclick="copyToClipboard('public-key-text', this)">Copy</button>
-                    <span id="public-key-text"></span>
+                <div class="format-tabs">
+                    <button class="format-tab active" onclick="switchFormat('public', 'base64')">Base64</button>
+                    <button class="format-tab" onclick="switchFormat('public', 'hex')">Hex</button>
+                </div>
+                <div class="key-display" id="public-key-base64">
+                    <button class="copy-btn" onclick="copyToClipboard('public-key-base64-text', this)">Copy</button>
+                    <span id="public-key-base64-text"></span>
+                </div>
+                <div class="key-display" id="public-key-hex" style="display: none;">
+                    <button class="copy-btn" onclick="copyToClipboard('public-key-hex-text', this)">Copy</button>
+                    <span id="public-key-hex-text"></span>
+                </div>
+                <div class="key-info">
+                    <small>Length: <span id="public-key-length"></span> bytes</small>
                 </div>
             </div>
             
@@ -424,9 +518,20 @@ const htmlTemplate = `
                 
                 const data = await response.json();
                 
-                // Display the keys
-                document.getElementById('private-key-text').textContent = data.privateKey;
-                document.getElementById('public-key-text').textContent = data.publicKey;
+                // Display metadata
+                document.getElementById('generated-at').textContent = new Date(data.generatedAt).toLocaleString();
+                document.getElementById('algorithm').textContent = data.algorithm;
+                document.getElementById('key-type').textContent = data.keyType;
+                
+                // Display private key data
+                document.getElementById('private-key-base64-text').textContent = data.privateKey.base64;
+                document.getElementById('private-key-hex-text').textContent = data.privateKey.hex;
+                document.getElementById('private-key-length').textContent = data.privateKey.byteLength;
+                
+                // Display public key data
+                document.getElementById('public-key-base64-text').textContent = data.publicKey.base64;
+                document.getElementById('public-key-hex-text').textContent = data.publicKey.hex;
+                document.getElementById('public-key-length').textContent = data.publicKey.byteLength;
                 
                 // Show results
                 loading.style.display = 'none';
@@ -482,6 +587,25 @@ const htmlTemplate = `
                 }
                 
                 document.body.removeChild(textArea);
+            }
+        }
+        
+        function switchFormat(keyType, format) {
+            // Update tab states
+            const tabs = document.querySelectorAll(` + "`" + `.key-section.${keyType} .format-tab` + "`" + `);
+            tabs.forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Show/hide content
+            const base64Display = document.getElementById(` + "`" + `${keyType}-key-base64` + "`" + `);
+            const hexDisplay = document.getElementById(` + "`" + `${keyType}-key-hex` + "`" + `);
+            
+            if (format === 'base64') {
+                base64Display.style.display = 'block';
+                hexDisplay.style.display = 'none';
+            } else {
+                base64Display.style.display = 'none';
+                hexDisplay.style.display = 'block';
             }
         }
         

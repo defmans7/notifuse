@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Notifuse API",
-    "description": "API for Notifuse - a notification and newsletter management platform",
+    "description": "API for Notifuse - a transactional email and newsletter management platform",
     "version": "1.0.0",
     "contact": {
       "name": "Notifuse Support",
@@ -120,6 +120,485 @@
                 },
                 "example": {
                   "error": "Failed to send notification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts.upsert": {
+      "post": {
+        "summary": "Create or update a contact",
+        "description": "Creates a new contact or updates an existing one based on email address. Returns information about whether the contact was created or updated.",
+        "operationId": "upsertContact",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertContactRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact upserted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpsertContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingWorkspaceId": {
+                    "value": {
+                      "error": "workspace_id is required"
+                    }
+                  },
+                  "invalidEmail": {
+                    "value": {
+                      "error": "invalid email format"
+                    }
+                  },
+                  "missingContact": {
+                    "value": {
+                      "error": "contact is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts.getByEmail": {
+      "get": {
+        "summary": "Get a contact by email address",
+        "description": "Retrieves a contact by their email address within a specific workspace.",
+        "operationId": "getContactByEmail",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the workspace",
+            "example": "ws_1234567890"
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "description": "The email address of the contact",
+            "example": "user@example.com"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact found successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": {
+                      "$ref": "#/components/schemas/Contact"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingWorkspaceId": {
+                    "value": {
+                      "error": "Missing workspace ID"
+                    }
+                  },
+                  "missingEmail": {
+                    "value": {
+                      "error": "Missing email"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Contact not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts.getByExternalID": {
+      "get": {
+        "summary": "Get a contact by external ID",
+        "description": "Retrieves a contact by their external ID within a specific workspace.",
+        "operationId": "getContactByExternalID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the workspace",
+            "example": "ws_1234567890"
+          },
+          {
+            "name": "external_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The external ID of the contact",
+            "example": "user_12345"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact found successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": {
+                      "$ref": "#/components/schemas/Contact"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingWorkspaceId": {
+                    "value": {
+                      "error": "Missing workspace ID"
+                    }
+                  },
+                  "missingExternalId": {
+                    "value": {
+                      "error": "Missing external ID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Contact not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts.delete": {
+      "post": {
+        "summary": "Delete a contact",
+        "description": "Deletes a contact from the workspace by email address. This action is permanent and cannot be undone.",
+        "operationId": "deleteContact",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteContactRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "Whether the deletion was successful",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingWorkspaceId": {
+                    "value": {
+                      "error": "workspace_id is required"
+                    }
+                  },
+                  "missingEmail": {
+                    "value": {
+                      "error": "email is required"
+                    }
+                  },
+                  "invalidEmail": {
+                    "value": {
+                      "error": "invalid email format"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Contact not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Failed to delete contact"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscribe": {
+      "post": {
+        "summary": "Subscribe to email lists",
+        "description": "Subscribe a contact to one or more email lists. This is a public endpoint that doesn't require authentication. If the list has double opt-in enabled, a confirmation email will be sent.",
+        "operationId": "subscribeToLists",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeToListsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscription successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "Whether the subscription was successful",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingWorkspaceId": {
+                    "value": {
+                      "error": "workspace_id is required"
+                    }
+                  },
+                  "invalidEmail": {
+                    "value": {
+                      "error": "invalid contact: invalid email format"
+                    }
+                  },
+                  "missingListIds": {
+                    "value": {
+                      "error": "list_ids is required"
+                    }
+                  },
+                  "listNotPublic": {
+                    "value": {
+                      "error": "list is not public"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Failed to subscribe to lists"
                 }
               }
             }
@@ -466,6 +945,309 @@
             "format": "date-time",
             "description": "When the contact was last updated",
             "example": "2023-04-22T15:45:00Z"
+          }
+        }
+      },
+      "SubscribeToListsRequest": {
+        "type": "object",
+        "required": ["workspace_id", "contact", "list_ids"],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "The ID of the workspace",
+            "example": "ws_1234567890"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/SubscriptionContact"
+          },
+          "list_ids": {
+            "type": "array",
+            "description": "Array of list IDs to subscribe the contact to",
+            "items": {
+              "type": "string"
+            },
+            "example": ["newsletter", "product_updates"],
+            "minItems": 1
+          }
+        }
+      },
+      "SubscriptionContact": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email address of the contact",
+            "example": "user@example.com"
+          },
+          "email_hmac": {
+            "type": "string",
+            "description": "HMAC of the email for authenticated subscription (optional)",
+            "example": "a1b2c3d4e5f6..."
+          },
+          "external_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "External identifier for the contact",
+            "example": "user_12345"
+          },
+          "timezone": {
+            "type": "string",
+            "nullable": true,
+            "description": "Timezone of the contact",
+            "example": "America/New_York"
+          },
+          "language": {
+            "type": "string",
+            "nullable": true,
+            "description": "Preferred language of the contact",
+            "example": "en-US"
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "First name of the contact",
+            "example": "John"
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Last name of the contact",
+            "example": "Doe"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "description": "Phone number of the contact",
+            "example": "+15551234567"
+          },
+          "address_line_1": {
+            "type": "string",
+            "nullable": true,
+            "description": "First line of address",
+            "example": "123 Main St"
+          },
+          "address_line_2": {
+            "type": "string",
+            "nullable": true,
+            "description": "Second line of address",
+            "example": "Apt 4B"
+          },
+          "country": {
+            "type": "string",
+            "nullable": true,
+            "description": "Country of the contact",
+            "example": "US"
+          },
+          "postcode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Postal code",
+            "example": "10001"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true,
+            "description": "State or province",
+            "example": "NY"
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true,
+            "description": "Job title of the contact",
+            "example": "Software Engineer"
+          },
+          "lifetime_value": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Lifetime value of the contact",
+            "example": 1250.5
+          },
+          "orders_count": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Number of orders placed by the contact",
+            "example": 5
+          },
+          "last_order_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Date and time of the contact's last order",
+            "example": "2023-05-15T14:30:00Z"
+          },
+          "custom_string_1": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 1",
+            "example": "Premium tier"
+          },
+          "custom_string_2": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 2"
+          },
+          "custom_string_3": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 3"
+          },
+          "custom_string_4": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 4"
+          },
+          "custom_string_5": {
+            "type": "string",
+            "nullable": true,
+            "description": "Custom string field 5"
+          },
+          "custom_number_1": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 1",
+            "example": 42
+          },
+          "custom_number_2": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 2"
+          },
+          "custom_number_3": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 3"
+          },
+          "custom_number_4": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 4"
+          },
+          "custom_number_5": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Custom number field 5"
+          },
+          "custom_datetime_1": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 1",
+            "example": "2023-06-01T09:00:00Z"
+          },
+          "custom_datetime_2": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 2"
+          },
+          "custom_datetime_3": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 3"
+          },
+          "custom_datetime_4": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 4"
+          },
+          "custom_datetime_5": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Custom datetime field 5"
+          },
+          "custom_json_1": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 1",
+            "example": {
+              "preferences": {
+                "theme": "dark",
+                "notifications": true
+              }
+            }
+          },
+          "custom_json_2": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 2"
+          },
+          "custom_json_3": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 3"
+          },
+          "custom_json_4": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 4"
+          },
+          "custom_json_5": {
+            "type": "object",
+            "nullable": true,
+            "description": "Custom JSON field 5"
+          }
+        }
+      },
+      "UpsertContactRequest": {
+        "type": "object",
+        "required": ["workspace_id", "contact"],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "The ID of the workspace",
+            "example": "ws_1234567890"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/Contact"
+          }
+        }
+      },
+      "UpsertContactResponse": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["created", "updated", "unchanged"],
+            "description": "The action that was performed on the contact",
+            "example": "created"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/Contact"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "description": "Error message if the operation failed",
+            "example": null
+          }
+        }
+      },
+      "DeleteContactRequest": {
+        "type": "object",
+        "required": ["workspace_id", "email"],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "The ID of the workspace",
+            "example": "ws_1234567890"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email address of the contact to delete",
+            "example": "user@example.com"
           }
         }
       }
