@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
+	"os"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
@@ -21,6 +22,12 @@ type KeyPair struct {
 
 // KeygenHandler serves both the HTML page and handles key generation
 func KeygenHandler(w http.ResponseWriter, r *http.Request) {
+	// Handle logo.png file serving
+	if r.URL.Path == "/logo.png" && r.Method == http.MethodGet {
+		serveLogo(w, r)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		// Serve the HTML page
@@ -37,17 +44,27 @@ func KeygenHandler(w http.ResponseWriter, r *http.Request) {
 func serveHTML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 
-	data := struct {
-		LogoBase64 string
-	}{
-		LogoBase64: logoBase64,
-	}
-
 	tmpl := template.Must(template.New("keygen").Parse(htmlTemplate))
-	if err := tmpl.Execute(w, data); err != nil {
+	if err := tmpl.Execute(w, nil); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+}
+
+// serveLogo serves the logo.png file as a static file
+func serveLogo(w http.ResponseWriter, r *http.Request) {
+	// Set appropriate headers for PNG
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+
+	// Read the logo.png file from the filesystem
+	logoData, err := os.ReadFile("logo.png")
+	if err != nil {
+		http.Error(w, "Logo not found", http.StatusNotFound)
+		return
+	}
+
+	w.Write(logoData)
 }
 
 // generateKeys generates a new PASETO v4 key pair and returns it as JSON
@@ -84,8 +101,6 @@ func generateKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-
-const logoBase64 = "iVBORw0KGgoAAAANSUhEUgAAAMgAAABMCAYAAAAoefhQAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAyKADAAQAAAABAAAATAAAAADfPSvHAAAU90lEQVR4Ae1dC3xUxbmfObt5IShP5WEJDxGQ4qOoFbk/e29vEqBkQ3ikCv60eZHC9W2tpYVro16Ver3aloc0kJCKYG0uQrLhkYSrvS2U2wqUqqC8wTYgkgICmk32nDP3P5uc5bw2u0k2u5tkzu+3e2a+ef9nvplvvvOdOZSISyDQhRG4NHL+tR6vnMkocRHGRjNCBlNKFELoKfg/lAitoPFJFf2OLL1oBwO1IwqaQKCzI3B29NO9mOfcjxgjTxDCerTcHnpOovSF/j2HLKP7Cxv1cQWD6NEQ7i6BwNkR825kiloB5hjdmgZRSv+Y5HTO6HV05edaOsEgGhLi3iUQqEvOH6syspMR1qdNDaL0eA+n8y6NSaQ2ZSISCQRiEIELQxf0AXO428wcvE2MDa+X5Y1sXGE89woG4SiIq0sg0Ei9z4M5Rra3MYyxu+su1z7M8xEiVnvRFOljAoEzNxSMpF71YwzuuPBUiJ5zxicNd4YnM5GLQCC6CEiNyv0qIWFiDt4W1pc11mcEZJDs7MLE0198OlpR2UBJYT55LLoQiNIFAkBAIp7qitIaMxaM0unYP5jJ7fKrhFkZJDVz3q1ElhfV1p2YiuKu4iWAM8UlEIgNBFRSi4pcvE2MDa+X5Y1sXGE89woG4SiIq0sg0Ei9z4M5Rra3MYyxu+su1z7M8xEiVnvRFOljAoEzNxSMpF71YwzuuPBUiJ5zxicNd4YnM5GLQCC6CEiNyv0qIWFiDt4W1pc11mcEZJDs7MLE0198OlpR2UBJYT55LLoQiNIFAkBAIp7qitIaMxaM0unYP5jJ7fKrhFkZJDVz3q1ElhfV1p2YiuKu4iWAM8UlEIgNBFRSi4pcvE2MDa+X5Y1sXGE89woG4SiIq0sg0Ei9z4M5Rra3MYyxu+su1z7M8xEiVnvRFOljAoEzNxSMpF71YwzuuPBUiJ5zxicNd4YnM5GLQCC6CEiNyv0qIWFiDt4W1pc11mcEZJDs7MLE0198OlpR2UBJYT55LLoQiNIFAkBAIp7qitIaMxaM0unYP5jJ7fKrhFkZJDVz3q1ElhfV1p2YiuKu4iWAM8UlEIgNBFRSi4pc"
 
 const htmlTemplate = `
 <!DOCTYPE html>
@@ -305,7 +320,7 @@ const htmlTemplate = `
     <div class="container">
         <div class="header">
             <a href="https://www.notifuse.com" target="_blank" class="logo-link">
-                <img src="data:image/png;base64,{{.LogoBase64}}" alt="Notifuse" class="logo">
+                <img src="./logo.png" alt="Notifuse" class="logo">
             </a>
             <h1>PASETO v4 Key Generator</h1>
             <p>Generate secure asymmetric key pairs for PASETO v4 tokens</p>
