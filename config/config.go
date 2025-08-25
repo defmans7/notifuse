@@ -137,7 +137,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("DB_USER", "postgres")
 	v.SetDefault("DB_PASSWORD", "postgres")
 	v.SetDefault("DB_PREFIX", "notifuse")
-	v.SetDefault("DB_NAME", "${DB_PREFIX}_system")
+	v.SetDefault("DB_NAME", "notifuse_system")
 	v.SetDefault("DB_SSLMODE", "require")
 	v.SetDefault("ENVIRONMENT", "production")
 	v.SetDefault("LOG_LEVEL", "info")
