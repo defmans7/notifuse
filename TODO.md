@@ -1,6 +1,5 @@
 # TODO
 
-- docs: email providers
 - docs: newsletter input form example
 
 ## Eventual features
