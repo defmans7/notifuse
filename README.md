@@ -87,7 +87,7 @@ For installation instructions, configuration options, and detailed setup guides,
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://docs.notifuse.com/development/contributing) for details.
+We welcome contributions!
 
 1. Fork the repository
 2. Create a feature branch

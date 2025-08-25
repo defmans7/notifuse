@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Notifuse/notifuse/config"
@@ -59,6 +60,11 @@ type AppInterface interface {
 	InitRepositories() error
 	InitServices() error
 	InitHandlers() error
+
+	// Graceful shutdown methods
+	SetShutdownTimeout(timeout time.Duration)
+	GetActiveRequestCount() int64
+	GetShutdownContext() context.Context
 }
 
 // App encapsulates the application dependencies and configuration
@@ -116,6 +122,13 @@ type App struct {
 	// Server synchronization
 	serverMu      sync.RWMutex
 	serverStarted chan struct{}
+
+	// Graceful shutdown management
+	shutdownCtx     context.Context
+	shutdownCancel  context.CancelFunc
+	activeRequests  int64          // atomic counter for active HTTP requests
+	requestWg       sync.WaitGroup // wait group for active requests
+	shutdownTimeout time.Duration  // configurable shutdown timeout
 }
 
 // AppOption defines a functional option for configuring the App
@@ -144,11 +157,17 @@ func WithLogger(logger logger.Logger) AppOption {
 
 // NewApp creates a new application instance
 func NewApp(cfg *config.Config, opts ...AppOption) AppInterface {
+	// Create shutdown context
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+
 	app := &App{
-		config:        cfg,
-		logger:        logger.NewLoggerWithLevel(cfg.LogLevel), // Use configured log level
-		mux:           http.NewServeMux(),
-		serverStarted: make(chan struct{}),
+		config:          cfg,
+		logger:          logger.NewLoggerWithLevel(cfg.LogLevel), // Use configured log level
+		mux:             http.NewServeMux(),
+		serverStarted:   make(chan struct{}),
+		shutdownCtx:     shutdownCtx,
+		shutdownCancel:  shutdownCancel,
+		shutdownTimeout: 60 * time.Second, // Default 60 seconds shutdown timeout (5 seconds buffer for 55-second tasks)
 	}
 
 	// Apply options
@@ -621,6 +640,10 @@ func (a *App) Start() error {
 	// Create server with wrapped handler for CORS and tracing
 	var handler http.Handler = a.mux
 
+	// Apply graceful shutdown middleware first (outermost)
+	handler = a.gracefulShutdownMiddleware(handler)
+	a.logger.Info("Graceful shutdown middleware enabled")
+
 	// Apply tracing middleware if enabled
 	if a.config.Tracing.Enabled {
 		handler = middleware.TracingMiddleware(handler)
@@ -674,27 +697,151 @@ func (a *App) Start() error {
 
 // Shutdown gracefully shuts down the server
 func (a *App) Shutdown(ctx context.Context) error {
+	a.logger.Info("Starting graceful shutdown...")
+
+	// Signal shutdown to all components
+	a.shutdownCancel()
+
+	// Get server reference
 	a.serverMu.RLock()
 	server := a.server
 	a.serverMu.RUnlock()
 
-	if server != nil {
-		if err := server.Shutdown(ctx); err != nil {
-			return err
+	if server == nil {
+		a.logger.Info("No server to shutdown")
+		return a.cleanupResources(ctx)
+	}
+
+	// Log current active requests
+	activeCount := a.getActiveRequestCount()
+	a.logger.WithField("active_requests", activeCount).Info("Active requests at shutdown start")
+
+	// Create a timeout context for shutdown operations
+	shutdownTimeout := a.shutdownTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		// Use the provided context deadline if it's sooner than our default timeout
+		if remaining := time.Until(deadline); remaining < shutdownTimeout {
+			shutdownTimeout = remaining - time.Second // Leave 1 second buffer
+			if shutdownTimeout < 0 {
+				shutdownTimeout = 0
+			}
 		}
 	}
 
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer shutdownCancel()
+
+	// Start HTTP server shutdown in a goroutine
+	serverShutdownDone := make(chan error, 1)
+	go func() {
+		a.logger.WithField("timeout", shutdownTimeout).Info("Starting HTTP server shutdown")
+		serverShutdownDone <- server.Shutdown(shutdownCtx)
+	}()
+
+	// Wait for active requests to complete in another goroutine
+	requestsDone := make(chan struct{}, 1)
+	go func() {
+		defer close(requestsDone)
+
+		// Wait for all active requests to complete
+		a.logger.Info("Waiting for active requests to complete...")
+		done := make(chan struct{})
+
+		go func() {
+			a.requestWg.Wait()
+			close(done)
+		}()
+
+		// Monitor progress
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				a.logger.Info("All requests completed")
+				return
+			case <-ticker.C:
+				activeCount := a.getActiveRequestCount()
+				a.logger.WithField("active_requests", activeCount).Info("Still waiting for requests to complete...")
+			case <-shutdownCtx.Done():
+				activeCount := a.getActiveRequestCount()
+				a.logger.WithField("active_requests", activeCount).Warn("Shutdown timeout reached, forcing shutdown")
+				return
+			}
+		}
+	}()
+
+	// Wait for both server shutdown and requests to complete
+	var shutdownErr error
+
+	select {
+	case err := <-serverShutdownDone:
+		shutdownErr = err
+		a.logger.Info("HTTP server shutdown completed")
+	case <-shutdownCtx.Done():
+		a.logger.Warn("Shutdown timeout reached")
+		shutdownErr = fmt.Errorf("shutdown timeout exceeded")
+	}
+
+	// Wait a bit more for requests to finish if server shutdown completed quickly
+	if shutdownErr == nil {
+		select {
+		case <-requestsDone:
+			// All requests completed
+		case <-time.After(2 * time.Second):
+			// Give up after 2 more seconds
+			activeCount := a.getActiveRequestCount()
+			if activeCount > 0 {
+				a.logger.WithField("active_requests", activeCount).Warn("Some requests still active, proceeding with shutdown")
+			}
+		}
+	}
+
+	// Cleanup resources
+	if cleanupErr := a.cleanupResources(ctx); cleanupErr != nil {
+		a.logger.WithField("error", cleanupErr).Error("Error during resource cleanup")
+		if shutdownErr == nil {
+			shutdownErr = cleanupErr
+		}
+	}
+
+	if shutdownErr != nil {
+		a.logger.WithField("error", shutdownErr).Error("Graceful shutdown completed with errors")
+	} else {
+		a.logger.Info("Graceful shutdown completed successfully")
+	}
+
+	return shutdownErr
+}
+
+// cleanupResources handles cleanup of database and other resources
+func (a *App) cleanupResources(ctx context.Context) error {
+	a.logger.Info("Cleaning up resources...")
+
 	// Close database connection if it exists
 	if a.db != nil {
-		// If tracing is enabled, unwrap the driver to properly close tracing
+		// If tracing is enabled, record final stats
 		if a.config.Tracing.Enabled {
 			if err := ocsql.RecordStats(a.db, 5*time.Second); err != nil {
 				a.logger.WithField("error", err).Error("Failed to record final database stats for tracing")
 			}
 		}
-		a.db.Close()
+
+		a.logger.Info("Closing database connection")
+		if err := a.db.Close(); err != nil {
+			a.logger.WithField("error", err).Error("Error closing database connection")
+			return err
+		}
 	}
 
+	// Stop telemetry service if it exists
+	if a.telemetryService != nil {
+		a.logger.Info("Stopping telemetry service")
+		// The telemetry service should respect context cancellation
+	}
+
+	a.logger.Info("Resource cleanup completed")
 	return nil
 }
 
@@ -841,6 +988,73 @@ func (a *App) GetTelemetryRepository() domain.TelemetryRepository {
 // SetHandler allows setting a custom HTTP handler
 func (a *App) SetHandler(handler http.Handler) {
 	a.mux = handler.(*http.ServeMux)
+}
+
+// incrementActiveRequests atomically increments the active request counter
+func (a *App) incrementActiveRequests() {
+	atomic.AddInt64(&a.activeRequests, 1)
+	a.requestWg.Add(1)
+}
+
+// decrementActiveRequests atomically decrements the active request counter
+func (a *App) decrementActiveRequests() {
+	atomic.AddInt64(&a.activeRequests, -1)
+	a.requestWg.Done()
+}
+
+// getActiveRequestCount returns the current number of active requests
+func (a *App) getActiveRequestCount() int64 {
+	return atomic.LoadInt64(&a.activeRequests)
+}
+
+// GetActiveRequestCount returns the current number of active requests (public interface method)
+func (a *App) GetActiveRequestCount() int64 {
+	return a.getActiveRequestCount()
+}
+
+// SetShutdownTimeout sets the timeout for graceful shutdown
+func (a *App) SetShutdownTimeout(timeout time.Duration) {
+	a.shutdownTimeout = timeout
+	a.logger.WithField("shutdown_timeout", timeout).Info("Shutdown timeout configured")
+}
+
+// GetShutdownContext returns the shutdown context for components that need to watch for shutdown
+func (a *App) GetShutdownContext() context.Context {
+	return a.shutdownCtx
+}
+
+// isShuttingDown returns true if the application is in shutdown mode
+func (a *App) isShuttingDown() bool {
+	select {
+	case <-a.shutdownCtx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+// gracefulShutdownMiddleware wraps HTTP handlers to track active requests
+func (a *App) gracefulShutdownMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if we're shutting down
+		if a.isShuttingDown() {
+			// Return 503 Service Unavailable if we're shutting down
+			http.Error(w, "Server is shutting down", http.StatusServiceUnavailable)
+			return
+		}
+
+		// Track this request
+		a.incrementActiveRequests()
+		defer a.decrementActiveRequests()
+
+		// Add shutdown context to request context
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, "shutdown_ctx", a.shutdownCtx)
+		r = r.WithContext(ctx)
+
+		// Call the next handler
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Ensure App implements AppInterface

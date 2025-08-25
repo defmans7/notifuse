@@ -1,7 +1,7 @@
 # TODO
 
 - docs: email providers
-- docker hub publish image
+- docs: newsletter input form example
 
 ## Eventual features
 

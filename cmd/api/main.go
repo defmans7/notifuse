@@ -36,7 +36,7 @@ func runServer(cfg *config.Config, appLogger logger.Logger) error {
 		return err
 	}
 
-	// Set up graceful shutdown
+	// Set up graceful shutdown - single channel for all signals
 	shutdown := make(chan os.Signal, 1)
 	signalNotify(shutdown, os.Interrupt, syscall.SIGTERM)
 
@@ -55,20 +55,60 @@ func runServer(cfg *config.Config, appLogger logger.Logger) error {
 		}
 		return err
 	case sig := <-shutdown:
-		appLogger.WithField("signal", sig.String()).Info("Shutdown signal received")
+		appLogger.WithField("signal", sig.String()).Info("Shutdown signal received - starting graceful shutdown")
+		appLogger.Info("Send signal again (Ctrl+C) to force immediate shutdown")
+
+		// Configure app shutdown timeout for long-running tasks (55+ seconds)
+		// Set to 65 seconds to allow tasks to complete or save progress
+		appInstance.SetShutdownTimeout(65 * time.Second)
 
 		// Create a context with timeout for graceful shutdown
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// Use 70 seconds to give 5 seconds buffer beyond app's internal timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
 		defer cancel()
 
-		// Attempt graceful shutdown
-		if err := appInstance.Shutdown(ctx); err != nil {
-			appLogger.WithField("error", err.Error()).Error("Error during shutdown")
-			return err
-		}
+		// Log current active requests
+		activeRequests := appInstance.GetActiveRequestCount()
+		appLogger.WithField("active_requests", activeRequests).Info("Starting graceful shutdown")
 
-		appLogger.Info("Server shut down gracefully")
-		return nil
+		// Create a new channel for force shutdown (after first signal received)
+		forceShutdown := make(chan os.Signal, 1)
+		signalNotify(forceShutdown, os.Interrupt, syscall.SIGTERM)
+
+		// Start graceful shutdown in a goroutine
+		shutdownDone := make(chan error, 1)
+		go func() {
+			shutdownDone <- appInstance.Shutdown(ctx)
+		}()
+
+		// Wait for either graceful shutdown completion or forced shutdown signal
+		select {
+		case err := <-shutdownDone:
+			if err != nil {
+				appLogger.WithField("error", err.Error()).Error("Error during graceful shutdown")
+				return err
+			}
+			appLogger.Info("Server shut down gracefully")
+			return nil
+		case forceSig := <-forceShutdown:
+			appLogger.WithField("signal", forceSig.String()).Warn("Force shutdown signal received - terminating immediately")
+			appLogger.Warn("Some requests may be interrupted!")
+
+			// Cancel the graceful shutdown context to force immediate shutdown
+			cancel()
+
+			// Wait a brief moment for the shutdown to acknowledge the cancellation
+			select {
+			case err := <-shutdownDone:
+				if err != nil {
+					appLogger.WithField("error", err.Error()).Error("Error during forced shutdown")
+				}
+			case <-time.After(2 * time.Second):
+				appLogger.Warn("Forced shutdown timeout - exiting immediately")
+			}
+
+			return fmt.Errorf("forced shutdown")
+		}
 	}
 }
 

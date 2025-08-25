@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -695,3 +696,157 @@ func (a *AppMockForRunServer) Shutdown(ctx context.Context) error {
 
 // Note: The runServer function is now properly tested in main_test.go
 // with TestActualRunServer, which tests the real implementation directly.
+
+// TestGracefulShutdownMethods tests the new graceful shutdown methods
+func TestGracefulShutdownMethods(t *testing.T) {
+	cfg := createTestConfig()
+	app := NewApp(cfg)
+
+	// Test SetShutdownTimeout
+	newTimeout := 90 * time.Second
+	app.SetShutdownTimeout(newTimeout)
+
+	// Cast to *App to check internal field
+	appImpl, ok := app.(*App)
+	require.True(t, ok, "app should be *App")
+	assert.Equal(t, newTimeout, appImpl.shutdownTimeout)
+
+	// Test GetActiveRequestCount (should be 0 initially)
+	activeCount := app.GetActiveRequestCount()
+	assert.Equal(t, int64(0), activeCount)
+
+	// Test GetShutdownContext (should not be cancelled initially)
+	shutdownCtx := app.GetShutdownContext()
+	assert.NotNil(t, shutdownCtx)
+	select {
+	case <-shutdownCtx.Done():
+		t.Fatal("Shutdown context should not be cancelled initially")
+	default:
+		// Good, context is not cancelled
+	}
+
+	// Test that shutdown context gets cancelled on shutdown
+	err := app.Shutdown(context.Background())
+	assert.NoError(t, err)
+
+	// Now the shutdown context should be cancelled
+	select {
+	case <-shutdownCtx.Done():
+		// Good, context is cancelled
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Shutdown context should be cancelled after shutdown")
+	}
+}
+
+// TestGracefulShutdownMiddleware tests the graceful shutdown middleware
+func TestGracefulShutdownMiddleware(t *testing.T) {
+	cfg := createTestConfig()
+	appInterface := NewApp(cfg)
+	app, ok := appInterface.(*App)
+	require.True(t, ok, "app should be *App")
+
+	// Create a test handler
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate some work
+		time.Sleep(10 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// Wrap with graceful shutdown middleware
+	wrappedHandler := app.gracefulShutdownMiddleware(testHandler)
+
+	// Test normal request (not shutting down)
+	req := httptest.NewRequest("GET", "/test", nil)
+	rec := httptest.NewRecorder()
+
+	// Should process normally
+	wrappedHandler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "OK", rec.Body.String())
+
+	// Now trigger shutdown
+	app.shutdownCancel()
+
+	// Test request during shutdown
+	req2 := httptest.NewRequest("GET", "/test", nil)
+	rec2 := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusServiceUnavailable, rec2.Code)
+	assert.Contains(t, rec2.Body.String(), "Server is shutting down")
+}
+
+// TestGracefulShutdownTimeout tests shutdown timeout handling
+func TestGracefulShutdownTimeout(t *testing.T) {
+	cfg := createTestConfig()
+
+	// Create mock logger
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Set up logger expectations
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	app := NewApp(cfg, WithLogger(mockLogger))
+
+	// Set a very short shutdown timeout for testing
+	app.SetShutdownTimeout(100 * time.Millisecond)
+
+	// Create a context with even shorter timeout to test timeout handling
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	// Shutdown should complete quickly since no server is running
+	err := app.Shutdown(ctx)
+	// Error might occur due to timeout, but cleanup should still happen
+	// We mainly want to ensure no panic occurs
+	_ = err // Ignore error for this test
+}
+
+// TestActiveRequestTracking tests the request tracking functionality
+func TestActiveRequestTracking(t *testing.T) {
+	cfg := createTestConfig()
+	appInterface := NewApp(cfg)
+	app, ok := appInterface.(*App)
+	require.True(t, ok, "app should be *App")
+
+	// Initially no active requests
+	assert.Equal(t, int64(0), app.GetActiveRequestCount())
+
+	// Simulate incrementing active requests
+	app.incrementActiveRequests()
+	assert.Equal(t, int64(1), app.GetActiveRequestCount())
+
+	app.incrementActiveRequests()
+	assert.Equal(t, int64(2), app.GetActiveRequestCount())
+
+	// Simulate decrementing active requests
+	app.decrementActiveRequests()
+	assert.Equal(t, int64(1), app.GetActiveRequestCount())
+
+	app.decrementActiveRequests()
+	assert.Equal(t, int64(0), app.GetActiveRequestCount())
+}
+
+// TestIsShuttingDown tests the shutdown state detection
+func TestIsShuttingDown(t *testing.T) {
+	cfg := createTestConfig()
+	appInterface := NewApp(cfg)
+	app, ok := appInterface.(*App)
+	require.True(t, ok, "app should be *App")
+
+	// Initially not shutting down
+	assert.False(t, app.isShuttingDown())
+
+	// Trigger shutdown
+	app.shutdownCancel()
+
+	// Now should be shutting down
+	assert.True(t, app.isShuttingDown())
+}
