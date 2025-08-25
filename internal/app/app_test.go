@@ -65,6 +65,9 @@ func setupTestDBMock() (*sql.DB, sqlmock.Sqlmock, error) {
 	mock.ExpectBegin()
 	mock.ExpectCommit()
 
+	// Expect Close to be called during shutdown
+	mock.ExpectClose()
+
 	return db, mock, nil
 }
 
@@ -119,6 +122,7 @@ func TestAppInitMailer(t *testing.T) {
 
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 	app := NewApp(cfg, WithLogger(mockLogger))
 	err := app.InitMailer()
 	assert.NoError(t, err)
@@ -144,10 +148,19 @@ func TestAppShutdown(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockDB, _, err := sqlmock.New()
+	mockDB, mock, err := sqlmock.New()
 	require.NoError(t, err)
 
+	// Expect Close to be called during shutdown
+	mock.ExpectClose()
+
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	// Set up logger expectations for graceful shutdown messages
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create app with mock DB
 	app := NewApp(cfg, WithLogger(mockLogger), WithMockDB(mockDB))
@@ -209,14 +222,23 @@ func TestAppStart(t *testing.T) {
 
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
-	mockDB, _, err := setupTestDBMock()
+	// Create a simple mock DB for this test
+	mockDB, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer mockDB.Close()
 
+	// Only expect Close to be called during shutdown
+	mock.ExpectClose()
+
 	app := NewApp(cfg, WithLogger(mockLogger), WithMockDB(mockDB))
+
+	// Set a shorter shutdown timeout for testing
+	app.SetShutdownTimeout(2 * time.Second)
 
 	// Set up a channel to receive errors
 	errCh := make(chan error, 1)
@@ -236,8 +258,8 @@ func TestAppStart(t *testing.T) {
 	// Verify server was created
 	assert.True(t, app.IsServerCreated(), "Server should be created")
 
-	// Shutdown the server
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 1*time.Second)
+	// Shutdown the server with sufficient timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
 	err = app.Shutdown(shutdownCtx)
@@ -584,6 +606,9 @@ func TestAppStartTLS(t *testing.T) {
 	// Create app
 	app := NewApp(cfg)
 
+	// Set a shorter shutdown timeout for testing
+	app.SetShutdownTimeout(2 * time.Second)
+
 	// Start server in goroutine
 	errCh := make(chan error, 1)
 	go func() {
@@ -596,8 +621,8 @@ func TestAppStartTLS(t *testing.T) {
 	started := app.WaitForServerStart(ctx)
 	require.True(t, started, "Server should have started within timeout")
 
-	// Shutdown the server
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 1*time.Second)
+	// Shutdown the server with sufficient timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	err := app.Shutdown(shutdownCtx)
 	assert.NoError(t, err)
