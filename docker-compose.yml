@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - '8080:8080'
     environment:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
@@ -18,16 +18,16 @@ services:
       - DB_NAME=notifuse_system
       - DB_SSLMODE=disable
       - ENVIRONMENT=production
-      - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY}
-      - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY}
-      - SECRET_KEY=${SECRET_KEY}
-      - ROOT_EMAIL=${ROOT_EMAIL:your@email.com}
-      - SMTP_HOST=smtp.example.com
-      - SMTP_PORT=587
-      - SMTP_USERNAME=your-username
-      - SMTP_PASSWORD=your-password
-      - SMTP_FROM_EMAIL=noreply@example.com
-      - SMTP_FROM_NAME=Notifuse
+      - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY:-d04zCk3Fa45oOjDWHpAvc1AZxnLdGffOnNWK+Jt2yXf37+FTfuMMHb8flcfPMqLluRR3rvhbr555r6j1DEigrA==}
+      - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY:-9+/hU37jDB2/H5XHzzKi5bkUd674W6+eea+o9QxIoKw=}
+      - SECRET_KEY=${SECRET_KEY:-change_me_32_character_secret_key}
+      - ROOT_EMAIL=${ROOT_EMAIL:-admin@example.com}
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-your-username}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-your-password}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@example.com}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Notifuse}
       - API_ENDPOINT=${API_ENDPOINT:-https://notifuse.yourdomain.com}
       - TRACING_ENABLED=false
       - TRACING_SERVICE_NAME=notifuse
@@ -54,7 +54,7 @@ services:
   postgres:
     image: postgres:17-alpine
     ports:
-      - "5432:5432"
+      - '5432:5432'
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -65,7 +65,7 @@ services:
     networks:
       - notifuse-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -76,4 +76,4 @@ volumes:
 
 networks:
   notifuse-network:
-    driver: bridge 
+    driver: bridge

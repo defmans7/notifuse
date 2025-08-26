@@ -81,7 +81,58 @@ Notifuse follows clean architecture principles with clear separation of concerns
 
 ## 🚀 Getting Started
 
-For installation instructions, configuration options, and detailed setup guides, visit our comprehensive documentation at **[docs.notifuse.com](https://docs.notifuse.com)**.
+### Quick Start with Docker Compose
+
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/Notifuse/notifuse.git
+   cd notifuse
+   ```
+
+2. **Configure environment variables**:
+
+   ```bash
+   cp env.example .env
+   # Edit .env with your configuration
+   ```
+
+3. **Generate PASETO keys**:
+   Visit [paseto.notifuse.com](https://paseto.notifuse.com) to generate your PASETO keys
+
+4. **Start the services**:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+5. **Access the application**:
+   - Console: http://localhost:8080
+   - API: http://localhost:8080/api
+
+### Environment Configuration
+
+**⚠️ Important**: The included `docker-compose.yml` is designed for **testing and development only**. For production deployments:
+
+- **Use a separate PostgreSQL database** (managed service recommended)
+- **Configure external storage** for file uploads
+- **Set up proper SSL/TLS termination**
+- **Use a reverse proxy** (nginx, Traefik, etc.)
+
+#### Development Setup
+
+The docker-compose includes a PostgreSQL container for quick testing. Simply run `docker-compose up -d` to get started.
+
+#### Production Setup
+
+Copy `env.example` to `.env` and configure:
+
+- **Required**: `ROOT_EMAIL`, `API_ENDPOINT`, `PASETO_PRIVATE_KEY`, `PASETO_PUBLIC_KEY`, `SECRET_KEY`
+- **Database**: Configure `DB_HOST`, `DB_USER`, `DB_PASSWORD` for your external PostgreSQL
+- **SMTP Settings**: Configure your email provider for system emails
+- **SSL**: Set `DB_SSLMODE=require` for secure database connections
+
+For detailed installation instructions, configuration options, and setup guides, visit **[docs.notifuse.com](https://docs.notifuse.com)**.
 
 ## 📚 Documentation
 
