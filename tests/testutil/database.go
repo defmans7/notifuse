@@ -123,16 +123,39 @@ func (dm *DatabaseManager) SeedTestData() error {
 		return fmt.Errorf("database not setup")
 	}
 
-	// Create a test user with valid UUID (using different email to avoid conflict with root user)
-	testUserID := "550e8400-e29b-41d4-a716-446655440000"
+	// Create test users with valid UUIDs (using different emails to avoid conflict with root user)
+	testUsers := []struct {
+		id    string
+		email string
+		name  string
+	}{
+		{"550e8400-e29b-41d4-a716-446655440000", "testuser@example.com", "Test User"},
+		{"550e8400-e29b-41d4-a716-446655440001", "workspace-creator@example.com", "Workspace Creator"},
+		{"550e8400-e29b-41d4-a716-446655440002", "workspace-viewer@example.com", "Workspace Viewer"},
+		{"550e8400-e29b-41d4-a716-446655440003", "workspace-lister@example.com", "Workspace Lister"},
+		{"550e8400-e29b-41d4-a716-446655440004", "workspace-updater@example.com", "Workspace Updater"},
+		{"550e8400-e29b-41d4-a716-446655440005", "workspace-deleter@example.com", "Workspace Deleter"},
+		{"550e8400-e29b-41d4-a716-446655440006", "workspace-owner@example.com", "Workspace Owner"},
+		{"550e8400-e29b-41d4-a716-446655440007", "existing-user@example.com", "Existing User"},
+		{"550e8400-e29b-41d4-a716-446655440008", "workspace-integrator@example.com", "Workspace Integrator"},
+		{"550e8400-e29b-41d4-a716-446655440009", "workspace-api-key@example.com", "Workspace API Key User"},
+		{"550e8400-e29b-41d4-a716-446655440010", "workspace-member@example.com", "Workspace Member"},
+		{"550e8400-e29b-41d4-a716-446655440011", "new-user@example.com", "New User"},
+		{"550e8400-e29b-41d4-a716-446655440012", "test@example.com", "Test User"},
+		{"550e8400-e29b-41d4-a716-446655440013", "non-member@example.com", "Non Member"},
+	}
+
 	testUserQuery := `
 		INSERT INTO users (id, email, name, type, created_at, updated_at)
-		VALUES ($1, 'testuser@example.com', 'Test User', 'user', NOW(), NOW())
+		VALUES ($1, $2, $3, 'user', NOW(), NOW())
 		ON CONFLICT (email) DO NOTHING
 	`
-	_, err := dm.db.Exec(testUserQuery, testUserID)
-	if err != nil {
-		return fmt.Errorf("failed to create test user: %w", err)
+
+	for _, user := range testUsers {
+		_, err := dm.db.Exec(testUserQuery, user.id, user.email, user.name)
+		if err != nil {
+			return fmt.Errorf("failed to create test user %s: %w", user.email, err)
+		}
 	}
 
 	// Create a test workspace with valid UUID and proper encrypted secret key
@@ -164,13 +187,14 @@ func (dm *DatabaseManager) SeedTestData() error {
 		return fmt.Errorf("failed to create test workspace: %w", err)
 	}
 
-	// Create workspace user association
+	// Create workspace user association - make workspace-owner@example.com the owner of the test workspace
+	workspaceOwnerID := "550e8400-e29b-41d4-a716-446655440006" // workspace-owner@example.com
 	workspaceUserQuery := `
 		INSERT INTO user_workspaces (user_id, workspace_id, role, created_at, updated_at)
 		VALUES ($1, $2, 'owner', NOW(), NOW())
 		ON CONFLICT (user_id, workspace_id) DO NOTHING
 	`
-	_, err = dm.db.Exec(workspaceUserQuery, testUserID, testWorkspaceID)
+	_, err = dm.db.Exec(workspaceUserQuery, workspaceOwnerID, testWorkspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to create workspace user association: %w", err)
 	}

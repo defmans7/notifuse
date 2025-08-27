@@ -234,7 +234,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		// Create user using repository
 		user := &domain.User{
-			ID:        "550e8400-e29b-41d4-a716-446655440001",
+			ID:        "550e8400-e29b-41d4-a716-446655440099", // Use a unique ID not in seeded data
 			Email:     email,
 			Name:      "Test User",
 			Type:      domain.UserTypeUser,
@@ -490,11 +490,10 @@ func TestUserSessionManagement(t *testing.T) {
 }
 
 // Helper function to perform complete signin and verification flow
-// Note: This function now uses the pre-seeded test user instead of creating new users
-// The email parameter is ignored - only existing users can sign in
+// Note: This function now uses pre-seeded test users - only existing users can sign in
 func performCompleteSignInFlow(t *testing.T, client *testutil.APIClient, email string) string {
-	// Sign in with existing test user (ignoring the passed email parameter)
-	signinReq := domain.SignInInput{Email: testUserEmail}
+	// Sign in with the provided email (must be a pre-seeded test user)
+	signinReq := domain.SignInInput{Email: email}
 
 	signinResp, err := client.Post("/api/user.signin", signinReq)
 	require.NoError(t, err)
@@ -509,7 +508,7 @@ func performCompleteSignInFlow(t *testing.T, client *testutil.APIClient, email s
 
 	// Verify code
 	verifyReq := domain.VerifyCodeInput{
-		Email: testUserEmail,
+		Email: email,
 		Code:  code,
 	}
 
