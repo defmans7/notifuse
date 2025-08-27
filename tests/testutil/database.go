@@ -9,6 +9,7 @@ import (
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/database"
+	"github.com/Notifuse/notifuse/pkg/crypto"
 	_ "github.com/lib/pq"
 )
 
@@ -134,14 +135,31 @@ func (dm *DatabaseManager) SeedTestData() error {
 		return fmt.Errorf("failed to create test user: %w", err)
 	}
 
-	// Create a test workspace with valid UUID
+	// Create a test workspace with valid UUID and proper encrypted secret key
 	testWorkspaceID := "testws01"
+
+	// Create workspace settings with encrypted secret key
+	// For testing, we'll use a simple secret key and encrypt it with the same global key used in server.go
+	testSecretKey := "test-workspace-secret-key-for-integration-tests"
+	testGlobalKey := "test-secret-key-for-integration-tests-only" // Must match server.go SecurityConfig.SecretKey
+
+	// Import crypto package functions
+	encryptedSecretKey, err := crypto.EncryptString(testSecretKey, testGlobalKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt test workspace secret key: %w", err)
+	}
+
+	workspaceSettings := fmt.Sprintf(`{
+		"timezone": "UTC",
+		"encrypted_secret_key": "%s"
+	}`, encryptedSecretKey)
+
 	testWorkspaceQuery := `
 		INSERT INTO workspaces (id, name, settings, integrations, created_at, updated_at)
-		VALUES ($1, 'Test Workspace', '{"timezone": "UTC"}', '[]', NOW(), NOW())
+		VALUES ($1, 'Test Workspace', $2, '[]', NOW(), NOW())
 		ON CONFLICT (id) DO NOTHING
 	`
-	_, err = dm.db.Exec(testWorkspaceQuery, testWorkspaceID)
+	_, err = dm.db.Exec(testWorkspaceQuery, testWorkspaceID, workspaceSettings)
 	if err != nil {
 		return fmt.Errorf("failed to create test workspace: %w", err)
 	}
