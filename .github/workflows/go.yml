@@ -34,7 +34,6 @@ jobs:
           echo "PASETO_PRIVATE_KEY=UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw==" >> .env.test
           echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
           echo "ROOT_EMAIL=admin@example.com" >> .env.test
-          echo "SECRET_KEY=test-key" >> .env.test
 
           # Run unit tests (exclude integration tests)
           go test -race -coverprofile=coverage-unit.txt -covermode=atomic $(go list ./... | grep -v '/tests/integration') -v 
@@ -126,7 +125,6 @@ jobs:
           echo "PASETO_PRIVATE_KEY=UayDa4OMDpm3CvIT+iSC39iDyPlsui0pNQYDEZ1pbo1LsIrO4p/aVuCBWz6LiYvzj9pc+gn0gLwRd0CoHV+nxw==" >> .env.test
           echo "PASETO_PUBLIC_KEY=S7CKzuKf2lbggVs+i4mL84/aXPoJ9IC8EXdAqB1fp8c=" >> .env.test
           echo "ROOT_EMAIL=admin@example.com" >> .env.test
-          echo "SECRET_KEY=test-key" >> .env.test
           echo "DB_HOST=localhost" >> .env.test
           echo "DB_PORT=5433" >> .env.test
           echo "DB_USER=notifuse_test" >> .env.test

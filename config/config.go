@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-const VERSION = "3.2"
+const VERSION = "3.3"
 
 type Config struct {
 	Server          ServerConfig
@@ -242,8 +242,11 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		return nil, fmt.Errorf("error creating PASETO public key: %w", err)
 	}
 
-	if v.GetString("SECRET_KEY") == "" {
-		return nil, fmt.Errorf("SECRET_KEY is required")
+	// Use PASETO private key as secret key if SECRET_KEY is not provided
+	secretKey := v.GetString("SECRET_KEY")
+	if secretKey == "" {
+		// Use base64 encoded PASETO private key as the secret key
+		secretKey = privateKeyBase64
 	}
 
 	config := &Config{
@@ -278,7 +281,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			PasetoPublicKey:       publicKey,
 			PasetoPrivateKeyBytes: privateKeyBytes,
 			PasetoPublicKeyBytes:  publicKeyBytes,
-			SecretKey:             v.GetString("SECRET_KEY"),
+			SecretKey:             secretKey,
 		},
 		Demo: DemoConfig{
 			FileManagerEndpoint:  v.GetString("DEMO_FILE_MANAGER_ENDPOINT"),

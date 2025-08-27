@@ -50,7 +50,6 @@ docker-run:
 		-p 8080:8080 \
 		-e PASETO_PRIVATE_KEY=$${PASETO_PRIVATE_KEY} \
 		-e PASETO_PUBLIC_KEY=$${PASETO_PUBLIC_KEY} \
-		-e SECRET_KEY=$${SECRET_KEY} \
 		-e ROOT_EMAIL=$${ROOT_EMAIL:-admin@example.com} \
 		-e API_ENDPOINT=$${API_ENDPOINT:-http://localhost:8080} \
 		-e WEBHOOK_ENDPOINT=$${WEBHOOK_ENDPOINT:-http://localhost:8080} \

@@ -20,7 +20,6 @@ services:
       - ENVIRONMENT=production
       - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY:-d04zCk3Fa45oOjDWHpAvc1AZxnLdGffOnNWK+Jt2yXf37+FTfuMMHb8flcfPMqLluRR3rvhbr555r6j1DEigrA==}
       - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY:-9+/hU37jDB2/H5XHzzKi5bkUd674W6+eea+o9QxIoKw=}
-      - SECRET_KEY=${SECRET_KEY:-change_me_32_character_secret_key}
       - ROOT_EMAIL=${ROOT_EMAIL:-admin@example.com}
       - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
       - SMTP_PORT=${SMTP_PORT:-587}

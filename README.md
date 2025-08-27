@@ -98,7 +98,15 @@ Notifuse follows clean architecture principles with clear separation of concerns
    ```
 
 3. **Generate PASETO keys**:
-   Visit [paseto.notifuse.com](https://paseto.notifuse.com) to generate your PASETO keys
+   Visit [paseto.notifuse.com](https://paseto.notifuse.com) to generate your PASETO keys, or use the built-in keygen command:
+
+   ```bash
+   # Generate keys manually
+   make keygen
+
+   # Or directly with Go
+   go run cmd/keygen/main.go
+   ```
 
 4. **Start the services**:
 
@@ -127,7 +135,7 @@ The docker-compose includes a PostgreSQL container for quick testing. Simply run
 
 Copy `env.example` to `.env` and configure:
 
-- **Required**: `ROOT_EMAIL`, `API_ENDPOINT`, `PASETO_PRIVATE_KEY`, `PASETO_PUBLIC_KEY`, `SECRET_KEY`
+- **Required**: `ROOT_EMAIL`, `API_ENDPOINT`, `PASETO_PRIVATE_KEY`, `PASETO_PUBLIC_KEY`
 - **Database**: Configure `DB_HOST`, `DB_USER`, `DB_PASSWORD` for your external PostgreSQL
 - **SMTP Settings**: Configure your email provider for system emails
 - **SSL**: Set `DB_SSLMODE=require` for secure database connections
