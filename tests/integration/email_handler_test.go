@@ -241,7 +241,8 @@ func testEmailHandlerTestProvider(t *testing.T, suite *testutil.IntegrationTestS
 	client := suite.APIClient
 
 	// Create and authenticate a user, then create a workspace
-	email := testutil.GenerateTestEmail()
+	// Use a pre-seeded test user instead of generating a random email
+	email := "testuser@example.com"
 	token := performCompleteSignInFlow(t, client, email)
 	client.SetToken(token)
 

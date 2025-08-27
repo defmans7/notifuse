@@ -140,9 +140,10 @@ func (dm *DatabaseManager) SeedTestData() error {
 		{"550e8400-e29b-41d4-a716-446655440008", "workspace-integrator@example.com", "Workspace Integrator"},
 		{"550e8400-e29b-41d4-a716-446655440009", "workspace-api-key@example.com", "Workspace API Key User"},
 		{"550e8400-e29b-41d4-a716-446655440010", "workspace-member@example.com", "Workspace Member"},
-		{"550e8400-e29b-41d4-a716-446655440011", "new-user@example.com", "New User"},
 		{"550e8400-e29b-41d4-a716-446655440012", "test@example.com", "Test User"},
 		{"550e8400-e29b-41d4-a716-446655440013", "non-member@example.com", "Non Member"},
+		{"550e8400-e29b-41d4-a716-446655440014", "template-tester@example.com", "Template Tester"},
+		{"550e8400-e29b-41d4-a716-446655440015", "template-integrator@example.com", "Template Integrator"},
 	}
 
 	testUserQuery := `
@@ -187,14 +188,14 @@ func (dm *DatabaseManager) SeedTestData() error {
 		return fmt.Errorf("failed to create test workspace: %w", err)
 	}
 
-	// Create workspace user association - make workspace-owner@example.com the owner of the test workspace
-	workspaceOwnerID := "550e8400-e29b-41d4-a716-446655440006" // workspace-owner@example.com
+	// Create workspace user association - keep the original testuser@example.com as owner for test compatibility
+	testUserID := "550e8400-e29b-41d4-a716-446655440000" // testuser@example.com (original test user)
 	workspaceUserQuery := `
 		INSERT INTO user_workspaces (user_id, workspace_id, role, created_at, updated_at)
 		VALUES ($1, $2, 'owner', NOW(), NOW())
 		ON CONFLICT (user_id, workspace_id) DO NOTHING
 	`
-	_, err = dm.db.Exec(workspaceUserQuery, workspaceOwnerID, testWorkspaceID)
+	_, err = dm.db.Exec(workspaceUserQuery, testUserID, testWorkspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to create workspace user association: %w", err)
 	}
