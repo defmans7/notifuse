@@ -13,6 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test user email that is pre-seeded in the database during test setup
+const testUserEmail = "testuser@example.com"
+
 func TestUserSignInFlow(t *testing.T) {
 	testutil.SkipIfShort(t)
 	testutil.SetupTestEnvironment()
@@ -23,10 +26,10 @@ func TestUserSignInFlow(t *testing.T) {
 
 	client := suite.APIClient
 
-	t.Run("successful signin for new user", func(t *testing.T) {
-		email := "newuser@example.com"
+	t.Run("signin fails for non-existent user", func(t *testing.T) {
+		email := "nonexistent@example.com"
 
-		// Sign in with new user
+		// Attempt to sign in with non-existent user
 		signinReq := domain.SignInInput{
 			Email: email,
 		}
@@ -35,50 +38,38 @@ func TestUserSignInFlow(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		// Should return 400 Bad Request
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
 		var response map[string]interface{}
 		err = json.NewDecoder(resp.Body).Decode(&response)
 		require.NoError(t, err)
 
-		assert.Equal(t, "Magic code sent to your email", response["message"])
-		// In test environment, code should be returned
-		assert.Contains(t, response, "code")
-		assert.NotEmpty(t, response["code"])
+		// Should return error message
+		assert.Equal(t, "user does not exist", response["error"])
 
-		// Verify user was created in database using repository
+		// Verify user was NOT created in database
 		app := suite.ServerManager.GetApp()
 		userRepo := app.GetUserRepository()
-		user, err := userRepo.GetUserByEmail(context.Background(), email)
-		require.NoError(t, err)
-		require.NotNil(t, user)
-		assert.Equal(t, email, user.Email)
+		_, err = userRepo.GetUserByEmail(context.Background(), email)
+		assert.Error(t, err, "User should not exist in database")
 
-		// Verify session was created using repository
-		sessions, err := userRepo.GetSessionsByUserID(context.Background(), user.ID)
-		require.NoError(t, err)
-		require.NotEmpty(t, sessions, "Session should be created")
-
-		// Find session with magic code
-		hasSessionWithMagicCode := false
-		for _, session := range sessions {
-			if session.MagicCode != "" {
-				hasSessionWithMagicCode = true
-				break
-			}
-		}
-		assert.True(t, hasSessionWithMagicCode, "Session with magic code should be created")
+		// Verify it's specifically a "user not found" error
+		var userNotFoundErr *domain.ErrUserNotFound
+		assert.ErrorAs(t, err, &userNotFoundErr, "Should be ErrUserNotFound")
 	})
 
 	t.Run("successful signin for existing user", func(t *testing.T) {
-		email := "existing@example.com"
+		// Use the pre-seeded test user
+		email := testUserEmail
 
-		// First signin to create user
+		// First signin with existing test user
 		signinReq := domain.SignInInput{Email: email}
 
 		resp1, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
 		resp1.Body.Close()
+		assert.Equal(t, http.StatusOK, resp1.StatusCode)
 
 		// Second signin for same user
 		resp2, err := client.Post("/api/user.signin", signinReq)
@@ -107,18 +98,15 @@ func TestUserSignInFlow(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		// The system currently accepts empty emails and creates a user/session for them
-		// This is the actual behavior, so we test for it
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		// Empty email should also fail since no user exists with empty email
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
 		var response map[string]interface{}
 		err = json.NewDecoder(resp.Body).Decode(&response)
 		require.NoError(t, err)
 
-		// Should get a magic code even for empty email (current behavior)
-		assert.Equal(t, "Magic code sent to your email", response["message"])
-		assert.Contains(t, response, "code")
-		assert.NotEmpty(t, response["code"])
+		// Should return error message
+		assert.Equal(t, "user does not exist", response["error"])
 	})
 
 	t.Run("invalid JSON body", func(t *testing.T) {
@@ -501,9 +489,11 @@ func TestUserSessionManagement(t *testing.T) {
 }
 
 // Helper function to perform complete signin and verification flow
+// Note: This function now uses the pre-seeded test user instead of creating new users
+// The email parameter is ignored - only existing users can sign in
 func performCompleteSignInFlow(t *testing.T, client *testutil.APIClient, email string) string {
-	// Sign in
-	signinReq := domain.SignInInput{Email: email}
+	// Sign in with existing test user (ignoring the passed email parameter)
+	signinReq := domain.SignInInput{Email: testUserEmail}
 
 	signinResp, err := client.Post("/api/user.signin", signinReq)
 	require.NoError(t, err)
@@ -518,7 +508,7 @@ func performCompleteSignInFlow(t *testing.T, client *testutil.APIClient, email s
 
 	// Verify code
 	verifyReq := domain.VerifyCodeInput{
-		Email: email,
+		Email: testUserEmail,
 		Code:  code,
 	}
 
