@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - '8081:8080'
+      - '8080'
     environment:
       # Server Configuration
       - SERVER_PORT=8080
@@ -14,13 +14,13 @@ services:
       - ENVIRONMENT=development
 
       # Database Configuration (Required)
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_PREFIX=notifuse
-      - DB_NAME=notifuse_system
-      - DB_SSLMODE=disable
+      - DB_HOST=${POSTGRES_HOST:-postgres}
+      - DB_PORT=${POSTGRES_DB_PORT:-5432}
+      - DB_USER=${POSTGRES_DB_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_DB_PASSWORD:-postgres}
+      - DB_PREFIX=${POSTGRES_DB_PREFIX:-notifuse}
+      - DB_NAME=${POSTGRES_DB_NAME:-notifuse_system}
+      - DB_SSLMODE=${POSTGRES_MODE:-disable}
 
       # Secret Key (Required) - Generate a secure random string for production
       - SECRET_KEY=${SECRET_KEY:-d04zCk3Fa45oOjDWHpAvc1AZxnLdGffOnNWK+Jt2yXf37+FTfuMMHb8flcfPMqLluRR3rvhbr555r6j1DEigrA==}
@@ -28,42 +28,21 @@ services:
       # All other settings (ROOT_EMAIL, API_ENDPOINT, SMTP, PASETO keys)
       # can be configured through the Setup Wizard on first launch
       # Or set them here as environment variables if you prefer
-      # - ROOT_EMAIL=${ROOT_EMAIL}
-      # - API_ENDPOINT=${API_ENDPOINT}
-      # - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY}
-      # - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY}
-      # - SMTP_HOST=${SMTP_HOST}
-      # - SMTP_PORT=${SMTP_PORT}
-      # - SMTP_USERNAME=${SMTP_USERNAME}
-      # - SMTP_PASSWORD=${SMTP_PASSWORD}
-      # - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
-      # - SMTP_FROM_NAME=${SMTP_FROM_NAME}
-    depends_on:
-      - postgres
+      - ROOT_EMAIL=${ROOT_EMAIL}
+      - API_ENDPOINT=${API_ENDPOINT}
+      - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY}
+      - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
     networks:
       - notifuse-network
-
-  postgres:
-    image: postgres:17-alpine
-    ports:
-      - '5433:5432'
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=postgres
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
-    networks:
-      - notifuse-network
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
 volumes:
   postgres-data:
