@@ -96,7 +96,7 @@ export function FileManagerPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <div className="text-2xl font-medium">File Manager - mod</div>
+        <div className="text-2xl font-medium">File Manager</div>
       </div>
 
       <div className="border border-gray-200 rounded-md p-4">
