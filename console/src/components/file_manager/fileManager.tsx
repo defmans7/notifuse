@@ -102,7 +102,9 @@ export const FileManager = (props: FileManagerProps) => {
 
     setIsLoading(true)
     const input: ListObjectsV2CommandInput = {
-      Bucket: props.settings.bucket
+      Bucket: props.settings.bucket,
+      FetchOwner: true,
+      Prefix: ''
     }
 
     const command = new ListObjectsV2Command(input)
