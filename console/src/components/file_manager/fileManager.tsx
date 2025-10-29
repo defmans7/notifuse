@@ -93,7 +93,12 @@ export const FileManager = (props: FileManagerProps) => {
   }
 
   const fetchObjects = useCallback(() => {
+
+    console.log('Fetching objects from S3...');
+
     if (!s3ClientRef.current || !props.settings?.bucket) return
+
+    console.log('Using bucket:', props.settings.bucket);
 
     setIsLoading(true)
     const input: ListObjectsV2CommandInput = {
