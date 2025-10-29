@@ -5,7 +5,7 @@ import type {FileManagerProps, StorageObject} from './interfaces'
 import {Copy, ExternalLink, Folder, Plus, RefreshCw, Settings, Trash2} from 'lucide-react'
 import {filesize} from 'filesize'
 import ButtonFilesSettings from './buttonSettings'
-import {DeleteObjectCommand, type DeleteObjectCommandInput, ListObjectsV2Command, type ListObjectsV2CommandInput, PutObjectCommand, type PutObjectCommandInput, S3Client} from '@aws-sdk/client-s3'
+import {DeleteObjectCommand, type DeleteObjectCommandInput, ListObjectsCommand, type ListObjectsCommandInput, PutObjectCommand, type PutObjectCommandInput, S3Client} from '@aws-sdk/client-s3'
 import GetContentType from './fileExtensions'
 import dayjs from 'dayjs'
 import timezone from 'dayjs/plugin/timezone'
@@ -80,13 +80,12 @@ export const FileManager = (props: FileManagerProps) => {
     console.log('Using bucket:', props.settings.bucket);
 
     setIsLoading(true)
-    const input: ListObjectsV2CommandInput = {
+    const input: ListObjectsCommandInput = {
       Bucket: props.settings.bucket,
-      FetchOwner: true,
       Prefix: ''
     }
 
-    const command = new ListObjectsV2Command(input)
+    const command = new ListObjectsCommand(input)
 
     console.log('Command', command);
 
