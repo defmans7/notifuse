@@ -175,7 +175,7 @@ export const FileManager = (props: FileManagerProps) => {
         return item
       })
 
-      // console.log('new items', newItems)
+      console.log('new items', newItems)
       setItems(newItems)
       setIsLoading(false)
     })
