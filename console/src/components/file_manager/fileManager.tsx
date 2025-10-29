@@ -370,10 +370,11 @@ export const FileManager = (props: FileManagerProps) => {
           s3ClientRef
             .current!.send(
             new PutObjectCommand({
+
               Bucket: props.settings?.bucket || 'files',
               Key: currentPath + file.name,
               Body: uint8Array,
-              ContentType: file.type
+              // ContentType: file.type
             })
           )
             .then(() => {
