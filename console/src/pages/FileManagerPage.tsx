@@ -52,7 +52,8 @@ export function FileManagerPage() {
             bucket: newSettings.bucket,
             region: newSettings.region,
             secret_key: newSettings.secret_key,
-            cdn_endpoint: newSettings.cdn_endpoint
+            cdn_endpoint: newSettings.cdn_endpoint,
+            force_path_style: true,
           }
         } as any // Use type assertion to bypass the type checking
       })
