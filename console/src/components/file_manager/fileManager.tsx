@@ -1,32 +1,11 @@
-import React from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Popover,
-  Space,
-  Table,
-  Tooltip
-} from 'antd'
-import type {FileManagerProps, StorageObject} from './interfaces'
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import type {ChangeEvent} from 'react'
-import {Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus} from 'lucide-react'
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {Alert, App, Button, Form, Input, Modal, Popconfirm, Popover, Space, Table, Tooltip} from 'antd'
+import type {FileManagerProps, StorageObject} from './interfaces'
+import {Copy, ExternalLink, Folder, Plus, RefreshCw, Settings, Trash2} from 'lucide-react'
 import {filesize} from 'filesize'
 import ButtonFilesSettings from './buttonSettings'
-import {
-  S3Client,
-  ListObjectsV2Command,
-  type ListObjectsV2CommandInput,
-  PutObjectCommand,
-  type PutObjectCommandInput,
-  DeleteObjectCommand,
-  type DeleteObjectCommandInput
-} from '@aws-sdk/client-s3'
+import {DeleteObjectCommand, type DeleteObjectCommandInput, ListObjectsV2Command, type ListObjectsV2CommandInput, PutObjectCommand, type PutObjectCommandInput, S3Client} from '@aws-sdk/client-s3'
 import GetContentType from './fileExtensions'
 import dayjs from 'dayjs'
 import timezone from 'dayjs/plugin/timezone'
@@ -365,17 +344,18 @@ export const FileManager = (props: FileManagerProps) => {
         .then((arrayBuffer) => {
           const uint8Array = new Uint8Array(arrayBuffer)
 
-          console.log(props.settings)
+
+          const sendInput = {
+            Bucket: props.settings?.bucket || 'files',
+            Key: currentPath + file.name,
+            Body: uint8Array,
+            // ContentType: file.type
+          }
+          console.log('sending', props.settings, sendInput)
 
           s3ClientRef
             .current!.send(
-            new PutObjectCommand({
-
-              Bucket: props.settings?.bucket || 'files',
-              Key: currentPath + file.name,
-              Body: uint8Array,
-              // ContentType: file.type
-            })
+            new PutObjectCommand(sendInput)
           )
             .then(() => {
               message.success('File ' + file.name + ' uploaded successfully.')
