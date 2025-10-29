@@ -15,7 +15,7 @@ import {
 import type { FileManagerProps, StorageObject } from './interfaces'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus, CopyX } from 'lucide-react'
+import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus, CopyPlus } from 'lucide-react'
 import { filesize } from 'filesize'
 import ButtonFilesSettings from './buttonSettings'
 import {
@@ -694,7 +694,7 @@ export const FileManager = (props: FileManagerProps) => {
                             })
                           }}
                         >
-                          <CopyX size={16} />
+                          <CopyPlus size={16} />
                         </Button>
                       </Tooltip>
                       <Tooltip title="Copy URL">
