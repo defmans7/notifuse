@@ -15,7 +15,7 @@ import {
 import type { FileManagerProps, StorageObject } from './interfaces'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus } from 'lucide-react'
+import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus, CopyX } from 'lucide-react'
 import { filesize } from 'filesize'
 import ButtonFilesSettings from './buttonSettings'
 import {
@@ -261,6 +261,30 @@ export const FileManager = (props: FileManagerProps) => {
 
   const toggleNewFolderModal = () => {
     setNewFolderModalVisible(!newFolderModalVisible)
+  }
+
+  const convertUrlToBase64Image = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'Anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'))
+          return
+        }
+        ctx.drawImage(img, 0, 0)
+        const dataURL = canvas.toDataURL('image/png')
+        resolve(dataURL)
+      }
+      img.onerror = (error) => {
+        reject(error)
+      }
+      img.src = url
+    })
   }
 
   const onSubmitNewFolder = () => {
@@ -659,6 +683,20 @@ export const FileManager = (props: FileManagerProps) => {
                   if (item.is_folder) return
                   return (
                     <Space>
+                      <Tooltip title="Copy data URL">
+                        <Button
+                          type="text"
+                          size="small"
+                          onClick={() => {
+                            convertUrlToBase64Image(item.file_info.url).then((dataUrl) => {
+                              navigator.clipboard.writeText(dataUrl)
+                              message.success('Data URL copied to clipboard.')
+                            })
+                          }}
+                        >
+                          <CopyX size={16} />
+                        </Button>
+                      </Tooltip>
                       <Tooltip title="Copy URL">
                         <Button
                           type="text"
