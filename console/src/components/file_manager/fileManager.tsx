@@ -344,10 +344,11 @@ export const FileManager = (props: FileManagerProps) => {
         .then((arrayBuffer) => {
           const uint8Array = new Uint8Array(arrayBuffer)
 
+          const bucket = props.settings?.bucket || 'files';
 
           const sendInput = {
-            Bucket: props.settings?.bucket || 'files',
-            Key: currentPath + file.name,
+            Bucket: bucket,
+            Key: `${bucket}/` + currentPath + file.name,
             Body: uint8Array,
             // ContentType: file.type
           }
