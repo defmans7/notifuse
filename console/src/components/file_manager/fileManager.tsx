@@ -107,7 +107,7 @@ export const FileManager = (props: FileManagerProps) => {
 
     const command = new ListObjectsV2Command(input)
     s3ClientRef.current.send(command).then((response) => {
-      // console.log('response', response)
+      console.log('response', response)
       if (!response.Contents) {
         setItems([])
         setIsLoading(false)
