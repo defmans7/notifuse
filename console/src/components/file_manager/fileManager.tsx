@@ -355,14 +355,18 @@ export const FileManager = (props: FileManagerProps) => {
         .then((arrayBuffer) => {
           const uint8Array = new Uint8Array(arrayBuffer)
 
+          const putObject = {
+            Bucket: props.settings?.bucket || '',
+            Key: currentPath + file.name,
+            Body: uint8Array,
+            ContentType: file.type
+          }
+
+          console.log('putObject', putObject)
+
           s3ClientRef
             .current!.send(
-            new PutObjectCommand({
-              Bucket: props.settings?.bucket || '',
-              Key: currentPath + file.name,
-              Body: uint8Array,
-              ContentType: file.type
-            })
+            new PutObjectCommand(putObject)
           )
             .then(() => {
               message.success('File ' + file.name + ' uploaded successfully.')

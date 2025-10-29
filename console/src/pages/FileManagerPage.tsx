@@ -1,18 +1,20 @@
-import {useEffect, useState} from 'react'
-import {App} from 'antd'
-import {FileManager} from '../components/file_manager/fileManager'
-import {FileManagerProps, StorageObject} from '../components/file_manager/interfaces'
-import {useParams} from '@tanstack/react-router'
-import {useAuth, useWorkspacePermissions} from '../contexts/AuthContext'
-import {workspaceService} from '../services/api/workspace'
-import {FileManagerSettings, Workspace} from '../services/api/types'
+import { useState, useEffect } from 'react'
+import { App } from 'antd'
+import { FileManager } from '../components/file_manager/fileManager'
+import { FileManagerProps } from '../components/file_manager/interfaces'
+import { StorageObject } from '../components/file_manager/interfaces'
+import { useParams } from '@tanstack/react-router'
+import { useAuth } from '../contexts/AuthContext'
+import { workspaceService } from '../services/api/workspace'
+import { Workspace, FileManagerSettings } from '../services/api/types'
+import { useWorkspacePermissions } from '../contexts/AuthContext'
 
 export function FileManagerPage() {
-  const {workspaceId} = useParams({from: '/workspace/$workspaceId'})
-  const {workspaces, refreshWorkspaces} = useAuth()
-  const {permissions} = useWorkspacePermissions(workspaceId)
+  const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
+  const { workspaces, refreshWorkspaces } = useAuth()
+  const { permissions } = useWorkspacePermissions(workspaceId)
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null)
-  const {message} = App.useApp()
+  const { message } = App.useApp()
 
   // Initialize settings from the current workspace
   useEffect(() => {
@@ -52,8 +54,7 @@ export function FileManagerPage() {
             bucket: newSettings.bucket,
             region: newSettings.region,
             secret_key: newSettings.secret_key,
-            cdn_endpoint: newSettings.cdn_endpoint,
-            force_path_style: true,
+            cdn_endpoint: newSettings.cdn_endpoint
           }
         } as any // Use type assertion to bypass the type checking
       })
@@ -78,10 +79,9 @@ export function FileManagerPage() {
     withSelection: true,
     multiple: true,
     settings: {
-      force_path_style: true,
       endpoint: currentWorkspace?.settings?.file_manager?.endpoint || '',
       access_key: currentWorkspace?.settings?.file_manager?.access_key || '',
-      bucket: currentWorkspace?.settings?.file_manager?.bucket || 'files',
+      bucket: currentWorkspace?.settings?.file_manager?.bucket || '',
       region: currentWorkspace?.settings?.file_manager?.region || '',
       secret_key: currentWorkspace?.settings?.file_manager?.secret_key || '',
       cdn_endpoint: currentWorkspace?.settings?.file_manager?.cdn_endpoint || ''
@@ -90,8 +90,8 @@ export function FileManagerPage() {
     readOnly: !permissions?.templates?.write
   }
 
-  console.log('fileManagerProps', fileManagerProps)
-  console.log('currentWorkspace', currentWorkspace)
+  // console.log('fileManagerProps', fileManagerProps)
+  // console.log('currentWorkspace', currentWorkspace)
 
   return (
     <div className="p-6">
