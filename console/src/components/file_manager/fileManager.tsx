@@ -1,11 +1,32 @@
-import type {ChangeEvent} from 'react'
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import {Alert, App, Button, Form, Input, Modal, Popconfirm, Popover, Space, Table, Tooltip} from 'antd'
-import type {FileManagerProps, StorageObject} from './interfaces'
-import {Copy, ExternalLink, Folder, Plus, RefreshCw, Settings, Trash2} from 'lucide-react'
-import {filesize} from 'filesize'
+import React from 'react'
+import {
+  Alert,
+  App,
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Popover,
+  Space,
+  Table,
+  Tooltip
+} from 'antd'
+import type { FileManagerProps, StorageObject } from './interfaces'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
+import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus } from 'lucide-react'
+import { filesize } from 'filesize'
 import ButtonFilesSettings from './buttonSettings'
-import {DeleteObjectCommand, type DeleteObjectCommandInput, ListObjectsV2Command, type ListObjectsV2CommandInput, PutObjectCommand, type PutObjectCommandInput, S3Client} from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  ListObjectsV2Command,
+  type ListObjectsV2CommandInput,
+  PutObjectCommand,
+  type PutObjectCommandInput,
+  DeleteObjectCommand,
+  type DeleteObjectCommandInput
+} from '@aws-sdk/client-s3'
 import GetContentType from './fileExtensions'
 import dayjs from 'dayjs'
 import timezone from 'dayjs/plugin/timezone'
@@ -39,17 +60,17 @@ const styles = {
     position: 'relative' as const,
     overflow: 'auto' as const
   },
-  marginBottomSmall: {marginBottom: 16},
-  marginBottomLarge: {marginBottom: 24},
-  padding: {paddingBottom: 16},
-  pullRight: {float: 'right' as const},
-  paddingRightSmall: {paddingRight: 8},
-  textRight: {textAlign: 'right' as const},
-  primary: {color: '#1890ff'} // Default antd primary color - replace with actual color if different
+  marginBottomSmall: { marginBottom: 16 },
+  marginBottomLarge: { marginBottom: 24 },
+  padding: { paddingBottom: 16 },
+  pullRight: { float: 'right' as const },
+  paddingRightSmall: { paddingRight: 8 },
+  textRight: { textAlign: 'right' as const },
+  primary: { color: '#1890ff' } // Default antd primary color - replace with actual color if different
 }
 
 export const FileManager = (props: FileManagerProps) => {
-  const {message} = App.useApp()
+  const { message } = App.useApp()
   const [currentPath, setCurrentPath] = useState(props.currentPath || '')
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [items, setItems] = useState<StorageObject[] | undefined>(undefined)
@@ -72,12 +93,7 @@ export const FileManager = (props: FileManagerProps) => {
   }
 
   const fetchObjects = useCallback(() => {
-
-    console.log('Fetching objects from S3...');
-
     if (!s3ClientRef.current || !props.settings?.bucket) return
-
-    console.log('Using bucket:', props.settings.bucket);
 
     setIsLoading(true)
     const input: ListObjectsV2CommandInput = {
@@ -85,11 +101,8 @@ export const FileManager = (props: FileManagerProps) => {
     }
 
     const command = new ListObjectsV2Command(input)
-
-    console.log('Command', command);
-
     s3ClientRef.current.send(command).then((response) => {
-      console.log('response', response)
+      // console.log('response', response)
       if (!response.Contents) {
         setItems([])
         setIsLoading(false)
@@ -148,7 +161,7 @@ export const FileManager = (props: FileManagerProps) => {
         if (!isFolder) {
           item.file_info = {
             size: x.Size as number,
-            size_human: filesize(x.Size || 0, {round: 0}),
+            size_human: filesize(x.Size || 0, { round: 0 }),
             content_type: GetContentType(key),
             url: baseUrl ? `${baseUrl}/${key}` : key
           }
@@ -157,7 +170,7 @@ export const FileManager = (props: FileManagerProps) => {
         return item
       })
 
-      console.log('new items', newItems)
+      // console.log('new items', newItems)
       setItems(newItems)
       setIsLoading(false)
     })
@@ -275,7 +288,7 @@ export const FileManager = (props: FileManagerProps) => {
       s3Client
         .send(new ListObjectsV2Command(input))
         .then((response) => {
-          console.log('response', response)
+          // console.log('response', response)
           if (response.Contents && response.Contents.length > 0) {
             message.error('Folder already exists.')
             return
@@ -330,7 +343,7 @@ export const FileManager = (props: FileManagerProps) => {
     if (isUploading) return
     if (!s3ClientRef.current) return
 
-    console.log(e.target.files)
+    // console.log(e.target.files)
 
     for (var i = 0; i < e.target.files.length; i++) {
       setIsUploading(true)
@@ -342,19 +355,14 @@ export const FileManager = (props: FileManagerProps) => {
         .then((arrayBuffer) => {
           const uint8Array = new Uint8Array(arrayBuffer)
 
-          const bucket = props.settings?.bucket || 'files';
-
-          const sendInput = {
-            Bucket: bucket,
-            Key: `${bucket}/` + currentPath + file.name,
-            Body: uint8Array,
-            // ContentType: file.type
-          }
-          console.log('sending', props.settings, sendInput)
-
           s3ClientRef
             .current!.send(
-            new PutObjectCommand(sendInput)
+            new PutObjectCommand({
+              Bucket: props.settings?.bucket || '',
+              Key: currentPath + file.name,
+              Body: uint8Array,
+              ContentType: file.type
+            })
           )
             .then(() => {
               message.success('File ' + file.name + ' uploaded successfully.')
@@ -403,10 +411,10 @@ export const FileManager = (props: FileManagerProps) => {
   }
 
   return (
-    <div style={{...styles.filesContainer, height: props.height}}>
+    <div style={{ ...styles.filesContainer, height: props.height }}>
       {props.settings?.endpoint !== '' && (
         <>
-          <div style={{...styles.padding, borderBottom: '1px solid rgba(0,0,0,0.1)'}}>
+          <div style={{ ...styles.padding, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
             <div style={styles.pullRight}>
               <Space>
                 {currentPath !== '' && !isReadOnly && (
@@ -430,14 +438,14 @@ export const FileManager = (props: FileManagerProps) => {
                         size="small"
                         type="text"
                         onClick={() => fetchObjects()}
-                        icon={<Trash2 size={16}/>}
+                        icon={<Trash2 size={16} />}
                       />
                     </Popconfirm>
                   </Tooltip>
                 )}
                 {currentPath !== '' && isReadOnly && (
                   <Tooltip title="Delete folder (Read-only mode)" placement="bottom">
-                    <Button size="small" type="text" disabled icon={<Trash2 size={16}/>}/>
+                    <Button size="small" type="text" disabled icon={<Trash2 size={16} />} />
                   </Tooltip>
                 )}
                 <Tooltip title="Refresh the list">
@@ -445,7 +453,7 @@ export const FileManager = (props: FileManagerProps) => {
                     size="small"
                     type="text"
                     onClick={() => fetchObjects()}
-                    icon={<RefreshCw size={16}/>}
+                    icon={<RefreshCw size={16} />}
                   />
                 </Tooltip>
 
@@ -457,7 +465,7 @@ export const FileManager = (props: FileManagerProps) => {
                   >
                     <Tooltip title="Storage settings">
                       <Button type="text" size="small">
-                        <Settings size={16}/>
+                        <Settings size={16} />
                       </Button>
                     </Tooltip>
                   </ButtonFilesSettings>
@@ -465,7 +473,7 @@ export const FileManager = (props: FileManagerProps) => {
                 {isReadOnly && (
                   <Tooltip title="Storage settings (Read-only mode)">
                     <Button type="text" size="small" disabled>
-                      <Settings size={16}/>
+                      <Settings size={16} />
                     </Button>
                   </Tooltip>
                 )}
@@ -485,7 +493,7 @@ export const FileManager = (props: FileManagerProps) => {
                       style={styles.pullRight}
                       loading={isUploading}
                     >
-                      <Plus size={16}/>
+                      <Plus size={16} />
                       Upload
                     </Button>
                   </span>
@@ -498,7 +506,7 @@ export const FileManager = (props: FileManagerProps) => {
                       style={styles.pullRight}
                       disabled
                     >
-                      <Plus size={16}/>
+                      <Plus size={16} />
                       Upload
                     </Button>
                   </Tooltip>
@@ -545,8 +553,8 @@ export const FileManager = (props: FileManagerProps) => {
             pagination={false}
             size="middle"
             rowKey="key"
-            locale={{emptyText: 'Folder is empty'}}
-            scroll={{y: props.height ? props.height - 100 : undefined}}
+            locale={{ emptyText: 'Folder is empty' }}
+            scroll={{ y: props.height ? props.height - 100 : undefined }}
             rowClassName={(record: StorageObject) => {
               return record.is_folder ? 'folder-row' : ''
             }}
@@ -583,7 +591,7 @@ export const FileManager = (props: FileManagerProps) => {
                   if (item.is_folder) {
                     return (
                       <div onClick={toggleSelectionForItem.bind(null, item)}>
-                        <Folder size={16} style={styles.primary}/>
+                        <Folder size={16} style={styles.primary} />
                       </div>
                     )
                   }
@@ -593,14 +601,14 @@ export const FileManager = (props: FileManagerProps) => {
                         <Popover
                           placement="right"
                           content={
-                            <img src={item.file_info.url} alt="" style={{maxHeight: '400px'}}/>
+                            <img src={item.file_info.url} alt="" style={{ maxHeight: '400px' }} />
                           }
                         >
                           <img
                             src={item.file_info.url}
                             alt=""
                             height="30"
-                            style={{maxWidth: '100px', maxHeight: '100px'}}
+                            style={{ maxWidth: '100px', maxHeight: '100px' }}
                           />
                         </Popover>
                       )}
@@ -656,13 +664,13 @@ export const FileManager = (props: FileManagerProps) => {
                             message.success('URL copied to clipboard.')
                           }}
                         >
-                          <Copy size={16}/>
+                          <Copy size={16} />
                         </Button>
                       </Tooltip>
                       <Tooltip title="Open in a window">
                         <a href={item.file_info.url} target="_blank" rel="noreferrer">
                           <Button type="text" size="small">
-                            <ExternalLink size={16}/>
+                            <ExternalLink size={16} />
                           </Button>
                         </a>
                       </Tooltip>
@@ -678,14 +686,14 @@ export const FileManager = (props: FileManagerProps) => {
                           }}
                         >
                           <Button type="text" size="small">
-                            <Trash2 size={16}/>
+                            <Trash2 size={16} />
                           </Button>
                         </Popconfirm>
                       )}
                       {isReadOnly && (
                         <Tooltip title="Delete file (Read-only mode)">
                           <Button type="text" size="small" disabled>
-                            <Trash2 size={16}/>
+                            <Trash2 size={16} />
                           </Button>
                         </Tooltip>
                       )}
@@ -742,7 +750,7 @@ export const FileManager = (props: FileManagerProps) => {
                 addonBefore={currentPath !== '/' ? currentPath : '/'}
                 onChange={(e) => {
                   // trim spaces
-                  form.setFieldsValue({folderName: e.target.value.trim()})
+                  form.setFieldsValue({ folderName: e.target.value.trim() })
                 }}
               />
             </Form.Item>
