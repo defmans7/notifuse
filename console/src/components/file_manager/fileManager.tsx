@@ -293,7 +293,7 @@ export const FileManager = (props: FileManagerProps) => {
       s3Client
         .send(new ListObjectsV2Command(input))
         .then((response) => {
-          // console.log('response', response)
+          console.log('response', response)
           if (response.Contents && response.Contents.length > 0) {
             message.error('Folder already exists.')
             return
@@ -348,7 +348,7 @@ export const FileManager = (props: FileManagerProps) => {
     if (isUploading) return
     if (!s3ClientRef.current) return
 
-    // console.log(e.target.files)
+    console.log(e.target.files)
 
     for (var i = 0; i < e.target.files.length; i++) {
       setIsUploading(true)
