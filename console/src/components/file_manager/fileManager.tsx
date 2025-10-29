@@ -355,10 +355,12 @@ export const FileManager = (props: FileManagerProps) => {
         .then((arrayBuffer) => {
           const uint8Array = new Uint8Array(arrayBuffer)
 
+          console.log(props.settings)
+
           s3ClientRef
             .current!.send(
               new PutObjectCommand({
-                Bucket: props.settings?.bucket || '',
+                Bucket: props.settings?.bucket || 'files',
                 Key: currentPath + file.name,
                 Body: uint8Array,
                 ContentType: file.type
