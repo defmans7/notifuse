@@ -81,7 +81,7 @@ export function FileManagerPage() {
     settings: {
       endpoint: currentWorkspace?.settings?.file_manager?.endpoint || '',
       access_key: currentWorkspace?.settings?.file_manager?.access_key || '',
-      bucket: currentWorkspace?.settings?.file_manager?.bucket || '',
+      bucket: currentWorkspace?.settings?.file_manager?.bucket || 'files',
       region: currentWorkspace?.settings?.file_manager?.region || '',
       secret_key: currentWorkspace?.settings?.file_manager?.secret_key || '',
       cdn_endpoint: currentWorkspace?.settings?.file_manager?.cdn_endpoint || ''
