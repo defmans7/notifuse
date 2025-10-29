@@ -44,4 +44,5 @@ export interface FileManagerSettings {
   secret_key?: string
   encrypted_secret_key?: string
   cdn_endpoint?: string
+  force_path_style: boolean
 }
