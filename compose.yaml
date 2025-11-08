@@ -1,6 +1,4 @@
-# ⚠️  IMPORTANT: If using a .env file with Docker Compose
-# Values containing # must be quoted: DB_PASSWORD="mypass#word123"
-# See env.example for more details.
+version: "3.8"
 
 services:
   api:
@@ -8,70 +6,55 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - '8081:8080'
-      - '587:587'
+      - "8080"
     environment:
       # Server Configuration
-      - SERVER_PORT=${SERVER_PORT:-8080}
-      - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - SERVER_PORT=8080
+      - SERVER_HOST=0.0.0.0
+      - ENVIRONMENT=development
 
       # Database Configuration (Required)
-      - DB_HOST=${DB_HOST:-postgres}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_PREFIX=${DB_PREFIX:-notifuse}
-      - DB_NAME=${DB_NAME:-notifuse_system}
-      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - DB_HOST=${POSTGRES_HOST:-postgres}
+      - DB_PORT=${POSTGRES_DB_PORT:-5432}
+      - DB_USER=${POSTGRES_DB_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_DB_PASSWORD:-postgres}
+      - DB_PREFIX=${POSTGRES_DB_PREFIX:-notifuse}
+      - DB_NAME=${POSTGRES_DB_NAME:-notifuse_system}
+      - DB_SSLMODE=${POSTGRES_MODE:-disable}
 
       # Secret Key (Required) - Generate a secure random string for production
       - SECRET_KEY=${SECRET_KEY:-d04zCk3Fa45oOjDWHpAvc1AZxnLdGffOnNWK+Jt2yXf37+FTfuMMHb8flcfPMqLluRR3rvhbr555r6j1DEigrA==}
 
-      # All other settings (ROOT_EMAIL, API_ENDPOINT, SMTP)
+      # All other settings (ROOT_EMAIL, API_ENDPOINT, SMTP, PASETO keys)
       # can be configured through the Setup Wizard on first launch
       # Or set them here as environment variables if you prefer
-      # - ROOT_EMAIL=${ROOT_EMAIL}
-      # - API_ENDPOINT=${API_ENDPOINT}
-      # - SMTP_HOST=${SMTP_HOST}
-      # - SMTP_PORT=${SMTP_PORT}
-      # - SMTP_USERNAME=${SMTP_USERNAME}
-      # - SMTP_PASSWORD=${SMTP_PASSWORD}
-      # - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
-      # - SMTP_FROM_NAME=${SMTP_FROM_NAME}
-
-      # SMTP Relay Configuration (Optional - for receiving inbound emails)
-      # - SMTP_RELAY_ENABLED=${SMTP_RELAY_ENABLED}
-      # - SMTP_RELAY_PORT=${SMTP_RELAY_PORT}
-      # - SMTP_RELAY_DOMAIN=${SMTP_RELAY_DOMAIN}
-      # - SMTP_RELAY_TLS_CERT_BASE64=${SMTP_RELAY_TLS_CERT_BASE64}
-      # - SMTP_RELAY_TLS_KEY_BASE64=${SMTP_RELAY_TLS_KEY_BASE64}
-    depends_on:
-      - postgres
+      - ROOT_EMAIL=${ROOT_EMAIL}
+      - API_ENDPOINT=${API_ENDPOINT}
+      - PASETO_PRIVATE_KEY=${PASETO_PRIVATE_KEY}
+      - PASETO_PUBLIC_KEY=${PASETO_PUBLIC_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
     networks:
       - notifuse-network
 
-  postgres:
-    image: postgres:17-alpine
-    ports:
-      - '5433:5432'
-    environment:
-      - POSTGRES_USER=${DB_USER:-postgres}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-postgres}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+  cron:
+    image: alpine:3.20
     restart: unless-stopped
-    networks:
-      - notifuse-network
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    depends_on:
+      - api
+    command: >
+      /bin/sh -c "
+        apk add --no-cache curl &&
+        echo '* * * * * /usr/bin/curl ${API_ENDPOINT}/api/cron > /dev/null 2>&1' > /etc/crontabs/root &&
+        crond -f -L /dev/stdout
+      "
 
 volumes:
   postgres-data:

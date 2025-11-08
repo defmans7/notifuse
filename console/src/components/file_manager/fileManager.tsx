@@ -15,7 +15,7 @@ import {
 import type { FileManagerProps, StorageObject } from './interfaces'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus } from 'lucide-react'
+import { Copy, Folder, Trash2, ExternalLink, Settings, RefreshCw, Plus, CopyPlus } from 'lucide-react'
 import { filesize } from 'filesize'
 import ButtonFilesSettings from './buttonSettings'
 import {
@@ -263,6 +263,30 @@ export const FileManager = (props: FileManagerProps) => {
     setNewFolderModalVisible(!newFolderModalVisible)
   }
 
+  const convertUrlToBase64Image = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'Anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'))
+          return
+        }
+        ctx.drawImage(img, 0, 0)
+        const dataURL = canvas.toDataURL('image/png')
+        resolve(dataURL)
+      }
+      img.onerror = (error) => {
+        reject(error)
+      }
+      img.src = url
+    })
+  }
+
   const onSubmitNewFolder = () => {
     if (!s3ClientRef.current) {
       message.error('S3 client is not initialized.')
@@ -355,15 +379,19 @@ export const FileManager = (props: FileManagerProps) => {
         .then((arrayBuffer) => {
           const uint8Array = new Uint8Array(arrayBuffer)
 
+          const putObject = {
+            Bucket: props.settings?.bucket || '',
+            Key: currentPath + file.name,
+            Body: uint8Array,
+            ContentType: file.type
+          }
+
+          console.log('putObject', putObject)
+
           s3ClientRef
             .current!.send(
-              new PutObjectCommand({
-                Bucket: props.settings?.bucket || '',
-                Key: currentPath + file.name,
-                Body: uint8Array,
-                ContentType: file.type
-              })
-            )
+            new PutObjectCommand(putObject)
+          )
             .then(() => {
               message.success('File ' + file.name + ' uploaded successfully.')
               setIsUploading(false)
@@ -571,16 +599,16 @@ export const FileManager = (props: FileManagerProps) => {
             rowSelection={
               props.withSelection
                 ? {
-                    type: props.multiple ? 'checkbox' : 'radio',
-                    selectedRowKeys: selectedRowKeys,
-                    onChange: (selectedRowKeys: React.Key[], selectedRows: any[]) => {
-                      setSelectedRowKeys(selectedRowKeys)
-                      selectItem(selectedRows)
-                    },
-                    getCheckboxProps: (record: any) => ({
-                      disabled: !props.acceptItem(record as StorageObject)
-                    })
-                  }
+                  type: props.multiple ? 'checkbox' : 'radio',
+                  selectedRowKeys: selectedRowKeys,
+                  onChange: (selectedRowKeys: React.Key[], selectedRows: any[]) => {
+                    setSelectedRowKeys(selectedRowKeys)
+                    selectItem(selectedRows)
+                  },
+                  getCheckboxProps: (record: any) => ({
+                    disabled: !props.acceptItem(record as StorageObject)
+                  })
+                }
                 : undefined
             }
             columns={[
@@ -655,6 +683,20 @@ export const FileManager = (props: FileManagerProps) => {
                   if (item.is_folder) return
                   return (
                     <Space>
+                      <Tooltip title="Copy data URL">
+                        <Button
+                          type="text"
+                          size="small"
+                          onClick={() => {
+                            convertUrlToBase64Image(item.file_info.url).then((dataUrl) => {
+                              navigator.clipboard.writeText(dataUrl)
+                              message.success('Data URL copied to clipboard.')
+                            })
+                          }}
+                        >
+                          <CopyPlus size={16} />
+                        </Button>
+                      </Tooltip>
                       <Tooltip title="Copy URL">
                         <Button
                           type="text"

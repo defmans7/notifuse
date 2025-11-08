@@ -6,6 +6,8 @@ node_modules
 .DS_Store
 server/tmp/
 tmp/
+.idea
+console/bun.lock
 
 bin/
 coverage.html
