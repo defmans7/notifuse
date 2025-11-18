@@ -20,3 +20,4 @@ console/public/config.js
 
 notification_center/tsconfig.tsbuildinfo
 dev-certs/
+/UPGRADE_STRAT.md
