@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [16.3] - 2025-11-15
+
+### Fixes
+
+- Fix: Replace hardcoded SMTP PLAIN auth with auto-discover to support Azure Communication Email and other providers requiring LOGIN authentication
+
+## [16.2] - 2025-11-14
+
+### Fixes
+
+- Fix: Setup wizard redirection loop when API_ENDPOINT differs from actual console host name
+- Add `/healthz` endpoint for container health checks that pings the database
+
 ## [16.1] - 2025-11-06
 
 ### Features
