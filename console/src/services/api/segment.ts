@@ -1,5 +1,6 @@
 import { api } from './client'
 import { FormInstance } from 'antd'
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 
 // Utility types
 export interface MapOfStrings {
@@ -7,7 +8,7 @@ export interface MapOfStrings {
 }
 
 export interface MapOfInterfaces {
-  [key: string]: any
+  [key: string]: unknown
 }
 
 // Segment types
@@ -16,10 +17,10 @@ export type SegmentStatus = 'active' | 'deleted' | 'building'
 // Tree structure types
 export type TreeNodeKind = 'branch' | 'leaf'
 export type BooleanOperator = 'and' | 'or'
-export type TableType = 'contacts' | 'contact_lists' | 'contact_timeline'
+export type SourceType = 'contacts' | 'contact_lists' | 'contact_timeline' | 'custom_events_goals'
 
 // Dimension filter types
-export type FieldType = 'string' | 'number' | 'time'
+export type FieldType = 'string' | 'number' | 'time' | 'json'
 export type FilterOperator =
   | 'is_set'
   | 'is_not_set'
@@ -38,6 +39,7 @@ export type FilterOperator =
   | 'before_date'
   | 'after_date'
   | 'in_the_last_days'
+  | 'in_array'
 
 // Contact list operators
 export type ContactListOperator = 'in' | 'not_in'
@@ -57,6 +59,10 @@ export interface DimensionFilter {
   operator: FilterOperator
   string_values?: string[]
   number_values?: number[]
+  // JSON-specific field for navigating nested JSON structures
+  // Each element is either a key name or a numeric index (as string)
+  // Example: ["user", "tags", "0"] represents user.tags[0]
+  json_path?: string[]
 }
 
 export interface ContactCondition {
@@ -78,11 +84,40 @@ export interface ContactTimelineCondition {
   filters?: DimensionFilter[]
 }
 
+// Goal types for custom events
+export type GoalType =
+  | 'purchase'
+  | 'subscription'
+  | 'lead'
+  | 'signup'
+  | 'booking'
+  | 'trial'
+  | 'other'
+  | '*'
+
+// Aggregate operators for custom events goals
+export type AggregateOperator = 'sum' | 'count' | 'avg' | 'min' | 'max'
+
+// Comparison operators for custom events goals
+export type GoalComparisonOperator = 'gte' | 'lte' | 'eq' | 'between'
+
+export interface CustomEventsGoalCondition {
+  goal_type: GoalType
+  goal_name?: string
+  aggregate_operator: AggregateOperator
+  operator: GoalComparisonOperator
+  value: number
+  value_2?: number // For between operator
+  timeframe_operator: TimeframeOperator
+  timeframe_values?: string[]
+}
+
 export interface TreeNodeLeaf {
-  table: TableType
+  source: SourceType
   contact?: ContactCondition
   contact_list?: ContactListCondition
   contact_timeline?: ContactTimelineCondition
+  custom_events_goal?: CustomEventsGoalCondition
 }
 
 export interface TreeNodeBranch {
@@ -106,7 +141,7 @@ export interface Segment {
   version: number
   status: SegmentStatus
   generated_sql?: string
-  generated_args?: Record<string, any>
+  generated_args?: Record<string, unknown>
   db_created_at: string
   db_updated_at: string
   users_count?: number
@@ -121,7 +156,7 @@ export interface EditingNodeLeaf extends TreeNode {
 
 // Field definition type
 export interface FieldDefinition {
-  table: string
+  source: string
   field_name: string
   definition: FieldSchema
 }
@@ -146,11 +181,16 @@ export type Operator =
   | 'before_date'
   | 'after_date'
   | 'in_the_last_days'
+  | 'in_array'
 
 // Field type renderer interfaces
 export interface FieldTypeRenderer {
   operators: IOperator[]
-  render: (filter: DimensionFilter, schema: FieldSchema) => JSX.Element
+  render: (
+    filter: DimensionFilter,
+    schema: FieldSchema,
+    customFieldLabels?: Record<string, string>
+  ) => JSX.Element
   renderFormItems: (fieldType: FieldTypeValue, fieldName: string, form: FormInstance) => JSX.Element
 }
 
@@ -170,7 +210,7 @@ export interface TableSchema {
   name: string
   title: string
   description?: string
-  icon?: any // FontAwesome icon definition
+  icon?: IconDefinition
   fields: { [key: string]: FieldSchema }
 }
 
@@ -178,7 +218,7 @@ export interface FieldSchema {
   name: string
   title: string
   description?: string
-  type: 'string' | 'number' | 'time' | 'boolean'
+  type: 'string' | 'number' | 'time' | 'boolean' | 'json'
   shown?: boolean
   options?: FieldOption[] // For predefined values (e.g., countries, languages)
 }
@@ -275,7 +315,7 @@ export interface PreviewSegmentResponse {
   total_count: number
   limit: number
   generated_sql: string
-  sql_args: any[]
+  sql_args: unknown[]
 }
 
 export interface GetSegmentContactsResponse {

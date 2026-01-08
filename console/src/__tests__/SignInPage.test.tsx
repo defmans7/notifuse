@@ -13,10 +13,18 @@ vi.mock('../services/api/auth', () => ({
   }
 }))
 
-// Mock the navigate function
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(() => ({}))
-}))
+// Mock the navigate function and useSearch
+const mockNavigate = vi.fn(() => ({}))
+const mockSearch = { email: undefined }
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useSearch: vi.fn(() => mockSearch)
+  }
+})
 
 // Mock antd message component
 const mockMessage = {
@@ -40,7 +48,13 @@ describe('SignInPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Clear any previous mock implementations
-    vi.spyOn(App, 'useApp').mockReturnValue({ message: mockMessage } as any)
+    vi.spyOn(App, 'useApp').mockReturnValue({
+      message: { ...mockMessage, open: vi.fn(), destroy: vi.fn() },
+      notification: {} as any,
+      modal: {} as any
+    } as ReturnType<typeof App.useApp>)
+    // Reset search mock
+    mockSearch.email = undefined
   })
 
   it('renders the email form initially', () => {
@@ -51,10 +65,10 @@ describe('SignInPage', () => {
   })
 
   it('submits email and shows code input form', async () => {
-    // Mock successful response
+    // Mock successful response without code (normal flow)
     vi.mocked(authService.authService.signIn).mockResolvedValueOnce({
-      message: 'Magic code sent',
-      code: '123456'
+      message: 'Magic code sent'
+      // No code property - normal flow
     })
 
     renderWithProviders(<SignInPage />)
@@ -67,7 +81,7 @@ describe('SignInPage', () => {
 
     // Wait for code input form to appear
     await waitFor(() => {
-      expect(screen.getByText(/enter the 6-digit code/i)).toBeInTheDocument()
+      expect(screen.getByText(/enter the 6-digit code sent to/i)).toBeInTheDocument()
     })
 
     // Verify API was called with correct data
@@ -84,10 +98,15 @@ describe('SignInPage', () => {
     // Mock console.log
     const consoleSpy = vi.spyOn(console, 'log')
 
-    // Mock successful response with code
+    // Mock successful response with code (auto-submits in dev mode)
     vi.mocked(authService.authService.signIn).mockResolvedValueOnce({
       message: 'Magic code sent',
       code: '123456'
+    })
+
+    // Mock verifyCode to prevent actual navigation
+    vi.mocked(authService.authService.verifyCode).mockResolvedValueOnce({
+      token: 'fake-token'
     })
 
     renderWithProviders(<SignInPage />)
@@ -98,10 +117,13 @@ describe('SignInPage', () => {
     })
     fireEvent.click(screen.getByText(/send magic code/i))
 
-    // Wait for state to update
-    await waitFor(() => {
-      expect(screen.getByText(/enter the 6-digit code/i)).toBeInTheDocument()
-    })
+    // Wait for auto-submit to complete (code form should appear briefly, then auto-submit)
+    await waitFor(
+      () => {
+        expect(consoleSpy).toHaveBeenCalledWith('Magic code for development:', '123456')
+      },
+      { timeout: 2000 }
+    )
 
     // Verify code was logged
     expect(consoleSpy).toHaveBeenCalledWith('Magic code for development:', '123456')
@@ -165,6 +187,49 @@ describe('SignInPage', () => {
     })
 
     // Email form should still be visible
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+  })
+
+  it('auto-fills and submits email from URL parameter', async () => {
+    // Set email in URL search params
+    (mockSearch as { email: string | undefined }).email = 'demo@notifuse.com'
+
+    // Mock successful response
+    vi.mocked(authService.authService.signIn).mockResolvedValueOnce({
+      message: 'Magic code sent'
+    })
+
+    renderWithProviders(<SignInPage />)
+
+    // Wait for auto-submit to complete
+    await waitFor(() => {
+      expect(authService.authService.signIn).toHaveBeenCalledWith({
+        email: 'demo@notifuse.com'
+      })
+    })
+
+    // Verify code input form is shown (after auto-submit)
+    await waitFor(() => {
+      expect(screen.getByText(/enter the 6-digit code sent to/i)).toBeInTheDocument()
+    })
+
+    // Verify the email is shown in the code form message
+    expect(screen.getByText(/demo@notifuse.com/i)).toBeInTheDocument()
+  })
+
+  it('does not auto-submit when email parameter is not present', async () => {
+    // Ensure email is not in search params
+    mockSearch.email = undefined
+
+    renderWithProviders(<SignInPage />)
+
+    // Wait a bit to ensure no auto-submit happens
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    // Verify API was not called
+    expect(authService.authService.signIn).not.toHaveBeenCalled()
+
+    // Email form should be visible
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
   })
 })

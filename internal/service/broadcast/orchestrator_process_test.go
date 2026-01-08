@@ -80,48 +80,14 @@ func createMockBroadcast(broadcastID string, variations []string) *domain.Broadc
 	return &domain.Broadcast{
 		ID: broadcastID,
 		Audience: domain.AudienceSettings{
-			Lists:    []string{"list-1", "list-2"},
+			List:     "list-1",
 			Segments: []string{"segment-1"},
 		},
 		TestSettings: domain.BroadcastTestSettings{
 			Variations: broadcastVariations,
 		},
-		Status: domain.BroadcastStatusSending,
+		Status: domain.BroadcastStatusProcessing,
 	}
-}
-
-// createTask creates a task with the specified state
-func createTask(
-	taskID, workspaceID, broadcastID string,
-	totalRecipients, sentCount, failedCount int,
-	offset int64,
-	retryCount, maxRetries int,
-) *domain.Task {
-	task := &domain.Task{
-		ID:          taskID,
-		WorkspaceID: workspaceID,
-		Type:        "send_broadcast",
-		Status:      domain.TaskStatusRunning,
-		RetryCount:  retryCount,
-		MaxRetries:  maxRetries,
-	}
-
-	// If broadcastID is provided, create a state
-	if broadcastID != "" {
-		task.BroadcastID = &broadcastID
-		task.State = &domain.TaskState{
-			SendBroadcast: &domain.SendBroadcastState{
-				BroadcastID:     broadcastID,
-				TotalRecipients: totalRecipients,
-				SentCount:       sentCount,
-				FailedCount:     failedCount,
-				RecipientOffset: offset,
-				ChannelType:     "email",
-			},
-		}
-	}
-
-	return task
 }
 
 // TestProcess_HappyPath tests the successful processing of a broadcast
@@ -188,7 +154,7 @@ func TestProcess_HappyPath(t *testing.T) {
 		Return(0, nil).
 		Times(1)
 
-	// Expect UpdateBroadcast to be called when marking broadcast as sent (no recipients)
+	// Expect UpdateBroadcast to be called when marking broadcast as processed (no recipients)
 	mockBroadcastRepository.EXPECT().
 		UpdateBroadcast(gomock.Any(), gomock.Any()).
 		Return(nil).

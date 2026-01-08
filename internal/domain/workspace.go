@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
-	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/asaskevich/govalidator"
 )
 
@@ -26,6 +25,9 @@ const (
 	PermissionResourceTransactional  PermissionResource = "transactional"
 	PermissionResourceWorkspace      PermissionResource = "workspace"
 	PermissionResourceMessageHistory PermissionResource = "message_history"
+	PermissionResourceBlog           PermissionResource = "blog"
+	PermissionResourceAutomations    PermissionResource = "automations"
+	PermissionResourceLLM            PermissionResource = "llm"
 )
 
 // PermissionType defines the types of permissions (read/write)
@@ -44,6 +46,9 @@ var FullPermissions = UserPermissions{
 	PermissionResourceTransactional:  ResourcePermissions{Read: true, Write: true},
 	PermissionResourceWorkspace:      ResourcePermissions{Read: true, Write: true},
 	PermissionResourceMessageHistory: ResourcePermissions{Read: true, Write: true},
+	PermissionResourceBlog:           ResourcePermissions{Read: true, Write: true},
+	PermissionResourceAutomations:    ResourcePermissions{Read: true, Write: true},
+	PermissionResourceLLM:            ResourcePermissions{Read: true, Write: true},
 }
 
 // ResourcePermissions defines read/write permissions for a specific resource
@@ -86,8 +91,10 @@ func (up *UserPermissions) Scan(value interface{}) error {
 type IntegrationType string
 
 const (
-	IntegrationTypeEmail    IntegrationType = "email"
-	IntegrationTypeSupabase IntegrationType = "supabase"
+	IntegrationTypeEmail     IntegrationType = "email"
+	IntegrationTypeSupabase  IntegrationType = "supabase"
+	IntegrationTypeLLM       IntegrationType = "llm"
+	IntegrationTypeFirecrawl IntegrationType = "firecrawl"
 )
 
 // Integrations is a slice of Integration with database serialization methods
@@ -119,13 +126,15 @@ func (i *Integrations) Scan(value interface{}) error {
 
 // Integration represents a third-party service integration that's embedded in workspace settings
 type Integration struct {
-	ID               string                       `json:"id"`
-	Name             string                       `json:"name"`
-	Type             IntegrationType              `json:"type"`
-	EmailProvider    EmailProvider                `json:"email_provider,omitempty"`
-	SupabaseSettings *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"`
-	CreatedAt        time.Time                    `json:"created_at"`
-	UpdatedAt        time.Time                    `json:"updated_at"`
+	ID                string                       `json:"id"`
+	Name              string                       `json:"name"`
+	Type              IntegrationType              `json:"type"`
+	EmailProvider     EmailProvider                `json:"email_provider,omitempty"`
+	SupabaseSettings  *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"`
+	LLMProvider       *LLMProvider                 `json:"llm_provider,omitempty"`
+	FirecrawlSettings *FirecrawlSettings           `json:"firecrawl_settings,omitempty"`
+	CreatedAt         time.Time                    `json:"created_at"`
+	UpdatedAt         time.Time                    `json:"updated_at"`
 }
 
 // Validate validates the integration
@@ -157,6 +166,22 @@ func (i *Integration) Validate(passphrase string) error {
 		if err := i.SupabaseSettings.Validate(passphrase); err != nil {
 			return fmt.Errorf("invalid supabase settings: %w", err)
 		}
+	case IntegrationTypeLLM:
+		// Validate LLM provider settings
+		if i.LLMProvider == nil {
+			return fmt.Errorf("llm provider settings are required for llm integration")
+		}
+		if err := i.LLMProvider.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid llm provider settings: %w", err)
+		}
+	case IntegrationTypeFirecrawl:
+		// Validate Firecrawl settings
+		if i.FirecrawlSettings == nil {
+			return fmt.Errorf("firecrawl settings are required for firecrawl integration")
+		}
+		if err := i.FirecrawlSettings.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid firecrawl settings: %w", err)
+		}
 	default:
 		return fmt.Errorf("unsupported integration type: %s", i.Type)
 	}
@@ -178,6 +203,18 @@ func (i *Integration) BeforeSave(secretkey string) error {
 				return fmt.Errorf("failed to encrypt supabase signature keys: %w", err)
 			}
 		}
+	case IntegrationTypeLLM:
+		if i.LLMProvider != nil {
+			if err := i.LLMProvider.EncryptSecretKeys(secretkey); err != nil {
+				return fmt.Errorf("failed to encrypt llm provider secrets: %w", err)
+			}
+		}
+	case IntegrationTypeFirecrawl:
+		if i.FirecrawlSettings != nil {
+			if err := i.FirecrawlSettings.EncryptSecretKeys(secretkey); err != nil {
+				return fmt.Errorf("failed to encrypt firecrawl secret keys: %w", err)
+			}
+		}
 	}
 
 	return nil
@@ -195,6 +232,18 @@ func (i *Integration) AfterLoad(secretkey string) error {
 		if i.SupabaseSettings != nil {
 			if err := i.SupabaseSettings.DecryptSignatureKeys(secretkey); err != nil {
 				return fmt.Errorf("failed to decrypt supabase signature keys: %w", err)
+			}
+		}
+	case IntegrationTypeLLM:
+		if i.LLMProvider != nil {
+			if err := i.LLMProvider.DecryptSecretKeys(secretkey); err != nil {
+				return fmt.Errorf("failed to decrypt llm provider secrets: %w", err)
+			}
+		}
+	case IntegrationTypeFirecrawl:
+		if i.FirecrawlSettings != nil {
+			if err := i.FirecrawlSettings.DecryptSecretKeys(secretkey); err != nil {
+				return fmt.Errorf("failed to decrypt firecrawl secret keys: %w", err)
 			}
 		}
 	}
@@ -222,72 +271,51 @@ func (b *Integration) Scan(value interface{}) error {
 	return json.Unmarshal(cloned, b)
 }
 
-type TemplateBlock struct {
-	ID      string                   `json:"id"`
-	Name    string                   `json:"name"`
-	Block   notifuse_mjml.EmailBlock `json:"block"`
-	Created time.Time                `json:"created"`
-	Updated time.Time                `json:"updated"`
+// BlogSettings contains blog title and SEO configuration
+type BlogSettings struct {
+	Title            string       `json:"title,omitempty"`
+	LogoURL          *string      `json:"logo_url,omitempty"`
+	IconURL          *string      `json:"icon_url,omitempty"`
+	SEO              *SEOSettings `json:"seo,omitempty"`
+	HomePageSize     int          `json:"home_page_size,omitempty"`     // Posts per page on home (default: 20)
+	CategoryPageSize int          `json:"category_page_size,omitempty"` // Posts per page on category (default: 20)
 }
 
-// MarshalJSON implements custom JSON marshaling for TemplateBlock
-func (tb TemplateBlock) MarshalJSON() ([]byte, error) {
-	// Create a temporary struct with the same fields but Block as interface{}
-	temp := struct {
-		ID      string      `json:"id"`
-		Name    string      `json:"name"`
-		Block   interface{} `json:"block"`
-		Created time.Time   `json:"created"`
-		Updated time.Time   `json:"updated"`
-	}{
-		ID:      tb.ID,
-		Name:    tb.Name,
-		Block:   tb.Block,
-		Created: tb.Created,
-		Updated: tb.Updated,
+// GetHomePageSize returns the home page size with validation and default
+func (bs *BlogSettings) GetHomePageSize() int {
+	if bs == nil || bs.HomePageSize < 1 || bs.HomePageSize > 100 {
+		return 20 // default
 	}
-	return json.Marshal(temp)
+	return bs.HomePageSize
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling for TemplateBlock
-func (tb *TemplateBlock) UnmarshalJSON(data []byte) error {
-	// First unmarshal into a temporary struct
-	temp := struct {
-		ID      string          `json:"id"`
-		Name    string          `json:"name"`
-		Block   json.RawMessage `json:"block"`
-		Created time.Time       `json:"created"`
-		Updated time.Time       `json:"updated"`
-	}{}
-
-	if err := json.Unmarshal(data, &temp); err != nil {
-		return err
+// GetCategoryPageSize returns the category page size with validation and default
+func (bs *BlogSettings) GetCategoryPageSize() int {
+	if bs == nil || bs.CategoryPageSize < 1 || bs.CategoryPageSize > 100 {
+		return 20 // default
 	}
-
-	// Set the simple fields
-	tb.ID = temp.ID
-	tb.Name = temp.Name
-	tb.Created = temp.Created
-	tb.Updated = temp.Updated
-
-	// Unmarshal the Block using the existing EmailBlock unmarshaling logic
-	if len(temp.Block) > 0 {
-		block, err := notifuse_mjml.UnmarshalEmailBlock(temp.Block)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal template block: %w", err)
-		}
-		tb.Block = block
-	}
-
-	return nil
+	return bs.CategoryPageSize
 }
 
-type SaveOperation string
+// Value implements the driver.Valuer interface for database serialization
+func (b BlogSettings) Value() (driver.Value, error) {
+	return json.Marshal(b)
+}
 
-const (
-	SaveOperationCreate SaveOperation = "create"
-	SaveOperationUpdate SaveOperation = "update"
-)
+// Scan implements the sql.Scanner interface for database deserialization
+func (b *BlogSettings) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	v, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+
+	cloned := bytes.Clone(v)
+	return json.Unmarshal(cloned, b)
+}
 
 // WorkspaceSettings contains configurable workspace settings
 type WorkspaceSettings struct {
@@ -303,6 +331,8 @@ type WorkspaceSettings struct {
 	TemplateBlocks               []TemplateBlock     `json:"template_blocks,omitempty"`
 	CustomEndpointURL            *string             `json:"custom_endpoint_url,omitempty"`
 	CustomFieldLabels            map[string]string   `json:"custom_field_labels,omitempty"`
+	BlogEnabled                  bool                `json:"blog_enabled"`            // Enable blog feature at workspace level
+	BlogSettings                 *BlogSettings       `json:"blog_settings,omitempty"` // Blog styling and SEO settings
 
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
@@ -624,12 +654,14 @@ func (w *Workspace) MarshalJSON() ([]byte, error) {
 }
 
 type FileManagerSettings struct {
+	Provider           string  `json:"provider,omitempty"`
 	Endpoint           string  `json:"endpoint"`
 	Bucket             string  `json:"bucket"`
 	AccessKey          string  `json:"access_key"`
 	EncryptedSecretKey string  `json:"encrypted_secret_key,omitempty"`
 	Region             *string `json:"region,omitempty"`
 	CDNEndpoint        *string `json:"cdn_endpoint,omitempty"`
+	ForcePathStyle     bool    `json:"force_path_style"`
 
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"secret_key,omitempty"`
@@ -825,6 +857,7 @@ type WorkspaceInvitation struct {
 type WorkspaceRepository interface {
 	Create(ctx context.Context, workspace *Workspace) error
 	GetByID(ctx context.Context, id string) (*Workspace, error)
+	GetWorkspaceByCustomDomain(ctx context.Context, hostname string) (*Workspace, error)
 	List(ctx context.Context) ([]*Workspace, error)
 	Update(ctx context.Context, workspace *Workspace) error
 	Delete(ctx context.Context, id string) error
@@ -925,11 +958,13 @@ func (r *CreateAPIKeyRequest) Validate() error {
 
 // CreateIntegrationRequest defines the request structure for creating an integration
 type CreateIntegrationRequest struct {
-	WorkspaceID      string                       `json:"workspace_id"`
-	Name             string                       `json:"name"`
-	Type             IntegrationType              `json:"type"`
-	Provider         EmailProvider                `json:"provider,omitempty"`          // For email integrations
-	SupabaseSettings *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"` // For Supabase integrations
+	WorkspaceID       string                       `json:"workspace_id"`
+	Name              string                       `json:"name"`
+	Type              IntegrationType              `json:"type"`
+	Provider          EmailProvider                `json:"provider,omitempty"`           // For email integrations
+	SupabaseSettings  *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"`  // For Supabase integrations
+	LLMProvider       *LLMProvider                 `json:"llm_provider,omitempty"`       // For LLM integrations
+	FirecrawlSettings *FirecrawlSettings           `json:"firecrawl_settings,omitempty"` // For Firecrawl integrations
 }
 
 func (r *CreateIntegrationRequest) Validate(passphrase string) error {
@@ -958,6 +993,20 @@ func (r *CreateIntegrationRequest) Validate(passphrase string) error {
 		if err := r.SupabaseSettings.Validate(passphrase); err != nil {
 			return fmt.Errorf("invalid supabase settings: %w", err)
 		}
+	case IntegrationTypeLLM:
+		if r.LLMProvider == nil {
+			return fmt.Errorf("llm provider settings are required for llm integration")
+		}
+		if err := r.LLMProvider.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid llm provider configuration: %w", err)
+		}
+	case IntegrationTypeFirecrawl:
+		if r.FirecrawlSettings == nil {
+			return fmt.Errorf("firecrawl settings are required for firecrawl integration")
+		}
+		if err := r.FirecrawlSettings.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid firecrawl settings: %w", err)
+		}
 	default:
 		return fmt.Errorf("unsupported integration type: %s", r.Type)
 	}
@@ -967,11 +1016,13 @@ func (r *CreateIntegrationRequest) Validate(passphrase string) error {
 
 // UpdateIntegrationRequest defines the request structure for updating an integration
 type UpdateIntegrationRequest struct {
-	WorkspaceID      string                       `json:"workspace_id"`
-	IntegrationID    string                       `json:"integration_id"`
-	Name             string                       `json:"name"`
-	Provider         EmailProvider                `json:"provider,omitempty"`          // For email integrations
-	SupabaseSettings *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"` // For Supabase integrations
+	WorkspaceID       string                       `json:"workspace_id"`
+	IntegrationID     string                       `json:"integration_id"`
+	Name              string                       `json:"name"`
+	Provider          EmailProvider                `json:"provider,omitempty"`           // For email integrations
+	SupabaseSettings  *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"`  // For Supabase integrations
+	LLMProvider       *LLMProvider                 `json:"llm_provider,omitempty"`       // For LLM integrations
+	FirecrawlSettings *FirecrawlSettings           `json:"firecrawl_settings,omitempty"` // For Firecrawl integrations
 }
 
 func (r *UpdateIntegrationRequest) Validate(passphrase string) error {
@@ -996,6 +1047,14 @@ func (r *UpdateIntegrationRequest) Validate(passphrase string) error {
 	} else if r.SupabaseSettings != nil {
 		if err := r.SupabaseSettings.Validate(passphrase); err != nil {
 			return fmt.Errorf("invalid supabase settings: %w", err)
+		}
+	} else if r.LLMProvider != nil {
+		if err := r.LLMProvider.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid llm provider configuration: %w", err)
+		}
+	} else if r.FirecrawlSettings != nil {
+		if err := r.FirecrawlSettings.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid firecrawl settings: %w", err)
 		}
 	}
 

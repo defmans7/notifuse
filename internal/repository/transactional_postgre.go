@@ -172,7 +172,6 @@ func (r *TransactionalNotificationRepository) List(ctx context.Context, workspac
 		whereClause += fmt.Sprintf(" AND (name ILIKE $%d OR id ILIKE $%d)", argIndex, argIndex)
 		searchPattern := "%" + search.(string) + "%"
 		args = append(args, searchPattern)
-		argIndex++
 	}
 
 	// Count total matching records
@@ -201,7 +200,7 @@ func (r *TransactionalNotificationRepository) List(ctx context.Context, workspac
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list transactional notifications: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var notifications []*domain.TransactionalNotification
 	for rows.Next() {

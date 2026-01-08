@@ -9,17 +9,12 @@ import (
 	"net/url"
 	"testing"
 
-
-
 	"github.com/Notifuse/notifuse/internal/domain"
-
 
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 
-
 	"github.com/golang/mock/gomock"
-
 
 	"github.com/stretchr/testify/assert"
 )
@@ -58,7 +53,7 @@ func createTestSegment() *domain.Segment {
 		Tree: &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -378,7 +373,7 @@ func TestSegmentHandler_HandleCreate(t *testing.T) {
 				Tree: &domain.TreeNode{
 					Kind: "leaf",
 					Leaf: &domain.TreeNodeLeaf{
-						Table: "contacts",
+						Source: "contacts",
 						Contact: &domain.ContactCondition{
 							Filters: []*domain.DimensionFilter{
 								{
@@ -427,7 +422,7 @@ func TestSegmentHandler_HandleCreate(t *testing.T) {
 				Tree: &domain.TreeNode{
 					Kind: "leaf",
 					Leaf: &domain.TreeNodeLeaf{
-						Table: "contacts",
+						Source: "contacts",
 						Contact: &domain.ContactCondition{
 							Filters: []*domain.DimensionFilter{},
 						},
@@ -465,7 +460,7 @@ func TestSegmentHandler_HandleCreate(t *testing.T) {
 				if str, ok := tc.requestBody.(string); ok {
 					body.WriteString(str)
 				} else {
-					json.NewEncoder(&body).Encode(tc.requestBody)
+					_ = json.NewEncoder(&body).Encode(tc.requestBody)
 				}
 			}
 
@@ -507,7 +502,7 @@ func TestSegmentHandler_HandleUpdate(t *testing.T) {
 				Tree: &domain.TreeNode{
 					Kind: "leaf",
 					Leaf: &domain.TreeNodeLeaf{
-						Table: "contacts",
+						Source: "contacts",
 						Contact: &domain.ContactCondition{
 							Filters: []*domain.DimensionFilter{},
 						},
@@ -549,7 +544,7 @@ func TestSegmentHandler_HandleUpdate(t *testing.T) {
 				Tree: &domain.TreeNode{
 					Kind: "leaf",
 					Leaf: &domain.TreeNodeLeaf{
-						Table: "contacts",
+						Source: "contacts",
 						Contact: &domain.ContactCondition{
 							Filters: []*domain.DimensionFilter{},
 						},
@@ -576,7 +571,7 @@ func TestSegmentHandler_HandleUpdate(t *testing.T) {
 				Tree: &domain.TreeNode{
 					Kind: "leaf",
 					Leaf: &domain.TreeNodeLeaf{
-						Table: "contacts",
+						Source: "contacts",
 						Contact: &domain.ContactCondition{
 							Filters: []*domain.DimensionFilter{},
 						},
@@ -614,7 +609,7 @@ func TestSegmentHandler_HandleUpdate(t *testing.T) {
 				if str, ok := tc.requestBody.(string); ok {
 					body.WriteString(str)
 				} else {
-					json.NewEncoder(&body).Encode(tc.requestBody)
+					_ = json.NewEncoder(&body).Encode(tc.requestBody)
 				}
 			}
 
@@ -713,7 +708,7 @@ func TestSegmentHandler_HandleDelete(t *testing.T) {
 				if str, ok := tc.requestBody.(string); ok {
 					body.WriteString(str)
 				} else {
-					json.NewEncoder(&body).Encode(tc.requestBody)
+					_ = json.NewEncoder(&body).Encode(tc.requestBody)
 				}
 			}
 
@@ -813,7 +808,7 @@ func TestSegmentHandler_HandleRebuild(t *testing.T) {
 			tc.setupMock(mockService)
 
 			var body bytes.Buffer
-			json.NewEncoder(&body).Encode(tc.requestBody)
+			_ = json.NewEncoder(&body).Encode(tc.requestBody)
 
 			req := httptest.NewRequest(tc.method, "/api/segments.rebuild", &body)
 			rr := httptest.NewRecorder()
@@ -968,7 +963,7 @@ func TestSegmentHandler_HandlePreview(t *testing.T) {
 			tc.setupMock(mockService)
 
 			var body bytes.Buffer
-			json.NewEncoder(&body).Encode(tc.requestBody)
+			_ = json.NewEncoder(&body).Encode(tc.requestBody)
 
 			req := httptest.NewRequest(tc.method, "/api/segments.preview", &body)
 			rr := httptest.NewRecorder()

@@ -32,7 +32,7 @@ func TestContactBulkImportE2E(t *testing.T) {
 	suite := testutil.NewIntegrationTestSuite(t, func(cfg *config.Config) testutil.AppInterface {
 		return app.NewApp(cfg)
 	})
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 	factory := suite.DataFactory
@@ -87,6 +87,10 @@ func TestContactBulkImportE2E(t *testing.T) {
 	t.Run("Custom Fields Preservation", func(t *testing.T) {
 		testCustomFieldsPreservation(t, client, workspaceDB, workspace.ID)
 	})
+
+	t.Run("Duplicate Emails in Single Batch", func(t *testing.T) {
+		testDuplicateEmailsInBatch(t, client, workspaceDB, workspace.ID)
+	})
 }
 
 func testBulkInsertNewContacts(t *testing.T, client *testutil.APIClient, workspaceDB *sql.DB, workspaceID string) {
@@ -112,7 +116,7 @@ func testBulkInsertNewContacts(t *testing.T, client *testutil.APIClient, workspa
 	// Import contacts - executes REAL multi-row INSERT against PostgreSQL
 	resp, err := client.BatchImportContacts(contacts, nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -168,7 +172,7 @@ func testBulkUpdateExistingContacts(t *testing.T, client *testutil.APIClient, wo
 	// Import original contacts
 	resp, err := client.BatchImportContacts(originalContacts, nil)
 	require.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	// Wait a moment to ensure different updated_at timestamps
 	time.Sleep(100 * time.Millisecond)
@@ -192,7 +196,7 @@ func testBulkUpdateExistingContacts(t *testing.T, client *testutil.APIClient, wo
 	// Import updated contacts
 	resp, err = client.BatchImportContacts(updatedContacts, nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -253,7 +257,7 @@ func testMixedCreateUpdateOperations(t *testing.T, client *testutil.APIClient, w
 		},
 	})
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Verify the contact was actually created
 	if resp.StatusCode != http.StatusOK {
@@ -294,7 +298,7 @@ func testMixedCreateUpdateOperations(t *testing.T, client *testutil.APIClient, w
 	// Import mixed batch - TESTS xmax DETECTION ACCURACY
 	resp, err = client.BatchImportContacts(contacts, nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -353,7 +357,7 @@ func testBulkImportWithListSubscription(t *testing.T, client *testutil.APIClient
 	// Import contacts with list subscription - TESTS BULK LIST SUBSCRIPTION
 	resp, err := client.BatchImportContacts(contacts, []string{list.ID})
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -401,7 +405,7 @@ func testBulkImportWithValidationErrors(t *testing.T, client *testutil.APIClient
 	// Import contacts - TESTS PARTIAL SUCCESS BEHAVIOR
 	resp, err := client.BatchImportContacts(contacts, nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -452,7 +456,7 @@ func testLargeBatchPerformance(t *testing.T, client *testutil.APIClient, workspa
 	startTime := time.Now()
 	resp, err := client.BatchImportContacts(contacts, nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	duration := time.Since(startTime)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -508,7 +512,7 @@ func testTransactionIntegrity(t *testing.T, client *testutil.APIClient, workspac
 	// Import contacts
 	resp, err := client.BatchImportContacts(contacts, nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -528,7 +532,7 @@ func testTransactionIntegrity(t *testing.T, client *testutil.APIClient, workspac
 	contacts[0]["first_name"] = "Updated"
 	resp, err = client.BatchImportContacts(contacts[:1], nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Verify update was applied
 	var firstName string
@@ -560,8 +564,6 @@ func testCustomFieldsPreservation(t *testing.T, client *testutil.APIClient, work
 			"postcode":          "12345",
 			"state":             "NY",
 			"job_title":         "Engineer",
-			"lifetime_value":    1000.50,
-			"orders_count":      5.0,
 			"custom_string_1":   "value1",
 			"custom_string_2":   "value2",
 			"custom_string_3":   "value3",
@@ -587,7 +589,7 @@ func testCustomFieldsPreservation(t *testing.T, client *testutil.APIClient, work
 
 	resp, err := client.BatchImportContacts(contacts, nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -645,4 +647,99 @@ func testCustomFieldsPreservation(t *testing.T, client *testutil.APIClient, work
 	assert.Equal(t, "Fields", dbLastName)
 	assert.Equal(t, "value1", dbCustomString1)
 	assert.Equal(t, "value2", dbCustomString2)
+}
+
+// testDuplicateEmailsInBatch tests that duplicate emails in a single batch are handled correctly
+// This specifically tests the fix for the PostgreSQL error:
+// "ON CONFLICT DO UPDATE command cannot affect row a second time"
+// The last occurrence of a duplicate email should be kept
+func testDuplicateEmailsInBatch(t *testing.T, client *testutil.APIClient, workspaceDB *sql.DB, workspaceID string) {
+	// Create a unique email that will appear multiple times
+	duplicateEmail := fmt.Sprintf("duplicate_%d@example.com", time.Now().UnixNano())
+	uniqueEmail := fmt.Sprintf("unique_%d@example.com", time.Now().UnixNano())
+
+	// Batch with the same email appearing 3 times with different data
+	// The last occurrence (with "Third") should be kept
+	contacts := []map[string]interface{}{
+		{
+			"email":      duplicateEmail,
+			"first_name": "First",
+			"last_name":  "Occurrence",
+		},
+		{
+			"email":      uniqueEmail,
+			"first_name": "Unique",
+			"last_name":  "Contact",
+		},
+		{
+			"email":      duplicateEmail,
+			"first_name": "Second",
+			"last_name":  "Occurrence",
+		},
+		{
+			"email":      duplicateEmail,
+			"first_name": "Third",   // This should be kept
+			"last_name":  "Winner",  // This should be kept
+		},
+	}
+
+	// Import contacts - this would fail before the fix with:
+	// "pq: ON CONFLICT DO UPDATE command cannot affect row a second time"
+	resp, err := client.BatchImportContacts(contacts, nil)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Parse response
+	var importResp struct {
+		Operations []struct {
+			Email  string `json:"email"`
+			Action string `json:"action"`
+			Error  string `json:"error,omitempty"`
+		} `json:"operations"`
+		Error string `json:"error,omitempty"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&importResp)
+	require.NoError(t, err)
+
+	// Should have no error
+	assert.Empty(t, importResp.Error)
+
+	// Should have 2 operations (deduplicated from 4 contacts)
+	assert.Len(t, importResp.Operations, 2, "Should have 2 operations after deduplication")
+
+	// All operations should be successful
+	for _, op := range importResp.Operations {
+		assert.Empty(t, op.Error, "Operation should not have error")
+		assert.Equal(t, "create", op.Action, "Should be create for new contacts")
+	}
+
+	// Verify only one contact exists in DB for the duplicate email
+	var count int
+	err = workspaceDB.QueryRow(
+		"SELECT COUNT(*) FROM contacts WHERE email = $1",
+		duplicateEmail,
+	).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "Should have exactly one contact for duplicate email")
+
+	// Verify the data matches the LAST occurrence (first_name="Third", last_name="Winner")
+	var firstName, lastName string
+	err = workspaceDB.QueryRow(
+		"SELECT first_name, last_name FROM contacts WHERE email = $1",
+		duplicateEmail,
+	).Scan(&firstName, &lastName)
+	require.NoError(t, err)
+	assert.Equal(t, "Third", firstName, "Should have last occurrence's first_name")
+	assert.Equal(t, "Winner", lastName, "Should have last occurrence's last_name")
+
+	// Verify the unique contact also exists
+	err = workspaceDB.QueryRow(
+		"SELECT first_name, last_name FROM contacts WHERE email = $1",
+		uniqueEmail,
+	).Scan(&firstName, &lastName)
+	require.NoError(t, err)
+	assert.Equal(t, "Unique", firstName)
+	assert.Equal(t, "Contact", lastName)
 }

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/osteele/liquid"
 )
 
 // ConvertJSONToMJML converts an EmailBlock JSON tree to MJML string
@@ -22,16 +20,6 @@ func ConvertJSONToMJMLWithData(tree EmailBlock, templateData string) (string, er
 		return "", fmt.Errorf("template data parsing failed: %v", parseErr)
 	}
 	return convertBlockToMJMLWithErrorAndParsedData(tree, 0, templateData, parsedData)
-}
-
-// convertBlockToMJMLWithError recursively converts a single EmailBlock to MJML string with error handling
-func convertBlockToMJMLWithError(block EmailBlock, indentLevel int, templateData string) (string, error) {
-	// Parse template data once at the beginning
-	parsedData, parseErr := parseTemplateDataString(templateData)
-	if parseErr != nil {
-		return "", fmt.Errorf("template data parsing failed: %v", parseErr)
-	}
-	return convertBlockToMJMLWithErrorAndParsedData(block, indentLevel, templateData, parsedData)
 }
 
 // convertBlockToMJMLWithErrorAndParsedData recursively converts a single EmailBlock to MJML string with error handling and pre-parsed data
@@ -196,7 +184,7 @@ func parseTemplateDataString(templateData string) (map[string]interface{}, error
 	return jsonData, nil
 }
 
-// processLiquidContent processes Liquid templating in content
+// processLiquidContent processes Liquid templating in content with security protections
 func processLiquidContent(content string, templateData map[string]interface{}, blockID string) (string, error) {
 	// Check if content contains Liquid templating markup
 	if !strings.Contains(content, "{{") && !strings.Contains(content, "{%") {
@@ -206,8 +194,8 @@ func processLiquidContent(content string, templateData map[string]interface{}, b
 	// Clean non-breaking spaces and other invisible characters from template variables
 	content = cleanLiquidTemplate(content)
 
-	// Create Liquid engine
-	engine := liquid.NewEngine()
+	// Create secure Liquid engine with timeout and size protections
+	engine := NewSecureLiquidEngine()
 
 	// Use provided template data or initialize empty map if nil
 	var jsonData map[string]interface{}
@@ -217,8 +205,8 @@ func processLiquidContent(content string, templateData map[string]interface{}, b
 		jsonData = make(map[string]interface{})
 	}
 
-	// Render the content with Liquid
-	renderedContent, err := engine.ParseAndRenderString(content, jsonData)
+	// Render the content with Liquid (with security protections)
+	renderedContent, err := engine.RenderWithTimeout(content, jsonData)
 	if err != nil {
 		return content, fmt.Errorf("liquid rendering error in block (ID: %s): %w", blockID, err)
 	}
@@ -346,12 +334,15 @@ func formatSingleAttributeWithLiquid(key string, value interface{}, templateData
 
 // processAttributeValue processes attribute values through liquid templating if applicable
 func processAttributeValue(value, attributeKey string, templateData map[string]interface{}, blockID string) string {
-	// Only process liquid templates for URL-related attributes that might contain dynamic content
+	// Process liquid templates for URL-related attributes and alt text
 	isURLAttribute := attributeKey == "href" || attributeKey == "src" || attributeKey == "action" ||
 		attributeKey == "background-url" || strings.HasSuffix(attributeKey, "-url")
 
-	// If templateData is nil or this isn't a URL attribute, return as-is
-	if templateData == nil || !isURLAttribute {
+	// Alt attribute for images - users commonly personalize this
+	isAltAttribute := attributeKey == "alt"
+
+	// If templateData is nil or this isn't a processable attribute, return as-is
+	if templateData == nil || (!isURLAttribute && !isAltAttribute) {
 		return value
 	}
 

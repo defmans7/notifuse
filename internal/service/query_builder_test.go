@@ -16,7 +16,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -40,11 +40,11 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
-							FieldName:    "orders_count",
+							FieldName:    "custom_number_1",
 							FieldType:    "number",
 							Operator:     "gte",
 							NumberValues: []float64{5.0},
@@ -56,7 +56,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 
 		sql, args, err := qb.BuildSQL(tree)
 		require.NoError(t, err)
-		assert.Equal(t, "SELECT email FROM contacts WHERE (orders_count >= $1)", sql)
+		assert.Equal(t, "SELECT email FROM contacts WHERE (custom_number_1 >= $1)", sql)
 		assert.Equal(t, []interface{}{5.0}, args)
 	})
 
@@ -64,7 +64,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -87,7 +87,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -111,7 +111,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -138,7 +138,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -164,7 +164,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -188,7 +188,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -212,7 +212,7 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -240,7 +240,7 @@ func TestQueryBuilder_BuildSQL_MultipleFilters(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -250,7 +250,7 @@ func TestQueryBuilder_BuildSQL_MultipleFilters(t *testing.T) {
 							StringValues: []string{"US"},
 						},
 						{
-							FieldName:    "orders_count",
+							FieldName:    "custom_number_1",
 							FieldType:    "number",
 							Operator:     "gte",
 							NumberValues: []float64{5.0},
@@ -263,7 +263,7 @@ func TestQueryBuilder_BuildSQL_MultipleFilters(t *testing.T) {
 		sql, args, err := qb.BuildSQL(tree)
 		require.NoError(t, err)
 		assert.Contains(t, sql, "country = $1")
-		assert.Contains(t, sql, "orders_count >= $2")
+		assert.Contains(t, sql, "custom_number_1 >= $2")
 		assert.Contains(t, sql, " AND ")
 		assert.Equal(t, []interface{}{"US", 5.0}, args)
 	})
@@ -272,7 +272,7 @@ func TestQueryBuilder_BuildSQL_MultipleFilters(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -282,7 +282,7 @@ func TestQueryBuilder_BuildSQL_MultipleFilters(t *testing.T) {
 							StringValues: []string{"United", "States"},
 						},
 						{
-							FieldName:    "orders_count",
+							FieldName:    "custom_number_1",
 							FieldType:    "number",
 							Operator:     "gte",
 							NumberValues: []float64{5.0},
@@ -296,7 +296,7 @@ func TestQueryBuilder_BuildSQL_MultipleFilters(t *testing.T) {
 		require.NoError(t, err)
 		// Contains with multiple values should be wrapped in parentheses
 		assert.Contains(t, sql, "(country ILIKE $1 OR country ILIKE $2)")
-		assert.Contains(t, sql, "orders_count >= $3")
+		assert.Contains(t, sql, "custom_number_1 >= $3")
 		assert.Contains(t, sql, " AND ")
 		assert.Equal(t, []interface{}{"%United%", "%States%", 5.0}, args)
 	})
@@ -316,7 +316,7 @@ func TestQueryBuilder_BuildSQL_MultipleValuesContains(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -332,7 +332,7 @@ func TestQueryBuilder_BuildSQL_MultipleValuesContains(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -377,7 +377,7 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -393,11 +393,11 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
-										FieldName:    "orders_count",
+										FieldName:    "custom_number_1",
 										FieldType:    "number",
 										Operator:     "gte",
 										NumberValues: []float64{5.0},
@@ -413,7 +413,7 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 		sql, args, err := qb.BuildSQL(tree)
 		require.NoError(t, err)
 		assert.Contains(t, sql, "country = $1")
-		assert.Contains(t, sql, "orders_count >= $2")
+		assert.Contains(t, sql, "custom_number_1 >= $2")
 		assert.Contains(t, sql, " AND ")
 		assert.Equal(t, []interface{}{"US", 5.0}, args)
 	})
@@ -427,7 +427,7 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -443,7 +443,7 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -483,7 +483,7 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 								{
 									Kind: "leaf",
 									Leaf: &domain.TreeNodeLeaf{
-										Table: "contacts",
+										Source: "contacts",
 										Contact: &domain.ContactCondition{
 											Filters: []*domain.DimensionFilter{
 												{
@@ -499,11 +499,11 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 								{
 									Kind: "leaf",
 									Leaf: &domain.TreeNodeLeaf{
-										Table: "contacts",
+										Source: "contacts",
 										Contact: &domain.ContactCondition{
 											Filters: []*domain.DimensionFilter{
 												{
-													FieldName:    "orders_count",
+													FieldName:    "custom_number_1",
 													FieldType:    "number",
 													Operator:     "gte",
 													NumberValues: []float64{5.0},
@@ -523,7 +523,7 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 								{
 									Kind: "leaf",
 									Leaf: &domain.TreeNodeLeaf{
-										Table: "contacts",
+										Source: "contacts",
 										Contact: &domain.ContactCondition{
 											Filters: []*domain.DimensionFilter{
 												{
@@ -539,11 +539,11 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 								{
 									Kind: "leaf",
 									Leaf: &domain.TreeNodeLeaf{
-										Table: "contacts",
+										Source: "contacts",
 										Contact: &domain.ContactCondition{
 											Filters: []*domain.DimensionFilter{
 												{
-													FieldName:    "orders_count",
+													FieldName:    "custom_number_1",
 													FieldType:    "number",
 													Operator:     "gte",
 													NumberValues: []float64{10.0},
@@ -569,9 +569,9 @@ func TestQueryBuilder_BuildSQL_BranchConditions(t *testing.T) {
 
 		// All 4 conditions should be present
 		assert.Contains(t, sql, "country = $1")
-		assert.Contains(t, sql, "orders_count >= $2")
+		assert.Contains(t, sql, "custom_number_1 >= $2")
 		assert.Contains(t, sql, "country = $3")
-		assert.Contains(t, sql, "orders_count >= $4")
+		assert.Contains(t, sql, "custom_number_1 >= $4")
 
 		assert.Equal(t, []interface{}{"US", 5.0, "CA", 10.0}, args)
 	})
@@ -613,7 +613,7 @@ func TestQueryBuilder_BuildSQL_AllOperators(t *testing.T) {
 			tree := &domain.TreeNode{
 				Kind: "leaf",
 				Leaf: &domain.TreeNodeLeaf{
-					Table: "contacts",
+					Source: "contacts",
 					Contact: &domain.ContactCondition{
 						Filters: []*domain.DimensionFilter{filter},
 					},
@@ -651,7 +651,7 @@ func TestQueryBuilder_BuildSQL_Validation(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -674,7 +674,7 @@ func TestQueryBuilder_BuildSQL_Validation(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -693,11 +693,11 @@ func TestQueryBuilder_BuildSQL_Validation(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid operator")
 	})
 
-	t.Run("unsupported table", func(t *testing.T) {
+	t.Run("unsupported source", func(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "unsupported_table",
+				Source: "unsupported_source",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -713,14 +713,14 @@ func TestQueryBuilder_BuildSQL_Validation(t *testing.T) {
 
 		_, _, err := qb.BuildSQL(tree)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid table")
+		assert.Contains(t, err.Error(), "invalid source")
 	})
 
 	t.Run("contains with no values", func(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -749,7 +749,7 @@ func TestQueryBuilder_BuildSQL_ParameterizedQueries(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -778,7 +778,7 @@ func TestQueryBuilder_BuildSQL_ParameterizedQueries(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contacts",
+				Source: "contacts",
 				Contact: &domain.ContactCondition{
 					Filters: []*domain.DimensionFilter{
 						{
@@ -794,7 +794,7 @@ func TestQueryBuilder_BuildSQL_ParameterizedQueries(t *testing.T) {
 							StringValues: []string{"CA"},
 						},
 						{
-							FieldName:    "orders_count",
+							FieldName:    "custom_number_1",
 							FieldType:    "number",
 							Operator:     "gte",
 							NumberValues: []float64{5.0},
@@ -821,7 +821,7 @@ func TestQueryBuilder_ContactLists(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_lists",
+				Source: "contact_lists",
 				ContactList: &domain.ContactListCondition{
 					Operator: "in",
 					ListID:   "list123",
@@ -847,7 +847,7 @@ func TestQueryBuilder_ContactLists(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_lists",
+				Source: "contact_lists",
 				ContactList: &domain.ContactListCondition{
 					Operator: "in",
 					ListID:   "list456",
@@ -869,7 +869,7 @@ func TestQueryBuilder_ContactLists(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_lists",
+				Source: "contact_lists",
 				ContactList: &domain.ContactListCondition{
 					Operator: "not_in",
 					ListID:   "list789",
@@ -888,7 +888,7 @@ func TestQueryBuilder_ContactLists(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_lists",
+				Source: "contact_lists",
 				ContactList: &domain.ContactListCondition{
 					Operator: "in",
 					ListID:   "",
@@ -905,7 +905,7 @@ func TestQueryBuilder_ContactLists(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_lists",
+				Source: "contact_lists",
 				ContactList: &domain.ContactListCondition{
 					Operator: "invalid",
 					ListID:   "list123",
@@ -927,7 +927,7 @@ func TestQueryBuilder_ContactLists(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -943,7 +943,7 @@ func TestQueryBuilder_ContactLists(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contact_lists",
+							Source: "contact_lists",
 							ContactList: &domain.ContactListCondition{
 								Operator: "in",
 								ListID:   "list123",
@@ -971,7 +971,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "email_opened",
 					CountOperator: "at_least",
@@ -995,7 +995,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "purchase",
 					CountOperator: "exactly",
@@ -1015,7 +1015,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "email_bounced",
 					CountOperator: "at_most",
@@ -1036,7 +1036,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:              "email_sent",
 					CountOperator:     "at_least",
@@ -1063,7 +1063,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:              "unsubscribe",
 					CountOperator:     "at_least",
@@ -1086,7 +1086,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:              "purchase",
 					CountOperator:     "at_least",
@@ -1109,7 +1109,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:              "email_clicked",
 					CountOperator:     "at_least",
@@ -1131,7 +1131,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "purchase",
 					CountOperator: "at_least",
@@ -1159,7 +1159,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "purchase",
 					CountOperator: "at_least",
@@ -1188,7 +1188,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "",
 					CountOperator: "at_least",
@@ -1206,7 +1206,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "email_sent",
 					CountOperator: "",
@@ -1224,7 +1224,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		tree := &domain.TreeNode{
 			Kind: "leaf",
 			Leaf: &domain.TreeNodeLeaf{
-				Table: "contact_timeline",
+				Source: "contact_timeline",
 				ContactTimeline: &domain.ContactTimelineCondition{
 					Kind:          "email_sent",
 					CountOperator: "invalid",
@@ -1247,7 +1247,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -1263,7 +1263,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contact_lists",
+							Source: "contact_lists",
 							ContactList: &domain.ContactListCondition{
 								Operator: "in",
 								ListID:   "list123",
@@ -1273,7 +1273,7 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contact_timeline",
+							Source: "contact_timeline",
 							ContactTimeline: &domain.ContactTimelineCondition{
 								Kind:          "purchase",
 								CountOperator: "at_least",
@@ -1295,5 +1295,631 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		assert.Contains(t, sql, "SELECT COUNT(*)")
 		assert.Contains(t, sql, "ct.kind = $3")
 		assert.Equal(t, []interface{}{"US", "list123", "purchase", 1}, args)
+	})
+}
+
+func TestQueryBuilder_BuildSQL_JSONFiltering(t *testing.T) {
+	qb := NewQueryBuilder()
+
+	t.Run("simple JSON path - string equals", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "json",
+							Operator:     "equals",
+							JSONPath:     []string{"name"},
+							StringValues: []string{"John"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_1['name']::text = $1")
+		assert.Equal(t, []interface{}{"John"}, args)
+	})
+
+	t.Run("nested JSON path - multiple levels", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "json",
+							Operator:     "equals",
+							JSONPath:     []string{"user", "profile", "country"},
+							StringValues: []string{"US"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_1['user']['profile']['country']::text = $1")
+		assert.Equal(t, []interface{}{"US"}, args)
+	})
+
+	t.Run("array element access by index", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_2",
+							FieldType:    "json",
+							Operator:     "equals",
+							JSONPath:     []string{"items", "0", "name"},
+							StringValues: []string{"Product A"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_2['items'][0]['name']::text = $1")
+		assert.Equal(t, []interface{}{"Product A"}, args)
+	})
+
+	t.Run("JSON number field - greater than", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "number",
+							Operator:     "gt",
+							JSONPath:     []string{"user", "age"},
+							NumberValues: []float64{25},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "(custom_json_1['user']['age']::text)::numeric > $1")
+		assert.Equal(t, []interface{}{25.0}, args)
+	})
+
+	t.Run("JSON time field - before date", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_3",
+							FieldType:    "time",
+							Operator:     "lt",
+							JSONPath:     []string{"last_login"},
+							StringValues: []string{"2024-01-01T00:00:00Z"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "(custom_json_3['last_login']::text)::timestamptz < $1")
+		assert.Len(t, args, 1)
+	})
+
+	t.Run("JSON contains operator", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "json",
+							Operator:     "contains",
+							JSONPath:     []string{"description"},
+							StringValues: []string{"premium"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_1['description']::text ILIKE $1")
+		assert.Equal(t, []interface{}{"%premium%"}, args)
+	})
+
+	t.Run("JSON field existence check - is_set", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName: "custom_json_1",
+							FieldType: "json",
+							Operator:  "is_set",
+							JSONPath:  []string{"user"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_1 ? $1")
+		assert.Equal(t, []interface{}{"user"}, args)
+	})
+
+	t.Run("JSON field existence check - is_not_set", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName: "custom_json_2",
+							FieldType: "json",
+							Operator:  "is_not_set",
+							JSONPath:  []string{"premium"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "NOT (custom_json_2 ? $1)")
+		assert.Equal(t, []interface{}{"premium"}, args)
+	})
+
+	t.Run("JSON key with special characters", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "json",
+							Operator:     "equals",
+							JSONPath:     []string{"user's name"},
+							StringValues: []string{"John"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		// Should escape single quotes
+		assert.Contains(t, sql, "custom_json_1['user''s name']::text = $1")
+		assert.Equal(t, []interface{}{"John"}, args)
+	})
+
+	t.Run("JSON in_array operator", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "json",
+							Operator:     "in_array",
+							JSONPath:     []string{"tags"},
+							StringValues: []string{"premium"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_1['tags'] ? $1")
+		assert.Equal(t, []interface{}{"premium"}, args)
+	})
+
+	t.Run("multiple JSON filters combined with AND", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "json",
+							Operator:     "equals",
+							JSONPath:     []string{"type"},
+							StringValues: []string{"premium"},
+						},
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "number",
+							Operator:     "gte",
+							JSONPath:     []string{"score"},
+							NumberValues: []float64{100},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_1['type']::text = $1")
+		assert.Contains(t, sql, "(custom_json_1['score']::text)::numeric >= $2")
+		assert.Contains(t, sql, " AND ")
+		assert.Equal(t, []interface{}{"premium", 100.0}, args)
+	})
+
+	t.Run("JSON filter combined with regular field", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "country",
+							FieldType:    "string",
+							Operator:     "equals",
+							StringValues: []string{"US"},
+						},
+						{
+							FieldName:    "custom_json_1",
+							FieldType:    "json",
+							Operator:     "equals",
+							JSONPath:     []string{"subscription", "tier"},
+							StringValues: []string{"gold"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "country = $1")
+		assert.Contains(t, sql, "custom_json_1['subscription']['tier']::text = $2")
+		assert.Contains(t, sql, " AND ")
+		assert.Equal(t, []interface{}{"US", "gold"}, args)
+	})
+
+	t.Run("mixed path with objects and arrays", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "custom_json_5",
+							FieldType:    "json",
+							Operator:     "equals",
+							JSONPath:     []string{"users", "0", "profile", "tags", "1"},
+							StringValues: []string{"verified"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "custom_json_5['users'][0]['profile']['tags'][1]::text = $1")
+		assert.Equal(t, []interface{}{"verified"}, args)
+	})
+}
+
+// ============================================================================
+// BuildTriggerCondition Tests
+// ============================================================================
+
+func TestQueryBuilder_BuildTriggerCondition(t *testing.T) {
+	qb := NewQueryBuilder()
+
+	t.Run("nil tree returns empty", func(t *testing.T) {
+		sql, args, err := qb.BuildTriggerCondition(nil, "NEW.email")
+		require.NoError(t, err)
+		assert.Equal(t, "", sql)
+		assert.Nil(t, args)
+	})
+
+	t.Run("simple contact condition", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "country",
+							FieldType:    "string",
+							Operator:     "equals",
+							StringValues: []string{"US"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.NoError(t, err)
+
+		// Should wrap in EXISTS with NEW.email reference
+		assert.Contains(t, sql, "EXISTS")
+		assert.Contains(t, sql, "SELECT 1 FROM contacts")
+		assert.Contains(t, sql, "email = NEW.email")
+		assert.Contains(t, sql, "country = $1")
+		assert.Equal(t, []interface{}{"US"}, args)
+	})
+
+	t.Run("contact list membership - in", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contact_lists",
+				ContactList: &domain.ContactListCondition{
+					Operator: "in",
+					ListID:   "vip_list",
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.NoError(t, err)
+
+		// Should use NEW.email instead of contacts.email
+		assert.Contains(t, sql, "EXISTS")
+		assert.Contains(t, sql, "FROM contact_lists cl")
+		assert.Contains(t, sql, "cl.email = NEW.email")
+		assert.Contains(t, sql, "cl.list_id = $1")
+		assert.Equal(t, []interface{}{"vip_list"}, args)
+	})
+
+	t.Run("contact list membership - not_in", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contact_lists",
+				ContactList: &domain.ContactListCondition{
+					Operator: "not_in",
+					ListID:   "blocklist",
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.NoError(t, err)
+
+		assert.Contains(t, sql, "NOT EXISTS")
+		assert.Contains(t, sql, "cl.email = NEW.email")
+		assert.Equal(t, []interface{}{"blocklist"}, args)
+	})
+
+	t.Run("timeline count condition", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contact_timeline",
+				ContactTimeline: &domain.ContactTimelineCondition{
+					Kind:          "update_message_history",
+					CountOperator: "at_least",
+					CountValue:    5,
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.NoError(t, err)
+
+		// Should use NEW.email instead of contacts.email in subquery
+		assert.Contains(t, sql, "SELECT COUNT(*)")
+		assert.Contains(t, sql, "ct.email = NEW.email")
+		assert.Contains(t, sql, "ct.kind = $1")
+		assert.Contains(t, sql, ">= $2")
+		assert.Equal(t, []interface{}{"update_message_history", 5}, args)
+	})
+
+	t.Run("AND branch with multiple conditions", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "branch",
+			Branch: &domain.TreeNodeBranch{
+				Operator: "and",
+				Leaves: []*domain.TreeNode{
+					{
+						Kind: "leaf",
+						Leaf: &domain.TreeNodeLeaf{
+							Source: "contacts",
+							Contact: &domain.ContactCondition{
+								Filters: []*domain.DimensionFilter{
+									{
+										FieldName:    "country",
+										FieldType:    "string",
+										Operator:     "equals",
+										StringValues: []string{"US"},
+									},
+								},
+							},
+						},
+					},
+					{
+						Kind: "leaf",
+						Leaf: &domain.TreeNodeLeaf{
+							Source: "contact_lists",
+							ContactList: &domain.ContactListCondition{
+								Operator: "in",
+								ListID:   "premium",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.NoError(t, err)
+
+		// Should have both conditions with NEW.email
+		assert.Contains(t, sql, "country = $1")
+		assert.Contains(t, sql, "cl.email = NEW.email")
+		assert.Contains(t, sql, "cl.list_id = $2")
+		assert.Contains(t, sql, " AND ")
+		assert.Equal(t, []interface{}{"US", "premium"}, args)
+	})
+
+	t.Run("OR branch with multiple conditions", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "branch",
+			Branch: &domain.TreeNodeBranch{
+				Operator: "or",
+				Leaves: []*domain.TreeNode{
+					{
+						Kind: "leaf",
+						Leaf: &domain.TreeNodeLeaf{
+							Source: "contacts",
+							Contact: &domain.ContactCondition{
+								Filters: []*domain.DimensionFilter{
+									{
+										FieldName:    "country",
+										FieldType:    "string",
+										Operator:     "equals",
+										StringValues: []string{"US"},
+									},
+								},
+							},
+						},
+					},
+					{
+						Kind: "leaf",
+						Leaf: &domain.TreeNodeLeaf{
+							Source: "contacts",
+							Contact: &domain.ContactCondition{
+								Filters: []*domain.DimensionFilter{
+									{
+										FieldName:    "country",
+										FieldType:    "string",
+										Operator:     "equals",
+										StringValues: []string{"CA"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.NoError(t, err)
+
+		assert.Contains(t, sql, "country = $1")
+		assert.Contains(t, sql, "country = $2")
+		assert.Contains(t, sql, " OR ")
+		assert.Equal(t, []interface{}{"US", "CA"}, args)
+	})
+
+	t.Run("different email references", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "country",
+							FieldType:    "string",
+							Operator:     "equals",
+							StringValues: []string{"US"},
+						},
+					},
+				},
+			},
+		}
+
+		// Test with different email reference
+		sql, _, err := qb.BuildTriggerCondition(tree, "OLD.email")
+		require.NoError(t, err)
+		assert.Contains(t, sql, "email = OLD.email")
+
+		// Test with table.column reference
+		sql2, _, err := qb.BuildTriggerCondition(tree, "ct.email")
+		require.NoError(t, err)
+		assert.Contains(t, sql2, "email = ct.email")
+	})
+
+	t.Run("invalid tree structure returns error", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			// Missing Leaf field
+		}
+
+		_, _, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.Error(t, err)
+	})
+
+	t.Run("multiple filters in contact condition", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "country",
+							FieldType:    "string",
+							Operator:     "equals",
+							StringValues: []string{"US"},
+						},
+						{
+							FieldName:    "custom_number_1",
+							FieldType:    "number",
+							Operator:     "gte",
+							NumberValues: []float64{100},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildTriggerCondition(tree, "NEW.email")
+		require.NoError(t, err)
+
+		assert.Contains(t, sql, "country = $1")
+		assert.Contains(t, sql, "custom_number_1 >= $2")
+		assert.Contains(t, sql, " AND ")
+		assert.Equal(t, []interface{}{"US", 100.0}, args)
 	})
 }

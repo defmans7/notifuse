@@ -22,7 +22,7 @@ func TestSetupWizardFlow(t *testing.T) {
 	// Create a custom test suite that doesn't seed the installation data
 	// This allows us to test the setup wizard from scratch
 	suite := createUninstalledTestSuite(t)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -30,7 +30,7 @@ func TestSetupWizardFlow(t *testing.T) {
 		// Check that the system is not installed
 		resp, err := client.Get("/api/setup.status")
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -42,7 +42,7 @@ func TestSetupWizardFlow(t *testing.T) {
 	})
 
 	t.Run("Initialize System", func(t *testing.T) {
-		// Initialize the system
+		// Initialize the system with TLS disabled (Mailpit doesn't use TLS)
 		initReq := map[string]interface{}{
 			"root_email":      "admin@example.com",
 			"api_endpoint":    suite.ServerManager.GetURL(),
@@ -50,11 +50,12 @@ func TestSetupWizardFlow(t *testing.T) {
 			"smtp_port":       1025,
 			"smtp_from_email": "test@example.com",
 			"smtp_from_name":  "Test Notifuse",
+			"smtp_use_tls":    false, // Mailpit doesn't use TLS
 		}
 
 		resp, err := client.Post("/api/setup.initialize", initReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -70,7 +71,7 @@ func TestSetupWizardFlow(t *testing.T) {
 		// Check that the system is now installed
 		resp, err := client.Get("/api/setup.status")
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -90,11 +91,12 @@ func TestSetupWizardFlow(t *testing.T) {
 			"smtp_port":       1025,
 			"smtp_from_email": "test@example.com",
 			"smtp_from_name":  "Test Notifuse",
+			"smtp_use_tls":    false,
 		}
 
 		resp, err := client.Post("/api/setup.initialize", initReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -114,7 +116,7 @@ func TestSetupWizardWithJWT(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := createUninstalledTestSuite(t)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -127,11 +129,12 @@ func TestSetupWizardWithJWT(t *testing.T) {
 			"smtp_port":       1025,
 			"smtp_from_email": "test@example.com",
 			"smtp_from_name":  "Test Notifuse",
+			"smtp_use_tls":    false, // Mailpit doesn't use TLS
 		}
 
 		resp, err := client.Post("/api/setup.initialize", initReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -151,7 +154,7 @@ func TestSetupWizardValidation(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := createUninstalledTestSuite(t)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -193,7 +196,7 @@ func TestSetupWizardValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resp, err := client.Post("/api/setup.initialize", tc.request)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			if tc.expectError {
 				assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -211,44 +214,46 @@ func TestSetupWizardSMTPTest(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := createUninstalledTestSuite(t)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
 	t.Run("Test SMTP Connection - Success", func(t *testing.T) {
-		// Test with valid MailHog settings (running in Docker Compose)
+		// Test with valid Mailpit settings (running in Docker Compose)
 		testReq := map[string]interface{}{
-			"smtp_host": "localhost",
-			"smtp_port": 1025,
+			"smtp_host":    "localhost",
+			"smtp_port":    1025,
+			"smtp_use_tls": false, // Mailpit doesn't use TLS
 		}
 
 		resp, err := client.Post("/api/setup.testSmtp", testReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
-		// MailHog may not be available in all test environments, so we accept both success and failure
+		// Mailpit may not be available in all test environments, so we accept both success and failure
 		// The important thing is that the endpoint is working and returning proper responses
 		if resp.StatusCode == http.StatusOK {
 			var testResp map[string]interface{}
 			err = json.NewDecoder(resp.Body).Decode(&testResp)
 			require.NoError(t, err)
-			assert.True(t, testResp["success"].(bool), "SMTP test should succeed when MailHog is available")
+			assert.True(t, testResp["success"].(bool), "SMTP test should succeed when Mailpit is available")
 		} else {
-			// MailHog might not be available, which is okay
+			// Mailpit might not be available, which is okay
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Should return bad request when SMTP is unavailable")
 		}
 	})
 
 	t.Run("Test SMTP Connection - Invalid Host", func(t *testing.T) {
-		// Test with invalid SMTP settings
+		// Test with invalid SMTP settings (TLS enabled by default)
 		testReq := map[string]interface{}{
-			"smtp_host": "invalid-host-that-does-not-exist.com",
-			"smtp_port": 587,
+			"smtp_host":    "invalid-host-that-does-not-exist.com",
+			"smtp_port":    587,
+			"smtp_use_tls": true,
 		}
 
 		resp, err := client.Post("/api/setup.testSmtp", testReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
@@ -268,21 +273,23 @@ func TestSetupWizardSMTPTest(t *testing.T) {
 			"smtp_port":       1025,
 			"smtp_from_email": "test@example.com",
 			"smtp_from_name":  "Test Notifuse",
+			"smtp_use_tls":    false, // Mailpit doesn't use TLS
 		}
 
 		resp, err := client.Post("/api/setup.initialize", initReq)
 		require.NoError(t, err)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		// Now try to test SMTP - should be forbidden
 		testReq := map[string]interface{}{
-			"smtp_host": "localhost",
-			"smtp_port": 1025,
+			"smtp_host":    "localhost",
+			"smtp_port":    1025,
+			"smtp_use_tls": false,
 		}
 
 		resp, err = client.Post("/api/setup.testSmtp", testReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	})
@@ -307,7 +314,7 @@ func TestSetupWizardWithServerRestart(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := createUninstalledTestSuite(t)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -331,11 +338,12 @@ func TestSetupWizardWithServerRestart(t *testing.T) {
 			"smtp_password":   "testpass",
 			"smtp_from_email": "noreply@example.com", // Important: non-empty from email
 			"smtp_from_name":  "Test System",
+			"smtp_use_tls":    false, // Mailpit doesn't use TLS
 		}
 
 		resp, err := client.Post("/api/setup.initialize", initReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "Setup should succeed")
 
@@ -373,7 +381,7 @@ func TestSetupWizardWithServerRestart(t *testing.T) {
 
 		signinResp, err := freshSuite.APIClient.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		defer signinResp.Body.Close()
+		defer func() { _ = signinResp.Body.Close() }()
 
 		var signinResult map[string]interface{}
 		err = json.NewDecoder(signinResp.Body).Decode(&signinResult)

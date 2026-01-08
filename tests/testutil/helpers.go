@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/require"
 )
@@ -109,6 +111,107 @@ func (s *IntegrationTestSuite) ResetData() {
 
 	err = s.DBManager.SeedTestData()
 	require.NoError(s.T, err, "Failed to seed test data")
+}
+
+// ============================================================================
+// Token Cache - Reduces redundant authentication calls in integration tests
+// ============================================================================
+
+// TokenCache provides a thread-safe cache for authentication tokens within a test suite.
+// This significantly reduces test execution time by avoiding repeated sign-in flows
+// for the same user across multiple subtests.
+type TokenCache struct {
+	mu     sync.RWMutex
+	tokens map[string]string // email -> token
+	client *APIClient
+}
+
+// NewTokenCache creates a token cache bound to an API client
+func NewTokenCache(client *APIClient) *TokenCache {
+	return &TokenCache{
+		tokens: make(map[string]string),
+		client: client,
+	}
+}
+
+// GetOrCreate returns a cached token or performs the authentication flow.
+// This method is thread-safe and handles concurrent access properly.
+func (tc *TokenCache) GetOrCreate(t *testing.T, email string) string {
+	// Try read lock first for fast path
+	tc.mu.RLock()
+	if token, exists := tc.tokens[email]; exists {
+		tc.mu.RUnlock()
+		return token
+	}
+	tc.mu.RUnlock()
+
+	// Acquire write lock for authentication
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine may have added it)
+	if token, exists := tc.tokens[email]; exists {
+		return token
+	}
+
+	// Perform the authentication flow
+	token := tc.performSignIn(t, email)
+	tc.tokens[email] = token
+	return token
+}
+
+// performSignIn executes the complete sign-in flow for an email address.
+// This performs the magic code sign-in and verification.
+func (tc *TokenCache) performSignIn(t *testing.T, email string) string {
+	// Save and restore current token
+	currentToken := tc.client.GetToken()
+	defer tc.client.SetToken(currentToken)
+
+	tc.client.SetToken("")
+
+	// Step 1: Sign in (generates magic code)
+	signInReq := map[string]string{"email": email}
+	resp, err := tc.client.Post("/api/user.signin", signInReq)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, "Sign-in failed for %s", email)
+
+	var signInResponse map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&signInResponse)
+	require.NoError(t, err)
+
+	// Get magic code from response (only available in test/development mode)
+	// Note: the API returns the code as "code", not "magic_code"
+	code, ok := signInResponse["code"].(string)
+	require.True(t, ok, "Magic code not found in response for %s", email)
+
+	// Step 2: Verify magic code
+	verifyReq := map[string]string{
+		"email": email,
+		"code":  code,
+	}
+	verifyResp, err := tc.client.Post("/api/user.verify", verifyReq)
+	require.NoError(t, err)
+	defer verifyResp.Body.Close()
+
+	require.Equal(t, http.StatusOK, verifyResp.StatusCode, "Verification failed for %s", email)
+
+	var authResponse map[string]interface{}
+	err = json.NewDecoder(verifyResp.Body).Decode(&authResponse)
+	require.NoError(t, err)
+
+	token, ok := authResponse["token"].(string)
+	require.True(t, ok, "Token not found in auth response for %s", email)
+
+	return token
+}
+
+// Clear removes all cached tokens (useful for test isolation if needed)
+func (tc *TokenCache) Clear() {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	tc.tokens = make(map[string]string)
 }
 
 // WaitForBroadcastCompletion waits for a broadcast to reach a terminal state
@@ -244,6 +347,18 @@ func SetupTestEnvironment() {
 	os.Setenv("TEST_DB_USER", "notifuse_test")
 	os.Setenv("TEST_DB_PASSWORD", "test_password")
 	os.Setenv("ENVIRONMENT", "test")
+
+	// Use faster SMTP dial timeout for tests (2s instead of 30s)
+	// This dramatically speeds up ESP failure tests that connect to non-existent ports
+	os.Setenv("SMTP_DIAL_TIMEOUT", "2s")
+
+	// Use faster circuit breaker cooldown for tests (2s instead of 1min)
+	// This dramatically speeds up ESP failure tests that wait for circuit breaker to reset
+	os.Setenv("CIRCUIT_BREAKER_COOLDOWN", "2s")
+
+	// Use faster retry backoff base for tests (2s instead of 1min)
+	// This speeds up tests that verify retry behavior
+	os.Setenv("EMAIL_QUEUE_RETRY_BASE", "2s")
 }
 
 // CleanupTestEnvironment cleans up test environment variables and connections
@@ -256,6 +371,9 @@ func CleanupTestEnvironment() {
 	os.Unsetenv("TEST_DB_USER")
 	os.Unsetenv("TEST_DB_PASSWORD")
 	os.Unsetenv("ENVIRONMENT")
+	os.Unsetenv("SMTP_DIAL_TIMEOUT")
+	os.Unsetenv("CIRCUIT_BREAKER_COOLDOWN")
+	os.Unsetenv("EMAIL_QUEUE_RETRY_BASE")
 }
 
 // CleanupAllTestConnections cleans up the global connection pool
@@ -446,8 +564,7 @@ func WaitForBroadcastStatusWithExecution(t *testing.T, client *APIClient, broadc
 				// Extract detailed state info
 				phase := "unknown"
 				progress := 0.0
-				sentCount := 0
-				failedCount := 0
+				enqueuedCount := 0
 				totalRecipients := 0
 
 				if state, ok := broadcastData["state"].(map[string]interface{}); ok {
@@ -459,11 +576,8 @@ func WaitForBroadcastStatusWithExecution(t *testing.T, client *APIClient, broadc
 					}
 				}
 
-				if sentCountVal, ok := broadcastData["sent_count"].(float64); ok {
-					sentCount = int(sentCountVal)
-				}
-				if failedCountVal, ok := broadcastData["failed_count"].(float64); ok {
-					failedCount = int(failedCountVal)
+				if enqueuedCountVal, ok := broadcastData["enqueued_count"].(float64); ok {
+					enqueuedCount = int(enqueuedCountVal)
 				}
 				if totalVal, ok := broadcastData["total_recipients"].(float64); ok {
 					totalRecipients = int(totalVal)
@@ -473,7 +587,7 @@ func WaitForBroadcastStatusWithExecution(t *testing.T, client *APIClient, broadc
 				t.Logf("  Current status: %s", status)
 				t.Logf("  Phase: %s", phase)
 				t.Logf("  Progress: %.1f%%", progress*100)
-				t.Logf("  Recipients: %d sent, %d failed, %d total", sentCount, failedCount, totalRecipients)
+				t.Logf("  Recipients: %d enqueued, %d total", enqueuedCount, totalRecipients)
 				t.Logf("  Iterations: %d", iterationCount)
 				t.Logf("  Task executions: %d", taskExecutionCount)
 				t.Logf("  Expected statuses: %v", acceptableStatuses)
@@ -779,38 +893,71 @@ func WaitForBuildTaskCreated(t *testing.T, client *APIClient, workspaceID, segme
 	return "", fmt.Errorf("timeout waiting for build task to be created for segment %s after %v", segmentID, timeout)
 }
 
-// MailhogMessage represents a simplified email message from Mailhog API
-type MailhogMessage struct {
-	ID   string `json:"ID"`
-	From struct {
-		Mailbox string `json:"Mailbox"`
-		Domain  string `json:"Domain"`
+// MailpitMessageSummary represents a message summary from Mailpit API list endpoint
+type MailpitMessageSummary struct {
+	ID        string `json:"ID"`
+	MessageID string `json:"MessageID"`
+	From      struct {
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
 	} `json:"From"`
 	To []struct {
-		Mailbox string `json:"Mailbox"`
-		Domain  string `json:"Domain"`
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
 	} `json:"To"`
-	Content struct {
-		Headers map[string][]string `json:"Headers"`
-		Body    string              `json:"Body"`
-	} `json:"Content"`
-	Created time.Time `json:"Created"`
+	Cc []struct {
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
+	} `json:"Cc"`
+	Bcc []struct {
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
+	} `json:"Bcc"`
+	Subject     string    `json:"Subject"`
+	Created     time.Time `json:"Created"`
+	Size        int       `json:"Size"`
+	Attachments int       `json:"Attachments"`
 }
 
-// MailhogAPIResponse represents the response from Mailhog's messages API
-type MailhogAPIResponse struct {
-	Total int              `json:"total"`
-	Count int              `json:"count"`
-	Start int              `json:"start"`
-	Items []MailhogMessage `json:"items"`
+// MailpitMessage represents a full message from Mailpit API (with headers and content)
+type MailpitMessage struct {
+	ID        string `json:"ID"`
+	MessageID string `json:"MessageID"`
+	From      struct {
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
+	} `json:"From"`
+	To []struct {
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
+	} `json:"To"`
+	Cc []struct {
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
+	} `json:"Cc"`
+	Subject string              `json:"Subject"`
+	Date    time.Time           `json:"Date"`
+	Text    string              `json:"Text"`
+	HTML    string              `json:"HTML"`
+	Size    int                 `json:"Size"`
+	Headers map[string][]string `json:"Headers,omitempty"`
 }
 
-// CheckMailhogForRecipients checks if an email was sent to all expected recipients via Mailhog
+// MailpitMessagesResponse represents the response from Mailpit's messages API
+type MailpitMessagesResponse struct {
+	Total         int                     `json:"total"`
+	Count         int                     `json:"count"`
+	MessagesCount int                     `json:"messages_count"`
+	Start         int                     `json:"start"`
+	Messages      []MailpitMessageSummary `json:"messages"`
+}
+
+// CheckMailpitForRecipients checks if an email was sent to all expected recipients via Mailpit
 // Returns a map of recipient email addresses to whether they received the email
-func CheckMailhogForRecipients(t *testing.T, subject string, expectedRecipients []string, timeout time.Duration) (map[string]bool, error) {
+func CheckMailpitForRecipients(t *testing.T, subject string, expectedRecipients []string, timeout time.Duration) (map[string]bool, error) {
 	deadline := time.Now().Add(timeout)
 	pollInterval := 500 * time.Millisecond
-	mailhogURL := "http://localhost:8025/api/v2/messages"
+	mailpitURL := "http://localhost:8025/api/v1/messages"
 
 	results := make(map[string]bool)
 	for _, recipient := range expectedRecipients {
@@ -820,38 +967,33 @@ func CheckMailhogForRecipients(t *testing.T, subject string, expectedRecipients 
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 
 	for time.Now().Before(deadline) {
-		resp, err := httpClient.Get(mailhogURL)
+		resp, err := httpClient.Get(mailpitURL)
 		if err != nil {
-			t.Logf("Failed to connect to Mailhog API: %v", err)
+			t.Logf("Failed to connect to Mailpit API: %v", err)
 			time.Sleep(pollInterval)
 			continue
 		}
 
-		var apiResp MailhogAPIResponse
+		var apiResp MailpitMessagesResponse
 		err = json.NewDecoder(resp.Body).Decode(&apiResp)
 		resp.Body.Close()
 
 		if err != nil {
-			t.Logf("Failed to decode Mailhog response: %v", err)
+			t.Logf("Failed to decode Mailpit response: %v", err)
 			time.Sleep(pollInterval)
 			continue
 		}
 
 		// Check each message for matching subject and recipients
-		for _, msg := range apiResp.Items {
-			subjectHeaders := msg.Content.Headers["Subject"]
-			if len(subjectHeaders) == 0 {
-				continue
-			}
-
+		for _, msg := range apiResp.Messages {
 			// Check if this message matches our subject
-			if !strings.Contains(subjectHeaders[0], subject) {
+			if !strings.Contains(msg.Subject, subject) {
 				continue
 			}
 
 			// Check To recipients
 			for _, to := range msg.To {
-				email := strings.ToLower(fmt.Sprintf("%s@%s", to.Mailbox, to.Domain))
+				email := strings.ToLower(to.Address)
 				for _, expected := range expectedRecipients {
 					if strings.ToLower(expected) == email {
 						results[expected] = true
@@ -861,14 +1003,12 @@ func CheckMailhogForRecipients(t *testing.T, subject string, expectedRecipients 
 			}
 
 			// Check CC recipients
-			if ccHeaders, ok := msg.Content.Headers["Cc"]; ok {
-				for _, ccHeader := range ccHeaders {
-					email := strings.ToLower(extractEmailFromHeader(ccHeader))
-					for _, expected := range expectedRecipients {
-						if strings.ToLower(expected) == email {
-							results[expected] = true
-							t.Logf("Found email for CC recipient: %s", expected)
-						}
+			for _, cc := range msg.Cc {
+				email := strings.ToLower(cc.Address)
+				for _, expected := range expectedRecipients {
+					if strings.ToLower(expected) == email {
+						results[expected] = true
+						t.Logf("Found email for CC recipient: %s", expected)
 					}
 				}
 			}
@@ -911,8 +1051,8 @@ func extractEmailFromHeader(header string) string {
 	return strings.TrimSpace(header)
 }
 
-// ClearMailhogMessages deletes all messages from Mailhog
-func ClearMailhogMessages(t *testing.T) error {
+// ClearMailpitMessages deletes all messages from Mailpit
+func ClearMailpitMessages(t *testing.T) error {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequest("DELETE", "http://localhost:8025/api/v1/messages", nil)
 	if err != nil {
@@ -921,14 +1061,357 @@ func ClearMailhogMessages(t *testing.T) error {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to clear Mailhog messages: %w", err)
+		return fmt.Errorf("failed to clear Mailpit messages: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code from Mailhog: %d", resp.StatusCode)
+		return fmt.Errorf("unexpected status code from Mailpit: %d", resp.StatusCode)
 	}
 
-	t.Log("Cleared all Mailhog messages")
+	t.Log("Cleared all Mailpit messages")
 	return nil
+}
+
+// GetMailpitMessage fetches a single message with full headers from Mailpit
+func GetMailpitMessage(t *testing.T, messageID string) (*MailpitMessage, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+
+	// Fetch message details
+	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:8025/api/v1/message/%s", messageID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get message from Mailpit: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code from Mailpit: %d", resp.StatusCode)
+	}
+
+	var msg MailpitMessage
+	if err := json.NewDecoder(resp.Body).Decode(&msg); err != nil {
+		return nil, fmt.Errorf("failed to decode Mailpit message: %w", err)
+	}
+
+	// Fetch headers from separate endpoint (Mailpit requires this)
+	headersResp, err := httpClient.Get(fmt.Sprintf("http://localhost:8025/api/v1/message/%s/headers", messageID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get headers from Mailpit: %w", err)
+	}
+	defer headersResp.Body.Close()
+
+	if headersResp.StatusCode == http.StatusOK {
+		if err := json.NewDecoder(headersResp.Body).Decode(&msg.Headers); err != nil {
+			t.Logf("Warning: failed to decode Mailpit headers: %v", err)
+		}
+	}
+
+	return &msg, nil
+}
+
+// GetMailpitMessageCount returns the total count of messages matching a subject substring
+// This is useful for verifying broadcast delivery to large recipient lists
+func GetMailpitMessageCount(t *testing.T, subject string) (int, error) {
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+
+	// Use the search API to find messages by subject
+	// Mailpit supports search queries in the format: subject:"text"
+	searchURL := fmt.Sprintf("http://localhost:8025/api/v1/search?query=subject:%s", subject)
+	resp, err := httpClient.Get(searchURL)
+	if err != nil {
+		return 0, fmt.Errorf("failed to search Mailpit: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Fall back to listing all messages if search not supported
+		return getMailpitMessageCountByListing(t, subject)
+	}
+
+	var apiResp MailpitMessagesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return 0, fmt.Errorf("failed to decode Mailpit search response: %w", err)
+	}
+
+	return apiResp.Total, nil
+}
+
+// getMailpitMessageCountByListing counts messages by listing all and filtering by subject
+func getMailpitMessageCountByListing(t *testing.T, subject string) (int, error) {
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+
+	// Get all messages with high limit
+	mailpitURL := "http://localhost:8025/api/v1/messages?limit=10000"
+	resp, err := httpClient.Get(mailpitURL)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list Mailpit messages: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var apiResp MailpitMessagesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return 0, fmt.Errorf("failed to decode Mailpit response: %w", err)
+	}
+
+	count := 0
+	for _, msg := range apiResp.Messages {
+		if strings.Contains(msg.Subject, subject) {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+// GetAllMailpitRecipients returns all unique recipient email addresses for messages matching a subject
+// This is the primary verification function for Issue #157 - ensures no recipients are skipped
+func GetAllMailpitRecipients(t *testing.T, subject string) (map[string]bool, error) {
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+
+	// Get all messages with high limit to capture all broadcast emails
+	mailpitURL := "http://localhost:8025/api/v1/messages?limit=10000"
+	resp, err := httpClient.Get(mailpitURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Mailpit messages: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var apiResp MailpitMessagesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Mailpit response: %w", err)
+	}
+
+	recipients := make(map[string]bool)
+	for _, msg := range apiResp.Messages {
+		// Only count messages matching our subject
+		if !strings.Contains(msg.Subject, subject) {
+			continue
+		}
+
+		// Collect all To recipients
+		for _, to := range msg.To {
+			email := strings.ToLower(strings.TrimSpace(to.Address))
+			if email != "" {
+				recipients[email] = true
+			}
+		}
+	}
+
+	t.Logf("Found %d unique recipients for subject containing '%s'", len(recipients), subject)
+	return recipients, nil
+}
+
+// WaitForMailpitMessages waits until the expected count of messages arrive in Mailpit
+// This is useful when testing async broadcast delivery to many recipients
+func WaitForMailpitMessages(t *testing.T, subject string, expectedCount int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 2 * time.Second
+	lastCount := 0
+
+	t.Logf("Waiting for %d emails with subject '%s' (timeout: %v)", expectedCount, subject, timeout)
+
+	for time.Now().Before(deadline) {
+		count, err := GetMailpitMessageCount(t, subject)
+		if err != nil {
+			t.Logf("Warning: failed to get Mailpit message count: %v", err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Log progress if count changed
+		if count != lastCount {
+			t.Logf("Mailpit message count: %d / %d (%.1f%%)", count, expectedCount, float64(count)/float64(expectedCount)*100)
+			lastCount = count
+		}
+
+		if count >= expectedCount {
+			t.Logf("All %d emails received in Mailpit", expectedCount)
+			return nil
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	// Timeout - get final count for error message
+	finalCount, _ := GetMailpitMessageCount(t, subject)
+	return fmt.Errorf("timeout waiting for %d emails (got %d after %v)", expectedCount, finalCount, timeout)
+}
+
+// WaitForMailpitMessagesFast waits for messages with fast polling (200ms interval).
+// Returns the MailpitMessagesResponse when at least one message matching subject is found.
+// If subject is empty, returns when any message is found.
+func WaitForMailpitMessagesFast(t *testing.T, subject string, timeout time.Duration) (*MailpitMessagesResponse, error) {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 200 * time.Millisecond
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	mailpitURL := "http://localhost:8025/api/v1/messages"
+
+	for time.Now().Before(deadline) {
+		resp, err := httpClient.Get(mailpitURL)
+		if err != nil {
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		var data MailpitMessagesResponse
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			resp.Body.Close()
+			time.Sleep(pollInterval)
+			continue
+		}
+		resp.Body.Close()
+
+		// If no subject filter, return any messages
+		if subject == "" && len(data.Messages) > 0 {
+			return &data, nil
+		}
+
+		// Filter by subject
+		for _, msg := range data.Messages {
+			if strings.Contains(msg.Subject, subject) {
+				return &data, nil
+			}
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return nil, fmt.Errorf("timeout waiting for messages with subject '%s'", subject)
+}
+
+// ============================================================================
+// Email Queue Helpers
+// ============================================================================
+
+// WaitForQueueEmpty waits for the email queue to be empty (no pending or processing entries)
+func WaitForQueueEmpty(t *testing.T, queueRepo domain.EmailQueueRepository, workspaceID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 500 * time.Millisecond
+
+	t.Logf("Waiting for email queue to be empty (workspace: %s, timeout: %v)", workspaceID, timeout)
+
+	for time.Now().Before(deadline) {
+		stats, err := queueRepo.GetStats(context.Background(), workspaceID)
+		if err != nil {
+			t.Logf("Warning: failed to get queue stats: %v", err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		activeCount := stats.Pending + stats.Processing
+		if activeCount == 0 {
+			// Note: sent entries are deleted immediately, not tracked in stats
+			t.Logf("Email queue is empty (failed: %d)", stats.Failed)
+			return nil
+		}
+
+		t.Logf("Queue status - pending: %d, processing: %d, failed: %d",
+			stats.Pending, stats.Processing, stats.Failed)
+
+		time.Sleep(pollInterval)
+	}
+
+	// Get final stats for error message
+	finalStats, _ := queueRepo.GetStats(context.Background(), workspaceID)
+	return fmt.Errorf("timeout waiting for queue to be empty (pending: %d, processing: %d after %v)",
+		finalStats.Pending, finalStats.Processing, timeout)
+}
+
+// WaitForQueueStats waits for the email queue to reach specific stats
+// Note: Since sent entries are deleted immediately, this only waits for failed count and empty queue
+func WaitForQueueStats(t *testing.T, queueRepo domain.EmailQueueRepository, workspaceID string,
+	expectedSent, expectedFailed int64, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 500 * time.Millisecond
+
+	// Note: expectedSent is kept for API compatibility but ignored since sent entries are deleted immediately
+	t.Logf("Waiting for queue stats: failed=%d (workspace: %s, timeout: %v)",
+		expectedFailed, workspaceID, timeout)
+
+	for time.Now().Before(deadline) {
+		stats, err := queueRepo.GetStats(context.Background(), workspaceID)
+		if err != nil {
+			t.Logf("Warning: failed to get queue stats: %v", err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Check if we've reached expected stats (sent entries are deleted, so just check failed and empty queue)
+		if stats.Failed >= expectedFailed && stats.Pending == 0 && stats.Processing == 0 {
+			t.Logf("Queue reached expected stats - failed: %d", stats.Failed)
+			return nil
+		}
+
+		t.Logf("Queue status - pending: %d, processing: %d, failed: %d/%d",
+			stats.Pending, stats.Processing, stats.Failed, expectedFailed)
+
+		time.Sleep(pollInterval)
+	}
+
+	// Get final stats for error message
+	finalStats, _ := queueRepo.GetStats(context.Background(), workspaceID)
+	return fmt.Errorf("timeout waiting for queue stats (got failed=%d, expected failed=%d after %v)",
+		finalStats.Failed, expectedFailed, timeout)
+}
+
+// WaitForQueueProcessed waits for all pending entries to be processed (either sent or failed)
+// Note: Sent entries are deleted immediately, so we wait until the queue is empty
+func WaitForQueueProcessed(t *testing.T, queueRepo domain.EmailQueueRepository, workspaceID string,
+	expectedTotal int64, timeout time.Duration) (*domain.EmailQueueStats, error) {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 500 * time.Millisecond
+
+	t.Logf("Waiting for %d queue entries to be processed (workspace: %s, timeout: %v)",
+		expectedTotal, workspaceID, timeout)
+
+	for time.Now().Before(deadline) {
+		stats, err := queueRepo.GetStats(context.Background(), workspaceID)
+		if err != nil {
+			t.Logf("Warning: failed to get queue stats: %v", err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Sent entries are deleted immediately, so just check if queue is empty (or only has failures)
+		if stats.Pending == 0 && stats.Processing == 0 {
+			t.Logf("Queue processing complete - failed: %d", stats.Failed)
+			return stats, nil
+		}
+
+		t.Logf("Queue progress - pending: %d, processing: %d, failed: %d",
+			stats.Pending, stats.Processing, stats.Failed)
+
+		time.Sleep(pollInterval)
+	}
+
+	// Get final stats for error message
+	finalStats, _ := queueRepo.GetStats(context.Background(), workspaceID)
+	return finalStats, fmt.Errorf("timeout waiting for queue processing (pending: %d, processing: %d after %v)",
+		finalStats.Pending, finalStats.Processing, timeout)
+}
+
+// CreateTestEmailQueueEntry creates a test email queue entry with sensible defaults
+func CreateTestEmailQueueEntry(integrationID, contactEmail, sourceID string, sourceType domain.EmailQueueSourceType) *domain.EmailQueueEntry {
+	return &domain.EmailQueueEntry{
+		Status:        domain.EmailQueueStatusPending,
+		Priority:      domain.EmailQueuePriorityMarketing,
+		SourceType:    sourceType,
+		SourceID:      sourceID,
+		IntegrationID: integrationID,
+		ProviderKind:  domain.EmailProviderKindSMTP,
+		ContactEmail:  contactEmail,
+		MessageID:     fmt.Sprintf("msg-%s", GenerateRandomString(8)),
+		TemplateID:    fmt.Sprintf("tpl-%s", GenerateRandomString(8)),
+		Payload: domain.EmailQueuePayload{
+			FromAddress:        "test@example.com",
+			FromName:           "Test Sender",
+			Subject:            fmt.Sprintf("Test Email %s", GenerateRandomString(4)),
+			HTMLContent:        "<html><body><h1>Test Email</h1><p>This is a test email.</p></body></html>",
+			RateLimitPerMinute: 6000, // High rate for tests
+		},
+		Attempts:    0,
+		MaxAttempts: 3,
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
+	}
 }

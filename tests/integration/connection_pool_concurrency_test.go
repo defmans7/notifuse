@@ -23,10 +23,10 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 
 	t.Run("concurrent workspace creation", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
-		numGoroutines := 25  // Reduced from 50 to avoid connection exhaustion
+		numGoroutines := 25 // Reduced from 50 to avoid connection exhaustion
 		var wg sync.WaitGroup
 		errors := make(chan error, numGoroutines)
 		workspaceIDs := make([]string, numGoroutines)
@@ -79,7 +79,7 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 
 		assert.Equal(t, 0, errorCount, "All concurrent creations should succeed")
 		assert.Equal(t, numGoroutines, pool.GetConnectionCount(), "Should have all workspace connections")
-		
+
 		// Explicit cleanup to release connections faster
 		err := pool.Cleanup()
 		require.NoError(t, err)
@@ -87,8 +87,8 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 
 	t.Run("concurrent same workspace access", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_concurrent_same"
 
@@ -96,7 +96,7 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 		err := pool.EnsureWorkspaceDatabase(workspaceID)
 		require.NoError(t, err)
 
-		numGoroutines := 50  // Reduced from 100 to be less aggressive
+		numGoroutines := 50 // Reduced from 100 to be less aggressive
 		var wg sync.WaitGroup
 		errors := make(chan error, numGoroutines)
 		connections := make(chan interface{}, numGoroutines)
@@ -160,8 +160,8 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 
 	t.Run("concurrent read write operations", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		// Create 5 workspaces (reduced to avoid connection exhaustion)
 		numWorkspaces := 5
@@ -243,8 +243,8 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 
 	t.Run("concurrent cleanup", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		// Create multiple workspaces (reduced to avoid connection exhaustion)
 		numWorkspaces := 10
@@ -301,16 +301,16 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 		// This test is specifically designed to trigger race conditions
 		// Run with: go test -race
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_race_detector"
 		err := pool.EnsureWorkspaceDatabase(workspaceID)
 		require.NoError(t, err)
 
 		// Stress test: many goroutines doing various operations
-		numGoroutines := 30  // Reduced from 50
-		duration := 1 * time.Second  // Reduced from 2s
+		numGoroutines := 30              // Reduced from 50
+		duration := 300 * time.Millisecond // Reduced for faster tests
 		stopChan := make(chan struct{})
 		var wg sync.WaitGroup
 
@@ -365,8 +365,8 @@ func TestConnectionPoolConcurrency(t *testing.T) {
 
 	t.Run("high contention on single workspace", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_high_contention"
 		err := pool.EnsureWorkspaceDatabase(workspaceID)

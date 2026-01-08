@@ -31,7 +31,7 @@ func TestBroadcastABTestingE2E(t *testing.T) {
 	suite := testutil.NewIntegrationTestSuite(t, func(cfg *config.Config) testutil.AppInterface {
 		return app.NewApp(cfg)
 	})
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 	factory := suite.DataFactory
@@ -103,9 +103,8 @@ func testCompleteABTestingFlow(t *testing.T, client *testutil.APIClient, factory
 			"workspace_id": workspaceID,
 			"name":         "E2E A/B Test Broadcast",
 			"audience": map[string]interface{}{
-				"lists":                 []string{list.ID},
-				"exclude_unsubscribed":  true,
-				"skip_duplicate_emails": true,
+				"list":                 list.ID,
+				"exclude_unsubscribed": true,
 			},
 			"schedule": map[string]interface{}{
 				"is_scheduled": false,
@@ -133,7 +132,7 @@ func testCompleteABTestingFlow(t *testing.T, client *testutil.APIClient, factory
 		// Step 3: Create the broadcast
 		resp, err := client.CreateBroadcast(broadcast)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 		var createResult map[string]interface{}
@@ -152,7 +151,7 @@ func testCompleteABTestingFlow(t *testing.T, client *testutil.APIClient, factory
 
 		scheduleResp, err := client.ScheduleBroadcast(scheduleRequest)
 		require.NoError(t, err)
-		defer scheduleResp.Body.Close()
+		defer func() { _ = scheduleResp.Body.Close() }()
 		assert.Equal(t, http.StatusOK, scheduleResp.StatusCode)
 
 		// Step 5: Wait for broadcast to reach test_completed or winner_selected status
@@ -169,7 +168,7 @@ func testCompleteABTestingFlow(t *testing.T, client *testutil.APIClient, factory
 		// Step 8: Get test results
 		testResultsResp, err := client.GetBroadcastTestResults(workspaceID, broadcastID)
 		require.NoError(t, err)
-		defer testResultsResp.Body.Close()
+		defer func() { _ = testResultsResp.Body.Close() }()
 		assert.Equal(t, http.StatusOK, testResultsResp.StatusCode)
 
 		// Step 9: Select winner manually
@@ -181,13 +180,13 @@ func testCompleteABTestingFlow(t *testing.T, client *testutil.APIClient, factory
 
 		winnerResp, err := client.SelectBroadcastWinner(selectWinnerRequest)
 		require.NoError(t, err)
-		defer winnerResp.Body.Close()
+		defer func() { _ = winnerResp.Body.Close() }()
 		assert.Equal(t, http.StatusOK, winnerResp.StatusCode)
 
-		// Step 10: Wait for broadcast to complete (sent or completed status)
+		// Step 10: Wait for broadcast to complete (processed or completed status)
 		// Using WaitForBroadcastStatusWithExecution to ensure continuous task processing
 		finalStatus, err := testutil.WaitForBroadcastStatusWithExecution(t, client, broadcastID,
-			[]string{"sent", "completed", "winner_selected"},
+			[]string{"processed", "completed", "winner_selected"},
 			60*time.Second)
 		if err != nil {
 			// If timeout, check if we're at least progressing
@@ -195,13 +194,13 @@ func testCompleteABTestingFlow(t *testing.T, client *testutil.APIClient, factory
 		}
 
 		// Verify broadcast progressed successfully
-		assert.Contains(t, []string{"sent", "completed", "winner_selected"}, finalStatus,
-			"Broadcast should reach sent, completed, or winner_selected state")
+		assert.Contains(t, []string{"processed", "completed", "winner_selected"}, finalStatus,
+			"Broadcast should reach processed, completed, or winner_selected state")
 
 		// Verify winning template is set
 		finalBroadcastResp, err := client.GetBroadcast(broadcastID)
 		require.NoError(t, err)
-		defer finalBroadcastResp.Body.Close()
+		defer func() { _ = finalBroadcastResp.Body.Close() }()
 
 		var finalBroadcastResult map[string]interface{}
 		err = json.NewDecoder(finalBroadcastResp.Body).Decode(&finalBroadcastResult)
@@ -244,9 +243,8 @@ func testRaceConditionPrevention(t *testing.T, client *testutil.APIClient, facto
 			"workspace_id": workspaceID,
 			"name":         "Race Condition Test Broadcast",
 			"audience": map[string]interface{}{
-				"lists":                 []string{list.ID},
-				"exclude_unsubscribed":  true,
-				"skip_duplicate_emails": true,
+				"list":                 list.ID,
+				"exclude_unsubscribed": true,
 			},
 			"schedule": map[string]interface{}{
 				"is_scheduled": false,
@@ -272,7 +270,7 @@ func testRaceConditionPrevention(t *testing.T, client *testutil.APIClient, facto
 		// Create and schedule broadcast
 		resp, err := client.CreateBroadcast(broadcast)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		var createResult map[string]interface{}
 		err = json.NewDecoder(resp.Body).Decode(&createResult)
@@ -290,16 +288,16 @@ func testRaceConditionPrevention(t *testing.T, client *testutil.APIClient, facto
 
 		scheduleResp, err := client.ScheduleBroadcast(scheduleRequest)
 		require.NoError(t, err)
-		defer scheduleResp.Body.Close()
+		defer func() { _ = scheduleResp.Body.Close() }()
 
 		// Start execution
 		execResp, err := client.ExecutePendingTasks(10)
 		require.NoError(t, err)
-		defer execResp.Body.Close()
+		defer func() { _ = execResp.Body.Close() }()
 
 		// Wait for broadcast to enter testing or test_completed state with continuous task execution
 		currentStatus, err := testutil.WaitForBroadcastStatusWithExecution(t, client, broadcastID,
-			[]string{"testing", "test_completed", "sending"},
+			[]string{"testing", "test_completed", "processing"},
 			90*time.Second)
 		if err != nil {
 			t.Fatalf("Failed to wait for broadcast to enter testing phase: %v", err)
@@ -315,7 +313,7 @@ func testRaceConditionPrevention(t *testing.T, client *testutil.APIClient, facto
 
 		winnerResp, err := client.SelectBroadcastWinner(selectWinnerRequest)
 		require.NoError(t, err)
-		defer winnerResp.Body.Close()
+		defer func() { _ = winnerResp.Body.Close() }()
 
 		if winnerResp.StatusCode != http.StatusOK {
 			body, _ := client.ReadBody(winnerResp)
@@ -326,7 +324,7 @@ func testRaceConditionPrevention(t *testing.T, client *testutil.APIClient, facto
 		// Final verification - wait for broadcast to progress to winner_selected or beyond
 		// Using WaitForBroadcastStatusWithExecution to continue task processing
 		finalStatus, err := testutil.WaitForBroadcastStatusWithExecution(t, client, broadcastID,
-			[]string{"winner_selected", "sending", "sent", "completed"},
+			[]string{"winner_selected", "processing", "processed", "completed"},
 			60*time.Second)
 		if err != nil {
 			// If timeout, verify we're at least past race condition state
@@ -334,13 +332,13 @@ func testRaceConditionPrevention(t *testing.T, client *testutil.APIClient, facto
 		}
 
 		// Should be progressing with or have completed winner phase (race condition prevented)
-		assert.Contains(t, []string{"winner_selected", "sending", "sent", "completed"}, finalStatus,
+		assert.Contains(t, []string{"winner_selected", "processing", "processed", "completed"}, finalStatus,
 			"Race condition test: broadcast should progress past test phase")
 
 		// Verify winning template is preserved
 		getBroadcastResp2, err := client.GetBroadcast(broadcastID)
 		require.NoError(t, err)
-		defer getBroadcastResp2.Body.Close()
+		defer func() { _ = getBroadcastResp2.Body.Close() }()
 
 		var getBroadcastResult2 map[string]interface{}
 		err = json.NewDecoder(getBroadcastResp2.Body).Decode(&getBroadcastResult2)
@@ -383,9 +381,8 @@ func testManualWinnerSelectionDuringTestPhase(t *testing.T, client *testutil.API
 			"workspace_id": workspaceID,
 			"name":         "Manual Winner Selection Test",
 			"audience": map[string]interface{}{
-				"lists":                 []string{list.ID},
-				"exclude_unsubscribed":  true,
-				"skip_duplicate_emails": true,
+				"list":                 list.ID,
+				"exclude_unsubscribed": true,
 			},
 			"schedule": map[string]interface{}{
 				"is_scheduled": false,
@@ -411,7 +408,7 @@ func testManualWinnerSelectionDuringTestPhase(t *testing.T, client *testutil.API
 		// Create and schedule
 		resp, err := client.CreateBroadcast(broadcast)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		var createResult map[string]interface{}
 		err = json.NewDecoder(resp.Body).Decode(&createResult)
@@ -428,18 +425,18 @@ func testManualWinnerSelectionDuringTestPhase(t *testing.T, client *testutil.API
 
 		scheduleResp, err := client.ScheduleBroadcast(scheduleRequest)
 		require.NoError(t, err)
-		defer scheduleResp.Body.Close()
+		defer func() { _ = scheduleResp.Body.Close() }()
 
 		// Wait for broadcast to enter testing state with continuous task execution
 		currentStatus, err := testutil.WaitForBroadcastStatusWithExecution(t, client, broadcastID,
-			[]string{"testing", "test_completed", "sending"},
+			[]string{"testing", "test_completed", "processing"},
 			45*time.Second)
 		if err != nil {
 			t.Fatalf("Failed to wait for broadcast to enter testing phase: %v", err)
 		}
 
 		// Verify we're in a state that allows winner selection
-		assert.Contains(t, []string{"testing", "test_completed", "sending"}, currentStatus,
+		assert.Contains(t, []string{"testing", "test_completed", "processing"}, currentStatus,
 			"Broadcast should be in testing, test_completed, or sending state before winner selection")
 
 		// Select winner DURING test phase (not after completion)
@@ -451,7 +448,7 @@ func testManualWinnerSelectionDuringTestPhase(t *testing.T, client *testutil.API
 
 		winnerResp, err := client.SelectBroadcastWinner(selectWinnerRequest)
 		require.NoError(t, err)
-		defer winnerResp.Body.Close()
+		defer func() { _ = winnerResp.Body.Close() }()
 
 		if winnerResp.StatusCode != http.StatusOK {
 			body, _ := client.ReadBody(winnerResp)
@@ -461,20 +458,20 @@ func testManualWinnerSelectionDuringTestPhase(t *testing.T, client *testutil.API
 
 		// Verify transition to winner phase with continuous task execution
 		finalStatus, err := testutil.WaitForBroadcastStatusWithExecution(t, client, broadcastID,
-			[]string{"winner_selected", "sending", "sent", "completed"},
+			[]string{"winner_selected", "processing", "processed", "completed"},
 			60*time.Second)
 		if err != nil {
 			t.Logf("Warning: broadcast did not reach final state: %v", err)
 		}
 
 		// Should be in or past winner phase
-		assert.Contains(t, []string{"winner_selected", "sending", "sent", "completed"}, finalStatus,
+		assert.Contains(t, []string{"winner_selected", "processing", "processed", "completed"}, finalStatus,
 			"Broadcast should progress to winner phase after manual selection")
 
 		// Verify correct winner
 		getBroadcastResp2, err := client.GetBroadcast(broadcastID)
 		require.NoError(t, err)
-		defer getBroadcastResp2.Body.Close()
+		defer func() { _ = getBroadcastResp2.Body.Close() }()
 
 		var getBroadcastResult2 map[string]interface{}
 		err = json.NewDecoder(getBroadcastResp2.Body).Decode(&getBroadcastResult2)
@@ -517,9 +514,8 @@ func testAutoWinnerSelectionFlow(t *testing.T, client *testutil.APIClient, facto
 			"workspace_id": workspaceID,
 			"name":         "Auto Winner Selection Test",
 			"audience": map[string]interface{}{
-				"lists":                 []string{list.ID},
-				"exclude_unsubscribed":  true,
-				"skip_duplicate_emails": true,
+				"list":                 list.ID,
+				"exclude_unsubscribed": true,
 			},
 			"schedule": map[string]interface{}{
 				"is_scheduled": false,
@@ -546,8 +542,8 @@ func testAutoWinnerSelectionFlow(t *testing.T, client *testutil.APIClient, facto
 		// Create and schedule
 		resp, err := client.CreateBroadcast(broadcast)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		
+		defer func() { _ = resp.Body.Close() }()
+
 		if resp.StatusCode != http.StatusCreated {
 			body, _ := client.ReadBody(resp)
 			t.Fatalf("Failed to create broadcast: status %d, body: %s", resp.StatusCode, body)
@@ -569,41 +565,41 @@ func testAutoWinnerSelectionFlow(t *testing.T, client *testutil.APIClient, facto
 
 		scheduleResp, err := client.ScheduleBroadcast(scheduleRequest)
 		require.NoError(t, err)
-		defer scheduleResp.Body.Close()
+		defer func() { _ = scheduleResp.Body.Close() }()
 
 		// Wait for broadcast to complete the test phase
 		// Note: Auto winner selection requires 1 hour to pass, which we can't wait for in tests
 		// So we verify the test phase completes and the broadcast is waiting for the duration
 		// Using WaitForBroadcastStatusWithExecution to ensure continuous task processing
 		status, err := testutil.WaitForBroadcastStatusWithExecution(t, client, broadcastID,
-			[]string{"test_completed", "testing", "sending"},
+			[]string{"test_completed", "testing", "processing"},
 			90*time.Second)
 		if err != nil {
 			t.Logf("Warning: broadcast did not complete test phase: %v", err)
 		}
 
 		// Broadcast should reach test_completed and wait for auto evaluation
-		assert.Contains(t, []string{"test_completed", "testing", "sending"}, status,
+		assert.Contains(t, []string{"test_completed", "testing", "processing"}, status,
 			"Broadcast should complete test phase and wait for auto winner evaluation")
 
 		// Verify broadcast state and settings
 		getBroadcastResp, err := client.GetBroadcast(broadcastID)
 		require.NoError(t, err)
-		defer getBroadcastResp.Body.Close()
+		defer func() { _ = getBroadcastResp.Body.Close() }()
 
 		var getBroadcastResult map[string]interface{}
 		err = json.NewDecoder(getBroadcastResp.Body).Decode(&getBroadcastResult)
 		require.NoError(t, err)
 
 		currentBroadcastData := getBroadcastResult["broadcast"].(map[string]interface{})
-		
+
 		// Verify auto_send_winner is enabled
 		if testSettings, ok := currentBroadcastData["test_settings"].(map[string]interface{}); ok {
 			autoSendWinner, _ := testSettings["auto_send_winner"].(bool)
 			assert.True(t, autoSendWinner, "Auto send winner should be enabled")
 			t.Logf("✓ Broadcast configured for auto winner selection after %v hour(s)", testSettings["test_duration_hours"])
 		}
-		
+
 		// In production, auto winner selection would happen after test_duration_hours
 		// For testing purposes, we verify the configuration is correct
 		t.Logf("✓ Auto winner selection test completed - broadcast waiting for test duration to expire")

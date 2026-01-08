@@ -47,6 +47,45 @@ func (t *TrackingSettings) Scan(value interface{}) error {
 	return json.Unmarshal(v, t)
 }
 
+// isNonTrackableURL checks if a URL should not have click tracking applied.
+// This includes special protocol links (mailto, tel, sms, etc.), template placeholders,
+// and anchor links that should not be redirected through the tracking endpoint.
+func isNonTrackableURL(urlStr string) bool {
+	if urlStr == "" {
+		return true
+	}
+
+	// Skip template placeholders (Liquid syntax)
+	if strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "{%") {
+		return true
+	}
+
+	// Skip anchor-only links
+	if strings.HasPrefix(urlStr, "#") {
+		return true
+	}
+
+	// Skip special protocol links that should not be tracked
+	lowerURL := strings.ToLower(urlStr)
+	nonTrackableProtocols := []string{
+		"mailto:",
+		"tel:",
+		"sms:",
+		"javascript:",
+		"data:",
+		"blob:",
+		"file:",
+	}
+
+	for _, protocol := range nonTrackableProtocols {
+		if strings.HasPrefix(lowerURL, protocol) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (t *TrackingSettings) GetTrackingURL(sourceURL string) string {
 	// Ignore if URL is empty, a placeholder, mailto:, tel:, or already tracked (basic check)
 	if sourceURL == "" || strings.Contains(sourceURL, "{{") || strings.Contains(sourceURL, "{%") || strings.HasPrefix(sourceURL, "mailto:") || strings.HasPrefix(sourceURL, "tel:") {
@@ -114,6 +153,7 @@ type CompileTemplateRequest struct {
 	VisualEditorTree EmailBlock       `json:"visual_editor_tree"`
 	TemplateData     MapOfAny         `json:"test_data,omitempty"`
 	TrackingSettings TrackingSettings `json:"tracking_settings,omitempty"`
+	Channel          string           `json:"channel,omitempty"` // "email" or "web" - filters blocks by visibility
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for CompileTemplateRequest
@@ -191,9 +231,16 @@ func GenerateHTMLOpenTrackingPixel(workspaceID string, messageID string, apiEndp
 
 // CompileTemplate compiles a visual editor tree to MJML and HTML
 func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse, err error) {
+	// Apply channel filtering if specified
+	tree := req.VisualEditorTree
+	if req.Channel != "" {
+		tree = FilterBlocksByChannel(req.VisualEditorTree, req.Channel)
+	}
+
 	// Prepare template data JSON string
+	// Note: Web channel doesn't use template data (no contact personalization)
 	var templateDataStr string
-	if len(req.TemplateData) > 0 {
+	if len(req.TemplateData) > 0 && req.Channel != "web" {
 		jsonDataBytes, err := json.Marshal(req.TemplateData)
 		if err != nil {
 			return &CompileTemplateResponse{
@@ -212,7 +259,7 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 	var mjmlString string
 	if templateDataStr != "" {
 		var err error
-		mjmlString, err = ConvertJSONToMJMLWithData(req.VisualEditorTree, templateDataStr)
+		mjmlString, err = ConvertJSONToMJMLWithData(tree, templateDataStr)
 		if err != nil {
 			return &CompileTemplateResponse{
 				Success: false,
@@ -224,7 +271,7 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 			}, nil
 		}
 	} else {
-		mjmlString = ConvertJSONToMJML(req.VisualEditorTree)
+		mjmlString = ConvertJSONToMJML(tree)
 	}
 
 	// Compile MJML to HTML using mjml-go library
@@ -245,7 +292,17 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 	// The MJML-to-HTML compiler doesn't always decode &amp; back to & in href attributes
 	htmlResult = decodeHTMLEntitiesInURLAttributes(htmlResult)
 
-	// Apply link tracking to the HTML output
+	// Skip tracking for web channel
+	if req.Channel == "web" {
+		return &CompileTemplateResponse{
+			Success: true,
+			MJML:    &mjmlString,
+			HTML:    &htmlResult, // No tracking applied for web
+			Error:   nil,
+		}, nil
+	}
+
+	// Apply link tracking to the HTML output (email channel only)
 	trackedHTML, err := TrackLinks(htmlResult, req.TrackingSettings)
 	if err != nil {
 		return nil, err
@@ -314,6 +371,12 @@ func TrackLinks(htmlString string, trackingSettings TrackingSettings) (updatedHT
 		beforeURL := parts[1]   // <a ...href="
 		originalURL := parts[2] // the URL
 		afterURL := parts[3]    // "...>
+
+		// Skip tracking for special protocol links (mailto, tel, sms, etc.)
+		// These should not be wrapped in a redirect as it breaks their functionality
+		if isNonTrackableURL(originalURL) {
+			return match // Return original link unchanged
+		}
 
 		// Apply tracking to the URL
 		trackedURL := trackingSettings.GetTrackingURL(originalURL)

@@ -19,6 +19,30 @@ type contactRepository struct {
 	workspaceRepo domain.WorkspaceRepository
 }
 
+// contactColumns defines the explicit column list for contacts table.
+// IMPORTANT: This order MUST match the ScanContact function in domain/contact.go.
+// Using explicit columns instead of SELECT * ensures consistent ordering
+// regardless of how columns were added to the table (CREATE TABLE vs ALTER TABLE).
+var contactColumns = []string{
+	"email", "external_id", "timezone", "language",
+	"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
+	"country", "postcode", "state", "job_title",
+	"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+	"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
+	"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
+	"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
+	"created_at", "updated_at", "db_created_at", "db_updated_at",
+}
+
+// contactColumnsWithPrefix returns contact columns prefixed with a table alias
+func contactColumnsWithPrefix(prefix string) []string {
+	cols := make([]string, len(contactColumns))
+	for i, col := range contactColumns {
+		cols[i] = prefix + "." + col
+	}
+	return cols
+}
+
 // NewContactRepository creates a new PostgreSQL contact repository
 func NewContactRepository(workspaceRepo domain.WorkspaceRepository) domain.ContactRepository {
 	return &contactRepository{
@@ -44,7 +68,7 @@ func (r *contactRepository) fetchContact(ctx context.Context, workspaceID string
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	query, args, err := psql.Select("c.*").
+	query, args, err := psql.Select(contactColumnsWithPrefix("c")...).
 		From("contacts c").
 		Where(filter).
 		ToSql()
@@ -77,7 +101,7 @@ func (r *contactRepository) fetchContact(ctx context.Context, workspaceID string
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch contact lists: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	contact.ContactLists = []*domain.ContactList{}
 	for rows.Next() {
@@ -119,7 +143,9 @@ func (r *contactRepository) fetchContact(ctx context.Context, workspaceID string
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch contact segments: %w", err)
 	}
-	defer segmentRows.Close()
+	defer func() {
+		_ = segmentRows.Close()
+	}()
 
 	contact.ContactSegments = []*domain.ContactSegment{}
 	for segmentRows.Next() {
@@ -154,7 +180,7 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sb := psql.Select("c.*").From("contacts c")
+	sb := psql.Select(contactColumnsWithPrefix("c")...).From("contacts c")
 
 	// Add filters using squirrel
 	if req.Email != "" {
@@ -168,6 +194,9 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 	}
 	if req.LastName != "" {
 		sb = sb.Where(sq.ILike{"c.last_name": "%" + req.LastName + "%"})
+	}
+	if req.FullName != "" {
+		sb = sb.Where(sq.ILike{"c.full_name": "%" + req.FullName + "%"})
 	}
 	if req.Phone != "" {
 		sb = sb.Where(sq.ILike{"c.phone": "%" + req.Phone + "%"})
@@ -239,7 +268,7 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 			return nil, fmt.Errorf("invalid cursor format: expected timestamp~email")
 		}
 
-		cursorTime, err := time.Parse(time.RFC3339, cursorParts[0])
+		cursorTime, err := time.Parse(time.RFC3339Nano, cursorParts[0])
 		if err != nil {
 			return nil, fmt.Errorf("invalid cursor timestamp format: %w", err)
 		}
@@ -274,7 +303,7 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Process results
 	var contacts []*domain.Contact
@@ -299,7 +328,8 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		contacts = contacts[:req.Limit]
 
 		// Create a compound cursor with timestamp and email using tilde as separator
-		cursorStr := fmt.Sprintf("%s~%s", lastContact.CreatedAt.Format(time.RFC3339), lastContact.Email)
+		// Use RFC3339Nano to preserve nanosecond precision and avoid skipping contacts created within the same second
+		cursorStr := fmt.Sprintf("%s~%s", lastContact.CreatedAt.Format(time.RFC3339Nano), lastContact.Email)
 
 		// Base64 encode the cursor to make it URL-friendly
 		nextCursor = base64.StdEncoding.EncodeToString([]byte(cursorStr))
@@ -333,7 +363,9 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		if err != nil {
 			return nil, fmt.Errorf("failed to query contact lists: %w", err)
 		}
-		defer listRows.Close()
+		defer func() {
+			_ = listRows.Close()
+		}()
 
 		// Create a map of contacts by email for quick lookup
 		contactMap := make(map[string]*domain.Contact)
@@ -386,7 +418,9 @@ func (r *contactRepository) GetContacts(ctx context.Context, req *domain.GetCont
 		if err != nil {
 			return nil, fmt.Errorf("failed to query contact segments: %w", err)
 		}
-		defer segmentRows.Close()
+		defer func() {
+			_ = segmentRows.Close()
+		}()
 
 		// Create/use the map of contacts by email for quick lookup
 		contactMap := make(map[string]*domain.Contact)
@@ -469,10 +503,10 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 	if err != nil {
 		return false, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Rollback if there's a panic or error
+	defer func() { _ = tx.Rollback() }() // Rollback if there's a panic or error
 
 	// Check if contact exists with FOR UPDATE lock using squirrel
-	selectQuery, selectArgs, err := psql.Select("c.*").
+	selectQuery, selectArgs, err := psql.Select(contactColumnsWithPrefix("c")...).
 		From("contacts c").
 		Where(sq.Eq{"c.email": contact.Email}).
 		Suffix("FOR UPDATE").
@@ -500,10 +534,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 
 		// Convert domain nullable types to SQL nullable types
 		var externalIDSQL, timezoneSQL, languageSQL sql.NullString
-		var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
+		var firstNameSQL, lastNameSQL, fullNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
 		var countrySQL, postcodeSQL, stateSQL, jobTitleSQL sql.NullString
-		var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
-		var lastOrderAtSQL sql.NullTime
 		var customString1SQL, customString2SQL, customString3SQL, customString4SQL, customString5SQL sql.NullString
 		var customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL sql.NullFloat64
 		var customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL sql.NullTime
@@ -543,6 +575,13 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 				lastNameSQL = sql.NullString{String: contact.LastName.String, Valid: true}
 			} else {
 				lastNameSQL = sql.NullString{Valid: false}
+			}
+		}
+		if contact.FullName != nil {
+			if !contact.FullName.IsNull {
+				fullNameSQL = sql.NullString{String: contact.FullName.String, Valid: true}
+			} else {
+				fullNameSQL = sql.NullString{Valid: false}
 			}
 		}
 		if contact.Phone != nil {
@@ -632,22 +671,6 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			}
 		}
 
-		// Number fields
-		if contact.LifetimeValue != nil {
-			if !contact.LifetimeValue.IsNull {
-				lifetimeValueSQL = sql.NullFloat64{Float64: contact.LifetimeValue.Float64, Valid: true}
-			} else {
-				lifetimeValueSQL = sql.NullFloat64{Valid: false}
-			}
-		}
-		if contact.OrdersCount != nil {
-			if !contact.OrdersCount.IsNull {
-				ordersCountSQL = sql.NullFloat64{Float64: contact.OrdersCount.Float64, Valid: true}
-			} else {
-				ordersCountSQL = sql.NullFloat64{Valid: false}
-			}
-		}
-
 		// Custom number fields
 		if contact.CustomNumber1 != nil {
 			if !contact.CustomNumber1.IsNull {
@@ -682,15 +705,6 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 				customNumber5SQL = sql.NullFloat64{Float64: contact.CustomNumber5.Float64, Valid: true}
 			} else {
 				customNumber5SQL = sql.NullFloat64{Valid: false}
-			}
-		}
-
-		// Datetime fields
-		if contact.LastOrderAt != nil {
-			if !contact.LastOrderAt.IsNull {
-				lastOrderAtSQL = sql.NullTime{Time: contact.LastOrderAt.Time, Valid: true}
-			} else {
-				lastOrderAtSQL = sql.NullTime{Valid: false}
 			}
 		}
 
@@ -802,9 +816,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		insertBuilder := psql.Insert("contacts").
 			Columns(
 				"email", "external_id", "timezone", "language",
-				"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+				"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
 				"country", "postcode", "state", "job_title",
-				"lifetime_value", "orders_count", "last_order_at",
 				"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 				"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 				"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
@@ -813,9 +826,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			).
 			Values(
 				contact.Email, externalIDSQL, timezoneSQL, languageSQL,
-				firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL,
+				firstNameSQL, lastNameSQL, fullNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL,
 				countrySQL, postcodeSQL, stateSQL, jobTitleSQL,
-				lifetimeValueSQL, ordersCountSQL, lastOrderAtSQL,
 				customString1SQL, customString2SQL, customString3SQL, customString4SQL, customString5SQL,
 				customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL,
 				customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL,
@@ -847,10 +859,8 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 
 		// Convert domain nullable types to SQL nullable types for the update
 		var externalIDSQL, timezoneSQL, languageSQL sql.NullString
-		var firstNameSQL, lastNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
+		var firstNameSQL, lastNameSQL, fullNameSQL, phoneSQL, addressLine1SQL, addressLine2SQL sql.NullString
 		var countrySQL, postcodeSQL, stateSQL, jobTitleSQL sql.NullString
-		var lifetimeValueSQL, ordersCountSQL sql.NullFloat64
-		var lastOrderAtSQL sql.NullTime
 		var customString1SQL, customString2SQL, customString3SQL, customString4SQL, customString5SQL sql.NullString
 		var customNumber1SQL, customNumber2SQL, customNumber3SQL, customNumber4SQL, customNumber5SQL sql.NullFloat64
 		var customDatetime1SQL, customDatetime2SQL, customDatetime3SQL, customDatetime4SQL, customDatetime5SQL sql.NullTime
@@ -882,6 +892,11 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		if existingContact.LastName != nil {
 			if !existingContact.LastName.IsNull {
 				lastNameSQL = sql.NullString{String: existingContact.LastName.String, Valid: true}
+			}
+		}
+		if existingContact.FullName != nil {
+			if !existingContact.FullName.IsNull {
+				fullNameSQL = sql.NullString{String: existingContact.FullName.String, Valid: true}
 			}
 		}
 		if existingContact.Phone != nil {
@@ -947,18 +962,6 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			}
 		}
 
-		// Convert number fields
-		if existingContact.LifetimeValue != nil {
-			if !existingContact.LifetimeValue.IsNull {
-				lifetimeValueSQL = sql.NullFloat64{Float64: existingContact.LifetimeValue.Float64, Valid: true}
-			}
-		}
-		if existingContact.OrdersCount != nil {
-			if !existingContact.OrdersCount.IsNull {
-				ordersCountSQL = sql.NullFloat64{Float64: existingContact.OrdersCount.Float64, Valid: true}
-			}
-		}
-
 		// Convert custom number fields
 		if existingContact.CustomNumber1 != nil {
 			if !existingContact.CustomNumber1.IsNull {
@@ -983,13 +986,6 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 		if existingContact.CustomNumber5 != nil {
 			if !existingContact.CustomNumber5.IsNull {
 				customNumber5SQL = sql.NullFloat64{Float64: existingContact.CustomNumber5.Float64, Valid: true}
-			}
-		}
-
-		// Convert datetime fields
-		if existingContact.LastOrderAt != nil {
-			if !existingContact.LastOrderAt.IsNull {
-				lastOrderAtSQL = sql.NullTime{Time: existingContact.LastOrderAt.Time, Valid: true}
 			}
 		}
 
@@ -1074,6 +1070,7 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			"language":          languageSQL,
 			"first_name":        firstNameSQL,
 			"last_name":         lastNameSQL,
+			"full_name":         fullNameSQL,
 			"phone":             phoneSQL,
 			"address_line_1":    addressLine1SQL,
 			"address_line_2":    addressLine2SQL,
@@ -1081,9 +1078,6 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			"postcode":          postcodeSQL,
 			"state":             stateSQL,
 			"job_title":         jobTitleSQL,
-			"lifetime_value":    lifetimeValueSQL,
-			"orders_count":      ordersCountSQL,
-			"last_order_at":     lastOrderAtSQL,
 			"custom_string_1":   customString1SQL,
 			"custom_string_2":   customString2SQL,
 			"custom_string_3":   customString3SQL,
@@ -1107,9 +1101,12 @@ func (r *contactRepository) UpsertContact(ctx context.Context, workspaceID strin
 			"db_updated_at":     existingContact.DBUpdatedAt,
 		}
 
-		// Only update updated_at if provided (not zero)
-		if !existingContact.UpdatedAt.IsZero() {
-			updateMap["updated_at"] = existingContact.UpdatedAt.UTC()
+		// Always update updated_at to current time for updates
+		// If the incoming contact provided an updated_at, use it; otherwise use NOW()
+		if !contact.UpdatedAt.IsZero() {
+			updateMap["updated_at"] = contact.UpdatedAt.UTC()
+		} else {
+			updateMap["updated_at"] = time.Now().UTC()
 		}
 
 		updateBuilder := psql.Update("contacts").
@@ -1155,21 +1152,20 @@ func (r *contactRepository) BulkUpsertContacts(ctx context.Context, workspaceID 
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Rollback if there's a panic or error
+	defer func() { _ = tx.Rollback() }() // Rollback if there's a panic or error
 
 	now := time.Now().UTC()
 
 	// Build the multi-row INSERT statement
 	// We'll use a raw SQL query because squirrel doesn't handle complex ON CONFLICT well
 	var queryBuilder strings.Builder
-	args := make([]interface{}, 0, len(contacts)*38) // 38 fields per contact (db_created_at and db_updated_at are managed by DB)
+	args := make([]interface{}, 0, len(contacts)*36) // 36 fields per contact (db_created_at and db_updated_at are managed by DB)
 	argIndex := 1
 
 	queryBuilder.WriteString(`INSERT INTO contacts (
 		email, external_id, timezone, language,
-		first_name, last_name, phone, address_line_1, address_line_2,
+		first_name, last_name, full_name, phone, address_line_1, address_line_2,
 		country, postcode, state, job_title,
-		lifetime_value, orders_count, last_order_at,
 		custom_string_1, custom_string_2, custom_string_3, custom_string_4, custom_string_5,
 		custom_number_1, custom_number_2, custom_number_3, custom_number_4, custom_number_5,
 		custom_datetime_1, custom_datetime_2, custom_datetime_3, custom_datetime_4, custom_datetime_5,
@@ -1184,8 +1180,8 @@ func (r *contactRepository) BulkUpsertContacts(ctx context.Context, workspaceID 
 		}
 		queryBuilder.WriteString("(")
 
-		// Add 38 placeholders for contact fields (excluding db_created_at and db_updated_at)
-		for j := 0; j < 38; j++ {
+		// Add 36 placeholders for contact fields (excluding db_created_at and db_updated_at)
+		for j := 0; j < 36; j++ {
 			if j > 0 {
 				queryBuilder.WriteString(", ")
 			}
@@ -1243,38 +1239,36 @@ func (r *contactRepository) BulkUpsertContacts(ctx context.Context, workspaceID 
 			toNullString(contact.Language),       // 4
 			toNullString(contact.FirstName),      // 5
 			toNullString(contact.LastName),       // 6
-			toNullString(contact.Phone),          // 7
-			toNullString(contact.AddressLine1),   // 8
-			toNullString(contact.AddressLine2),   // 9
-			toNullString(contact.Country),        // 10
-			toNullString(contact.Postcode),       // 11
-			toNullString(contact.State),          // 12
-			toNullString(contact.JobTitle),       // 13
-			toNullFloat64(contact.LifetimeValue), // 14
-			toNullFloat64(contact.OrdersCount),   // 15
-			toNullTime(contact.LastOrderAt),      // 16
-			toNullString(contact.CustomString1),  // 17
-			toNullString(contact.CustomString2),  // 18
-			toNullString(contact.CustomString3),  // 19
-			toNullString(contact.CustomString4),  // 20
-			toNullString(contact.CustomString5),  // 21
-			toNullFloat64(contact.CustomNumber1), // 22
-			toNullFloat64(contact.CustomNumber2), // 23
-			toNullFloat64(contact.CustomNumber3), // 24
-			toNullFloat64(contact.CustomNumber4), // 25
-			toNullFloat64(contact.CustomNumber5), // 26
-			toNullTime(contact.CustomDatetime1),  // 27
-			toNullTime(contact.CustomDatetime2),  // 28
-			toNullTime(contact.CustomDatetime3),  // 29
-			toNullTime(contact.CustomDatetime4),  // 30
-			toNullTime(contact.CustomDatetime5),  // 31
-			toNullJSON(contact.CustomJSON1),      // 32
-			toNullJSON(contact.CustomJSON2),      // 33
-			toNullJSON(contact.CustomJSON3),      // 34
-			toNullJSON(contact.CustomJSON4),      // 35
-			toNullJSON(contact.CustomJSON5),      // 36
-			createdAt,                            // 37 - application-level timestamp
-			updatedAt,                            // 38 - application-level timestamp
+			toNullString(contact.FullName),       // 7
+			toNullString(contact.Phone),          // 8
+			toNullString(contact.AddressLine1),   // 9
+			toNullString(contact.AddressLine2),   // 10
+			toNullString(contact.Country),        // 11
+			toNullString(contact.Postcode),       // 12
+			toNullString(contact.State),          // 13
+			toNullString(contact.JobTitle),       // 14
+			toNullString(contact.CustomString1),  // 15
+			toNullString(contact.CustomString2),  // 16
+			toNullString(contact.CustomString3),  // 17
+			toNullString(contact.CustomString4),  // 18
+			toNullString(contact.CustomString5),  // 19
+			toNullFloat64(contact.CustomNumber1), // 20
+			toNullFloat64(contact.CustomNumber2), // 21
+			toNullFloat64(contact.CustomNumber3), // 22
+			toNullFloat64(contact.CustomNumber4), // 23
+			toNullFloat64(contact.CustomNumber5), // 24
+			toNullTime(contact.CustomDatetime1),  // 25
+			toNullTime(contact.CustomDatetime2),  // 26
+			toNullTime(contact.CustomDatetime3),  // 27
+			toNullTime(contact.CustomDatetime4),  // 28
+			toNullTime(contact.CustomDatetime5),  // 29
+			toNullJSON(contact.CustomJSON1),      // 30
+			toNullJSON(contact.CustomJSON2),      // 31
+			toNullJSON(contact.CustomJSON3),      // 32
+			toNullJSON(contact.CustomJSON4),      // 33
+			toNullJSON(contact.CustomJSON5),      // 34
+			createdAt,                            // 35 - application-level timestamp
+			updatedAt,                            // 36 - application-level timestamp
 		)
 	}
 
@@ -1288,6 +1282,7 @@ func (r *contactRepository) BulkUpsertContacts(ctx context.Context, workspaceID 
 		language = CASE WHEN EXCLUDED.language IS NOT NULL THEN EXCLUDED.language ELSE contacts.language END,
 		first_name = CASE WHEN EXCLUDED.first_name IS NOT NULL THEN EXCLUDED.first_name ELSE contacts.first_name END,
 		last_name = CASE WHEN EXCLUDED.last_name IS NOT NULL THEN EXCLUDED.last_name ELSE contacts.last_name END,
+		full_name = CASE WHEN EXCLUDED.full_name IS NOT NULL THEN EXCLUDED.full_name ELSE contacts.full_name END,
 		phone = CASE WHEN EXCLUDED.phone IS NOT NULL THEN EXCLUDED.phone ELSE contacts.phone END,
 		address_line_1 = CASE WHEN EXCLUDED.address_line_1 IS NOT NULL THEN EXCLUDED.address_line_1 ELSE contacts.address_line_1 END,
 		address_line_2 = CASE WHEN EXCLUDED.address_line_2 IS NOT NULL THEN EXCLUDED.address_line_2 ELSE contacts.address_line_2 END,
@@ -1295,9 +1290,6 @@ func (r *contactRepository) BulkUpsertContacts(ctx context.Context, workspaceID 
 		postcode = CASE WHEN EXCLUDED.postcode IS NOT NULL THEN EXCLUDED.postcode ELSE contacts.postcode END,
 		state = CASE WHEN EXCLUDED.state IS NOT NULL THEN EXCLUDED.state ELSE contacts.state END,
 		job_title = CASE WHEN EXCLUDED.job_title IS NOT NULL THEN EXCLUDED.job_title ELSE contacts.job_title END,
-		lifetime_value = CASE WHEN EXCLUDED.lifetime_value IS NOT NULL THEN EXCLUDED.lifetime_value ELSE contacts.lifetime_value END,
-		orders_count = CASE WHEN EXCLUDED.orders_count IS NOT NULL THEN EXCLUDED.orders_count ELSE contacts.orders_count END,
-		last_order_at = CASE WHEN EXCLUDED.last_order_at IS NOT NULL THEN EXCLUDED.last_order_at ELSE contacts.last_order_at END,
 		custom_string_1 = CASE WHEN EXCLUDED.custom_string_1 IS NOT NULL THEN EXCLUDED.custom_string_1 ELSE contacts.custom_string_1 END,
 		custom_string_2 = CASE WHEN EXCLUDED.custom_string_2 IS NOT NULL THEN EXCLUDED.custom_string_2 ELSE contacts.custom_string_2 END,
 		custom_string_3 = CASE WHEN EXCLUDED.custom_string_3 IS NOT NULL THEN EXCLUDED.custom_string_3 ELSE contacts.custom_string_3 END,
@@ -1330,7 +1322,7 @@ func (r *contactRepository) BulkUpsertContacts(ctx context.Context, workspaceID 
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute bulk upsert: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Collect results
 	results := make([]domain.BulkUpsertResult, 0, len(contacts))
@@ -1356,12 +1348,13 @@ func (r *contactRepository) BulkUpsertContacts(ctx context.Context, workspaceID 
 
 // GetContactsForBroadcast retrieves contacts based on broadcast audience settings
 // It supports filtering by lists, handling unsubscribed contacts, and deduplication
+// Uses cursor-based pagination with afterEmail for deterministic ordering (fixes Issue #157)
 func (r *contactRepository) GetContactsForBroadcast(
 	ctx context.Context,
 	workspaceID string,
 	audience domain.AudienceSettings,
 	limit int,
-	offset int,
+	afterEmail string,
 ) ([]*domain.ContactWithList, error) {
 	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
@@ -1374,24 +1367,23 @@ func (r *contactRepository) GetContactsForBroadcast(
 	var query sq.SelectBuilder
 	var includeListID bool
 
-	// If we're filtering by lists, include list_id in the result
-	if len(audience.Lists) > 0 {
+	// If we're filtering by list, include list_id in the result
+	if audience.List != "" {
 		includeListID = true
-		query = psql.Select("c.*", "cl.list_id", "l.name as list_name").
+		// Build column list: all contact columns plus list_id and list_name
+		selectCols := append(contactColumnsWithPrefix("c"), "cl.list_id", "l.name as list_name")
+		query = psql.Select(selectCols...).
 			From("contacts c").
 			Join("contact_lists cl ON c.email = cl.email").
 			Join("lists l ON cl.list_id = l.id"). // Join with lists table to get the name
-			Where(sq.Eq{"cl.list_id": audience.Lists}).
+			Where(sq.Eq{"cl.list_id": audience.List}).
 			Where(sq.Eq{"l.deleted_at": nil}). // Filter out deleted lists
 			Limit(uint64(limit)).
-			Offset(uint64(offset))
+			OrderBy("c.email ASC") // Sort by email only (unique, deterministic)
 
-		// Set order by clause based on whether we need deduplication
-		if audience.SkipDuplicateEmails {
-			// For DISTINCT ON (c.email), we must order by c.email first
-			query = query.OrderBy("c.email ASC", "c.created_at ASC")
-		} else {
-			query = query.OrderBy("c.created_at ASC")
+		// Cursor-based pagination: fetch contacts with email > afterEmail
+		if afterEmail != "" {
+			query = query.Where(sq.Gt{"c.email": afterEmail})
 		}
 
 		// Exclude unsubscribed contacts if required
@@ -1403,25 +1395,22 @@ func (r *contactRepository) GetContactsForBroadcast(
 	} else {
 		// For non-list based audiences (e.g., segments in the future)
 		includeListID = false
-		query = psql.Select("c.*").
+		query = psql.Select(contactColumnsWithPrefix("c")...).
 			From("contacts c").
 			Limit(uint64(limit)).
-			Offset(uint64(offset))
+			OrderBy("c.email ASC") // Sort by email only (unique, deterministic)
 
-		// Set order by clause based on whether we need deduplication
-		if audience.SkipDuplicateEmails {
-			// For DISTINCT ON (c.email), we must order by c.email first
-			query = query.OrderBy("c.email ASC", "c.created_at ASC")
-		} else {
-			query = query.OrderBy("c.created_at ASC")
+		// Cursor-based pagination: fetch contacts with email > afterEmail
+		if afterEmail != "" {
+			query = query.Where(sq.Gt{"c.email": afterEmail})
 		}
 	}
 
 	// Handle segments filtering
 	if len(audience.Segments) > 0 {
 		// If we already have list filtering, we need to add segments as an additional filter
-		// This means contacts must be in BOTH the specified lists AND segments
-		if len(audience.Lists) > 0 {
+		// This means contacts must be in BOTH the specified list AND segments
+		if audience.List != "" {
 			// Join with contact_segments table in addition to the existing list joins
 			query = query.Join("contact_segments cs ON c.email = cs.email")
 			query = query.Where(sq.Eq{"cs.segment_id": audience.Segments})
@@ -1429,19 +1418,16 @@ func (r *contactRepository) GetContactsForBroadcast(
 			// No list filtering, so we're filtering by segments only
 			// We need to select from contacts and join with contact_segments
 			includeListID = false
-			query = psql.Select("c.*").
+			query = psql.Select(contactColumnsWithPrefix("c")...).
 				From("contacts c").
 				Join("contact_segments cs ON c.email = cs.email").
 				Where(sq.Eq{"cs.segment_id": audience.Segments}).
 				Limit(uint64(limit)).
-				Offset(uint64(offset))
+				OrderBy("c.email ASC") // Sort by email only (unique, deterministic)
 
-			// Set order by clause based on whether we need deduplication
-			if audience.SkipDuplicateEmails {
-				// For DISTINCT ON (c.email), we must order by c.email first
-				query = query.OrderBy("c.email ASC", "c.created_at ASC")
-			} else {
-				query = query.OrderBy("c.created_at ASC")
+			// Cursor-based pagination: fetch contacts with email > afterEmail
+			if afterEmail != "" {
+				query = query.Where(sq.Gt{"c.email": afterEmail})
 			}
 		}
 	}
@@ -1452,18 +1438,12 @@ func (r *contactRepository) GetContactsForBroadcast(
 		return nil, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	// Handle deduplication if required by modifying the SQL string
-	if audience.SkipDuplicateEmails {
-		// Replace "SELECT" with "SELECT DISTINCT ON (c.email)" at the beginning
-		sqlQuery = strings.Replace(sqlQuery, "SELECT", "SELECT DISTINCT ON (c.email)", 1)
-	}
-
 	// Execute the query
 	rows, err := db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Process the results
 	var contactsWithList []*domain.ContactWithList
@@ -1478,10 +1458,8 @@ func (r *contactRepository) GetContactsForBroadcast(
 			// We need to scan all columns at once since we selected c.*, cl.list_id, l.name
 			// Create all the scan destinations for contact fields plus list_id and list_name
 			var email, externalID, timezone, language sql.NullString
-			var firstName, lastName, phone, addressLine1, addressLine2 sql.NullString
+			var firstName, lastName, fullName, phone, addressLine1, addressLine2 sql.NullString
 			var country, postcode, state, jobTitle sql.NullString
-			var lifetimeValue, ordersCount sql.NullFloat64
-			var lastOrderAt sql.NullTime
 			var customString1, customString2, customString3, customString4, customString5 sql.NullString
 			var customNumber1, customNumber2, customNumber3, customNumber4, customNumber5 sql.NullFloat64
 			var customDatetime1, customDatetime2, customDatetime3, customDatetime4, customDatetime5 sql.NullTime
@@ -1491,9 +1469,8 @@ func (r *contactRepository) GetContactsForBroadcast(
 			// Scan all columns including contact fields + list_id + list_name
 			scanErr = rows.Scan(
 				&email, &externalID, &timezone, &language,
-				&firstName, &lastName, &phone, &addressLine1, &addressLine2,
+				&firstName, &lastName, &fullName, &phone, &addressLine1, &addressLine2,
 				&country, &postcode, &state, &jobTitle,
-				&lifetimeValue, &ordersCount, &lastOrderAt,
 				&customString1, &customString2, &customString3, &customString4, &customString5,
 				&customNumber1, &customNumber2, &customNumber3, &customNumber4, &customNumber5,
 				&customDatetime1, &customDatetime2, &customDatetime3, &customDatetime4, &customDatetime5,
@@ -1530,6 +1507,9 @@ func (r *contactRepository) GetContactsForBroadcast(
 			if lastName.Valid {
 				contact.LastName = &domain.NullableString{String: lastName.String, IsNull: false}
 			}
+			if fullName.Valid {
+				contact.FullName = &domain.NullableString{String: fullName.String, IsNull: false}
+			}
 			if phone.Valid {
 				contact.Phone = &domain.NullableString{String: phone.String, IsNull: false}
 			}
@@ -1550,15 +1530,6 @@ func (r *contactRepository) GetContactsForBroadcast(
 			}
 			if jobTitle.Valid {
 				contact.JobTitle = &domain.NullableString{String: jobTitle.String, IsNull: false}
-			}
-			if lifetimeValue.Valid {
-				contact.LifetimeValue = &domain.NullableFloat64{Float64: lifetimeValue.Float64, IsNull: false}
-			}
-			if ordersCount.Valid {
-				contact.OrdersCount = &domain.NullableFloat64{Float64: ordersCount.Float64, IsNull: false}
-			}
-			if lastOrderAt.Valid {
-				contact.LastOrderAt = &domain.NullableTime{Time: lastOrderAt.Time, IsNull: false}
 			}
 			// Handle custom fields similarly...
 			if customString1.Valid {
@@ -1675,23 +1646,20 @@ func (r *contactRepository) CountContactsForBroadcast(
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 	// Start building the count query
-	// Use DISTINCT only if audience settings require deduplication, otherwise count all rows
-	var countExpression string
-	if audience.SkipDuplicateEmails {
-		countExpression = "COUNT(DISTINCT c.email)"
-	} else {
-		countExpression = "COUNT(*)"
-	}
-	query := psql.Select(countExpression).
+	query := psql.Select("COUNT(*)").
 		From("contacts c")
 
-	// Handle lists filtering
-	if len(audience.Lists) > 0 {
+	// Handle list filtering
+	if audience.List != "" {
 		// Join with contact_lists table to filter by list membership and status
 		query = query.Join("contact_lists cl ON c.email = cl.email")
+		// Join with lists table to filter by list deletion status (matches GetContactsForBroadcast)
+		query = query.Join("lists l ON cl.list_id = l.id")
 
-		// Filter by the specified lists
-		query = query.Where(sq.Eq{"cl.list_id": audience.Lists})
+		// Filter by the specified list
+		query = query.Where(sq.Eq{"cl.list_id": audience.List})
+		// Filter out soft-deleted lists (matches GetContactsForBroadcast)
+		query = query.Where(sq.Eq{"l.deleted_at": nil})
 
 		// Exclude unsubscribed contacts if required
 		if audience.ExcludeUnsubscribed {
@@ -1704,22 +1672,14 @@ func (r *contactRepository) CountContactsForBroadcast(
 	// Handle segments filtering
 	if len(audience.Segments) > 0 {
 		// If we already have list filtering, we need to add segments as an additional filter
-		// This means contacts must be in BOTH the specified lists AND segments
-		if len(audience.Lists) > 0 {
+		// This means contacts must be in BOTH the specified list AND segments
+		if audience.List != "" {
 			// Join with contact_segments table in addition to the existing list joins
 			query = query.Join("contact_segments cs ON c.email = cs.email")
 			query = query.Where(sq.Eq{"cs.segment_id": audience.Segments})
 		} else {
 			// No list filtering, so we're filtering by segments only
-			// Use DISTINCT counting if needed
-			var countExpression string
-			if audience.SkipDuplicateEmails {
-				countExpression = "COUNT(DISTINCT c.email)"
-			} else {
-				countExpression = "COUNT(*)"
-			}
-
-			query = psql.Select(countExpression).
+			query = psql.Select("COUNT(*)").
 				From("contacts c").
 				Join("contact_segments cs ON c.email = cs.email").
 				Where(sq.Eq{"cs.segment_id": audience.Segments})
@@ -1785,7 +1745,7 @@ func (r *contactRepository) GetBatchForSegment(ctx context.Context, workspaceID 
 	if err != nil {
 		return nil, fmt.Errorf("failed to query emails: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	emails := make([]string, 0, limit)
 	for rows.Next() {

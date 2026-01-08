@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/botdetection"
 	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/ratelimiter"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -19,13 +21,15 @@ type NotificationCenterHandler struct {
 	service     domain.NotificationCenterService
 	listService domain.ListService
 	logger      logger.Logger
+	rateLimiter *ratelimiter.RateLimiter
 }
 
-func NewNotificationCenterHandler(service domain.NotificationCenterService, listService domain.ListService, logger logger.Logger) *NotificationCenterHandler {
+func NewNotificationCenterHandler(service domain.NotificationCenterService, listService domain.ListService, logger logger.Logger, rateLimiter *ratelimiter.RateLimiter) *NotificationCenterHandler {
 	return &NotificationCenterHandler{
 		service:     service,
 		listService: listService,
 		logger:      logger,
+		rateLimiter: rateLimiter,
 	}
 }
 
@@ -109,10 +113,36 @@ func (h *NotificationCenterHandler) handleSubscribe(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Check rate limit by email
+	if h.rateLimiter != nil && !h.rateLimiter.Allow("subscribe:email", req.Contact.Email) {
+		retryAfter := h.rateLimiter.GetRemainingWindow("subscribe:email", req.Contact.Email)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		h.logger.WithField("email", req.Contact.Email).Warn("Subscribe: Rate limit exceeded")
+		WriteJSONError(w, "Too many subscription attempts. Please try again in a few minutes.", http.StatusTooManyRequests)
+		return
+	}
+
+	// Check rate limit by IP (prevents email-spam attacks)
+	clientIP := getClientIP(r)
+	if h.rateLimiter != nil && !h.rateLimiter.Allow("subscribe:ip", clientIP) {
+		retryAfter := h.rateLimiter.GetRemainingWindow("subscribe:ip", clientIP)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		h.logger.WithField("ip", clientIP).Warn("Subscribe: IP rate limit exceeded")
+		WriteJSONError(w, "Too many subscription attempts. Please try again in a few minutes.", http.StatusTooManyRequests)
+		return
+	}
+
 	fromAPI := false
 
 	if err := h.listService.SubscribeToLists(r.Context(), &req, fromAPI); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to subscribe to lists")
+
+		// Return specific error for non-public lists (matches OpenAPI spec)
+		if strings.Contains(err.Error(), "list is not public") {
+			WriteJSONError(w, "list is not public", http.StatusBadRequest)
+			return
+		}
+
 		WriteJSONError(w, "Failed to subscribe to lists", http.StatusInternalServerError)
 		return
 	}
@@ -135,6 +165,17 @@ func (h *NotificationCenterHandler) handleUnsubscribeOneClick(w http.ResponseWri
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Bot detection: check user agent before processing unsubscribe
+	userAgent := r.Header.Get("User-Agent")
+	if botdetection.IsBotUserAgent(userAgent) {
+		// Return success without actually unsubscribing to avoid revealing bot detection
+		h.logger.WithField("user_agent", userAgent).Debug("Bot detected by user agent - not processing unsubscribe")
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+		})
 		return
 	}
 
@@ -257,7 +298,7 @@ func (h *NotificationCenterHandler) HandleDetectFavicon(w http.ResponseWriter, r
 		http.Error(w, "Error fetching URL", http.StatusInternalServerError)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Parse HTML
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
@@ -291,7 +332,7 @@ func (h *NotificationCenterHandler) HandleDetectFavicon(w http.ResponseWriter, r
 
 	// Return the combined results
 	if response.IconURL != "" || response.CoverURL != "" {
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -326,7 +367,7 @@ func findManifestIcon(doc *goquery.Document, baseURL *url.URL) string {
 			if err != nil {
 				return
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			var manifest struct {
 				Icons []struct {
@@ -468,4 +509,27 @@ func parseInt(val string) (int, error) {
 	var result int
 	_, err := fmt.Sscanf(val, "%d", &result)
 	return result, err
+}
+
+// getClientIP extracts the client IP from the request, checking X-Forwarded-For first
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (if behind proxy)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take first IP in the list
+		ips := strings.Split(xff, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+
+	// Fall back to RemoteAddr
+	ip := r.RemoteAddr
+	// Remove port if present
+	if colon := strings.LastIndex(ip, ":"); colon != -1 {
+		ip = ip[:colon]
+	}
+	return ip
 }

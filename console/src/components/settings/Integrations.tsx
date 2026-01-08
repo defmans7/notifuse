@@ -23,6 +23,7 @@ import {
   Col,
   Table
 } from 'antd'
+
 import {
   EmailProvider,
   EmailProviderKind,
@@ -37,7 +38,6 @@ import {
 import { workspaceService } from '../../services/api/workspace'
 import { emailService } from '../../services/api/email'
 import { listsApi } from '../../services/api/list'
-import { Section } from './Section'
 import {
   faCheck,
   faChevronDown,
@@ -61,7 +61,13 @@ import {
 } from '@fortawesome/free-regular-svg-icons'
 import { emailProviders } from '../integrations/EmailProviders'
 import { SupabaseIntegration } from '../integrations/SupabaseIntegration'
+import { LLMIntegration } from '../integrations/LLMIntegration'
+import { llmProviders, getLLMProviderIcon, getLLMProviderName } from '../integrations/LLMProviders'
+import { FirecrawlIntegration } from '../integrations/FirecrawlIntegration'
+import { firecrawlProvider } from '../integrations/FirecrawlProviders'
+import { LLMProviderKind } from '../../services/api/types'
 import { v4 as uuidv4 } from 'uuid'
+import { SettingsSectionHeader } from './SettingsSectionHeader'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = ['postmark']
@@ -475,7 +481,22 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     null
   )
   const [supabaseSaving, setSupabaseSaving] = useState(false)
-  const supabaseFormRef = React.useRef<any>(null)
+  const supabaseFormRef = React.useRef<{ submit: () => void } | null>(null)
+
+  // LLM Integration state
+  const [llmDrawerVisible, setLLMDrawerVisible] = useState(false)
+  const [editingLLMIntegration, setEditingLLMIntegration] = useState<Integration | null>(null)
+  const [selectedLLMProvider, setSelectedLLMProvider] = useState<LLMProviderKind | null>(null)
+  const [llmSaving, setLLMSaving] = useState(false)
+  const llmFormRef = React.useRef<{ submit: () => void } | null>(null)
+
+  // Firecrawl Integration state
+  const [firecrawlDrawerVisible, setFirecrawlDrawerVisible] = useState(false)
+  const [editingFirecrawlIntegration, setEditingFirecrawlIntegration] = useState<Integration | null>(
+    null
+  )
+  const [firecrawlSaving, setFirecrawlSaving] = useState(false)
+  const firecrawlFormRef = React.useRef<{ submit: () => void } | null>(null)
 
   // Test email modal state
   const [testModalVisible, setTestModalVisible] = useState(false)
@@ -485,7 +506,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const [testingEmailLoading, setTestingEmailLoading] = useState(false)
 
   // Lists state for Supabase integration
-  const [lists, setLists] = useState<any[]>([])
+  const [lists, setLists] = useState<{ id: string; name: string }[]>([])
 
   // Fetch lists for Supabase integration display
   useEffect(() => {
@@ -736,6 +757,109 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     }
   }
 
+  // Handle LLM provider selection
+  const handleSelectLLMProvider = (kind: LLMProviderKind) => {
+    setSelectedLLMProvider(kind)
+    setEditingLLMIntegration(null)
+    setLLMDrawerVisible(true)
+  }
+
+  // Start editing an LLM integration
+  const startEditLLMIntegration = (integration: Integration) => {
+    setEditingLLMIntegration(integration)
+    setSelectedLLMProvider(integration.llm_provider?.kind || 'anthropic')
+    setLLMDrawerVisible(true)
+  }
+
+  // Save LLM integration
+  const saveLLMIntegration = async (integration: Integration) => {
+    setLLMSaving(true)
+    try {
+      if (editingLLMIntegration) {
+        // Update existing integration
+        await workspaceService.updateIntegration({
+          workspace_id: workspace.id,
+          integration_id: integration.id,
+          name: integration.name,
+          llm_provider: integration.llm_provider
+        })
+      } else {
+        // Create new integration
+        await workspaceService.createIntegration({
+          workspace_id: workspace.id,
+          name: integration.name,
+          type: 'llm',
+          llm_provider: integration.llm_provider
+        })
+      }
+
+      // Refresh workspace data
+      const response = await workspaceService.get(workspace.id)
+      await onSave(response.workspace)
+
+      setLLMDrawerVisible(false)
+      setEditingLLMIntegration(null)
+      setSelectedLLMProvider(null)
+      message.success('LLM integration saved successfully')
+    } catch (error) {
+      console.error('Error saving LLM integration:', error)
+      message.error('Failed to save LLM integration')
+      throw error
+    } finally {
+      setLLMSaving(false)
+    }
+  }
+
+  // Handle Firecrawl selection
+  const handleSelectFirecrawl = () => {
+    setEditingFirecrawlIntegration(null)
+    setFirecrawlDrawerVisible(true)
+  }
+
+  // Start editing a Firecrawl integration
+  const startEditFirecrawlIntegration = (integration: Integration) => {
+    setEditingFirecrawlIntegration(integration)
+    setFirecrawlDrawerVisible(true)
+  }
+
+  // Save Firecrawl integration
+  const saveFirecrawlIntegration = async (integration: Integration) => {
+    setFirecrawlSaving(true)
+    try {
+      if (editingFirecrawlIntegration) {
+        // Update existing integration
+        await workspaceService.updateIntegration({
+          workspace_id: workspace.id,
+          integration_id: integration.id,
+          name: integration.name,
+          firecrawl_settings: integration.firecrawl_settings
+        })
+      } else {
+        // Create new integration
+        await workspaceService.createIntegration({
+          workspace_id: workspace.id,
+          name: integration.name,
+          type: 'firecrawl',
+          firecrawl_settings: integration.firecrawl_settings
+        })
+      }
+
+      // Refresh workspace data
+      const response = await workspaceService.get(workspace.id)
+      await onSave(response.workspace)
+
+      setFirecrawlDrawerVisible(false)
+      setEditingFirecrawlIntegration(null)
+      message.success('Firecrawl integration saved successfully')
+    } catch (error) {
+      console.error('Error saving Firecrawl integration:', error)
+      message.error('Failed to save Firecrawl integration')
+      throw error
+    } finally {
+      setFirecrawlSaving(false)
+    }
+  }
+
   // Close provider drawer
   const closeProviderDrawer = () => {
     setProviderDrawerVisible(false)
@@ -905,7 +1029,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all cursor-pointer mb-4 relative"
         >
           <div className="flex items-center">
-            <img src="/supabase.png" alt="Supabase" style={{ height: 13 }} />
+            <img src="/console/supabase.png" alt="Supabase" style={{ height: 13 }} />
             <span className="ml-3 font-medium">Supabase</span>
           </div>
           <Button
@@ -915,6 +1039,53 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             onClick={(e) => {
               e.stopPropagation()
               handleSelectSupabase()
+            }}
+          >
+            Configure
+          </Button>
+        </div>
+
+        {/* LLM Providers */}
+        {llmProviders.map((provider) => (
+          <div
+            key={`${provider.type}-${provider.kind}`}
+            onClick={() => handleSelectLLMProvider(provider.kind)}
+            className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all cursor-pointer mb-4 relative"
+          >
+            <div className="flex items-center">
+              {provider.getIcon('', 'large')}
+              <span className="ml-3 font-medium">{provider.name}</span>
+            </div>
+            <Button
+              type="primary"
+              ghost
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSelectLLMProvider(provider.kind)
+              }}
+            >
+              Configure
+            </Button>
+          </div>
+        ))}
+
+        {/* Firecrawl */}
+        <div
+          onClick={() => handleSelectFirecrawl()}
+          className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all cursor-pointer mb-4 relative"
+        >
+          <div className="flex items-center">
+            {firecrawlProvider.getIcon('', 'large')}
+            <span className="ml-3 font-medium">{firecrawlProvider.name}</span>
+          </div>
+          <Button
+            type="primary"
+            ghost
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleSelectFirecrawl()
             }}
           >
             Configure
@@ -1010,7 +1181,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                         )}
                       </div>
                       <Tooltip title={integration.id}>
-                        <img src="/supabase.png" alt="Supabase" style={{ height: 24 }} />
+                        <img src="/console/supabase.png" alt="Supabase" style={{ height: 24 }} />
                       </Tooltip>
                     </>
                   }
@@ -1094,7 +1265,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                     {hasBeforeUserCreatedHook && addToLists.length > 0 && (
                       <Descriptions.Item label="Auto-subscribe to Lists">
                         {addToLists.map((listId) => {
-                          const list = lists.find((l: any) => l.id === listId)
+                          const list = lists.find((l) => l.id === listId)
                           return (
                             <Tag key={listId} bordered={false} color="blue" className="mb-1">
                               {list?.name || listId}
@@ -1126,6 +1297,129 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                         </Tag>
                       </Descriptions.Item>
                     )}
+                  </Descriptions>
+                </Card>
+              </div>
+            )
+          }
+
+          if (integration.type === 'llm' && integration.llm_provider) {
+            const provider = integration.llm_provider
+
+            return (
+              <div key={integration.id} className="mb-4">
+                <Card
+                  title={
+                    <>
+                      <div className="float-right">
+                        {isOwner && (
+                          <Space>
+                            <Tooltip title="Edit">
+                              <Button
+                                type="text"
+                                onClick={() => startEditLLMIntegration(integration)}
+                                size="small"
+                              >
+                                <FontAwesomeIcon icon={faPenToSquare} />
+                              </Button>
+                            </Tooltip>
+                            <Popconfirm
+                              title="Delete this integration?"
+                              description="This action cannot be undone."
+                              onConfirm={() => deleteIntegration(integration.id)}
+                              okText="Yes"
+                              cancelText="No"
+                            >
+                              <Tooltip title="Delete">
+                                <Button size="small" type="text">
+                                  <FontAwesomeIcon icon={faTrashCan} />
+                                </Button>
+                              </Tooltip>
+                            </Popconfirm>
+                          </Space>
+                        )}
+                      </div>
+                      <Tooltip title={integration.id}>
+                        {getLLMProviderIcon(provider.kind, 14)}
+                      </Tooltip>
+                    </>
+                  }
+                >
+                  <Descriptions bordered size="small" column={1} className="mt-2">
+                    <Descriptions.Item label="Name">{integration.name}</Descriptions.Item>
+                    <Descriptions.Item label="Model">
+                      <Tag bordered={false} color="purple">
+                        {provider.anthropic?.model || 'Not configured'}
+                      </Tag>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="API Key">
+                      <Tag bordered={false} color="green">
+                        <FontAwesomeIcon icon={faCheck} className="mr-1" /> Configured
+                      </Tag>
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Card>
+              </div>
+            )
+          }
+
+          if (integration.type === 'firecrawl' && integration.firecrawl_settings) {
+            return (
+              <div key={integration.id} className="mb-4">
+                <Card
+                  title={
+                    <>
+                      <div className="float-right">
+                        {isOwner && (
+                          <Space>
+                            <Tooltip title="Edit">
+                              <Button
+                                type="text"
+                                onClick={() => startEditFirecrawlIntegration(integration)}
+                                size="small"
+                              >
+                                <FontAwesomeIcon icon={faPenToSquare} />
+                              </Button>
+                            </Tooltip>
+                            <Popconfirm
+                              title="Delete this integration?"
+                              description="This action cannot be undone."
+                              onConfirm={() => deleteIntegration(integration.id)}
+                              okText="Yes"
+                              cancelText="No"
+                            >
+                              <Tooltip title="Delete">
+                                <Button size="small" type="text">
+                                  <FontAwesomeIcon icon={faTrashCan} />
+                                </Button>
+                              </Tooltip>
+                            </Popconfirm>
+                          </Space>
+                        )}
+                      </div>
+                      <Tooltip title={integration.id}>
+                        {firecrawlProvider.getIcon('', 14)}
+                      </Tooltip>
+                    </>
+                  }
+                >
+                  <Descriptions bordered size="small" column={1} className="mt-2">
+                    <Descriptions.Item label="Name">{integration.name}</Descriptions.Item>
+                    <Descriptions.Item label="API Key">
+                      <Tag bordered={false} color="green">
+                        <FontAwesomeIcon icon={faCheck} className="mr-1" /> Configured
+                      </Tag>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Tools">
+                      <Space>
+                        <Tag bordered={false} color="blue">
+                          scrape_url
+                        </Tag>
+                        <Tag bordered={false} color="blue">
+                          search_web
+                        </Tag>
+                      </Space>
+                    </Descriptions.Item>
                   </Descriptions>
                 </Card>
               </div>
@@ -1368,7 +1662,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         title: 'Name',
         dataIndex: 'name',
         key: 'name',
-        render: (text: string, record: any) => (
+        render: (text: string, record: { is_default: boolean }) => (
           <span>
             {text}
             {record.is_default && (
@@ -1393,7 +1687,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </div>
         ),
         key: 'actions',
-        render: (_: any, record: any, index: number) => (
+        render: (_: unknown, record: { is_default: boolean }, index: number) => (
           <div className="flex justify-end">
             <Space>
               {!record.is_default && (
@@ -1594,25 +1888,46 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     {
       key: 'supabase',
       label: 'Supabase',
-      icon: <img src="/supabase.png" alt="Supabase" style={{ height: 10, marginRight: 8 }} />,
+      icon: (
+        <img src="/console/supabase.png" alt="Supabase" style={{ height: 10, marginRight: 8 }} />
+      ),
       onClick: () => handleSelectSupabase()
+    },
+    ...llmProviders.map((provider) => ({
+      key: `llm-${provider.kind}`,
+      label: provider.name,
+      icon: React.cloneElement(
+        provider.getIcon('h-6 w-12 object-contain mr-1') as React.ReactElement
+      ),
+      onClick: () => handleSelectLLMProvider(provider.kind)
+    })),
+    {
+      key: 'firecrawl',
+      label: 'Firecrawl',
+      icon: React.cloneElement(
+        firecrawlProvider.getIcon('h-6 w-12 object-contain mr-1') as React.ReactElement
+      ),
+      onClick: () => handleSelectFirecrawl()
     }
   ]
 
   return (
-    <Section
-      title="Integrations"
-      description="Connect and manage external services"
-      extra={
-        isOwner && (workspace?.integrations?.length ?? 0) > 0 ? (
+    <>
+      <SettingsSectionHeader
+        title="Integrations"
+        description="Connect and manage external services"
+      />
+
+      {isOwner && (workspace?.integrations?.length ?? 0) > 0 && (
+        <div style={{ textAlign: 'right', marginBottom: 16 }}>
           <Dropdown menu={{ items: integrationMenuItems }} trigger={['click']}>
             <Button type="primary" size="small" ghost>
               Add Integration <FontAwesomeIcon icon={faChevronDown} />
             </Button>
           </Dropdown>
-        ) : null
-      }
-    >
+        </div>
+      )}
+
       {/* Check and display alert for missing email provider configuration */}
       {workspace && (
         <>
@@ -1764,6 +2079,99 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           formRef={supabaseFormRef}
         />
       </Drawer>
-    </Section>
+
+      {/* LLM Integration Drawer */}
+      <Drawer
+        title={
+          editingLLMIntegration
+            ? `Edit ${getLLMProviderName(selectedLLMProvider || 'anthropic').toUpperCase()} Integration`
+            : `Add New ${getLLMProviderName(selectedLLMProvider || 'anthropic').toUpperCase()} Integration`
+        }
+        width={600}
+        open={llmDrawerVisible}
+        onClose={() => {
+          setLLMDrawerVisible(false)
+          setEditingLLMIntegration(null)
+          setSelectedLLMProvider(null)
+        }}
+        footer={
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button
+                onClick={() => {
+                  setLLMDrawerVisible(false)
+                  setEditingLLMIntegration(null)
+                  setSelectedLLMProvider(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => llmFormRef.current?.submit()}
+                loading={llmSaving}
+                disabled={!isOwner}
+              >
+                Save
+              </Button>
+            </Space>
+          </div>
+        }
+        destroyOnClose
+      >
+        {selectedLLMProvider && (
+          <LLMIntegration
+            integration={editingLLMIntegration || undefined}
+            workspace={workspace}
+            providerKind={selectedLLMProvider}
+            onSave={saveLLMIntegration}
+            isOwner={isOwner}
+            formRef={llmFormRef}
+          />
+        )}
+      </Drawer>
+
+      {/* Firecrawl Integration Drawer */}
+      <Drawer
+        title={editingFirecrawlIntegration ? 'Edit Firecrawl Integration' : 'Add Firecrawl Integration'}
+        width={600}
+        open={firecrawlDrawerVisible}
+        onClose={() => {
+          setFirecrawlDrawerVisible(false)
+          setEditingFirecrawlIntegration(null)
+        }}
+        footer={
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button
+                onClick={() => {
+                  setFirecrawlDrawerVisible(false)
+                  setEditingFirecrawlIntegration(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => firecrawlFormRef.current?.submit()}
+                loading={firecrawlSaving}
+                disabled={!isOwner}
+              >
+                Save
+              </Button>
+            </Space>
+          </div>
+        }
+        destroyOnClose
+      >
+        <FirecrawlIntegration
+          integration={editingFirecrawlIntegration || undefined}
+          workspace={workspace}
+          onSave={saveFirecrawlIntegration}
+          isOwner={isOwner}
+          formRef={firecrawlFormRef}
+        />
+      </Drawer>
+    </>
   )
 }

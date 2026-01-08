@@ -37,12 +37,7 @@ import {
   handleBackgroundColorChange as handleBackgroundColorChangeUtil,
   getEffectiveTextColor,
   getEffectiveBackgroundColor,
-  createLinkWithStyleMerging,
-  debugSpecificContent,
-  testLinkParsing,
-  verifyLinkParsingFix,
-  testUserSpecificContent,
-  testContentReloadPersistence
+  createLinkWithStyleMerging
 } from '../shared/utils'
 
 // Toolbar Button Component
@@ -76,8 +71,8 @@ export const ColorButton: React.FC<ColorButtonProps> = ({
   title,
   isActive = false
 }) => {
-  const handleColorChange = (color: any) => {
-    const hexValue = color?.toHexString() || ''
+  const handleColorChange = (color: unknown) => {
+    const hexValue = (color as { toHexString?: () => string })?.toHexString?.() || ''
     onColorChange(hexValue)
   }
 
@@ -87,128 +82,130 @@ export const ColorButton: React.FC<ColorButtonProps> = ({
 
   return (
     <Tooltip title={title}>
-      <ColorPicker
-        value={currentColor || undefined}
-        onChange={handleColorChange}
-        onClear={handleClear}
-        allowClear={true}
-        size="small"
-        showText={false}
-        presets={[
-          {
-            label: 'Recommended',
-            colors: [
-              // Basic + Gray
-              '#000000',
-              '#ffffff',
-              '#1f2937',
-              '#f9fafb',
-              '#f3f4f6',
-              '#e5e7eb',
-              '#d1d5db',
-              '#9ca3af',
-              '#6b7280',
-              '#4b5563',
-              '#374151',
-              '#111827',
-              // Red
-              '#fdf2f2',
-              '#fde8e8',
-              '#fbd5d5',
-              '#f8b4b4',
-              '#f98080',
-              '#f05252',
-              '#e02424',
-              '#c81e1e',
-              '#9b1c1c',
-              '#771d1d',
-              // Yellow
-              '#fdfdea',
-              '#fdf6b2',
-              '#fce96a',
-              '#faca15',
-              '#e3a008',
-              '#c27803',
-              '#9f580a',
-              '#8e4b10',
-              '#723b13',
-              '#633112',
-              // Green
-              '#f3faf7',
-              '#def7ec',
-              '#bcf0da',
-              '#84e1bc',
-              '#31c48d',
-              '#0e9f6e',
-              '#057a55',
-              '#046c4e',
-              '#03543f',
-              '#014737',
-              // Blue
-              '#ebf5ff',
-              '#e1effe',
-              '#c3ddfd',
-              '#a4cafe',
-              '#76a9fa',
-              '#3f83f8',
-              '#1c64f2',
-              '#1a56db',
-              '#1e429f',
-              '#233876',
-              // Indigo
-              '#f0f5ff',
-              '#e5edff',
-              '#cddbfe',
-              '#b4c6fc',
-              '#8da2fb',
-              '#6875f5',
-              '#5850ec',
-              '#5145cd',
-              '#42389d',
-              '#362f78',
-              // Purple
-              '#f6f5ff',
-              '#edebfe',
-              '#dcd7fe',
-              '#cabffd',
-              '#ac94fa',
-              '#9061f9',
-              '#7e3af2',
-              '#6c2bd9',
-              '#5521b5',
-              '#4a1d96',
-              // Pink
-              '#fdf2f8',
-              '#fce8f3',
-              '#fad1e8',
-              '#f8b4d9',
-              '#f17eb8',
-              '#e74694',
-              '#d61f69',
-              '#bf125d',
-              '#99154b',
-              '#751a3d'
-            ]
-          }
-        ]}
-      >
-        <div style={{ position: 'relative' }}>
-          <ToolbarButton title={title} isActive={isActive}>
-            <FontAwesomeIcon icon={icon} size="xs" />
-          </ToolbarButton>
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '2px',
-              left: '2px',
-              right: '2px',
-              height: '3px',
-              backgroundColor: currentColor || '#ffffff',
-              borderRadius: '1px'
-            }}
-          />
-        </div>
-      </ColorPicker>
+      <span>
+        <ColorPicker
+          value={currentColor || undefined}
+          onChange={handleColorChange}
+          onClear={handleClear}
+          allowClear={true}
+          size="small"
+          showText={false}
+          presets={[
+            {
+              label: 'Recommended',
+              colors: [
+                // Basic + Gray
+                '#000000',
+                '#ffffff',
+                '#1f2937',
+                '#f9fafb',
+                '#f3f4f6',
+                '#e5e7eb',
+                '#d1d5db',
+                '#9ca3af',
+                '#6b7280',
+                '#4b5563',
+                '#374151',
+                '#111827',
+                // Red
+                '#fdf2f2',
+                '#fde8e8',
+                '#fbd5d5',
+                '#f8b4b4',
+                '#f98080',
+                '#f05252',
+                '#e02424',
+                '#c81e1e',
+                '#9b1c1c',
+                '#771d1d',
+                // Yellow
+                '#fdfdea',
+                '#fdf6b2',
+                '#fce96a',
+                '#faca15',
+                '#e3a008',
+                '#c27803',
+                '#9f580a',
+                '#8e4b10',
+                '#723b13',
+                '#633112',
+                // Green
+                '#f3faf7',
+                '#def7ec',
+                '#bcf0da',
+                '#84e1bc',
+                '#31c48d',
+                '#0e9f6e',
+                '#057a55',
+                '#046c4e',
+                '#03543f',
+                '#014737',
+                // Blue
+                '#ebf5ff',
+                '#e1effe',
+                '#c3ddfd',
+                '#a4cafe',
+                '#76a9fa',
+                '#3f83f8',
+                '#1c64f2',
+                '#1a56db',
+                '#1e429f',
+                '#233876',
+                // Indigo
+                '#f0f5ff',
+                '#e5edff',
+                '#cddbfe',
+                '#b4c6fc',
+                '#8da2fb',
+                '#6875f5',
+                '#5850ec',
+                '#5145cd',
+                '#42389d',
+                '#362f78',
+                // Purple
+                '#f6f5ff',
+                '#edebfe',
+                '#dcd7fe',
+                '#cabffd',
+                '#ac94fa',
+                '#9061f9',
+                '#7e3af2',
+                '#6c2bd9',
+                '#5521b5',
+                '#4a1d96',
+                // Pink
+                '#fdf2f8',
+                '#fce8f3',
+                '#fad1e8',
+                '#f8b4d9',
+                '#f17eb8',
+                '#e74694',
+                '#d61f69',
+                '#bf125d',
+                '#99154b',
+                '#751a3d'
+              ]
+            }
+          ]}
+        >
+          <div style={{ position: 'relative' }}>
+            <ToolbarButton title={title} isActive={isActive}>
+              <FontAwesomeIcon icon={icon as import('@fortawesome/fontawesome-svg-core').IconProp} size="xs" />
+            </ToolbarButton>
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '2px',
+                left: '2px',
+                right: '2px',
+                height: '3px',
+                backgroundColor: currentColor || '#ffffff',
+                borderRadius: '1px'
+              }}
+            />
+          </div>
+        </ColorPicker>
+      </span>
     </Tooltip>
   )
 }
@@ -220,7 +217,7 @@ export const ToolbarSeparator: React.FC = () => <div className={toolbarSeparator
 export const EmojiButton: React.FC<EmojiButtonProps> = ({ onEmojiSelect, title }) => {
   const [visible, setVisible] = React.useState(false)
 
-  const handleEmojiSelect = (emoji: any) => {
+  const handleEmojiSelect = (emoji: { native?: string }) => {
     onEmojiSelect(emoji)
     setVisible(false)
   }
@@ -448,15 +445,17 @@ export const TiptapToolbar: React.FC<TiptapToolbarProps> = ({ editor, buttons, m
   }
 
   const handleTextColorChange = (color: string) => {
-    handleTextColorChangeUtil(editor, color, mode)
+    handleTextColorChangeUtil(editor, color)
   }
 
   const handleBackgroundColorChange = (color: string) => {
-    handleBackgroundColorChangeUtil(editor, color, mode)
+    handleBackgroundColorChangeUtil(editor, color)
   }
 
-  const handleEmojiSelect = (emoji: any) => {
-    editor.chain().focus().insertContent(emoji.native).run()
+  const handleEmojiSelect = (emoji: { native?: string }) => {
+    if (emoji.native) {
+      editor.chain().focus().insertContent(emoji.native).run()
+    }
   }
 
   const getFormattingHandler = (action: () => void) => {

@@ -27,6 +27,7 @@ type TelemetryMetrics struct {
 	ListsCount         int    `json:"lists_count"`
 	SegmentsCount      int    `json:"segments_count"`
 	UsersCount         int    `json:"users_count"`
+	BlogPostsCount     int    `json:"blog_posts_count"`
 	APIEndpoint        string `json:"api_endpoint"`
 
 	// Integration flags - boolean for each email provider
@@ -98,9 +99,8 @@ func (t *TelemetryService) SendMetricsForAllWorkspaces(ctx context.Context) erro
 
 	// Collect and send metrics for each workspace
 	for _, workspace := range workspaces {
-		if err := t.sendMetricsForWorkspace(ctx, workspace); err != nil {
-			// Continue with other workspaces on error
-		}
+		_ = t.sendMetricsForWorkspace(ctx, workspace)
+		// Continue with other workspaces on error
 	}
 
 	return nil
@@ -133,6 +133,7 @@ func (t *TelemetryService) sendMetricsForWorkspace(ctx context.Context, workspac
 		metrics.ListsCount = telemetryMetrics.ListsCount
 		metrics.SegmentsCount = telemetryMetrics.SegmentsCount
 		metrics.UsersCount = telemetryMetrics.UsersCount
+		metrics.BlogPostsCount = telemetryMetrics.BlogPostsCount
 		metrics.LastMessageAt = telemetryMetrics.LastMessageAt
 	}
 
@@ -154,10 +155,10 @@ func (t *TelemetryService) setIntegrationFlagsFromWorkspace(workspace *domain.Wo
 				metrics.Mailjet = true
 			case domain.EmailProviderKindPostmark:
 				metrics.Postmark = true
-		case domain.EmailProviderKindSMTP:
-			metrics.SMTP = true
-		case domain.EmailProviderKindSparkPost:
-			metrics.SparkPost = true
+			case domain.EmailProviderKindSMTP:
+				metrics.SMTP = true
+			case domain.EmailProviderKindSparkPost:
+				metrics.SparkPost = true
 			}
 		}
 	}
@@ -195,7 +196,7 @@ func (t *TelemetryService) sendMetrics(ctx context.Context, metrics TelemetryMet
 	if err != nil {
 		return nil // Fail silently as requested
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Check response status
 	if resp.StatusCode >= 400 {
@@ -220,7 +221,7 @@ func (t *TelemetryService) StartDailyScheduler(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				t.SendMetricsForAllWorkspaces(ctx)
+				_ = t.SendMetricsForAllWorkspaces(ctx)
 			}
 		}
 	}()

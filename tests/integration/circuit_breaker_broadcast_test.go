@@ -27,7 +27,7 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 	t.Run("should_pause_broadcast_and_set_reason_when_circuit_breaker_triggers", func(t *testing.T) {
 		// Create a fresh test database
 		dbManager := testutil.NewDatabaseManager()
-		defer dbManager.Cleanup()
+		defer func() { _ = dbManager.Cleanup() }()
 
 		err := dbManager.Setup()
 		require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		// Get workspace database connection
 		workspaceDB, err := dbManager.GetWorkspaceDB("testws01")
 		require.NoError(t, err)
-		defer workspaceDB.Close()
+		defer func() { _ = workspaceDB.Close() }()
 
 		// Ensure workspace database has the broadcasts table (initialize schema)
 		err = initializeWorkspaceSchema(workspaceDB)
@@ -62,13 +62,14 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		require.NoError(t, err)
 
 		// Step 2: Verify broadcast exists and is in 'sending' status
-		var initialStatus, initialPauseReason string
+		var initialStatus string
+		var initialPauseReason sql.NullString
 		err = workspaceDB.QueryRow(`
-			SELECT status, COALESCE(pause_reason, '') FROM broadcasts WHERE id = $1
+			SELECT status, pause_reason FROM broadcasts WHERE id = $1
 		`, broadcastID).Scan(&initialStatus, &initialPauseReason)
 		require.NoError(t, err)
 		assert.Equal(t, "sending", initialStatus, "Broadcast should initially be in sending status")
-		assert.Empty(t, initialPauseReason, "Pause reason should initially be empty")
+		assert.False(t, initialPauseReason.Valid, "Pause reason should initially be NULL")
 
 		// Step 3: Create a task for this broadcast in system database
 		taskID := "550e8400-e29b-41d4-a716-446655440001" // Valid UUID format
@@ -120,7 +121,7 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 				"error":        "Daily sending limit exceeded",
 			},
 		}
-		mockEventBus.Publish(ctx, circuitBreakerEvent)
+		_ = mockEventBus.Publish(ctx, circuitBreakerEvent)
 
 		// Publish broadcast paused event (simulating what orchestrator would do)
 		broadcastPausedEvent := domain.EventPayload{
@@ -131,20 +132,22 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 				"reason":       circuitBreakerReason,
 			},
 		}
-		mockEventBus.Publish(ctx, broadcastPausedEvent)
+		_ = mockEventBus.Publish(ctx, broadcastPausedEvent)
 
 		// Step 6: Verify the broadcast was paused with the correct reason
-		var finalStatus, finalPauseReason string
+		var finalStatus string
+		var finalPauseReason sql.NullString
 		var pausedAt *time.Time
 		err = workspaceDB.QueryRow(`
-			SELECT status, COALESCE(pause_reason, ''), paused_at 
+			SELECT status, pause_reason, paused_at
 			FROM broadcasts WHERE id = $1
 		`, broadcastID).Scan(&finalStatus, &finalPauseReason, &pausedAt)
 		require.NoError(t, err)
 
 		// Assertions
 		assert.Equal(t, "paused", finalStatus, "Broadcast should be paused after circuit breaker trigger")
-		assert.Equal(t, circuitBreakerReason, finalPauseReason, "Pause reason should be set to circuit breaker reason")
+		assert.True(t, finalPauseReason.Valid, "Pause reason should be set")
+		assert.Equal(t, circuitBreakerReason, finalPauseReason.String, "Pause reason should be set to circuit breaker reason")
 		assert.NotNil(t, pausedAt, "Paused timestamp should be set")
 		assert.WithinDuration(t, time.Now(), *pausedAt, 5*time.Second, "Paused timestamp should be recent")
 
@@ -176,7 +179,7 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 	t.Run("should_handle_multiple_circuit_breaker_triggers_gracefully", func(t *testing.T) {
 		// Create a fresh test database
 		dbManager := testutil.NewDatabaseManager()
-		defer dbManager.Cleanup()
+		defer func() { _ = dbManager.Cleanup() }()
 
 		err := dbManager.Setup()
 		require.NoError(t, err)
@@ -188,7 +191,7 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		// Get workspace database connection
 		workspaceDB, err := dbManager.GetWorkspaceDB("testws01")
 		require.NoError(t, err)
-		defer workspaceDB.Close()
+		defer func() { _ = workspaceDB.Close() }()
 
 		// Ensure workspace database has the broadcasts table (initialize schema)
 		err = initializeWorkspaceSchema(workspaceDB)
@@ -221,13 +224,15 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify first pause
-		var status1, reason1 string
+		var status1 string
+		var reason1 sql.NullString
 		err = workspaceDB.QueryRow(`
-			SELECT status, COALESCE(pause_reason, '') FROM broadcasts WHERE id = $1
+			SELECT status, pause_reason FROM broadcasts WHERE id = $1
 		`, broadcastID).Scan(&status1, &reason1)
 		require.NoError(t, err)
 		assert.Equal(t, "paused", status1)
-		assert.Equal(t, firstReason, reason1)
+		assert.True(t, reason1.Valid)
+		assert.Equal(t, firstReason, reason1.String)
 
 		// Simulate broadcast being resumed
 		_, err = workspaceDB.Exec(`
@@ -253,19 +258,21 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify second pause with updated reason
-		var status2, reason2 string
+		var status2 string
+		var reason2 sql.NullString
 		err = workspaceDB.QueryRow(`
-			SELECT status, COALESCE(pause_reason, '') FROM broadcasts WHERE id = $1
+			SELECT status, pause_reason FROM broadcasts WHERE id = $1
 		`, broadcastID).Scan(&status2, &reason2)
 		require.NoError(t, err)
 		assert.Equal(t, "paused", status2)
-		assert.Equal(t, secondReason, reason2, "Pause reason should be updated to the latest circuit breaker trigger")
+		assert.True(t, reason2.Valid)
+		assert.Equal(t, secondReason, reason2.String, "Pause reason should be updated to the latest circuit breaker trigger")
 	})
 
 	t.Run("should_preserve_pause_reason_when_broadcast_is_resumed", func(t *testing.T) {
 		// Create a fresh test database
 		dbManager := testutil.NewDatabaseManager()
-		defer dbManager.Cleanup()
+		defer func() { _ = dbManager.Cleanup() }()
 
 		err := dbManager.Setup()
 		require.NoError(t, err)
@@ -277,7 +284,7 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		// Get workspace database connection
 		workspaceDB, err := dbManager.GetWorkspaceDB("testws01")
 		require.NoError(t, err)
-		defer workspaceDB.Close()
+		defer func() { _ = workspaceDB.Close() }()
 
 		// Ensure workspace database has the broadcasts table (initialize schema)
 		err = initializeWorkspaceSchema(workspaceDB)
@@ -300,13 +307,15 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify broadcast is paused with reason
-		var initialStatus, initialReason string
+		var initialStatus string
+		var initialReason sql.NullString
 		err = workspaceDB.QueryRow(`
-			SELECT status, COALESCE(pause_reason, '') FROM broadcasts WHERE id = $1
+			SELECT status, pause_reason FROM broadcasts WHERE id = $1
 		`, broadcastID).Scan(&initialStatus, &initialReason)
 		require.NoError(t, err)
 		assert.Equal(t, "paused", initialStatus)
-		assert.Equal(t, circuitBreakerReason, initialReason)
+		assert.True(t, initialReason.Valid)
+		assert.Equal(t, circuitBreakerReason, initialReason.String)
 
 		// Simulate resuming the broadcast (this would typically be done via API or admin action)
 		_, err = workspaceDB.Exec(`
@@ -318,13 +327,15 @@ func TestCircuitBreakerBroadcastPause(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify broadcast is resumed but pause_reason is preserved for historical reference
-		var resumedStatus, preservedReason string
+		var resumedStatus string
+		var preservedReason sql.NullString
 		err = workspaceDB.QueryRow(`
-			SELECT status, COALESCE(pause_reason, '') FROM broadcasts WHERE id = $1
+			SELECT status, pause_reason FROM broadcasts WHERE id = $1
 		`, broadcastID).Scan(&resumedStatus, &preservedReason)
 		require.NoError(t, err)
 		assert.Equal(t, "sending", resumedStatus, "Broadcast should be resumed")
-		assert.Equal(t, circuitBreakerReason, preservedReason, "Pause reason should be preserved for historical tracking")
+		assert.True(t, preservedReason.Valid)
+		assert.Equal(t, circuitBreakerReason, preservedReason.String, "Pause reason should be preserved for historical tracking")
 	})
 }
 
@@ -367,6 +378,7 @@ func initializeWorkspaceSchema(workspaceDB *sql.DB) error {
 			winner_sent_at TIMESTAMP WITH TIME ZONE,
 			test_phase_recipient_count INTEGER DEFAULT 0,
 			winner_phase_recipient_count INTEGER DEFAULT 0,
+			enqueued_count INTEGER DEFAULT 0,
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			started_at TIMESTAMP WITH TIME ZONE,

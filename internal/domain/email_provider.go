@@ -116,17 +116,17 @@ func (e *EmailProvider) Validate(passphrase string) error {
 		return e.SparkPost.Validate(passphrase)
 	case EmailProviderKindPostmark:
 		if e.Postmark == nil {
-			return fmt.Errorf("Postmark settings required when email provider kind is postmark")
+			return fmt.Errorf("postmark settings required when email provider kind is postmark")
 		}
 		return e.Postmark.Validate(passphrase)
 	case EmailProviderKindMailgun:
 		if e.Mailgun == nil {
-			return fmt.Errorf("Mailgun settings required when email provider kind is mailgun")
+			return fmt.Errorf("mailgun settings required when email provider kind is mailgun")
 		}
 		return e.Mailgun.Validate(passphrase)
 	case EmailProviderKindMailjet:
 		if e.Mailjet == nil {
-			return fmt.Errorf("Mailjet settings required when email provider kind is mailjet")
+			return fmt.Errorf("mailjet settings required when email provider kind is mailjet")
 		}
 		return e.Mailjet.Validate(passphrase)
 	default:
@@ -266,11 +266,12 @@ func (e *EmailProvider) DecryptSecretKeys(passphrase string) error {
 }
 
 type EmailOptions struct {
-	FromName    *string      `json:"from_name,omitempty"` // Override default sender from name
-	CC          []string     `json:"cc,omitempty"`
-	BCC         []string     `json:"bcc,omitempty"`
-	ReplyTo     string       `json:"reply_to,omitempty"`
-	Attachments []Attachment `json:"attachments,omitempty"`
+	FromName           *string      `json:"from_name,omitempty"` // Override default sender from name
+	CC                 []string     `json:"cc,omitempty"`
+	BCC                []string     `json:"bcc,omitempty"`
+	ReplyTo            string       `json:"reply_to,omitempty"`
+	Attachments        []Attachment `json:"attachments,omitempty"`
+	ListUnsubscribeURL string       `json:"list_unsubscribe_url,omitempty"` // RFC-8058 one-click unsubscribe URL
 }
 
 // IsEmpty returns true if no email options are set
@@ -349,6 +350,7 @@ type SendEmailRequest struct {
 	IntegrationID string `validate:"required"`
 	MessageID     string `validate:"required"`
 	ExternalID    *string
+	AutomationID  *string // Automation this email is sent from (nullable for broadcasts/transactional)
 
 	// Target and content
 	Contact        *Contact        `validate:"required"`

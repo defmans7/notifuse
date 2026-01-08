@@ -1,4 +1,5 @@
-import { createRootRoute, createRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
+import { createRootRoute, createRoute, useParams, useNavigate } from '@tanstack/react-router'
 import { RootLayout } from './layouts/RootLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { SignInPage } from './pages/SignInPage'
@@ -12,10 +13,12 @@ import { ListsPage } from './pages/ListsPage'
 import { FileManagerPage } from './pages/FileManagerPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 import { BroadcastsPage } from './pages/BroadcastsPage'
+import { AutomationsPage } from './pages/AutomationsPage'
 import { TransactionalNotificationsPage } from './pages/TransactionalNotificationsPage'
 import { LogsPage } from './pages/LogsPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { DebugSegmentPage } from './pages/DebugSegmentPage'
+import { BlogPage } from './pages/BlogPage'
 import SetupWizard from './pages/SetupWizard'
 import { createRouter } from '@tanstack/react-router'
 
@@ -42,6 +45,11 @@ export interface AcceptInvitationSearch {
   token?: string
 }
 
+export interface BlogSearch {
+  status?: string
+  category_id?: string
+}
+
 // Create the root route
 const rootRoute = createRootRoute({
   component: RootLayout
@@ -50,14 +58,14 @@ const rootRoute = createRootRoute({
 // Create the index route
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/',
+  path: '/console/',
   component: DashboardPage
 })
 
 // Create the signin route
 const signinRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/signin',
+  path: '/console/signin',
   component: SignInPage,
   validateSearch: (search: Record<string, unknown>): SignInSearch => ({
     email: search.email as string | undefined
@@ -67,21 +75,21 @@ const signinRoute = createRoute({
 // Create the logout route
 const logoutRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/logout',
+  path: '/console/logout',
   component: LogoutPage
 })
 
 // Create the setup wizard route
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/setup',
+  path: '/console/setup',
   component: SetupWizard
 })
 
 // Create the accept invitation route
 const acceptInvitationRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/accept-invitation',
+  path: '/console/accept-invitation',
   component: AcceptInvitationPage,
   validateSearch: (search: Record<string, unknown>): AcceptInvitationSearch => ({
     token: search.token as string | undefined
@@ -91,14 +99,14 @@ const acceptInvitationRoute = createRoute({
 // Create the workspace create route
 const workspaceCreateRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/workspace/create',
+  path: '/console/workspace/create',
   component: CreateWorkspacePage
 })
 
 // Create the workspace route
 const workspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/workspace/$workspaceId',
+  path: '/console/workspace/$workspaceId',
   component: WorkspaceLayout
 })
 
@@ -114,6 +122,12 @@ const workspaceBroadcastsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/broadcasts',
   component: BroadcastsPage
+})
+
+const workspaceAutomationsRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/automations',
+  component: AutomationsPage
 })
 
 const workspaceListsRoute = createRoute({
@@ -164,9 +178,30 @@ export const workspaceContactsRoute = createRoute({
   })
 })
 
-const workspaceSettingsRoute = createRoute({
+const WorkspaceSettingsRedirect = () => {
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId/settings' })
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    navigate({
+      to: '/console/workspace/$workspaceId/settings/$section',
+      params: { workspaceId, section: 'team' },
+      replace: true
+    })
+  }, [workspaceId, navigate])
+
+  return null
+}
+
+const workspaceSettingsRedirectRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/settings',
+  component: WorkspaceSettingsRedirect
+})
+
+const workspaceSettingsRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/settings/$section',
   component: WorkspaceSettingsPage
 })
 
@@ -188,6 +223,16 @@ const workspaceNewSegmentRoute = createRoute({
   component: DebugSegmentPage
 })
 
+const workspaceBlogRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/blog',
+  component: BlogPage,
+  validateSearch: (search: Record<string, unknown>): BlogSearch => ({
+    status: search.status as string | undefined,
+    category_id: search.category_id as string | undefined
+  })
+})
+
 // Create the router
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -199,15 +244,18 @@ const routeTree = rootRoute.addChildren([
   workspaceRoute.addChildren([
     workspaceIndexRoute,
     workspaceBroadcastsRoute,
+    workspaceAutomationsRoute,
     workspaceContactsRoute,
     workspaceListsRoute,
     workspaceTransactionalNotificationsRoute,
     workspaceLogsRoute,
     workspaceFileManagerRoute,
+    workspaceSettingsRedirectRoute,
     workspaceSettingsRoute,
     workspaceTemplatesRoute,
     workspaceAnalyticsRoute,
-    workspaceNewSegmentRoute
+    workspaceNewSegmentRoute,
+    workspaceBlogRoute
   ])
 ])
 

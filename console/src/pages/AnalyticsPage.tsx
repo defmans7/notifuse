@@ -10,7 +10,7 @@ import { getBrowserTimezone } from '../lib/timezoneNormalizer'
 type TimePeriod = '7D' | '14D' | '30D' | '90D'
 
 export function AnalyticsPage() {
-  const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId' })
   const { workspaces } = useAuth()
 
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('14D')
@@ -21,6 +21,7 @@ export function AnalyticsPage() {
   // Get browser timezone on component mount (normalized to canonical IANA name)
   useEffect(() => {
     const browserTimezone = getBrowserTimezone()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedTimezone(browserTimezone)
   }, [])
 

@@ -27,6 +27,7 @@ import { TIMEZONE_OPTIONS } from '../../lib/timezones'
 import { Contact, UpsertContactOperationAction } from '../../services/api/contacts'
 import { contactsApi } from '../../services/api/contacts'
 import dayjs from '../../lib/dayjs'
+import type { Dayjs } from 'dayjs'
 import { Workspace } from '../../services/api/types'
 
 const { Option } = Select
@@ -149,6 +150,7 @@ const formatCustomFieldLabel = (fieldKey: string, workspace: Workspace): string 
 const getOptionalFields = (workspace: Workspace) => [
   { key: 'first_name', label: 'First Name' },
   { key: 'last_name', label: 'Last Name' },
+  { key: 'full_name', label: 'Full Name' },
   { key: 'phone', label: 'Phone' },
   { key: 'country', label: 'Country' },
   { key: 'external_id', label: 'External ID' },
@@ -159,9 +161,6 @@ const getOptionalFields = (workspace: Workspace) => [
   { key: 'postcode', label: 'Postcode' },
   { key: 'state', label: 'State' },
   { key: 'job_title', label: 'Job Title' },
-  { key: 'lifetime_value', label: 'Lifetime Value' },
-  { key: 'orders_count', label: 'Orders Count' },
-  { key: 'last_order_at', label: 'Last Order At' },
   { key: 'custom_string_1', label: formatCustomFieldLabel('custom_string_1', workspace) },
   { key: 'custom_string_2', label: formatCustomFieldLabel('custom_string_2', workspace) },
   { key: 'custom_string_3', label: formatCustomFieldLabel('custom_string_3', workspace) },
@@ -222,8 +221,8 @@ export function ContactUpsertDrawer({
   const [loading, setLoading] = React.useState(false)
   const { message } = App.useApp()
 
-  // Get optional fields with custom labels
-  const optionalFields = getOptionalFields(workspace)
+  // Get optional fields with custom labels - memoize to prevent useEffect from running on every render
+  const optionalFields = React.useMemo(() => getOptionalFields(workspace), [workspace])
 
   // Use external open state if provided, otherwise use internal state
   const isControlled = externalOpen !== undefined
@@ -242,63 +241,73 @@ export function ContactUpsertDrawer({
       setSelectedFields(fieldsToShow)
 
       // Format JSON fields for display and convert date strings to dayjs objects
-      const formattedValues = { ...contact }
+      const formattedValues: Record<string, unknown> = { ...contact }
       fieldsToShow.forEach((field) => {
         // Handle JSON fields
         if (field.startsWith('custom_json_')) {
           try {
-            formattedValues[field as keyof Contact] = JSON.stringify(
+            formattedValues[field] = JSON.stringify(
               contact[field as keyof Contact],
               null,
               2
             )
-          } catch (e) {
-            console.error(`Error formatting JSON for field ${field}:`, e)
+          } catch (error) {
+            console.error(`Error formatting JSON for field ${field}:`, error)
           }
         }
 
         // Handle date fields - convert string to dayjs object for DatePicker
-        else if (field === 'last_order_at' || field.startsWith('custom_datetime_')) {
+        else if (field.startsWith('custom_datetime_')) {
           const dateValue = contact[field as keyof Contact]
           if (dateValue) {
-            formattedValues[field as keyof Contact] = dayjs(dateValue as string)
+            formattedValues[field] = dayjs(dateValue as string)
           }
         }
       })
 
       form.setFieldsValue(formattedValues)
     }
-  }, [contact, form, drawerVisible])
+  }, [contact, form, drawerVisible, optionalFields])
 
   const handleRemoveField = (field: string) => {
     setSelectedFields(selectedFields.filter((f) => f !== field))
     form.setFieldValue(field, undefined)
   }
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: Record<string, unknown>) => {
     try {
       setLoading(true)
-      const contactData = {
-        ...values,
+      const contactData: Partial<Contact> & { workspace_id: string } = {
         workspace_id: workspace.id
       }
+
+      // Copy all values from the form
+      Object.keys(values).forEach((key) => {
+        contactData[key as keyof typeof contactData] = values[key] as never
+      })
 
       // Convert dayjs objects to strings for API submission and parse JSON
       selectedFields.forEach((field) => {
         // Handle JSON fields
         if (field.startsWith('custom_json_')) {
           try {
-            contactData[field] = JSON.parse(values[field])
-          } catch (e) {
+            const fieldValue = values[field]
+            contactData[field as keyof typeof contactData] = JSON.parse(
+              String(fieldValue)
+            ) as never
+          } catch {
             message.error(`Invalid JSON in field ${field}`)
             return
           }
         }
         // Handle date fields - convert dayjs to ISO string
-        else if (field === 'last_order_at' || field.startsWith('custom_datetime_')) {
+        else if (field.startsWith('custom_datetime_')) {
           const dateValue = values[field]
-          if (dateValue && dateValue.$d) {
-            contactData[field] = dateValue.toISOString()
+          // Check if it's a Dayjs object
+          if (dateValue && typeof dateValue === 'object' && 'toISOString' in dateValue) {
+            contactData[field as keyof typeof contactData] = (
+              dateValue as Dayjs
+            ).toISOString() as never
           }
         }
       })
@@ -389,8 +398,6 @@ export function ContactUpsertDrawer({
     }
 
     if (
-      field === 'lifetime_value' ||
-      field === 'orders_count' ||
       field === 'custom_number_1' ||
       field === 'custom_number_2' ||
       field === 'custom_number_3' ||
@@ -403,7 +410,6 @@ export function ContactUpsertDrawer({
     }
 
     if (
-      field === 'last_order_at' ||
       field === 'custom_datetime_1' ||
       field === 'custom_datetime_2' ||
       field === 'custom_datetime_3' ||

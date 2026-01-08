@@ -17,7 +17,7 @@ export interface StorageObject {
 export interface FileManagerProps {
   currentPath?: string
   itemFilters?: ItemFilter[]
-  onError: (error: any) => void
+  onError: (error: Error) => void
   onSelect: (items: StorageObject[]) => void
   height: number
   acceptFileType: string
@@ -32,11 +32,12 @@ export interface FileManagerProps {
 
 export interface ItemFilter {
   key: string // item key
-  value: any
+  value: string | number | boolean
   operator: string // contains equals greaterThan lessThan
 }
 
 export interface FileManagerSettings {
+  provider?: string
   endpoint: string
   access_key: string
   bucket: string
@@ -44,4 +45,5 @@ export interface FileManagerSettings {
   secret_key?: string
   encrypted_secret_key?: string
   cdn_endpoint?: string
+  force_path_style?: boolean
 }

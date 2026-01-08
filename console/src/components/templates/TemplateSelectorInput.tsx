@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Input, Drawer, List, Empty, Spin, Button } from 'antd'
+import { Input, Drawer, List, Empty, Spin, Button, Space } from 'antd'
 import { EyeOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { templatesApi } from '../../services/api/template'
@@ -54,7 +54,8 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
       // Assume the API accepts a category parameter for filtering
       const response = await templatesApi.list({
         workspace_id: workspaceId,
-        category: category
+        category: category,
+        channel: 'email'
       })
       return response
     },
@@ -127,26 +128,26 @@ const TemplateSelectorInput: React.FC<TemplateSelectorInputProps> = ({
 
   return (
     <>
-      <Input
-        value={selectedTemplate?.name || ''}
-        placeholder={placeholder}
-        readOnly={!clearable}
-        disabled={disabled}
-        onClick={showDrawer}
-        onClear={() => {
-          setSelectedTemplate(null)
-          onChange?.(null)
-        }}
-        addonAfter={
-          selectedTemplate &&
-          currentWorkspace && (
-            <TemplatePreviewPopover record={selectedTemplate} workspace={currentWorkspace}>
-              <EyeOutlined style={{ cursor: 'pointer' }} />
-            </TemplatePreviewPopover>
-          )
-        }
-        allowClear={clearable}
-      />
+      <Space.Compact style={{ width: '100%' }}>
+        <Input
+          value={selectedTemplate?.name || ''}
+          placeholder={placeholder}
+          readOnly={!clearable}
+          disabled={disabled}
+          onClick={showDrawer}
+          onClear={() => {
+            setSelectedTemplate(null)
+            onChange?.(null)
+          }}
+          allowClear={clearable}
+          style={{ flex: 1 }}
+        />
+        {selectedTemplate && currentWorkspace && (
+          <TemplatePreviewPopover record={selectedTemplate} workspace={currentWorkspace}>
+            <Button icon={<EyeOutlined />} />
+          </TemplatePreviewPopover>
+        )}
+      </Space.Compact>
 
       <Drawer
         title="Select Template"

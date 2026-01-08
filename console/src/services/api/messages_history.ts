@@ -13,8 +13,8 @@ export interface ChannelOptions {
 }
 
 export interface MessageData {
-  data: Record<string, any>
-  metadata?: Record<string, any>
+  data: Record<string, unknown>
+  metadata?: Record<string, unknown>
 }
 
 export interface MessageHistory {
@@ -22,7 +22,7 @@ export interface MessageHistory {
   external_id?: string
   contact_email: string
   broadcast_id?: string
-  list_ids?: string[]
+  list_id?: string
   template_id: string
   template_version: number
   channel: string

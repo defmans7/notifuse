@@ -42,7 +42,7 @@ export const FailedMessagesTable: React.FC<FailedMessagesTableProps> = ({ worksp
 
   const handleViewMore = () => {
     navigate({
-      to: '/workspace/$workspaceId/logs',
+      to: '/console/workspace/$workspaceId/logs',
       params: { workspaceId: workspace.id },
       search: { is_failed: 'true' }
     })
@@ -50,6 +50,7 @@ export const FailedMessagesTable: React.FC<FailedMessagesTableProps> = ({ worksp
 
   useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id])
 
   const cardExtra = (

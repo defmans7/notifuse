@@ -17,7 +17,7 @@ import (
 )
 
 // TestBroadcastHandler tests the broadcast handler with proper SMTP email provider configuration.
-// This test suite sets up a Mailhog SMTP server (configured in compose.test.yaml) to properly
+// This test suite sets up a Mailpit SMTP server (configured in compose.test.yaml) to properly
 // test email sending functionality without skipping tests due to missing email provider configuration.
 
 func TestBroadcastHandler(t *testing.T) {
@@ -84,9 +84,8 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				"workspace_id": workspaceID,
 				"name":         "Test Broadcast",
 				"audience": map[string]interface{}{
-					"lists":                 []string{list.ID},
-					"exclude_unsubscribed":  true,
-					"skip_duplicate_emails": true,
+					"list":                 list.ID,
+					"exclude_unsubscribed": true,
 				},
 				"schedule": map[string]interface{}{
 					"is_scheduled": false,
@@ -99,7 +98,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.CreateBroadcast(broadcast)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -122,7 +121,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.CreateBroadcast(broadcast)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -145,7 +144,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.CreateBroadcast(broadcast)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -162,9 +161,8 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				"workspace_id": workspaceID,
 				"name":         "A/B Test Broadcast",
 				"audience": map[string]interface{}{
-					"lists":                 []string{list.ID},
-					"exclude_unsubscribed":  true,
-					"skip_duplicate_emails": true,
+					"list":                 list.ID,
+					"exclude_unsubscribed": true,
 				},
 				"schedule": map[string]interface{}{
 					"is_scheduled": false,
@@ -190,7 +188,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.CreateBroadcast(broadcast)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -213,7 +211,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.GetBroadcast(broadcast.ID)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
@@ -238,7 +236,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 		t.Run("should return 404 for non-existent broadcast", func(t *testing.T) {
 			resp, err := client.GetBroadcast("non-existent-id")
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 		})
@@ -247,7 +245,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 			// Test missing parameters
 			resp, err := client.Get("/api/broadcasts.get")
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -265,7 +263,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				"workspace_id": workspaceID,
 			})
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -286,7 +284,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				"offset":       "1",
 			})
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -304,7 +302,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				"status":       "draft",
 			})
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -317,6 +315,64 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				broadcastData := b.(map[string]interface{})
 				assert.Equal(t, "draft", broadcastData["status"])
 			}
+		})
+
+		t.Run("should handle broadcasts with NULL pause_reason (migrated broadcasts)", func(t *testing.T) {
+			// This test simulates the scenario where old broadcasts have NULL pause_reason
+			// after a database migration. This is what caused the production bug.
+
+			// Get workspace database connection
+			workspaceDB, err := factory.GetWorkspaceDB(workspaceID)
+			require.NoError(t, err)
+			defer func() { _ = workspaceDB.Close() }()
+
+			// Insert broadcast directly with NULL pause_reason (simulating migrated data)
+			broadcastID := "bc-null-test-" + testutil.GenerateRandomString(12)
+			_, err = workspaceDB.Exec(`
+				INSERT INTO broadcasts (
+					id, workspace_id, name, status, audience, schedule, test_settings,
+					created_at, updated_at, pause_reason
+				) VALUES (
+					$1, $2, 'Migrated Broadcast with NULL pause_reason', 'draft',
+					'{"type": "all"}', '{"type": "immediate"}', '{}',
+					CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL
+				)
+			`, broadcastID, workspaceID)
+			require.NoError(t, err, "Failed to insert broadcast with NULL pause_reason")
+
+			// Try to list broadcasts - this should NOT crash
+			resp, err := client.ListBroadcasts(map[string]string{
+				"workspace_id": workspaceID,
+			})
+			require.NoError(t, err)
+			defer func() { _ = resp.Body.Close() }()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode, "ListBroadcasts should handle NULL pause_reason")
+
+			var result map[string]interface{}
+			err = json.NewDecoder(resp.Body).Decode(&result)
+			require.NoError(t, err)
+
+			// Verify we got broadcasts back
+			assert.Contains(t, result, "broadcasts")
+			broadcasts := result["broadcasts"].([]interface{})
+			assert.NotEmpty(t, broadcasts, "Should return broadcasts including the one with NULL pause_reason")
+
+			// Find our test broadcast and verify pause_reason is handled correctly
+			found := false
+			for _, b := range broadcasts {
+				broadcastData := b.(map[string]interface{})
+				if broadcastData["id"] == broadcastID {
+					found = true
+					// pause_reason should either be nil or omitted from JSON (due to omitempty)
+					pauseReason, exists := broadcastData["pause_reason"]
+					if exists {
+						assert.Nil(t, pauseReason, "NULL pause_reason should be represented as nil in JSON")
+					}
+					break
+				}
+			}
+			assert.True(t, found, "Should find the broadcast with NULL pause_reason in results")
 		})
 	})
 
@@ -335,9 +391,8 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				"id":           broadcast.ID,
 				"name":         "Updated Broadcast Name",
 				"audience": map[string]interface{}{
-					"lists":                 []string{list.ID},
-					"exclude_unsubscribed":  true,
-					"skip_duplicate_emails": true,
+					"list":                 list.ID,
+					"exclude_unsubscribed": true,
 				},
 				"schedule":      broadcast.Schedule,
 				"test_settings": broadcast.TestSettings,
@@ -345,7 +400,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.UpdateBroadcast(updateRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
@@ -372,7 +427,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			// Create a broadcast and set it to sent status
 			broadcast, err := factory.CreateBroadcast(workspaceID,
-				testutil.WithBroadcastStatus(domain.BroadcastStatusSent))
+				testutil.WithBroadcastStatus(domain.BroadcastStatusProcessed))
 			require.NoError(t, err)
 
 			updateRequest := map[string]interface{}{
@@ -380,9 +435,8 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 				"id":           broadcast.ID,
 				"name":         "Should Not Update",
 				"audience": map[string]interface{}{
-					"lists":                 []string{list.ID},
-					"exclude_unsubscribed":  true,
-					"skip_duplicate_emails": true,
+					"list":                 list.ID,
+					"exclude_unsubscribed": true,
 				},
 				"schedule":      broadcast.Schedule,
 				"test_settings": broadcast.TestSettings,
@@ -390,7 +444,7 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.UpdateBroadcast(updateRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -409,14 +463,14 @@ func testBroadcastCRUD(t *testing.T, client *testutil.APIClient, factory *testut
 
 			resp, err := client.DeleteBroadcast(deleteRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 			// Verify broadcast is deleted
 			getResp, err := client.GetBroadcast(broadcast.ID)
 			require.NoError(t, err)
-			defer getResp.Body.Close()
+			defer func() { _ = getResp.Body.Close() }()
 
 			assert.Equal(t, http.StatusNotFound, getResp.StatusCode)
 		})
@@ -430,7 +484,7 @@ func testBroadcastEmailProvider(t *testing.T, client *testutil.APIClient, factor
 			"id": workspaceID,
 		})
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -515,9 +569,8 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 			// Create broadcast targeting the list with a template
 			broadcast, err := factory.CreateBroadcast(workspaceID,
 				testutil.WithBroadcastAudience(domain.AudienceSettings{
-					Lists:               []string{list.ID},
+					List:                list.ID,
 					ExcludeUnsubscribed: true,
-					SkipDuplicateEmails: true,
 				}))
 			require.NoError(t, err)
 
@@ -533,7 +586,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 			}
 			updateResp, err := client.UpdateBroadcast(updateReq)
 			require.NoError(t, err)
-			defer updateResp.Body.Close()
+			defer func() { _ = updateResp.Body.Close() }()
 			require.Equal(t, http.StatusOK, updateResp.StatusCode)
 
 			scheduleRequest := map[string]interface{}{
@@ -544,7 +597,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.ScheduleBroadcast(scheduleRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			// With SMTP provider configured, this should succeed
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -563,13 +616,13 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 			// Using WaitForBroadcastStatusWithExecution to ensure continuous task processing
 			// This is the critical check that would have caught the SQL scan bug!
 			finalStatus, err := testutil.WaitForBroadcastStatusWithExecution(t, client, broadcast.ID,
-				[]string{"sent", "completed"},
+				[]string{"processed", "completed"},
 				60*time.Second)
 			if err != nil {
 				t.Fatalf("Broadcast failed or timed out: %v", err)
 			}
 
-			assert.Contains(t, []string{"sent", "completed"}, finalStatus,
+			assert.Contains(t, []string{"processed", "completed"}, finalStatus,
 				"Broadcast should complete successfully")
 		})
 
@@ -590,7 +643,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.ScheduleBroadcast(scheduleRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			// With SMTP provider configured, this should succeed
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -610,7 +663,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.ScheduleBroadcast(scheduleRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -619,7 +672,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 	t.Run("Pause Broadcast", func(t *testing.T) {
 		t.Run("should pause broadcast successfully", func(t *testing.T) {
 			broadcast, err := factory.CreateBroadcast(workspaceID,
-				testutil.WithBroadcastStatus(domain.BroadcastStatusSending))
+				testutil.WithBroadcastStatus(domain.BroadcastStatusProcessing))
 			require.NoError(t, err)
 
 			pauseRequest := map[string]interface{}{
@@ -629,7 +682,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.PauseBroadcast(pauseRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		})
@@ -648,7 +701,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.ResumeBroadcast(resumeRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		})
@@ -667,7 +720,7 @@ func testBroadcastLifecycle(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.CancelBroadcast(cancelRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		})
@@ -690,7 +743,7 @@ func testBroadcastABTesting(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.GetBroadcastTestResults(workspaceID, broadcast.ID)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			// With SMTP provider configured, this should succeed
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -713,7 +766,7 @@ func testBroadcastABTesting(t *testing.T, client *testutil.APIClient, factory *t
 		t.Run("should validate required parameters", func(t *testing.T) {
 			resp, err := client.Get("/api/broadcasts.getTestResults")
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -739,7 +792,7 @@ func testBroadcastABTesting(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.SelectBroadcastWinner(selectWinnerRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -762,7 +815,7 @@ func testBroadcastABTesting(t *testing.T, client *testutil.APIClient, factory *t
 
 			resp, err := client.SelectBroadcastWinner(selectWinnerRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -795,7 +848,7 @@ func testBroadcastIndividualSend(t *testing.T, client *testutil.APIClient, facto
 
 			resp, err := client.SendBroadcastToIndividual(sendRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			// With SMTP provider configured, this should succeed
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -819,7 +872,7 @@ func testBroadcastIndividualSend(t *testing.T, client *testutil.APIClient, facto
 
 			resp, err := client.SendBroadcastToIndividual(sendRequest)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
@@ -892,7 +945,7 @@ func TestBroadcastAuthentication(t *testing.T) {
 			t.Run(endpoint.name, func(t *testing.T) {
 				resp, err := endpoint.fn()
 				require.NoError(t, err)
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 
 				assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 			})
@@ -954,7 +1007,7 @@ func TestBroadcastMethodValidation(t *testing.T) {
 					"workspace_id": workspace.ID,
 				})
 				require.NoError(t, err)
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 
 				assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 			})
@@ -967,7 +1020,7 @@ func TestBroadcastMethodValidation(t *testing.T) {
 					"workspace_id": workspace.ID,
 				})
 				require.NoError(t, err)
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 
 				assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 			})

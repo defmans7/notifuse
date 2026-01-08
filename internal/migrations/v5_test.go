@@ -46,7 +46,7 @@ func TestV5Migration_UpdateWorkspace_Success(t *testing.T) {
 	// Create mock database
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mock the ALTER TABLE query
 	mock.ExpectExec("ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS pause_reason TEXT").
@@ -69,7 +69,7 @@ func TestV5Migration_UpdateWorkspace_AlterTableFails(t *testing.T) {
 	// Create mock database
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mock the ALTER TABLE query to fail
 	mock.ExpectExec("ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS pause_reason TEXT").
@@ -82,6 +82,12 @@ func TestV5Migration_UpdateWorkspace_AlterTableFails(t *testing.T) {
 
 	// Verify all expectations were met
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestV5Migration_ShouldRestartServer(t *testing.T) {
+	// Test V5Migration.ShouldRestartServer - this was at 0% coverage
+	migration := &V5Migration{}
+	assert.False(t, migration.ShouldRestartServer(), "V5Migration should not require server restart")
 }
 
 func TestV5Migration_Registration(t *testing.T) {

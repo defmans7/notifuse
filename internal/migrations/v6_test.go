@@ -30,7 +30,7 @@ func TestV6Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - All operations complete", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock the ALTER TABLE for workspace_invitations permissions column
 		mock.ExpectExec("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT").
@@ -52,7 +52,7 @@ func TestV6Migration_UpdateSystem(t *testing.T) {
 	t.Run("Error - ALTER TABLE fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock the ALTER TABLE to fail
 		mock.ExpectExec("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT").
@@ -66,7 +66,7 @@ func TestV6Migration_UpdateSystem(t *testing.T) {
 	t.Run("Error - Invitations permissions update fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock successful ALTER TABLE
 		mock.ExpectExec("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT").
@@ -84,7 +84,7 @@ func TestV6Migration_UpdateSystem(t *testing.T) {
 	t.Run("Error - User workspaces permissions update fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock successful ALTER TABLE and invitations update
 		mock.ExpectExec("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT").
@@ -114,7 +114,7 @@ func TestV6Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Success - No workspace changes", func(t *testing.T) {
 		db, _, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// V6 has no workspace-level changes, should return nil
 		err = migration.UpdateWorkspace(ctx, cfg, workspace, db)
@@ -130,6 +130,12 @@ func TestV6Migration_Interface(t *testing.T) {
 
 	// Test GetMajorVersion
 	assert.Equal(t, 6.0, migration.GetMajorVersion())
+}
+
+func TestV6Migration_ShouldRestartServer(t *testing.T) {
+	// Test V6Migration.ShouldRestartServer - this was at 0% coverage
+	migration := &V6Migration{}
+	assert.False(t, migration.ShouldRestartServer(), "V6Migration should not require server restart")
 }
 
 func TestV6Migration_Registration(t *testing.T) {
@@ -153,7 +159,7 @@ func TestV6Migration_PermissionsStructure(t *testing.T) {
 	t.Run("Verify permissions JSON structure", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// We can verify the permissions structure by checking the SQL contains expected keys
 		mock.ExpectExec("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT").
@@ -183,7 +189,7 @@ func TestV6Migration_Idempotency(t *testing.T) {
 		// This test verifies the migration can be run multiple times safely
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// First run - column doesn't exist, gets created
 		mock.ExpectExec("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT").

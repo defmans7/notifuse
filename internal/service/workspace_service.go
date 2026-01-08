@@ -18,21 +18,23 @@ import (
 )
 
 type WorkspaceService struct {
-	repo               domain.WorkspaceRepository
-	userRepo           domain.UserRepository
-	taskRepo           domain.TaskRepository
-	logger             logger.Logger
-	userService        domain.UserServiceInterface
-	authService        domain.AuthService
-	mailer             mailer.Mailer
-	config             *config.Config
-	contactService     domain.ContactService
-	listService        domain.ListService
-	contactListService domain.ContactListService
-	templateService    domain.TemplateService
-	webhookRegService  domain.WebhookRegistrationService
-	supabaseService    *SupabaseService
-	secretKey          string
+	repo                   domain.WorkspaceRepository
+	userRepo               domain.UserRepository
+	taskRepo               domain.TaskRepository
+	logger                 logger.Logger
+	userService            domain.UserServiceInterface
+	authService            domain.AuthService
+	mailer                 mailer.Mailer
+	config                 *config.Config
+	contactService         domain.ContactService
+	listService            domain.ListService
+	contactListService     domain.ContactListService
+	templateService        domain.TemplateService
+	webhookRegService      domain.WebhookRegistrationService
+	supabaseService        *SupabaseService
+	secretKey              string
+	dnsVerificationService *DNSVerificationService
+	blogService            *BlogService
 }
 
 func NewWorkspaceService(
@@ -50,28 +52,29 @@ func NewWorkspaceService(
 	templateService domain.TemplateService,
 	webhookRegService domain.WebhookRegistrationService,
 	secretKey string,
+	supabaseService *SupabaseService,
+	dnsVerificationService *DNSVerificationService,
+	blogService *BlogService,
 ) *WorkspaceService {
 	return &WorkspaceService{
-		repo:               repo,
-		userRepo:           userRepo,
-		taskRepo:           taskRepo,
-		logger:             logger,
-		userService:        userService,
-		authService:        authService,
-		mailer:             mailerInstance,
-		config:             config,
-		contactService:     contactService,
-		listService:        listService,
-		contactListService: contactListService,
-		templateService:    templateService,
-		webhookRegService:  webhookRegService,
-		secretKey:          secretKey,
+		repo:                   repo,
+		userRepo:               userRepo,
+		taskRepo:               taskRepo,
+		logger:                 logger,
+		userService:            userService,
+		authService:            authService,
+		mailer:                 mailerInstance,
+		config:                 config,
+		contactService:         contactService,
+		listService:            listService,
+		contactListService:     contactListService,
+		templateService:        templateService,
+		webhookRegService:      webhookRegService,
+		secretKey:              secretKey,
+		supabaseService:        supabaseService,
+		dnsVerificationService: dnsVerificationService,
+		blogService:            blogService,
 	}
-}
-
-// SetSupabaseService sets the Supabase service (used to avoid circular dependencies)
-func (s *WorkspaceService) SetSupabaseService(supabaseService *SupabaseService) {
-	s.supabaseService = supabaseService
 }
 
 // ListWorkspaces returns all workspaces for a user
@@ -317,23 +320,67 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.TransactionalEmailProviderID = settings.TransactionalEmailProviderID
 	existingWorkspace.Settings.MarketingEmailProviderID = settings.MarketingEmailProviderID
 	existingWorkspace.Settings.EmailTrackingEnabled = settings.EmailTrackingEnabled
+
+	// Verify DNS ownership if custom endpoint URL is being set or changed
+	if settings.CustomEndpointURL != nil && *settings.CustomEndpointURL != "" {
+		isDomainChanging := existingWorkspace.Settings.CustomEndpointURL == nil ||
+			*existingWorkspace.Settings.CustomEndpointURL != *settings.CustomEndpointURL
+
+		if isDomainChanging {
+			// Verify DNS ownership
+			if err := s.dnsVerificationService.VerifyDomainOwnership(ctx, *settings.CustomEndpointURL); err != nil {
+				s.logger.
+					WithField("workspace_id", id).
+					WithField("domain", *settings.CustomEndpointURL).
+					WithField("error", err.Error()).
+					Warn("DNS verification failed")
+
+				// In production, fail the request; in non-production, just log and continue
+				if s.config.IsProduction() {
+					// Return the validation error as-is without wrapping
+					return nil, err
+				}
+
+				s.logger.
+					WithField("workspace_id", id).
+					WithField("domain", *settings.CustomEndpointURL).
+					Info("DNS verification failed but continuing in non-production environment")
+			} else {
+				s.logger.
+					WithField("workspace_id", id).
+					WithField("domain", *settings.CustomEndpointURL).
+					Info("DNS verification successful")
+			}
+		}
+	}
+
 	existingWorkspace.Settings.CustomEndpointURL = settings.CustomEndpointURL
 	existingWorkspace.Settings.CustomFieldLabels = settings.CustomFieldLabels
+	existingWorkspace.Settings.BlogEnabled = settings.BlogEnabled
+	existingWorkspace.Settings.BlogSettings = settings.BlogSettings
 
-	// Handle template blocks - ensure they have proper timestamps and IDs
-	for i := range settings.TemplateBlocks {
-		block := &settings.TemplateBlocks[i]
+	// Handle template blocks - preserve existing blocks if not provided in update
+	// Note: Template blocks should be managed via dedicated /api/templateBlocks.* endpoints
+	// which support granular template permissions instead of requiring owner role.
+	// This code is kept for backward compatibility.
+	if settings.TemplateBlocks != nil {
+		// Only update template blocks if explicitly provided in the request
+		// Ensure they have proper timestamps and IDs
+		for i := range settings.TemplateBlocks {
+			block := &settings.TemplateBlocks[i]
 
-		// If this is a new block (no ID), generate one and set created time
-		if block.ID == "" {
-			block.ID = uuid.New().String()
-			block.Created = time.Now().UTC()
+			// If this is a new block (no ID), generate one and set created time
+			if block.ID == "" {
+				block.ID = uuid.New().String()
+				block.Created = time.Now().UTC()
+			}
+
+			// Always update the Updated timestamp
+			block.Updated = time.Now().UTC()
 		}
-
-		// Always update the Updated timestamp
-		block.Updated = time.Now().UTC()
+		existingWorkspace.Settings.TemplateBlocks = settings.TemplateBlocks
 	}
-	existingWorkspace.Settings.TemplateBlocks = settings.TemplateBlocks
+	// If settings.TemplateBlocks is nil, preserve existing template blocks (don't overwrite)
 
 	existingWorkspace.UpdatedAt = time.Now().UTC()
 
@@ -346,6 +393,9 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to update workspace")
 		return nil, err
 	}
+
+	// Blog themes are now created by the frontend when enabling the blog
+	// No automatic theme creation in the backend
 
 	return existingWorkspace, nil
 }
@@ -1098,6 +1148,10 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 		integration.EmailProvider = req.Provider
 	case domain.IntegrationTypeSupabase:
 		integration.SupabaseSettings = req.SupabaseSettings
+	case domain.IntegrationTypeLLM:
+		integration.LLMProvider = req.LLMProvider
+	case domain.IntegrationTypeFirecrawl:
+		integration.FirecrawlSettings = req.FirecrawlSettings
 	}
 
 	// Validate the integration
@@ -1142,25 +1196,23 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 
 	case domain.IntegrationTypeSupabase:
 		// Create default templates and transactional notifications for Supabase integration
-		if s.supabaseService != nil {
-			// Create templates first
-			mappings, err := s.supabaseService.CreateDefaultSupabaseTemplates(ctx, req.WorkspaceID, integrationID)
+		// Create templates first
+		mappings, err := s.supabaseService.CreateDefaultSupabaseTemplates(ctx, req.WorkspaceID, integrationID)
+		if err != nil {
+			s.logger.WithField("workspace_id", req.WorkspaceID).
+				WithField("integration_id", integrationID).
+				WithField("error", err.Error()).
+				Error("Failed to create default Supabase templates")
+			// Don't fail the integration creation, templates can be created manually
+		} else {
+			// Create transactional notifications that reference the templates
+			err = s.supabaseService.CreateDefaultSupabaseNotifications(ctx, req.WorkspaceID, integrationID, mappings)
 			if err != nil {
 				s.logger.WithField("workspace_id", req.WorkspaceID).
 					WithField("integration_id", integrationID).
 					WithField("error", err.Error()).
-					Error("Failed to create default Supabase templates")
-				// Don't fail the integration creation, templates can be created manually
-			} else {
-				// Create transactional notifications that reference the templates
-				err = s.supabaseService.CreateDefaultSupabaseNotifications(ctx, req.WorkspaceID, integrationID, mappings)
-				if err != nil {
-					s.logger.WithField("workspace_id", req.WorkspaceID).
-						WithField("integration_id", integrationID).
-						WithField("error", err.Error()).
-						Error("Failed to create default Supabase notifications")
-					// Don't fail the integration creation
-				}
+					Error("Failed to create default Supabase notifications")
+				// Don't fail the integration creation
 			}
 		}
 	}
@@ -1239,6 +1291,40 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 		} else {
 			// If no settings provided, preserve existing
 			updatedIntegration.SupabaseSettings = existingIntegration.SupabaseSettings
+		}
+	case domain.IntegrationTypeLLM:
+		// Preserve existing encrypted API key if new key is not provided
+		if req.LLMProvider != nil {
+			updatedIntegration.LLMProvider = req.LLMProvider
+
+			// Preserve encrypted API key if not provided in update
+			if req.LLMProvider.Anthropic != nil &&
+				req.LLMProvider.Anthropic.APIKey == "" &&
+				req.LLMProvider.Anthropic.EncryptedAPIKey == "" &&
+				existingIntegration.LLMProvider != nil &&
+				existingIntegration.LLMProvider.Anthropic != nil {
+				updatedIntegration.LLMProvider.Anthropic.EncryptedAPIKey =
+					existingIntegration.LLMProvider.Anthropic.EncryptedAPIKey
+			}
+		} else {
+			// If no settings provided, preserve existing
+			updatedIntegration.LLMProvider = existingIntegration.LLMProvider
+		}
+	case domain.IntegrationTypeFirecrawl:
+		// Preserve existing encrypted API key if new key is not provided
+		if req.FirecrawlSettings != nil {
+			updatedIntegration.FirecrawlSettings = req.FirecrawlSettings
+
+			// Preserve encrypted API key if not provided in update
+			if req.FirecrawlSettings.APIKey == "" &&
+				req.FirecrawlSettings.EncryptedAPIKey == "" &&
+				existingIntegration.FirecrawlSettings != nil {
+				updatedIntegration.FirecrawlSettings.EncryptedAPIKey =
+					existingIntegration.FirecrawlSettings.EncryptedAPIKey
+			}
+		} else {
+			// If no settings provided, preserve existing
+			updatedIntegration.FirecrawlSettings = existingIntegration.FirecrawlSettings
 		}
 	}
 
@@ -1326,14 +1412,12 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 
 	case domain.IntegrationTypeSupabase:
 		// Delete all templates and transactional notifications associated with this integration
-		if s.supabaseService != nil {
-			err := s.deleteSupabaseIntegrationResources(ctx, workspaceID, integrationID)
-			if err != nil {
-				s.logger.WithField("workspace_id", workspaceID).
-					WithField("integration_id", integrationID).
-					WithField("error", err.Error()).
-					Warn("Failed to delete Supabase integration resources, continuing with deletion anyway")
-			}
+		err := s.deleteSupabaseIntegrationResources(ctx, workspaceID, integrationID)
+		if err != nil {
+			s.logger.WithField("workspace_id", workspaceID).
+				WithField("integration_id", integrationID).
+				WithField("error", err.Error()).
+				Warn("Failed to delete Supabase integration resources, continuing with deletion anyway")
 		}
 	}
 
@@ -1363,10 +1447,6 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 // deleteSupabaseIntegrationResources deletes all templates and transactional notifications associated with a Supabase integration
 func (s *WorkspaceService) deleteSupabaseIntegrationResources(ctx context.Context, workspaceID, integrationID string) error {
 	// Delegate to the Supabase service which has access to all necessary repositories
-	if s.supabaseService == nil {
-		return fmt.Errorf("supabase service not available")
-	}
-
 	return s.supabaseService.DeleteIntegrationResources(ctx, workspaceID, integrationID)
 }
 

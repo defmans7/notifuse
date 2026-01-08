@@ -22,6 +22,7 @@ func TestNewFactory(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
 	config := DefaultConfig()
@@ -50,10 +51,12 @@ func TestNewFactory(t *testing.T) {
 				mockContactRepo,
 				mockTaskRepo,
 				mockWorkspaceRepo,
+				mockEmailQueueRepo,
 				mockLogger,
 				tt.config,
 				"https://api.notifuse.com",
 				mockEventBus,
+				false, // useQueueSender
 			)
 
 			assert.NotNil(t, factory)
@@ -87,6 +90,7 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
 	config := DefaultConfig()
@@ -99,10 +103,12 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		mockEmailQueueRepo,
 		mockLogger,
 		config,
 		"https://api.notifuse.com",
 		mockEventBus,
+		false, // useQueueSender
 	)
 
 	// Test CreateMessageSender
@@ -110,8 +116,7 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 
 	// Assert messageSender is not nil and is of MessageSender type
 	assert.NotNil(t, messageSender)
-	_, ok := messageSender.(MessageSender)
-	assert.True(t, ok, "Sender should implement MessageSender interface")
+	// messageSender already has type MessageSender, no need for type assertion
 }
 
 func TestFactory_CreateOrchestrator(t *testing.T) {
@@ -127,6 +132,7 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
 	config := DefaultConfig()
@@ -139,10 +145,12 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		mockEmailQueueRepo,
 		mockLogger,
 		config,
 		"https://api.notifuse.com",
 		mockEventBus,
+		false, // useQueueSender
 	)
 
 	// Test CreateOrchestrator
@@ -150,8 +158,7 @@ func TestFactory_CreateOrchestrator(t *testing.T) {
 
 	// Assert orchestrator is not nil
 	assert.NotNil(t, orchestrator)
-	_, ok := orchestrator.(BroadcastOrchestratorInterface)
-	assert.True(t, ok, "Orchestrator should implement BroadcastOrchestratorInterface")
+	// orchestrator already has type BroadcastOrchestratorInterface, no need for type assertion
 }
 
 func TestFactory_RegisterWithTaskService(t *testing.T) {
@@ -167,6 +174,7 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
 	mockTaskRepo := mocks.NewMockTaskRepository(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	mockTaskService := mocks.NewMockTaskService(ctrl)
 	mockEventBus := mocks.NewMockEventBus(ctrl)
@@ -184,10 +192,12 @@ func TestFactory_RegisterWithTaskService(t *testing.T) {
 		mockContactRepo,
 		mockTaskRepo,
 		mockWorkspaceRepo,
+		mockEmailQueueRepo,
 		mockLogger,
 		config,
 		"https://api.notifuse.com",
 		mockEventBus,
+		false, // useQueueSender
 	)
 
 	// Test RegisterWithTaskService

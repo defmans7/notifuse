@@ -33,7 +33,6 @@ export type {
   Integration,
   SupabaseAuthEmailHookSettings,
   SupabaseUserCreatedHookSettings,
-  SupabaseWebhookEndpoints,
   SupabaseIntegrationSettings,
   CreateWorkspaceRequest,
   Workspace,
@@ -115,6 +114,20 @@ export type {
   TestTemplateRequest,
   TestTemplateResponse
 } from './template'
+
+// Re-export from template_blocks.ts
+export type {
+  GetTemplateBlockRequest,
+  ListTemplateBlocksRequest,
+  CreateTemplateBlockRequest,
+  UpdateTemplateBlockRequest,
+  DeleteTemplateBlockRequest,
+  GetTemplateBlockResponse,
+  ListTemplateBlocksResponse,
+  CreateTemplateBlockResponse,
+  UpdateTemplateBlockResponse,
+  DeleteTemplateBlockResponse
+} from './template_blocks'
 
 // Re-export from segment.ts
 export type {

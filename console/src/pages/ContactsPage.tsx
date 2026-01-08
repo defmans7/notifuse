@@ -37,7 +37,9 @@ import { getCustomFieldLabel } from '../hooks/useCustomFieldLabel'
 const STORAGE_KEY = 'contact_columns_visibility'
 
 const DEFAULT_VISIBLE_COLUMNS = {
-  name: true,
+  first_name: true,
+  last_name: true,
+  full_name: false,
   language: true,
   timezone: true,
   country: true,
@@ -46,9 +48,6 @@ const DEFAULT_VISIBLE_COLUMNS = {
   phone: false,
   address: false,
   job_title: false,
-  lifetime_value: false,
-  orders_count: false,
-  last_order_at: false,
   created_at: false,
   custom_string_1: false,
   custom_string_2: false,
@@ -73,7 +72,7 @@ const DEFAULT_VISIBLE_COLUMNS = {
 }
 
 export function ContactsPage() {
-  const { workspaceId } = useParams({ from: '/workspace/$workspaceId/contacts' })
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId/contacts' })
   const search = useSearch({ from: workspaceContactsRoute.id })
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -142,7 +141,7 @@ export function ContactsPage() {
       setDeleteModalVisible(false)
       setContactToDelete(null)
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       message.error(error?.message || 'Failed to delete contact')
     }
   })
@@ -188,6 +187,7 @@ export function ContactsPage() {
     { key: 'external_id', label: 'External ID', type: 'string' as const },
     { key: 'first_name', label: 'First Name', type: 'string' as const },
     { key: 'last_name', label: 'Last Name', type: 'string' as const },
+    { key: 'full_name', label: 'Full Name', type: 'string' as const },
     { key: 'phone', label: 'Phone', type: 'string' as const },
     { key: 'language', label: 'Language', type: 'string' as const, options: Languages },
     { key: 'country', label: 'Country', type: 'string' as const, options: CountriesFormOptions },
@@ -240,16 +240,15 @@ export function ContactsPage() {
   const allColumns: { key: string; title: string }[] = [
     { key: 'lists', title: 'Lists' },
     { key: 'segments', title: 'Segments' },
-    { key: 'name', title: 'Name' },
+    { key: 'first_name', title: 'First Name' },
+    { key: 'last_name', title: 'Last Name' },
+    { key: 'full_name', title: 'Full Name' },
     { key: 'phone', title: 'Phone' },
     { key: 'country', title: 'Country' },
     { key: 'language', title: 'Language' },
     { key: 'timezone', title: 'Timezone' },
     { key: 'address', title: 'Address' },
     { key: 'job_title', title: 'Job Title' },
-    { key: 'lifetime_value', title: 'Lifetime Value' },
-    { key: 'orders_count', title: 'Orders Count' },
-    { key: 'last_order_at', title: 'Last Order' },
     { key: 'created_at', title: 'Created At' },
     { key: 'custom_string_1', title: getCustomFieldLabel('custom_string_1', currentWorkspace) },
     { key: 'custom_string_2', title: getCustomFieldLabel('custom_string_2', currentWorkspace) },
@@ -292,7 +291,7 @@ export function ContactsPage() {
           label: field?.label || key
         }
       })
-  }, [search])
+  }, [search, filterFields])
 
   // Force data refresh on mount
   React.useEffect(() => {
@@ -317,6 +316,7 @@ export function ContactsPage() {
         external_id: search.external_id,
         first_name: search.first_name,
         last_name: search.last_name,
+        full_name: search.full_name,
         phone: search.phone,
         country: search.country,
         language: search.language,
@@ -368,6 +368,7 @@ export function ContactsPage() {
     search.external_id,
     search.first_name,
     search.last_name,
+    search.full_name,
     search.phone,
     search.country,
     search.language,
@@ -402,7 +403,10 @@ export function ContactsPage() {
       key: 'email',
       fixed: 'left' as const,
       onHeaderCell: () => ({
-        className: '!bg-white'
+        style: { backgroundColor: '#F9F9F9' }
+      }),
+      onCell: () => ({
+        style: { backgroundColor: '#F9F9F9' }
       })
     },
     {
@@ -535,11 +539,25 @@ export function ContactsPage() {
       hidden: !visibleColumns.segments
     },
     {
-      title: 'Name',
-      key: 'name',
-      render: (_: unknown, record: Contact) =>
-        `${record.first_name || ''} ${record.last_name || ''}`,
-      hidden: !visibleColumns.name
+      title: 'First Name',
+      dataIndex: 'first_name',
+      key: 'first_name',
+      render: (_: unknown, record: Contact) => record.first_name || '-',
+      hidden: !visibleColumns.first_name
+    },
+    {
+      title: 'Last Name',
+      dataIndex: 'last_name',
+      key: 'last_name',
+      render: (_: unknown, record: Contact) => record.last_name || '-',
+      hidden: !visibleColumns.last_name
+    },
+    {
+      title: 'Full Name',
+      dataIndex: 'full_name',
+      key: 'full_name',
+      render: (_: unknown, record: Contact) => record.full_name || '-',
+      hidden: !visibleColumns.full_name
     },
     {
       title: 'Phone',
@@ -584,28 +602,6 @@ export function ContactsPage() {
       dataIndex: 'job_title',
       key: 'job_title',
       hidden: !visibleColumns.job_title
-    },
-    {
-      title: 'Lifetime Value',
-      dataIndex: 'lifetime_value',
-      key: 'lifetime_value',
-      render: (_: unknown, record: Contact) =>
-        record.lifetime_value ? `$${record.lifetime_value.toFixed(2)}` : '-',
-      hidden: !visibleColumns.lifetime_value
-    },
-    {
-      title: 'Orders Count',
-      dataIndex: 'orders_count',
-      key: 'orders_count',
-      hidden: !visibleColumns.orders_count
-    },
-    {
-      title: 'Last Order',
-      dataIndex: 'last_order_at',
-      key: 'last_order_at',
-      render: (_: unknown, record: Contact) =>
-        record.last_order_at ? new Date(record.last_order_at).toLocaleDateString() : '-',
-      hidden: !visibleColumns.last_order_at
     },
     {
       title: 'Created At',
@@ -803,7 +799,10 @@ export function ContactsPage() {
       fixed: 'right' as const,
       align: 'right' as const,
       onHeaderCell: () => ({
-        className: '!bg-white'
+        style: { backgroundColor: '#F9F9F9' }
+      }),
+      onCell: () => ({
+        style: { backgroundColor: '#F9F9F9' }
       }),
       render: (_: unknown, record: Contact) => {
         const menuItems: MenuProps['items'] = [
@@ -892,8 +891,9 @@ export function ContactsPage() {
                 workspaceId={workspaceId}
                 lists={listsData?.lists || []}
                 buttonProps={{
-                  type: 'default',
-                  buttonContent: 'Bulk Update',
+                  type: 'primary',
+                  ghost: true,
+                  children: 'Bulk Update',
                   disabled: !permissions?.contacts?.write
                 }}
               />

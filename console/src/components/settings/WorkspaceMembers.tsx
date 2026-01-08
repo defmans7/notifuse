@@ -21,8 +21,8 @@ import { faTrashCan } from '@fortawesome/free-regular-svg-icons'
 import { faRefresh, faUserCog } from '@fortawesome/free-solid-svg-icons'
 import { WorkspaceMember, UserPermissions } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
-import { Section } from './Section'
 import { EditPermissionsModal } from './EditPermissionsModal'
+import { SettingsSectionHeader } from './SettingsSectionHeader'
 
 const { Text } = Typography
 
@@ -51,7 +51,10 @@ export function WorkspaceMembers({
     broadcasts: { read: true, write: true },
     transactional: { read: true, write: true },
     workspace: { read: true, write: true },
-    message_history: { read: true, write: true }
+    message_history: { read: true, write: true },
+    blog: { read: true, write: true },
+    automations: { read: true, write: true },
+    llm: { read: true, write: true }
   })
   const { message } = App.useApp()
 
@@ -73,11 +76,7 @@ export function WorkspaceMembers({
       dataIndex: 'email',
       key: 'email',
       render: (email: string) => {
-        return (
-          <Space>
-            <Text ellipsis>{email}</Text>
-          </Space>
-        )
+        return <Text className="break-all">{email}</Text>
       }
     },
     {
@@ -163,7 +162,7 @@ export function WorkspaceMembers({
             title: '',
             key: 'action',
             width: 100,
-            render: (_: any, record: WorkspaceMember) => {
+            render: (_: unknown, record: WorkspaceMember) => {
               // Don't show remove button for the owner or for the current user
               if (record.role === 'owner') {
                 return null
@@ -294,9 +293,9 @@ export function WorkspaceMembers({
 
       // Refresh the members list
       onMembersChange()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create API key', error)
-      message.error(error.message || 'Failed to create API key')
+      message.error((error as Error).message || 'Failed to create API key')
     } finally {
       setCreatingApiKey(false)
     }
@@ -365,7 +364,10 @@ export function WorkspaceMembers({
         broadcasts: { read: true, write: true },
         transactional: { read: true, write: true },
         workspace: { read: true, write: true },
-        message_history: { read: true, write: true }
+        message_history: { read: true, write: true },
+        blog: { read: true, write: true },
+        automations: { read: true, write: true },
+        llm: { read: true, write: true }
       }
 
       await workspaceService.inviteMember({
@@ -447,7 +449,7 @@ export function WorkspaceMembers({
     setInvitePermissions((prev) => ({
       ...prev,
       [resource]: {
-        ...(prev as any)[resource],
+        ...((prev as unknown as Record<string, { read: boolean; write: boolean }>)[resource]),
         [type]: value
       }
     }))
@@ -476,7 +478,7 @@ export function WorkspaceMembers({
       dataIndex: 'read',
       key: 'read',
       width: '30%',
-      render: (value: boolean, record: any) => (
+      render: (value: boolean, record: { key: string }) => (
         <Switch
           checked={value}
           onChange={(checked) => updateInvitePermission(record.key, 'read', checked)}
@@ -489,7 +491,7 @@ export function WorkspaceMembers({
       dataIndex: 'write',
       key: 'write',
       width: '30%',
-      render: (value: boolean, record: any) => (
+      render: (value: boolean, record: { key: string }) => (
         <Switch
           checked={value}
           onChange={(checked) => updateInvitePermission(record.key, 'write', checked)}
@@ -501,35 +503,35 @@ export function WorkspaceMembers({
 
   return (
     <>
-      <Section title="Members" description="Manage your workspace members">
-        {isOwner && (
-          <div className="flex justify-end mb-4">
-            <Space size="middle">
-              <Button type="primary" size="small" ghost onClick={() => setApiKeyModalVisible(true)}>
-                Create API Key
-              </Button>
-              <Button type="primary" size="small" ghost onClick={() => setInviteModalVisible(true)}>
-                Invite Member
-              </Button>
-            </Space>
-          </div>
-        )}
+      <SettingsSectionHeader title="Team" description="Manage your workspace members" />
 
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '20px' }}>
-            <Spin />
-          </div>
-        ) : (
-          <Table
-            dataSource={members}
-            columns={columns}
-            rowKey="user_id"
-            pagination={false}
-            locale={{ emptyText: 'No members found' }}
-            className="border border-gray-200 rounded-md"
-          />
-        )}
-      </Section>
+      {isOwner && (
+        <div className="flex justify-end mb-4">
+          <Space size="middle">
+            <Button type="primary" size="small" ghost onClick={() => setApiKeyModalVisible(true)}>
+              Create API Key
+            </Button>
+            <Button type="primary" size="small" ghost onClick={() => setInviteModalVisible(true)}>
+              Invite Member
+            </Button>
+          </Space>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <Spin />
+        </div>
+      ) : (
+        <Table
+          dataSource={members}
+          columns={columns}
+          rowKey="user_id"
+          pagination={false}
+          locale={{ emptyText: 'No members found' }}
+          className="border border-gray-200 rounded-md"
+        />
+      )}
 
       <Modal
         title="Invite Member"
@@ -603,18 +605,23 @@ export function WorkspaceMembers({
               required
               rules={[{ required: true, message: 'Please enter an API key name' }]}
             >
-              <Input
-                value={apiKeyName}
-                onChange={(e) => {
-                  // Convert to snake_case on change
-                  const snakeCaseName = e.target.value
-                    .toLowerCase()
-                    .replace(/\s+/g, '_')
-                    .replace(/[^a-z0-9_]/g, '')
-                  setApiKeyName(snakeCaseName)
-                }}
-                addonAfter={'@' + domainName}
-              />
+              <Space.Compact style={{ width: '100%' }}>
+                <Input
+                  value={apiKeyName}
+                  onChange={(e) => {
+                    // Convert to snake_case on change
+                    const snakeCaseName = e.target.value
+                      .toLowerCase()
+                      .replace(/\s+/g, '_')
+                      .replace(/[^a-z0-9_]/g, '')
+                    setApiKeyName(snakeCaseName)
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <Button disabled style={{ pointerEvents: 'none', color: 'rgba(0, 0, 0, 0.88)' }}>
+                  {'@' + domainName}
+                </Button>
+              </Space.Compact>
             </Form.Item>
           </Form>
         ) : (

@@ -257,6 +257,22 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 	// Use a wait group to wait for all HTTP requests to complete
 	var wg sync.WaitGroup
 
+	// Create HTTP client with connection pooling for reuse across tasks
+	// Per Go docs: "Clients and Transports are safe for concurrent use by multiple
+	// goroutines and for efficiency should only be created once and re-used."
+	httpClient := &http.Client{
+		Timeout: 53 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout:     90 * time.Second,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	httpClient = tracing.WrapHTTPClient(httpClient)
+
 	// Execute tasks using HTTP roundtrips
 	for _, task := range tasks {
 		// Add to wait group before launching goroutine
@@ -293,19 +309,6 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 				return
 			}
 
-			// Create HTTP client with timeout
-			httpClient := &http.Client{
-				Timeout: 53 * time.Second, // 53 seconds timeout as requested
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{
-						InsecureSkipVerify: true, // Skip TLS verification
-					},
-				},
-			}
-
-			// Wrap with OpenCensus tracing
-			httpClient = tracing.WrapHTTPClient(httpClient)
-
 			// Create request with tracing context
 			endpoint := fmt.Sprintf("%s/api/tasks.execute", s.apiEndpoint)
 			req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(reqBody))
@@ -332,11 +335,21 @@ func (s *TaskService) ExecutePendingTasks(ctx context.Context, maxTasks int) err
 					Error("HTTP request for task execution failed")
 				return
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			// Check response
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
+
+				// 409 Conflict means task is already running - this is expected in concurrent scenarios
+				if resp.StatusCode == http.StatusConflict {
+					s.logger.WithField("task_id", t.ID).
+						WithField("workspace_id", t.WorkspaceID).
+						Debug("Task already running, skipping duplicate dispatch")
+					return
+				}
+
+				// Other non-OK statuses are actual errors
 				err := fmt.Errorf("non-OK status: %d, response: %s", resp.StatusCode, string(body))
 				tracing.MarkSpanError(taskCtx, err)
 				s.logger.WithField("task_id", t.ID).
@@ -432,10 +445,9 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string,
 	// Get the task
 	var task *domain.Task
 	var processor domain.TaskProcessor
-	var err error
 
 	// Wrap the initial setup operations in a transaction
-	err = s.WithTransaction(ctx, func(tx *sql.Tx) error {
+	err := s.WithTransaction(ctx, func(tx *sql.Tx) error {
 		txCtx, txSpan := tracing.StartServiceSpan(ctx, "TaskService", "ExecuteTaskTransaction")
 		defer tracing.EndSpan(txSpan, nil)
 
@@ -574,7 +586,7 @@ func (s *TaskService) ExecuteTask(ctx context.Context, workspace, taskID string,
 			tracing.AddAttribute(completeCtx, "task_id", taskID)
 			tracing.AddAttribute(completeCtx, "workspace_id", workspace)
 
-			if err := s.repo.MarkAsCompleted(bgCtx, workspace, taskID); err != nil {
+			if err := s.repo.MarkAsCompleted(bgCtx, workspace, taskID, task.State); err != nil {
 				tracing.MarkSpanError(completeCtx, err)
 				s.logger.WithFields(map[string]interface{}{
 					"task_id":      taskID,
@@ -694,10 +706,20 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 		"workspace_id": payload.WorkspaceID,
 	}).Info("Handling broadcast scheduled event")
 
+	// Extract payload data before transaction (needed after commit for immediate execution)
+	sendNow, _ := payload.Data["send_now"].(bool)
+	status, _ := payload.Data["status"].(string)
+
+	// Track whether we should trigger immediate execution after commit
+	shouldExecuteImmediately := false
+
 	// Use a transaction for checking and potentially updating/creating task
 	err := s.WithTransaction(ctx, func(tx *sql.Tx) error {
 		txCtx, txSpan := tracing.StartServiceSpan(ctx, "TaskService", "BroadcastScheduledTransaction")
 		defer tracing.EndSpan(txSpan, nil)
+
+		tracing.AddAttribute(txCtx, "send_now", sendNow)
+		tracing.AddAttribute(txCtx, "broadcast_status", status)
 
 		// Try to find the task for this broadcast ID directly
 		existingTask, err := s.repo.GetTaskByBroadcastID(txCtx, payload.WorkspaceID, broadcastID)
@@ -720,14 +742,7 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 				"task_id":      existingTask.ID,
 			}).Info("Task already exists for broadcast, updating status")
 
-			// Update task state if needed
-			sendNow, _ := payload.Data["send_now"].(bool)
-			status, _ := payload.Data["status"].(string)
-
-			tracing.AddAttribute(txCtx, "send_now", sendNow)
-			tracing.AddAttribute(txCtx, "broadcast_status", status)
-
-			if sendNow && status == string(domain.BroadcastStatusSending) {
+			if sendNow && status == string(domain.BroadcastStatusProcessing) {
 				// If broadcast is being sent immediately, mark task as pending and set next run to now
 				nextRunAfter := time.Now()
 				existingTask.NextRunAfter = &nextRunAfter
@@ -749,20 +764,8 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 					return updateErr
 				}
 
-				// Immediately trigger task execution after the transaction commits
-				if s.autoExecuteImmediate {
-					go func() {
-						// Small delay to ensure transaction is committed
-						time.Sleep(100 * time.Millisecond)
-						if execErr := s.ExecutePendingTasks(context.Background(), 1); execErr != nil {
-							s.logger.WithFields(map[string]interface{}{
-								"broadcast_id": broadcastID,
-								"task_id":      existingTask.ID,
-								"error":        execErr.Error(),
-							}).Error("Failed to trigger immediate task execution")
-						}
-					}()
-				}
+				// Flag for immediate execution after transaction commits
+				shouldExecuteImmediately = true
 			}
 
 			return nil
@@ -771,12 +774,6 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 		// If no task exists, create one
 		s.logger.WithField("broadcast_id", broadcastID).Info("Creating new task for scheduled broadcast")
 
-		// Set up task state
-		sendNow, _ := payload.Data["send_now"].(bool)
-		status, _ := payload.Data["status"].(string)
-
-		tracing.AddAttribute(txCtx, "send_now", sendNow)
-		tracing.AddAttribute(txCtx, "broadcast_status", status)
 		tracing.AddAttribute(txCtx, "creating_new_task", true)
 
 		// Create a copy of the broadcast ID for the pointer
@@ -793,7 +790,7 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 				SendBroadcast: &domain.SendBroadcastState{
 					BroadcastID:     broadcastID,
 					ChannelType:     "email",
-					SentCount:       0,
+					EnqueuedCount:   0,
 					FailedCount:     0,
 					RecipientOffset: 0,
 				},
@@ -836,19 +833,9 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 			"workspace_id": payload.WorkspaceID,
 		}).Info("Successfully created task for scheduled broadcast")
 
-		// If the broadcast is set to send immediately, trigger task execution
-		if sendNow && status == string(domain.BroadcastStatusSending) && s.autoExecuteImmediate {
-			// Immediately trigger task execution after the transaction commits
-			go func() {
-				// Small delay to ensure transaction is committed
-				time.Sleep(100 * time.Millisecond)
-				if execErr := s.ExecutePendingTasks(context.Background(), 1); execErr != nil {
-					s.logger.WithFields(map[string]interface{}{
-						"broadcast_id": broadcastID,
-						"error":        execErr.Error(),
-					}).Error("Failed to trigger immediate task execution for new task")
-				}
-			}()
+		// Flag for immediate execution if this is a send-now broadcast
+		if sendNow && status == string(domain.BroadcastStatusProcessing) {
+			shouldExecuteImmediately = true
 		}
 
 		return nil
@@ -861,6 +848,19 @@ func (s *TaskService) handleBroadcastScheduled(ctx context.Context, payload doma
 			"workspace_id": payload.WorkspaceID,
 			"error":        err.Error(),
 		}).Error("Failed to handle broadcast scheduled event")
+		return
+	}
+
+	// Trigger immediate task execution after transaction commits (no sleep needed)
+	if shouldExecuteImmediately && s.autoExecuteImmediate {
+		go func() {
+			if execErr := s.ExecutePendingTasks(context.Background(), 1); execErr != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"broadcast_id": broadcastID,
+					"error":        execErr.Error(),
+				}).Error("Failed to trigger immediate task execution")
+			}
+		}()
 	}
 }
 
@@ -1023,7 +1023,7 @@ func (s *TaskService) handleBroadcastSent(ctx context.Context, payload domain.Ev
 	tracing.AddAttribute(ctx, "current_status", string(task.Status))
 
 	// Mark the task as completed
-	if err := s.repo.MarkAsCompleted(ctx, payload.WorkspaceID, task.ID); err != nil {
+	if err := s.repo.MarkAsCompleted(ctx, payload.WorkspaceID, task.ID, task.State); err != nil {
 		tracing.MarkSpanError(ctx, err)
 		s.logger.WithFields(map[string]interface{}{
 			"broadcast_id": broadcastID,

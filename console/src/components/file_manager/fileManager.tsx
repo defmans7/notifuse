@@ -379,34 +379,30 @@ export const FileManager = (props: FileManagerProps) => {
         .then((arrayBuffer) => {
           const uint8Array = new Uint8Array(arrayBuffer)
 
-          const putObject = {
-            Bucket: props.settings?.bucket || '',
-            Key: currentPath + file.name,
-            Body: uint8Array,
-            ContentType: file.type
-          }
-
-          console.log('putObject', putObject)
-
           s3ClientRef
             .current!.send(
-            new PutObjectCommand(putObject)
-          )
+              new PutObjectCommand({
+                Bucket: props.settings?.bucket || '',
+                Key: currentPath + file.name,
+                Body: uint8Array,
+                ContentType: file.type
+              })
+            )
             .then(() => {
               message.success('File ' + file.name + ' uploaded successfully.')
               setIsUploading(false)
               fetchObjects()
             })
-            .catch((error) => {
+            .catch((error: unknown) => {
               message.error('Failed to upload file: ' + error)
               setIsUploading(false)
-              props.onError(error)
+              props.onError(error instanceof Error ? error : new Error(String(error)))
             })
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           message.error('Failed to read file: ' + error)
           setIsUploading(false)
-          props.onError(error)
+          props.onError(error instanceof Error ? error : new Error(String(error)))
         })
     }
   }
@@ -599,16 +595,16 @@ export const FileManager = (props: FileManagerProps) => {
             rowSelection={
               props.withSelection
                 ? {
-                  type: props.multiple ? 'checkbox' : 'radio',
-                  selectedRowKeys: selectedRowKeys,
-                  onChange: (selectedRowKeys: React.Key[], selectedRows: any[]) => {
-                    setSelectedRowKeys(selectedRowKeys)
-                    selectItem(selectedRows)
-                  },
-                  getCheckboxProps: (record: any) => ({
-                    disabled: !props.acceptItem(record as StorageObject)
-                  })
-                }
+                    type: props.multiple ? 'checkbox' : 'radio',
+                    selectedRowKeys: selectedRowKeys,
+                    onChange: (selectedRowKeys: React.Key[], selectedRows: StorageObject[]) => {
+                      setSelectedRowKeys(selectedRowKeys)
+                      selectItem(selectedRows)
+                    },
+                    getCheckboxProps: (record: StorageObject) => ({
+                      disabled: !props.acceptItem(record as StorageObject)
+                    })
+                  }
                 : undefined
             }
             columns={[

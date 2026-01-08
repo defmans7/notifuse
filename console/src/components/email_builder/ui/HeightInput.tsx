@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { InputNumber, Radio } from 'antd'
+import { InputNumber, Radio, Space, Button } from 'antd'
 
 interface HeightInputProps {
   value?: string
@@ -9,14 +9,14 @@ interface HeightInputProps {
 
 const HeightInput: React.FC<HeightInputProps> = ({
   value,
-  onChange,
-  placeholder = 'Enter height'
+  onChange
 }) => {
   const [mode, setMode] = useState<'auto' | 'custom'>('auto')
   const [numericValue, setNumericValue] = useState<number | undefined>()
 
   // Parse incoming value to determine mode and numeric value
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (value === 'auto' || !value) {
       setMode('auto')
       setNumericValue(undefined)
@@ -38,9 +38,10 @@ const HeightInput: React.FC<HeightInputProps> = ({
         }
       }
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [value])
 
-  const handleModeChange = (e: any) => {
+  const handleModeChange = (e: import('antd').RadioChangeEvent) => {
     const modeValue = e.target.value as 'auto' | 'custom'
     setMode(modeValue)
 
@@ -81,16 +82,20 @@ const HeightInput: React.FC<HeightInputProps> = ({
         ]}
       />
       {mode === 'custom' && (
-        <InputNumber
-          size="small"
-          value={numericValue}
-          onChange={handleNumberChange}
-          placeholder="Height"
-          min={0}
-          step={10}
-          style={{ width: 90 }}
-          addonAfter="px"
-        />
+        <Space.Compact size="small">
+          <InputNumber
+            size="small"
+            value={numericValue}
+            onChange={handleNumberChange}
+            placeholder="Height"
+            min={0}
+            step={10}
+            style={{ width: 70 }}
+          />
+          <Button size="small" disabled style={{ pointerEvents: 'none' }}>
+            px
+          </Button>
+        </Space.Compact>
       )}
     </div>
   )

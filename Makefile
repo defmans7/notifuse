@@ -1,10 +1,15 @@
-.PHONY: build test-unit run clean keygen test-service test-repo test-http test-migrations test-database test-pkg dev coverage docker-build docker-run docker-stop docker-clean docker-logs docker-buildx-setup docker-publish docker-compose-up docker-compose-down docker-compose-build
+.PHONY: build test-unit run clean keygen test-service test-repo test-http test-migrations test-database test-pkg dev coverage coverage-report docker-build docker-run docker-stop docker-clean docker-logs docker-buildx-setup docker-publish docker-compose-up docker-compose-down docker-compose-build openapi-bundle openapi-lint openapi-preview demo-hmac
 
 build:
-	go build -o bin/server ./cmd/api
+	@echo "Building with CGO enabled (required for V8)..."
+	CGO_ENABLED=1 go build -o bin/server ./cmd/api
+
+build-static:
+	@echo "Note: Static builds (CGO_ENABLED=0) are not compatible with V8"
+	@echo "Use 'make build' for local development or Docker for deployment"
 
 test-unit:
-	go test -race -v ./internal/domain  ./internal/http ./internal/service ./internal/service/broadcast ./internal/repository ./internal/migrations ./internal/database
+	go test -race -v ./internal/... ./pkg/...
 
 # End-to-end test command for Cursor Agent: runs all integration tests (non-verbose)
 e2e-test-within-cursor-agent:
@@ -45,6 +50,10 @@ coverage:
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Detailed HTML coverage report generated: coverage.html"
 
+# Per-file coverage report for /internal and /pkg directories
+coverage-report:
+	@./scripts/coverage-report.sh $(THRESHOLD)
+
 run:
 	go run ./cmd/api
 
@@ -52,7 +61,7 @@ dev:
 	air
 
 clean:
-	rm -rf bin/ tmp/ coverage.out coverage.html
+	rm -rf bin/ tmp/ coverage.out coverage.html coverage-internal-pkg.out coverage-report.txt
 
 keygen:
 	go run cmd/keygen/main.go
@@ -119,4 +128,30 @@ docker-compose-build:
 	@echo "Building services with Docker Compose..."
 	docker compose build
 
-.DEFAULT_GOAL := build 
+# OpenAPI commands
+openapi-bundle:
+	@echo "Bundling OpenAPI spec from YAML chunks..."
+	@npx @redocly/cli bundle openapi/openapi.yaml -o openapi.json --ext json
+	@echo "OpenAPI spec bundled to openapi.json"
+
+openapi-lint:
+	@echo "Linting OpenAPI spec..."
+	@npx @redocly/cli lint openapi/openapi.yaml
+
+openapi-preview:
+	@echo "Starting OpenAPI preview server..."
+	@npx @redocly/cli preview-docs openapi/openapi.yaml
+
+# Generate HMAC for demo reset endpoint
+# Usage: make demo-hmac ROOT_EMAIL=your@email.com SECRET_KEY=your-secret-key
+demo-hmac:
+	@if [ -z "$(ROOT_EMAIL)" ] || [ -z "$(SECRET_KEY)" ]; then \
+		echo "Usage: make demo-hmac ROOT_EMAIL=your@email.com SECRET_KEY=your-secret-key"; \
+		echo ""; \
+		echo "This generates the HMAC needed to call the /api/demo.reset endpoint."; \
+		exit 1; \
+	fi
+	@echo "Generating HMAC for demo reset..."
+	@go run -exec "" cmd/hmac/main.go "$(ROOT_EMAIL)" "$(SECRET_KEY)"
+
+.DEFAULT_GOAL := build

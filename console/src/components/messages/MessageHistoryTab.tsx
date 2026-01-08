@@ -30,7 +30,7 @@ const DEFAULT_VISIBLE_COLUMNS = {
   contact_email: true,
   template_id: true,
   broadcast_id: true,
-  list_ids: true,
+  list_id: true,
   events: true,
   error: false,
   created_at: true
@@ -269,7 +269,7 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
 
         return filters
       },
-      {} as Record<string, any>
+      {} as Record<string, string | boolean>
     )
   }, [activeFilters])
 
@@ -282,6 +282,7 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
     if (savedState) {
       const parsedState = JSON.parse(savedState)
       // Merge with defaults to ensure all fields exist
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisibleColumns({
         ...DEFAULT_VISIBLE_COLUMNS,
         ...parsedState
@@ -316,6 +317,7 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
     })
 
     if (initialFilters.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveFilters(initialFilters)
     }
   }, [])
@@ -432,6 +434,7 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
         <Popover
           key={option.key}
           trigger="click"
+          placement="bottom"
           open={openPopovers[option.key]}
           onOpenChange={(visible) => {
             // Initialize temp value when opening

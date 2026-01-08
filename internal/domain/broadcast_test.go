@@ -15,9 +15,9 @@ func TestBroadcastStatus_Values(t *testing.T) {
 	// Verify all status constants are defined
 	assert.Equal(t, domain.BroadcastStatus("draft"), domain.BroadcastStatusDraft)
 	assert.Equal(t, domain.BroadcastStatus("scheduled"), domain.BroadcastStatusScheduled)
-	assert.Equal(t, domain.BroadcastStatus("sending"), domain.BroadcastStatusSending)
+	assert.Equal(t, domain.BroadcastStatus("processing"), domain.BroadcastStatusProcessing)
 	assert.Equal(t, domain.BroadcastStatus("paused"), domain.BroadcastStatusPaused)
-	assert.Equal(t, domain.BroadcastStatus("sent"), domain.BroadcastStatusSent)
+	assert.Equal(t, domain.BroadcastStatus("processed"), domain.BroadcastStatusProcessed)
 	assert.Equal(t, domain.BroadcastStatus("cancelled"), domain.BroadcastStatusCancelled)
 	assert.Equal(t, domain.BroadcastStatus("failed"), domain.BroadcastStatusFailed)
 }
@@ -36,9 +36,8 @@ func createValidBroadcast() domain.Broadcast {
 		Name:        "Test Newsletter",
 		Status:      domain.BroadcastStatusDraft,
 		Audience: domain.AudienceSettings{
-			Lists:               []string{"list123"},
+			List:                "list123",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: true,
 		},
 		Schedule: domain.ScheduleSettings{
 			IsScheduled: false,
@@ -160,18 +159,18 @@ func TestBroadcast_Validate(t *testing.T) {
 			name: "missing audience selection",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcast()
-				b.Audience.Lists = []string{}
+				b.Audience.List = ""
 				b.Audience.Segments = []string{}
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "at least one list must be specified",
+			errMsg:  "list is required",
 		},
 		{
-			name: "both lists and segments specified (valid - segments filter lists)",
+			name: "list and segments specified (valid - segments filter list)",
 			broadcast: func() domain.Broadcast {
 				b := createValidBroadcast()
-				b.Audience.Lists = []string{"list1"}
+				b.Audience.List = "list1"
 				b.Audience.Segments = []string{"segment1"}
 				return b
 			}(),
@@ -346,11 +345,8 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 				WorkspaceID: "workspace123",
 				Name:        "Test Newsletter",
 				Audience: domain.AudienceSettings{
-					Lists:               []string{"list123"},
+					List:                "list123",
 					ExcludeUnsubscribed: true,
-				},
-				Schedule: domain.ScheduleSettings{
-					IsScheduled: false,
 				},
 				TestSettings: domain.BroadcastTestSettings{
 					Enabled: false,
@@ -363,7 +359,7 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 			request: domain.CreateBroadcastRequest{
 				Name: "Test Newsletter",
 				Audience: domain.AudienceSettings{
-					Lists: []string{"list123"},
+					List: "list123",
 				},
 			},
 			wantErr: true,
@@ -374,7 +370,7 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 			request: domain.CreateBroadcastRequest{
 				WorkspaceID: "workspace123",
 				Audience: domain.AudienceSettings{
-					Lists: []string{"list123"},
+					List: "list123",
 				},
 			},
 			wantErr: true,
@@ -484,7 +480,7 @@ func TestUpdateBroadcastRequest_Validate(t *testing.T) {
 			errMsg:   "broadcast id cannot be changed",
 		},
 		{
-			name: "cannot update sent broadcast",
+			name: "cannot update processed broadcast",
 			request: domain.UpdateBroadcastRequest{
 				WorkspaceID: existingBroadcast.WorkspaceID,
 				ID:          existingBroadcast.ID,
@@ -492,14 +488,14 @@ func TestUpdateBroadcastRequest_Validate(t *testing.T) {
 			},
 			existing: func() domain.Broadcast {
 				b := existingBroadcast
-				b.Status = domain.BroadcastStatusSent
+				b.Status = domain.BroadcastStatusProcessed
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "cannot update broadcast with status: sent",
+			errMsg:  "cannot update broadcast with status: processed",
 		},
 		{
-			name: "cannot update sending broadcast",
+			name: "cannot update processing broadcast",
 			request: domain.UpdateBroadcastRequest{
 				WorkspaceID: existingBroadcast.WorkspaceID,
 				ID:          existingBroadcast.ID,
@@ -507,11 +503,11 @@ func TestUpdateBroadcastRequest_Validate(t *testing.T) {
 			},
 			existing: func() domain.Broadcast {
 				b := existingBroadcast
-				b.Status = domain.BroadcastStatusSending
+				b.Status = domain.BroadcastStatusProcessing
 				return b
 			}(),
 			wantErr: true,
-			errMsg:  "cannot update broadcast with status: sending",
+			errMsg:  "cannot update broadcast with status: processing",
 		},
 		{
 			name: "cannot update cancelled broadcast",
@@ -1207,10 +1203,9 @@ func TestVariationMetrics_ValueScan(t *testing.T) {
 func TestAudienceSettings_ValueScan(t *testing.T) {
 	// Test serialization
 	original := domain.AudienceSettings{
-		Lists:               []string{"list1", "list2"},
+		List:                "list1",
 		Segments:            []string{}, // Empty slice
 		ExcludeUnsubscribed: true,
-		SkipDuplicateEmails: true,
 	}
 
 	// Test Value method
@@ -1224,13 +1219,12 @@ func TestAudienceSettings_ValueScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the scanned value matches the original
-	assert.Equal(t, original.Lists, scanned.Lists)
+	assert.Equal(t, original.List, scanned.List)
 	// When an empty slice is serialized to JSON and back, it may become nil
 	// so we should compare lengths instead of direct equality
 	assert.Len(t, original.Segments, 0)
 	assert.Len(t, scanned.Segments, 0)
 	assert.Equal(t, original.ExcludeUnsubscribed, scanned.ExcludeUnsubscribed)
-	assert.Equal(t, original.SkipDuplicateEmails, scanned.SkipDuplicateEmails)
 
 	// Test scanning nil value
 	var nilTarget domain.AudienceSettings
@@ -1824,23 +1818,20 @@ func TestScheduleSettings_ParseScheduledDateTime_Comprehensive(t *testing.T) {
 
 // Additional test cases for CreateBroadcastRequest.Validate
 func TestCreateBroadcastRequest_Validate_Additional(t *testing.T) {
-	// Test scheduled broadcast
-	scheduledRequest := domain.CreateBroadcastRequest{
+	// Test that broadcasts are always created in draft status
+	// Scheduling must be done via the ScheduleBroadcastRequest endpoint
+	request := domain.CreateBroadcastRequest{
 		WorkspaceID: "workspace123",
-		Name:        "Test Scheduled Newsletter",
+		Name:        "Test Newsletter",
 		Audience: domain.AudienceSettings{
-			Lists: []string{"list123"},
-		},
-		Schedule: domain.ScheduleSettings{
-			IsScheduled:   true,
-			ScheduledDate: "2023-12-31",
-			ScheduledTime: "15:30",
+			List: "list123",
 		},
 	}
 
-	broadcast, err := scheduledRequest.Validate()
+	broadcast, err := request.Validate()
 	require.NoError(t, err)
-	assert.Equal(t, domain.BroadcastStatusScheduled, broadcast.Status)
+	assert.Equal(t, domain.BroadcastStatusDraft, broadcast.Status)
+	assert.False(t, broadcast.Schedule.IsScheduled, "Schedule should be empty - scheduling must be done via broadcasts.schedule endpoint")
 }
 
 // Additional test cases for UpdateBroadcastRequest.Validate
@@ -1861,22 +1852,10 @@ func TestUpdateBroadcastRequest_Validate_Additional(t *testing.T) {
 
 	_, err := invalidAudienceRequest.Validate(&existingBroadcast)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "at least one list must be specified")
+	assert.Contains(t, err.Error(), "list is required")
 }
 
-// Additional test for ParseBoolParam
-func TestParseBoolParam_AdditionalCases(t *testing.T) {
-	// Test empty string
-	val, err := domain.ParseBoolParam("")
-	if err == nil {
-		t.Log("Empty string parsed without error, checking result is default false value")
-		assert.False(t, val)
-	} else {
-		// If implementation changes to consider empty string an error, this would still pass
-		t.Log("Empty string considered invalid boolean")
-	}
-}
-
+// Test that Channels are properly persisted on update
 // Add more FromURLParams test cases
 func TestGetBroadcastsRequest_FromURLParams_Additional(t *testing.T) {
 	params := url.Values{
@@ -1994,4 +1973,138 @@ func TestGetBroadcastRequest_FromURLParams_Comprehensive(t *testing.T) {
 		// If the implementation is lenient, then "yes" might be accepted as true or false
 		t.Log("The implementation accepted a non-standard boolean value")
 	}
+}
+
+func TestSelectWinnerRequest_Validate(t *testing.T) {
+	t.Run("valid request", func(t *testing.T) {
+		req := domain.SelectWinnerRequest{
+			WorkspaceID: "workspace123",
+			ID:          "broadcast123",
+			TemplateID:  "template123",
+		}
+
+		err := req.Validate()
+		assert.NoError(t, err)
+	})
+
+	t.Run("missing workspace_id", func(t *testing.T) {
+		req := domain.SelectWinnerRequest{
+			ID:         "broadcast123",
+			TemplateID: "template123",
+		}
+
+		err := req.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace_id is required")
+	})
+
+	t.Run("missing ID", func(t *testing.T) {
+		req := domain.SelectWinnerRequest{
+			WorkspaceID: "workspace123",
+			TemplateID:  "template123",
+		}
+
+		err := req.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcast id is required")
+	})
+
+	t.Run("missing template_id", func(t *testing.T) {
+		req := domain.SelectWinnerRequest{
+			WorkspaceID: "workspace123",
+			ID:          "broadcast123",
+		}
+
+		err := req.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "template_id is required")
+	})
+}
+
+func TestGetTestResultsRequest_Validate(t *testing.T) {
+	t.Run("valid request", func(t *testing.T) {
+		req := domain.GetTestResultsRequest{
+			WorkspaceID: "workspace123",
+			ID:          "broadcast123",
+		}
+
+		err := req.Validate()
+		assert.NoError(t, err)
+	})
+
+	t.Run("missing workspace_id", func(t *testing.T) {
+		req := domain.GetTestResultsRequest{
+			ID: "broadcast123",
+		}
+
+		err := req.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace_id is required")
+	})
+
+	t.Run("missing ID", func(t *testing.T) {
+		req := domain.GetTestResultsRequest{
+			WorkspaceID: "workspace123",
+		}
+
+		err := req.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "broadcast id is required")
+	})
+}
+
+func TestGetTestResultsRequest_FromURLParams(t *testing.T) {
+	t.Run("valid URL params", func(t *testing.T) {
+		params := url.Values{
+			"workspace_id": {"workspace123"},
+			"id":           {"broadcast123"},
+		}
+
+		req := domain.GetTestResultsRequest{}
+		err := req.FromURLParams(params)
+
+		require.NoError(t, err)
+		assert.Equal(t, "workspace123", req.WorkspaceID)
+		assert.Equal(t, "broadcast123", req.ID)
+	})
+
+	t.Run("missing workspace_id", func(t *testing.T) {
+		params := url.Values{
+			"id": {"broadcast123"},
+		}
+
+		req := domain.GetTestResultsRequest{}
+		err := req.FromURLParams(params)
+
+		require.NoError(t, err) // FromURLParams doesn't validate, just sets values
+		assert.Empty(t, req.WorkspaceID)
+		assert.Equal(t, "broadcast123", req.ID)
+	})
+
+	t.Run("missing ID", func(t *testing.T) {
+		params := url.Values{
+			"workspace_id": {"workspace123"},
+		}
+
+		req := domain.GetTestResultsRequest{}
+		err := req.FromURLParams(params)
+
+		require.NoError(t, err) // FromURLParams doesn't validate, just sets values
+		assert.Equal(t, "workspace123", req.WorkspaceID)
+		assert.Empty(t, req.ID)
+	})
+
+	t.Run("both present", func(t *testing.T) {
+		params := url.Values{
+			"workspace_id": {"workspace123"},
+			"id":           {"broadcast123"},
+		}
+
+		req := domain.GetTestResultsRequest{}
+		err := req.FromURLParams(params)
+
+		require.NoError(t, err)
+		assert.Equal(t, "workspace123", req.WorkspaceID)
+		assert.Equal(t, "broadcast123", req.ID)
+	})
 }

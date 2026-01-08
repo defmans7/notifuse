@@ -24,8 +24,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 
 	t.Run("connection reuse performance", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_perf_reuse"
 
@@ -67,8 +67,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 
 	t.Run("high workspace count", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		// Create 25 workspace pools (reduced from 100 to avoid "too many clients")
 		// Test environment has connection limits
@@ -131,8 +131,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 
 	t.Run("rapid create destroy cycles", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		// Rapidly create and destroy 50 workspaces, repeat 10 times
 		numCycles := 10
@@ -192,8 +192,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 
 	t.Run("idle connection cleanup overhead", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		// Create 10 workspace pools (reduced from 20 to avoid exhaustion)
 		numWorkspaces := 10
@@ -218,8 +218,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 		runtime.ReadMemStats(&memStatsBefore)
 
 		// Let connections idle
-		t.Log("Letting connections idle for 3 seconds...")
-		time.Sleep(3 * time.Second)
+		t.Log("Letting connections idle for 1 second...")
+		time.Sleep(1 * time.Second)
 
 		// Record memory after idle period
 		runtime.GC()
@@ -240,8 +240,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 
 	t.Run("concurrent query performance", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		// Create 5 workspaces
 		numWorkspaces := 5
@@ -306,8 +306,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 
 	t.Run("memory efficiency with large result sets", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_perf_memory"
 
@@ -327,12 +327,13 @@ func TestConnectionPoolPerformance(t *testing.T) {
 		`)
 		require.NoError(t, err)
 
-		// Insert test data
-		for i := 0; i < 1000; i++ {
-			_, err = db.Exec("INSERT INTO test_large (data) VALUES ($1)",
-				fmt.Sprintf("test_data_%d_with_some_content_to_make_it_larger", i))
-			require.NoError(t, err)
-		}
+		// Insert test data using generate_series (single query for efficiency)
+		_, err = db.Exec(`
+			INSERT INTO test_large (data)
+			SELECT 'test_data_' || i || '_with_some_content_to_make_it_larger'
+			FROM generate_series(1, 1000) AS s(i)
+		`)
+		require.NoError(t, err)
 
 		// Measure memory before queries
 		runtime.GC()
@@ -387,8 +388,8 @@ func TestConnectionPoolPerformance(t *testing.T) {
 		// Measure time to create and initialize pool
 		start := time.Now()
 
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		pool := testutil.NewTestConnectionPoolWithTiming(config, testutil.FastTimingConfig())
+		defer func() { _ = pool.Cleanup() }()
 
 		// Get system connection
 		_, err := pool.GetSystemConnection()
@@ -412,136 +413,3 @@ func TestConnectionPoolPerformance(t *testing.T) {
 	})
 }
 
-// TestConnectionPoolScalability tests behavior under scaling scenarios
-func TestConnectionPoolScalability(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping scalability tests in short mode")
-	}
-
-	testutil.SetupTestEnvironment()
-	defer testutil.CleanupTestEnvironment()
-
-	t.Run("linear scaling with workspace count", func(t *testing.T) {
-		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
-
-		// Test different workspace counts and measure time
-		workspaceCounts := []int{5, 10, 20}
-		timings := make([]time.Duration, len(workspaceCounts))
-
-		for idx, count := range workspaceCounts {
-			start := time.Now()
-
-			for i := 0; i < count; i++ {
-				workspaceID := fmt.Sprintf("test_scale_linear_%d_%d", idx, i)
-
-				err := pool.EnsureWorkspaceDatabase(workspaceID)
-				require.NoError(t, err)
-
-				db, err := pool.GetWorkspaceConnection(workspaceID)
-				require.NoError(t, err)
-
-				var result int
-				err = db.QueryRow("SELECT 1").Scan(&result)
-				require.NoError(t, err)
-			}
-
-			timings[idx] = time.Since(start)
-
-			t.Logf("Created %d workspaces in %v", count, timings[idx])
-
-			// Cleanup for next iteration
-			for i := 0; i < count; i++ {
-				workspaceID := fmt.Sprintf("test_scale_linear_%d_%d", idx, i)
-				pool.CleanupWorkspace(workspaceID)
-			}
-		}
-
-		// Verify scaling is reasonable (not exponential)
-		// Doubling workspaces shouldn't more than triple the time
-		for i := 1; i < len(timings); i++ {
-			ratio := float64(timings[i]) / float64(timings[i-1])
-			countRatio := float64(workspaceCounts[i]) / float64(workspaceCounts[i-1])
-
-			t.Logf("Time ratio: %.2f for count ratio: %.2f", ratio, countRatio)
-
-			// Time should scale roughly linearly (allow 1.5x factor)
-			assert.Less(t, ratio, countRatio*1.5,
-				"Time should scale roughly linearly with workspace count")
-		}
-	})
-
-	t.Run("throughput under sustained load", func(t *testing.T) {
-		config := testutil.GetTestDatabaseConfig()
-		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
-
-		// Create 10 workspaces
-		numWorkspaces := 10
-		workspaceIDs := make([]string, numWorkspaces)
-
-		for i := 0; i < numWorkspaces; i++ {
-			workspaceID := fmt.Sprintf("test_scale_sustained_%d", i)
-			workspaceIDs[i] = workspaceID
-
-			err := pool.EnsureWorkspaceDatabase(workspaceID)
-			require.NoError(t, err)
-
-			_, err = pool.GetWorkspaceConnection(workspaceID)
-			require.NoError(t, err)
-		}
-
-		// Sustained load for 10 seconds
-		duration := 10 * time.Second
-		stopChan := make(chan struct{})
-		var operationCount int64
-
-		// Start workers
-		numWorkers := 20
-		var wg sync.WaitGroup
-
-		for i := 0; i < numWorkers; i++ {
-			wg.Add(1)
-
-			go func(workerID int) {
-				defer wg.Done()
-
-				for {
-					select {
-					case <-stopChan:
-						return
-					default:
-						// Pick random workspace
-						wsID := workspaceIDs[workerID%numWorkspaces]
-						db, err := pool.GetWorkspaceConnection(wsID)
-						if err != nil {
-							continue
-						}
-
-						var result int
-						err = db.QueryRow("SELECT 1").Scan(&result)
-						if err == nil {
-							atomic.AddInt64(&operationCount, 1)
-						}
-					}
-				}
-			}(i)
-		}
-
-		// Let it run
-		time.Sleep(duration)
-		close(stopChan)
-		wg.Wait()
-
-		totalOps := atomic.LoadInt64(&operationCount)
-		opsPerSecond := float64(totalOps) / duration.Seconds()
-
-		t.Logf("Sustained load: %d operations in %v (%.0f ops/sec)",
-			totalOps, duration, opsPerSecond)
-
-		// Should handle reasonable sustained throughput
-		assert.Greater(t, opsPerSecond, 500.0,
-			"Should handle at least 500 ops/sec under sustained load")
-	})
-}

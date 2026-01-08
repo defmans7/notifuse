@@ -13,12 +13,30 @@ import {
   TreeNodeLeaf,
   TableSchema,
   List,
-  ContactTimelineCondition
+  ContactTimelineCondition,
+  CustomEventsGoalCondition,
+  BooleanOperator
 } from '../../services/api/segment'
+import type { CascaderProps } from 'antd'
+import dayjs from 'dayjs'
+
+// Format date for display (converts ISO8601 to readable format)
+const formatDateDisplay = (dateStr: string | undefined): string => {
+  if (!dateStr) return ''
+  return dayjs(dateStr).format('YYYY-MM-DD HH:mm:ss')
+}
+
+type CascaderOption = NonNullable<CascaderProps['options']>[number]
 import { FieldTypeString } from './type_string'
 import { FieldTypeTime } from './type_time'
-import { LeafActionForm, LeafContactForm, LeafContactListForm } from './form_leaf'
+import {
+  LeafActionForm,
+  LeafContactForm,
+  LeafContactListForm,
+  LeafCustomEventsGoalForm
+} from './form_leaf'
 import { FieldTypeNumber } from './type_number'
+import { FieldTypeJSON } from './type_json'
 import styles from './input.module.css'
 
 export const HasLeaf = (node: TreeNode): boolean => {
@@ -39,12 +57,14 @@ export type TreeNodeInputProps = {
   onChange?: (updatedValue: TreeNode) => void
   schemas: SegmentSchemas
   lists?: List[]
+  customFieldLabels?: Record<string, string>
 }
 
 const fieldTypeRendererDictionary: FieldTypeRendererDictionary = {
   string: new FieldTypeString(),
   time: new FieldTypeTime(),
-  number: new FieldTypeNumber()
+  number: new FieldTypeNumber(),
+  json: new FieldTypeJSON()
 }
 
 // Helper function to get color class name
@@ -68,7 +88,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
   const [editingNodeLeaf, setEditingNodeLeaf] = useState<EditingNodeLeaf | undefined>(undefined)
 
   const cascaderOptions = useMemo(() => {
-    const options: any[] = [
+    const options: CascaderOption[] = [
       {
         value: 'and',
         label: (
@@ -202,7 +222,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
       set(
         clonedTree,
         path,
-        target.filter((_x: any, i: number) => i !== key)
+        target.filter((_x: TreeNode, i: number) => i !== key)
       )
     }
 
@@ -214,7 +234,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
     if (props.onChange) props.onChange(clonedTree)
   }
 
-  const addTreeNode = (path: string, key: number, values: any[], selectedOptions: any) => {
+  const addTreeNode = (path: string, key: number, values: (string | number | null)[], selectedOptions: (CascaderOption | undefined)[]) => {
     // console.log('values', values);
     // console.log('selectedOptions', selectedOptions);
     // console.log('path', path);
@@ -251,22 +271,32 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
 
     // Add leaf
     const leaf = {
-      table: selectedOptions[0].value
+      source: selectedOptions[0]?.value
     } as TreeNodeLeaf
 
-    // Initialize based on table type
-    if (leaf.table === 'contact_lists') {
+    // Initialize based on source type
+    if (leaf.source === 'contact_lists') {
       // Contact lists use ContactListCondition
       leaf.contact_list = {
         operator: 'in',
         list_id: '',
         status: undefined
       }
-    } else if (leaf.table === 'contacts') {
+    } else if (leaf.source === 'contacts') {
       // Contacts use ContactCondition
       leaf.contact = {
         filters: [] as DimensionFilter[]
       }
+    } else if (leaf.source === 'custom_events_goals') {
+      // Custom events goals use CustomEventsGoalCondition
+      leaf.custom_events_goal = {
+        goal_type: '*', // All goal types by default
+        aggregate_operator: 'count',
+        operator: 'gte',
+        value: 1, // At least 1 event makes sense as default
+        timeframe_operator: 'anytime',
+        timeframe_values: []
+      } as CustomEventsGoalCondition
     } else {
       // Contact timeline uses ContactTimelineCondition
       leaf.contact_timeline = {
@@ -366,7 +396,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
     setEditingNodeLeaf(editingNodeLeaf)
   }
 
-  const changeBranchOperator = (path: string, pathKey: number, value: any) => {
+  const changeBranchOperator = (path: string, pathKey: number, value: BooleanOperator) => {
     const clonedTree = cloneDeep(props.value) as TreeNode
     if (!clonedTree.branch) return
 
@@ -397,7 +427,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
         ? true
         : false
 
-    const schema = props.schemas[node.leaf?.table as string]
+    const schema = props.schemas[node.leaf?.source as string]
 
     if (!schema) {
       return (
@@ -406,56 +436,75 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
             {deleteButton(path, pathKey, false)}
           </Flex>
           <div>
-            <Alert type="error" message={'table ' + node.leaf?.table + ' not found'} />
+            <Alert type="error" message={'source ' + node.leaf?.source + ' not found'} />
           </div>
         </div>
       )
     }
 
     if (isEditingCurrent && editingNodeLeaf) {
-      const isContactTable = node.leaf?.table === 'contacts'
-      const isContactListTable = node.leaf?.table === 'contact_lists'
+      const isContactSource = node.leaf?.source === 'contacts'
+      const isContactListSource = node.leaf?.source === 'contact_lists'
+      const isCustomEventsGoalSource = node.leaf?.source === 'custom_events_goals'
+      const isContactTimelineSource = node.leaf?.source === 'contact_timeline'
 
       return (
         <div className="py-4 pl-4">
-          {isContactTable && (
+          {isContactSource && (
             <LeafContactForm
               value={node}
               onChange={(updatedLeaf: TreeNode) => {
                 onUpdateNode(updatedLeaf, path, pathKey)
               }}
-              table={node.leaf?.table as string}
+              source={node.leaf?.source as string}
               schema={schema}
               editingNodeLeaf={editingNodeLeaf as EditingNodeLeaf}
               setEditingNodeLeaf={setEditingNodeLeaf}
               cancelOrDeleteNode={cancelOrDeleteNode.bind(null, path, pathKey)}
+              customFieldLabels={props.customFieldLabels}
             />
           )}
-          {isContactListTable && (
+          {isContactListSource && (
             <LeafContactListForm
               value={node}
               onChange={(updatedLeaf: TreeNode) => {
                 onUpdateNode(updatedLeaf, path, pathKey)
               }}
-              table={node.leaf?.table as string}
+              source={node.leaf?.source as string}
               schema={schema}
               editingNodeLeaf={editingNodeLeaf as EditingNodeLeaf}
               setEditingNodeLeaf={setEditingNodeLeaf}
               cancelOrDeleteNode={cancelOrDeleteNode.bind(null, path, pathKey)}
               lists={props.lists || []}
+              customFieldLabels={props.customFieldLabels}
             />
           )}
-          {!isContactTable && !isContactListTable && (
+          {isCustomEventsGoalSource && (
+            <LeafCustomEventsGoalForm
+              value={node}
+              onChange={(updatedLeaf: TreeNode) => {
+                onUpdateNode(updatedLeaf, path, pathKey)
+              }}
+              source={node.leaf?.source as string}
+              schema={schema}
+              editingNodeLeaf={editingNodeLeaf as EditingNodeLeaf}
+              setEditingNodeLeaf={setEditingNodeLeaf}
+              cancelOrDeleteNode={cancelOrDeleteNode.bind(null, path, pathKey)}
+              customFieldLabels={props.customFieldLabels}
+            />
+          )}
+          {isContactTimelineSource && (
             <LeafActionForm
               value={node}
               onChange={(updatedLeaf: TreeNode) => {
                 onUpdateNode(updatedLeaf, path, pathKey)
               }}
-              table={node.leaf?.table as string}
+              source={node.leaf?.source as string}
               schema={schema}
               editingNodeLeaf={editingNodeLeaf as EditingNodeLeaf}
               setEditingNodeLeaf={setEditingNodeLeaf}
               cancelOrDeleteNode={cancelOrDeleteNode.bind(null, path, pathKey)}
+              customFieldLabels={props.customFieldLabels}
             />
           )}
         </div>
@@ -465,8 +514,8 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
     // console.log('node', node)
 
     // Special rendering for contact_lists
-    const isContactListTable = node.leaf?.table === 'contact_lists'
-    if (isContactListTable && node.leaf?.contact_list) {
+    const isContactListSource = node.leaf?.source === 'contact_lists'
+    if (isContactListSource && node.leaf?.contact_list) {
       const contactList = node.leaf.contact_list
       const listName =
         props.lists?.find((l) => l.id === contactList.list_id)?.name || contactList.list_id
@@ -508,12 +557,127 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
       )
     }
 
-    // Determine filters based on table type
-    const isContactTable = node.leaf?.table === 'contacts'
-    const isContactTimelineTable = node.leaf?.table === 'contact_timeline'
-    const filtersToShow = isContactTable
+    // Special rendering for custom_events_goals
+    const isCustomEventsGoalSource = node.leaf?.source === 'custom_events_goals'
+    if (isCustomEventsGoalSource && node.leaf?.custom_events_goal) {
+      const goal = node.leaf.custom_events_goal
+      const goalTypeLabel =
+        schema.fields['goal_type']?.options?.find((o) => o.value === goal.goal_type)?.label ||
+        goal.goal_type
+      const aggregateLabel =
+        schema.fields['aggregate_operator']?.options?.find(
+          (o) => o.value === goal.aggregate_operator
+        )?.label || goal.aggregate_operator
+      const operatorLabel =
+        schema.fields['operator']?.options?.find((o) => o.value === goal.operator)?.label ||
+        goal.operator
+
+      return (
+        <div style={{ lineHeight: '32px' }} className="py-4 pl-4">
+          <Flex gap="small" className="float-right">
+            {deleteButton(path, pathKey, false)}
+            <Button size="small" onClick={editNode.bind(null, path, pathKey)}>
+              <FontAwesomeIcon icon={faPenToSquare} />
+            </Button>
+          </Flex>
+
+          <div>
+            <Space style={{ alignItems: 'start' }}>
+              <Tag bordered={false} color="cyan">
+                {schema.icon && <FontAwesomeIcon icon={schema.icon} style={{ marginRight: 8 }} />}
+                Goal
+              </Tag>
+              <div>
+                <div className="mb-2">
+                  <Space>
+                    <span className="opacity-60">type</span>
+                    <Tag bordered={false} color="blue">
+                      {goalTypeLabel}
+                    </Tag>
+                  </Space>
+                </div>
+                <div className="mb-2">
+                  <Space>
+                    <Tag bordered={false} color="blue">
+                      {aggregateLabel}
+                    </Tag>
+                    <span className="opacity-60">is</span>
+                    <Tag bordered={false} color="blue">
+                      {operatorLabel}
+                    </Tag>
+                    <Tag bordered={false} color="blue">
+                      {goal.value}
+                    </Tag>
+                    {goal.operator === 'between' && goal.value_2 !== undefined && (
+                      <>
+                        <span className="opacity-60">and</span>
+                        <Tag bordered={false} color="blue">
+                          {goal.value_2}
+                        </Tag>
+                      </>
+                    )}
+                  </Space>
+                </div>
+                <div>
+                  <Space>
+                    <span className="opacity-60">timeframe</span>
+                    {goal.timeframe_operator === 'anytime' && (
+                      <Tag bordered={false} color="blue">
+                        anytime
+                      </Tag>
+                    )}
+                    {goal.timeframe_operator === 'in_the_last_days' && (
+                      <>
+                        <span className="opacity-60">in the last</span>
+                        <Tag bordered={false} color="blue">
+                          {goal.timeframe_values?.[0]}
+                        </Tag>
+                        <span className="opacity-60">days</span>
+                      </>
+                    )}
+                    {goal.timeframe_operator === 'in_date_range' && (
+                      <>
+                        <span className="opacity-60">between</span>
+                        <Tag bordered={false} color="blue">
+                          {formatDateDisplay(goal.timeframe_values?.[0])}
+                        </Tag>
+                        <span className="opacity-60">&rarr;</span>
+                        <Tag bordered={false} color="blue">
+                          {formatDateDisplay(goal.timeframe_values?.[1])}
+                        </Tag>
+                      </>
+                    )}
+                    {goal.timeframe_operator === 'before_date' && (
+                      <>
+                        <span className="opacity-60">before</span>
+                        <Tag bordered={false} color="blue">
+                          {formatDateDisplay(goal.timeframe_values?.[0])}
+                        </Tag>
+                      </>
+                    )}
+                    {goal.timeframe_operator === 'after_date' && (
+                      <>
+                        <span className="opacity-60">after</span>
+                        <Tag bordered={false} color="blue">
+                          {formatDateDisplay(goal.timeframe_values?.[0])}
+                        </Tag>
+                      </>
+                    )}
+                  </Space>
+                </div>
+              </div>
+            </Space>
+          </div>
+        </div>
+      )
+    }
+
+    // Determine filters based on source type
+    const isContactSource = node.leaf?.source === 'contacts'
+    const isContactTimelineSource = node.leaf?.source === 'contact_timeline'
+    const filtersToShow = isContactSource
       ? node.leaf?.contact?.filters
-      : isContactTimelineTable
+      : isContactTimelineSource
         ? node.leaf?.contact_timeline?.filters
         : undefined
 
@@ -528,13 +692,13 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
 
         <div>
           <Space style={{ alignItems: 'start' }}>
-            {isContactTable && (
+            {isContactSource && (
               <Tag bordered={false} color="cyan">
                 {schema.icon && <FontAwesomeIcon icon={schema.icon} style={{ marginRight: 8 }} />}
                 Contact property
               </Tag>
             )}
-            {isContactTimelineTable && (
+            {isContactTimelineSource && (
               <Tag bordered={false} color="cyan">
                 {schema.icon && <FontAwesomeIcon icon={schema.icon} style={{ marginRight: 8 }} />}
                 Activity
@@ -590,11 +754,11 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
                         <>
                           <span className="opacity-60">between</span>
                           <Tag bordered={false} color="blue">
-                            {node.leaf?.contact_timeline.timeframe_values?.[0]}
+                            {formatDateDisplay(node.leaf?.contact_timeline.timeframe_values?.[0])}
                           </Tag>
                           &rarr;
                           <Tag className="ml-3" bordered={false} color="blue">
-                            {node.leaf?.contact_timeline.timeframe_values?.[1]}
+                            {formatDateDisplay(node.leaf?.contact_timeline.timeframe_values?.[1])}
                           </Tag>
                         </>
                       )}
@@ -602,7 +766,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
                         <>
                           <span className="opacity-60">before</span>
                           <Tag bordered={false} color="blue">
-                            {node.leaf?.contact_timeline.timeframe_values?.[0]}
+                            {formatDateDisplay(node.leaf?.contact_timeline.timeframe_values?.[0])}
                           </Tag>
                         </>
                       )}
@@ -610,7 +774,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
                         <>
                           <span className="opacity-60">after</span>
                           <Tag bordered={false} color="blue">
-                            {node.leaf?.contact_timeline.timeframe_values?.[0]}
+                            {formatDateDisplay(node.leaf?.contact_timeline.timeframe_values?.[0])}
                           </Tag>
                         </>
                       )}
@@ -624,7 +788,12 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
                     <tbody>
                       {filtersToShow.map((filter, key) => {
                         const field = schema.fields[filter.field_name]
-                        const fieldTypeRenderer = fieldTypeRendererDictionary[filter.field_type]
+                        // Use JSON renderer if filter has json_path, otherwise use the field_type renderer
+                        const rendererType =
+                          filter.json_path && filter.json_path.length > 0
+                            ? 'json'
+                            : filter.field_type
+                        const fieldTypeRenderer = fieldTypeRendererDictionary[rendererType]
 
                         return (
                           <tr key={key}>
@@ -632,7 +801,7 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
                               {!fieldTypeRenderer && (
                                 <Alert
                                   type="error"
-                                  message={'type ' + filter.field_type + ' is not implemented'}
+                                  message={'type ' + rendererType + ' is not implemented'}
                                 />
                               )}
                               {fieldTypeRenderer && (
@@ -641,9 +810,11 @@ export const TreeNodeInput = (props: TreeNodeInputProps) => {
                                     title={'field: ' + filter.field_name}
                                     content={field.description}
                                   >
-                                    <b>{field.title}</b>
+                                    <b>
+                                      {props.customFieldLabels?.[filter.field_name] || field.title}
+                                    </b>
                                   </Popover>
-                                  {fieldTypeRenderer.render(filter, field)}
+                                  {fieldTypeRenderer.render(filter, field, props.customFieldLabels)}
                                 </Space>
                               )}
                             </td>

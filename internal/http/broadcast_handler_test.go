@@ -13,15 +13,12 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 
-
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	http_handler "github.com/Notifuse/notifuse/internal/http"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	notifusemjml "github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 
-
 	"github.com/golang/mock/gomock"
-
 
 	"github.com/stretchr/testify/assert"
 )
@@ -35,7 +32,7 @@ func createTestBroadcast() *domain.Broadcast {
 		Name:        "Test Broadcast",
 		Status:      domain.BroadcastStatusDraft,
 		Audience: domain.AudienceSettings{
-			Lists:    []string{"list123"},
+			List:     "list123",
 			Segments: []string{"segment123"},
 		},
 		Schedule: domain.ScheduleSettings{
@@ -255,11 +252,11 @@ func TestHandleGet(t *testing.T) {
 				SenderID:        "sender123",
 				Subject:         "Test Subject",
 				CompiledPreview: "<p>Test HTML content</p>",
-			VisualEditorTree: func() notifusemjml.EmailBlock {
-				base := notifusemjml.NewBaseBlock("root", notifusemjml.MJMLComponentMjml)
-				base.Attributes["version"] = "4.0.0"
-				return &notifusemjml.MJMLBlock{BaseBlock: base}
-			}(),
+				VisualEditorTree: func() notifusemjml.EmailBlock {
+					base := notifusemjml.NewBaseBlock("root", notifusemjml.MJMLComponentMjml)
+					base.Attributes["version"] = "4.0.0"
+					return &notifusemjml.MJMLBlock{BaseBlock: base}
+				}(),
 			},
 			Category:  "marketing",
 			CreatedAt: time.Now(),
@@ -386,11 +383,8 @@ func TestHandleCreate(t *testing.T) {
 			WorkspaceID: "workspace123",
 			Name:        "Test Broadcast",
 			Audience: domain.AudienceSettings{
-				Lists:    []string{"list123"},
+				List:     "list123",
 				Segments: []string{"segment123"},
-			},
-			Schedule: domain.ScheduleSettings{
-				IsScheduled: false,
 			},
 		}
 
@@ -423,11 +417,8 @@ func TestHandleCreate(t *testing.T) {
 			WorkspaceID: "workspace123",
 			Name:        "Test Broadcast",
 			Audience: domain.AudienceSettings{
-				Lists:    []string{"list123"},
+				List:     "list123",
 				Segments: []string{"segment123"},
-			},
-			Schedule: domain.ScheduleSettings{
-				IsScheduled: false,
 			},
 		}
 
@@ -592,7 +583,7 @@ func TestHandleSchedule(t *testing.T) {
 		customHandler := http_handler.NewBroadcastHandler(
 			customMock,
 			customTemplateService,
-		func() ([]byte, error) { return jwtSecret, nil },
+			func() ([]byte, error) { return jwtSecret, nil },
 			customLogger,
 			false,
 		)
@@ -634,7 +625,7 @@ func TestHandleSchedule(t *testing.T) {
 		customHandler := http_handler.NewBroadcastHandler(
 			customMock,
 			customTemplateService,
-		func() ([]byte, error) { return jwtSecret, nil },
+			func() ([]byte, error) { return jwtSecret, nil },
 			customLogger,
 			false,
 		)
@@ -681,7 +672,7 @@ func TestHandleSchedule(t *testing.T) {
 		customHandler := http_handler.NewBroadcastHandler(
 			customMock,
 			customTemplateService,
-		func() ([]byte, error) { return jwtSecret, nil },
+			func() ([]byte, error) { return jwtSecret, nil },
 			customLogger,
 			false,
 		)
@@ -1226,7 +1217,7 @@ func TestHandleUpdate(t *testing.T) {
 			WorkspaceID: broadcast.WorkspaceID,
 			Name:        "Updated Broadcast",
 			Audience: domain.AudienceSettings{
-				Lists:    []string{"list123"},
+				List:     "list123",
 				Segments: []string{"segment123"},
 			},
 		}
@@ -1267,7 +1258,7 @@ func TestHandleUpdate(t *testing.T) {
 			WorkspaceID: broadcast.WorkspaceID,
 			Name:        "Updated Broadcast",
 			Audience: domain.AudienceSettings{
-				Lists:    []string{"list123"},
+				List:     "list123",
 				Segments: []string{"segment123"},
 			},
 		}
@@ -1317,7 +1308,7 @@ func TestHandleUpdate(t *testing.T) {
 			WorkspaceID: broadcast.WorkspaceID,
 			Name:        "Updated Broadcast",
 			Audience: domain.AudienceSettings{
-				Lists:    []string{"list123"},
+				List:     "list123",
 				Segments: []string{"segment123"},
 			},
 		}
@@ -1349,7 +1340,7 @@ func TestHandleUpdate(t *testing.T) {
 			WorkspaceID: broadcast.WorkspaceID,
 			Name:        "Updated Broadcast",
 			Audience: domain.AudienceSettings{
-				Lists:    []string{"list123"},
+				List:     "list123",
 				Segments: []string{"segment123"},
 			},
 		}
@@ -1437,7 +1428,7 @@ func TestHandleResume(t *testing.T) {
 		// Verify response
 		assert.Equal(t, http.StatusOK, w.Code)
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		assert.True(t, response["success"].(bool))
 	})
 
@@ -1567,7 +1558,7 @@ func TestHandleSendToIndividual(t *testing.T) {
 		// Verify response
 		assert.Equal(t, http.StatusOK, w.Code)
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		assert.True(t, response["success"].(bool))
 	})
 
@@ -1827,5 +1818,24 @@ func TestHandleSelectWinner(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.HandleSelectWinner(w, httpReq)
 		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+}
+
+func TestMissingParameterError_Error(t *testing.T) {
+	// Test MissingParameterError.Error - this was at 0% coverage
+	t.Run("returns formatted error message", func(t *testing.T) {
+		err := &http_handler.MissingParameterError{
+			Param: "workspace_id",
+		}
+		expected := "Missing parameter: workspace_id"
+		assert.Equal(t, expected, err.Error())
+	})
+
+	t.Run("returns formatted error message with different param", func(t *testing.T) {
+		err := &http_handler.MissingParameterError{
+			Param: "broadcast_id",
+		}
+		expected := "Missing parameter: broadcast_id"
+		assert.Equal(t, expected, err.Error())
 	})
 }

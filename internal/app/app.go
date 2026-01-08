@@ -20,9 +20,12 @@ import (
 	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/service/broadcast"
+	"github.com/Notifuse/notifuse/internal/service/queue"
+	"github.com/Notifuse/notifuse/pkg/cache"
 	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
+	"github.com/Notifuse/notifuse/pkg/ratelimiter"
 	"github.com/Notifuse/notifuse/pkg/smtp_relay"
 	"github.com/Notifuse/notifuse/pkg/tracing"
 
@@ -53,10 +56,12 @@ type AppInterface interface {
 	GetContactListRepository() domain.ContactListRepository
 	GetTransactionalNotificationRepository() domain.TransactionalNotificationRepository
 	GetTelemetryRepository() domain.TelemetryRepository
+	GetEmailQueueRepository() domain.EmailQueueRepository
 
 	// Service getters for testing
 	GetAuthService() interface{} // Returns *service.AuthService but defined as interface{} to avoid import cycle
 	GetTransactionalNotificationService() domain.TransactionalNotificationService
+	GetEmailQueueWorker() *queue.EmailQueueWorker
 
 	// Server status methods
 	IsServerCreated() bool
@@ -98,12 +103,20 @@ type App struct {
 	taskRepo                      domain.TaskRepository
 	transactionalNotificationRepo domain.TransactionalNotificationRepository
 	messageHistoryRepo            domain.MessageHistoryRepository
-	webhookEventRepo              domain.WebhookEventRepository
+	inboundWebhookEventRepo       domain.InboundWebhookEventRepository
 	telemetryRepo                 domain.TelemetryRepository
 	analyticsRepo                 domain.AnalyticsRepository
 	contactTimelineRepo           domain.ContactTimelineRepository
 	segmentRepo                   domain.SegmentRepository
 	contactSegmentQueueRepo       domain.ContactSegmentQueueRepository
+	blogCategoryRepo              domain.BlogCategoryRepository
+	blogPostRepo                  domain.BlogPostRepository
+	blogThemeRepo                 domain.BlogThemeRepository
+	customEventRepo               domain.CustomEventRepository
+	webhookSubscriptionRepo       domain.WebhookSubscriptionRepository
+	webhookDeliveryRepo           domain.WebhookDeliveryRepository
+	automationRepo                domain.AutomationRepository
+	emailQueueRepo                domain.EmailQueueRepository
 
 	// Services
 	authService                      *service.AuthService
@@ -113,12 +126,13 @@ type App struct {
 	listService                      *service.ListService
 	contactListService               *service.ContactListService
 	templateService                  *service.TemplateService
+	templateBlockService             *service.TemplateBlockService
 	emailService                     *service.EmailService
 	broadcastService                 *service.BroadcastService
 	taskService                      *service.TaskService
 	transactionalNotificationService *service.TransactionalNotificationService
 	systemNotificationService        *service.SystemNotificationService
-	webhookEventService              *service.WebhookEventService
+	inboundWebhookEventService       *service.InboundWebhookEventService
 	webhookRegistrationService       *service.WebhookRegistrationService
 	messageHistoryService            *service.MessageHistoryService
 	notificationCenterService        *service.NotificationCenterService
@@ -127,10 +141,19 @@ type App struct {
 	analyticsService                 *service.AnalyticsService
 	contactTimelineService           domain.ContactTimelineService
 	segmentService                   *service.SegmentService
+	blogService                      *service.BlogService
 	settingService                   *service.SettingService
 	setupService                     *service.SetupService
 	supabaseService                  *service.SupabaseService
 	taskScheduler                    *service.TaskScheduler
+	dnsVerificationService           *service.DNSVerificationService
+	customEventService               *service.CustomEventService
+	webhookSubscriptionService       *service.WebhookSubscriptionService
+	webhookDeliveryWorker            *service.WebhookDeliveryWorker
+	automationService                *service.AutomationService
+	automationScheduler              *service.AutomationScheduler
+	llmService                       *service.LLMService
+	emailQueueWorker                 *queue.EmailQueueWorker
 	// providers
 	postmarkService  *service.PostmarkService
 	mailgunService   *service.MailgunService
@@ -138,13 +161,18 @@ type App struct {
 	sparkPostService *service.SparkPostService
 	sesService       *service.SESService
 
+	// Cache
+	blogCache cache.Cache // Dedicated cache for blog rendering
+
 	// HTTP handlers
 	mux    *http.ServeMux
 	server *http.Server
 
+	// Rate limiter (global, namespace-based)
+	rateLimiter *ratelimiter.RateLimiter
+
 	// SMTP relay server
 	smtpRelayHandlerService *service.SMTPRelayHandlerService
-	smtpRelayRateLimiter    *service.RateLimiter
 	smtpRelayServer         interface {
 		Start() error
 		Shutdown(context.Context) error
@@ -278,13 +306,13 @@ func (a *App) InitDB() error {
 
 	// Test database connection
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return fmt.Errorf("failed to ping system database: %w", err)
 	}
 
 	// Initialize database schema if needed
 	if err := database.InitializeDatabase(db, a.config.RootEmail); err != nil {
-		db.Close()
+		_ = db.Close()
 		return fmt.Errorf("failed to initialize database schema: %w", err)
 	}
 
@@ -309,7 +337,7 @@ func (a *App) InitDB() error {
 			a.logger.Info("Exiting now - process manager should restart the server")
 			os.Exit(0)
 		}
-		db.Close()
+		_ = db.Close()
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
@@ -318,7 +346,7 @@ func (a *App) InitDB() error {
 	// Initialize connection manager singleton
 	// This will configure the system DB pool settings appropriately
 	if err := pkgDatabase.InitializeConnectionManager(a.config, db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return fmt.Errorf("failed to initialize connection manager: %w", err)
 	}
 
@@ -382,12 +410,26 @@ func (a *App) InitRepositories() error {
 	a.broadcastRepo = repository.NewBroadcastRepository(a.workspaceRepo)
 	a.transactionalNotificationRepo = repository.NewTransactionalNotificationRepository(a.workspaceRepo)
 	a.messageHistoryRepo = repository.NewMessageHistoryRepository(a.workspaceRepo)
-	a.webhookEventRepo = repository.NewWebhookEventRepository(a.workspaceRepo)
+	a.inboundWebhookEventRepo = repository.NewInboundWebhookEventRepository(a.workspaceRepo)
 	a.telemetryRepo = repository.NewTelemetryRepository(a.workspaceRepo)
 	a.analyticsRepo = repository.NewAnalyticsRepository(a.workspaceRepo, a.logger)
 	a.contactTimelineRepo = repository.NewContactTimelineRepository(a.workspaceRepo)
 	a.segmentRepo = repository.NewSegmentRepository(a.workspaceRepo)
 	a.contactSegmentQueueRepo = repository.NewContactSegmentQueueRepository(a.workspaceRepo)
+	a.blogCategoryRepo = repository.NewBlogCategoryRepository(a.workspaceRepo)
+	a.blogPostRepo = repository.NewBlogPostRepository(a.workspaceRepo)
+	a.blogThemeRepo = repository.NewBlogThemeRepository(a.workspaceRepo)
+	a.customEventRepo = repository.NewCustomEventRepository(a.workspaceRepo)
+	a.webhookSubscriptionRepo = repository.NewWebhookSubscriptionRepository(a.workspaceRepo)
+	a.webhookDeliveryRepo = repository.NewWebhookDeliveryRepository(a.workspaceRepo)
+
+	// Create trigger generator for automation repository
+	queryBuilder := service.NewQueryBuilder()
+	triggerGenerator := service.NewAutomationTriggerGenerator(queryBuilder)
+	a.automationRepo = repository.NewAutomationRepository(a.workspaceRepo, triggerGenerator)
+
+	// Initialize email queue repository
+	a.emailQueueRepo = repository.NewEmailQueueRepository(a.workspaceRepo)
 
 	// Initialize setting service
 	a.settingService = service.NewSettingService(a.settingRepo)
@@ -418,23 +460,28 @@ func (a *App) InitServices() error {
 
 	var err error
 
-	// Initialize rate limiters for authentication endpoints
-	// 5 attempts per 5 minutes per email address
-	signInLimiter := service.NewRateLimiter(5, 5*time.Minute)
-	verifyCodeLimiter := service.NewRateLimiter(5, 5*time.Minute)
+	// Initialize global rate limiter with namespace support
+	a.rateLimiter = ratelimiter.NewRateLimiter()
+
+	// Configure policies for different use cases
+	a.rateLimiter.SetPolicy("signin", 5, 5*time.Minute)           // Strict auth
+	a.rateLimiter.SetPolicy("verify", 5, 5*time.Minute)           // Strict auth
+	a.rateLimiter.SetPolicy("smtp", 5, 1*time.Minute)             // SMTP relay
+	a.rateLimiter.SetPolicy("subscribe:email", 10, 1*time.Minute) // Public subscribe by email
+	a.rateLimiter.SetPolicy("subscribe:ip", 50, 1*time.Minute)    // Public subscribe by IP
 
 	// Initialize user service
 	userServiceConfig := service.UserServiceConfig{
-		Repository:        a.userRepo,
-		AuthService:       a.authService,
-		EmailSender:       a.mailer,
-		SessionExpiry:     30 * 24 * time.Hour, // 30 days
-		IsProduction:      a.config.IsProduction(),
-		Logger:            a.logger,
-		Tracer:            tracing.GetTracer(),
-		SignInLimiter:     signInLimiter,
-		VerifyCodeLimiter: verifyCodeLimiter,
-		SecretKey:         a.config.Security.SecretKey,
+		Repository:    a.userRepo,
+		AuthService:   a.authService,
+		EmailSender:   a.mailer,
+		SessionExpiry: 30 * 24 * time.Hour, // 30 days
+		IsProduction:  a.config.IsProduction(),
+		Logger:        a.logger,
+		Tracer:        tracing.GetTracer(),
+		RateLimiter:   a.rateLimiter, // Pass global rate limiter
+		SecretKey:     a.config.Security.SecretKey,
+		RootEmail:     a.config.RootEmail,
 	}
 
 	a.userService, err = service.NewUserService(userServiceConfig)
@@ -444,7 +491,7 @@ func (a *App) InitServices() error {
 
 	// Initialize setup service with environment config from config loader
 	// Config tracks which values came from actual env vars (not database, not generated)
-	rootEmail, apiEndpoint, smtpHost, smtpUsername, smtpPassword, smtpFromEmail, smtpFromName, smtpPort, smtpRelayEnabled, smtpRelayDomain, smtpRelayTLSCertBase64, smtpRelayTLSKeyBase64, smtpRelayPort := a.config.GetEnvValues()
+	rootEmail, apiEndpoint, smtpHost, smtpUsername, smtpPassword, smtpFromEmail, smtpFromName, smtpPort, smtpUseTLS, smtpRelayEnabled, smtpRelayDomain, smtpRelayTLSCertBase64, smtpRelayTLSKeyBase64, smtpRelayPort := a.config.GetEnvValues()
 	envConfig := &service.EnvironmentConfig{
 		RootEmail:              rootEmail,
 		APIEndpoint:            apiEndpoint,
@@ -454,6 +501,7 @@ func (a *App) InitServices() error {
 		SMTPPassword:           smtpPassword,
 		SMTPFromEmail:          smtpFromEmail,
 		SMTPFromName:           smtpFromName,
+		SMTPUseTLS:             smtpUseTLS,
 		SMTPRelayEnabled:       smtpRelayEnabled,
 		SMTPRelayDomain:        smtpRelayDomain,
 		SMTPRelayPort:          smtpRelayPort,
@@ -479,13 +527,20 @@ func (a *App) InitServices() error {
 		a.config.APIEndpoint,
 	)
 
+	// Initialize template block service
+	a.templateBlockService = service.NewTemplateBlockService(
+		a.workspaceRepo,
+		a.authService,
+		a.logger,
+	)
+
 	// Initialize contact service
 	a.contactService = service.NewContactService(
 		a.contactRepo,
 		a.workspaceRepo,
 		a.authService,
 		a.messageHistoryRepo,
-		a.webhookEventRepo,
+		a.inboundWebhookEventRepo,
 		a.contactListRepo,
 		a.contactTimelineRepo,
 		a.logger,
@@ -499,6 +554,14 @@ func (a *App) InitServices() error {
 		a.contactRepo,
 		a.listRepo,
 		a.contactListRepo,
+		a.logger,
+	)
+
+	// Initialize custom event service
+	a.customEventService = service.NewCustomEventService(
+		a.customEventRepo,
+		a.contactRepo,
+		a.authService,
 		a.logger,
 	)
 
@@ -554,28 +617,18 @@ func (a *App) InitServices() error {
 		a.workspaceRepo,
 		a.contactListRepo,
 		a.contactRepo,
+		a.messageHistoryRepo,
 		a.authService,
 		a.emailService,
 		a.logger,
 		a.config.APIEndpoint,
+		a.blogCache,
 	)
 
-	// Initialize workspace service
-	a.workspaceService = service.NewWorkspaceService(
-		a.workspaceRepo,
-		a.userRepo,
-		a.taskRepo,
+	// Initialize DNS verification service (before workspace service)
+	a.dnsVerificationService = service.NewDNSVerificationService(
 		a.logger,
-		a.userService,
-		a.authService,
-		a.mailer,
-		a.config,
-		a.contactService,
-		a.listService,
-		a.contactListService,
-		a.templateService,
-		a.webhookRegistrationService,
-		a.config.Security.SecretKey,
+		a.config.APIEndpoint, // Expected CNAME target
 	)
 
 	// Initialize task service
@@ -598,15 +651,15 @@ func (a *App) InitServices() error {
 		a.config.APIEndpoint,
 	)
 
-	a.webhookEventService = service.NewWebhookEventService(
-		a.webhookEventRepo,
+	a.inboundWebhookEventService = service.NewInboundWebhookEventService(
+		a.inboundWebhookEventRepo,
 		a.authService,
 		a.logger,
 		a.workspaceRepo,
 		a.messageHistoryRepo,
 	)
 
-	// Initialize Supabase service
+	// Initialize Supabase service (before workspace service)
 	a.supabaseService = service.NewSupabaseService(
 		a.workspaceRepo,
 		a.emailService,
@@ -617,12 +670,9 @@ func (a *App) InitServices() error {
 		a.templateService,
 		a.transactionalNotificationRepo,
 		a.transactionalNotificationService,
-		a.webhookEventRepo,
+		a.inboundWebhookEventRepo,
 		a.logger,
 	)
-
-	// Link Supabase service to Workspace service (for integration template creation)
-	a.workspaceService.SetSupabaseService(a.supabaseService)
 
 	// Initialize broadcast service
 	a.broadcastService = service.NewBroadcastService(
@@ -637,6 +687,7 @@ func (a *App) InitServices() error {
 		a.authService,
 		a.eventBus,           // Pass the event bus
 		a.messageHistoryRepo, // Message history repository
+		a.listService,        // List service for web publication validation
 		a.config.APIEndpoint, // API endpoint for tracking URLs
 	)
 
@@ -654,10 +705,12 @@ func (a *App) InitServices() error {
 		a.contactRepo,
 		a.taskRepo,
 		a.workspaceRepo,
+		a.emailQueueRepo,
 		a.logger,
 		broadcastConfig,
 		a.config.APIEndpoint,
 		a.eventBus,
+		true, // useQueueSender - use queue-based message sender for broadcasts
 	)
 
 	// Register the broadcast factory with the task service
@@ -699,6 +752,40 @@ func (a *App) InitServices() error {
 		a.logger,
 	)
 
+	// Initialize blog service (before workspace service)
+	a.blogService = service.NewBlogService(
+		a.logger,
+		a.blogCategoryRepo,
+		a.blogPostRepo,
+		a.blogThemeRepo,
+		a.workspaceRepo,
+		a.listRepo,
+		a.templateRepo,
+		a.authService,
+		a.blogCache,
+	)
+
+	// Initialize workspace service (after all its dependencies)
+	a.workspaceService = service.NewWorkspaceService(
+		a.workspaceRepo,
+		a.userRepo,
+		a.taskRepo,
+		a.logger,
+		a.userService,
+		a.authService,
+		a.mailer,
+		a.config,
+		a.contactService,
+		a.listService,
+		a.contactListService,
+		a.templateService,
+		a.webhookRegistrationService,
+		a.config.Security.SecretKey,
+		a.supabaseService,
+		a.dnsVerificationService,
+		a.blogService,
+	)
+
 	// Initialize and register segment build processor
 	segmentBuildProcessor := service.NewSegmentBuildProcessor(
 		a.segmentRepo,
@@ -735,6 +822,14 @@ func (a *App) InitServices() error {
 	)
 	a.taskService.RegisterProcessor(contactSegmentQueueTaskProcessor)
 
+	// Initialize webhook subscription service (before demo service so it can create subscriptions)
+	a.webhookSubscriptionService = service.NewWebhookSubscriptionService(
+		a.webhookSubscriptionRepo,
+		a.webhookDeliveryRepo,
+		a.authService,
+		a.logger,
+	)
+
 	// Initialize demo service
 	a.demoService = service.NewDemoService(
 		a.logger,
@@ -749,7 +844,7 @@ func (a *App) InitServices() error {
 		a.broadcastService,
 		a.taskService,
 		a.transactionalNotificationService,
-		a.webhookEventService,
+		a.inboundWebhookEventService,
 		a.webhookRegistrationService,
 		a.messageHistoryService,
 		a.notificationCenterService,
@@ -757,8 +852,10 @@ func (a *App) InitServices() error {
 		a.workspaceRepo,
 		a.taskRepo,
 		a.messageHistoryRepo,
-		a.webhookEventRepo,
+		a.inboundWebhookEventRepo,
 		a.broadcastRepo,
+		a.customEventRepo,
+		a.webhookSubscriptionService,
 	)
 
 	// Initialize telemetry service
@@ -790,8 +887,66 @@ func (a *App) InitServices() error {
 		a.config.TaskScheduler.MaxTasks,
 	)
 
-	// Create rate limiter for SMTP relay (5 attempts per minute)
-	a.smtpRelayRateLimiter = service.NewRateLimiter(5, 1*time.Minute)
+	// Initialize webhook delivery worker
+	a.webhookDeliveryWorker = service.NewWebhookDeliveryWorker(
+		a.webhookSubscriptionRepo,
+		a.webhookDeliveryRepo,
+		a.workspaceRepo,
+		a.logger,
+		httpClient,
+	)
+
+	// Initialize email queue worker for processing marketing emails (broadcasts & automations)
+	// Worker creates message_history entries via UPSERT after each send attempt
+	a.emailQueueWorker = queue.NewEmailQueueWorker(
+		a.emailQueueRepo,
+		a.workspaceRepo,
+		a.emailService,
+		a.messageHistoryRepo,
+		queue.DefaultWorkerConfig(),
+		a.logger,
+	)
+
+	// Initialize automation service
+	a.automationService = service.NewAutomationService(
+		a.automationRepo,
+		a.authService,
+		a.logger,
+	)
+
+	// Initialize Firecrawl service
+	firecrawlService := service.NewFirecrawlService(a.logger)
+
+	// Initialize server-side tool registry
+	toolRegistry := service.NewServerSideToolRegistry(firecrawlService, a.logger)
+
+	// Initialize LLM service with tool registry
+	a.llmService = service.NewLLMService(service.LLMServiceConfig{
+		AuthService:   a.authService,
+		WorkspaceRepo: a.workspaceRepo,
+		Logger:        a.logger,
+		ToolRegistry:  toolRegistry,
+	})
+
+	// Initialize automation executor and scheduler
+	automationExecutor := service.NewAutomationExecutor(
+		a.automationRepo,
+		a.contactRepo,
+		a.workspaceRepo,
+		a.contactListRepo,
+		a.templateRepo,
+		a.emailQueueRepo,
+		a.messageHistoryRepo,
+		a.contactTimelineRepo,
+		a.logger,
+		a.config.APIEndpoint,
+	)
+	a.automationScheduler = service.NewAutomationScheduler(
+		automationExecutor,
+		a.logger,
+		10*time.Second, // Poll every 10 seconds
+		50,             // Process 50 contacts per batch
+	)
 
 	// Initialize SMTP relay handler service
 	a.smtpRelayHandlerService = service.NewSMTPRelayHandlerService(
@@ -800,7 +955,7 @@ func (a *App) InitServices() error {
 		a.workspaceRepo,
 		a.logger,
 		a.config.Security.JWTSecret,
-		a.smtpRelayRateLimiter,
+		a.rateLimiter, // Use global rate limiter
 	)
 
 	// Initialize SMTP relay server if enabled
@@ -887,6 +1042,9 @@ func (a *App) InitHandlers() error {
 		a.config.SMTPRelay.Domain,
 		a.config.SMTPRelay.Port,
 		smtpRelayTLSEnabled,
+		a.workspaceRepo,
+		a.blogService,
+		a.blogCache,
 	)
 	setupHandler := httpHandler.NewSetupHandler(
 		a.setupService,
@@ -905,8 +1063,11 @@ func (a *App) InitHandlers() error {
 	listHandler := httpHandler.NewListHandler(a.listService, getJWTSecret, a.logger)
 	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, getJWTSecret, a.logger)
 	templateHandler := httpHandler.NewTemplateHandler(a.templateService, getJWTSecret, a.logger)
+	templateBlockHandler := httpHandler.NewTemplateBlockHandler(a.templateBlockService, getJWTSecret, a.logger)
 	emailHandler := httpHandler.NewEmailHandler(a.emailService, getJWTSecret, a.logger, a.config.Security.SecretKey)
 	broadcastHandler := httpHandler.NewBroadcastHandler(a.broadcastService, a.templateService, getJWTSecret, a.logger, a.config.IsDemo())
+	blogHandler := httpHandler.NewBlogHandler(a.blogService, getJWTSecret, a.logger, a.config.IsDemo())
+	blogThemeHandler := httpHandler.NewBlogThemeHandler(a.blogService, getJWTSecret, a.logger)
 	taskHandler := httpHandler.NewTaskHandler(
 		a.taskService,
 		getJWTSecret,
@@ -914,7 +1075,7 @@ func (a *App) InitHandlers() error {
 		a.config.Security.SecretKey,
 	)
 	transactionalHandler := httpHandler.NewTransactionalNotificationHandler(a.transactionalNotificationService, getJWTSecret, a.logger, a.config.IsDemo())
-	webhookEventHandler := httpHandler.NewWebhookEventHandler(a.webhookEventService, getJWTSecret, a.logger)
+	inboundWebhookEventHandler := httpHandler.NewInboundWebhookEventHandler(a.inboundWebhookEventService, getJWTSecret, a.logger)
 	webhookRegistrationHandler := httpHandler.NewWebhookRegistrationHandler(a.webhookRegistrationService, getJWTSecret, a.logger)
 	supabaseWebhookHandler := httpHandler.NewSupabaseWebhookHandler(a.supabaseService, a.logger)
 	messageHistoryHandler := httpHandler.NewMessageHistoryHandler(
@@ -927,6 +1088,7 @@ func (a *App) InitHandlers() error {
 		a.notificationCenterService,
 		a.listService,
 		a.logger,
+		a.rateLimiter, // Pass global rate limiter
 	)
 	analyticsHandler := httpHandler.NewAnalyticsHandler(
 		a.analyticsService,
@@ -944,6 +1106,27 @@ func (a *App) InitHandlers() error {
 		getJWTSecret,
 		a.logger,
 	)
+	customEventHandler := httpHandler.NewCustomEventHandler(
+		a.customEventService,
+		getJWTSecret,
+		a.logger,
+	)
+	webhookSubscriptionHandler := httpHandler.NewWebhookSubscriptionHandler(
+		a.webhookSubscriptionService,
+		a.webhookDeliveryWorker,
+		getJWTSecret,
+		a.logger,
+	)
+	automationHandler := httpHandler.NewAutomationHandler(
+		a.automationService,
+		getJWTSecret,
+		a.logger,
+	)
+	llmHandler := httpHandler.NewLLMHandler(
+		a.llmService,
+		getJWTSecret,
+		a.logger,
+	)
 	if !a.config.IsProduction() {
 		demoHandler := httpHandler.NewDemoHandler(a.demoService, a.logger)
 		demoHandler.RegisterRoutes(a.mux)
@@ -958,11 +1141,14 @@ func (a *App) InitHandlers() error {
 	listHandler.RegisterRoutes(a.mux)
 	contactListHandler.RegisterRoutes(a.mux)
 	templateHandler.RegisterRoutes(a.mux)
+	templateBlockHandler.RegisterRoutes(a.mux)
 	emailHandler.RegisterRoutes(a.mux)
 	broadcastHandler.RegisterRoutes(a.mux)
+	blogHandler.RegisterRoutes(a.mux)
+	blogThemeHandler.RegisterRoutes(a.mux)
 	taskHandler.RegisterRoutes(a.mux)
 	transactionalHandler.RegisterRoutes(a.mux)
-	webhookEventHandler.RegisterRoutes(a.mux)
+	inboundWebhookEventHandler.RegisterRoutes(a.mux)
 	webhookRegistrationHandler.RegisterRoutes(a.mux)
 	supabaseWebhookHandler.RegisterRoutes(a.mux)
 	messageHistoryHandler.RegisterRoutes(a.mux)
@@ -970,6 +1156,10 @@ func (a *App) InitHandlers() error {
 	analyticsHandler.RegisterRoutes(a.mux)
 	contactTimelineHandler.RegisterRoutes(a.mux)
 	segmentHandler.RegisterRoutes(a.mux)
+	customEventHandler.RegisterRoutes(a.mux)
+	webhookSubscriptionHandler.RegisterRoutes(a.mux)
+	automationHandler.RegisterRoutes(a.mux)
+	llmHandler.RegisterRoutes(a.mux)
 
 	return nil
 }
@@ -1060,6 +1250,83 @@ func (a *App) Start() error {
 		}()
 	}
 
+	// Start webhook delivery worker (with 30 second delay like task scheduler)
+	// Disabled in demo mode to prevent sending webhooks to external endpoints
+	if a.webhookDeliveryWorker != nil && !a.config.IsDemo() {
+		go func() {
+			a.logger.Info("Webhook delivery worker will start in 30 seconds...")
+
+			ctx := a.GetShutdownContext()
+
+			// Use a timer that respects the shutdown context
+			select {
+			case <-time.After(30 * time.Second):
+				// Check if we're shutting down before starting
+				if ctx.Err() != nil {
+					a.logger.Info("Server shutting down, webhook delivery worker will not start")
+					return
+				}
+				a.logger.Info("Starting webhook delivery worker now")
+				a.webhookDeliveryWorker.Start(ctx)
+			case <-ctx.Done():
+				a.logger.Info("Server shutdown initiated during webhook worker delay, worker will not start")
+				return
+			}
+		}()
+	}
+
+	// Start email queue worker (with 30 second delay)
+	// Disabled in demo mode to prevent sending marketing emails
+	if a.emailQueueWorker != nil && !a.config.IsDemo() {
+		go func() {
+			a.logger.Info("Email queue worker will start in 30 seconds...")
+
+			ctx := a.GetShutdownContext()
+
+			// Use a timer that respects the shutdown context
+			select {
+			case <-time.After(30 * time.Second):
+				// Check if we're shutting down before starting
+				if ctx.Err() != nil {
+					a.logger.Info("Server shutting down, email queue worker will not start")
+					return
+				}
+				a.logger.Info("Starting email queue worker now")
+				if err := a.emailQueueWorker.Start(ctx); err != nil {
+					a.logger.WithField("error", err.Error()).Error("Failed to start email queue worker")
+				}
+			case <-ctx.Done():
+				a.logger.Info("Server shutdown initiated during email queue worker delay, worker will not start")
+				return
+			}
+		}()
+	}
+
+	// Start automation scheduler (with 30 second delay)
+	// Disabled in demo mode to prevent executing automations
+	if a.automationScheduler != nil && !a.config.IsDemo() {
+		go func() {
+			a.logger.Info("Automation scheduler will start in 30 seconds...")
+
+			ctx := a.GetShutdownContext()
+
+			// Use a timer that respects the shutdown context
+			select {
+			case <-time.After(30 * time.Second):
+				// Check if we're shutting down before starting
+				if ctx.Err() != nil {
+					a.logger.Info("Server shutting down, automation scheduler will not start")
+					return
+				}
+				a.logger.Info("Starting automation scheduler now")
+				a.automationScheduler.Start(ctx)
+			case <-ctx.Done():
+				a.logger.Info("Server shutdown initiated during automation scheduler delay, scheduler will not start")
+				return
+			}
+		}()
+	}
+
 	// Start the server based on SSL configuration
 	if a.config.Server.SSL.Enabled {
 		a.logger.WithField("cert_file", a.config.Server.SSL.CertFile).Info("SSL enabled")
@@ -1076,14 +1343,32 @@ func (a *App) Shutdown(ctx context.Context) error {
 	// Signal shutdown to all components
 	a.shutdownCancel()
 
+	// Stop blog cache cleanup goroutine
+	if a.blogCache != nil {
+		a.logger.Info("Stopping blog cache...")
+		a.blogCache.Stop()
+	}
+
 	// Stop task scheduler first (before stopping server)
 	if a.taskScheduler != nil {
 		a.taskScheduler.Stop()
 	}
 
-	// Stop SMTP relay rate limiter
-	if a.smtpRelayRateLimiter != nil {
-		a.smtpRelayRateLimiter.Stop()
+	// Stop automation scheduler
+	if a.automationScheduler != nil {
+		a.logger.Info("Stopping automation scheduler...")
+		a.automationScheduler.Stop()
+	}
+
+	// Stop email queue worker
+	if a.emailQueueWorker != nil {
+		a.logger.Info("Stopping email queue worker...")
+		a.emailQueueWorker.Stop()
+	}
+
+	// Stop global rate limiter
+	if a.rateLimiter != nil {
+		a.rateLimiter.Stop()
 	}
 
 	// Shutdown SMTP relay server if running
@@ -1306,6 +1591,10 @@ func (a *App) Initialize() error {
 		a.logger.Info("System installation verified")
 	}
 
+	// Initialize dedicated blog cache
+	a.blogCache = cache.NewInMemoryCache(domain.BlogCacheTTL)
+	a.logger.Info("Blog cache initialized")
+
 	if err := a.InitMailer(); err != nil {
 		return err
 	}
@@ -1402,6 +1691,14 @@ func (a *App) GetTransactionalNotificationRepository() domain.TransactionalNotif
 
 func (a *App) GetTelemetryRepository() domain.TelemetryRepository {
 	return a.telemetryRepo
+}
+
+func (a *App) GetEmailQueueRepository() domain.EmailQueueRepository {
+	return a.emailQueueRepo
+}
+
+func (a *App) GetEmailQueueWorker() *queue.EmailQueueWorker {
+	return a.emailQueueWorker
 }
 
 func (a *App) GetAuthService() interface{} {

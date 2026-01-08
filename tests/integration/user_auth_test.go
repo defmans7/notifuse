@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func TestUserSignInFlow(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := testutil.NewIntegrationTestSuite(t, appFactory)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -37,7 +38,7 @@ func TestUserSignInFlow(t *testing.T) {
 
 		resp, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should return 400 Bad Request
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -69,13 +70,13 @@ func TestUserSignInFlow(t *testing.T) {
 
 		resp1, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		resp1.Body.Close()
+		_ = resp1.Body.Close()
 		assert.Equal(t, http.StatusOK, resp1.StatusCode)
 
 		// Second signin for same user
 		resp2, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		defer resp2.Body.Close()
+		defer func() { _ = resp2.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
@@ -97,7 +98,7 @@ func TestUserSignInFlow(t *testing.T) {
 
 		resp, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Empty email should also fail since no user exists with empty email
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -127,7 +128,7 @@ func TestUserSignInFlow(t *testing.T) {
 		// This should fail at the client level when trying to marshal
 		assert.Error(t, err)
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 	})
 }
@@ -138,7 +139,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := testutil.NewIntegrationTestSuite(t, appFactory)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -150,7 +151,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		signinResp, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		defer signinResp.Body.Close()
+		defer func() { _ = signinResp.Body.Close() }()
 
 		var signinResponse map[string]interface{}
 		err = json.NewDecoder(signinResp.Body).Decode(&signinResponse)
@@ -168,7 +169,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		verifyResp, err := client.Post("/api/user.verify", verifyReq)
 		require.NoError(t, err)
-		defer verifyResp.Body.Close()
+		defer func() { _ = verifyResp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, verifyResp.StatusCode)
 
@@ -206,7 +207,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		signinResp, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		signinResp.Body.Close()
+		_ = signinResp.Body.Close()
 
 		// Try to verify with wrong code
 		verifyReq := domain.VerifyCodeInput{
@@ -216,7 +217,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		verifyResp, err := client.Post("/api/user.verify", verifyReq)
 		require.NoError(t, err)
-		defer verifyResp.Body.Close()
+		defer func() { _ = verifyResp.Body.Close() }()
 
 		assert.Equal(t, http.StatusUnauthorized, verifyResp.StatusCode)
 
@@ -247,11 +248,11 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		// Create session with expired magic code using repository
 		expiredTime := time.Now().UTC().Add(-1 * time.Hour) // 1 hour ago
-		
+
 		// Get secret key from app config to hash the magic code
 		secretKey := app.GetConfig().Security.SecretKey
 		hashedCode := crypto.HashMagicCode("123456", secretKey)
-		
+
 		session := &domain.Session{
 			ID:               "550e8400-e29b-41d4-a716-446655440002",
 			UserID:           user.ID,
@@ -271,7 +272,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		verifyResp, err := client.Post("/api/user.verify", verifyReq)
 		require.NoError(t, err)
-		defer verifyResp.Body.Close()
+		defer func() { _ = verifyResp.Body.Close() }()
 
 		// Check the actual response to understand behavior
 		var response map[string]interface{}
@@ -297,7 +298,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 
 		verifyResp, err := client.Post("/api/user.verify", verifyReq)
 		require.NoError(t, err)
-		defer verifyResp.Body.Close()
+		defer func() { _ = verifyResp.Body.Close() }()
 
 		assert.Equal(t, http.StatusUnauthorized, verifyResp.StatusCode)
 
@@ -325,7 +326,7 @@ func TestUserVerifyCodeFlow(t *testing.T) {
 		// This should fail at the client level when trying to marshal
 		assert.Error(t, err)
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 	})
 }
@@ -336,7 +337,7 @@ func TestUserGetCurrentUserFlow(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := testutil.NewIntegrationTestSuite(t, appFactory)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -353,7 +354,7 @@ func TestUserGetCurrentUserFlow(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -383,7 +384,7 @@ func TestUserGetCurrentUserFlow(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
@@ -395,7 +396,7 @@ func TestUserGetCurrentUserFlow(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
@@ -408,7 +409,7 @@ func TestUserSessionManagement(t *testing.T) {
 	defer testutil.CleanupTestEnvironment()
 
 	suite := testutil.NewIntegrationTestSuite(t, appFactory)
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 
@@ -421,7 +422,7 @@ func TestUserSessionManagement(t *testing.T) {
 
 			resp, err := client.Post("/api/user.signin", signinReq)
 			require.NoError(t, err)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 
 		// Verify multiple sessions exist using repository
@@ -471,7 +472,7 @@ func TestUserSessionManagement(t *testing.T) {
 
 		resp, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		// Check session properties using repository
 		app := suite.ServerManager.GetApp()
@@ -501,7 +502,7 @@ func TestUserSessionManagement(t *testing.T) {
 		signinReq := domain.SignInInput{Email: email}
 		resp, err := client.Post("/api/user.signin", signinReq)
 		require.NoError(t, err)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		// Get the session and manually clear the magic code to simulate v15 migration
 		app := suite.ServerManager.GetApp()
@@ -553,7 +554,7 @@ func performCompleteSignInFlow(t *testing.T, client *testutil.APIClient, email s
 
 	signinResp, err := client.Post("/api/user.signin", signinReq)
 	require.NoError(t, err)
-	defer signinResp.Body.Close()
+	defer func() { _ = signinResp.Body.Close() }()
 
 	var signinResponse map[string]interface{}
 	err = json.NewDecoder(signinResp.Body).Decode(&signinResponse)
@@ -570,7 +571,7 @@ func performCompleteSignInFlow(t *testing.T, client *testutil.APIClient, email s
 
 	verifyResp, err := client.Post("/api/user.verify", verifyReq)
 	require.NoError(t, err)
-	defer verifyResp.Body.Close()
+	defer func() { _ = verifyResp.Body.Close() }()
 
 	var authResponse domain.AuthResponse
 	err = json.NewDecoder(verifyResp.Body).Decode(&authResponse)
@@ -579,9 +580,187 @@ func performCompleteSignInFlow(t *testing.T, client *testutil.APIClient, email s
 	return authResponse.Token
 }
 
+func TestRootSigninFlow(t *testing.T) {
+	testutil.SkipIfShort(t)
+	testutil.SetupTestEnvironment()
+	defer testutil.CleanupTestEnvironment()
+
+	suite := testutil.NewIntegrationTestSuite(t, appFactory)
+	defer func() { suite.Cleanup() }()
+
+	client := suite.APIClient
+
+	t.Run("successful root signin with valid HMAC", func(t *testing.T) {
+		// Get root email and secret from config
+		app := suite.ServerManager.GetApp()
+		rootEmail := app.GetConfig().RootEmail
+		secretKey := app.GetConfig().Security.SecretKey
+
+		// Skip test if root email is not configured
+		if rootEmail == "" {
+			t.Skip("RootEmail not configured in test environment")
+		}
+
+		// Generate valid signature
+		timestamp := time.Now().Unix()
+		message := fmt.Sprintf("%s:%d", rootEmail, timestamp)
+		signature := crypto.ComputeHMAC256([]byte(message), secretKey)
+
+		req := domain.RootSigninInput{
+			Email:     rootEmail,
+			Timestamp: timestamp,
+			Signature: signature,
+		}
+
+		resp, err := client.Post("/api/user.rootSignin", req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var authResp domain.AuthResponse
+		err = json.NewDecoder(resp.Body).Decode(&authResp)
+		require.NoError(t, err)
+		assert.NotEmpty(t, authResp.Token)
+		assert.Equal(t, rootEmail, authResp.User.Email)
+	})
+
+	t.Run("fails with wrong email", func(t *testing.T) {
+		app := suite.ServerManager.GetApp()
+		secretKey := app.GetConfig().Security.SecretKey
+
+		wrongEmail := "wrongemail@example.com"
+		timestamp := time.Now().Unix()
+		message := fmt.Sprintf("%s:%d", wrongEmail, timestamp)
+		signature := crypto.ComputeHMAC256([]byte(message), secretKey)
+
+		req := domain.RootSigninInput{
+			Email:     wrongEmail,
+			Timestamp: timestamp,
+			Signature: signature,
+		}
+
+		resp, err := client.Post("/api/user.rootSignin", req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+		var response map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, "Invalid credentials", response["error"])
+	})
+
+	t.Run("fails with expired timestamp", func(t *testing.T) {
+		app := suite.ServerManager.GetApp()
+		rootEmail := app.GetConfig().RootEmail
+		secretKey := app.GetConfig().Security.SecretKey
+
+		if rootEmail == "" {
+			t.Skip("RootEmail not configured in test environment")
+		}
+
+		// Timestamp more than 60 seconds ago
+		timestamp := time.Now().Unix() - 120
+		message := fmt.Sprintf("%s:%d", rootEmail, timestamp)
+		signature := crypto.ComputeHMAC256([]byte(message), secretKey)
+
+		req := domain.RootSigninInput{
+			Email:     rootEmail,
+			Timestamp: timestamp,
+			Signature: signature,
+		}
+
+		resp, err := client.Post("/api/user.rootSignin", req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("fails with invalid signature", func(t *testing.T) {
+		app := suite.ServerManager.GetApp()
+		rootEmail := app.GetConfig().RootEmail
+
+		if rootEmail == "" {
+			t.Skip("RootEmail not configured in test environment")
+		}
+
+		timestamp := time.Now().Unix()
+
+		req := domain.RootSigninInput{
+			Email:     rootEmail,
+			Timestamp: timestamp,
+			Signature: "invalid-signature-abc123def456",
+		}
+
+		resp, err := client.Post("/api/user.rootSignin", req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("token can be used for authenticated requests", func(t *testing.T) {
+		app := suite.ServerManager.GetApp()
+		rootEmail := app.GetConfig().RootEmail
+		secretKey := app.GetConfig().Security.SecretKey
+
+		if rootEmail == "" {
+			t.Skip("RootEmail not configured in test environment")
+		}
+
+		// Generate valid signature and get token
+		timestamp := time.Now().Unix()
+		message := fmt.Sprintf("%s:%d", rootEmail, timestamp)
+		signature := crypto.ComputeHMAC256([]byte(message), secretKey)
+
+		signinReq := domain.RootSigninInput{
+			Email:     rootEmail,
+			Timestamp: timestamp,
+			Signature: signature,
+		}
+
+		resp, err := client.Post("/api/user.rootSignin", signinReq)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var authResp domain.AuthResponse
+		err = json.NewDecoder(resp.Body).Decode(&authResp)
+		require.NoError(t, err)
+		require.NotEmpty(t, authResp.Token)
+
+		// Use the token to call /api/user.me
+		meReq, err := http.NewRequest("GET", suite.ServerManager.GetURL()+"/api/user.me", nil)
+		require.NoError(t, err)
+		meReq.Header.Set("Authorization", "Bearer "+authResp.Token)
+
+		meResp, err := http.DefaultClient.Do(meReq)
+		require.NoError(t, err)
+		defer func() { _ = meResp.Body.Close() }()
+
+		assert.Equal(t, http.StatusOK, meResp.StatusCode)
+
+		var meResponse map[string]interface{}
+		err = json.NewDecoder(meResp.Body).Decode(&meResponse)
+		require.NoError(t, err)
+		assert.Contains(t, meResponse, "user")
+		user := meResponse["user"].(map[string]interface{})
+		assert.Equal(t, rootEmail, user["email"])
+	})
+}
+
+// getAuthServiceFromApp is an unused test helper
+// It is kept for potential future use but currently not called by any tests
+// Uncomment and use it when needed:
+/*
 // Helper function to extract auth service from app (this might need adjustment based on actual app structure)
 func getAuthServiceFromApp(app testutil.AppInterface) interface{} {
 	// This is a placeholder - you'll need to implement this based on how the app exposes the auth service
 	// For now, we'll skip this test case that requires it
 	return nil
 }
+*/

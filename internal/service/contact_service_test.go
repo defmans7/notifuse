@@ -14,12 +14,12 @@ import (
 )
 
 // createContactServiceWithMocks creates a ContactService with all required mocks
-func createContactServiceWithMocks(ctrl *gomock.Controller) (*ContactService, *mocks.MockContactRepository, *mocks.MockWorkspaceRepository, *mocks.MockAuthService, *mocks.MockMessageHistoryRepository, *mocks.MockWebhookEventRepository, *mocks.MockContactListRepository, *mocks.MockContactTimelineRepository, *pkgmocks.MockLogger) {
+func createContactServiceWithMocks(ctrl *gomock.Controller) (*ContactService, *mocks.MockContactRepository, *mocks.MockWorkspaceRepository, *mocks.MockAuthService, *mocks.MockMessageHistoryRepository, *mocks.MockInboundWebhookEventRepository, *mocks.MockContactListRepository, *mocks.MockContactTimelineRepository, *pkgmocks.MockLogger) {
 	mockRepo := mocks.NewMockContactRepository(ctrl)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockAuthService := mocks.NewMockAuthService(ctrl)
 	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	mockWebhookEventRepo := mocks.NewMockWebhookEventRepository(ctrl)
+	mockInboundWebhookEventRepo := mocks.NewMockInboundWebhookEventRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactTimelineRepo := mocks.NewMockContactTimelineRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
@@ -29,13 +29,13 @@ func createContactServiceWithMocks(ctrl *gomock.Controller) (*ContactService, *m
 		mockWorkspaceRepo,
 		mockAuthService,
 		mockMessageHistoryRepo,
-		mockWebhookEventRepo,
+		mockInboundWebhookEventRepo,
 		mockContactListRepo,
 		mockContactTimelineRepo,
 		mockLogger,
 	)
 
-	return service, mockRepo, mockWorkspaceRepo, mockAuthService, mockMessageHistoryRepo, mockWebhookEventRepo, mockContactListRepo, mockContactTimelineRepo, mockLogger
+	return service, mockRepo, mockWorkspaceRepo, mockAuthService, mockMessageHistoryRepo, mockInboundWebhookEventRepo, mockContactListRepo, mockContactTimelineRepo, mockLogger
 }
 
 func TestContactService_GetContactByEmail(t *testing.T) {
@@ -302,7 +302,7 @@ func TestContactService_DeleteContact(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	service, mockContactRepo, _, mockAuthService, mockMessageHistoryRepo, mockWebhookEventRepo, mockContactListRepo, mockContactTimelineRepo, mockLogger := createContactServiceWithMocks(ctrl)
+	service, mockContactRepo, _, mockAuthService, mockMessageHistoryRepo, mockInboundWebhookEventRepo, mockContactListRepo, mockContactTimelineRepo, mockLogger := createContactServiceWithMocks(ctrl)
 
 	ctx := context.Background()
 	workspaceID := "test-workspace"
@@ -320,7 +320,7 @@ func TestContactService_DeleteContact(t *testing.T) {
 	t.Run("successful deletion", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
 		mockMessageHistoryRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
-		mockWebhookEventRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
+		mockInboundWebhookEventRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
 		mockContactListRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
 		mockContactTimelineRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
 		mockContactRepo.EXPECT().DeleteContact(ctx, workspaceID, email).Return(nil)
@@ -340,7 +340,7 @@ func TestContactService_DeleteContact(t *testing.T) {
 	t.Run("contact not found", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
 		mockMessageHistoryRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
-		mockWebhookEventRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
+		mockInboundWebhookEventRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
 		mockContactListRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
 		mockContactTimelineRepo.EXPECT().DeleteForEmail(ctx, workspaceID, email).Return(nil)
 		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
@@ -663,9 +663,10 @@ func TestContactService_BatchImportContacts(t *testing.T) {
 		// Find the operations by email
 		var newOp, existingOp *domain.UpsertContactOperation
 		for _, op := range response.Operations {
-			if op.Email == "new@example.com" {
+			switch op.Email {
+			case "new@example.com":
 				newOp = op
-			} else if op.Email == "existing@example.com" {
+			case "existing@example.com":
 				existingOp = op
 			}
 		}
@@ -864,5 +865,176 @@ func TestContactService_BatchImportContacts_WithBulkOperations(t *testing.T) {
 		assert.NotNil(t, response)
 		assert.NotEmpty(t, response.Error)
 		assert.Contains(t, response.Error, "write access to lists required")
+	})
+}
+
+func TestContactService_BatchImportContacts_DuplicateEmails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	service, mockRepo, _, mockAuthService, _, _, _, _, _ := createContactServiceWithMocks(ctrl)
+
+	ctx := context.Background()
+	workspaceID := "workspace123"
+
+	userWorkspace := &domain.UserWorkspace{
+		UserID:      "user123",
+		WorkspaceID: workspaceID,
+		Role:        "admin",
+		Permissions: domain.UserPermissions{
+			domain.PermissionResourceContacts: {Read: true, Write: true},
+		},
+	}
+
+	t.Run("duplicate emails are deduplicated - last occurrence wins", func(t *testing.T) {
+		// Input has the same email appearing 3 times with different first names
+		contacts := []*domain.Contact{
+			{Email: "duplicate@example.com", FirstName: &domain.NullableString{String: "First", IsNull: false}},
+			{Email: "unique@example.com", FirstName: &domain.NullableString{String: "Unique", IsNull: false}},
+			{Email: "duplicate@example.com", FirstName: &domain.NullableString{String: "Second", IsNull: false}},
+			{Email: "duplicate@example.com", FirstName: &domain.NullableString{String: "Third", IsNull: false}}, // This should be kept
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+
+		// After deduplication, only 2 contacts should be passed to BulkUpsertContacts
+		// The last occurrence of duplicate@example.com (with FirstName="Third") should be kept
+		mockRepo.EXPECT().BulkUpsertContacts(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, wsID string, deduped []*domain.Contact) ([]domain.BulkUpsertResult, error) {
+				// Verify deduplication happened correctly
+				assert.Len(t, deduped, 2)
+				// Find the duplicate email contact and verify it has the last occurrence's data
+				for _, c := range deduped {
+					if c.Email == "duplicate@example.com" {
+						assert.Equal(t, "Third", c.FirstName.String, "Should keep last occurrence")
+					}
+				}
+				return []domain.BulkUpsertResult{
+					{Email: "unique@example.com", IsNew: true},
+					{Email: "duplicate@example.com", IsNew: true},
+				}, nil
+			})
+
+		response := service.BatchImportContacts(ctx, workspaceID, contacts, nil)
+
+		assert.NotNil(t, response)
+		assert.Empty(t, response.Error)
+		// Response should have 2 operations (deduplicated count)
+		assert.Len(t, response.Operations, 2)
+	})
+
+	t.Run("single contact with duplicate email in batch", func(t *testing.T) {
+		// Even with just 2 contacts where both have the same email
+		contacts := []*domain.Contact{
+			{Email: "same@example.com", FirstName: &domain.NullableString{String: "First", IsNull: false}},
+			{Email: "same@example.com", FirstName: &domain.NullableString{String: "Last", IsNull: false}},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+
+		mockRepo.EXPECT().BulkUpsertContacts(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, wsID string, deduped []*domain.Contact) ([]domain.BulkUpsertResult, error) {
+				assert.Len(t, deduped, 1)
+				assert.Equal(t, "Last", deduped[0].FirstName.String)
+				return []domain.BulkUpsertResult{
+					{Email: "same@example.com", IsNew: true},
+				}, nil
+			})
+
+		response := service.BatchImportContacts(ctx, workspaceID, contacts, nil)
+
+		assert.NotNil(t, response)
+		assert.Empty(t, response.Error)
+		assert.Len(t, response.Operations, 1)
+	})
+
+	t.Run("no duplicates passes through unchanged", func(t *testing.T) {
+		contacts := []*domain.Contact{
+			{Email: "a@example.com"},
+			{Email: "b@example.com"},
+			{Email: "c@example.com"},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+
+		mockRepo.EXPECT().BulkUpsertContacts(ctx, workspaceID, contacts).Return([]domain.BulkUpsertResult{
+			{Email: "a@example.com", IsNew: true},
+			{Email: "b@example.com", IsNew: true},
+			{Email: "c@example.com", IsNew: true},
+		}, nil)
+
+		response := service.BatchImportContacts(ctx, workspaceID, contacts, nil)
+
+		assert.NotNil(t, response)
+		assert.Empty(t, response.Error)
+		assert.Len(t, response.Operations, 3)
+	})
+}
+
+func TestContactService_CountContacts(t *testing.T) {
+	// Test ContactService.CountContacts - this was at 0% coverage
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	service, mockRepo, _, mockAuthService, _, _, _, _, mockLogger := createContactServiceWithMocks(ctrl)
+
+	ctx := context.Background()
+	workspaceID := "workspace123"
+
+	userWorkspace := &domain.UserWorkspace{
+		UserID:      "user123",
+		WorkspaceID: workspaceID,
+		Role:        "member",
+		Permissions: domain.UserPermissions{
+			domain.PermissionResourceContacts: {Read: true, Write: true},
+		},
+	}
+
+	t.Run("Success - Returns count", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().Count(ctx, workspaceID).Return(42, nil)
+
+		count, err := service.CountContacts(ctx, workspaceID)
+		assert.NoError(t, err)
+		assert.Equal(t, 42, count)
+	})
+
+	t.Run("Error - Authentication fails", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, nil, nil, errors.New("auth error"))
+
+		count, err := service.CountContacts(ctx, workspaceID)
+		assert.Error(t, err)
+		assert.Equal(t, 0, count)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+
+	t.Run("Error - Insufficient permissions", func(t *testing.T) {
+		userWorkspaceNoPerms := &domain.UserWorkspace{
+			UserID:      "user123",
+			WorkspaceID: workspaceID,
+			Role:        "member",
+			Permissions: domain.UserPermissions{
+				domain.PermissionResourceContacts: {Read: false, Write: false},
+			},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspaceNoPerms, nil)
+
+		count, err := service.CountContacts(ctx, workspaceID)
+		assert.Error(t, err)
+		assert.Equal(t, 0, count)
+		var permErr *domain.PermissionError
+		assert.True(t, errors.As(err, &permErr))
+	})
+
+	t.Run("Error - Repository error", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().Count(ctx, workspaceID).Return(0, errors.New("repository error"))
+		mockLogger.EXPECT().Error(gomock.Any())
+
+		count, err := service.CountContacts(ctx, workspaceID)
+		assert.Error(t, err)
+		assert.Equal(t, 0, count)
+		assert.Contains(t, err.Error(), "failed to count contacts")
 	})
 }

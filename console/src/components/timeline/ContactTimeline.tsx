@@ -1,5 +1,5 @@
 import React from 'react'
-import { Timeline, Empty, Spin, Button, Tag, Tooltip, Typography, Popover } from 'antd'
+import { Timeline, Empty, Spin, Button, Tag, Tooltip, Typography, Popover, Collapse } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faCheck,
@@ -9,20 +9,25 @@ import {
   faTriangleExclamation,
   faArrowRightToBracket,
   faArrowRightFromBracket,
-  faBolt
+  faBolt,
+  faPlay,
+  faFlagCheckered
 } from '@fortawesome/free-solid-svg-icons'
 import { faUser, faFolderOpen, faPaperPlane, faEye } from '@fortawesome/free-regular-svg-icons'
 import {
   ContactTimelineEntry,
   ContactListEntityData,
   MessageHistoryEntityData,
-  WebhookEventEntityData
+  InboundWebhookEventEntityData,
+  CustomEventEntityData,
+  AutomationEventEntityData
 } from '../../services/api/contact_timeline'
 import type { Workspace } from '../../services/api/types'
 import type { Segment } from '../../services/api/segment'
 import dayjs from '../../lib/dayjs'
 import TemplatePreviewDrawer from '../templates/TemplatePreviewDrawer'
 import { getProviderIcon } from '../integrations/EmailProviders'
+import { formatValue, formatEventName, getSourceBadge } from '../../utils/formatters'
 
 const { Text } = Typography
 
@@ -47,20 +52,6 @@ export function ContactTimeline({
   hasMore = false,
   isLoadingMore = false
 }: ContactTimelineProps) {
-  // Get color based on operation
-  const getOperationColor = (operation: string) => {
-    switch (operation) {
-      case 'insert':
-        return 'green'
-      case 'update':
-        return 'blue'
-      case 'delete':
-        return 'red'
-      default:
-        return 'gray'
-    }
-  }
-
   // Get color for contact list status
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -80,6 +71,41 @@ export function ContactTimeline({
       default:
         return 'blue'
     }
+  }
+
+  // Get standardized color for action tags across all event types
+  const getActionTagColor = (action: string): string => {
+    const colorMap: Record<string, string> = {
+      // Positive actions
+      created: 'green',
+      subscribed: 'green',
+      joined: 'green',
+      delivered: 'green',
+      // Neutral/info actions
+      updated: 'blue',
+      sent: 'blue',
+      'status changed': 'blue',
+      'auth email': 'blue',
+      // Warning actions
+      left: 'orange',
+      pending: 'orange',
+      // Negative actions
+      deleted: 'red',
+      removed: 'red',
+      bounce: 'volcano',
+      complaint: 'magenta',
+      // Engagement actions
+      opened: 'cyan',
+      clicked: 'geekblue',
+      'user created': 'cyan',
+      // Automation actions
+      started: 'blue',
+      ended: 'green',
+      completed: 'green',
+      exited: 'orange',
+      failed: 'red'
+    }
+    return colorMap[action.toLowerCase()] || 'default'
   }
 
   // Get icon based on entity type
@@ -107,8 +133,8 @@ export function ContactTimeline({
           return faMousePointer
         }
         return faPaperPlane
-      case 'webhook_event':
-        const webhookData = entry.entity_data as any
+      case 'inbound_webhook_event': {
+        const webhookData = entry.entity_data as InboundWebhookEventEntityData | undefined
         const eventType = webhookData?.type
         if (eventType === 'bounce') {
           return faCircleExclamation
@@ -117,6 +143,13 @@ export function ContactTimeline({
         } else if (eventType === 'delivered') {
           return faCheck
         }
+        return faBolt
+      }
+      case 'custom_event':
+        return faBolt
+      case 'automation':
+        if (entry.kind === 'automation.start') return faPlay
+        if (entry.kind === 'automation.end') return faFlagCheckered
         return faBolt
       default:
         return faClock
@@ -131,11 +164,22 @@ export function ContactTimeline({
       .join(' ')
   }
 
-  // Render title with date in standardized format
-  const renderTitleWithDate = (entry: ContactTimelineEntry, titleContent: React.ReactNode) => {
+  // Render unified event header with category, action tag, and timestamp
+  const renderEventHeader = (
+    entry: ContactTimelineEntry,
+    category: string | null,
+    actionLabel: string,
+    actionColor?: string,
+    prefixContent?: React.ReactNode
+  ) => {
+    const color = actionColor || getActionTagColor(actionLabel)
     return (
-      <div className="flex items-center gap-4 mb-2">
-        {titleContent}
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        {prefixContent}
+        {category && <Text strong>{category}</Text>}
+        <Tag bordered={false} color={color}>
+          {actionLabel}
+        </Tag>
         <Tooltip title={`${dayjs(entry.created_at).format('LLLL')} in ${timezone}`}>
           <span>
             <Text type="secondary" className="text-xs cursor-help">
@@ -154,89 +198,185 @@ export function ContactTimeline({
 
     // Extract old and new values if they exist
     const oldStatus =
-      typeof statusChange === 'object' && statusChange?.old ? statusChange.old : null
+      typeof statusChange === 'object' && statusChange !== null && 'old' in statusChange ? String(statusChange.old) : null
     const newStatus =
-      typeof statusChange === 'object' && statusChange?.new ? statusChange.new : statusChange
+      typeof statusChange === 'object' && statusChange !== null && 'new' in statusChange ? String(statusChange.new) : String(statusChange)
 
     // Use entity_data if available to get list name
     const entityData = entry.entity_data as ContactListEntityData | undefined
     const listName = entityData?.name
     const listDisplay = listName ? (
-      <>
-        <Tooltip title={'ID: ' + listId}>
-          <span>
-            <Text strong>{listName}</Text>{' '}
-          </span>
-        </Tooltip>
-      </>
+      <Tooltip title={'ID: ' + listId}>
+        <span>
+          <Text strong>{listName}</Text>
+        </span>
+      </Tooltip>
     ) : (
       <Text code>{listId}</Text>
     )
 
+    // Map operations to action labels
+    const subscriptionActionMap: Record<string, string> = {
+      insert: 'subscribed',
+      update: 'status changed',
+      delete: 'removed'
+    }
+    const actionLabel = subscriptionActionMap[entry.operation] || entry.operation
+
     if (entry.operation === 'insert') {
       return (
         <div>
-          {renderTitleWithDate(entry, <Text strong>Subscription</Text>)}
-          <div className="mb-2">
-            <Text>
-              Added to list {listDisplay} with status{' '}
-              <Tag bordered={false} color={getStatusColor(newStatus)}>
-                {newStatus}
-              </Tag>
-            </Text>
+          {renderEventHeader(entry, 'Subscription', actionLabel)}
+          <div className="text-sm">
+            <Text type="secondary">List:</Text> {listDisplay}{' '}
+            <Text type="secondary">with status</Text>{' '}
+            <Tag bordered={false} color={getStatusColor(newStatus)}>
+              {newStatus}
+            </Tag>
           </div>
         </div>
       )
     } else if (entry.operation === 'update') {
-      // Status change - show from/to if old status exists
       return (
         <div>
-          {renderTitleWithDate(entry, <Text strong>Subscription</Text>)}
-          <div className="mb-2">
+          {renderEventHeader(entry, 'Subscription', actionLabel)}
+          <div className="text-sm">
+            <Text type="secondary">List:</Text> {listDisplay}
             {oldStatus ? (
-              <Text>
-                Status changed from{' '}
-                <Tag bordered={false} color={getStatusColor(oldStatus)}>
-                  {oldStatus}
-                </Tag>{' '}
-                to{' '}
+              <>
+                {' — '}
+                <Text type="secondary">{oldStatus}</Text>
+                <Text type="secondary"> → </Text>
                 <Tag bordered={false} color={getStatusColor(newStatus)}>
                   {newStatus}
-                </Tag>{' '}
-                for list {listDisplay}
-              </Text>
+                </Tag>
+              </>
             ) : (
-              <Text>
-                Status changed to{' '}
+              <>
+                {' → '}
                 <Tag bordered={false} color={getStatusColor(newStatus)}>
                   {newStatus}
-                </Tag>{' '}
-                for list {listDisplay}
-              </Text>
+                </Tag>
+              </>
             )}
           </div>
         </div>
       )
     } else if (entry.operation === 'delete') {
-      return <div>{renderTitleWithDate(entry, <Text>Removed from list {listDisplay}</Text>)}</div>
+      return (
+        <div>
+          {renderEventHeader(entry, 'Subscription', actionLabel)}
+          <div className="text-sm">
+            <Text type="secondary">List:</Text> {listDisplay}
+          </div>
+        </div>
+      )
     }
 
     return null
   }
 
+  // Render custom event properties with tiered display approach
+  const renderCustomEventProperties = (
+    properties: Record<string, unknown> | undefined,
+    timezone: string
+  ): React.ReactNode => {
+    if (!properties || Object.keys(properties).length === 0) {
+      return (
+        <Text type="secondary" className="text-xs">
+          No properties
+        </Text>
+      )
+    }
+
+    const entries = Object.entries(properties)
+    const propertyCount = entries.length
+
+    // Check if all values are primitives (not objects or arrays)
+    const allPrimitives = entries.every(
+      ([, value]) => typeof value !== 'object' || value === null
+    )
+
+    // Tier 1: Inline display for ≤3 properties with all primitives
+    if (propertyCount <= 3 && allPrimitives) {
+      return (
+        <div className="space-y-1 mt-2">
+          {entries.map(([key, value]) => (
+            <div key={key} className="text-sm">
+              <Text type="secondary" className="font-mono text-xs">
+                {key}:
+              </Text>{' '}
+              {formatValue(value, timezone)}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    // Tier 2: Expandable for >3 properties or complex objects
+    const rawJsonContent = (
+      <div className="p-2 bg-gray-50 rounded border border-gray-200 max-h-96 overflow-auto">
+        <pre className="text-xs m-0 whitespace-pre-wrap break-all">
+          {JSON.stringify(properties, null, 2)}
+        </pre>
+      </div>
+    )
+
+    return (
+      <div className="mt-2 space-y-2">
+        <Collapse
+          size="small"
+          items={[
+            {
+              key: '1',
+              label: `${propertyCount} properties`,
+              children: (
+                <div className="space-y-1">
+                  {entries.map(([key, value]) => (
+                    <div key={key} className="text-sm">
+                      <Text type="secondary" className="font-mono text-xs">
+                        {key}:
+                      </Text>{' '}
+                      {formatValue(value, timezone)}
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          ]}
+        />
+        <Popover
+          content={rawJsonContent}
+          title="Raw JSON"
+          placement="rightTop"
+          trigger="click"
+          overlayStyle={{ maxWidth: '600px' }}
+        >
+          <Button size="small" type="text">
+            View Raw JSON
+          </Button>
+        </Popover>
+      </div>
+    )
+  }
+
   // Render entity-specific details based on entity type
   const renderEntityDetails = (entry: ContactTimelineEntry) => {
-    let tagColor = 'blue'
-
     switch (entry.entity_type) {
-      case 'contact':
-        if (entry.operation === 'insert') {
-          return <div>{renderTitleWithDate(entry, <Text strong>New contact</Text>)}</div>
-        } else if (entry.operation === 'update') {
+      case 'contact': {
+        // Map operations to action labels
+        const contactActionMap: Record<string, string> = {
+          insert: 'created',
+          update: 'updated',
+          delete: 'deleted'
+        }
+        const contactAction = contactActionMap[entry.operation] || entry.operation
+
+        if (entry.operation === 'update') {
           return (
             <div>
-              {renderTitleWithDate(entry, <Text strong>Contact updated</Text>)}
-              <div className="mt-2 space-y-1">
+              {renderEventHeader(entry, 'Contact', contactAction)}
+              <div className="space-y-1">
                 {Object.entries(entry.changes || {}).map(([key, value]) => {
                   // Handle different value types
                   let displayValue: React.ReactNode
@@ -249,18 +389,17 @@ export function ContactTimeline({
                     )
                   } else if (typeof value === 'object') {
                     // Check if it's an old/new value object
-                    if (value.old !== undefined || value.new !== undefined) {
-                      const oldVal = value.old
-                      const newVal = value.new
+                    if (value !== null && ('old' in value || 'new' in value)) {
+                      const oldVal = 'old' in value ? value.old : undefined
+                      const newVal = 'new' in value ? value.new : undefined
                       return (
                         <div key={key} className="text-sm">
-                          <Tag color="blue" bordered={false}>
-                            {key}
-                          </Tag>{' '}
-                          changed from <Tag bordered={false}>{String(oldVal)}</Tag> to{' '}
-                          <Tag color="green" bordered={false}>
-                            {String(newVal)}
-                          </Tag>
+                          <Text type="secondary" className="font-mono text-xs">
+                            {key}:
+                          </Text>{' '}
+                          <Text type="secondary">{String(oldVal)}</Text>
+                          <Text type="secondary"> → </Text>
+                          <Text>{String(newVal)}</Text>
                         </div>
                       )
                     } else {
@@ -293,7 +432,7 @@ export function ContactTimeline({
 
                   return (
                     <div key={key} className="text-sm">
-                      <Text type="secondary" className="font-mono">
+                      <Text type="secondary" className="font-mono text-xs">
                         {key}:
                       </Text>{' '}
                       {displayValue}
@@ -304,161 +443,119 @@ export function ContactTimeline({
             </div>
           )
         } else {
-          // Delete or other operations
-          return (
-            <div>
-              {renderTitleWithDate(
-                entry,
-                <>
-                  <Text strong>{formatEntityType(entry.entity_type)}</Text>
-                  <Tag color={getOperationColor(entry.operation)}>{entry.operation}</Tag>
-                </>
-              )}
-            </div>
-          )
+          // Insert or delete - just header, no details needed
+          return <div>{renderEventHeader(entry, 'Contact', contactAction)}</div>
         }
+      }
 
       case 'contact_list':
         return <div>{renderContactListMessage(entry)}</div>
 
-      case 'contact_segment':
+      case 'contact_segment': {
         const segmentId = entry.entity_id || 'Unknown Segment'
 
         // Look up segment from segments prop
         const segment = segments.find((s) => s.id === segmentId)
 
         const segmentDisplay = segment ? (
-          <>
-            <Tooltip title={'ID: ' + segmentId}>
-              <span>
-                <Tag bordered={false} color={segment.color}>
-                  {segment.name}
-                </Tag>
-              </span>
-            </Tooltip>
-          </>
+          <Tooltip title={'ID: ' + segmentId}>
+            <span>
+              <Tag bordered={false} color={segment.color}>
+                {segment.name}
+              </Tag>
+            </span>
+          </Tooltip>
         ) : (
           <Tag bordered={false} color="blue">
             {segmentId}
           </Tag>
         )
 
-        if (entry.kind === 'join_segment') {
-          return (
-            <div>
-              {renderTitleWithDate(entry, <Text strong>Segment</Text>)}
-              <div className="mb-2">
-                <Text>Joined segment {segmentDisplay}</Text>
-              </div>
-            </div>
-          )
-        } else if (entry.kind === 'leave_segment') {
-          return (
-            <div>
-              {renderTitleWithDate(entry, <Text strong>Segment</Text>)}
-              <div className="mb-2">
-                <Text>Left segment {segmentDisplay}</Text>
-              </div>
-            </div>
-          )
-        }
-        return null
+        // Map kind to action labels
+        const segmentActionLabel = entry.kind === 'join_segment' ? 'joined' : 'left'
 
-      case 'message_history':
-        const messageData = entry.entity_data as MessageHistoryEntityData | undefined
-        let tag = (
-          <Tag bordered={false} color="blue">
-            sent
-          </Tag>
-        )
-        if (entry.changes.delivered_at) {
-          tag = (
-            <Tag bordered={false} color="green">
-              delivered
-            </Tag>
-          )
-        } else if (entry.changes.opened_at) {
-          tag = (
-            <Tag bordered={false} color="cyan">
-              opened
-            </Tag>
-          )
-        } else if (entry.changes.clicked_at) {
-          tag = (
-            <Tag bordered={false} color="geekblue">
-              clicked
-            </Tag>
-          )
-        }
         return (
           <div>
-            {renderTitleWithDate(
-              entry,
-              <>
-                <Text strong>Email</Text>
-                {tag}
-              </>
-            )}
-            {messageData && (
-              <div className="mb-2 space-y-1">
-                {messageData.template_id && (
-                  <div className="flex items-center gap-2">
-                    <Text type="secondary" className="text-xs">
-                      Template:{' '}
-                      {messageData.template_name ? (
-                        <Tooltip title={`ID: ${messageData.template_id}`}>
-                          <span>
-                            <Text strong className="text-xs cursor-help">
-                              {messageData.template_name}
-                            </Text>
-                          </span>
-                        </Tooltip>
-                      ) : (
-                        <Text code className="text-xs">
-                          {messageData.template_id}
-                        </Text>
-                      )}
-                      {messageData.template_version && ` (v${messageData.template_version})`}
-                    </Text>
-                    {workspace && messageData.template_email && (
-                      <Tooltip title="Preview email">
-                        <span>
-                          <TemplatePreviewDrawer
-                            record={
-                              {
-                                id: messageData.template_id,
-                                name: messageData.template_name || messageData.template_id,
-                                version: messageData.template_version,
-                                category: messageData.template_category || 'transactional',
-                                channel: messageData.channel,
-                                email: messageData.template_email,
-                                test_data: messageData.message_data || {}
-                              } as any
-                            }
-                            workspace={workspace}
-                            templateData={messageData.message_data}
-                          >
-                            <Button
-                              size="small"
-                              type="text"
-                              icon={<FontAwesomeIcon icon={faEye} />}
-                              className="p-0 h-auto text-xs"
-                            />
-                          </TemplatePreviewDrawer>
-                        </span>
-                      </Tooltip>
-                    )}
-                  </div>
+            {renderEventHeader(entry, 'Segment', segmentActionLabel)}
+            <div className="text-sm">
+              {segmentDisplay}
+            </div>
+          </div>
+        )
+      }
+
+      case 'message_history': {
+        const messageData = entry.entity_data as MessageHistoryEntityData | undefined
+
+        // Determine email action based on changes
+        let emailAction = 'sent'
+        if (entry.changes.delivered_at) {
+          emailAction = 'delivered'
+        } else if (entry.changes.opened_at) {
+          emailAction = 'opened'
+        } else if (entry.changes.clicked_at) {
+          emailAction = 'clicked'
+        }
+
+        return (
+          <div>
+            {renderEventHeader(entry, 'Email', emailAction)}
+            {messageData && messageData.template_id && (
+              <div className="text-sm flex items-center gap-2">
+                <Text type="secondary">Template:</Text>{' '}
+                {messageData.template_name ? (
+                  <Tooltip title={`ID: ${messageData.template_id}`}>
+                    <span>
+                      <Text strong className="cursor-help">
+                        {messageData.template_name}
+                      </Text>
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <Text code>{messageData.template_id}</Text>
+                )}
+                {messageData.template_version && (
+                  <Text type="secondary">(v{messageData.template_version})</Text>
+                )}
+                {workspace && messageData.template_email && (
+                  <Tooltip title="Preview email">
+                    <span>
+                      <TemplatePreviewDrawer
+                        record={{
+                          id: messageData.template_id,
+                          name: messageData.template_name || messageData.template_id,
+                          version: messageData.template_version,
+                          category: messageData.template_category || 'transactional',
+                          channel: messageData.channel as 'email' | 'web',
+                          email: messageData.template_email as unknown as Parameters<typeof TemplatePreviewDrawer>[0]['record']['email'],
+                          test_data: messageData.message_data || {},
+                          created_at: '',
+                          updated_at: ''
+                        }}
+                        workspace={workspace}
+                        templateData={messageData.message_data}
+                      >
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<FontAwesomeIcon icon={faEye} />}
+                          className="p-0 h-auto"
+                        />
+                      </TemplatePreviewDrawer>
+                    </span>
+                  </Tooltip>
                 )}
               </div>
             )}
           </div>
         )
+      }
 
-      case 'webhook_event':
-        const webhookEventData = entry.entity_data as WebhookEventEntityData
+      case 'inbound_webhook_event': {
+        const webhookEventData = entry.entity_data as InboundWebhookEventEntityData
         const eventType = webhookEventData?.type
-        const source = webhookEventData?.source || entry.changes?.source?.new
+        const sourceChange = entry.changes?.source
+        const source = webhookEventData?.source || (typeof sourceChange === 'object' && sourceChange !== null && 'new' in sourceChange ? sourceChange.new as string : undefined)
         const bounceType = webhookEventData?.bounce_type
         const bounceCategory = webhookEventData?.bounce_category
         const bounceDiagnostic = webhookEventData?.bounce_diagnostic
@@ -468,130 +565,206 @@ export function ContactTimeline({
 
         const isSupabase = source === 'supabase'
 
-        // Set tag color based on event type
-        if (eventType === 'bounce') {
-          tagColor = 'volcano'
-        } else if (eventType === 'complaint') {
-          tagColor = 'magenta'
-        } else if (eventType === 'delivered') {
-          tagColor = 'green'
-        } else if (eventType === 'auth_email') {
-          tagColor = 'blue'
-        } else if (eventType === 'before_user_created') {
-          tagColor = 'cyan'
+        // Map event types to labels and colors
+        const webhookEventLabels: Record<string, string> = {
+          delivered: 'Delivered',
+          bounce: 'Bounce',
+          complaint: 'Complaint',
+          auth_email: 'Auth Email',
+          before_user_created: 'User Created'
         }
+        const webhookActionLabel = webhookEventLabels[eventType || ''] || eventType || 'Event'
 
-        // Get event type label for display
-        const getEventTypeLabel = (type: string) => {
-          switch (type) {
-            case 'delivered':
-              return 'Delivered'
-            case 'bounce':
-              return 'Bounce'
-            case 'complaint':
-              return 'Complaint'
-            case 'auth_email':
-              return 'Auth Email'
-            case 'before_user_created':
-              return 'User Created'
-            default:
-              return type
-          }
-        }
+        // Provider icon as prefix content
+        const providerPrefix = source ? getProviderIcon(source, 'small') : undefined
 
         return (
           <div>
-            {renderTitleWithDate(
-              entry,
-              <>
-                {source && getProviderIcon(source, 'small')}
-                {eventType && (
-                  <Tag color={tagColor} bordered={false}>
-                    {getEventTypeLabel(eventType)}
-                  </Tag>
-                )}
-              </>
-            )}
-            <div className="mb-2 space-y-1">
+            {renderEventHeader(entry, 'Webhook', webhookActionLabel, undefined, providerPrefix)}
+            <div className="space-y-1">
               {isSupabase && (
-                <div>
-                  <Text type="secondary" className="text-xs">
+                <div className="text-sm">
+                  <Text type="secondary">
                     {eventType === 'auth_email' && 'Authentication email sent via Supabase'}
                     {eventType === 'before_user_created' && 'User created and synced from Supabase'}
                   </Text>
                 </div>
               )}
               {!isSupabase && webhookTemplateId && (
-                <div>
-                  <Text type="secondary" className="text-xs">
-                    Template:{' '}
-                    {webhookEventData?.template_name ? (
-                      <Tooltip title={`ID: ${webhookTemplateId}`}>
-                        <span>
-                          <Text strong className="text-xs cursor-help">
-                            {webhookEventData.template_name}
-                          </Text>
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      <Text code className="text-xs">
-                        {webhookTemplateId}
-                      </Text>
-                    )}
-                    {webhookTemplateVersion && ` (v${webhookTemplateVersion})`}
-                  </Text>
+                <div className="text-sm">
+                  <Text type="secondary">Template:</Text>{' '}
+                  {webhookEventData?.template_name ? (
+                    <Tooltip title={`ID: ${webhookTemplateId}`}>
+                      <span>
+                        <Text strong className="cursor-help">
+                          {webhookEventData.template_name}
+                        </Text>
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <Text code>{webhookTemplateId}</Text>
+                  )}
+                  {webhookTemplateVersion && (
+                    <Text type="secondary"> (v{webhookTemplateVersion})</Text>
+                  )}
                 </div>
               )}
               {bounceType && (
-                <div>
-                  <Text type="secondary" className="text-xs">
-                    Bounce Type: <Tag className="text-xs">{bounceType}</Tag>
-                  </Text>
-                </div>
-              )}
-              {bounceCategory && (
-                <div>
-                  <Text type="secondary" className="text-xs">
-                    Category: <Tag className="text-xs">{bounceCategory}</Tag>
-                  </Text>
+                <div className="text-sm">
+                  <Text type="secondary">Type:</Text> {bounceType}
+                  {bounceCategory && (
+                    <>
+                      {' | '}
+                      <Text type="secondary">Category:</Text> {bounceCategory}
+                    </>
+                  )}
                 </div>
               )}
               {bounceDiagnostic && (
-                <div>
-                  <Text type="secondary" className="text-xs">
-                    Diagnostic: <Text className="text-xs">{bounceDiagnostic}</Text>
-                  </Text>
+                <div className="text-sm">
+                  <Text type="secondary">Diagnostic:</Text> {bounceDiagnostic}
                 </div>
               )}
               {complaintType && (
-                <div>
-                  <Text type="secondary" className="text-xs">
-                    Feedback Type: <Tag className="text-xs">{complaintType}</Tag>
-                  </Text>
+                <div className="text-sm">
+                  <Text type="secondary">Feedback:</Text> {complaintType}
                 </div>
               )}
             </div>
           </div>
         )
+      }
+
+      case 'custom_event': {
+        const customEventData = entry.entity_data as CustomEventEntityData | undefined
+        // Fallback to entry.kind for event name when entity_data is not available
+        const eventName = customEventData?.event_name || entry.kind
+        const externalId = customEventData?.external_id || entry.entity_id
+        // Get goal fields from entity_data or from changes (for timeline entries)
+        const goalTypeChange = entry.changes?.goal_type
+        const goalValueChange = entry.changes?.goal_value
+        const goalNameChange = entry.changes?.goal_name
+        const goalType = customEventData?.goal_type || (typeof goalTypeChange === 'object' && goalTypeChange !== null && 'new' in goalTypeChange ? goalTypeChange.new as string : undefined)
+        const goalValue = customEventData?.goal_value ?? (typeof goalValueChange === 'object' && goalValueChange !== null && 'new' in goalValueChange ? goalValueChange.new as number : undefined)
+        const goalName = customEventData?.goal_name || (typeof goalNameChange === 'object' && goalNameChange !== null && 'new' in goalNameChange ? goalNameChange.new as string : undefined)
+
+        // Custom events use the event name as the primary identifier (no category label)
+        const formattedEventName = formatEventName(eventName)
+
+        return (
+          <div>
+            {/* Custom header: event name tag serves as primary identifier */}
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <Tooltip title={eventName}>
+                <span>
+                  <Tag color="purple" bordered={false}>{formattedEventName}</Tag>
+                </span>
+              </Tooltip>
+              {goalValue !== undefined && goalValue !== null && (
+                <Tag color="cyan" bordered={false}>
+                  {goalType === 'purchase' || goalType === 'subscription' ? '$' : ''}
+                  {goalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Tag>
+              )}
+              {customEventData?.source && getSourceBadge(customEventData.source)}
+              {entry.operation === 'update' && (
+                <Tag color="orange" bordered={false}>
+                  updated
+                </Tag>
+              )}
+              <Tooltip title={`${dayjs(entry.created_at).format('LLLL')} in ${timezone}`}>
+                <span>
+                  <Text type="secondary" className="text-xs cursor-help">
+                    {dayjs(entry.created_at).fromNow()}
+                  </Text>
+                </span>
+              </Tooltip>
+            </div>
+
+            <div className="space-y-1">
+              {/* Goal name */}
+              {goalName && (
+                <div className="text-sm">
+                  <Text type="secondary">Goal:</Text> {goalName}
+                </div>
+              )}
+
+              {/* External ID */}
+              {externalId && (
+                <div className="text-sm">
+                  <Text type="secondary">ID:</Text>{' '}
+                  <span className="font-mono">{externalId}</span>
+                </div>
+              )}
+
+              {/* Occurred time (if different from created_at) */}
+              {customEventData?.occurred_at && customEventData.occurred_at !== entry.created_at && (
+                <div className="text-sm">
+                  <Tooltip
+                    title={`${dayjs(customEventData.occurred_at).format('LLLL')} in ${timezone}`}
+                  >
+                    <span>
+                      <Text type="secondary" className="cursor-help">
+                        Occurred: {dayjs(customEventData.occurred_at).fromNow()}
+                      </Text>
+                    </span>
+                  </Tooltip>
+                </div>
+              )}
+
+              {/* Properties */}
+              {customEventData?.properties && renderCustomEventProperties(customEventData.properties, timezone)}
+            </div>
+          </div>
+        )
+      }
+
+      case 'automation': {
+        const automationData = entry.entity_data as AutomationEventEntityData | undefined
+        const isStart = entry.kind === 'automation.start'
+        const exitReasonChange = entry.changes?.exit_reason
+        const exitReason = typeof exitReasonChange === 'object' && exitReasonChange !== null && 'new' in exitReasonChange
+          ? exitReasonChange.new as string
+          : undefined
+
+        // Determine action label based on event kind and exit reason
+        let actionLabel = isStart ? 'started' : 'ended'
+        if (!isStart && exitReason) {
+          if (exitReason === 'failed') actionLabel = 'failed'
+          else if (exitReason.includes('exited') || exitReason.includes('deleted')) actionLabel = 'exited'
+          else if (exitReason === 'completed') actionLabel = 'completed'
+        }
+
+        return (
+          <div>
+            {renderEventHeader(entry, 'Automation', actionLabel)}
+            <div className="text-sm">
+              <Text type="secondary">Automation:</Text>{' '}
+              {automationData?.name ? (
+                <Tooltip title={`ID: ${entry.entity_id}`}>
+                  <span>
+                    <Text strong className="cursor-help">{automationData.name}</Text>
+                  </span>
+                </Tooltip>
+              ) : (
+                <Text code>{entry.entity_id || 'Unknown'}</Text>
+              )}
+              {!isStart && exitReason && exitReason !== 'completed' && (
+                <Tag className="ml-2" bordered={false}>{exitReason}</Tag>
+              )}
+            </div>
+          </div>
+        )
+      }
 
       default:
         return (
           <div>
-            {renderTitleWithDate(
-              entry,
-              <>
-                <Text strong>{formatEntityType(entry.entity_type)}</Text>
-                <Tag color={getOperationColor(entry.operation)}>{entry.operation}</Tag>
-              </>
-            )}
+            {renderEventHeader(entry, formatEntityType(entry.entity_type), entry.operation)}
             {entry.entity_id && (
-              <div className="mb-2">
-                <Text type="secondary" className="text-xs">
-                  Entity ID:{' '}
-                  <Text code className="text-xs">
-                    {entry.entity_id}
-                  </Text>
-                </Text>
+              <div className="text-sm">
+                <Text type="secondary">Entity ID:</Text>{' '}
+                <Text code>{entry.entity_id}</Text>
               </div>
             )}
           </div>
@@ -621,7 +794,6 @@ export function ContactTimeline({
       <Timeline
         className="contact-timeline"
         items={entries.map((entry) => ({
-          //   color: getOperationColor(entry.operation),
           dot: (
             <Popover
               content={

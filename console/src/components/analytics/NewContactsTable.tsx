@@ -50,13 +50,14 @@ export const NewContactsTable: React.FC<NewContactsTableProps> = ({ workspace })
 
   const handleViewMore = () => {
     navigate({
-      to: '/workspace/$workspaceId/contacts',
+      to: '/console/workspace/$workspaceId/contacts',
       params: { workspaceId: workspace.id }
     })
   }
 
   useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id])
 
   const columns = [

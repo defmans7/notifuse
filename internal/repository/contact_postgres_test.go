@@ -21,13 +21,17 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 )
 
+// contactColumnsPattern is the regex pattern for matching explicit contact columns in queries.
+// This matches the contactColumnsWithPrefix("c") output in contact_postgres.go.
+const contactColumnsPattern = `c\.email, c\.external_id, c\.timezone, c\.language, c\.first_name, c\.last_name, c\.full_name, c\.phone, c\.address_line_1, c\.address_line_2, c\.country, c\.postcode, c\.state, c\.job_title, c\.custom_string_1, c\.custom_string_2, c\.custom_string_3, c\.custom_string_4, c\.custom_string_5, c\.custom_number_1, c\.custom_number_2, c\.custom_number_3, c\.custom_number_4, c\.custom_number_5, c\.custom_datetime_1, c\.custom_datetime_2, c\.custom_datetime_3, c\.custom_datetime_4, c\.custom_datetime_5, c\.custom_json_1, c\.custom_json_2, c\.custom_json_3, c\.custom_json_4, c\.custom_json_5, c\.created_at, c\.updated_at, c\.db_created_at, c\.db_updated_at`
+
 // setupMockDB creates a mock database and sqlmock for testing
 func setupMockDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, func()) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err, "Failed to create mock database")
 
 	cleanup := func() {
-		db.Close()
+		_ = db.Close()
 	}
 
 	return db, mock, cleanup
@@ -50,10 +54,9 @@ func TestGetContactByEmail(t *testing.T) {
 	// Test case 1: Contact found
 	rows := sqlmock.NewRows([]string{
 		"email", "external_id", "timezone", "language",
-		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+		"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
 		"country", "postcode", "state", "job_title",
-		"lifetime_value", "orders_count", "last_order_at",
-		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+				"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
@@ -61,9 +64,8 @@ func TestGetContactByEmail(t *testing.T) {
 	}).
 		AddRow(
 			email, "ext123", "Europe/Paris", "en-US",
-			"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+			"John", "Doe", "John Doe", "+1234567890", "123 Main St", "Apt 4B",
 			"USA", "12345", "CA", "Developer",
-			100.50, 5, now,
 			"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 			42.0, 43.0, 44.0, 45.0, 46.0,
 			now, now, now, now, now,
@@ -71,7 +73,7 @@ func TestGetContactByEmail(t *testing.T) {
 			now, now, now, now,
 		)
 
-	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
+	mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c.email = \$1`).
 		WithArgs(email).
 		WillReturnRows(rows)
 
@@ -108,7 +110,7 @@ func TestGetContactByEmail(t *testing.T) {
 	assert.Equal(t, int64(1), contact.ContactSegments[0].Version)
 
 	// Test case 2: Contact not found
-	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
+	mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c.email = \$1`).
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
@@ -135,10 +137,9 @@ func TestGetContactByExternalID(t *testing.T) {
 	// Test case 1: Contact found
 	rows := sqlmock.NewRows([]string{
 		"email", "external_id", "timezone", "language",
-		"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+		"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
 		"country", "postcode", "state", "job_title",
-		"lifetime_value", "orders_count", "last_order_at",
-		"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+				"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 		"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 		"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 		"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
@@ -146,9 +147,8 @@ func TestGetContactByExternalID(t *testing.T) {
 	}).
 		AddRow(
 			email, externalID, "Europe/Paris", "en-US",
-			"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+			"John", "Doe", "John Doe", "+1234567890", "123 Main St", "Apt 4B",
 			"USA", "12345", "CA", "Developer",
-			100.50, 5, now,
 			"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 			42.0, 43.0, 44.0, 45.0, 46.0,
 			now, now, now, now, now,
@@ -156,7 +156,7 @@ func TestGetContactByExternalID(t *testing.T) {
 			now, now, now, now,
 		)
 
-	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.external_id = \$1`).
+	mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c.external_id = \$1`).
 		WithArgs(externalID).
 		WillReturnRows(rows)
 
@@ -193,7 +193,7 @@ func TestGetContactByExternalID(t *testing.T) {
 	assert.Equal(t, "segment1", contact.ContactSegments[0].SegmentID)
 
 	// Test case 2: Contact not found
-	mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.external_id = \$1`).
+	mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c.external_id = \$1`).
 		WithArgs("nonexistent-ext-id").
 		WillReturnError(sql.ErrNoRows)
 
@@ -208,23 +208,22 @@ func TestGetContactByExternalID(t *testing.T) {
 
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
-			"first_name", "last_name", "phone",
+			"first_name", "last_name", "full_name", "phone",
 			"address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", "custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 			"created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			email, "e-123", "Europe/Paris", "en-US", "John", "Doe", "", "", "", "", "", "", "", 0, 0, time.Time{},
+			email, "e-123", "Europe/Paris", "en-US", "John", "Doe", "John Doe", "", "", "", "", "", "", "",
 			"", "", "", "", "", 0, 0, 0, 0, 0, time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{},
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
 			time.Now(), time.Now(), time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery("SELECT c\\.\\* FROM contacts c WHERE c.external_id = \\$1").
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c.external_id = \$1`).
 			WithArgs(externalID).
 			WillReturnRows(rows)
 
@@ -279,10 +278,9 @@ func TestFetchContact(t *testing.T) {
 		// Test with a custom filter (phone number)
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
-			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+			"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
 			"country", "postcode", "state", "job_title",
-			"lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+						"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
@@ -290,9 +288,8 @@ func TestFetchContact(t *testing.T) {
 		}).
 			AddRow(
 				email, "ext123", "Europe/Paris", "en-US",
-				"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+				"John", "Doe", "John Doe", "+1234567890", "123 Main St", "Apt 4B",
 				"USA", "12345", "CA", "Developer",
-				100.50, 5, now,
 				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 				42.0, 43.0, 44.0, 45.0, 46.0,
 				now, now, now, now, now,
@@ -301,7 +298,7 @@ func TestFetchContact(t *testing.T) {
 			)
 
 		phone := "+1234567890"
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.phone = \$1`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c.phone = \$1`).
 			WithArgs(phone).
 			WillReturnRows(rows)
 
@@ -349,10 +346,9 @@ func TestFetchContact(t *testing.T) {
 	t.Run("with error on contact lists query", func(t *testing.T) {
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
-			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+			"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
 			"country", "postcode", "state", "job_title",
-			"lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+						"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
@@ -360,9 +356,8 @@ func TestFetchContact(t *testing.T) {
 		}).
 			AddRow(
 				email, "ext123", "Europe/Paris", "en-US",
-				"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+				"John", "Doe", "John Doe", "+1234567890", "123 Main St", "Apt 4B",
 				"USA", "12345", "CA", "Developer",
-				100.50, 5, now,
 				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 				42.0, 43.0, 44.0, 45.0, 46.0,
 				now, now, now, now, now,
@@ -370,7 +365,7 @@ func TestFetchContact(t *testing.T) {
 				now, now, now, now,
 			)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c.email = \$1`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c.email = \$1`).
 			WithArgs(email).
 			WillReturnRows(rows)
 
@@ -403,19 +398,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -424,7 +418,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(), time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs().
 			WillReturnRows(rows)
 
@@ -485,19 +479,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -506,7 +499,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(), time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c\.email ILIKE \$1 AND c\.first_name ILIKE \$2 AND c\.country ILIKE \$3 ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("%test@example.com%", "%John%", "%US%").
 			WillReturnRows(rows)
 
@@ -568,10 +561,9 @@ func TestGetContacts(t *testing.T) {
 		// Create multiple rows to trigger pagination
 		now := time.Now()
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
@@ -583,9 +575,9 @@ func TestGetContacts(t *testing.T) {
 		for i := 1; i <= 11; i++ { // 11 to trigger the limit+1 logic
 			rows.AddRow(
 				fmt.Sprintf("test%d@example.com", i), fmt.Sprintf("ext%d", i), "UTC", "en",
-				fmt.Sprintf("First%d", i), fmt.Sprintf("Last%d", i),
+				fmt.Sprintf("First%d", i), fmt.Sprintf("Last%d", i), fmt.Sprintf("First%d Last%d", i, i),
 				fmt.Sprintf("+%d", i), "123 Main St", "Apt 4B", "US", "12345", "CA",
-				"Engineer", 100.0, 5, now,
+				"Engineer",
 				"custom1", "custom2", "custom3", "custom4", "custom5",
 				1.0, 2.0, 3.0, 4.0, 5.0,
 				now, now, now, now, now,
@@ -595,18 +587,18 @@ func TestGetContacts(t *testing.T) {
 			)
 		}
 
-		// Truncate time to seconds to match the expected format
-		cursorTime := time.Now().Truncate(time.Second)
+		// Use nanosecond precision to match the cursor format
+		cursorTime := time.Now()
 		cursorEmail := "previous@example.com"
-		cursorStr := fmt.Sprintf("%s~%s", cursorTime.Format(time.RFC3339), cursorEmail)
+		cursorStr := fmt.Sprintf("%s~%s", cursorTime.Format(time.RFC3339Nano), cursorEmail)
 		encodedCursor := base64.StdEncoding.EncodeToString([]byte(cursorStr))
 
 		// Parse the time back from the string to ensure it matches exactly what the test expects
-		parsedTime, _ := time.Parse(time.RFC3339, cursorTime.Format(time.RFC3339))
+		parsedTime, _ := time.Parse(time.RFC3339Nano, cursorTime.Format(time.RFC3339Nano))
 
 		// The query should have compound condition for cursor-based pagination
 		// Use a simpler regex pattern that's more forgiving of whitespace variations
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE \(c\.created_at < \$1 OR \(c\.created_at = \$2 AND c\.email > \$3\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE \(c\.created_at < \$1 OR \(c\.created_at = \$2 AND c\.email > \$3\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs(parsedTime, parsedTime, cursorEmail).
 			WillReturnRows(rows)
 
@@ -684,10 +676,10 @@ func TestGetContacts(t *testing.T) {
 		cursorParts := strings.Split(string(decodedBytes), "~")
 		require.Len(t, cursorParts, 2)
 
-		_, err = time.Parse(time.RFC3339, cursorParts[0])
+		_, err = time.Parse(time.RFC3339Nano, cursorParts[0])
 		require.NoError(t, err)
 
-		// The 11th contact email should be in the cursor
+		// The 10th contact email should be in the cursor (last item of the returned page)
 		assert.Equal(t, "test10@example.com", cursorParts[1])
 	})
 
@@ -815,19 +807,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -836,7 +827,7 @@ func TestGetContacts(t *testing.T) {
 			time.Now(), time.Now(), time.Now(), time.Now(),
 		)
 
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE c\.email ILIKE \$1 AND c\.external_id ILIKE \$2 AND c\.first_name ILIKE \$3 AND c\.last_name ILIKE \$4 AND c\.phone ILIKE \$5 AND c\.country ILIKE \$6 ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("%test@example.com%", "%ext123%", "%John%", "%Doe%", "%+1234567890%", "%US%").
 			WillReturnRows(rows)
 
@@ -898,7 +889,7 @@ func TestGetContacts(t *testing.T) {
 		repo := NewContactRepository(workspaceRepo)
 
 		// Set up expectations for the query to fail
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs().
 			WillReturnError(errors.New("database query error"))
 
@@ -930,19 +921,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query with EXISTS subquery
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -952,7 +942,7 @@ func TestGetContacts(t *testing.T) {
 		)
 
 		// Match the query using a regex pattern that includes the EXISTS subquery
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("list123").
 			WillReturnRows(rows)
 
@@ -1011,19 +1001,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query with EXISTS subquery
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -1033,7 +1022,7 @@ func TestGetContacts(t *testing.T) {
 		)
 
 		// Match the query using a regex pattern that includes the EXISTS subquery
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.status = \$1\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.status = \$1\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs(string(domain.ContactListStatusActive)).
 			WillReturnRows(rows)
 
@@ -1092,19 +1081,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query with EXISTS subquery
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -1114,7 +1102,7 @@ func TestGetContacts(t *testing.T) {
 		)
 
 		// Match the query using a regex pattern that includes the EXISTS subquery with both list_id and status filters
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1 AND cl\.status = \$2\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1 AND cl\.status = \$2\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("list123", string(domain.ContactListStatusActive)).
 			WillReturnRows(rows)
 
@@ -1172,19 +1160,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query with EXISTS subquery for segments
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -1194,7 +1181,7 @@ func TestGetContacts(t *testing.T) {
 		)
 
 		// Match the query using a regex pattern that includes the EXISTS subquery for segments
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_segments cs JOIN segments s ON cs\.segment_id = s\.id WHERE cs\.email = c\.email AND cs\.segment_id IN \(\$1,\$2\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_segments cs JOIN segments s ON cs\.segment_id = s\.id WHERE cs\.email = c\.email AND cs\.segment_id IN \(\$1,\$2\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("segment123", "segment456").
 			WillReturnRows(rows)
 
@@ -1263,19 +1250,18 @@ func TestGetContacts(t *testing.T) {
 
 		// Set up expectations for the workspace database query with EXISTS subquery for single segment
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name",
 			"phone", "address_line_1", "address_line_2", "country", "postcode", "state",
-			"job_title", "lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
+			"job_title", 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4",
 			"custom_string_5", "custom_number_1", "custom_number_2", "custom_number_3",
 			"custom_number_4", "custom_number_5", "custom_datetime_1", "custom_datetime_2",
 			"custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
 			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).AddRow(
-			"test@example.com", "ext123", "UTC", "en", "John", "Doe",
+			"test@example.com", "ext123", "UTC", "en", "John", "Doe", "John Doe",
 			"+1234567890", "123 Main St", "Apt 4B", "US", "12345", "CA",
-			"Engineer", 100.0, 5, time.Now(),
+			"Engineer",
 			"custom1", "custom2", "custom3", "custom4", "custom5",
 			1.0, 2.0, 3.0, 4.0, 5.0,
 			time.Now(), time.Now(), time.Now(), time.Now(), time.Now(),
@@ -1286,7 +1272,7 @@ func TestGetContacts(t *testing.T) {
 
 		// Match the query using a regex pattern that includes the EXISTS subquery for a single segment
 		// Note: Squirrel generates IN ($1) even for single values
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_segments cs JOIN segments s ON cs\.segment_id = s\.id WHERE cs\.email = c\.email AND cs\.segment_id IN \(\$1\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_segments cs JOIN segments s ON cs\.segment_id = s\.id WHERE cs\.email = c\.email AND cs\.segment_id IN \(\$1\)\) ORDER BY c\.created_at DESC, c\.email ASC LIMIT 11`).
 			WithArgs("segment123").
 			WillReturnRows(rows)
 
@@ -1343,19 +1329,17 @@ func TestGetContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings
 		audience := domain.AudienceSettings{
-			Lists:               []string{"list1", "list2"},
+			List:                "list1",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
 		// Set up expectations for the database query with all 42 columns (40 contact + 2 list)
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
-			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+			"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
 			"country", "postcode", "state", "job_title",
-			"lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+						"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
@@ -1364,9 +1348,8 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		}).
 			AddRow(
 				"test1@example.com", "ext123", "Europe/Paris", "en-US",
-				"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+				"John", "Doe", "John Doe", "+1234567890", "123 Main St", "Apt 4B",
 				"USA", "12345", "CA", "Developer",
-				100.50, 5, now,
 				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 				42.0, 43.0, 44.0, 45.0, 46.0,
 				now, now, now, now, now,
@@ -1376,27 +1359,26 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			).
 			AddRow(
 				"test2@example.com", "ext456", "America/New_York", "en-US",
-				"Jane", "Smith", "+0987654321", "456 Oak Ave", "",
+				"Jane", "Smith", "Jane Smith", "+0987654321", "456 Oak Ave", "",
 				"USA", "54321", "NY", "Designer",
-				200.50, 10, now,
 				"Custom 1-2", "Custom 2-2", "Custom 3-2", "Custom 4-2", "Custom 5-2",
 				52.0, 53.0, 54.0, 55.0, 56.0,
 				now, now, now, now, now,
 				[]byte(`{"key": "value1-2"}`), []byte(`{"key": "value2-2"}`), []byte(`{"key": "value3-2"}`), []byte(`{"key": "value4-2"}`), []byte(`{"key": "value5-2"}`),
 				now, now, now, now,
-				"list2", "Sales List", // Additional values for list filtering
+				"list1", "Marketing List", // Additional values for list filtering - same list
 			)
 
-			// Expect query with JOINS for list filtering and excludeUnsubscribed
-		mock.ExpectQuery(`SELECT c\.\*, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id IN \(\$1,\$2\) AND l\.deleted_at IS NULL AND cl\.status <> \$3 AND cl\.status <> \$4 AND cl\.status <> \$5 ORDER BY c\.created_at ASC LIMIT 10 OFFSET 0`).
-			WithArgs("list1", "list2",
+			// Expect query with JOINS for list filtering and excludeUnsubscribed (cursor-based pagination)
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + `, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 ORDER BY c\.email ASC LIMIT 10`).
+			WithArgs("list1",
 				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
 				domain.ContactListStatusComplained).
 			WillReturnRows(rows)
 
-		// Call the method being tested
-		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, 0)
+		// Call the method being tested (empty string for first batch cursor)
+		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, "")
 
 		// Assertions
 		require.NoError(t, err)
@@ -1408,75 +1390,8 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		assert.Equal(t, "Marketing List", contacts[0].ListName)
 
 		assert.Equal(t, "test2@example.com", contacts[1].Contact.Email)
-		assert.Equal(t, "list2", contacts[1].ListID)
-		assert.Equal(t, "Sales List", contacts[1].ListName)
-	})
-
-	t.Run("should handle deduplication (skip_duplicate_emails=true)", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := setupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
-
-		repo := NewContactRepository(workspaceRepo)
-
-		// Create test audience settings with deduplication enabled
-		audience := domain.AudienceSettings{
-			Lists:               []string{"list1", "list2"},
-			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: true, // Enable deduplication
-		}
-
-		// Set up expectations for the database query with all 42 columns (40 contact + 2 list)
-		now := time.Now().UTC().Truncate(time.Microsecond)
-		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language",
-			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
-			"country", "postcode", "state", "job_title",
-			"lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
-			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
-			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
-			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
-			"custom_json_5", "created_at", "updated_at", "db_created_at", "db_updated_at",
-			"list_id", "list_name", // Additional columns for list filtering (makes it 42 total)
-		}).
-			AddRow(
-				"test1@example.com", "ext123", "Europe/Paris", "en-US",
-				"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
-				"USA", "12345", "CA", "Developer",
-				100.50, 5, now,
-				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
-				42.0, 43.0, 44.0, 45.0, 46.0,
-				now, now, now, now, now,
-				[]byte(`{"key": "value1"}`), []byte(`{"key": "value2"}`), []byte(`{"key": "value3"}`), []byte(`{"key": "value4"}`), []byte(`{"key": "value5"}`),
-				now, now, now, now,
-				"list1", "Marketing List", // Additional values for list filtering
-			)
-
-		// Expect query with DISTINCT ON for deduplication
-		mock.ExpectQuery(`SELECT DISTINCT ON \(c\.email\) .*`).
-			WithArgs("list1", "list2",
-				domain.ContactListStatusUnsubscribed,
-				domain.ContactListStatusBounced,
-				domain.ContactListStatusComplained).
-			WillReturnRows(rows)
-
-		// Call the method being tested
-		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, 0)
-
-		// Assertions
-		require.NoError(t, err)
-		require.Len(t, contacts, 1)
-		assert.Equal(t, "test1@example.com", contacts[0].Contact.Email)
-		assert.Equal(t, "list1", contacts[0].ListID)
-		assert.Equal(t, "Marketing List", contacts[0].ListName)
+		assert.Equal(t, "list1", contacts[1].ListID)
+		assert.Equal(t, "Marketing List", contacts[1].ListName)
 	})
 
 	t.Run("should get contacts without list filtering", func(t *testing.T) {
@@ -1496,19 +1411,17 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		// Create test audience settings with no lists or segments
 		audience := domain.AudienceSettings{
 			// Empty lists array
-			Lists:               []string{},
+			List:                "",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
 		// Set up expectations for the database query with only 38 contact columns (no list columns)
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		rows := sqlmock.NewRows([]string{
 			"email", "external_id", "timezone", "language",
-			"first_name", "last_name", "phone", "address_line_1", "address_line_2",
+			"first_name", "last_name", "full_name", "phone", "address_line_1", "address_line_2",
 			"country", "postcode", "state", "job_title",
-			"lifetime_value", "orders_count", "last_order_at",
-			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
+						"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4",
@@ -1516,9 +1429,8 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		}).
 			AddRow(
 				"test1@example.com", "ext123", "Europe/Paris", "en-US",
-				"John", "Doe", "+1234567890", "123 Main St", "Apt 4B",
+				"John", "Doe", "John Doe", "+1234567890", "123 Main St", "Apt 4B",
 				"USA", "12345", "CA", "Developer",
-				100.50, 5, now,
 				"Custom 1", "Custom 2", "Custom 3", "Custom 4", "Custom 5",
 				42.0, 43.0, 44.0, 45.0, 46.0,
 				now, now, now, now, now,
@@ -1527,9 +1439,8 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			).
 			AddRow(
 				"test2@example.com", "ext456", "America/New_York", "en-US",
-				"Jane", "Smith", "+0987654321", "456 Oak Ave", "",
+				"Jane", "Smith", "Jane Smith", "+0987654321", "456 Oak Ave", "",
 				"USA", "54321", "NY", "Designer",
-				200.50, 10, now,
 				"Custom 1-2", "Custom 2-2", "Custom 3-2", "Custom 4-2", "Custom 5-2",
 				52.0, 53.0, 54.0, 55.0, 56.0,
 				now, now, now, now, now,
@@ -1537,12 +1448,12 @@ func TestGetContactsForBroadcast(t *testing.T) {
 				now, now, now, now,
 			)
 
-		// Expect query without JOINS for all contacts
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c ORDER BY c\.created_at ASC LIMIT 10 OFFSET 0`).
+		// Expect query without JOINS for all contacts (cursor-based pagination)
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c ORDER BY c\.email ASC LIMIT 10`).
 			WillReturnRows(rows)
 
-		// Call the method being tested
-		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, 0)
+		// Call the method being tested (empty string for first batch cursor)
+		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, "")
 
 		// Assertions
 		require.NoError(t, err)
@@ -1572,13 +1483,12 @@ func TestGetContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings
 		audience := domain.AudienceSettings{
-			Lists:               []string{"list1"},
+			List:                "list1",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
-		// Call the method being tested
-		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, 0)
+		// Call the method being tested (empty string for first batch cursor)
+		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, "")
 
 		// Assertions
 		require.Error(t, err)
@@ -1602,21 +1512,20 @@ func TestGetContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings
 		audience := domain.AudienceSettings{
-			Lists:               []string{"list1"},
+			List:                "list1",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
-		// Expect query with error
-		mock.ExpectQuery(`SELECT c\.\*, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id IN \(\$1\) AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 ORDER BY c\.created_at ASC LIMIT 10 OFFSET 0`).
+		// Expect query with error (cursor-based pagination)
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + `, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 ORDER BY c\.email ASC LIMIT 10`).
 			WithArgs("list1",
 				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
 				domain.ContactListStatusComplained).
 			WillReturnError(fmt.Errorf("database error"))
 
-		// Call the method being tested
-		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, 0)
+		// Call the method being tested (empty string for first batch cursor)
+		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, "")
 
 		// Assertions
 		require.Error(t, err)
@@ -1642,7 +1551,6 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		audience := domain.AudienceSettings{
 			Segments:            []string{"segment1"},
 			ExcludeUnsubscribed: false,
-			SkipDuplicateEmails: false,
 		}
 
 		// Set up expectations for the query
@@ -1650,29 +1558,28 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		createdAt1 := time.Now().UTC().Add(-24 * time.Hour)
 		createdAt2 := time.Now().UTC()
 		rows := sqlmock.NewRows([]string{
-			"email", "external_id", "timezone", "language", "first_name", "last_name", "phone",
+			"email", "external_id", "timezone", "language", "first_name", "last_name", "full_name", "phone",
 			"address_line_1", "address_line_2", "country", "postcode", "state", "job_title",
-			"lifetime_value", "orders_count", "last_order_at",
 			"custom_string_1", "custom_string_2", "custom_string_3", "custom_string_4", "custom_string_5",
 			"custom_number_1", "custom_number_2", "custom_number_3", "custom_number_4", "custom_number_5",
 			"custom_datetime_1", "custom_datetime_2", "custom_datetime_3", "custom_datetime_4", "custom_datetime_5",
 			"custom_json_1", "custom_json_2", "custom_json_3", "custom_json_4", "custom_json_5",
 			"created_at", "updated_at", "db_created_at", "db_updated_at",
 		}).
-			AddRow("test1@example.com", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			AddRow("test1@example.com", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 				nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 				nil, nil, nil, nil, nil, createdAt1, createdAt1, createdAt1, createdAt1).
-			AddRow("test2@example.com", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			AddRow("test2@example.com", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 				nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 				nil, nil, nil, nil, nil, createdAt2, createdAt2, createdAt2, createdAt2)
 
-		// Expect the query to join contacts with contact_segments
-		mock.ExpectQuery(`SELECT c\.\* FROM contacts c JOIN contact_segments cs ON c\.email = cs\.email WHERE cs\.segment_id IN \(\$1\) ORDER BY c\.created_at ASC LIMIT 10 OFFSET 0`).
+		// Expect the query to join contacts with contact_segments (cursor-based pagination)
+		mock.ExpectQuery(`SELECT ` + contactColumnsPattern + ` FROM contacts c JOIN contact_segments cs ON c\.email = cs\.email WHERE cs\.segment_id IN \(\$1\) ORDER BY c\.email ASC LIMIT 10`).
 			WithArgs("segment1").
 			WillReturnRows(rows)
 
-		// Call the method being tested
-		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, 0)
+		// Call the method being tested (empty string for first batch cursor)
+		contacts, err := repo.GetContactsForBroadcast(context.Background(), "workspace123", audience, 10, "")
 
 		// Assertions
 		require.NoError(t, err)
@@ -1702,18 +1609,17 @@ func TestCountContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings
 		audience := domain.AudienceSettings{
-			Lists:               []string{"list1", "list2"},
+			List:                "list1",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
 		// Set up expectations for the count query
 		rows := sqlmock.NewRows([]string{"count"}).AddRow(25)
 
-		// Expect query with JOINS for list filtering and excludeUnsubscribed
+		// Expect query with JOINS for list filtering, soft-deleted lists filtering, and excludeUnsubscribed
 		// Note: SkipDuplicateEmails is false, so we expect COUNT(*) not COUNT(DISTINCT)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1,\$2\) AND cl\.status <> \$3 AND cl\.status <> \$4 AND cl\.status <> \$5`).
-			WithArgs("list1", "list2",
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
+			WithArgs("list1",
 				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
 				domain.ContactListStatusComplained).
@@ -1743,16 +1649,14 @@ func TestCountContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings with no lists
 		audience := domain.AudienceSettings{
-			Lists:               []string{},
+			List:                "",
 			ExcludeUnsubscribed: false,
-			SkipDuplicateEmails: false,
 		}
 
 		// Set up expectations for the count query
 		rows := sqlmock.NewRows([]string{"count"}).AddRow(100)
 
 		// Expect simple count query without filtering
-		// Note: SkipDuplicateEmails is false, so we expect COUNT(*) not COUNT(DISTINCT)
 		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c`).
 			WillReturnRows(rows)
 
@@ -1762,46 +1666,6 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		// Assertions
 		require.NoError(t, err)
 		assert.Equal(t, 100, count)
-	})
-
-	t.Run("should count distinct emails when SkipDuplicateEmails is true", func(t *testing.T) {
-		// Create a mock workspace database
-		mockDB, mock, cleanup := setupMockDB(t)
-		defer cleanup()
-
-		// Create a new repository with the mock DB
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace123").Return(mockDB, nil)
-
-		repo := NewContactRepository(workspaceRepo)
-
-		// Create test audience settings with SkipDuplicateEmails enabled
-		audience := domain.AudienceSettings{
-			Lists:               []string{"list1"},
-			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: true,
-		}
-
-		// Set up expectations for the count query
-		rows := sqlmock.NewRows([]string{"count"}).AddRow(90)
-
-		// Expect query with DISTINCT when SkipDuplicateEmails is true
-		mock.ExpectQuery(`SELECT COUNT\(DISTINCT c\.email\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
-			WithArgs("list1",
-				domain.ContactListStatusUnsubscribed,
-				domain.ContactListStatusBounced,
-				domain.ContactListStatusComplained).
-			WillReturnRows(rows)
-
-		// Call the method being tested
-		count, err := repo.CountContactsForBroadcast(context.Background(), "workspace123", audience)
-
-		// Assertions
-		require.NoError(t, err)
-		assert.Equal(t, 90, count)
 	})
 
 	t.Run("should handle database connection error", func(t *testing.T) {
@@ -1817,9 +1681,8 @@ func TestCountContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings
 		audience := domain.AudienceSettings{
-			Lists:               []string{"list1"},
+			List:                "list1",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
 		// Call the method being tested
@@ -1847,9 +1710,8 @@ func TestCountContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings
 		audience := domain.AudienceSettings{
-			Lists:               []string{"list1"},
+			List:                "list1",
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
 		// Expect query with error
@@ -1887,7 +1749,6 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		audience := domain.AudienceSettings{
 			Segments:            []string{"segment1", "segment2"},
 			ExcludeUnsubscribed: false,
-			SkipDuplicateEmails: false,
 		}
 
 		// Set up expectations for the count query
@@ -1922,18 +1783,17 @@ func TestCountContactsForBroadcast(t *testing.T) {
 
 		// Create test audience settings with both lists and segments
 		audience := domain.AudienceSettings{
-			Lists:               []string{"list1"},
+			List:                "list1",
 			Segments:            []string{"segment1"},
 			ExcludeUnsubscribed: true,
-			SkipDuplicateEmails: false,
 		}
 
 		// Set up expectations for the count query
 		rows := sqlmock.NewRows([]string{"count"}).AddRow(15)
 
-		// Expect query with JOINs for both list and segment filtering
-		// The query should join contact_lists, then also join contact_segments
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN contact_segments cs ON c\.email = cs\.email WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 AND cs\.segment_id IN \(\$5\)`).
+		// Expect query with JOINs for both list, lists table (for soft-delete filter), and segment filtering
+		// The query should join contact_lists, lists, then also join contact_segments
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id JOIN contact_segments cs ON c\.email = cs\.email WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 AND cs\.segment_id IN \(\$5\)`).
 			WithArgs("list1",
 				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
@@ -2325,5 +2185,134 @@ func TestContactRepository_BulkUpsertContacts(t *testing.T) {
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
+	})
+}
+
+func TestContactRepository_Count(t *testing.T) {
+	// Test contactRepository.Count - this was at 0% coverage
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewContactRepository(mockWorkspaceRepo)
+
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace123"
+
+	t.Run("Success - Returns count", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts`).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(42))
+
+		count, err := repo.Count(ctx, workspaceID)
+		assert.NoError(t, err)
+		assert.Equal(t, 42, count)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Error - Connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		count, err := repo.Count(ctx, workspaceID)
+		assert.Error(t, err)
+		assert.Equal(t, 0, count)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("Error - Query error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts`).
+			WillReturnError(errors.New("query error"))
+
+		count, err := repo.Count(ctx, workspaceID)
+		assert.Error(t, err)
+		assert.Equal(t, 0, count)
+		assert.Contains(t, err.Error(), "failed to execute count query")
+	})
+}
+
+func TestContactRepository_GetBatchForSegment(t *testing.T) {
+	// Test contactRepository.GetBatchForSegment - this was at 0% coverage
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := NewContactRepository(mockWorkspaceRepo)
+
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace123"
+
+	t.Run("Success - Returns emails", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT email FROM contacts ORDER BY email ASC LIMIT \$1 OFFSET \$2`).
+			WithArgs(10, int64(0)).
+			WillReturnRows(sqlmock.NewRows([]string{"email"}).
+				AddRow("test1@example.com").
+				AddRow("test2@example.com"))
+
+		emails, err := repo.GetBatchForSegment(ctx, workspaceID, 0, 10)
+		assert.NoError(t, err)
+		assert.Len(t, emails, 2)
+		assert.Equal(t, "test1@example.com", emails[0])
+		assert.Equal(t, "test2@example.com", emails[1])
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Success - Empty result", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT email FROM contacts ORDER BY email ASC LIMIT \$1 OFFSET \$2`).
+			WithArgs(10, int64(100)).
+			WillReturnRows(sqlmock.NewRows([]string{"email"}))
+
+		emails, err := repo.GetBatchForSegment(ctx, workspaceID, 100, 10)
+		assert.NoError(t, err)
+		assert.Empty(t, emails)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Error - Connection error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(nil, errors.New("connection error"))
+
+		emails, err := repo.GetBatchForSegment(ctx, workspaceID, 0, 10)
+		assert.Error(t, err)
+		assert.Nil(t, emails)
+		assert.Contains(t, err.Error(), "failed to get workspace connection")
+	})
+
+	t.Run("Error - Query error", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().
+			GetConnection(ctx, workspaceID).
+			Return(db, nil)
+
+		mock.ExpectQuery(`SELECT email FROM contacts ORDER BY email ASC LIMIT \$1 OFFSET \$2`).
+			WithArgs(10, int64(0)).
+			WillReturnError(errors.New("query error"))
+
+		emails, err := repo.GetBatchForSegment(ctx, workspaceID, 0, 10)
+		assert.Error(t, err)
+		assert.Nil(t, emails)
+		assert.Contains(t, err.Error(), "failed to query emails")
 	})
 }

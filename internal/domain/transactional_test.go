@@ -1242,3 +1242,406 @@ func TestTransactionalChannelHandling(t *testing.T) {
 	// Verify the channel was preserved through JSON serialization
 	assert.Contains(t, unmarshaled.Channels, emailChannel)
 }
+
+func TestSendTransactionalRequest_Validate_Attachments(t *testing.T) {
+	// Valid base64 content for a small PDF
+	validBase64Content := "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiA+PgplbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDQgL1Jvb3QgMSAwIFIgPj4Kc3RhcnR4cmVmCjE2OQolJUVPRgo="
+
+	tests := []struct {
+		name    string
+		req     SendTransactionalRequest
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid request with attachment",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "test.pdf",
+								Content:     validBase64Content,
+								ContentType: "application/pdf",
+								Disposition: "attachment",
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid request with multiple attachments",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "test1.pdf",
+								Content:     validBase64Content,
+								ContentType: "application/pdf",
+								Disposition: "attachment",
+							},
+							{
+								Filename:    "test2.pdf",
+								Content:     validBase64Content,
+								ContentType: "application/pdf",
+								Disposition: "attachment",
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid request with inline attachment",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "logo.png",
+								Content:     validBase64Content,
+								ContentType: "image/png",
+								Disposition: "inline",
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid attachment - missing filename",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "", // Missing filename
+								Content:     validBase64Content,
+								ContentType: "application/pdf",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "filename is required",
+		},
+		{
+			name: "invalid attachment - missing content",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "test.pdf",
+								Content:     "", // Missing content
+								ContentType: "application/pdf",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "content is required",
+		},
+		{
+			name: "invalid attachment - invalid base64 content",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "test.pdf",
+								Content:     "not-valid-base64!!!",
+								ContentType: "application/pdf",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "content must be valid base64",
+		},
+		{
+			name: "invalid attachment - unsupported file extension (.exe)",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "malware.exe",
+								Content:     validBase64Content,
+								ContentType: "application/octet-stream",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "file extension .exe is not supported",
+		},
+		{
+			name: "invalid attachment - unsupported file extension (.bat)",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "script.bat",
+								Content:     validBase64Content,
+								ContentType: "application/bat",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "file extension .bat is not supported",
+		},
+		{
+			name: "invalid attachment - invalid disposition",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "test.pdf",
+								Content:     validBase64Content,
+								ContentType: "application/pdf",
+								Disposition: "invalid-disposition",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "disposition must be 'attachment' or 'inline'",
+		},
+		{
+			name: "invalid attachment - filename with path separator",
+			req: SendTransactionalRequest{
+				WorkspaceID: "workspace-123",
+				Notification: TransactionalNotificationSendParams{
+					ID: "notification-456",
+					Contact: &Contact{
+						Email: "contact@example.com",
+					},
+					Channels: []TransactionalChannel{TransactionalChannelEmail},
+					EmailOptions: EmailOptions{
+						Attachments: []Attachment{
+							{
+								Filename:    "../../../etc/passwd",
+								Content:     validBase64Content,
+								ContentType: "text/plain",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "filename must not contain path separators",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestTestTemplateRequest_Validate(t *testing.T) {
+	// Test TestTemplateRequest.Validate - this was at 0% coverage
+	tests := []struct {
+		name    string
+		req     TestTemplateRequest
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid request",
+			req: TestTemplateRequest{
+				WorkspaceID:    "workspace-123",
+				TemplateID:     "template-456",
+				IntegrationID:  "integration-789",
+				SenderID:       "sender-101",
+				RecipientEmail: "test@example.com",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid request with email options",
+			req: TestTemplateRequest{
+				WorkspaceID:    "workspace-123",
+				TemplateID:     "template-456",
+				IntegrationID:  "integration-789",
+				SenderID:       "sender-101",
+				RecipientEmail: "test@example.com",
+				EmailOptions: EmailOptions{
+					CC:      []string{"cc@example.com"},
+					BCC:     []string{"bcc@example.com"},
+					ReplyTo: "reply@example.com",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workspace_id",
+			req: TestTemplateRequest{
+				TemplateID:     "template-456",
+				IntegrationID:  "integration-789",
+				SenderID:       "sender-101",
+				RecipientEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "workspace_id is required",
+		},
+		{
+			name: "missing template_id",
+			req: TestTemplateRequest{
+				WorkspaceID:    "workspace-123",
+				IntegrationID:  "integration-789",
+				SenderID:       "sender-101",
+				RecipientEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "template_id is required",
+		},
+		{
+			name: "missing integration_id",
+			req: TestTemplateRequest{
+				WorkspaceID:    "workspace-123",
+				TemplateID:     "template-456",
+				SenderID:       "sender-101",
+				RecipientEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "integration_id is required",
+		},
+		{
+			name: "missing sender_id",
+			req: TestTemplateRequest{
+				WorkspaceID:    "workspace-123",
+				TemplateID:     "template-456",
+				IntegrationID:  "integration-789",
+				RecipientEmail: "test@example.com",
+			},
+			wantErr: true,
+			errMsg:  "sender_id is required",
+		},
+		{
+			name: "missing recipient_email",
+			req: TestTemplateRequest{
+				WorkspaceID:   "workspace-123",
+				TemplateID:    "template-456",
+				IntegrationID: "integration-789",
+				SenderID:      "sender-101",
+			},
+			wantErr: true,
+			errMsg:  "recipient_email is required",
+		},
+		{
+			name: "invalid recipient_email format",
+			req: TestTemplateRequest{
+				WorkspaceID:    "workspace-123",
+				TemplateID:     "template-456",
+				IntegrationID:  "integration-789",
+				SenderID:       "sender-101",
+				RecipientEmail: "not-an-email",
+			},
+			wantErr: true,
+			errMsg:  "invalid recipient_email format",
+		},
+		{
+			name: "empty recipient_email",
+			req: TestTemplateRequest{
+				WorkspaceID:    "workspace-123",
+				TemplateID:     "template-456",
+				IntegrationID:  "integration-789",
+				SenderID:       "sender-101",
+				RecipientEmail: "",
+			},
+			wantErr: true,
+			errMsg:  "recipient_email is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

@@ -1,17 +1,23 @@
-import { DatePicker, Form, FormInstance, InputNumber, Tag } from 'antd'
-import { DimensionFilter, FieldTypeValue, IOperator, Operator } from '../../services/api/segment'
+import { DatePicker, Form, InputNumber, Tag } from 'antd'
+import { DimensionFilter, IOperator, Operator } from '../../services/api/segment'
 import Messages from './messages'
 import dayjs from 'dayjs'
+
+// Format date for display (converts ISO8601 to readable format)
+const formatDateDisplay = (dateStr: string | undefined): string => {
+  if (!dateStr) return ''
+  return dayjs(dateStr).format('YYYY-MM-DD HH:mm:ss')
+}
 
 const formItemDatetime = (
   <Form.Item
     name={['string_values', 0]}
     dependencies={['operator']}
     rules={[{ required: true, type: 'string', message: Messages.RequiredField }]}
-    getValueProps={(value: any) => {
-      return { value: value ? dayjs(value) : undefined }
+    getValueProps={(value: unknown) => {
+      return { value: value ? dayjs(value as string) : undefined }
     }}
-    getValueFromEvent={(_date: any, dateString: string) => dateString}
+    getValueFromEvent={(date: dayjs.Dayjs | null) => (date ? date.toISOString() : undefined)}
   >
     <DatePicker showTime={{ defaultValue: dayjs().startOf('day') }} />
   </Form.Item>
@@ -22,14 +28,16 @@ const formItemDatetimeRange = (
     name="string_values"
     dependencies={['operator']}
     rules={[{ required: true, type: 'array', message: Messages.RequiredField }]}
-    getValueProps={(values: any[]) => {
+    getValueProps={(values: unknown[]) => {
       return {
         value: values?.map((value) => {
-          return value ? dayjs(value) : undefined
+          return value ? dayjs(value as string) : undefined
         })
       }
     }}
-    getValueFromEvent={(_date: any, dateStrings: string[]) => dateStrings}
+    getValueFromEvent={(dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) =>
+      dates ? dates.map((date) => (date ? date.toISOString() : undefined)) : undefined
+    }
   >
     <DatePicker.RangePicker
       showTime={{
@@ -49,14 +57,14 @@ export class OperatorBeforeDate implements IOperator {
         <span className="opacity-60 pt-0.5">{this.label}</span>
         <span>
           <Tag bordered={false} color="blue">
-            {filter.string_values?.[0]}
+            {formatDateDisplay(filter.string_values?.[0])}
           </Tag>
         </span>
       </>
     )
   }
 
-  renderFormItems(_fieldType: FieldTypeValue, _fieldName: string, _form: FormInstance) {
+  renderFormItems() {
     return formItemDatetime
   }
 }
@@ -71,14 +79,14 @@ export class OperatorAfterDate implements IOperator {
         <span className="opacity-60 pt-0.5">{this.label}</span>
         <span>
           <Tag bordered={false} color="blue">
-            {filter.string_values?.[0]}
+            {formatDateDisplay(filter.string_values?.[0])}
           </Tag>
         </span>
       </>
     )
   }
 
-  renderFormItems(_fieldType: FieldTypeValue, _fieldName: string, _form: FormInstance) {
+  renderFormItems() {
     return formItemDatetime
   }
 }
@@ -93,18 +101,18 @@ export class OperatorInDateRange implements IOperator {
         <span className="opacity-60 pt-0.5">{this.label}</span>
         <span>
           <Tag bordered={false} color="blue">
-            {filter.string_values?.[0]}
+            {formatDateDisplay(filter.string_values?.[0])}
           </Tag>
           &rarr;
           <Tag bordered={false} className="ml-3" color="blue">
-            {filter.string_values?.[1]}
+            {formatDateDisplay(filter.string_values?.[1])}
           </Tag>
         </span>
       </>
     )
   }
 
-  renderFormItems(_fieldType: FieldTypeValue, _fieldName: string, _form: FormInstance) {
+  renderFormItems() {
     return formItemDatetimeRange
   }
 }
@@ -119,18 +127,18 @@ export class OperatorNotInDateRange implements IOperator {
         <span className="opacity-60 pt-0.5">{this.label}</span>
         <span>
           <Tag bordered={false} color="blue">
-            {filter.string_values?.[0]}
+            {formatDateDisplay(filter.string_values?.[0])}
           </Tag>
           &rarr;
           <Tag bordered={false} className="ml-3" color="blue">
-            {filter.string_values?.[1]}
+            {formatDateDisplay(filter.string_values?.[1])}
           </Tag>
         </span>
       </>
     )
   }
 
-  renderFormItems(_fieldType: FieldTypeValue, _fieldName: string, _form: FormInstance) {
+  renderFormItems() {
     return formItemDatetimeRange
   }
 }
@@ -153,7 +161,7 @@ export class OperatorInTheLastDays implements IOperator {
     )
   }
 
-  renderFormItems(_fieldType: FieldTypeValue, _fieldName: string, _form: FormInstance) {
+  renderFormItems() {
     return (
       <>
         <Form.Item
@@ -161,11 +169,11 @@ export class OperatorInTheLastDays implements IOperator {
           dependencies={['operator']}
           rules={[{ required: true, message: Messages.RequiredField }]}
           style={{ display: 'inline-block', marginBottom: 0 }}
-          getValueProps={(value: any) => {
+          getValueProps={(value: unknown) => {
             // Convert string to number for InputNumber
-            return { value: value ? parseInt(value) : undefined }
+            return { value: value ? parseInt(value as string) : undefined }
           }}
-          getValueFromEvent={(value: any) => {
+          getValueFromEvent={(value: unknown) => {
             // Convert number back to string for API
             return value !== null && value !== undefined ? String(value) : undefined
           }}

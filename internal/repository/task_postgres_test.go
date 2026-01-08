@@ -83,7 +83,7 @@ func taskToMockRows(t *testing.T, task *domain.Task) *sqlmock.Rows {
 
 func TestTaskRepository_WithTransaction(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Setup mock expectations
 	mock.ExpectBegin()
@@ -114,7 +114,7 @@ func TestTaskRepository_WithTransaction(t *testing.T) {
 
 func TestTaskRepository_CreateWithTransaction(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -164,7 +164,7 @@ func TestTaskRepository_CreateWithTransaction(t *testing.T) {
 
 func TestTaskRepository_GetWithTransaction(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -203,7 +203,7 @@ func TestTaskRepository_GetWithTransaction(t *testing.T) {
 
 func TestTaskRepository_UpdateWithTransaction(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -253,7 +253,7 @@ func TestTaskRepository_UpdateWithTransaction(t *testing.T) {
 
 func TestTaskRepository_Delete(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -291,7 +291,7 @@ func TestTaskRepository_Delete(t *testing.T) {
 
 func TestTaskRepository_DeleteAll(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -327,7 +327,7 @@ func TestTaskRepository_DeleteAll(t *testing.T) {
 
 func TestTaskRepository_List(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -433,7 +433,7 @@ func TestTaskRepository_List(t *testing.T) {
 
 func TestTaskRepository_GetNextBatch(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -513,14 +513,14 @@ func TestTaskRepository_GetNextBatch(t *testing.T) {
 
 func TestTaskRepository_MarkAsRunning(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
 	taskID := uuid.New().String()
 	timeoutAfter := time.Now().UTC().Add(5 * time.Minute)
 
-	// Test successful mark as running
+	// Test successful mark as running (task is in pending status)
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE tasks SET").
 		WithArgs(
@@ -530,6 +530,8 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 			timeoutAfter,
 			taskID,
 			workspace,
+			string(domain.TaskStatusPending), // status check in WHERE
+			string(domain.TaskStatusPaused),  // status check in WHERE
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
@@ -538,7 +540,7 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
-	// Test mark as running for non-existent task
+	// Test mark as running for non-existent task or task already running
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE tasks SET").
 		WithArgs(
@@ -548,13 +550,17 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 			timeoutAfter,
 			taskID,
 			workspace,
+			string(domain.TaskStatusPending), // status check in WHERE
+			string(domain.TaskStatusPaused),  // status check in WHERE
 		).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 
 	err = repo.MarkAsRunning(ctx, workspace, taskID, timeoutAfter)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "task not found")
+	var alreadyRunningErr *domain.ErrTaskAlreadyRunning
+	assert.ErrorAs(t, err, &alreadyRunningErr)
+	assert.Equal(t, taskID, alreadyRunningErr.TaskID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
 	// Test database error
@@ -567,6 +573,8 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 			timeoutAfter,
 			taskID,
 			workspace,
+			string(domain.TaskStatusPending), // status check in WHERE
+			string(domain.TaskStatusPaused),  // status check in WHERE
 		).
 		WillReturnError(fmt.Errorf("database error"))
 	mock.ExpectRollback()
@@ -577,21 +585,68 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestTaskRepository_MarkAsCompleted(t *testing.T) {
+// TestTaskRepository_MarkAsRunning_ConcurrentProtection tests that MarkAsRunning
+// properly prevents concurrent execution by checking the task status.
+func TestTaskRepository_MarkAsRunning_ConcurrentProtection(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
 	taskID := uuid.New().String()
+	timeoutAfter := time.Now().UTC().Add(5 * time.Minute)
+
+	// Simulate scenario where task is already running (another executor claimed it first)
+	// The query will match 0 rows because status is 'running', not 'pending' or 'paused'
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE tasks SET").
+		WithArgs(
+			domain.TaskStatusRunning,
+			sqlmock.AnyArg(), // updated_at
+			sqlmock.AnyArg(), // last_run_at
+			timeoutAfter,
+			taskID,
+			workspace,
+			string(domain.TaskStatusPending),
+			string(domain.TaskStatusPaused),
+		).
+		WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows = task already running
+	mock.ExpectRollback()
+
+	err := repo.MarkAsRunning(ctx, workspace, taskID, timeoutAfter)
+	assert.Error(t, err)
+	var alreadyRunningErr *domain.ErrTaskAlreadyRunning
+	assert.ErrorAs(t, err, &alreadyRunningErr)
+	assert.Equal(t, taskID, alreadyRunningErr.TaskID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestTaskRepository_MarkAsCompleted(t *testing.T) {
+	db, mock, repo := setupTaskMock(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	workspace := "test-workspace"
+	taskID := uuid.New().String()
+	state := &domain.TaskState{
+		Progress: 100,
+		Message:  "Completed",
+		SendBroadcast: &domain.SendBroadcastState{
+			BroadcastID:     "broadcast-123",
+			TotalRecipients: 1000,
+			EnqueuedCount:       1000,
+			FailedCount:     0,
+		},
+	}
 
 	// Test successful mark as completed
 	mock.ExpectBegin()
-	// Squirrel generates the args in the order: status, progress, error_message, updated_at, completed_at, timeout_after, id, workspace_id
+	// Squirrel generates the args in the order: status, progress, state, error_message, updated_at, completed_at, timeout_after, id, workspace_id
 	mock.ExpectExec("UPDATE tasks SET").
 		WithArgs(
 			string(domain.TaskStatusCompleted),
 			int64(100),       // progress
+			sqlmock.AnyArg(), // state JSON
 			nil,              // error_message (nil on completion)
 			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // completed_at
@@ -602,7 +657,7 @@ func TestTaskRepository_MarkAsCompleted(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	err := repo.MarkAsCompleted(ctx, workspace, taskID)
+	err := repo.MarkAsCompleted(ctx, workspace, taskID, state)
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
@@ -612,6 +667,7 @@ func TestTaskRepository_MarkAsCompleted(t *testing.T) {
 		WithArgs(
 			string(domain.TaskStatusCompleted),
 			int64(100),       // progress
+			sqlmock.AnyArg(), // state JSON
 			nil,              // error_message (nil on completion)
 			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // completed_at
@@ -622,7 +678,7 @@ func TestTaskRepository_MarkAsCompleted(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 
-	err = repo.MarkAsCompleted(ctx, workspace, taskID)
+	err = repo.MarkAsCompleted(ctx, workspace, taskID, state)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "task not found")
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -633,6 +689,7 @@ func TestTaskRepository_MarkAsCompleted(t *testing.T) {
 		WithArgs(
 			string(domain.TaskStatusCompleted),
 			int64(100),       // progress
+			sqlmock.AnyArg(), // state JSON
 			nil,              // error_message (nil on completion)
 			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // completed_at
@@ -643,15 +700,59 @@ func TestTaskRepository_MarkAsCompleted(t *testing.T) {
 		WillReturnError(fmt.Errorf("database error"))
 	mock.ExpectRollback()
 
-	err = repo.MarkAsCompleted(ctx, workspace, taskID)
+	err = repo.MarkAsCompleted(ctx, workspace, taskID, state)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to mark task as completed")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+// TestTaskRepository_MarkAsCompleted_SavesState verifies that MarkAsCompleted
+// now saves the final task state (fix for GitHub issue #157).
+func TestTaskRepository_MarkAsCompleted_SavesState(t *testing.T) {
+	db, mock, repo := setupTaskMock(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	workspace := "test-workspace"
+	taskID := uuid.New().String()
+	state := &domain.TaskState{
+		Progress: 100,
+		Message:  "Processed 1000/1000 recipients (100.0%)",
+		SendBroadcast: &domain.SendBroadcastState{
+			BroadcastID:     "broadcast-123",
+			TotalRecipients: 1000,
+			EnqueuedCount:       1000,
+			FailedCount:     0,
+		},
+	}
+
+	// Verify that state is now included in the SQL (unlike before the fix)
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE tasks SET").
+		WithArgs(
+			string(domain.TaskStatusCompleted),
+			int64(100),       // progress
+			sqlmock.AnyArg(), // state JSON - THIS WAS MISSING BEFORE THE FIX
+			nil,              // error_message
+			sqlmock.AnyArg(), // updated_at
+			sqlmock.AnyArg(), // completed_at
+			nil,              // timeout_after
+			taskID,
+			workspace,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err := repo.MarkAsCompleted(ctx, workspace, taskID, state)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	t.Log("FIXED: MarkAsCompleted now saves the final task state")
+}
+
 func TestTaskRepository_MarkAsFailed(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -734,7 +835,7 @@ func TestTaskRepository_MarkAsFailed(t *testing.T) {
 
 func TestTaskRepository_MarkAsPaused(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -813,7 +914,7 @@ func TestTaskRepository_MarkAsPaused(t *testing.T) {
 
 func TestTaskRepository_SaveState(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -884,7 +985,7 @@ func TestTaskRepository_SaveState(t *testing.T) {
 
 func TestTaskRepository_GetTaskByBroadcastID(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -973,7 +1074,7 @@ func TestTaskRepository_GetTaskByBroadcastID(t *testing.T) {
 // TestTaskRepository_CreateTx_ErrorPaths tests error paths in CreateTx
 func TestTaskRepository_CreateTx_ErrorPaths(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1022,7 +1123,7 @@ func TestTaskRepository_CreateTx_ErrorPaths(t *testing.T) {
 // TestTaskRepository_GetTx_ErrorPaths tests error paths in GetTx
 func TestTaskRepository_GetTx_ErrorPaths(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1060,7 +1161,7 @@ func TestTaskRepository_GetTx_ErrorPaths(t *testing.T) {
 // TestTaskRepository_UpdateTx_ErrorPaths tests error paths in UpdateTx
 func TestTaskRepository_UpdateTx_ErrorPaths(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1102,7 +1203,7 @@ func TestTaskRepository_UpdateTx_ErrorPaths(t *testing.T) {
 // TestTaskRepository_List_ErrorPaths tests error paths in List
 func TestTaskRepository_List_ErrorPaths(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1201,7 +1302,7 @@ func TestTaskRepository_List_ErrorPaths(t *testing.T) {
 // TestTaskRepository_GetNextBatch_ErrorPaths tests error paths in GetNextBatch
 func TestTaskRepository_GetNextBatch_ErrorPaths(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	limit := 2
@@ -1270,7 +1371,7 @@ func TestTaskRepository_GetNextBatch_ErrorPaths(t *testing.T) {
 // TestTaskRepository_WithTransaction_BeginError tests begin transaction error
 func TestTaskRepository_WithTransaction_BeginError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Test begin transaction error
 	mock.ExpectBegin().WillReturnError(fmt.Errorf("begin transaction error"))
@@ -1287,7 +1388,7 @@ func TestTaskRepository_WithTransaction_BeginError(t *testing.T) {
 // TestTaskRepository_WithTransaction_CommitError tests commit transaction error
 func TestTaskRepository_WithTransaction_CommitError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Test commit transaction error
 	mock.ExpectBegin()
@@ -1305,7 +1406,7 @@ func TestTaskRepository_WithTransaction_CommitError(t *testing.T) {
 // TestTaskRepository_CreateTx_MarshalError tests JSON marshal error in CreateTx
 func TestTaskRepository_CreateTx_MarshalError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1350,7 +1451,7 @@ func TestTaskRepository_CreateTx_MarshalError(t *testing.T) {
 // TestTaskRepository_UpdateTx_MarshalError tests JSON marshal error in UpdateTx
 func TestTaskRepository_UpdateTx_MarshalError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1391,7 +1492,7 @@ func TestTaskRepository_UpdateTx_MarshalError(t *testing.T) {
 // TestTaskRepository_SaveStateTx_MarshalError tests JSON marshal error in SaveStateTx
 func TestTaskRepository_SaveStateTx_MarshalError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1421,7 +1522,7 @@ func TestTaskRepository_SaveStateTx_MarshalError(t *testing.T) {
 // TestTaskRepository_MarkAsPausedTx_MarshalError tests JSON marshal error in MarkAsPausedTx
 func TestTaskRepository_MarkAsPausedTx_MarshalError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1454,7 +1555,7 @@ func TestTaskRepository_MarkAsPausedTx_MarshalError(t *testing.T) {
 // TestTaskRepository_DeleteAll_QueryBuildError tests query build error in DeleteAll
 func TestTaskRepository_DeleteAll_QueryBuildError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	workspace := "test-workspace"
@@ -1472,7 +1573,7 @@ func TestTaskRepository_DeleteAll_QueryBuildError(t *testing.T) {
 // TestTaskRepository_GetNextBatch_QueryBuildError tests query build error in GetNextBatch
 func TestTaskRepository_GetNextBatch_QueryBuildError(t *testing.T) {
 	db, mock, repo := setupTaskMock(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	limit := 5
@@ -1499,4 +1600,163 @@ func TestTaskRepository_GetNextBatch_QueryBuildError(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, tasks, 1)
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestTaskRepository_MarkAsPending(t *testing.T) {
+	// Test TaskRepository.MarkAsPending - this was at 0% coverage
+	db, mock, repo := setupTaskMock(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	workspace := "test-workspace"
+	id := "task-123"
+	nextRunAfter := time.Now().UTC().Add(1 * time.Hour)
+	progress := 50.0
+	state := &domain.TaskState{
+		SendBroadcast: &domain.SendBroadcastState{
+			BroadcastID:     "broadcast-123",
+			RecipientOffset: 100,
+		},
+	}
+
+	t.Run("Success - Marks task as pending", func(t *testing.T) {
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE tasks SET").
+			WithArgs(
+				domain.TaskStatusPending,
+				progress,
+				sqlmock.AnyArg(), // state JSON
+				sqlmock.AnyArg(), // updated_at
+				nextRunAfter,
+				nil, // timeout_after
+				id,
+				workspace,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		err := repo.MarkAsPending(ctx, workspace, id, nextRunAfter, progress, state)
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Error - Task not found", func(t *testing.T) {
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE tasks SET").
+			WithArgs(
+				domain.TaskStatusPending,
+				progress,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				nextRunAfter,
+				nil,
+				id,
+				workspace,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectRollback()
+
+		err := repo.MarkAsPending(ctx, workspace, id, nextRunAfter, progress, state)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "task not found")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestTaskRepository_MarkAsPendingTx(t *testing.T) {
+	// Test TaskRepository.MarkAsPendingTx - this was at 0% coverage
+	db, mock, repo := setupTaskMock(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+
+	workspace := "test-workspace"
+	id := "task-123"
+	nextRunAfter := time.Now().UTC().Add(1 * time.Hour)
+	progress := 50.0
+	state := &domain.TaskState{
+		SendBroadcast: &domain.SendBroadcastState{
+			BroadcastID:     "broadcast-123",
+			RecipientOffset: 100,
+		},
+	}
+
+	t.Run("Success - Marks task as pending in transaction", func(t *testing.T) {
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE tasks SET").
+			WithArgs(
+				domain.TaskStatusPending,
+				progress,
+				sqlmock.AnyArg(), // state JSON
+				sqlmock.AnyArg(), // updated_at
+				nextRunAfter,
+				nil, // timeout_after
+				id,
+				workspace,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		tx, err := db.Begin()
+		require.NoError(t, err)
+		defer func() { _ = tx.Rollback() }()
+
+		err = repo.MarkAsPendingTx(ctx, tx, workspace, id, nextRunAfter, progress, state)
+		assert.NoError(t, err)
+		_ = tx.Commit()
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Error - Task not found", func(t *testing.T) {
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE tasks SET").
+			WithArgs(
+				domain.TaskStatusPending,
+				progress,
+				sqlmock.AnyArg(),
+				sqlmock.AnyArg(),
+				nextRunAfter,
+				nil,
+				id,
+				workspace,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		// Note: MarkAsPendingTx doesn't rollback on error, caller manages transaction
+
+		tx, err := db.Begin()
+		require.NoError(t, err)
+		defer func() { _ = tx.Rollback() }()
+
+		err = repo.MarkAsPendingTx(ctx, tx, workspace, id, nextRunAfter, progress, state)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "task not found")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Success - Nil state", func(t *testing.T) {
+		mock.ExpectBegin()
+		mock.ExpectExec("UPDATE tasks SET").
+			WithArgs(
+				domain.TaskStatusPending,
+				progress,
+				[]byte("null"),   // nil state marshaled as null
+				sqlmock.AnyArg(), // updated_at
+				nextRunAfter,
+				nil, // timeout_after
+				id,
+				workspace,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		tx, err := db.Begin()
+		require.NoError(t, err)
+		defer func() { _ = tx.Rollback() }()
+
+		err = repo.MarkAsPendingTx(ctx, tx, workspace, id, nextRunAfter, progress, nil)
+		// nil state should be marshaled as null, which is valid
+		assert.NoError(t, err)
+		_ = tx.Commit()
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }

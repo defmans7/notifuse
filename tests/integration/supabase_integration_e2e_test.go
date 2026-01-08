@@ -38,7 +38,7 @@ func TestSupabaseIntegrationE2E(t *testing.T) {
 	suite := testutil.NewIntegrationTestSuite(t, func(cfg *config.Config) testutil.AppInterface {
 		return app.NewApp(cfg)
 	})
-	defer suite.Cleanup()
+	defer func() { suite.Cleanup() }()
 
 	client := suite.APIClient
 	factory := suite.DataFactory
@@ -112,7 +112,7 @@ func testSupabaseInstallation(t *testing.T, suite *testutil.IntegrationTestSuite
 
 	resp, err := client.Post("/api/workspaces.createIntegration", createReq)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -134,7 +134,7 @@ func testSupabaseInstallation(t *testing.T, suite *testutil.IntegrationTestSuite
 			"id": workspaceID,
 		})
 		require.NoError(t, err)
-		defer getResp.Body.Close()
+		defer func() { _ = getResp.Body.Close() }()
 
 		var getResponse map[string]interface{}
 		err = json.NewDecoder(getResp.Body).Decode(&getResponse)
@@ -173,7 +173,7 @@ func testSupabaseInstallation(t *testing.T, suite *testutil.IntegrationTestSuite
 	t.Run("Verify Templates Created", func(t *testing.T) {
 		// Get all templates for the workspace
 		systemCtx := context.WithValue(context.Background(), domain.SystemCallKey, true)
-		templates, err := suite.ServerManager.GetApp().GetTemplateRepository().GetTemplates(systemCtx, workspaceID, "")
+		templates, err := suite.ServerManager.GetApp().GetTemplateRepository().GetTemplates(systemCtx, workspaceID, "", "")
 		require.NoError(t, err)
 
 		// Filter templates by integration_id
@@ -276,7 +276,7 @@ func testSupabaseInstallation(t *testing.T, suite *testutil.IntegrationTestSuite
 
 		// Verify notification templates link to the created templates
 		systemCtx = context.WithValue(context.Background(), domain.SystemCallKey, true)
-		templates, err := suite.ServerManager.GetApp().GetTemplateRepository().GetTemplates(systemCtx, workspaceID, "")
+		templates, err := suite.ServerManager.GetApp().GetTemplateRepository().GetTemplates(systemCtx, workspaceID, "", "")
 		require.NoError(t, err)
 
 		// Build a map of template IDs
@@ -396,7 +396,7 @@ func testAuthEmailWebhooks(t *testing.T, suite *testutil.IntegrationTestSuite, w
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			// Verify response
 			assert.Equal(t, http.StatusOK, resp.StatusCode, "Webhook should be accepted with valid signature")
@@ -511,7 +511,7 @@ func testBeforeUserCreatedWebhook(t *testing.T, suite *testutil.IntegrationTestS
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Verify response - should always return 204 No Content
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Webhook should return 204 to not block user creation")
@@ -596,7 +596,7 @@ func testBeforeUserCreatedWebhook(t *testing.T, suite *testutil.IntegrationTestS
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should still return 204 even with processing errors
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Webhook should return 204 even on errors to not block user creation")
@@ -648,7 +648,7 @@ func testWebhookPayloadValidation(t *testing.T, suite *testutil.IntegrationTestS
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should return 400 for invalid payload structure
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -709,7 +709,7 @@ func testWebhookPayloadValidation(t *testing.T, suite *testutil.IntegrationTestS
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should process successfully and return 204
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
@@ -769,7 +769,7 @@ func testWebhookSignatureValidation(t *testing.T, suite *testutil.IntegrationTes
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
@@ -793,7 +793,7 @@ func testWebhookSignatureValidation(t *testing.T, suite *testutil.IntegrationTes
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -813,7 +813,7 @@ func testWebhookSignatureValidation(t *testing.T, suite *testutil.IntegrationTes
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -832,7 +832,7 @@ func testWebhookSignatureValidation(t *testing.T, suite *testutil.IntegrationTes
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -853,7 +853,7 @@ func testWebhookSignatureValidation(t *testing.T, suite *testutil.IntegrationTes
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -880,7 +880,7 @@ func testWebhookSignatureValidation(t *testing.T, suite *testutil.IntegrationTes
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should reject expired timestamp
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -931,7 +931,7 @@ func setupSupabaseIntegrationForWebhooks(t *testing.T, suite *testutil.Integrati
 		nil, // templateService not needed for template/notification creation
 		suite.ServerManager.GetApp().GetTransactionalNotificationRepository(),
 		nil, // transactionalService not needed for template/notification creation
-		nil, // webhookEventRepo not needed for template/notification creation
+		nil, // inboundWebhookEventRepo not needed for template/notification creation
 		suite.ServerManager.GetApp().GetLogger(),
 	)
 
@@ -988,7 +988,7 @@ func setupSupabaseIntegrationWithUserCreatedHook(t *testing.T, suite *testutil.I
 		nil, // templateService not needed for template/notification creation
 		suite.ServerManager.GetApp().GetTransactionalNotificationRepository(),
 		nil, // transactionalService not needed for template/notification creation
-		nil, // webhookEventRepo not needed for template/notification creation
+		nil, // inboundWebhookEventRepo not needed for template/notification creation
 		suite.ServerManager.GetApp().GetLogger(),
 	)
 
@@ -1093,7 +1093,7 @@ func testRejectDisposableEmail(t *testing.T, suite *testutil.IntegrationTestSuit
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should return 400 Bad Request when disposable email is rejected
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Disposable email should be rejected with 400")
@@ -1199,7 +1199,7 @@ func testRejectDisposableEmail(t *testing.T, suite *testutil.IntegrationTestSuit
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should return 204 No Content for valid email
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Valid email should be accepted")
@@ -1297,7 +1297,7 @@ func testRejectDisposableEmail(t *testing.T, suite *testutil.IntegrationTestSuit
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Should return 204 No Content even for disposable email when disabled
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Disposable email should be accepted when rejection is disabled")

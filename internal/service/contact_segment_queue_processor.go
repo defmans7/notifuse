@@ -54,7 +54,9 @@ func (p *ContactSegmentQueueProcessor) ProcessQueue(ctx context.Context, workspa
 	if err != nil {
 		return 0, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Rollback if not committed
+	defer func() {
+		_ = tx.Rollback()
+	}() // Rollback if not committed
 
 	// Get pending emails (locks them with FOR UPDATE SKIP LOCKED)
 	emails, err := p.getPendingEmailsInTx(ctx, tx, p.batchSize)
@@ -152,7 +154,9 @@ func (p *ContactSegmentQueueProcessor) getPendingEmailsInTx(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending emails: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var emails []string
 	for rows.Next() {
@@ -176,9 +180,6 @@ func (p *ContactSegmentQueueProcessor) removeBatchFromQueueInTx(ctx context.Cont
 		return nil
 	}
 
-	// Import pq for array support
-	query := `DELETE FROM contact_segment_queue WHERE email = ANY($1)`
-
 	// Convert emails to a format compatible with pq.Array
 	emailsArray := make([]interface{}, len(emails))
 	for i, email := range emails {
@@ -196,7 +197,7 @@ func (p *ContactSegmentQueueProcessor) removeBatchFromQueueInTx(ctx context.Cont
 		args[i] = email
 	}
 
-	query = fmt.Sprintf("DELETE FROM contact_segment_queue WHERE email IN (%s)", placeholders)
+	query := fmt.Sprintf("DELETE FROM contact_segment_queue WHERE email IN (%s)", placeholders)
 
 	_, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -263,7 +264,9 @@ func (p *ContactSegmentQueueProcessor) processContact(ctx context.Context, works
 	if err != nil {
 		return fmt.Errorf("failed to evaluate segments: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	matchingSegments := make(map[string]bool)
 	for rows.Next() {

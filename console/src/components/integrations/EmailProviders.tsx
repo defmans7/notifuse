@@ -1,5 +1,3 @@
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faEnvelope } from '@fortawesome/free-solid-svg-icons'
 import { IntegrationType, EmailProviderKind } from '../../services/api/types'
 import React from 'react'
 
@@ -44,18 +42,24 @@ export const getProviderIcon = (
   if (source === 'supabase') {
     return (
       <img
-        src="/supabase.png"
+        src="/console/supabase.png"
         alt="Supabase"
-        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-8 object-contain inline-block'}`.trim()}
+        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-6 object-contain inline-block'}`.trim()}
       />
     )
   }
 
   return (
-    <FontAwesomeIcon
-      icon={faEnvelope}
-      className={`${size === 'small' ? 'w-5 h-5' : 'w-16'}`.trim()}
-    />
+    <span
+      style={{
+        fontWeight: 700,
+        fontSize: size === 'small' ? 12 : 16,
+        fontFamily: 'monospace',
+        color: '#666'
+      }}
+    >
+      SMTP
+    </span>
   )
 }
 
@@ -65,10 +69,17 @@ export const emailProviders: ProviderInfo[] = [
     kind: 'smtp',
     name: 'SMTP',
     getIcon: (className = '', size = 'small') => (
-      <FontAwesomeIcon
-        icon={faEnvelope}
-        className={`${size === 'small' ? 'w-5 h-5' : 'w-16'} ${className}`.trim()}
-      />
+      <span
+        className={className}
+        style={{
+          fontWeight: 700,
+          fontSize: size === 'small' ? 12 : 16,
+          fontFamily: 'monospace',
+          color: '#666'
+        }}
+      >
+        SMTP
+      </span>
     )
   },
   {
@@ -77,9 +88,9 @@ export const emailProviders: ProviderInfo[] = [
     name: 'Amazon SES',
     getIcon: (className = '', size = 'small') => (
       <img
-        src="/amazonses.png"
+        src="/console/amazonses.png"
         alt="Amazon SES"
-        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-8 object-contain inline-block'} ${className}`.trim()}
+        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-5 object-contain inline-block'} ${className}`.trim()}
       />
     )
   },
@@ -89,9 +100,9 @@ export const emailProviders: ProviderInfo[] = [
     name: 'SparkPost',
     getIcon: (className = '', size = 'small') => (
       <img
-        src="/sparkpost.png"
+        src="/console/sparkpost.png"
         alt="SparkPost"
-        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-8 object-contain inline-block'} ${className}`.trim()}
+        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-6 object-contain inline-block'} ${className}`.trim()}
       />
     )
   },
@@ -101,9 +112,9 @@ export const emailProviders: ProviderInfo[] = [
     name: 'Postmark',
     getIcon: (className = '', size = 'small') => (
       <img
-        src="/postmark.png"
+        src="/console/postmark.png"
         alt="Postmark"
-        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-8 object-contain inline-block'} ${className}`.trim()}
+        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-5 object-contain inline-block'} ${className}`.trim()}
       />
     )
   },
@@ -113,9 +124,9 @@ export const emailProviders: ProviderInfo[] = [
     name: 'Mailgun',
     getIcon: (className = '', size = 'small') => (
       <img
-        src="/mailgun.png"
+        src="/console/mailgun.png"
         alt="Mailgun"
-        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-8 object-contain inline-block'} ${className}`.trim()}
+        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-6 object-contain inline-block'} ${className}`.trim()}
       />
     )
   },
@@ -125,9 +136,9 @@ export const emailProviders: ProviderInfo[] = [
     name: 'Mailjet',
     getIcon: (className = '', size = 'small') => (
       <img
-        src="/mailjet.png"
+        src="/console/mailjet.png"
         alt="Mailjet"
-        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-8 object-contain inline-block'} ${className}`.trim()}
+        className={`${size === 'small' ? 'h-3 object-contain inline-block' : 'h-6 object-contain inline-block'} ${className}`.trim()}
       />
     )
   }

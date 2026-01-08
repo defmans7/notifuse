@@ -24,6 +24,32 @@ func NewContactTimelineRepository(workspaceRepo domain.WorkspaceRepository) *Con
 	}
 }
 
+// Create inserts a new timeline entry
+func (r *ContactTimelineRepository) Create(ctx context.Context, workspaceID string, entry *domain.ContactTimelineEntry) error {
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	changesJSON, err := json.Marshal(entry.Changes)
+	if err != nil {
+		return fmt.Errorf("failed to marshal changes: %w", err)
+	}
+
+	query := `
+		INSERT INTO contact_timeline (email, operation, entity_type, kind, entity_id, changes, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	_, err = workspaceDB.ExecContext(ctx, query,
+		entry.Email, entry.Operation, entry.EntityType, entry.Kind,
+		entry.EntityID, changesJSON, entry.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to create timeline entry: %w", err)
+	}
+
+	return nil
+}
+
 // List retrieves timeline entries for a contact with cursor-based pagination
 func (r *ContactTimelineRepository) List(ctx context.Context, workspaceID string, email string, limit int, cursor *string) ([]*domain.ContactTimelineEntry, *string, error) {
 	// Get the workspace database connection
@@ -78,7 +104,7 @@ func (r *ContactTimelineRepository) List(ctx context.Context, workspaceID string
 					'clicked_at', mh.clicked_at,
 					'message_data', mh.message_data
 				)
-			WHEN ct.entity_type = 'webhook_event' THEN json_build_object(
+			WHEN ct.entity_type = 'inbound_webhook_event' THEN json_build_object(
 				'id', we.id,
 				'type', we.type,
 				'source', we.source,
@@ -92,6 +118,10 @@ func (r *ContactTimelineRepository) List(ctx context.Context, workspaceID string
 				'template_version', mh_we.template_version,
 				'template_name', t_we.name
 			)
+			WHEN ct.entity_type = 'automation' THEN (
+				SELECT json_build_object('id', a.id, 'name', a.name, 'status', a.status)
+				FROM automations a WHERE a.id = ct.entity_id
+			)
 				ELSE NULL
 			END as entity_data
 		FROM contact_timeline ct
@@ -100,9 +130,9 @@ func (r *ContactTimelineRepository) List(ctx context.Context, workspaceID string
 		LEFT JOIN lists l ON cl.list_id = l.id
 		LEFT JOIN message_history mh ON ct.entity_type = 'message_history' AND ct.entity_id = mh.id
 		LEFT JOIN templates t_mh ON ct.entity_type = 'message_history' AND mh.template_id = t_mh.id AND mh.template_version = t_mh.version
-		LEFT JOIN webhook_events we ON ct.entity_type = 'webhook_event' AND (ct.entity_id = we.message_id OR ct.entity_id = we.id::text)
-		LEFT JOIN message_history mh_we ON ct.entity_type = 'webhook_event' AND we.message_id = mh_we.id
-		LEFT JOIN templates t_we ON ct.entity_type = 'webhook_event' AND mh_we.template_id = t_we.id AND mh_we.template_version = t_we.version
+		LEFT JOIN inbound_webhook_events we ON ct.entity_type = 'inbound_webhook_event' AND (ct.entity_id = we.message_id OR ct.entity_id = we.id::text)
+		LEFT JOIN message_history mh_we ON ct.entity_type = 'inbound_webhook_event' AND we.message_id = mh_we.id
+		LEFT JOIN templates t_we ON ct.entity_type = 'inbound_webhook_event' AND mh_we.template_id = t_we.id AND mh_we.template_version = t_we.version
 		WHERE ct.email = $1
 	`
 
@@ -141,7 +171,7 @@ func (r *ContactTimelineRepository) List(ctx context.Context, workspaceID string
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query timeline: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Parse results
 	var entries []*domain.ContactTimelineEntry

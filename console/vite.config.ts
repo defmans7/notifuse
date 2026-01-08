@@ -12,7 +12,8 @@ const __dirname = dirname(__filename)
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()] as any,
+  base: '/console/',
+  plugins: [react(), tailwindcss()],
   server: {
     host: 'notifusedev.com',
     https: {
@@ -23,7 +24,14 @@ export default defineConfig({
       '/config.js': {
         target: 'https://localapi.notifuse.com:4000',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => path.replace(/^\/console/, '')
+      },
+      '/console/config.js': {
+        target: 'https://localapi.notifuse.com:4000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/console/, '')
       }
     }
   },

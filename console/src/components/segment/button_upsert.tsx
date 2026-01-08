@@ -28,20 +28,22 @@ import {
   previewSegment,
   CreateSegmentRequest,
   UpdateSegmentRequest,
-  PreviewSegmentRequest
+  PreviewSegmentRequest,
+  PreviewSegmentResponse,
+  TreeNode,
+  DimensionFilter
 } from '../../services/api/segment'
 import { TIMEZONE_OPTIONS } from '../../lib/timezones'
 import { TableSchemas } from './table_schemas'
-import { Workspace } from '../../services/api/types'
 
 // Helper function to check if a tree contains relative date filters
-const treeHasRelativeDates = (tree: any): boolean => {
+const treeHasRelativeDates = (tree: TreeNode | null | undefined): boolean => {
   if (!tree) return false
 
   if (tree.kind === 'branch') {
     // Check all child leaves recursively
     if (tree.branch?.leaves) {
-      return tree.branch.leaves.some((leaf: any) => treeHasRelativeDates(leaf))
+      return tree.branch.leaves.some((leaf: TreeNode) => treeHasRelativeDates(leaf))
     }
     return false
   }
@@ -56,7 +58,7 @@ const treeHasRelativeDates = (tree: any): boolean => {
     // Check contact property filters for relative date operators
     if (tree.leaf?.contact?.filters) {
       const hasRelativeDateFilter = tree.leaf.contact.filters.some(
-        (filter: any) => filter.operator === 'in_the_last_days'
+        (filter: DimensionFilter) => (filter.operator as string) === 'in_the_last_days'
       )
       if (hasRelativeDateFilter) {
         return true
@@ -110,36 +112,48 @@ const ButtonUpsertSegment = (props: {
 const DrawerSegment = (props: {
   segment?: Segment
   totalContacts?: number
-  setDrawserVisible: any
+  setDrawserVisible: (visible: boolean) => void
   onSuccess?: () => void
 }) => {
-  const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId' })
   const { workspaces } = useAuth()
-  const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [previewedData, setPreviewedData] = useState<string | undefined>() // track the tree hash to avoid re-render
-  const [previewResponse, setPreviewResponse] = useState<any>()
+  const [previewResponse, setPreviewResponse] = useState<PreviewSegmentResponse | undefined>()
 
   // Find the current workspace
-  useEffect(() => {
+  const workspace = useMemo(() => {
     if (workspaceId && workspaces.length > 0) {
-      const ws = workspaces.find((w) => w.id === workspaceId)
-      if (ws) {
-        setWorkspace(ws)
-      }
+      return workspaces.find((w) => w.id === workspaceId) || null
     }
+    return null
   }, [workspaceId, workspaces])
 
-  // Log the tree when the drawer opens
+  // Auto-preview when editing an existing segment
   useEffect(() => {
-    if (props.segment?.tree) {
-      console.log('Segment tree:', props.segment.tree)
-    } else {
-      console.log('New segment - empty tree')
+    if (props.segment?.tree && workspaceId && HasLeaf(props.segment.tree)) {
+      // Trigger preview automatically for existing segments
+      const autoPreview = async () => {
+        setLoadingPreview(true)
+        const requestData: PreviewSegmentRequest = {
+          workspace_id: workspaceId,
+          tree: props.segment!.tree,
+          limit: 100
+        }
+        setPreviewedData(JSON.stringify(requestData))
+        try {
+          const res = await previewSegment(requestData)
+          setPreviewResponse(res)
+        } catch (error) {
+          console.error('Auto-preview error:', error)
+        }
+        setLoadingPreview(false)
+      }
+      autoPreview()
     }
-  }, [])
+  }, [props.segment?.tree, workspaceId])
 
   // Fetch lists for the current workspace
   const { data: listsData } = useQuery({
@@ -166,11 +180,7 @@ const DrawerSegment = (props: {
 
     try {
       const res = await previewSegment(requestData)
-      setPreviewResponse({
-        count: res.total_count,
-        sql: res.generated_sql,
-        args: res.sql_args
-      })
+      setPreviewResponse(res)
       setLoadingPreview(false)
     } catch (error) {
       console.error('Preview error:', error)
@@ -194,7 +204,7 @@ const DrawerSegment = (props: {
     props.segment
   )
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: { name: string; color: string; tree: TreeNode; timezone: string }) => {
     if (loading || !workspaceId) return
 
     setLoading(true)
@@ -253,7 +263,8 @@ const DrawerSegment = (props: {
     return {
       contacts: TableSchemas.contacts,
       contact_lists: TableSchemas.contact_lists,
-      contact_timeline: TableSchemas.contact_timeline
+      contact_timeline: TableSchemas.contact_timeline,
+      custom_events_goals: TableSchemas.custom_events_goals
     }
   }, [])
 
@@ -292,115 +303,115 @@ const DrawerSegment = (props: {
         >
           <Row gutter={24}>
             <Col span={18}>
-              <Form.Item name="name" label="Name" rules={[{ required: true, type: 'string' }]}>
-                <Input
-                  placeholder="i.e: Big spenders..."
-                  addonAfter={
-                    <Form.Item noStyle name="color">
-                      <Select
-                        style={{ width: 150 }}
-                        options={[
-                          {
-                            label: (
-                              <Tag bordered={false} color="magenta">
-                                magenta
-                              </Tag>
-                            ),
-                            value: 'magenta'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="red">
-                                red
-                              </Tag>
-                            ),
-                            value: 'red'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="volcano">
-                                volcano
-                              </Tag>
-                            ),
-                            value: 'volcano'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="orange">
-                                orange
-                              </Tag>
-                            ),
-                            value: 'orange'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="gold">
-                                gold
-                              </Tag>
-                            ),
-                            value: 'gold'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="lime">
-                                lime
-                              </Tag>
-                            ),
-                            value: 'lime'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="green">
-                                green
-                              </Tag>
-                            ),
-                            value: 'green'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="cyan">
-                                cyan
-                              </Tag>
-                            ),
-                            value: 'cyan'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="blue">
-                                blue
-                              </Tag>
-                            ),
-                            value: 'blue'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="geekblue">
-                                geekblue
-                              </Tag>
-                            ),
-                            value: 'geekblue'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="purple">
-                                purple
-                              </Tag>
-                            ),
-                            value: 'purple'
-                          },
-                          {
-                            label: (
-                              <Tag bordered={false} color="grey">
-                                grey
-                              </Tag>
-                            ),
-                            value: 'grey'
-                          }
-                        ]}
-                      ></Select>
-                    </Form.Item>
-                  }
-                />
+              <Form.Item label="Name" required>
+                <Space.Compact style={{ width: '100%' }}>
+                  <Form.Item name="name" noStyle rules={[{ required: true, type: 'string' }]}>
+                    <Input placeholder="i.e: Big spenders..." style={{ flex: 1 }} />
+                  </Form.Item>
+                  <Form.Item noStyle name="color">
+                    <Select
+                      style={{ width: 150 }}
+                      options={[
+                        {
+                          label: (
+                            <Tag bordered={false} color="magenta">
+                              magenta
+                            </Tag>
+                          ),
+                          value: 'magenta'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="red">
+                              red
+                            </Tag>
+                          ),
+                          value: 'red'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="volcano">
+                              volcano
+                            </Tag>
+                          ),
+                          value: 'volcano'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="orange">
+                              orange
+                            </Tag>
+                          ),
+                          value: 'orange'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="gold">
+                              gold
+                            </Tag>
+                          ),
+                          value: 'gold'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="lime">
+                              lime
+                            </Tag>
+                          ),
+                          value: 'lime'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="green">
+                              green
+                            </Tag>
+                          ),
+                          value: 'green'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="cyan">
+                              cyan
+                            </Tag>
+                          ),
+                          value: 'cyan'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="blue">
+                              blue
+                            </Tag>
+                          ),
+                          value: 'blue'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="geekblue">
+                              geekblue
+                            </Tag>
+                          ),
+                          value: 'geekblue'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="purple">
+                              purple
+                            </Tag>
+                          ),
+                          value: 'purple'
+                        },
+                        {
+                          label: (
+                            <Tag bordered={false} color="grey">
+                              grey
+                            </Tag>
+                          ),
+                          value: 'grey'
+                        }
+                      ]}
+                    />
+                  </Form.Item>
+                </Space.Compact>
               </Form.Item>
 
               <Form.Item
@@ -413,10 +424,10 @@ const DrawerSegment = (props: {
                   placeholder="Select a time zone"
                   allowClear={false}
                   showSearch={true}
-                  filterOption={(input: string, option: any) => {
+                  filterOption={(input: string, option) => {
                     if (!input || !option) return true
                     const label = option.label || option.value || ''
-                    return label.toString().toLowerCase().includes(input.toLowerCase())
+                    return String(label).toLowerCase().includes(input.toLowerCase())
                   }}
                   optionFilterProp="label"
                   options={TIMEZONE_OPTIONS}
@@ -499,12 +510,12 @@ const DrawerSegment = (props: {
                         size={150}
                       />
                     )
-                  } else if (previewResponse && previewResponse.count >= 0) {
+                  } else if (previewResponse && previewResponse.total_count >= 0) {
                     const content =
-                      previewResponse.count === 0 ? (
+                      previewResponse.total_count === 0 ? (
                         <>0 contacts</>
                       ) : (
-                        <span className="text-base">{previewResponse.count} contacts</span>
+                        <span className="text-base">{previewResponse.total_count} contacts</span>
                       )
 
                     // Calculate percentage based on total contacts
@@ -512,10 +523,10 @@ const DrawerSegment = (props: {
                     if (
                       props.totalContacts &&
                       props.totalContacts > 0 &&
-                      previewResponse.count > 0
+                      previewResponse.total_count > 0
                     ) {
-                      percent = Math.min(100, (previewResponse.count / props.totalContacts) * 100)
-                    } else if (previewResponse.count > 0) {
+                      percent = Math.min(100, (previewResponse.total_count / props.totalContacts) * 100)
+                    } else if (previewResponse.total_count > 0) {
                       // Fallback to fixed percentage if total is not available
                       percent = 50
                     }
@@ -539,9 +550,9 @@ const DrawerSegment = (props: {
                           content={
                             <div style={{ width: 600, maxHeight: 600, overflow: 'auto' }}>
                               <p>
-                                <strong>Matching contacts:</strong> {previewResponse.count}
+                                <strong>Matching contacts:</strong> {previewResponse.total_count}
                               </p>
-                              {previewResponse.sql && (
+                              {previewResponse.generated_sql && (
                                 <>
                                   <p>
                                     <strong>Generated SQL:</strong>
@@ -556,11 +567,11 @@ const DrawerSegment = (props: {
                                       maxHeight: '200px'
                                     }}
                                   >
-                                    {previewResponse.sql}
+                                    {previewResponse.generated_sql}
                                   </pre>
                                 </>
                               )}
-                              {previewResponse.args && previewResponse.args.length > 0 && (
+                              {previewResponse.sql_args && previewResponse.sql_args.length > 0 && (
                                 <>
                                   <p>
                                     <strong>SQL Arguments:</strong>
@@ -575,7 +586,7 @@ const DrawerSegment = (props: {
                                       maxHeight: '100px'
                                     }}
                                   >
-                                    {JSON.stringify(previewResponse.args, null, 2)}
+                                    {JSON.stringify(previewResponse.sql_args, null, 2)}
                                   </pre>
                                 </>
                               )}
@@ -623,7 +634,11 @@ const DrawerSegment = (props: {
               }
             ]}
           >
-            <TreeNodeInput schemas={schemas} lists={lists} />
+            <TreeNodeInput
+              schemas={schemas}
+              lists={lists}
+              customFieldLabels={workspace?.settings?.custom_field_labels}
+            />
           </Form.Item>
         </Form>
       </>

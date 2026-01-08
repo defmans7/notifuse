@@ -21,7 +21,7 @@ func TestConnectionPoolLifecycle(t *testing.T) {
 	t.Run("pool initialization", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		// Test system connection is established
 		systemDB, err := pool.GetSystemConnection()
@@ -40,7 +40,7 @@ func TestConnectionPoolLifecycle(t *testing.T) {
 	t.Run("workspace pool creation", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_lifecycle_create"
 
@@ -70,7 +70,7 @@ func TestConnectionPoolLifecycle(t *testing.T) {
 	t.Run("workspace pool reuse", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_lifecycle_reuse"
 
@@ -96,7 +96,7 @@ func TestConnectionPoolLifecycle(t *testing.T) {
 	t.Run("workspace pool cleanup", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_lifecycle_cleanup"
 
@@ -189,8 +189,8 @@ func TestConnectionPoolLifecycle(t *testing.T) {
 
 		pool1 := testutil.NewTestConnectionPool(config)
 		pool2 := testutil.NewTestConnectionPool(config)
-		defer pool1.Cleanup()
-		defer pool2.Cleanup()
+		defer func() { _ = pool1.Cleanup() }()
+		defer func() { _ = pool2.Cleanup() }()
 
 		workspaceID1 := "test_lifecycle_isolated_1"
 		workspaceID2 := "test_lifecycle_isolated_2"
@@ -232,7 +232,7 @@ func TestConnectionPoolManagerIsolation(t *testing.T) {
 	t.Run("isolated pools per test", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		manager := testutil.NewTestConnectionPoolManager()
-		defer manager.CleanupAll()
+		defer func() { _ = manager.CleanupAll() }()
 
 		// Create pools for different "tests"
 		pool1 := manager.GetOrCreatePool("test1", config)
@@ -254,7 +254,7 @@ func TestConnectionPoolManagerIsolation(t *testing.T) {
 	t.Run("cleanup specific pool", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		manager := testutil.NewTestConnectionPoolManager()
-		defer manager.CleanupAll()
+		defer func() { _ = manager.CleanupAll() }()
 
 		pool1 := manager.GetOrCreatePool("test1", config)
 		pool2 := manager.GetOrCreatePool("test2", config)
@@ -309,7 +309,7 @@ func TestConnectionPoolMetrics(t *testing.T) {
 	t.Run("metrics tracking", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		// Create metrics tracker
 		metrics := testutil.NewConnectionPoolMetrics("test_metrics", 0)

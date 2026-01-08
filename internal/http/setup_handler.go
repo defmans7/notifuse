@@ -58,6 +58,7 @@ type InitializeRequest struct {
 	SMTPPassword           string `json:"smtp_password"`
 	SMTPFromEmail          string `json:"smtp_from_email"`
 	SMTPFromName           string `json:"smtp_from_name"`
+	SMTPUseTLS             *bool  `json:"smtp_use_tls"`
 	TelemetryEnabled       bool   `json:"telemetry_enabled"`
 	CheckForUpdates        bool   `json:"check_for_updates"`
 	SMTPRelayEnabled       bool   `json:"smtp_relay_enabled"`
@@ -79,6 +80,7 @@ type TestSMTPRequest struct {
 	SMTPPort     int    `json:"smtp_port"`
 	SMTPUsername string `json:"smtp_username"`
 	SMTPPassword string `json:"smtp_password"`
+	SMTPUseTLS   *bool  `json:"smtp_use_tls"`
 }
 
 // TestSMTPResponse represents the SMTP connection test response
@@ -114,7 +116,7 @@ func (h *SetupHandler) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // Initialize completes the setup wizard
@@ -142,7 +144,7 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -163,6 +165,12 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 		req.APIEndpoint = fmt.Sprintf("%s://%s", scheme, r.Host)
 	}
 
+	// Default TLS to true if not specified
+	smtpUseTLS := true
+	if req.SMTPUseTLS != nil {
+		smtpUseTLS = *req.SMTPUseTLS
+	}
+
 	// Convert request to service config
 	setupConfig := &service.SetupConfig{
 		RootEmail:              req.RootEmail,
@@ -173,6 +181,7 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 		SMTPPassword:           req.SMTPPassword,
 		SMTPFromEmail:          req.SMTPFromEmail,
 		SMTPFromName:           req.SMTPFromName,
+		SMTPUseTLS:             smtpUseTLS,
 		TelemetryEnabled:       req.TelemetryEnabled,
 		CheckForUpdates:        req.CheckForUpdates,
 		SMTPRelayEnabled:       req.SMTPRelayEnabled,
@@ -197,7 +206,7 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 
 	// Flush the response to ensure client receives it before shutdown
 	if flusher, ok := w.(http.Flusher); ok {
@@ -244,12 +253,19 @@ func (h *SetupHandler) TestSMTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default TLS to true if not specified
+	useTLS := true
+	if req.SMTPUseTLS != nil {
+		useTLS = *req.SMTPUseTLS
+	}
+
 	// Test SMTP connection using service
 	testConfig := &service.SMTPTestConfig{
 		Host:     req.SMTPHost,
 		Port:     req.SMTPPort,
 		Username: req.SMTPUsername,
 		Password: req.SMTPPassword,
+		UseTLS:   useTLS,
 	}
 
 	if err := h.setupService.TestSMTPConnection(ctx, testConfig); err != nil {
@@ -264,7 +280,7 @@ func (h *SetupHandler) TestSMTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // RegisterRoutes registers the setup handler routes

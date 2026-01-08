@@ -37,7 +37,7 @@ const { Title, Paragraph, Text } = Typography
 const getIntegrationIcon = (integrationType: string) => {
   switch (integrationType) {
     case 'supabase':
-      return <img src="/supabase.png" alt="Supabase" className="h-3" />
+      return <img src="/console/supabase.png" alt="Supabase" className="h-3" />
     default:
       return <FontAwesomeIcon icon={faTerminal} className="text-gray-600" />
   }
@@ -49,10 +49,10 @@ interface TemplatesSearch {
 }
 
 export function TemplatesPage() {
-  const { workspaceId } = useParams({ from: '/workspace/$workspaceId/templates' })
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId/templates' })
   // Use useSearch to get query params
-  const search = useSearch({ from: '/workspace/$workspaceId/templates' }) as TemplatesSearch
-  const navigate = useNavigate({ from: '/workspace/$workspaceId/templates' })
+  const search = useSearch({ from: '/console/workspace/$workspaceId/templates' }) as TemplatesSearch
+  const navigate = useNavigate({ from: '/console/workspace/$workspaceId/templates' })
   const queryClient = useQueryClient()
   const { workspaces } = useAuth()
   const { permissions } = useWorkspacePermissions(workspaceId)
@@ -88,6 +88,7 @@ export function TemplatesPage() {
     if (workspaces.length > 0) {
       const currentWorkspace = workspaces.find((w) => w.id === workspaceId)
       if (currentWorkspace) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setWorkspace(currentWorkspace)
       }
     }
@@ -97,8 +98,9 @@ export function TemplatesPage() {
     // Use selectedCategory from search params in queryKey
     queryKey: ['templates', workspaceId, selectedCategory],
     queryFn: () => {
-      const params: { workspace_id: string; category?: string } = {
-        workspace_id: workspaceId
+      const params: { workspace_id: string; category?: string; channel?: string } = {
+        workspace_id: workspaceId,
+        channel: 'email'
       }
       if (selectedCategory !== 'all') {
         params.category = selectedCategory
@@ -114,7 +116,7 @@ export function TemplatesPage() {
       // Use selectedCategory from search params in invalidation
       queryClient.invalidateQueries({ queryKey: ['templates', workspaceId, selectedCategory] })
     },
-    onError: (error: any) => {
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
       const errorMsg = error?.response?.data?.error || error.message
       message.error(`Failed to delete template: ${errorMsg}`)
     }
@@ -173,7 +175,7 @@ export function TemplatesPage() {
     {
       title: 'Sender',
       key: 'sender',
-      render: (_: any, record: Template) => {
+      render: (_: unknown, record: Template) => {
         if (workspace && record.email?.sender_id) {
           const isMarketing = record.category === 'marketing'
           const emailProvider = isMarketing ? marketingEmailProvider : transactionalEmailProvider
@@ -227,7 +229,7 @@ export function TemplatesPage() {
     {
       title: '',
       key: 'actions',
-      render: (_: any, record: Template) => (
+      render: (_: unknown, record: Template) => (
         <Space>
           {workspace && (
             <Tooltip

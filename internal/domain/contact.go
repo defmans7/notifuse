@@ -33,6 +33,7 @@ type Contact struct {
 	Language     *NullableString `json:"language,omitempty" valid:"optional"`
 	FirstName    *NullableString `json:"first_name,omitempty" valid:"optional"`
 	LastName     *NullableString `json:"last_name,omitempty" valid:"optional"`
+	FullName     *NullableString `json:"full_name,omitempty" valid:"optional"`
 	Phone        *NullableString `json:"phone,omitempty" valid:"optional"`
 	AddressLine1 *NullableString `json:"address_line_1,omitempty" valid:"optional"`
 	AddressLine2 *NullableString `json:"address_line_2,omitempty" valid:"optional"`
@@ -40,11 +41,6 @@ type Contact struct {
 	Postcode     *NullableString `json:"postcode,omitempty" valid:"optional"`
 	State        *NullableString `json:"state,omitempty" valid:"optional"`
 	JobTitle     *NullableString `json:"job_title,omitempty" valid:"optional"`
-
-	// Commerce related fields
-	LifetimeValue *NullableFloat64 `json:"lifetime_value,omitempty" valid:"optional"`
-	OrdersCount   *NullableFloat64 `json:"orders_count,omitempty" valid:"optional"`
-	LastOrderAt   *NullableTime    `json:"last_order_at,omitempty" valid:"optional"`
 
 	// Custom fields
 	CustomString1 *NullableString `json:"custom_string_1,omitempty" valid:"optional"`
@@ -122,6 +118,7 @@ type dbContact struct {
 
 	FirstName    sql.NullString
 	LastName     sql.NullString
+	FullName     sql.NullString
 	Phone        sql.NullString
 	AddressLine1 sql.NullString
 	AddressLine2 sql.NullString
@@ -129,10 +126,6 @@ type dbContact struct {
 	Postcode     sql.NullString
 	State        sql.NullString
 	JobTitle     sql.NullString
-
-	LifetimeValue sql.NullFloat64
-	OrdersCount   sql.NullFloat64
-	LastOrderAt   sql.NullTime
 
 	CustomString1 sql.NullString
 	CustomString2 sql.NullString
@@ -178,6 +171,7 @@ func ScanContact(scanner interface {
 		&dbc.Language,
 		&dbc.FirstName,
 		&dbc.LastName,
+		&dbc.FullName,
 		&dbc.Phone,
 		&dbc.AddressLine1,
 		&dbc.AddressLine2,
@@ -185,9 +179,6 @@ func ScanContact(scanner interface {
 		&dbc.Postcode,
 		&dbc.State,
 		&dbc.JobTitle,
-		&dbc.LifetimeValue,
-		&dbc.OrdersCount,
-		&dbc.LastOrderAt,
 		&dbc.CustomString1,
 		&dbc.CustomString2,
 		&dbc.CustomString3,
@@ -245,6 +236,10 @@ func ScanContact(scanner interface {
 		c.LastName = &NullableString{String: dbc.LastName.String, IsNull: false}
 	}
 
+	if dbc.FullName.Valid {
+		c.FullName = &NullableString{String: dbc.FullName.String, IsNull: false}
+	}
+
 	if dbc.Phone.Valid {
 		c.Phone = &NullableString{String: dbc.Phone.String, IsNull: false}
 	}
@@ -271,18 +266,6 @@ func ScanContact(scanner interface {
 
 	if dbc.JobTitle.Valid {
 		c.JobTitle = &NullableString{String: dbc.JobTitle.String, IsNull: false}
-	}
-
-	if dbc.LifetimeValue.Valid {
-		c.LifetimeValue = &NullableFloat64{Float64: dbc.LifetimeValue.Float64, IsNull: false}
-	}
-
-	if dbc.OrdersCount.Valid {
-		c.OrdersCount = &NullableFloat64{Float64: dbc.OrdersCount.Float64, IsNull: false}
-	}
-
-	if dbc.LastOrderAt.Valid {
-		c.LastOrderAt = &NullableTime{Time: dbc.LastOrderAt.Time, IsNull: false}
 	}
 
 	if dbc.CustomString1.Valid {
@@ -390,6 +373,7 @@ type GetContactsRequest struct {
 	ExternalID        string   `json:"external_id,omitempty" valid:"optional"`
 	FirstName         string   `json:"first_name,omitempty" valid:"optional"`
 	LastName          string   `json:"last_name,omitempty" valid:"optional"`
+	FullName          string   `json:"full_name,omitempty" valid:"optional"`
 	Phone             string   `json:"phone,omitempty" valid:"optional"`
 	Country           string   `json:"country,omitempty" valid:"optional"`
 	Language          string   `json:"language,omitempty" valid:"optional"`
@@ -412,6 +396,7 @@ func (r *GetContactsRequest) FromQueryParams(params url.Values) error {
 	r.ExternalID = params.Get("external_id")
 	r.FirstName = params.Get("first_name")
 	r.LastName = params.Get("last_name")
+	r.FullName = params.Get("full_name")
 	r.Phone = params.Get("phone")
 	r.Country = params.Get("country")
 	r.Language = params.Get("language")
@@ -640,7 +625,8 @@ type ContactRepository interface {
 	BulkUpsertContacts(ctx context.Context, workspaceID string, contacts []*Contact) ([]BulkUpsertResult, error)
 
 	// GetContactsForBroadcast retrieves contacts based on broadcast audience settings
-	GetContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings, limit int, offset int) ([]*ContactWithList, error)
+	// Uses cursor-based pagination: afterEmail is the last email from the previous batch (empty for first batch)
+	GetContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings, limit int, afterEmail string) ([]*ContactWithList, error)
 
 	// CountContactsForBroadcast counts contacts based on broadcast audience settings
 	CountContactsForBroadcast(ctx context.Context, workspaceID string, audience AudienceSettings) (int, error)
@@ -700,6 +686,9 @@ func FromJSON(data interface{}) (*Contact, error) {
 	if err := parseNullableString(jsonResult, "last_name", &contact.LastName); err != nil {
 		return nil, err
 	}
+	if err := parseNullableString(jsonResult, "full_name", &contact.FullName); err != nil {
+		return nil, err
+	}
 	if err := parseNullableString(jsonResult, "phone", &contact.Phone); err != nil {
 		return nil, err
 	}
@@ -739,14 +728,6 @@ func FromJSON(data interface{}) (*Contact, error) {
 		return nil, err
 	}
 
-	// Parse nullable number fields
-	if err := parseNullableFloat(jsonResult, "lifetime_value", &contact.LifetimeValue); err != nil {
-		return nil, err
-	}
-	if err := parseNullableFloat(jsonResult, "orders_count", &contact.OrdersCount); err != nil {
-		return nil, err
-	}
-
 	// Parse custom number fields
 	if err := parseNullableFloat(jsonResult, "custom_number_1", &contact.CustomNumber1); err != nil {
 		return nil, err
@@ -761,11 +742,6 @@ func FromJSON(data interface{}) (*Contact, error) {
 		return nil, err
 	}
 	if err := parseNullableFloat(jsonResult, "custom_number_5", &contact.CustomNumber5); err != nil {
-		return nil, err
-	}
-
-	// Parse date fields
-	if err := parseNullableTime(jsonResult, "last_order_at", &contact.LastOrderAt); err != nil {
 		return nil, err
 	}
 
@@ -835,11 +811,12 @@ func FromJSON(data interface{}) (*Contact, error) {
 // Helper functions for parsing nullable fields from JSON
 func parseNullableString(result gjson.Result, field string, target **NullableString) error {
 	if value := result.Get(field); value.Exists() {
-		if value.Type == gjson.Null {
+		switch value.Type {
+		case gjson.Null:
 			*target = &NullableString{IsNull: true}
-		} else if value.Type == gjson.String {
+		case gjson.String:
 			*target = &NullableString{String: value.String(), IsNull: false}
-		} else {
+		default:
 			return fmt.Errorf("invalid type for %s: expected string, got %s", field, value.Type)
 		}
 	}
@@ -848,11 +825,12 @@ func parseNullableString(result gjson.Result, field string, target **NullableStr
 
 func parseNullableFloat(result gjson.Result, field string, target **NullableFloat64) error {
 	if value := result.Get(field); value.Exists() {
-		if value.Type == gjson.Null {
+		switch value.Type {
+		case gjson.Null:
 			*target = &NullableFloat64{IsNull: true}
-		} else if value.Type == gjson.Number {
+		case gjson.Number:
 			*target = &NullableFloat64{Float64: value.Float(), IsNull: false}
-		} else {
+		default:
 			return fmt.Errorf("invalid type for %s: expected number, got %s", field, value.Type)
 		}
 	}
@@ -861,15 +839,16 @@ func parseNullableFloat(result gjson.Result, field string, target **NullableFloa
 
 func parseNullableTime(result gjson.Result, field string, target **NullableTime) error {
 	if value := result.Get(field); value.Exists() {
-		if value.Type == gjson.Null {
+		switch value.Type {
+		case gjson.Null:
 			*target = &NullableTime{IsNull: true}
-		} else if value.Type == gjson.String {
+		case gjson.String:
 			t, err := time.Parse(time.RFC3339, value.String())
 			if err != nil {
 				return fmt.Errorf("invalid time format for %s: %v", field, err)
 			}
 			*target = &NullableTime{Time: t, IsNull: false}
-		} else {
+		default:
 			return fmt.Errorf("invalid type for %s: expected string, got %s", field, value.Type)
 		}
 	}
@@ -903,6 +882,9 @@ func (c *Contact) Merge(other *Contact) {
 	if other.LastName != nil {
 		c.LastName = other.LastName
 	}
+	if other.FullName != nil {
+		c.FullName = other.FullName
+	}
 	if other.Phone != nil {
 		c.Phone = other.Phone
 	}
@@ -923,17 +905,6 @@ func (c *Contact) Merge(other *Contact) {
 	}
 	if other.JobTitle != nil {
 		c.JobTitle = other.JobTitle
-	}
-
-	// Commerce related fields
-	if other.LifetimeValue != nil {
-		c.LifetimeValue = other.LifetimeValue
-	}
-	if other.OrdersCount != nil {
-		c.OrdersCount = other.OrdersCount
-	}
-	if other.LastOrderAt != nil {
-		c.LastOrderAt = other.LastOrderAt
 	}
 
 	// Custom string fields

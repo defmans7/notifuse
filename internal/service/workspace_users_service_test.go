@@ -12,8 +12,7 @@ import (
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/Notifuse/notifuse/internal/domain/mocks"
-	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
+	mocks "github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 )
 
@@ -28,10 +27,10 @@ func TestWorkspaceService_AddUserToWorkspace(t *testing.T) {
 	mockAuthSvc := mocks.NewMockAuthService(ctrl)
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
-	mockListService := domainmocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
-	mockWebhookRegService := domainmocks.NewMockWebhookRegistrationService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 	cfg := &config.Config{}
 
 	service := NewWorkspaceService(
@@ -49,6 +48,9 @@ func TestWorkspaceService_AddUserToWorkspace(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	ctx := context.Background()
@@ -155,9 +157,9 @@ func TestWorkspaceService_RemoveUserFromWorkspace(t *testing.T) {
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
-	mockWebhookRegService := domainmocks.NewMockWebhookRegistrationService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 	cfg := &config.Config{}
 
 	service := NewWorkspaceService(
@@ -175,6 +177,9 @@ func TestWorkspaceService_RemoveUserFromWorkspace(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -321,9 +326,9 @@ func TestWorkspaceService_TransferOwnership(t *testing.T) {
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
-	mockWebhookRegService := domainmocks.NewMockWebhookRegistrationService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 	cfg := &config.Config{}
 
 	service := NewWorkspaceService(
@@ -341,6 +346,9 @@ func TestWorkspaceService_TransferOwnership(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	ctx := context.Background()
@@ -499,9 +507,9 @@ func TestWorkspaceService_GetWorkspaceMembersWithEmail(t *testing.T) {
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
-	mockWebhookRegService := domainmocks.NewMockWebhookRegistrationService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 	cfg := &config.Config{}
 
 	service := NewWorkspaceService(
@@ -519,6 +527,9 @@ func TestWorkspaceService_GetWorkspaceMembersWithEmail(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	ctx := context.Background()
@@ -635,9 +646,9 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
-	mockWebhookRegService := domainmocks.NewMockWebhookRegistrationService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 	cfg := &config.Config{
 		Environment: "development",
 	}
@@ -657,6 +668,9 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Set up mockLogger to allow any calls
@@ -915,9 +929,9 @@ func TestWorkspaceService_CreateAPIKey(t *testing.T) {
 	mockMailer := pkgmocks.NewMockMailer(ctrl)
 	mockContactService := mocks.NewMockContactService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
-	mockContactListService := domainmocks.NewMockContactListService(ctrl)
-	mockTemplateService := domainmocks.NewMockTemplateService(ctrl)
-	mockWebhookRegService := domainmocks.NewMockWebhookRegistrationService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 	cfg := &config.Config{APIEndpoint: "https://api.example.com/v1"}
 
 	ctx := context.Background()
@@ -956,6 +970,9 @@ func TestWorkspaceService_CreateAPIKey(t *testing.T) {
 			mockTemplateService,
 			mockWebhookRegService,
 			"secret_key",
+			&SupabaseService{},
+			&DNSVerificationService{},
+			&BlogService{},
 		)
 
 		// Set up mock expectations
@@ -1023,6 +1040,9 @@ func TestWorkspaceService_CreateAPIKey(t *testing.T) {
 			mockTemplateService,
 			mockWebhookRegService,
 			"secret_key",
+			&SupabaseService{},
+			&DNSVerificationService{},
+			&BlogService{},
 		)
 
 		mockAuthSvc.EXPECT().
@@ -1059,6 +1079,9 @@ func TestWorkspaceService_CreateAPIKey(t *testing.T) {
 			mockTemplateService,
 			mockWebhookRegService,
 			"secret_key",
+			&SupabaseService{},
+			&DNSVerificationService{},
+			&BlogService{},
 		)
 
 		mockAuthSvc.EXPECT().
@@ -1104,6 +1127,9 @@ func TestWorkspaceService_CreateAPIKey(t *testing.T) {
 			mockTemplateService,
 			mockWebhookRegService,
 			"secret_key",
+			&SupabaseService{},
+			&DNSVerificationService{},
+			&BlogService{},
 		)
 
 		mockAuthSvc.EXPECT().
@@ -1153,6 +1179,9 @@ func TestWorkspaceService_CreateAPIKey(t *testing.T) {
 			mockTemplateService,
 			mockWebhookRegService,
 			"secret_key",
+			&SupabaseService{},
+			&DNSVerificationService{},
+			&BlogService{},
 		)
 
 		mockAuthSvc.EXPECT().

@@ -15,9 +15,9 @@ import {
   MenuProps
 } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { templatesApi } from '../../services/api/template'
-import { workspaceService } from '../../services/api/workspace'
-import type { Template, Workspace, TemplateBlock } from '../../services/api/types'
+import { templatesApi, type CreateTemplateRequest, type UpdateTemplateRequest } from '../../services/api/template'
+import { templateBlocksApi } from '../../services/api/template_blocks'
+import type { Template, Workspace } from '../../services/api/types'
 import EmailBuilder from '../email_builder/EmailBuilder'
 import type { EmailBlock } from '../email_builder/types'
 import type { PreviewRef } from '../email_builder/panels/Preview'
@@ -29,6 +29,9 @@ import { faQuestion } from '@fortawesome/free-solid-svg-icons'
 import { Tour } from 'antd'
 import { ImportExportButton } from './ImportExportButton'
 import { useAuth } from '../../contexts/AuthContext'
+import { EmailAIAssistant } from '../email_builder/EmailAIAssistant'
+import { EmailBlockClass } from '../email_builder/EmailBlockClass'
+import type { MJMLComponentType } from '../email_builder/types'
 
 /**
  * Validates liquid template tags in a string to ensure they are properly closed
@@ -86,7 +89,7 @@ interface CreateTemplateDrawerProps {
   workspace: Workspace
   template?: Template
   fromTemplate?: Template
-  buttonProps?: any
+  buttonProps?: Record<string, unknown>
   buttonContent?: React.ReactNode
   onClose?: () => void
   forceCategory?: string
@@ -198,11 +201,12 @@ export function CreateTemplateDrawer({
     return createDefaultBlocks()
   })
 
-  // Add Form.useWatch for the email fields
+  // Add Form.useWatch for the email fields - must be called before conditional returns
   const senderID = Form.useWatch(['email', 'sender_id'], form)
   const emailSubject = Form.useWatch(['email', 'subject'], form)
   const emailPreview = Form.useWatch(['email', 'subject_preview'], form)
-  const categoryValue = forceCategory || Form.useWatch(['category'], form)
+  const watchedCategory = Form.useWatch(['category'], form)
+  const categoryValue = forceCategory || watchedCategory
 
   const emailProvider = useMemo(() => {
     const providerId =
@@ -219,41 +223,18 @@ export function CreateTemplateDrawer({
     return null
   }, [emailProvider, senderID])
 
-  const updateWorkspaceMutation = useMutation({
-    mutationFn: (updatedSettings: any) => {
-      return workspaceService.update({
-        id: workspace.id,
-        name: workspace.name,
-        settings: updatedSettings
-      })
-    },
-    onSuccess: async () => {
-      // Invalidate workspace query to refetch latest data
-      queryClient.invalidateQueries({ queryKey: ['workspace', workspace.id] })
-      message.success('Template block saved successfully')
-
-      // Refresh workspaces in AuthContext to immediately update the workspace state
-      // This ensures the EmailBuilder shows the saved blocks without requiring a page refresh
-      await refreshWorkspaces()
-    },
-    onError: (error: any) => {
-      console.error('Failed to update workspace:', error)
-      message.error('Failed to save template block')
-    }
-  })
-
   const createTemplateMutation = useMutation({
-    mutationFn: (values: any) => {
+    mutationFn: (values: Record<string, unknown>) => {
       if (template) {
         return templatesApi.update({
-          ...values,
+          ...(values as Omit<UpdateTemplateRequest, 'channel' | 'workspace_id' | 'id'>),
           channel: 'email',
           workspace_id: workspace.id,
           id: template.id
         })
       } else {
         return templatesApi.create({
-          ...values,
+          ...(values as Omit<CreateTemplateRequest, 'channel' | 'workspace_id'>),
           channel: 'email',
           workspace_id: workspace.id
         })
@@ -272,7 +253,7 @@ export function CreateTemplateDrawer({
   })
 
   const defaultTestData = useMemo(() => {
-    const endpoint = workspace.settings?.custom_endpoint_url || window.API_ENDPOINT
+    const endpoint = workspace.settings.custom_endpoint_url || window.API_ENDPOINT
     // These example values show available template variables for preview
     // Note: Preview links (mid=preview) show a "Preview Mode" message in the notification center
     // Real emails use secure HMACs for authentication
@@ -290,7 +271,7 @@ export function CreateTemplateDrawer({
       confirm_subscription_url: `${endpoint}/notification-center?action=confirm&email=john.doe@example.com&lid=newsletter&lname=Newsletter&wid=${workspace.id}&mid=preview&email_hmac=abc123`,
       notification_center_url: `${endpoint}/notification-center?email=john.doe@example.com&email_hmac=abc123&wid=${workspace.id}`
     }
-  }, [workspace.settings?.custom_endpoint_url, workspace.id])
+  }, [workspace.settings.custom_endpoint_url, workspace.id])
 
   const showDrawer = () => {
     if (template) {
@@ -367,44 +348,50 @@ export function CreateTemplateDrawer({
     nameOrId: string
   ) => {
     try {
-      const currentTemplateBlocks = workspace.settings.template_blocks || []
-      let updatedTemplateBlocks: TemplateBlock[]
-
       if (operation === 'create') {
         // Create new template block
-        const newTemplateBlock: TemplateBlock = {
-          id: '', // Will be generated by the backend
+        await templateBlocksApi.create({
+          workspace_id: workspace.id,
           name: nameOrId,
-          block: block,
-          created: new Date().toISOString(),
-          updated: new Date().toISOString()
-        }
-        updatedTemplateBlocks = [...currentTemplateBlocks, newTemplateBlock]
+          block: block
+        })
+        message.success(`Template block "${nameOrId}" saved successfully`)
       } else if (operation === 'update') {
         // Update existing template block
-        updatedTemplateBlocks = currentTemplateBlocks.map((templateBlock) =>
-          templateBlock.id === nameOrId
-            ? { ...templateBlock, block: block, updated: new Date().toISOString() }
-            : templateBlock
-        )
+        const existingBlock = workspace.settings.template_blocks?.find((b) => b.id === nameOrId)
+        if (!existingBlock) {
+          message.error('Template block not found')
+          return
+        }
+        await templateBlocksApi.update({
+          workspace_id: workspace.id,
+          id: nameOrId,
+          name: existingBlock.name, // Preserve the existing name
+          block: block
+        })
+        message.success(`Template block "${existingBlock.name}" updated successfully`)
       } else if (operation === 'delete') {
         // Delete template block
-        updatedTemplateBlocks = currentTemplateBlocks.filter(
-          (templateBlock) => templateBlock.id !== nameOrId
-        )
+        await templateBlocksApi.delete({
+          workspace_id: workspace.id,
+          id: nameOrId
+        })
+        const existingBlock = workspace.settings.template_blocks?.find((b) => b.id === nameOrId)
+        message.success(`Template block "${existingBlock?.name || nameOrId}" deleted successfully`)
       } else {
         return // Invalid operation
       }
 
-      // Update workspace settings with new template blocks
-      const updatedSettings = {
-        ...workspace.settings,
-        template_blocks: updatedTemplateBlocks
-      }
+      // Invalidate workspace query to refetch latest data
+      queryClient.invalidateQueries({ queryKey: ['workspace', workspace.id] })
 
-      await updateWorkspaceMutation.mutateAsync(updatedSettings)
+      // Refresh workspaces in AuthContext to immediately update the workspace state
+      // This ensures the EmailBuilder shows the saved blocks without requiring a page refresh
+      await refreshWorkspaces()
     } catch (error) {
       console.error('Failed to save template block:', error)
+      const err = error as Error
+      message.error(err?.message || 'Failed to save template block')
     }
   }
 
@@ -479,7 +466,7 @@ export function CreateTemplateDrawer({
             }}
             onFinishFailed={(info) => {
               if (info.errorFields) {
-                info.errorFields.forEach((field: any) => {
+                info.errorFields.forEach((field) => {
                   // field.name can be an array, so we need to concatenate the array into a string
                   const fieldName = field.name.join('.')
                   if (
@@ -516,7 +503,7 @@ export function CreateTemplateDrawer({
                 onChange={(k) => setTab(k)}
                 style={{ display: 'inline-block' }}
                 className="tabs-in-header"
-                destroyInactiveTabPane={false}
+                destroyOnHidden={false}
                 items={[
                   {
                     key: 'settings',
@@ -537,7 +524,7 @@ export function CreateTemplateDrawer({
                       <Form.Item name="name" label="Template name" rules={[{ required: true }]}>
                         <Input
                           placeholder="i.e: Welcome Email"
-                          onChange={(e: any) => {
+                          onChange={(e) => {
                             if (!template) {
                               const id = kebabCase(e.target.value)
                               form.setFieldsValue({ id: id })
@@ -566,7 +553,7 @@ export function CreateTemplateDrawer({
                                 try {
                                   await templatesApi.get({ workspace_id: workspace.id, id: value })
                                   return Promise.reject('Template ID already exists')
-                                } catch (error) {
+                                } catch {
                                   return Promise.resolve()
                                 }
                               }
@@ -713,13 +700,17 @@ export function CreateTemplateDrawer({
                       <EmailBuilder
                         tree={visualEditorTree}
                         onTreeChange={setVisualEditorTree}
-                        onCompile={async (tree: EmailBlock, testData?: any) => {
+                        onCompile={async (
+                          tree: EmailBlock,
+                          testData?: Record<string, unknown>
+                        ) => {
                           try {
                             const response = await templatesApi.compile({
                               workspace_id: workspace.id,
                               message_id: 'preview',
-                              visual_editor_tree: tree as any,
+                              visual_editor_tree: tree,
                               test_data: testData || {},
+                              channel: 'email',
                               tracking_settings: {
                                 enable_tracking:
                                   workspace.settings?.email_tracking_enabled || false,
@@ -733,7 +724,7 @@ export function CreateTemplateDrawer({
                               return {
                                 html: '',
                                 mjml: response.mjml || '',
-                                errors: [response.error]
+                                errors: [response.error as unknown as Record<string, unknown>]
                               }
                             }
 
@@ -742,12 +733,13 @@ export function CreateTemplateDrawer({
                               mjml: response.mjml || '',
                               errors: []
                             }
-                          } catch (error: any) {
+                          } catch (error) {
                             console.error('Compilation error:', error)
+                            const err = error as Error
                             return {
                               html: '',
                               mjml: '',
-                              errors: [{ message: error.message || 'Compilation failed' }]
+                              errors: [{ message: err.message || 'Compilation failed' }]
                             }
                           }
                         }}
@@ -809,7 +801,8 @@ export function CreateTemplateDrawer({
             onChange={(current) => {
               // Change email builder state based on tour step
               switch (current) {
-                case 2: // Edit panel step (0-indexed)
+                case 2: {
+                  // Edit panel step (0-indexed)
                   // Select the body block to demonstrate block selection
                   const bodyBlock = visualEditorTree.children?.find(
                     (child) => child.type === 'mj-body'
@@ -819,6 +812,7 @@ export function CreateTemplateDrawer({
                   }
                   setForcedViewMode('edit')
                   break
+                }
                 case 4: // Preview step (0-indexed)
                 case 5: // Mobile/Desktop preview step
                   // Automatically switch to preview mode when reaching the preview steps
@@ -852,9 +846,9 @@ export function CreateTemplateDrawer({
                 target: null // Center of screen
               },
               {
-                title: 'Email Structure Tree',
+                title: 'Content Structure Tree',
                 description:
-                  'This is your email structure tree. You can drag and drop blocks to reorganize your email layout. Click the + buttons to add new blocks, or drag blocks from one section to another.',
+                  'This is your content structure tree. You can drag and drop blocks to reorganize your email layout. Click the + buttons to add new blocks, or drag blocks from one section to another.',
                 target: () => treePanelRef.current!,
                 placement: 'right' as const
               },
@@ -914,6 +908,93 @@ export function CreateTemplateDrawer({
               </span>
             )}
           />
+
+          {/* AI Email Assistant - persists across tab switches */}
+          <EmailAIAssistant
+              hidden={tab !== 'template'}
+              workspace={workspace}
+              currentSubject={emailSubject}
+              currentPreviewText={emailPreview}
+              onUpdateSubject={(subject) => form.setFieldValue(['email', 'subject'], subject)}
+              onUpdatePreviewText={(preview) => form.setFieldValue(['email', 'subject_preview'], preview)}
+              callbacks={{
+                getEmailTree: () => visualEditorTree,
+                setEmailTree: setVisualEditorTree,
+                onAddBlock: (parentId, blockType, position, content, attributes) => {
+                  // Use functional updater to ensure we have the latest state
+                  setVisualEditorTree(prevTree => {
+                    // Create a new block with defaults
+                    const newBlock = EmailBlockClass.createBlock(
+                      blockType as MJMLComponentType,
+                      undefined,
+                      content,
+                      prevTree
+                    )
+                    // Apply custom attributes if provided
+                    if (attributes) {
+                      newBlock.attributes = { ...newBlock.attributes, ...attributes }
+                    }
+                    // Insert into tree
+                    const updatedTree = EmailBlockClass.insertBlockIntoTree(
+                      prevTree,
+                      parentId,
+                      newBlock,
+                      position ?? (prevTree.children?.length || 0)
+                    )
+                    if (updatedTree) {
+                      // Schedule selection update after state is applied
+                      setTimeout(() => setSelectedBlockId(newBlock.id), 0)
+                      return updatedTree
+                    }
+                    return prevTree
+                  })
+                },
+                onUpdateBlock: (blockId, updates) => {
+                  // Use functional updater to ensure atomic updates
+                  setVisualEditorTree(prevTree => {
+                    const updatedTree = JSON.parse(JSON.stringify(prevTree)) as EmailBlock
+                    const block = EmailBlockClass.findBlockById(updatedTree, blockId)
+                    if (block) {
+                      if (updates.attributes) {
+                        block.attributes = { ...block.attributes, ...updates.attributes }
+                      }
+                      if (updates.content !== undefined) {
+                        block.content = updates.content
+                      }
+                      return updatedTree
+                    }
+                    return prevTree
+                  })
+                },
+                onDeleteBlock: (blockId) => {
+                  setVisualEditorTree(prevTree => {
+                    const updatedTree = EmailBlockClass.removeBlockFromTree(prevTree, blockId)
+                    if (updatedTree) {
+                      // Clear selection if deleted block was selected
+                      if (selectedBlockId === blockId) {
+                        setTimeout(() => setSelectedBlockId(null), 0)
+                      }
+                      return updatedTree
+                    }
+                    return prevTree
+                  })
+                },
+                onMoveBlock: (blockId, newParentId, position) => {
+                  setVisualEditorTree(prevTree => {
+                    const updatedTree = EmailBlockClass.moveBlockInTree(
+                      prevTree,
+                      blockId,
+                      newParentId,
+                      position
+                    )
+                    return updatedTree || prevTree
+                  })
+                },
+                onSelectBlock: (blockId) => {
+                  setSelectedBlockId(blockId)
+                }
+              }}
+            />
         </Drawer>
       )}
     </>

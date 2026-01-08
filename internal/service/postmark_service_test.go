@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -1572,7 +1573,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 
 		// Verify results
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Postmark provider is not configured")
+		assert.Contains(t, err.Error(), "postmark provider is not configured")
 	})
 
 	t.Run("Empty server token", func(t *testing.T) {
@@ -1605,7 +1606,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 
 		// Verify results
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Postmark server token is required")
+		assert.Contains(t, err.Error(), "postmark server token is required")
 	})
 
 	t.Run("HTTP client error", func(t *testing.T) {
@@ -1681,7 +1682,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 
 		// Verify results
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Postmark API error")
+		assert.Contains(t, err.Error(), "postmark API error")
 	})
 
 	t.Run("Error reading response body", func(t *testing.T) {
@@ -2129,7 +2130,7 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 
 		// Verify error handling
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Postmark API error")
+		assert.Contains(t, err.Error(), "postmark API error")
 	})
 
 	t.Run("Email with attachment without ContentType", func(t *testing.T) {
@@ -2194,6 +2195,145 @@ func TestPostmarkService_SendEmail(t *testing.T) {
 						Disposition: "attachment",
 					},
 				},
+			},
+		}
+		err := service.SendEmail(context.Background(), request)
+
+		// Verify results
+		assert.NoError(t, err)
+	})
+
+	t.Run("with RFC-8058 List-Unsubscribe headers", func(t *testing.T) {
+		// Setup
+		service, httpClient, _, _ := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+
+		// Provider config
+		providerConfig := &domain.EmailProvider{
+			Kind: domain.EmailProviderKindPostmark,
+			Postmark: &domain.PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+		}
+
+		// Expect HTTP request
+		httpClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request body
+				body, _ := io.ReadAll(req.Body)
+				var requestBody map[string]interface{}
+				err := json.Unmarshal(body, &requestBody)
+				require.NoError(t, err)
+
+				// Check for RFC-8058 List-Unsubscribe headers
+				headers, ok := requestBody["Headers"].([]interface{})
+				assert.True(t, ok, "Headers should be present")
+				assert.Len(t, headers, 2)
+
+				// Verify header values
+				var foundListUnsubscribe, foundListUnsubscribePost bool
+				for _, h := range headers {
+					header := h.(map[string]interface{})
+					name := header["Name"].(string)
+					value := header["Value"].(string)
+					if name == "List-Unsubscribe" {
+						assert.Equal(t, "<https://example.com/unsubscribe/abc123>", value)
+						foundListUnsubscribe = true
+					}
+					if name == "List-Unsubscribe-Post" {
+						assert.Equal(t, "List-Unsubscribe=One-Click", value)
+						foundListUnsubscribePost = true
+					}
+				}
+				assert.True(t, foundListUnsubscribe, "List-Unsubscribe header should be present")
+				assert.True(t, foundListUnsubscribePost, "List-Unsubscribe-Post header should be present")
+
+				return createMockResponse(http.StatusOK, `{"MessageID":"12345"}`), nil
+			})
+
+		// Call the method
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   "sender@example.com",
+			FromName:      "Sender",
+			To:            "recipient@example.com",
+			Subject:       "Subject",
+			Content:       "Content",
+			Provider:      providerConfig,
+			EmailOptions: domain.EmailOptions{
+				ListUnsubscribeURL: "https://example.com/unsubscribe/abc123",
+			},
+		}
+		err := service.SendEmail(context.Background(), request)
+
+		// Verify results
+		assert.NoError(t, err)
+	})
+
+	t.Run("with RFC-8058 List-Unsubscribe headers and attachments", func(t *testing.T) {
+		// Setup
+		service, httpClient, _, mockLogger := setupPostmarkTest(t)
+		workspaceID := "workspace-123"
+		base64Content := base64.StdEncoding.EncodeToString([]byte("Hello World"))
+
+		// Provider config
+		providerConfig := &domain.EmailProvider{
+			Kind: domain.EmailProviderKindPostmark,
+			Postmark: &domain.PostmarkSettings{
+				ServerToken: "test-server-token",
+			},
+		}
+
+		// Allow logger calls for attachment debugging
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		// Expect HTTP request
+		httpClient.EXPECT().
+			Do(gomock.Any()).
+			DoAndReturn(func(req *http.Request) (*http.Response, error) {
+				// Verify request body
+				body, _ := io.ReadAll(req.Body)
+				var requestBody map[string]interface{}
+				err := json.Unmarshal(body, &requestBody)
+				require.NoError(t, err)
+
+				// Check for RFC-8058 List-Unsubscribe headers
+				headers, ok := requestBody["Headers"].([]interface{})
+				assert.True(t, ok, "Headers should be present")
+				assert.Len(t, headers, 2)
+
+				// Check for attachments
+				attachments, ok := requestBody["Attachments"].([]interface{})
+				assert.True(t, ok, "Attachments should be present")
+				assert.Len(t, attachments, 1)
+
+				return createMockResponse(http.StatusOK, `{"MessageID":"12345"}`), nil
+			})
+
+		// Call the method
+		request := domain.SendEmailProviderRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: "test-integration-id",
+			MessageID:     "test-message-id",
+			FromAddress:   "sender@example.com",
+			FromName:      "Sender",
+			To:            "recipient@example.com",
+			Subject:       "Subject",
+			Content:       "Content",
+			Provider:      providerConfig,
+			EmailOptions: domain.EmailOptions{
+				Attachments: []domain.Attachment{
+					{
+						Filename:    "test.txt",
+						Content:     base64Content,
+						ContentType: "text/plain",
+						Disposition: "attachment",
+					},
+				},
+				ListUnsubscribeURL: "https://example.com/unsubscribe/xyz789",
 			},
 		}
 		err := service.SendEmail(context.Background(), request)

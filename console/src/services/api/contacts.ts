@@ -7,6 +7,7 @@ export interface ListContactsRequest {
   external_id?: string
   first_name?: string
   last_name?: string
+  full_name?: string
   phone?: string
   country?: string
   language?: string
@@ -26,6 +27,7 @@ export interface Contact {
   language?: string
   first_name?: string
   last_name?: string
+  full_name?: string
   phone?: string
   address_line_1?: string
   address_line_2?: string
@@ -33,10 +35,6 @@ export interface Contact {
   postcode?: string
   state?: string
   job_title?: string
-
-  lifetime_value?: number
-  orders_count?: number
-  last_order_at?: string
 
   custom_string_1?: string
   custom_string_2?: string
@@ -56,11 +54,11 @@ export interface Contact {
   custom_datetime_4?: string
   custom_datetime_5?: string
 
-  custom_json_1?: any
-  custom_json_2?: any
-  custom_json_3?: any
-  custom_json_4?: any
-  custom_json_5?: any
+  custom_json_1?: unknown
+  custom_json_2?: unknown
+  custom_json_3?: unknown
+  custom_json_4?: unknown
+  custom_json_5?: unknown
 
   created_at: string
   updated_at: string
@@ -123,6 +121,7 @@ export const contactsApi = {
     if (params.external_id) searchParams.append('external_id', params.external_id)
     if (params.first_name) searchParams.append('first_name', params.first_name)
     if (params.last_name) searchParams.append('last_name', params.last_name)
+    if (params.full_name) searchParams.append('full_name', params.full_name)
     if (params.phone) searchParams.append('phone', params.phone)
     if (params.country) searchParams.append('country', params.country)
     if (params.language) searchParams.append('language', params.language)

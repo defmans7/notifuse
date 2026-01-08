@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ func testBroadcast(workspaceID, id string) *domain.Broadcast {
 		ChannelType: "email",
 		Status:      domain.BroadcastStatusDraft,
 		Audience: domain.AudienceSettings{
-			Lists:    []string{"list1"},
+			List:     "list1",
 			Segments: []string{"seg1"},
 		},
 		Schedule: domain.ScheduleSettings{
@@ -61,6 +62,7 @@ type broadcastSvcDeps struct {
 	authService        *domainmocks.MockAuthService
 	eventBus           *domainmocks.MockEventBus
 	messageHistoryRepo *domainmocks.MockMessageHistoryRepository
+	listService        *domainmocks.MockListService
 	svc                *BroadcastService
 }
 
@@ -78,6 +80,7 @@ func setupBroadcastSvc(t *testing.T) *broadcastSvcDeps {
 	authService := domainmocks.NewMockAuthService(ctrl)
 	eventBus := domainmocks.NewMockEventBus(ctrl)
 	messageHistoryRepo := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	listService := domainmocks.NewMockListService(ctrl)
 
 	// use real no-op logger
 	log := logger.NewLoggerWithLevel("disabled")
@@ -94,6 +97,7 @@ func setupBroadcastSvc(t *testing.T) *broadcastSvcDeps {
 		authService,
 		eventBus,
 		messageHistoryRepo,
+		listService,
 		"https://api.example.test",
 	)
 
@@ -109,6 +113,7 @@ func setupBroadcastSvc(t *testing.T) *broadcastSvcDeps {
 		authService:        authService,
 		eventBus:           eventBus,
 		messageHistoryRepo: messageHistoryRepo,
+		listService:        listService,
 		svc:                svc,
 	}
 }
@@ -133,8 +138,7 @@ func TestBroadcastService_CreateBroadcast_Success(t *testing.T) {
 	req := &domain.CreateBroadcastRequest{
 		WorkspaceID: "w1",
 		Name:        "My Campaign",
-		Audience:    domain.AudienceSettings{Lists: []string{"list1"}, Segments: []string{"seg1"}},
-		Schedule:    domain.ScheduleSettings{IsScheduled: false},
+		Audience:    domain.AudienceSettings{List: "list1", Segments: []string{"seg1"}},
 	}
 
 	authOK(d.authService, ctx, req.WorkspaceID)
@@ -202,7 +206,7 @@ func TestBroadcastService_PauseBroadcast_Success(t *testing.T) {
 	)
 
 	sending := testBroadcast(req.WorkspaceID, req.ID)
-	sending.Status = domain.BroadcastStatusSending
+	sending.Status = domain.BroadcastStatusProcessing
 	d.repo.EXPECT().GetBroadcastTx(gomock.Any(), gomock.Any(), req.WorkspaceID, req.ID).Return(sending, nil)
 	d.repo.EXPECT().UpdateBroadcastTx(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	d.eventBus.EXPECT().PublishWithAck(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ domain.EventPayload, ack domain.EventAckCallback) { ack(nil) })
@@ -291,9 +295,9 @@ func TestBroadcastService_SendToIndividual_Success(t *testing.T) {
 
 	d.messageHistoryRepo.EXPECT().Create(gomock.Any(), req.WorkspaceID, gomock.Any(), gomock.Any()).Do(
 		func(_ context.Context, _ string, _ string, msg *domain.MessageHistory) {
-			// Verify list_ids is populated from broadcast audience
-			assert.NotNil(t, msg.ListIDs)
-			assert.Equal(t, domain.ListIDs(b.Audience.Lists), msg.ListIDs)
+			// Verify list_id is populated from broadcast audience
+			assert.NotNil(t, msg.ListID)
+			assert.Equal(t, b.Audience.List, *msg.ListID)
 		},
 	).Return(nil)
 
@@ -410,7 +414,7 @@ func TestBroadcastService_UpdateBroadcast_Success(t *testing.T) {
 		WorkspaceID: "w1",
 		ID:          "b1",
 		Name:        "Updated Name",
-		Audience:    domain.AudienceSettings{Lists: []string{"list1"}, Segments: []string{"seg1"}},
+		Audience:    domain.AudienceSettings{List: "list1", Segments: []string{"seg1"}},
 		Schedule:    domain.ScheduleSettings{IsScheduled: false},
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled:    false,
@@ -562,8 +566,7 @@ func TestBroadcastService_CreateBroadcast_RepositoryFailure(t *testing.T) {
 	req := &domain.CreateBroadcastRequest{
 		WorkspaceID: "w1",
 		Name:        "Test",
-		Audience:    domain.AudienceSettings{Lists: []string{"list1"}, Segments: []string{"seg1"}},
-		Schedule:    domain.ScheduleSettings{IsScheduled: false},
+		Audience:    domain.AudienceSettings{List: "list1", Segments: []string{"seg1"}},
 	}
 	authOK(d.authService, ctx, req.WorkspaceID)
 
@@ -669,7 +672,7 @@ func TestBroadcastService_UpdateBroadcast_RepositoryFailure(t *testing.T) {
 		WorkspaceID: "w1",
 		ID:          "b1",
 		Name:        "Updated Name",
-		Audience:    domain.AudienceSettings{Lists: []string{"list1"}, Segments: []string{"seg1"}},
+		Audience:    domain.AudienceSettings{List: "list1", Segments: []string{"seg1"}},
 		Schedule:    domain.ScheduleSettings{IsScheduled: false},
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled:    false,
@@ -889,7 +892,7 @@ func TestBroadcastService_ScheduleBroadcast_InvalidStatus(t *testing.T) {
 		func(_ context.Context, _ string, fn func(*sql.Tx) error) error {
 			// broadcast with invalid status for scheduling
 			broadcast := testBroadcast(req.WorkspaceID, req.ID)
-			broadcast.Status = domain.BroadcastStatusSending // not draft
+			broadcast.Status = domain.BroadcastStatusProcessing // not draft
 			d.repo.EXPECT().GetBroadcastTx(gomock.Any(), gomock.Any(), req.WorkspaceID, req.ID).Return(broadcast, nil)
 			return fn(nil)
 		},
@@ -1063,7 +1066,7 @@ func TestBroadcastService_CancelBroadcast_InvalidStatus(t *testing.T) {
 		func(_ context.Context, _ string, fn func(*sql.Tx) error) error {
 			// broadcast with invalid status for cancelling
 			broadcast := testBroadcast(req.WorkspaceID, req.ID)
-			broadcast.Status = domain.BroadcastStatusSending // not scheduled or paused
+			broadcast.Status = domain.BroadcastStatusProcessing // not scheduled or paused
 			d.repo.EXPECT().GetBroadcastTx(gomock.Any(), gomock.Any(), req.WorkspaceID, req.ID).Return(broadcast, nil)
 			return fn(nil)
 		},
@@ -1126,7 +1129,7 @@ func TestBroadcastService_DeleteBroadcast_SendingStatus(t *testing.T) {
 	authOK(d.authService, ctx, req.WorkspaceID)
 
 	b := testBroadcast(req.WorkspaceID, req.ID)
-	b.Status = domain.BroadcastStatusSending // not deletable
+	b.Status = domain.BroadcastStatusProcessing // not deletable
 	d.repo.EXPECT().GetBroadcast(ctx, req.WorkspaceID, req.ID).Return(b, nil)
 
 	err := d.svc.DeleteBroadcast(ctx, req)
@@ -1834,29 +1837,27 @@ func TestBroadcastService_ScheduleBroadcast_ContextCancellation(t *testing.T) {
 
 // Additional edge case tests
 
-func TestBroadcastService_CreateBroadcast_WithScheduledBroadcast(t *testing.T) {
+func TestBroadcastService_CreateBroadcast_AlwaysCreatesInDraftStatus(t *testing.T) {
 	d := setupBroadcastSvc(t)
 	defer d.ctrl.Finish()
 
 	ctx := context.Background()
+	// Note: Schedule is no longer part of CreateBroadcastRequest
+	// Broadcasts must be scheduled via the broadcasts.schedule endpoint
 	req := &domain.CreateBroadcastRequest{
 		WorkspaceID: "w1",
-		Name:        "Scheduled Campaign",
-		Audience:    domain.AudienceSettings{Lists: []string{"list1"}, Segments: []string{"seg1"}},
-		Schedule: domain.ScheduleSettings{
-			IsScheduled:   true,
-			ScheduledDate: "2024-12-25",
-			ScheduledTime: "10:00",
-			Timezone:      "UTC",
-		},
+		Name:        "New Campaign",
+		Audience:    domain.AudienceSettings{List: "list1", Segments: []string{"seg1"}},
 	}
 
 	authOK(d.authService, ctx, req.WorkspaceID)
 
 	d.repo.EXPECT().CreateBroadcast(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, b *domain.Broadcast) error {
-			// Verify status is set to scheduled for scheduled broadcasts
-			assert.Equal(t, domain.BroadcastStatusScheduled, b.Status)
+			// Verify status is always set to draft on creation
+			assert.Equal(t, domain.BroadcastStatusDraft, b.Status)
+			// Verify schedule is empty (scheduling must be done separately)
+			assert.False(t, b.Schedule.IsScheduled)
 			return nil
 		},
 	)
@@ -1864,7 +1865,7 @@ func TestBroadcastService_CreateBroadcast_WithScheduledBroadcast(t *testing.T) {
 	b, err := d.svc.CreateBroadcast(ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, b)
-	assert.Equal(t, domain.BroadcastStatusScheduled, b.Status)
+	assert.Equal(t, domain.BroadcastStatusDraft, b.Status)
 }
 
 func TestBroadcastService_SendToIndividual_WithContact(t *testing.T) {
@@ -1926,9 +1927,9 @@ func TestBroadcastService_SendToIndividual_WithContact(t *testing.T) {
 
 	d.messageHistoryRepo.EXPECT().Create(gomock.Any(), req.WorkspaceID, gomock.Any(), gomock.Any()).Do(
 		func(_ context.Context, _ string, _ string, msg *domain.MessageHistory) {
-			// Verify list_ids is populated from broadcast audience
-			assert.NotNil(t, msg.ListIDs)
-			assert.Equal(t, domain.ListIDs(b.Audience.Lists), msg.ListIDs)
+			// Verify list_id is populated from broadcast audience
+			assert.NotNil(t, msg.ListID)
+			assert.Equal(t, b.Audience.List, *msg.ListID)
 		},
 	).Return(nil)
 
@@ -2003,9 +2004,9 @@ func TestBroadcastService_SendToIndividual_WithCustomEndpoint(t *testing.T) {
 
 	d.messageHistoryRepo.EXPECT().Create(gomock.Any(), req.WorkspaceID, gomock.Any(), gomock.Any()).Do(
 		func(_ context.Context, _ string, _ string, msg *domain.MessageHistory) {
-			// Verify list_ids is populated from broadcast audience
-			assert.NotNil(t, msg.ListIDs)
-			assert.Equal(t, domain.ListIDs(b.Audience.Lists), msg.ListIDs)
+			// Verify list_id is populated from broadcast audience
+			assert.NotNil(t, msg.ListID)
+			assert.Equal(t, b.Audience.List, *msg.ListID)
 		},
 	).Return(nil)
 
@@ -2057,7 +2058,8 @@ func TestBroadcastService_GetTestResults_WithWinnerAlreadySelected(t *testing.T)
 	b.Status = domain.BroadcastStatusWinnerSelected
 	b.TestSettings.Enabled = true
 	b.TestSettings.AutoSendWinner = false
-	b.WinningTemplate = "tplB" // winner already selected
+	tplB := "tplB"
+	b.WinningTemplate = &tplB // winner already selected
 	b.TestSettings.Variations = []domain.BroadcastVariation{
 		{VariationName: "A", TemplateID: "tplA"},
 		{VariationName: "B", TemplateID: "tplB"},
@@ -2150,7 +2152,7 @@ func TestBroadcastService_SelectWinner_DuringSendingPhase(t *testing.T) {
 	d.repo.EXPECT().WithTransaction(ctx, workspaceID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, fn func(*sql.Tx) error) error {
 			b := testBroadcast(workspaceID, broadcastID)
-			b.Status = domain.BroadcastStatusSending // sending phase
+			b.Status = domain.BroadcastStatusProcessing // sending phase
 			b.TestSettings.Enabled = true
 			b.TestSettings.AutoSendWinner = false // manual selection allowed
 			b.TestSettings.Variations = []domain.BroadcastVariation{{VariationName: "A", TemplateID: templateID}}
@@ -2177,8 +2179,7 @@ func TestBroadcastService_CreateBroadcast_IDGeneration(t *testing.T) {
 	req := &domain.CreateBroadcastRequest{
 		WorkspaceID: "w1",
 		Name:        "Test Campaign",
-		Audience:    domain.AudienceSettings{Lists: []string{"list1"}, Segments: []string{"seg1"}},
-		Schedule:    domain.ScheduleSettings{IsScheduled: false},
+		Audience:    domain.AudienceSettings{List: "list1", Segments: []string{"seg1"}},
 	}
 
 	authOK(d.authService, ctx, req.WorkspaceID)
@@ -2327,12 +2328,63 @@ func TestBroadcastService_SendToIndividual_ContactToMapError(t *testing.T) {
 	d.emailSvc.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
 	d.messageHistoryRepo.EXPECT().Create(gomock.Any(), req.WorkspaceID, gomock.Any(), gomock.Any()).Do(
 		func(_ context.Context, _ string, _ string, msg *domain.MessageHistory) {
-			// Verify list_ids is populated from broadcast audience
-			assert.NotNil(t, msg.ListIDs)
-			assert.Equal(t, domain.ListIDs(b.Audience.Lists), msg.ListIDs)
+			// Verify list_id is populated from broadcast audience
+			assert.NotNil(t, msg.ListID)
+			assert.Equal(t, b.Audience.List, *msg.ListID)
 		},
 	).Return(nil)
 
 	err := d.svc.SendToIndividual(ctx, req)
 	require.NoError(t, err)
+}
+
+func TestValidateSlug(t *testing.T) {
+	// Test ValidateSlug - this was at 0% coverage
+	t.Run("Success - Valid slugs", func(t *testing.T) {
+		validSlugs := []string{
+			"hello-world",
+			"test123",
+			"my-blog-post",
+			"a",
+			"123",
+			"a-b-c-123",
+			strings.Repeat("a", 100), // Max length
+		}
+
+		for _, slug := range validSlugs {
+			err := ValidateSlug(slug)
+			assert.NoError(t, err, "slug '%s' should be valid", slug)
+		}
+	})
+
+	t.Run("Error - Empty slug", func(t *testing.T) {
+		err := ValidateSlug("")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "slug cannot be empty")
+	})
+
+	t.Run("Error - Too long", func(t *testing.T) {
+		longSlug := strings.Repeat("a", 101) // 101 characters
+		err := ValidateSlug(longSlug)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "slug too long")
+	})
+
+	t.Run("Error - Invalid characters", func(t *testing.T) {
+		invalidSlugs := []string{
+			"Hello-World",  // Uppercase
+			"hello world",  // Space
+			"hello_world",  // Underscore
+			"hello.world",  // Dot
+			"hello@world",  // At sign
+			"hello#world",  // Hash
+			"hello world!", // Space and exclamation
+		}
+
+		for _, slug := range invalidSlugs {
+			err := ValidateSlug(slug)
+			assert.Error(t, err, "slug '%s' should be invalid", slug)
+			assert.Contains(t, err.Error(), "lowercase letters, numbers, and hyphens")
+		}
+	})
 }

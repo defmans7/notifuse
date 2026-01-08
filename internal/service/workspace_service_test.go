@@ -16,6 +16,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 )
 
 func TestWorkspaceService_ListWorkspaces(t *testing.T) {
@@ -50,6 +51,9 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	ctx := context.Background()
@@ -147,6 +151,9 @@ func TestWorkspaceService_GetWorkspace(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -268,6 +275,9 @@ func TestWorkspaceService_CreateWorkspace(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -544,6 +554,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -746,6 +759,126 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.NotNil(t, workspace)
 		assert.Equal(t, customFieldLabels, workspace.Settings.CustomFieldLabels)
 	})
+
+	t.Run("preserves template blocks when not provided", func(t *testing.T) {
+		expectedUser := &domain.User{ID: userID}
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a test email block
+		blockJSON := []byte(`{"id":"b1","type":"mj-text","content":"Hello","attributes":{"fontSize":"16px"}}`)
+		testBlock, _ := notifuse_mjml.UnmarshalEmailBlock(blockJSON)
+
+		// Existing workspace with template blocks
+		existingTemplateBlocks := []domain.TemplateBlock{
+			{
+				ID:      "block-1",
+				Name:    "Existing Block",
+				Block:   testBlock,
+				Created: time.Now().Add(-24 * time.Hour),
+				Updated: time.Now().Add(-24 * time.Hour),
+			},
+		}
+
+		existingWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Original Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone:       "UTC",
+				TemplateBlocks: existingTemplateBlocks,
+			},
+		}
+
+		// Update settings without template blocks
+		settings := domain.WorkspaceSettings{
+			Timezone: "America/New_York",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existingWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify template blocks are preserved
+			assert.Len(t, workspace.Settings.TemplateBlocks, 1)
+			assert.Equal(t, "block-1", workspace.Settings.TemplateBlocks[0].ID)
+			assert.Equal(t, "Existing Block", workspace.Settings.TemplateBlocks[0].Name)
+			// Verify timezone was updated
+			assert.Equal(t, "America/New_York", workspace.Settings.Timezone)
+			return nil
+		})
+
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
+		require.NoError(t, err)
+		assert.NotNil(t, workspace)
+		assert.Len(t, workspace.Settings.TemplateBlocks, 1)
+		assert.Equal(t, existingTemplateBlocks[0].ID, workspace.Settings.TemplateBlocks[0].ID)
+	})
+
+	t.Run("updates template blocks when explicitly provided", func(t *testing.T) {
+		expectedUser := &domain.User{ID: userID}
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a test email block
+		blockJSON := []byte(`{"id":"b1","type":"mj-text","content":"Hello","attributes":{"fontSize":"16px"}}`)
+		testBlock, _ := notifuse_mjml.UnmarshalEmailBlock(blockJSON)
+
+		existingWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Original Workspace",
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+				TemplateBlocks: []domain.TemplateBlock{
+					{
+						ID:      "old-block",
+						Name:    "Old Block",
+						Block:   testBlock,
+						Created: time.Now().Add(-24 * time.Hour),
+						Updated: time.Now().Add(-24 * time.Hour),
+					},
+				},
+			},
+		}
+
+		// Update settings with new template blocks
+		newTemplateBlocks := []domain.TemplateBlock{
+			{
+				ID:    "", // New block without ID
+				Name:  "New Block",
+				Block: testBlock,
+			},
+		}
+
+		settings := domain.WorkspaceSettings{
+			Timezone:       "UTC",
+			TemplateBlocks: newTemplateBlocks,
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existingWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify template blocks were updated
+			assert.Len(t, workspace.Settings.TemplateBlocks, 1)
+			assert.NotEmpty(t, workspace.Settings.TemplateBlocks[0].ID) // ID should be generated
+			assert.Equal(t, "New Block", workspace.Settings.TemplateBlocks[0].Name)
+			assert.NotZero(t, workspace.Settings.TemplateBlocks[0].Created)
+			assert.NotZero(t, workspace.Settings.TemplateBlocks[0].Updated)
+			return nil
+		})
+
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
+		require.NoError(t, err)
+		assert.NotNil(t, workspace)
+		assert.Len(t, workspace.Settings.TemplateBlocks, 1)
+		assert.Equal(t, "New Block", workspace.Settings.TemplateBlocks[0].Name)
+	})
 }
 
 func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
@@ -781,6 +914,9 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -1007,6 +1143,9 @@ func TestWorkspaceService_CreateIntegration(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -1157,6 +1296,49 @@ func TestWorkspaceService_CreateIntegration(t *testing.T) {
 		require.Empty(t, integrationID)
 		require.Contains(t, err.Error(), "update error")
 	})
+
+	t.Run("successful create firecrawl integration", func(t *testing.T) {
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:   workspaceID,
+			Name: "Test Workspace",
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify the integration was added to the workspace
+			require.Equal(t, 1, len(workspace.Integrations))
+			require.Equal(t, "My Firecrawl", workspace.Integrations[0].Name)
+			require.Equal(t, domain.IntegrationTypeFirecrawl, workspace.Integrations[0].Type)
+			require.NotNil(t, workspace.Integrations[0].FirecrawlSettings)
+			// API key should be encrypted
+			require.NotEmpty(t, workspace.Integrations[0].FirecrawlSettings.EncryptedAPIKey)
+			require.Empty(t, workspace.Integrations[0].FirecrawlSettings.APIKey) // Plain key should be cleared
+			return nil
+		})
+
+		integrationID, err := service.CreateIntegration(ctx, domain.CreateIntegrationRequest{
+			WorkspaceID: workspaceID,
+			Name:        "My Firecrawl",
+			Type:        domain.IntegrationTypeFirecrawl,
+			FirecrawlSettings: &domain.FirecrawlSettings{
+				APIKey: "fc-test-key",
+			},
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, integrationID)
+	})
 }
 
 func TestWorkspaceService_UpdateIntegration(t *testing.T) {
@@ -1191,6 +1373,9 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -1339,6 +1524,121 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "integration not found")
 	})
+
+	t.Run("successful update firecrawl integration preserves API key", func(t *testing.T) {
+		firecrawlIntegrationID := "firecrawl123"
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with an existing Firecrawl integration
+		existingIntegration := domain.Integration{
+			ID:   firecrawlIntegrationID,
+			Name: "Original Firecrawl",
+			Type: domain.IntegrationTypeFirecrawl,
+			FirecrawlSettings: &domain.FirecrawlSettings{
+				EncryptedAPIKey: "encrypted-existing-key",
+				BaseURL:         "https://custom.firecrawl.dev",
+			},
+			CreatedAt: time.Now().Add(-24 * time.Hour),
+			UpdatedAt: time.Now().Add(-24 * time.Hour),
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: []domain.Integration{existingIntegration},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify the integration was updated
+			require.Equal(t, 1, len(workspace.Integrations))
+			require.Equal(t, firecrawlIntegrationID, workspace.Integrations[0].ID)
+			require.Equal(t, "Updated Firecrawl", workspace.Integrations[0].Name)
+			require.Equal(t, domain.IntegrationTypeFirecrawl, workspace.Integrations[0].Type)
+			// API key should be preserved since no new key was provided
+			require.Equal(t, "encrypted-existing-key", workspace.Integrations[0].FirecrawlSettings.EncryptedAPIKey)
+			// BaseURL should be updated
+			require.Equal(t, "https://new.firecrawl.dev", workspace.Integrations[0].FirecrawlSettings.BaseURL)
+			return nil
+		})
+
+		err := service.UpdateIntegration(ctx, domain.UpdateIntegrationRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: firecrawlIntegrationID,
+			Name:          "Updated Firecrawl",
+			FirecrawlSettings: &domain.FirecrawlSettings{
+				APIKey:  "", // Empty - should preserve existing encrypted key
+				BaseURL: "https://new.firecrawl.dev",
+			},
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("successful update firecrawl integration replaces API key", func(t *testing.T) {
+		firecrawlIntegrationID := "firecrawl456"
+		expectedUser := &domain.User{
+			ID: userID,
+		}
+
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+
+		// Create a workspace with an existing Firecrawl integration
+		existingIntegration := domain.Integration{
+			ID:   firecrawlIntegrationID,
+			Name: "Original Firecrawl",
+			Type: domain.IntegrationTypeFirecrawl,
+			FirecrawlSettings: &domain.FirecrawlSettings{
+				EncryptedAPIKey: "encrypted-old-key",
+			},
+			CreatedAt: time.Now().Add(-24 * time.Hour),
+			UpdatedAt: time.Now().Add(-24 * time.Hour),
+		}
+
+		expectedWorkspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: []domain.Integration{existingIntegration},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			// Verify the integration was updated
+			require.Equal(t, 1, len(workspace.Integrations))
+			require.Equal(t, firecrawlIntegrationID, workspace.Integrations[0].ID)
+			// New API key should be encrypted (different from old encrypted key)
+			require.NotEmpty(t, workspace.Integrations[0].FirecrawlSettings.EncryptedAPIKey)
+			require.NotEqual(t, "encrypted-old-key", workspace.Integrations[0].FirecrawlSettings.EncryptedAPIKey)
+			// Plain key should be cleared
+			require.Empty(t, workspace.Integrations[0].FirecrawlSettings.APIKey)
+			return nil
+		})
+
+		err := service.UpdateIntegration(ctx, domain.UpdateIntegrationRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: firecrawlIntegrationID,
+			Name:          "Updated Firecrawl",
+			FirecrawlSettings: &domain.FirecrawlSettings{
+				APIKey: "fc-new-api-key", // New key provided - should be encrypted
+			},
+		})
+		require.NoError(t, err)
+	})
 }
 
 func TestWorkspaceService_DeleteIntegration(t *testing.T) {
@@ -1373,6 +1673,9 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Set up mockLogger to allow any calls
@@ -1612,6 +1915,9 @@ func TestWorkspaceService_RemoveMember(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	ctx := context.Background()
@@ -1863,6 +2169,9 @@ func TestWorkspaceService_GetInvitationByID(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	invitationID := "invitation-123"
@@ -1935,6 +2244,9 @@ func TestWorkspaceService_AcceptInvitation(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	invitationID := "invitation-123"
@@ -2375,6 +2687,9 @@ func TestWorkspaceService_DeleteInvitation(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	ctx := context.Background()
@@ -2544,6 +2859,9 @@ func TestWorkspaceService_SetUserPermissions(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
 	// Setup common logger expectations
@@ -2679,7 +2997,8 @@ func TestWorkspaceService_SetUserPermissions(t *testing.T) {
 	})
 }
 
-func TestWorkspaceService_SetSupabaseService(t *testing.T) {
+func TestWorkspaceService_deleteSupabaseIntegrationResources(t *testing.T) {
+	// Test WorkspaceService.deleteSupabaseIntegrationResources - this was at 0% coverage
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -2696,6 +3015,31 @@ func TestWorkspaceService_SetSupabaseService(t *testing.T) {
 	mockTemplateService := mocks.NewMockTemplateService(ctrl)
 	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
 
+	// Create a real SupabaseService with mocked dependencies
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockTransactionalRepo := mocks.NewMockTransactionalNotificationRepository(ctrl)
+	mockInboundWebhookEventRepo := mocks.NewMockInboundWebhookEventRepository(ctrl)
+	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	supabaseService := NewSupabaseService(
+		mockRepo,
+		nil, // emailService
+		mockContactService,
+		mockListService,
+		mockContactListRepo,
+		mockTemplateRepo,
+		mockTemplateService,
+		mockTransactionalRepo,
+		nil, // transactionalService
+		mockInboundWebhookEventRepo,
+		mockLogger,
+	)
+
 	service := NewWorkspaceService(
 		mockRepo,
 		mockUserRepo,
@@ -2711,18 +3055,37 @@ func TestWorkspaceService_SetSupabaseService(t *testing.T) {
 		mockTemplateService,
 		mockWebhookRegService,
 		"secret_key",
+		supabaseService,
+		&DNSVerificationService{},
+		&BlogService{},
 	)
 
-	// Initially supabaseService should be nil
-	assert.Nil(t, service.supabaseService)
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	integrationID := "integration-456"
 
-	// Create a mock Supabase service
-	mockSupabaseService := &SupabaseService{}
+	t.Run("Success - Deletes resources", func(t *testing.T) {
+		// Mock template repo to return empty list (no templates to delete)
+		mockTemplateRepo.EXPECT().
+			GetTemplates(gomock.Any(), workspaceID, "", "").
+			Return([]*domain.Template{}, nil)
 
-	// Set the Supabase service
-	service.SetSupabaseService(mockSupabaseService)
+		// Mock transactional repo to return empty list (no notifications to delete)
+		mockTransactionalRepo.EXPECT().
+			List(gomock.Any(), workspaceID, gomock.Any(), gomock.Any(), gomock.Any()).
+			Return([]*domain.TransactionalNotification{}, 0, nil)
 
-	// Verify it's set
-	assert.NotNil(t, service.supabaseService)
-	assert.Equal(t, mockSupabaseService, service.supabaseService)
+		err := service.deleteSupabaseIntegrationResources(ctx, workspaceID, integrationID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Error - Template repo error", func(t *testing.T) {
+		mockTemplateRepo.EXPECT().
+			GetTemplates(gomock.Any(), workspaceID, "", "").
+			Return(nil, errors.New("template repo error"))
+
+		err := service.deleteSupabaseIntegrationResources(ctx, workspaceID, integrationID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to list templates")
+	})
 }

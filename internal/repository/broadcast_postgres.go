@@ -36,7 +36,7 @@ func (r *broadcastRepository) WithTransaction(ctx context.Context, workspaceID s
 	}
 
 	// Defer rollback - this will be a no-op if we successfully commit
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Execute the provided function with the transaction
 	if err := fn(tx); err != nil {
@@ -68,25 +68,28 @@ func (r *broadcastRepository) CreateBroadcastTx(ctx context.Context, tx *sql.Tx,
 	// Insert the broadcast
 	query := `
 		INSERT INTO broadcasts (
-			id, 
+			id,
 			workspace_id,
-			name, 
-			status, 
-			audience, 
-			schedule, 
-			test_settings, 
-			utm_parameters, 
-			metadata, 
-			winning_template, 
-			test_sent_at, 
-			winner_sent_at, 
-			created_at, 
-			updated_at, 
-			started_at, 
-			completed_at, 
-			cancelled_at
+			name,
+			status,
+			audience,
+			schedule,
+			test_settings,
+			utm_parameters,
+			metadata,
+			winning_template,
+			test_sent_at,
+			winner_sent_at,
+			enqueued_count,
+			created_at,
+			updated_at,
+			started_at,
+			completed_at,
+			cancelled_at,
+			paused_at,
+			pause_reason
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 		)
 	`
 
@@ -103,11 +106,14 @@ func (r *broadcastRepository) CreateBroadcastTx(ctx context.Context, tx *sql.Tx,
 		broadcast.WinningTemplate,
 		broadcast.TestSentAt,
 		broadcast.WinnerSentAt,
+		broadcast.EnqueuedCount,
 		broadcast.CreatedAt,
 		broadcast.UpdatedAt,
 		broadcast.StartedAt,
 		broadcast.CompletedAt,
 		broadcast.CancelledAt,
+		broadcast.PausedAt,
+		broadcast.PauseReason,
 	)
 
 	if err != nil {
@@ -126,24 +132,27 @@ func (r *broadcastRepository) GetBroadcast(ctx context.Context, workspaceID, id 
 	}
 
 	query := `
-		SELECT 
-			id, 
+		SELECT
+			id,
 			workspace_id,
-			name, 
-			status, 
-			audience, 
-			schedule, 
-			test_settings, 
-			utm_parameters, 
-			metadata, 
-			winning_template, 
-			test_sent_at, 
-			winner_sent_at, 
-			created_at, 
-			updated_at, 
-			started_at, 
-			completed_at, 
-			cancelled_at
+			name,
+			status,
+			audience,
+			schedule,
+			test_settings,
+			utm_parameters,
+			metadata,
+			winning_template,
+			test_sent_at,
+			winner_sent_at,
+			enqueued_count,
+			created_at,
+			updated_at,
+			started_at,
+			completed_at,
+			cancelled_at,
+			paused_at,
+			pause_reason
 		FROM broadcasts
 		WHERE id = $1 AND workspace_id = $2
 	`
@@ -164,24 +173,27 @@ func (r *broadcastRepository) GetBroadcast(ctx context.Context, workspaceID, id 
 // GetBroadcastTx retrieves a broadcast by ID within a transaction
 func (r *broadcastRepository) GetBroadcastTx(ctx context.Context, tx *sql.Tx, workspaceID, id string) (*domain.Broadcast, error) {
 	query := `
-		SELECT 
-			id, 
+		SELECT
+			id,
 			workspace_id,
-			name, 
-			status, 
-			audience, 
-			schedule, 
-			test_settings, 
-			utm_parameters, 
-			metadata, 
-			winning_template, 
-			test_sent_at, 
-			winner_sent_at, 
-			created_at, 
-			updated_at, 
-			started_at, 
-			completed_at, 
-			cancelled_at
+			name,
+			status,
+			audience,
+			schedule,
+			test_settings,
+			utm_parameters,
+			metadata,
+			winning_template,
+			test_sent_at,
+			winner_sent_at,
+			enqueued_count,
+			created_at,
+			updated_at,
+			started_at,
+			completed_at,
+			cancelled_at,
+			paused_at,
+			pause_reason
 		FROM broadcasts
 		WHERE id = $1 AND workspace_id = $2
 	`
@@ -226,10 +238,13 @@ func (r *broadcastRepository) UpdateBroadcastTx(ctx context.Context, tx *sql.Tx,
 			updated_at = $13,
 			started_at = $14,
 			completed_at = $15,
-			cancelled_at = $16
+			cancelled_at = $16,
+			paused_at = $17,
+			pause_reason = $18,
+			enqueued_count = $19
 		WHERE id = $1 AND workspace_id = $2
 			AND status != 'cancelled'
-			AND status != 'sent'
+			AND status != 'processed'
 	`
 
 	result, err := tx.ExecContext(ctx, query,
@@ -249,6 +264,9 @@ func (r *broadcastRepository) UpdateBroadcastTx(ctx context.Context, tx *sql.Tx,
 		broadcast.StartedAt,
 		broadcast.CompletedAt,
 		broadcast.CancelledAt,
+		broadcast.PausedAt,
+		broadcast.PauseReason,
+		broadcast.EnqueuedCount,
 	)
 
 	if err != nil {
@@ -301,24 +319,27 @@ func (r *broadcastRepository) ListBroadcastsTx(ctx context.Context, tx *sql.Tx, 
 
 	if params.Status != "" {
 		dataQuery = `
-			SELECT 
-				id, 
+			SELECT
+				id,
 				workspace_id,
-				name, 
-				status, 
-				audience, 
-				schedule, 
-				test_settings, 
-				utm_parameters, 
-				metadata, 
-				winning_template, 
-				test_sent_at, 
-				winner_sent_at, 
-				created_at, 
-				updated_at, 
-				started_at, 
-				completed_at, 
-				cancelled_at
+				name,
+				status,
+				audience,
+				schedule,
+				test_settings,
+				utm_parameters,
+				metadata,
+				winning_template,
+				test_sent_at,
+				winner_sent_at,
+				enqueued_count,
+				created_at,
+				updated_at,
+				started_at,
+				completed_at,
+				cancelled_at,
+				paused_at,
+				pause_reason
 			FROM broadcasts
 			WHERE workspace_id = $1 AND status = $2
 			ORDER BY created_at DESC
@@ -327,24 +348,27 @@ func (r *broadcastRepository) ListBroadcastsTx(ctx context.Context, tx *sql.Tx, 
 		dataArgs = []interface{}{params.WorkspaceID, params.Status, params.Limit, params.Offset}
 	} else {
 		dataQuery = `
-			SELECT 
-				id, 
+			SELECT
+				id,
 				workspace_id,
-				name, 
-				status, 
-				audience, 
-				schedule, 
-				test_settings, 
-				utm_parameters, 
-				metadata, 
-				winning_template, 
-				test_sent_at, 
-				winner_sent_at, 
-				created_at, 
-				updated_at, 
-				started_at, 
-				completed_at, 
-				cancelled_at
+				name,
+				status,
+				audience,
+				schedule,
+				test_settings,
+				utm_parameters,
+				metadata,
+				winning_template,
+				test_sent_at,
+				winner_sent_at,
+				enqueued_count,
+				created_at,
+				updated_at,
+				started_at,
+				completed_at,
+				cancelled_at,
+				paused_at,
+				pause_reason
 			FROM broadcasts
 			WHERE workspace_id = $1
 			ORDER BY created_at DESC
@@ -357,7 +381,7 @@ func (r *broadcastRepository) ListBroadcastsTx(ctx context.Context, tx *sql.Tx, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list broadcasts: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var broadcasts []*domain.Broadcast
 	for rows.Next() {
@@ -391,7 +415,7 @@ func (r *broadcastRepository) ListBroadcasts(ctx context.Context, params domain.
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Use the transaction-aware method
 	result, err := r.ListBroadcastsTx(ctx, tx, params)
@@ -443,6 +467,8 @@ func scanBroadcast(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*domain.Broadcast, error) {
 	broadcast := &domain.Broadcast{}
+	var winningTemplate sql.NullString
+	var pauseReason sql.NullString
 
 	err := scanner.Scan(
 		&broadcast.ID,
@@ -454,18 +480,29 @@ func scanBroadcast(scanner interface {
 		&broadcast.TestSettings,
 		&broadcast.UTMParameters,
 		&broadcast.Metadata,
-		&broadcast.WinningTemplate,
+		&winningTemplate,
 		&broadcast.TestSentAt,
 		&broadcast.WinnerSentAt,
+		&broadcast.EnqueuedCount,
 		&broadcast.CreatedAt,
 		&broadcast.UpdatedAt,
 		&broadcast.StartedAt,
 		&broadcast.CompletedAt,
 		&broadcast.CancelledAt,
+		&broadcast.PausedAt,
+		&pauseReason,
 	)
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Convert sql.NullString to *string
+	if winningTemplate.Valid {
+		broadcast.WinningTemplate = &winningTemplate.String
+	}
+	if pauseReason.Valid {
+		broadcast.PauseReason = &pauseReason.String
 	}
 
 	return broadcast, nil

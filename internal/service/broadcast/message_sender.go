@@ -331,6 +331,11 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		},
 	}
 
+	// Extract List-Unsubscribe URL from template data for RFC-8058 compliance (broadcast emails only)
+	if unsubscribeURL, ok := data["oneclick_unsubscribe_url"].(string); ok && unsubscribeURL != "" {
+		emailRequest.EmailOptions.ListUnsubscribeURL = unsubscribeURL
+	}
+
 	// Now send email directly using compiled HTML rather than passing template to broadcastRepo
 	// Note: Context is checked by SendEmail; in rare cancellation cases we may complete
 	// template compilation (~50-100ms) before detecting cancellation. This is acceptable
@@ -471,9 +476,9 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integ
 
 		// Determine which variation to use for this contact
 		var templateID string
-		if broadcast.WinningTemplate != "" {
+		if broadcast.WinningTemplate != nil {
 			// Winner selected: use it directly
-			templateID = broadcast.WinningTemplate
+			templateID = *broadcast.WinningTemplate
 		} else if broadcast.TestSettings.Enabled {
 			// Test phase (no winner yet): pick a random variation per recipient
 			if len(broadcast.TestSettings.Variations) > 0 {
@@ -563,11 +568,12 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integ
 		}
 
 		now := time.Now().UTC()
+		listID := broadcast.Audience.List
 		message := &domain.MessageHistory{
 			ID:              messageID,
 			ContactEmail:    contact.Email,
 			BroadcastID:     &broadcastID,
-			ListIDs:         domain.ListIDs(broadcast.Audience.Lists),
+			ListID:          &listID,
 			TemplateID:      templateID,
 			TemplateVersion: templates[templateID].Version,
 			Channel:         "email",

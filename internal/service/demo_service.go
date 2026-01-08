@@ -28,7 +28,7 @@ type DemoService struct {
 	broadcastService                 *BroadcastService
 	taskService                      *TaskService
 	transactionalNotificationService *TransactionalNotificationService
-	webhookEventService              *WebhookEventService
+	inboundWebhookEventService              *InboundWebhookEventService
 	webhookRegistrationService       *WebhookRegistrationService
 	messageHistoryService            *MessageHistoryService
 	notificationCenterService        *NotificationCenterService
@@ -36,8 +36,10 @@ type DemoService struct {
 	workspaceRepo                    domain.WorkspaceRepository
 	taskRepo                         domain.TaskRepository
 	messageHistoryRepo               domain.MessageHistoryRepository
-	webhookEventRepo                 domain.WebhookEventRepository
+	inboundWebhookEventRepo                 domain.InboundWebhookEventRepository
 	broadcastRepo                    domain.BroadcastRepository
+	customEventRepo                  domain.CustomEventRepository
+	webhookSubscriptionService       *WebhookSubscriptionService
 }
 
 // Sample data arrays for contact generation
@@ -101,7 +103,7 @@ func NewDemoService(
 	broadcastService *BroadcastService,
 	taskService *TaskService,
 	transactionalNotificationService *TransactionalNotificationService,
-	webhookEventService *WebhookEventService,
+	inboundWebhookEventService *InboundWebhookEventService,
 	webhookRegistrationService *WebhookRegistrationService,
 	messageHistoryService *MessageHistoryService,
 	notificationCenterService *NotificationCenterService,
@@ -109,8 +111,10 @@ func NewDemoService(
 	workspaceRepo domain.WorkspaceRepository,
 	taskRepo domain.TaskRepository,
 	messageHistoryRepo domain.MessageHistoryRepository,
-	webhookEventRepo domain.WebhookEventRepository,
+	inboundWebhookEventRepo domain.InboundWebhookEventRepository,
 	broadcastRepo domain.BroadcastRepository,
+	customEventRepo domain.CustomEventRepository,
+	webhookSubscriptionService *WebhookSubscriptionService,
 ) *DemoService {
 	return &DemoService{
 		logger:                           logger,
@@ -125,7 +129,7 @@ func NewDemoService(
 		broadcastService:                 broadcastService,
 		taskService:                      taskService,
 		transactionalNotificationService: transactionalNotificationService,
-		webhookEventService:              webhookEventService,
+		inboundWebhookEventService:              inboundWebhookEventService,
 		webhookRegistrationService:       webhookRegistrationService,
 		messageHistoryService:            messageHistoryService,
 		notificationCenterService:        notificationCenterService,
@@ -133,8 +137,10 @@ func NewDemoService(
 		workspaceRepo:                    workspaceRepo,
 		taskRepo:                         taskRepo,
 		messageHistoryRepo:               messageHistoryRepo,
-		webhookEventRepo:                 webhookEventRepo,
+		inboundWebhookEventRepo:                 inboundWebhookEventRepo,
 		broadcastRepo:                    broadcastRepo,
+		customEventRepo:                  customEventRepo,
+		webhookSubscriptionService:       webhookSubscriptionService,
 	}
 }
 
@@ -236,7 +242,7 @@ func (s *DemoService) createDemoWorkspace(ctx context.Context) error {
 		workspaceID,
 		"Demo Workspace",
 		"https://demo.notifuse.com",
-		"https://demo.notifuse.com/logo.png",
+		"https://www.notifuse.com/apple-touch-icon.png",
 		"https://demo.notifuse.com/cover.png",
 		"UTC",
 		fileManagerSettings,
@@ -246,6 +252,23 @@ func (s *DemoService) createDemoWorkspace(ctx context.Context) error {
 	}
 
 	s.logger.WithField("workspace_id", workspace.ID).Info("Demo workspace created successfully")
+
+	// Create webhook subscription to generate webhook deliveries for demo data
+	// Must be created BEFORE sample data so DB triggers can fire
+	_, err = s.webhookSubscriptionService.Create(
+		authenticatedCtx,
+		workspace.ID,
+		"Demo Webhook",
+		"https://webhook.site/demo",
+		domain.WebhookEventTypes, // Subscribe to all event types
+		nil,
+	)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspace.ID).WithField("error", err.Error()).Warn("Failed to create demo webhook subscription")
+		// Non-fatal - continue with demo setup
+	} else {
+		s.logger.WithField("workspace_id", workspace.ID).Info("Demo webhook subscription created")
+	}
 
 	// Create SMTP integration for demo emails
 	if err := s.createDemoSMTPIntegration(authenticatedCtx, workspace.ID); err != nil {
@@ -282,6 +305,12 @@ func (s *DemoService) addSampleData(ctx context.Context, workspaceID string) err
 	if err := s.generateAndAddSampleContacts(ctx, workspaceID, 1000); err != nil {
 		s.logger.WithField("error", err.Error()).Warn("Failed to create sample contacts")
 		return err
+	}
+
+	// Step 3b: Generate sample custom events to simulate e-commerce transactions
+	if err := s.generateSampleCustomEvents(ctx, workspaceID); err != nil {
+		s.logger.WithField("error", err.Error()).Warn("Failed to create sample custom events")
+		// Don't fail the entire operation if custom events creation fails
 	}
 
 	// Step 4: Subscribe all contacts to the newsletter list
@@ -428,17 +457,98 @@ func (s *DemoService) generateSampleContactsBatch(count int, startIndex int) []*
 			UpdatedAt: createdAt,
 		}
 
-		// Add some custom fields for e-commerce demo data
-		if rand.Float32() < 0.7 { // 70% of contacts have purchase history
-			contact.LifetimeValue = &domain.NullableFloat64{Float64: rand.Float64() * 1000, IsNull: false}
-			contact.OrdersCount = &domain.NullableFloat64{Float64: float64(rand.Intn(20)), IsNull: false}
-			contact.LastOrderAt = &domain.NullableTime{Time: createdAt.Add(time.Duration(rand.Intn(30)) * 24 * time.Hour), IsNull: false}
-		}
-
 		contacts[i] = contact
 	}
 
 	return contacts
+}
+
+// generateSampleCustomEvents creates sample custom events to simulate e-commerce transactions
+func (s *DemoService) generateSampleCustomEvents(ctx context.Context, workspaceID string) error {
+	s.logger.WithField("workspace_id", workspaceID).Info("Generating sample custom events for e-commerce simulation")
+
+	// Get all contacts to create events for
+	contactsReq := &domain.GetContactsRequest{
+		WorkspaceID: workspaceID,
+		Limit:       1000,
+	}
+
+	contactsResp, err := s.contactService.GetContacts(ctx, contactsReq)
+	if err != nil {
+		return fmt.Errorf("failed to get contacts for custom events: %w", err)
+	}
+
+	if len(contactsResp.Contacts) == 0 {
+		s.logger.WithField("workspace_id", workspaceID).Info("No contacts found, skipping custom events generation")
+		return nil
+	}
+
+	// Sample product names for realistic demo data
+	productNames := []string{
+		"Premium Subscription", "Basic Plan", "Pro License", "Enterprise Package",
+		"Widget Pack", "Service Credit", "Annual Membership", "Monthly Bundle",
+		"Starter Kit", "Professional Tools", "Digital Download", "Consulting Hour",
+	}
+
+	totalEvents := 0
+
+	// 70% of contacts have purchase history
+	for _, contact := range contactsResp.Contacts {
+		if rand.Float32() >= 0.7 {
+			continue // Skip 30% of contacts
+		}
+
+		// Generate 1-5 purchase events per contact
+		numPurchases := 1 + rand.Intn(5)
+		contactCreatedAt := contact.CreatedAt
+
+		for j := 0; j < numPurchases; j++ {
+			// Spread purchases over time after contact creation
+			daysAfterCreation := rand.Intn(180) // Up to 6 months after signup
+			purchaseTime := contactCreatedAt.Add(time.Duration(daysAfterCreation*24) * time.Hour)
+
+			// Don't create events in the future
+			if purchaseTime.After(time.Now()) {
+				purchaseTime = time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
+			}
+
+			// Generate purchase value (between $10 and $500)
+			purchaseValue := 10.0 + rand.Float64()*490.0
+			purchaseValue = float64(int(purchaseValue*100)) / 100 // Round to 2 decimal places
+
+			goalType := "purchase"
+			goalName := "E-commerce Purchase"
+
+			customEvent := &domain.CustomEvent{
+				ExternalID: fmt.Sprintf("demo_purchase_%s_%d_%d", contact.Email, j, purchaseTime.Unix()),
+				Email:      contact.Email,
+				EventName:  "purchase",
+				Properties: map[string]interface{}{
+					"product_name": getRandomElement(productNames),
+					"quantity":     1 + rand.Intn(3),
+					"currency":     "USD",
+					"order_id":     fmt.Sprintf("ORD-%d", 10000+rand.Intn(90000)),
+				},
+				OccurredAt: purchaseTime,
+				Source:     "demo",
+				GoalName:   &goalName,
+				GoalType:   &goalType,
+				GoalValue:  &purchaseValue,
+				CreatedAt:  purchaseTime,
+				UpdatedAt:  purchaseTime,
+			}
+
+			if err := s.customEventRepo.Upsert(ctx, workspaceID, customEvent); err != nil {
+				s.logger.WithField("email", contact.Email).WithField("error", err.Error()).Debug("Failed to create custom event")
+				continue
+			}
+
+			totalEvents++
+		}
+	}
+
+	s.logger.WithField("workspace_id", workspaceID).WithField("total_events", totalEvents).Info("Sample custom events generation completed")
+	return nil
 }
 
 // generateEmail creates a realistic email address
@@ -1081,16 +1191,9 @@ func (s *DemoService) createSampleBroadcasts(ctx context.Context, workspaceID st
 			WorkspaceID: workspaceID,
 			Name:        bc.name,
 			Audience: domain.AudienceSettings{
-				Lists:               []string{"newsletter"},
+				List:                "newsletter",
 				Segments:            []string{},
 				ExcludeUnsubscribed: true,
-				SkipDuplicateEmails: true,
-			},
-			Schedule: domain.ScheduleSettings{
-				IsScheduled:   false,
-				ScheduledDate: "",
-				ScheduledTime: "",
-				Timezone:      "UTC",
 			},
 			TestSettings: domain.BroadcastTestSettings{
 				Enabled:          i == len(broadcasts)-1, // Only enable A/B test for last broadcast
@@ -1114,25 +1217,24 @@ func (s *DemoService) createSampleBroadcasts(ctx context.Context, workspaceID st
 			continue
 		}
 
-		// Update broadcast status to "sent" since we're generating message history for it
-		// Set timestamps to simulate that it was sent in the past (10-1 days ago based on campaign)
+		// Update broadcast status to "processed" since we're generating message history for it
+		// Set timestamps to simulate that it was processed in the past (10-1 days ago based on campaign)
 		daysAgo := 10 - (i * 2) // Spread broadcasts over last 10 days
 		if daysAgo < 1 {
 			daysAgo = 1
 		}
 		sentTime := time.Now().AddDate(0, 0, -daysAgo)
-		completedTime := sentTime.Add(2 * time.Hour) // Completed 2 hours after sending started
+		completedTime := sentTime.Add(2 * time.Hour) // Completed 2 hours after processing started
 
-		broadcast.Status = domain.BroadcastStatusSent
+		broadcast.Status = domain.BroadcastStatusProcessed
 		broadcast.StartedAt = &sentTime
-		broadcast.SentAt = &sentTime
 		broadcast.CompletedAt = &completedTime
 		broadcast.UpdatedAt = completedTime
 
-		// Update the broadcast in the repository to reflect sent status
+		// Update the broadcast in the repository to reflect processed status
 		if err := s.broadcastRepo.UpdateBroadcast(ctx, broadcast); err != nil {
-			s.logger.WithField("broadcast_id", broadcast.ID).WithField("error", err.Error()).Warn("Failed to update broadcast status to sent")
-			// Continue anyway - the broadcast was created, just not marked as sent
+			s.logger.WithField("broadcast_id", broadcast.ID).WithField("error", err.Error()).Warn("Failed to update broadcast status to processed")
+			// Continue anyway - the broadcast was created, just not marked as processed
 		}
 
 		broadcastIDs = append(broadcastIDs, broadcast.ID)
@@ -1386,9 +1488,9 @@ func (s *DemoService) generateMessagesPerContact(ctx context.Context, workspaceI
 		}
 
 		// Apply engagement events sequentially to simulate realistic event flow
-		// 1. First, generate webhook events for delivered messages
-		if err := s.generateDeliveredWebhookEventsForBatch(ctx, workspaceID, messagesWithEngagement); err != nil {
-			s.logger.WithField("error", err.Error()).Debug("Failed to generate delivered webhook events")
+		// 1. First, generate inbound webhook events for delivered messages
+		if err := s.generateDeliveredInboundWebhookEventsForBatch(ctx, workspaceID, messagesWithEngagement); err != nil {
+			s.logger.WithField("error", err.Error()).Debug("Failed to generate delivered inbound webhook events")
 		}
 
 		// 2. Then, update message_history for opened messages (triggers timeline entries)
@@ -1412,11 +1514,11 @@ type messageEngagementData struct {
 	engagement messageEngagement
 }
 
-// generateDeliveredWebhookEventsForBatch creates webhook events for delivered messages
-func (s *DemoService) generateDeliveredWebhookEventsForBatch(ctx context.Context, workspaceID string, messagesData []messageEngagementData) error {
-	// Skip if workspace service or webhook event repo is not available
-	if s.workspaceService == nil || s.webhookEventRepo == nil {
-		s.logger.Debug("Workspace service or webhook event repo not available, skipping webhook events")
+// generateDeliveredInboundWebhookEventsForBatch creates inbound webhook events for delivered messages
+func (s *DemoService) generateDeliveredInboundWebhookEventsForBatch(ctx context.Context, workspaceID string, messagesData []messageEngagementData) error {
+	// Skip if workspace service or inbound webhook event repo is not available
+	if s.workspaceService == nil || s.inboundWebhookEventRepo == nil {
+		s.logger.Debug("Workspace service or inbound webhook event repo not available, skipping inbound webhook events")
 		return nil
 	}
 
@@ -1428,23 +1530,23 @@ func (s *DemoService) generateDeliveredWebhookEventsForBatch(ctx context.Context
 
 	integrationID := workspace.Settings.TransactionalEmailProviderID
 	if integrationID == "" {
-		s.logger.WithField("workspace_id", workspaceID).Debug("No transactional email provider configured, skipping webhook events")
+		s.logger.WithField("workspace_id", workspaceID).Debug("No transactional email provider configured, skipping inbound webhook events")
 		return nil
 	}
 
-	// Collect webhook events for delivered messages
-	var webhookEvents []*domain.WebhookEvent
+	// Collect inbound webhook events for delivered messages
+	var inboundWebhookEvents []*domain.InboundWebhookEvent
 	for _, data := range messagesData {
 		if !data.engagement.shouldDeliver {
 			continue
 		}
 
-		webhookEventID := uuid.New().String()
+		inboundWebhookEventID := uuid.New().String()
 		rawPayload := fmt.Sprintf(`{"event":"delivered","message_id":"%s","recipient":"%s","timestamp":"%s"}`,
 			data.message.ID, data.message.ContactEmail, data.engagement.deliveredTime.Format(time.RFC3339))
 
-		webhookEvent := &domain.WebhookEvent{
-			ID:             webhookEventID,
+		inboundWebhookEvent := &domain.InboundWebhookEvent{
+			ID:             inboundWebhookEventID,
 			Type:           domain.EmailEventDelivered,
 			Source:         domain.WebhookSourceSMTP,
 			IntegrationID:  integrationID,
@@ -1455,15 +1557,15 @@ func (s *DemoService) generateDeliveredWebhookEventsForBatch(ctx context.Context
 			CreatedAt:      data.engagement.deliveredTime,
 		}
 
-		webhookEvents = append(webhookEvents, webhookEvent)
+		inboundWebhookEvents = append(inboundWebhookEvents, inboundWebhookEvent)
 	}
 
-	// Store webhook events
-	if len(webhookEvents) > 0 {
-		if err := s.webhookEventRepo.StoreEvents(ctx, workspaceID, webhookEvents); err != nil {
-			return fmt.Errorf("failed to store webhook events: %w", err)
+	// Store inbound webhook events
+	if len(inboundWebhookEvents) > 0 {
+		if err := s.inboundWebhookEventRepo.StoreEvents(ctx, workspaceID, inboundWebhookEvents); err != nil {
+			return fmt.Errorf("failed to store inbound webhook events: %w", err)
 		}
-		s.logger.WithField("count", len(webhookEvents)).Debug("Generated delivered webhook events")
+		s.logger.WithField("count", len(inboundWebhookEvents)).Debug("Generated delivered inbound webhook events")
 	}
 
 	return nil
@@ -1582,13 +1684,14 @@ func (s *DemoService) generateMessageHistoryForContact(contact *domain.Contact, 
 
 	// Determine campaign type based on broadcastID
 	var campaignType string
-	var utmMedium string = "email"
+	utmMedium := "email"
 
 	if strings.Contains(broadcastID, "transactional") {
 		campaignType = "transactional"
-		if templateID == "password-reset" {
+		switch templateID {
+		case "password-reset":
 			campaignType = "password_reset"
-		} else if templateID == "welcome-email" {
+		case "welcome-email":
 			campaignType = "welcome"
 		}
 	} else {
@@ -1671,7 +1774,7 @@ func getStringValue(ns *domain.NullableString) string {
 func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID string) error {
 	s.logger.WithField("workspace_id", workspaceID).Info("Creating sample segments")
 
-	// Segment 1: VIP Customers (high lifetime value and orders) - demonstrates AND logic
+	// Segment 1: VIP Customers (high lifetime value and orders) - demonstrates AND logic with custom events goals
 	vipSegment := &domain.CreateSegmentRequest{
 		WorkspaceID: workspaceID,
 		ID:          "vip_customers",
@@ -1686,32 +1789,26 @@ func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID stri
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
-							Contact: &domain.ContactCondition{
-								Filters: []*domain.DimensionFilter{
-									{
-										FieldName:    "lifetime_value",
-										FieldType:    "number",
-										Operator:     "gte",
-										NumberValues: []float64{800.0},
-									},
-								},
+							Source: "custom_events_goals",
+							CustomEventsGoal: &domain.CustomEventsGoalCondition{
+								GoalType:          "purchase",
+								AggregateOperator: "sum",
+								Operator:          "gte",
+								Value:             800.0,
+								TimeframeOperator: "anytime",
 							},
 						},
 					},
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
-							Contact: &domain.ContactCondition{
-								Filters: []*domain.DimensionFilter{
-									{
-										FieldName:    "orders_count",
-										FieldType:    "number",
-										Operator:     "gte",
-										NumberValues: []float64{3.0},
-									},
-								},
+							Source: "custom_events_goals",
+							CustomEventsGoal: &domain.CustomEventsGoalCondition{
+								GoalType:          "purchase",
+								AggregateOperator: "count",
+								Operator:          "gte",
+								Value:             3.0,
+								TimeframeOperator: "anytime",
 							},
 						},
 					},
@@ -1741,7 +1838,7 @@ func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID stri
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -1757,7 +1854,7 @@ func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID stri
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -1773,7 +1870,7 @@ func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID stri
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -1789,7 +1886,7 @@ func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID stri
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -1805,7 +1902,7 @@ func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID stri
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contacts",
+							Source: "contacts",
 							Contact: &domain.ContactCondition{
 								Filters: []*domain.DimensionFilter{
 									{
@@ -1845,7 +1942,7 @@ func (s *DemoService) createSampleSegments(ctx context.Context, workspaceID stri
 					{
 						Kind: "leaf",
 						Leaf: &domain.TreeNodeLeaf{
-							Table: "contact_timeline",
+							Source: "contact_timeline",
 							ContactTimeline: &domain.ContactTimelineCondition{
 								Kind:              "open_email",
 								CountOperator:     "at_least",

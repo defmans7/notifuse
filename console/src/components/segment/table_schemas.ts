@@ -3,7 +3,7 @@ import { CountriesFormOptions } from '../../lib/countries_timezones'
 import { TIMEZONE_OPTIONS } from '../../lib/timezones'
 import { Languages } from '../../lib/languages'
 import { faUser, faFolderOpen } from '@fortawesome/free-regular-svg-icons'
-import { faMousePointer } from '@fortawesome/free-solid-svg-icons'
+import { faMousePointer, faBullseye } from '@fortawesome/free-solid-svg-icons'
 
 /**
  * Database table schemas for segmentation engine
@@ -108,27 +108,6 @@ export const ContactsTableSchema: TableSchema = {
       title: 'Job Title',
       description: 'Contact job title',
       type: 'string',
-      shown: true
-    },
-    lifetime_value: {
-      name: 'lifetime_value',
-      title: 'Lifetime Value',
-      description: 'Customer lifetime value',
-      type: 'number',
-      shown: true
-    },
-    orders_count: {
-      name: 'orders_count',
-      title: 'Orders Count',
-      description: 'Total number of orders',
-      type: 'number',
-      shown: true
-    },
-    last_order_at: {
-      name: 'last_order_at',
-      title: 'Last Order Date',
-      description: 'Date of last order',
-      type: 'time',
       shown: true
     },
     // Custom string fields
@@ -252,6 +231,42 @@ export const ContactsTableSchema: TableSchema = {
       description: 'Contact last update date',
       type: 'time',
       shown: false
+    },
+    // Custom JSON fields
+    custom_json_1: {
+      name: 'custom_json_1',
+      title: 'Custom JSON 1',
+      description: 'Custom JSON field 1',
+      type: 'json',
+      shown: true
+    },
+    custom_json_2: {
+      name: 'custom_json_2',
+      title: 'Custom JSON 2',
+      description: 'Custom JSON field 2',
+      type: 'json',
+      shown: true
+    },
+    custom_json_3: {
+      name: 'custom_json_3',
+      title: 'Custom JSON 3',
+      description: 'Custom JSON field 3',
+      type: 'json',
+      shown: true
+    },
+    custom_json_4: {
+      name: 'custom_json_4',
+      title: 'Custom JSON 4',
+      description: 'Custom JSON field 4',
+      type: 'json',
+      shown: true
+    },
+    custom_json_5: {
+      name: 'custom_json_5',
+      title: 'Custom JSON 5',
+      description: 'Custom JSON field 5',
+      type: 'json',
+      shown: true
     }
   }
 }
@@ -334,7 +349,7 @@ export const ContactTimelineTableSchema: TableSchema = {
         { value: 'contact', label: 'Contact' },
         { value: 'contact_list', label: 'Contact List' },
         { value: 'message_history', label: 'Message History' },
-        { value: 'webhook_event', label: 'Webhook Event' }
+        { value: 'inbound_webhook_event', label: 'Inbound Webhook Event' }
       ]
     },
     entity_id: {
@@ -354,9 +369,84 @@ export const ContactTimelineTableSchema: TableSchema = {
   }
 }
 
+export const CustomEventsGoalsTableSchema: TableSchema = {
+  name: 'custom_events_goals',
+  title: 'Custom Events Goal',
+  description: 'Aggregated custom events data (LTV, transaction counts, etc.)',
+  icon: faBullseye,
+  fields: {
+    goal_type: {
+      name: 'goal_type',
+      title: 'Goal Type',
+      description: 'Type of goal (purchase, subscription, lead, etc.)',
+      type: 'string',
+      shown: true,
+      options: [
+        { value: '*', label: 'All types' },
+        { value: 'purchase', label: 'Purchase' },
+        { value: 'subscription', label: 'Subscription' },
+        { value: 'lead', label: 'Lead' },
+        { value: 'signup', label: 'Signup' },
+        { value: 'booking', label: 'Booking' },
+        { value: 'trial', label: 'Trial' },
+        { value: 'other', label: 'Other' }
+      ]
+    },
+    goal_name: {
+      name: 'goal_name',
+      title: 'Goal Name',
+      description: 'Optional specific goal name to filter by',
+      type: 'string',
+      shown: true
+    },
+    aggregate_operator: {
+      name: 'aggregate_operator',
+      title: 'Aggregate',
+      description: 'How to aggregate the goal values',
+      type: 'string',
+      shown: true,
+      options: [
+        { value: 'sum', label: 'Sum' },
+        { value: 'count', label: 'Count' },
+        { value: 'avg', label: 'Average' },
+        { value: 'min', label: 'Minimum' },
+        { value: 'max', label: 'Maximum' }
+      ]
+    },
+    operator: {
+      name: 'operator',
+      title: 'Comparison',
+      description: 'Comparison operator',
+      type: 'string',
+      shown: true,
+      options: [
+        { value: 'gte', label: 'Greater than or equal' },
+        { value: 'lte', label: 'Less than or equal' },
+        { value: 'eq', label: 'Equal to' },
+        { value: 'between', label: 'Between' }
+      ]
+    },
+    value: {
+      name: 'value',
+      title: 'Value',
+      description: 'Comparison value',
+      type: 'number',
+      shown: true
+    },
+    value_2: {
+      name: 'value_2',
+      title: 'Value 2',
+      description: 'Second value for between operator',
+      type: 'number',
+      shown: true
+    }
+  }
+}
+
 // Export all schemas as a map
 export const TableSchemas: { [key: string]: TableSchema } = {
   contacts: ContactsTableSchema,
   contact_lists: ContactListsTableSchema,
-  contact_timeline: ContactTimelineTableSchema
+  contact_timeline: ContactTimelineTableSchema,
+  custom_events_goals: CustomEventsGoalsTableSchema
 }

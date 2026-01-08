@@ -10,7 +10,29 @@ export interface TemplateBlock {
   updated: string
 }
 
-// Workspace types
+// SEO Settings type (matches blog.go's SEOSettings)
+export interface SEOSettings {
+  meta_title?: string
+  meta_description?: string
+  og_title?: string
+  og_description?: string
+  og_image?: string
+  canonical_url?: string
+  keywords?: string[]
+  meta_robots?: string
+}
+
+// Blog Settings type (styling + SEO for blog)
+export interface BlogSettings {
+  title?: string
+  logo_url?: string
+  icon_url?: string
+  styling?: Record<string, unknown> // EditorStyleConfig - stored as JSON
+  seo?: SEOSettings
+  home_page_size?: number
+  category_page_size?: number
+}
+
 export interface WorkspaceSettings {
   website_url?: string
   logo_url?: string | null
@@ -23,9 +45,12 @@ export interface WorkspaceSettings {
   template_blocks?: TemplateBlock[]
   custom_endpoint_url?: string
   custom_field_labels?: Record<string, string>
+  blog_enabled?: boolean
+  blog_settings?: BlogSettings
 }
 
 export interface FileManagerSettings {
+  provider?: string
   endpoint: string
   access_key: string
   bucket: string
@@ -33,6 +58,7 @@ export interface FileManagerSettings {
   secret_key?: string
   encrypted_secret_key?: string
   cdn_endpoint?: string
+  force_path_style?: boolean
 }
 
 export type EmailProviderKind = 'smtp' | 'ses' | 'sparkpost' | 'postmark' | 'mailgun' | 'mailjet'
@@ -99,7 +125,28 @@ export interface MailjetSettings {
   sandbox_mode: boolean
 }
 
-export type IntegrationType = 'email' | 'sms' | 'whatsapp' | 'supabase'
+export type IntegrationType = 'email' | 'sms' | 'whatsapp' | 'supabase' | 'llm' | 'firecrawl'
+
+// LLM Provider types
+export type LLMProviderKind = 'anthropic'
+
+export interface AnthropicSettings {
+  api_key?: string
+  encrypted_api_key?: string
+  model: string
+}
+
+export interface LLMProvider {
+  kind: LLMProviderKind
+  anthropic?: AnthropicSettings
+}
+
+// Firecrawl settings for web scraping and search
+export interface FirecrawlSettings {
+  api_key?: string
+  encrypted_api_key?: string
+  base_url?: string
+}
 
 export interface SupabaseAuthEmailHookSettings {
   signature_key?: string
@@ -125,6 +172,8 @@ export interface Integration {
   type: IntegrationType
   email_provider?: EmailProvider
   supabase_settings?: SupabaseIntegrationSettings
+  llm_provider?: LLMProvider
+  firecrawl_settings?: FirecrawlSettings
   created_at: string
   updated_at: string
 }
@@ -201,6 +250,8 @@ export interface CreateIntegrationRequest {
   type: IntegrationType
   provider?: EmailProvider
   supabase_settings?: SupabaseIntegrationSettings
+  llm_provider?: LLMProvider
+  firecrawl_settings?: FirecrawlSettings
 }
 
 export interface UpdateIntegrationRequest {
@@ -209,6 +260,8 @@ export interface UpdateIntegrationRequest {
   name: string
   provider?: EmailProvider
   supabase_settings?: SupabaseIntegrationSettings
+  llm_provider?: LLMProvider
+  firecrawl_settings?: FirecrawlSettings
 }
 
 export interface DeleteIntegrationRequest {
@@ -273,6 +326,9 @@ export interface UserPermissions {
   transactional: ResourcePermissions
   workspace: ResourcePermissions
   message_history: ResourcePermissions
+  blog: ResourcePermissions
+  automations: ResourcePermissions
+  llm: ResourcePermissions
 }
 
 // Set User Permissions types

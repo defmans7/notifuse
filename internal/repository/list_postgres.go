@@ -33,10 +33,9 @@ func (r *listRepository) CreateList(ctx context.Context, workspaceID string, lis
 	list.UpdatedAt = now
 
 	query := `
-		INSERT INTO lists (id, name, is_double_optin, is_public, description, 
-		                   double_optin_template, welcome_template, unsubscribe_template,
-		                   created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO lists (id, name, is_double_optin, is_public, description,
+		                   double_optin_template, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err = workspaceDB.ExecContext(ctx, query,
 		list.ID,
@@ -45,8 +44,6 @@ func (r *listRepository) CreateList(ctx context.Context, workspaceID string, lis
 		list.IsPublic,
 		list.Description,
 		list.DoubleOptInTemplate,
-		list.WelcomeTemplate,
-		list.UnsubscribeTemplate,
 		list.CreatedAt,
 		list.UpdatedAt,
 	)
@@ -64,8 +61,8 @@ func (r *listRepository) GetListByID(ctx context.Context, workspaceID string, id
 	}
 
 	query := `
-		SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
-		welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
+		SELECT id, name, is_double_optin, is_public, description, double_optin_template,
+		created_at, updated_at, deleted_at
 		FROM lists
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -92,8 +89,8 @@ func (r *listRepository) GetLists(ctx context.Context, workspaceID string) ([]*d
 	}
 
 	query := `
-		SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
-		welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
+		SELECT id, name, is_double_optin, is_public, description, double_optin_template,
+		created_at, updated_at, deleted_at
 		FROM lists
 		WHERE deleted_at IS NULL
 		ORDER BY created_at DESC
@@ -103,7 +100,7 @@ func (r *listRepository) GetLists(ctx context.Context, workspaceID string) ([]*d
 	if err != nil {
 		return nil, fmt.Errorf("failed to get lists: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var lists []*domain.List
 	for rows.Next() {
@@ -133,8 +130,8 @@ func (r *listRepository) UpdateList(ctx context.Context, workspaceID string, lis
 	query := `
 		UPDATE lists
 		SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5,
-		    double_optin_template = $6, welcome_template = $7, unsubscribe_template = $8
-		WHERE id = $9 AND deleted_at IS NULL
+		    double_optin_template = $6
+		WHERE id = $7 AND deleted_at IS NULL
 	`
 
 	result, err := workspaceDB.ExecContext(ctx, query,
@@ -144,8 +141,6 @@ func (r *listRepository) UpdateList(ctx context.Context, workspaceID string, lis
 		list.Description,
 		list.UpdatedAt,
 		list.DoubleOptInTemplate,
-		list.WelcomeTemplate,
-		list.UnsubscribeTemplate,
 		list.ID,
 	)
 
@@ -180,7 +175,7 @@ func (r *listRepository) DeleteList(ctx context.Context, workspaceID string, id 
 	}
 
 	// Defer rollback - it will be a no-op if Commit() is called
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
 
@@ -224,12 +219,12 @@ func (r *listRepository) GetListStats(ctx context.Context, workspaceID string, i
 	}
 
 	query := `
-		SELECT 
-			SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active,
-			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as total_pending,
-			SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed,
-			SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
-			SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained
+		SELECT
+			COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as total_active,
+			COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as total_pending,
+			COALESCE(SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END), 0) as total_unsubscribed,
+			COALESCE(SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END), 0) as total_bounced,
+			COALESCE(SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END), 0) as total_complained
 		FROM contact_lists
 		WHERE list_id = $1 AND deleted_at IS NULL
 	`

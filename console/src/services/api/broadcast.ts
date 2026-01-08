@@ -27,7 +27,7 @@ export interface EmailTemplate {
   subject: string
   subject_preview?: string
   compiled_preview: string
-  visual_editor_tree: any
+  visual_editor_tree: Record<string, unknown>
   text?: string
 }
 
@@ -44,8 +44,8 @@ export interface Template {
   utm_source?: string
   utm_medium?: string
   utm_campaign?: string
-  test_data?: Record<string, any>
-  settings?: Record<string, any>
+  test_data?: Record<string, unknown>
+  settings?: Record<string, unknown>
   created_at: string
   updated_at: string
   deleted_at?: string
@@ -68,10 +68,9 @@ export interface BroadcastTestSettings {
 }
 
 export interface AudienceSettings {
-  lists?: string[]
+  list?: string
   segments?: string[]
   exclude_unsubscribed: boolean
-  skip_duplicate_emails: boolean
 }
 
 export interface ScheduleSettings {
@@ -85,36 +84,36 @@ export interface ScheduleSettings {
 export type BroadcastStatus =
   | 'draft'
   | 'scheduled'
-  | 'sending'
+  | 'processing'
   | 'paused'
-  | 'sent'
+  | 'processed'
   | 'cancelled'
   | 'failed'
   | 'testing'
   | 'test_completed'
   | 'winner_selected'
 
+export interface BroadcastChannels {
+  email: boolean
+}
+
 export interface Broadcast {
   id: string
   workspace_id: string
   name: string
+  channel_type: string
   status: BroadcastStatus
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
   utm_parameters?: UTMParameters
-  metadata?: Record<string, any>
-  sent_count: number
-  delivered_count: number
-  failed_count: number
-  total_opens?: number
-  total_clicks?: number
-  total_bounced?: number
-  total_complained?: number
-  total_unsubscribed?: number
+  metadata?: Record<string, unknown>
+  channels?: BroadcastChannels // Legacy/frontend-only field
   winning_template?: string
   test_sent_at?: string
   winner_sent_at?: string
+  test_phase_recipient_count: number
+  winner_phase_recipient_count: number
   created_at: string
   updated_at: string
   started_at?: string
@@ -130,8 +129,9 @@ export interface CreateBroadcastRequest {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
+  tracking_enabled?: boolean
   utm_parameters?: UTMParameters
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface UpdateBroadcastRequest {
@@ -141,8 +141,9 @@ export interface UpdateBroadcastRequest {
   audience: AudienceSettings
   schedule: ScheduleSettings
   test_settings: BroadcastTestSettings
+  tracking_enabled?: boolean
   utm_parameters?: UTMParameters
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface ListBroadcastsRequest {

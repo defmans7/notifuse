@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -26,6 +26,7 @@ type BroadcastService struct {
 	authService        domain.AuthService
 	eventBus           domain.EventBus
 	messageHistoryRepo domain.MessageHistoryRepository
+	listService        domain.ListService
 	apiEndpoint        string
 }
 
@@ -42,6 +43,7 @@ func NewBroadcastService(
 	authService domain.AuthService,
 	eventBus domain.EventBus,
 	messageHistoryRepository domain.MessageHistoryRepository,
+	listService domain.ListService,
 	apiEndpoint string,
 ) *BroadcastService {
 	return &BroadcastService{
@@ -56,6 +58,7 @@ func NewBroadcastService(
 		authService:        authService,
 		eventBus:           eventBus,
 		messageHistoryRepo: messageHistoryRepository,
+		listService:        listService,
 		apiEndpoint:        apiEndpoint,
 	}
 }
@@ -300,7 +303,7 @@ func (s *BroadcastService) ScheduleBroadcast(ctx context.Context, request *domai
 
 		if request.SendNow {
 			// If sending immediately, set status to sending
-			broadcast.Status = domain.BroadcastStatusSending
+			broadcast.Status = domain.BroadcastStatusProcessing
 			now := time.Now().UTC()
 			broadcast.StartedAt = &now
 		} else {
@@ -408,7 +411,7 @@ func (s *BroadcastService) PauseBroadcast(ctx context.Context, request *domain.P
 		}
 
 		// Only sending broadcasts can be paused
-		if broadcast.Status != domain.BroadcastStatusSending {
+		if broadcast.Status != domain.BroadcastStatusProcessing {
 			err := fmt.Errorf("only broadcasts with sending status can be paused, current status: %s", broadcast.Status)
 			s.logger.Error("Cannot pause broadcast with non-sending status")
 			return err
@@ -529,7 +532,7 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 				s.logger.Info("Broadcast resumed to scheduled status")
 			} else {
 				// If scheduled time has passed or there was an error parsing it
-				broadcast.Status = domain.BroadcastStatusSending
+				broadcast.Status = domain.BroadcastStatusProcessing
 				startNow = true
 				if broadcast.StartedAt == nil {
 					broadcast.StartedAt = &now
@@ -538,7 +541,7 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 			}
 		} else {
 			// If broadcast wasn't scheduled, resume sending
-			broadcast.Status = domain.BroadcastStatusSending
+			broadcast.Status = domain.BroadcastStatusProcessing
 			startNow = true
 			if broadcast.StartedAt == nil {
 				broadcast.StartedAt = &now
@@ -548,7 +551,7 @@ func (s *BroadcastService) ResumeBroadcast(ctx context.Context, request *domain.
 
 		// Clear the paused timestamp and reason
 		broadcast.PausedAt = nil
-		broadcast.PauseReason = ""
+		broadcast.PauseReason = nil
 
 		// Persist the changes
 		err = s.repo.UpdateBroadcastTx(ctx, tx, broadcast)
@@ -730,7 +733,7 @@ func (s *BroadcastService) DeleteBroadcast(ctx context.Context, request *domain.
 	}
 
 	// Broadcasts in 'sending' status cannot be deleted
-	if broadcast.Status == domain.BroadcastStatusSending {
+	if broadcast.Status == domain.BroadcastStatusProcessing {
 		err := fmt.Errorf("broadcasts in 'sending' status cannot be deleted")
 		s.logger.Error("Cannot delete broadcast with sending status")
 		return err
@@ -867,7 +870,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		WorkspaceSecretKey: workspace.Settings.SecretKey,
 		ContactWithList: domain.ContactWithList{
 			Contact:  contact,
-			ListID:   "",
+			ListID:   broadcast.Audience.List, // Use list from broadcast audience for unsubscribe URL
 			ListName: "",
 		},
 		MessageID:        messageID,
@@ -926,6 +929,11 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		},
 	}
 
+	// Extract List-Unsubscribe URL from template data for RFC-8058 compliance
+	if unsubscribeURL, ok := templateData["oneclick_unsubscribe_url"].(string); ok && unsubscribeURL != "" {
+		emailRequest.EmailOptions.ListUnsubscribeURL = unsubscribeURL
+	}
+
 	// Send the email
 	err = s.emailSvc.SendEmail(ctx, emailRequest, true)
 	if err != nil {
@@ -934,11 +942,12 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 	}
 
 	now := time.Now().UTC()
+	listID := broadcast.Audience.List
 	message := &domain.MessageHistory{
 		ID:              messageID,
 		ContactEmail:    request.RecipientEmail,
 		BroadcastID:     &request.BroadcastID,
-		ListIDs:         domain.ListIDs(broadcast.Audience.Lists),
+		ListID:          &listID,
 		TemplateID:      template.ID,
 		TemplateVersion: template.Version,
 		Channel:         "email",
@@ -971,8 +980,8 @@ func (s *BroadcastService) GetTestResults(ctx context.Context, workspaceID, broa
 	// Validate status - allow viewing results during active sending and completed states
 	if broadcast.Status != domain.BroadcastStatusTestCompleted &&
 		broadcast.Status != domain.BroadcastStatusWinnerSelected &&
-		broadcast.Status != domain.BroadcastStatusSent &&
-		broadcast.Status != domain.BroadcastStatusSending &&
+		broadcast.Status != domain.BroadcastStatusProcessed &&
+		broadcast.Status != domain.BroadcastStatusProcessing &&
 		broadcast.Status != domain.BroadcastStatusTesting {
 		return nil, fmt.Errorf("broadcast test results not available for status: %s", broadcast.Status)
 	}
@@ -1013,13 +1022,19 @@ func (s *BroadcastService) GetTestResults(ctx context.Context, workspaceID, broa
 		}
 
 		// Calculate score for recommendation (if not auto-send winner mode)
-		if !broadcast.TestSettings.AutoSendWinner && broadcast.WinningTemplate == "" {
+		if !broadcast.TestSettings.AutoSendWinner && broadcast.WinningTemplate == nil {
 			score := (clickRate * 0.7) + (openRate * 0.3)
 			if score > bestScore {
 				bestScore = score
 				recommendedWinner = variation.TemplateID
 			}
 		}
+	}
+
+	// Get winning template as string for response
+	winningTemplate := ""
+	if broadcast.WinningTemplate != nil {
+		winningTemplate = *broadcast.WinningTemplate
 	}
 
 	return &domain.TestResultsResponse{
@@ -1029,7 +1044,7 @@ func (s *BroadcastService) GetTestResults(ctx context.Context, workspaceID, broa
 		TestCompletedAt:   broadcast.TestSentAt,
 		VariationResults:  variationResults,
 		RecommendedWinner: recommendedWinner,
-		WinningTemplate:   broadcast.WinningTemplate, // Include actual winner if selected
+		WinningTemplate:   winningTemplate, // Include actual winner if selected
 		IsAutoSendWinner:  broadcast.TestSettings.AutoSendWinner,
 	}, nil
 }
@@ -1056,7 +1071,7 @@ func (s *BroadcastService) SelectWinner(ctx context.Context, workspaceID, broadc
 		} else if broadcast.Status == domain.BroadcastStatusTesting && !broadcast.TestSettings.AutoSendWinner {
 			// Allow manual winner selection during test phase when auto_send_winner is false
 			validForWinnerSelection = true
-		} else if broadcast.Status == domain.BroadcastStatusSending && broadcast.TestSettings.Enabled && !broadcast.TestSettings.AutoSendWinner {
+		} else if broadcast.Status == domain.BroadcastStatusProcessing && broadcast.TestSettings.Enabled && !broadcast.TestSettings.AutoSendWinner {
 			// Allow manual winner selection during sending phase for A/B tests when auto_send_winner is false
 			// This handles the case where the test phase is very short and the status hasn't been updated to "testing" yet
 			validForWinnerSelection = true
@@ -1079,7 +1094,7 @@ func (s *BroadcastService) SelectWinner(ctx context.Context, workspaceID, broadc
 		}
 
 		// Update broadcast with winning template
-		broadcast.WinningTemplate = templateID // Store the winning TemplateID
+		broadcast.WinningTemplate = &templateID // Store the winning TemplateID
 		broadcast.Status = domain.BroadcastStatusWinnerSelected
 		broadcast.UpdatedAt = time.Now().UTC()
 
@@ -1122,4 +1137,24 @@ func (s *BroadcastService) SelectWinner(ctx context.Context, workspaceID, broadc
 
 		return nil
 	})
+}
+
+// ValidateSlug checks if slug is valid format (no nanoid - clean slugs)
+func ValidateSlug(slug string) error {
+	if slug == "" {
+		return fmt.Errorf("slug cannot be empty")
+	}
+
+	if len(slug) > 100 {
+		return fmt.Errorf("slug too long (max 100 characters)")
+	}
+
+	// Check format: lowercase letters, numbers, and hyphens only
+	for _, r := range slug {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return fmt.Errorf("slug must contain only lowercase letters, numbers, and hyphens")
+		}
+	}
+
+	return nil
 }

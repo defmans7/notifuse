@@ -23,10 +23,12 @@ func TestListService_CreateList(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -46,6 +48,7 @@ func TestListService_CreateList(t *testing.T) {
 		}
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
 		mockRepo.EXPECT().CreateList(ctx, workspaceID, gomock.Any()).Return(nil)
+		mockCache.EXPECT().Clear()
 		mockLogger.EXPECT().WithField("list_id", list.ID).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
 
@@ -64,14 +67,6 @@ func TestListService_CreateList(t *testing.T) {
 				ID:      "template123",
 				Version: 1,
 			},
-			WelcomeTemplate: &domain.TemplateReference{
-				ID:      "welcome123",
-				Version: 2,
-			},
-			UnsubscribeTemplate: &domain.TemplateReference{
-				ID:      "unsub123",
-				Version: 3,
-			},
 		}
 
 		userWorkspace := &domain.UserWorkspace{
@@ -89,12 +84,9 @@ func TestListService_CreateList(t *testing.T) {
 				assert.Equal(t, "list123", l.ID)
 				assert.Equal(t, "template123", l.DoubleOptInTemplate.ID)
 				assert.Equal(t, int64(1), l.DoubleOptInTemplate.Version)
-				assert.Equal(t, "welcome123", l.WelcomeTemplate.ID)
-				assert.Equal(t, int64(2), l.WelcomeTemplate.Version)
-				assert.Equal(t, "unsub123", l.UnsubscribeTemplate.ID)
-				assert.Equal(t, int64(3), l.UnsubscribeTemplate.Version)
 				return nil
 			})
+		mockCache.EXPECT().Clear()
 
 		err := service.CreateList(ctx, workspaceID, listWithTemplates)
 		assert.NoError(t, err)
@@ -155,10 +147,12 @@ func TestListService_GetListByID(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -247,10 +241,12 @@ func TestListService_GetLists(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -316,10 +312,12 @@ func TestListService_UpdateList(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -339,6 +337,7 @@ func TestListService_UpdateList(t *testing.T) {
 		}
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
 		mockRepo.EXPECT().UpdateList(ctx, workspaceID, gomock.Any()).Return(nil)
+		mockCache.EXPECT().Clear()
 		mockLogger.EXPECT().WithField("list_id", list.ID).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
 
@@ -356,14 +355,6 @@ func TestListService_UpdateList(t *testing.T) {
 				ID:      "template123",
 				Version: 1,
 			},
-			WelcomeTemplate: &domain.TemplateReference{
-				ID:      "welcome123",
-				Version: 2,
-			},
-			UnsubscribeTemplate: &domain.TemplateReference{
-				ID:      "unsub123",
-				Version: 3,
-			},
 		}
 
 		userWorkspace := &domain.UserWorkspace{
@@ -380,12 +371,9 @@ func TestListService_UpdateList(t *testing.T) {
 				assert.Equal(t, "list123", l.ID)
 				assert.Equal(t, "template123", l.DoubleOptInTemplate.ID)
 				assert.Equal(t, int64(1), l.DoubleOptInTemplate.Version)
-				assert.Equal(t, "welcome123", l.WelcomeTemplate.ID)
-				assert.Equal(t, int64(2), l.WelcomeTemplate.Version)
-				assert.Equal(t, "unsub123", l.UnsubscribeTemplate.ID)
-				assert.Equal(t, int64(3), l.UnsubscribeTemplate.Version)
 				return nil
 			})
+		mockCache.EXPECT().Clear()
 
 		err := service.UpdateList(ctx, workspaceID, listWithTemplates)
 		assert.NoError(t, err)
@@ -446,10 +434,12 @@ func TestListService_DeleteList(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -466,6 +456,7 @@ func TestListService_DeleteList(t *testing.T) {
 		}
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
 		mockRepo.EXPECT().DeleteList(ctx, workspaceID, listID).Return(nil)
+		mockCache.EXPECT().Clear()
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger).Times(0)
 		mockLogger.EXPECT().Error(gomock.Any()).Times(0)
 
@@ -511,10 +502,12 @@ func TestListService_GetListStats(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -582,10 +575,12 @@ func TestListService_SubscribeToLists(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -784,9 +779,23 @@ func TestListService_SubscribeToLists(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to subscribe to list")
 	})
 
-	t.Run("error - non-public list", func(t *testing.T) {
-		// Test case for a non-public list with unauthenticated request
+	t.Run("error - non-public list with unauthenticated request", func(t *testing.T) {
+		// Test case for a non-public list with unauthenticated request (no valid HMAC)
+		// Create payload WITHOUT valid HMAC to simulate truly unauthenticated request
+		unauthPayload := &domain.SubscribeToListsRequest{
+			WorkspaceID: workspaceID,
+			Contact: domain.Contact{
+				Email:     "test@example.com",
+				EmailHMAC: "", // No HMAC = unauthenticated
+				FirstName: &domain.NullableString{String: "Test", IsNull: false},
+				LastName:  &domain.NullableString{String: "User", IsNull: false},
+			},
+			ListIDs: []string{"list123"},
+		}
+
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		// For unauthenticated requests, service checks if contact exists first
+		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, "test@example.com").Return(nil, nil)
 		mockContactRepo.EXPECT().UpsertContact(gomock.Any(), workspaceID, gomock.Any()).Return(true, nil)
 
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
@@ -799,9 +808,51 @@ func TestListService_SubscribeToLists(t *testing.T) {
 			},
 		}, nil)
 
-		err := service.SubscribeToLists(ctx, payload, false) // hasBearerToken=false
+		err := service.SubscribeToLists(ctx, unauthPayload, false) // hasBearerToken=false, no HMAC
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "list is not public")
+	})
+
+	t.Run("success - non-public list with HMAC authentication", func(t *testing.T) {
+		// Create workspace with secret key
+		workspaceWithSecret := &domain.Workspace{
+			ID: workspaceID,
+			Settings: domain.WorkspaceSettings{
+				SecretKey: "test-secret-key",
+			},
+		}
+
+		// Compute valid HMAC for the email
+		validHMAC := domain.ComputeEmailHMAC("test@example.com", "test-secret-key")
+
+		// Create payload with valid HMAC (simulates notification center request)
+		hmacPayload := &domain.SubscribeToListsRequest{
+			WorkspaceID: workspaceID,
+			Contact: domain.Contact{
+				Email:     "test@example.com",
+				EmailHMAC: validHMAC,
+				FirstName: &domain.NullableString{String: "Test", IsNull: false},
+				LastName:  &domain.NullableString{String: "User", IsNull: false},
+			},
+			ListIDs: []string{"list123"},
+		}
+
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspaceWithSecret, nil)
+		mockContactRepo.EXPECT().UpsertContact(gomock.Any(), workspaceID, gomock.Any()).Return(true, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
+			{
+				ID:        "list123",
+				Name:      "Private List",
+				IsPublic:  false, // Private list should work with HMAC auth
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}, nil)
+		mockContactListRepo.EXPECT().AddContactToList(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+		workspaceWithSecret.Settings.MarketingEmailProviderID = "" // No marketing provider
+
+		err := service.SubscribeToLists(ctx, hmacPayload, false) // hasBearerToken=false but HMAC is valid
+		assert.NoError(t, err)                                   // Should succeed because isAuthenticated=true via HMAC
 	})
 
 	t.Run("error - upsert contact failure", func(t *testing.T) {
@@ -945,10 +996,12 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -970,18 +1023,6 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		ListIDs:     []string{listID},
 	}
 
-	contact := &domain.Contact{
-		Email: email,
-		FirstName: &domain.NullableString{
-			String: "Test",
-			IsNull: false,
-		},
-		LastName: &domain.NullableString{
-			String: "User",
-			IsNull: false,
-		},
-	}
-
 	t.Run("unsubscribe with API authentication", func(t *testing.T) {
 		// Set up expectations
 		userWorkspace := &domain.UserWorkspace{
@@ -994,9 +1035,6 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		}
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
-		mockWorkspace := workspace
-		mockWorkspace.Settings.MarketingEmailProviderID = ""
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
 			{
 				ID:        listID,
@@ -1021,9 +1059,6 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 	t.Run("unsubscribe with HMAC authentication", func(t *testing.T) {
 		// Set up expectations
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
-		mockWorkspace := workspace
-		mockWorkspace.Settings.MarketingEmailProviderID = ""
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
 			{
 				ID:        listID,
@@ -1045,8 +1080,9 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("unsubscribe with confirmation email - using workspace.GetEmailProvider", func(t *testing.T) {
-		// Setup workspace with marketing email provider
+	t.Run("unsubscribe without confirmation email", func(t *testing.T) {
+		// Setup workspace with marketing email provider but no unsubscribe template
+		// (unsubscribe templates are no longer supported - automations handle this now)
 		mockWorkspace := &domain.Workspace{
 			ID: workspaceID,
 			Settings: domain.WorkspaceSettings{
@@ -1070,23 +1106,18 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			},
 		}
 
-		// List with unsubscribe template
-		listWithTemplate := &domain.List{
-			ID:       listID,
-			Name:     "Test List",
-			IsPublic: true,
-			UnsubscribeTemplate: &domain.TemplateReference{
-				ID:      "unsub-template",
-				Version: 1,
-			},
+		// List without unsubscribe template (automations handle this now)
+		listWithoutTemplate := &domain.List{
+			ID:        listID,
+			Name:      "Test List",
+			IsPublic:  true,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
 
 		// Set up expectations
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(mockWorkspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
-		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{listWithTemplate}, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{listWithoutTemplate}, nil)
 		mockContactListRepo.EXPECT().UpdateContactListStatus(
 			gomock.Any(),
 			workspaceID,
@@ -1095,103 +1126,16 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			domain.ContactListStatusUnsubscribed,
 		).Return(nil)
 
-		// Email sending expectations
-		mockEmailService.EXPECT().SendEmailForTemplate(
-			gomock.Any(),
-			gomock.Any(), // SendEmailRequest
-		).Do(func(_ context.Context, request domain.SendEmailRequest) {
-			assert.Equal(t, workspaceID, request.WorkspaceID)
-			assert.Equal(t, contact, request.Contact)
-			assert.Equal(t, "unsub-template", request.TemplateConfig.TemplateID)
-			assert.Equal(t, domain.EmailProviderKindSparkPost, request.EmailProvider.Kind)
-			assert.Len(t, request.EmailProvider.Senders, 1)
-			assert.Equal(t, "test@example.com", request.EmailProvider.Senders[0].Email)
-			assert.NotNil(t, request.EmailProvider.SparkPost)
-			assert.Equal(t, "test-api-key", request.EmailProvider.SparkPost.APIKey)
-		}).Return(nil)
+		// No email sending expected - automations handle unsubscribe confirmations now
 
 		err := service.UnsubscribeFromLists(ctx, payload, false)
 		assert.NoError(t, err)
 	})
 
-	t.Run("error - get contact failure", func(t *testing.T) {
-		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(nil, errors.New("contact not found"))
-		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
-		mockLogger.EXPECT().Error(gomock.Any())
 
-		err := service.UnsubscribeFromLists(ctx, payload, false)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get contact")
-	})
-
-	t.Run("error - send unsubscribe email failure", func(t *testing.T) {
-		// Setup workspace with marketing email provider
-		mockWorkspace := &domain.Workspace{
-			ID: workspaceID,
-			Settings: domain.WorkspaceSettings{
-				SecretKey:                "test-secret-key",
-				MarketingEmailProviderID: "marketing-provider",
-			},
-			Integrations: domain.Integrations{
-				{
-					ID:   "marketing-provider",
-					Type: domain.IntegrationTypeEmail,
-					EmailProvider: domain.EmailProvider{
-						Kind: domain.EmailProviderKindSparkPost,
-						Senders: []domain.EmailSender{
-							domain.NewEmailSender("test@example.com", "Test Sender"),
-						},
-						SparkPost: &domain.SparkPostSettings{
-							APIKey: "test-api-key",
-						},
-					},
-				},
-			},
-		}
-
-		// List with unsubscribe template
-		listWithTemplate := &domain.List{
-			ID:       listID,
-			Name:     "Test List",
-			IsPublic: true,
-			UnsubscribeTemplate: &domain.TemplateReference{
-				ID:      "unsub-template",
-				Version: 1,
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		// Set up expectations
-		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(mockWorkspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
-		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{listWithTemplate}, nil)
-		mockContactListRepo.EXPECT().UpdateContactListStatus(
-			gomock.Any(),
-			workspaceID,
-			email,
-			listID,
-			domain.ContactListStatusUnsubscribed,
-		).Return(nil)
-
-		// Email sending expectations - returns error
-		mockEmailService.EXPECT().SendEmailForTemplate(
-			gomock.Any(),
-			gomock.Any(), // SendEmailRequest
-		).Return(errors.New("email sending error"))
-
-		mockLogger.EXPECT().WithField("email", email).Return(mockLogger)
-		mockLogger.EXPECT().Error(gomock.Any())
-
-		err := service.UnsubscribeFromLists(ctx, payload, false)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to send unsubscribe confirmation email")
-	})
 
 	t.Run("error - get lists failure", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return(nil, errors.New("get lists error"))
 		mockLogger.EXPECT().WithField("list_ids", payload.ListIDs).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -1203,7 +1147,6 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 
 	t.Run("error - update status failure", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
 			{
 				ID:        listID,
@@ -1279,7 +1222,6 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 
 	t.Run("error - list not found", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
 		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{}, nil)
 		mockLogger.EXPECT().WithField("list_id", listID).Return(mockLogger)
 		mockLogger.EXPECT().Error(gomock.Any())
@@ -1289,33 +1231,29 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 		assert.Contains(t, err.Error(), "list not found")
 	})
 
-	t.Run("unsubscribe with template but no email provider configured", func(t *testing.T) {
-		// Setup workspace with NO marketing email provider
-		mockWorkspace := &domain.Workspace{
-			ID: workspaceID,
-			Settings: domain.WorkspaceSettings{
-				SecretKey: "test-secret-key",
-				// MarketingEmailProviderID not set intentionally
-			},
-		}
 
-		// List with unsubscribe template
-		listWithTemplate := &domain.List{
-			ID:       listID,
-			Name:     "Test List",
-			IsPublic: true,
-			UnsubscribeTemplate: &domain.TemplateReference{
-				ID:      "unsub-template",
-				Version: 1,
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+	t.Run("unsubscribe updates message history when MessageID provided", func(t *testing.T) {
+		// Payload with MessageID for broadcast tracking
+		messageID := "msg123"
+		payloadWithMessageID := &domain.UnsubscribeFromListsRequest{
+			WorkspaceID: workspaceID,
+			Email:       email,
+			EmailHMAC:   emailHMAC,
+			ListIDs:     []string{listID},
+			MessageID:   messageID,
 		}
 
 		// Set up expectations
-		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(mockWorkspace, nil)
-		mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, email).Return(contact, nil)
-		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{listWithTemplate}, nil)
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
+			{
+				ID:        listID,
+				Name:      "Test List",
+				IsPublic:  true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}, nil)
 		mockContactListRepo.EXPECT().UpdateContactListStatus(
 			gomock.Any(),
 			workspaceID,
@@ -1324,11 +1262,101 @@ func TestListService_UnsubscribeFromLists(t *testing.T) {
 			domain.ContactListStatusUnsubscribed,
 		).Return(nil)
 
-		// Email service should not be called when no provider is configured
-		// Even though template exists, email won't be sent
+		// Expect message history to be updated with unsubscribe event
+		mockMessageHistoryRepo.EXPECT().SetStatusesIfNotSet(
+			gomock.Any(),
+			workspaceID,
+			gomock.Any(), // []domain.MessageEventUpdate
+		).Do(func(_ context.Context, _ string, updates []domain.MessageEventUpdate) {
+			assert.Len(t, updates, 1)
+			assert.Equal(t, messageID, updates[0].ID)
+			assert.Equal(t, domain.MessageEventUnsubscribed, updates[0].Event)
+			assert.False(t, updates[0].Timestamp.IsZero())
+		}).Return(nil)
 
-		err := service.UnsubscribeFromLists(ctx, payload, false)
+		err := service.UnsubscribeFromLists(ctx, payloadWithMessageID, false)
 		assert.NoError(t, err)
+	})
+
+	t.Run("unsubscribe skips message history when MessageID empty", func(t *testing.T) {
+		// Payload without MessageID
+		payloadNoMessageID := &domain.UnsubscribeFromListsRequest{
+			WorkspaceID: workspaceID,
+			Email:       email,
+			EmailHMAC:   emailHMAC,
+			ListIDs:     []string{listID},
+			MessageID:   "", // No message ID
+		}
+
+		// Set up expectations
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
+			{
+				ID:        listID,
+				Name:      "Test List",
+				IsPublic:  true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}, nil)
+		mockContactListRepo.EXPECT().UpdateContactListStatus(
+			gomock.Any(),
+			workspaceID,
+			email,
+			listID,
+			domain.ContactListStatusUnsubscribed,
+		).Return(nil)
+
+		// Message history should NOT be called when MessageID is empty
+		// (No EXPECT call for mockMessageHistoryRepo.SetStatusesIfNotSet)
+
+		err := service.UnsubscribeFromLists(ctx, payloadNoMessageID, false)
+		assert.NoError(t, err)
+	})
+
+	t.Run("unsubscribe succeeds even if message history update fails", func(t *testing.T) {
+		// Payload with MessageID
+		messageID := "msg456"
+		payloadWithMessageID := &domain.UnsubscribeFromListsRequest{
+			WorkspaceID: workspaceID,
+			Email:       email,
+			EmailHMAC:   emailHMAC,
+			ListIDs:     []string{listID},
+			MessageID:   messageID,
+		}
+
+		// Set up expectations
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{
+			{
+				ID:        listID,
+				Name:      "Test List",
+				IsPublic:  true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}, nil)
+		mockContactListRepo.EXPECT().UpdateContactListStatus(
+			gomock.Any(),
+			workspaceID,
+			email,
+			listID,
+			domain.ContactListStatusUnsubscribed,
+		).Return(nil)
+
+		// Message history update fails - but unsubscribe should still succeed
+		mockMessageHistoryRepo.EXPECT().SetStatusesIfNotSet(
+			gomock.Any(),
+			workspaceID,
+			gomock.Any(),
+		).Return(errors.New("database error"))
+
+		// Expect warning log
+		mockLogger.EXPECT().WithField("message_id", messageID).Return(mockLogger)
+		mockLogger.EXPECT().Warn(gomock.Any())
+
+		err := service.UnsubscribeFromLists(ctx, payloadWithMessageID, false)
+		assert.NoError(t, err) // Should succeed despite message history error
 	})
 }
 
@@ -1344,10 +1372,12 @@ func TestListService_SubscribeToLists_UnauthExistingContactSkipsUpsert(t *testin
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -1371,80 +1401,6 @@ func TestListService_SubscribeToLists_UnauthExistingContactSkipsUpsert(t *testin
 	assert.NoError(t, err)
 }
 
-func TestListService_SubscribeToLists_WelcomeEmailSent(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockListRepository(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockContactRepo := mocks.NewMockContactRepository(ctrl)
-	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
-	apiEndpoint := "https://api.example.com"
-
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
-
-	ctx := context.Background()
-	workspaceID := "workspace123"
-	contactEmail := "test@example.com"
-	workspace := &domain.Workspace{
-		ID: workspaceID,
-		Settings: domain.WorkspaceSettings{
-			SecretKey:                "test-secret-key",
-			MarketingEmailProviderID: "marketing-provider",
-		},
-		Integrations: domain.Integrations{
-			{
-				ID:   "marketing-provider",
-				Type: domain.IntegrationTypeEmail,
-				EmailProvider: domain.EmailProvider{
-					Kind:      domain.EmailProviderKindSparkPost,
-					Senders:   []domain.EmailSender{domain.NewEmailSender("test@example.com", "Test Sender")},
-					SparkPost: &domain.SparkPostSettings{APIKey: "test-api-key"},
-				},
-			},
-		},
-	}
-
-	list := &domain.List{
-		ID:              "list123",
-		Name:            "Welcome List",
-		WelcomeTemplate: &domain.TemplateReference{ID: "welcome-template", Version: 1},
-		IsPublic:        true,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
-	}
-
-	userWorkspace := &domain.UserWorkspace{
-		UserID:      "user123",
-		WorkspaceID: workspaceID,
-		Role:        "member",
-		Permissions: domain.UserPermissions{
-			domain.PermissionResourceLists: {Read: true, Write: true},
-		},
-	}
-	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
-	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-	mockContactRepo.EXPECT().UpsertContact(gomock.Any(), workspaceID, gomock.Any()).Return(true, nil)
-	mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{list}, nil)
-	mockContactListRepo.EXPECT().AddContactToList(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
-	mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, contactEmail).Return(&domain.Contact{Email: contactEmail}, nil)
-	mockEmailService.EXPECT().SendEmailForTemplate(gomock.Any(), gomock.Any()).Do(func(_ context.Context, req domain.SendEmailRequest) {
-		assert.Equal(t, "welcome-template", req.TemplateConfig.TemplateID)
-		assert.Equal(t, domain.EmailProviderKindSparkPost, req.EmailProvider.Kind)
-	}).Return(nil)
-
-	payload := &domain.SubscribeToListsRequest{
-		WorkspaceID: workspaceID,
-		Contact:     domain.Contact{Email: contactEmail},
-		ListIDs:     []string{"list123"},
-	}
-
-	err := service.SubscribeToLists(ctx, payload, true)
-	assert.NoError(t, err)
-}
 
 func TestListService_SubscribeToLists_DoubleOptInEmailSent(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -1456,10 +1412,12 @@ func TestListService_SubscribeToLists_DoubleOptInEmailSent(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"
@@ -1518,80 +1476,6 @@ func TestListService_SubscribeToLists_DoubleOptInEmailSent(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestListService_SubscribeToLists_WelcomeEmailFailure(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockListRepository(ctrl)
-	mockAuthService := mocks.NewMockAuthService(ctrl)
-	mockLogger := pkgmocks.NewMockLogger(ctrl)
-	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
-	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
-	mockContactRepo := mocks.NewMockContactRepository(ctrl)
-	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
-	apiEndpoint := "https://api.example.com"
-
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
-
-	ctx := context.Background()
-	workspaceID := "workspace123"
-	contactEmail := "test@example.com"
-	workspace := &domain.Workspace{
-		ID: workspaceID,
-		Settings: domain.WorkspaceSettings{
-			SecretKey:                "test-secret-key",
-			MarketingEmailProviderID: "marketing-provider",
-		},
-		Integrations: domain.Integrations{
-			{
-				ID:   "marketing-provider",
-				Type: domain.IntegrationTypeEmail,
-				EmailProvider: domain.EmailProvider{
-					Kind:      domain.EmailProviderKindSparkPost,
-					Senders:   []domain.EmailSender{domain.NewEmailSender("test@example.com", "Test Sender")},
-					SparkPost: &domain.SparkPostSettings{APIKey: "test-api-key"},
-				},
-			},
-		},
-	}
-
-	list := &domain.List{
-		ID:              "list123",
-		Name:            "Welcome List",
-		WelcomeTemplate: &domain.TemplateReference{ID: "welcome-template", Version: 1},
-		IsPublic:        true,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
-	}
-
-	userWorkspace := &domain.UserWorkspace{
-		UserID:      "user123",
-		WorkspaceID: workspaceID,
-		Role:        "member",
-		Permissions: domain.UserPermissions{
-			domain.PermissionResourceLists: {Read: true, Write: true},
-		},
-	}
-	mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
-	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
-	mockContactRepo.EXPECT().UpsertContact(gomock.Any(), workspaceID, gomock.Any()).Return(true, nil)
-	mockRepo.EXPECT().GetLists(gomock.Any(), workspaceID).Return([]*domain.List{list}, nil)
-	mockContactListRepo.EXPECT().AddContactToList(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
-	mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, contactEmail).Return(&domain.Contact{Email: contactEmail}, nil)
-	mockEmailService.EXPECT().SendEmailForTemplate(gomock.Any(), gomock.Any()).Return(errors.New("email sending error"))
-	mockLogger.EXPECT().WithField("email", contactEmail).Return(mockLogger)
-	mockLogger.EXPECT().Error(gomock.Any())
-
-	payload := &domain.SubscribeToListsRequest{
-		WorkspaceID: workspaceID,
-		Contact:     domain.Contact{Email: contactEmail},
-		ListIDs:     []string{"list123"},
-	}
-
-	err := service.SubscribeToLists(ctx, payload, true)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to send welcome email")
-}
 
 func TestListService_SubscribeToLists_GetEmailProviderError(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -1603,10 +1487,12 @@ func TestListService_SubscribeToLists_GetEmailProviderError(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
 	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockCache := pkgmocks.NewMockCache(ctrl)
 	apiEndpoint := "https://api.example.com"
 
-	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint)
+	service := NewListService(mockRepo, mockWorkspaceRepo, mockContactListRepo, mockContactRepo, mockMessageHistoryRepo, mockAuthService, mockEmailService, mockLogger, apiEndpoint, mockCache)
 
 	ctx := context.Background()
 	workspaceID := "workspace123"

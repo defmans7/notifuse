@@ -20,16 +20,16 @@ export interface MessageHistoryEntityData {
   template_version: number
   template_name?: string | null
   template_category?: string | null
-  template_email?: Record<string, any> | null
+  template_email?: Record<string, unknown> | null
   channel: string
   sent_at: string
   delivered_at?: string
   opened_at?: string
   clicked_at?: string
-  message_data?: Record<string, any>
+  message_data?: Record<string, unknown>
 }
 
-export interface WebhookEventEntityData {
+export interface InboundWebhookEventEntityData {
   id: string
   type: string // delivered, bounce, complaint, opened, clicked, auth_email, before_user_created
   source: string // ses, postmark, mailgun, sparkpost, mailjet, smtp, supabase
@@ -51,22 +51,46 @@ export interface ContactSegmentEntityData {
   version?: number
 }
 
+export interface CustomEventEntityData {
+  event_name: string
+  external_id: string
+  email: string
+  properties: Record<string, unknown>
+  occurred_at: string
+  source: string
+  integration_id?: string | null
+  // Goal tracking fields
+  goal_name?: string | null
+  goal_type?: string | null
+  goal_value?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AutomationEventEntityData {
+  id: string
+  name: string
+  status: string
+}
+
 export type EntityData =
   | ContactEntityData
   | ContactListEntityData
   | MessageHistoryEntityData
-  | WebhookEventEntityData
+  | InboundWebhookEventEntityData
   | ContactSegmentEntityData
+  | CustomEventEntityData
+  | AutomationEventEntityData
 
 export interface ContactTimelineEntry {
   id: string
   email: string
   operation: 'insert' | 'update' | 'delete'
-  entity_type: 'contact' | 'contact_list' | 'message_history' | 'webhook_event' | 'contact_segment'
-  kind: string // operation_entityType (e.g., 'insert_contact', 'update_message_history', 'join_segment', 'leave_segment')
-  changes: Record<string, any>
-  entity_id?: string // NULL for contact, list_id for contact_list, message_id for message_history and webhook_event, segment_id for contact_segment
-  entity_data?: EntityData // Joined entity data with contact, list, message, or webhook event details
+  entity_type: 'contact' | 'contact_list' | 'message_history' | 'inbound_webhook_event' | 'contact_segment' | 'custom_event' | 'automation'
+  kind: string // Semantic event names (e.g., 'contact.created', 'list.subscribed', 'segment.joined', 'orders/fulfilled')
+  changes: Record<string, unknown>
+  entity_id?: string // NULL for contact, list_id for contact_list, message_id for message_history and inbound_webhook_event, segment_id for contact_segment, external_id for custom_event
+  entity_data?: EntityData // Joined entity data with contact, list, message, webhook event, or custom event details
   created_at: string // Can be set to historical data
   db_created_at: string // Timestamp when record was inserted into database
 }

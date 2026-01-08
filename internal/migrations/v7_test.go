@@ -27,6 +27,12 @@ func TestV7Migration_HasWorkspaceUpdate(t *testing.T) {
 	assert.True(t, migration.HasWorkspaceUpdate(), "V7Migration should have workspace updates")
 }
 
+func TestV7Migration_ShouldRestartServer(t *testing.T) {
+	// Test V7Migration.ShouldRestartServer - this was at 0% coverage
+	migration := &V7Migration{}
+	assert.False(t, migration.ShouldRestartServer(), "V7Migration should not require server restart")
+}
+
 func TestV7Migration_UpdateSystem(t *testing.T) {
 	migration := &V7Migration{}
 	ctx := context.Background()
@@ -35,7 +41,7 @@ func TestV7Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - No system updates", func(t *testing.T) {
 		db, _, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		err = migration.UpdateSystem(ctx, cfg, db)
 		assert.NoError(t, err, "UpdateSystem should succeed with no operations")
@@ -54,7 +60,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Success - All operations complete", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock CREATE TABLE
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
@@ -108,7 +114,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE TABLE fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnError(sql.ErrConnDone)
@@ -121,7 +127,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE INDEX for email_created_at fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -136,7 +142,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE INDEX for entity_id fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -153,7 +159,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE FUNCTION for track_contact_changes fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -172,7 +178,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE TRIGGER for contacts fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -193,7 +199,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE FUNCTION for track_contact_list_changes fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -216,7 +222,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE TRIGGER for contact_lists fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -241,7 +247,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE FUNCTION for track_message_history_changes fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -268,7 +274,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE TRIGGER for message_history fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -297,7 +303,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE FUNCTION for track_webhook_event_changes fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))
@@ -328,7 +334,7 @@ func TestV7Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Error - CREATE TRIGGER for webhook_events fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		mock.ExpectExec("CREATE TABLE IF NOT EXISTS contact_timeline").
 			WillReturnResult(sqlmock.NewResult(0, 0))

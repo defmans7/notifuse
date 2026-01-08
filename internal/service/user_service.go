@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"fmt"
 	"time"
@@ -9,22 +10,23 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/ratelimiter"
 	"github.com/Notifuse/notifuse/pkg/tracing"
 	"github.com/google/uuid"
 	"go.opencensus.io/trace"
 )
 
 type UserService struct {
-	repo              domain.UserRepository
-	authService       domain.AuthService
-	emailSender       EmailSender
-	sessionExpiry     time.Duration
-	logger            logger.Logger
-	isProduction      bool
-	tracer            tracing.Tracer
-	signInLimiter     *RateLimiter
-	verifyCodeLimiter *RateLimiter
-	secretKey         string
+	repo          domain.UserRepository
+	authService   domain.AuthService
+	emailSender   EmailSender
+	sessionExpiry time.Duration
+	logger        logger.Logger
+	isProduction  bool
+	tracer        tracing.Tracer
+	rateLimiter   *ratelimiter.RateLimiter // Global rate limiter with namespace support
+	secretKey     string
+	rootEmail     string
 }
 
 type EmailSender interface {
@@ -32,16 +34,16 @@ type EmailSender interface {
 }
 
 type UserServiceConfig struct {
-	Repository        domain.UserRepository
-	AuthService       domain.AuthService
-	EmailSender       EmailSender
-	SessionExpiry     time.Duration
-	Logger            logger.Logger
-	IsProduction      bool
-	Tracer            tracing.Tracer
-	SignInLimiter     *RateLimiter
-	VerifyCodeLimiter *RateLimiter
-	SecretKey         string
+	Repository    domain.UserRepository
+	AuthService   domain.AuthService
+	EmailSender   EmailSender
+	SessionExpiry time.Duration
+	Logger        logger.Logger
+	IsProduction  bool
+	Tracer        tracing.Tracer
+	RateLimiter   *ratelimiter.RateLimiter // Global rate limiter
+	SecretKey     string
+	RootEmail     string
 }
 
 func NewUserService(cfg UserServiceConfig) (*UserService, error) {
@@ -52,16 +54,16 @@ func NewUserService(cfg UserServiceConfig) (*UserService, error) {
 	}
 
 	return &UserService{
-		repo:              cfg.Repository,
-		authService:       cfg.AuthService,
-		emailSender:       cfg.EmailSender,
-		sessionExpiry:     cfg.SessionExpiry,
-		logger:            cfg.Logger,
-		isProduction:      cfg.IsProduction,
-		tracer:            tracer,
-		signInLimiter:     cfg.SignInLimiter,
-		verifyCodeLimiter: cfg.VerifyCodeLimiter,
-		secretKey:         cfg.SecretKey,
+		repo:          cfg.Repository,
+		authService:   cfg.AuthService,
+		emailSender:   cfg.EmailSender,
+		sessionExpiry: cfg.SessionExpiry,
+		logger:        cfg.Logger,
+		isProduction:  cfg.IsProduction,
+		tracer:        tracer,
+		rateLimiter:   cfg.RateLimiter, // Global rate limiter
+		secretKey:     cfg.SecretKey,
+		rootEmail:     cfg.RootEmail,
 	}, nil
 }
 
@@ -75,7 +77,7 @@ func (s *UserService) SignIn(ctx context.Context, input domain.SignInInput) (str
 	s.tracer.AddAttribute(ctx, "user.email", input.Email)
 
 	// Check rate limit to prevent email bombing and session creation spam
-	if s.signInLimiter != nil && !s.signInLimiter.Allow(input.Email) {
+	if s.rateLimiter != nil && !s.rateLimiter.Allow("signin", input.Email) {
 		s.logger.WithField("email", input.Email).Warn("Sign-in rate limit exceeded")
 		s.tracer.AddAttribute(ctx, "error", "rate_limit_exceeded")
 		s.tracer.MarkSpanError(ctx, fmt.Errorf("rate limit exceeded"))
@@ -152,7 +154,7 @@ func (s *UserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInp
 	s.tracer.AddAttribute(ctx, "user.email", input.Email)
 
 	// Check rate limit to prevent brute force attacks on magic codes
-	if s.verifyCodeLimiter != nil && !s.verifyCodeLimiter.Allow(input.Email) {
+	if s.rateLimiter != nil && !s.rateLimiter.Allow("verify", input.Email) {
 		s.logger.WithField("email", input.Email).Warn("Verify code rate limit exceeded")
 		s.tracer.AddAttribute(ctx, "error", "rate_limit_exceeded")
 		s.tracer.MarkSpanError(ctx, fmt.Errorf("rate limit exceeded"))
@@ -226,14 +228,100 @@ func (s *UserService) VerifyCode(ctx context.Context, input domain.VerifyCodeInp
 	s.tracer.AddAttribute(ctx, "token.expires_at", matchingSession.ExpiresAt.String())
 
 	// Reset rate limiter on successful verification
-	if s.verifyCodeLimiter != nil {
-		s.verifyCodeLimiter.Reset(input.Email)
+	if s.rateLimiter != nil {
+		s.rateLimiter.Reset("verify", input.Email)
 	}
 
 	return &domain.AuthResponse{
 		Token:     token,
 		User:      *user,
 		ExpiresAt: matchingSession.ExpiresAt,
+	}, nil
+}
+
+// RootSignin authenticates the root user using HMAC signature.
+// This allows programmatic authentication without magic link for automation scenarios.
+func (s *UserService) RootSignin(ctx context.Context, input domain.RootSigninInput) (*domain.AuthResponse, error) {
+	ctx, span := s.tracer.StartServiceSpan(ctx, "UserService", "RootSignin")
+	defer span.End()
+
+	s.tracer.AddAttribute(ctx, "user.email", input.Email)
+
+	// Check rate limit (reuse "signin" namespace)
+	if s.rateLimiter != nil && !s.rateLimiter.Allow("signin", input.Email) {
+		s.logger.WithField("email", input.Email).Warn("Root sign-in rate limit exceeded")
+		s.tracer.AddAttribute(ctx, "error", "rate_limit_exceeded")
+		s.tracer.MarkSpanError(ctx, fmt.Errorf("rate limit exceeded"))
+		return nil, fmt.Errorf("too many sign-in attempts, please try again in a few minutes")
+	}
+
+	// Verify email matches root user
+	if input.Email != s.rootEmail {
+		s.logger.WithField("email", input.Email).Warn("Root signin attempted with non-root email")
+		s.tracer.AddAttribute(ctx, "error", "invalid_credentials")
+		return nil, fmt.Errorf("unauthorized: invalid credentials")
+	}
+
+	// Validate timestamp (60-second window to prevent replay attacks)
+	now := time.Now().Unix()
+	if input.Timestamp < now-60 || input.Timestamp > now+60 {
+		s.logger.WithField("email", input.Email).WithField("timestamp", input.Timestamp).Warn("Root signin timestamp out of range")
+		s.tracer.AddAttribute(ctx, "error", "invalid_timestamp")
+		return nil, fmt.Errorf("unauthorized: invalid credentials")
+	}
+
+	// Verify HMAC signature using constant-time comparison
+	message := fmt.Sprintf("%s:%d", input.Email, input.Timestamp)
+	expectedSig := crypto.ComputeHMAC256([]byte(message), s.secretKey)
+	if !hmac.Equal([]byte(input.Signature), []byte(expectedSig)) {
+		s.logger.WithField("email", input.Email).Warn("Root signin invalid signature")
+		s.tracer.AddAttribute(ctx, "error", "invalid_signature")
+		return nil, fmt.Errorf("unauthorized: invalid credentials")
+	}
+
+	// Get root user
+	user, err := s.repo.GetUserByEmail(ctx, input.Email)
+	if err != nil {
+		s.logger.WithField("email", input.Email).WithField("error", err.Error()).Error("Root signin user not found")
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, fmt.Errorf("unauthorized: invalid credentials")
+	}
+
+	s.tracer.AddAttribute(ctx, "user.id", user.ID)
+
+	// Create session (no magic code needed for root signin)
+	expiresAt := time.Now().Add(s.sessionExpiry)
+	session := &domain.Session{
+		ID:        generateID(),
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+	}
+
+	s.tracer.AddAttribute(ctx, "session.id", session.ID)
+	s.tracer.AddAttribute(ctx, "session.expires_at", expiresAt.String())
+
+	if err := s.repo.CreateSession(ctx, session); err != nil {
+		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to create session for root signin")
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Generate JWT token
+	token := s.authService.GenerateUserAuthToken(user, session.ID, expiresAt)
+	s.tracer.AddAttribute(ctx, "token.generated", true)
+
+	// Reset rate limiter on success
+	if s.rateLimiter != nil {
+		s.rateLimiter.Reset("signin", input.Email)
+	}
+
+	s.logger.WithField("user_id", user.ID).WithField("email", user.Email).Info("Root user signed in via HMAC")
+
+	return &domain.AuthResponse{
+		Token:     token,
+		User:      *user,
+		ExpiresAt: expiresAt,
 	}, nil
 }
 
@@ -334,7 +422,15 @@ func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain
 
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
-		s.logger.WithField("email", email).WithField("error", err.Error()).Error("Failed to get user by email")
+		// Check if it's an expected "not found" error vs unexpected error
+		if _, ok := err.(*domain.ErrUserNotFound); ok {
+			// User not found is expected in some contexts (e.g., invitation acceptance)
+			// Log at Info level instead of Error
+			s.logger.WithField("email", email).Info("User not found by email")
+		} else {
+			// Real errors (DB connection, etc.) should be logged as Error
+			s.logger.WithField("email", email).WithField("error", err.Error()).Error("Failed to get user by email")
+		}
 		span.SetStatus(trace.Status{
 			Code:    trace.StatusCodeNotFound,
 			Message: err.Error(),

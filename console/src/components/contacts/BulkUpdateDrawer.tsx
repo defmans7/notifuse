@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Button,
   Drawer,
@@ -23,7 +23,7 @@ import {
   PlayCircleOutlined,
   CloseCircleOutlined
 } from '@ant-design/icons'
-import type { UploadProps, UploadFile } from 'antd'
+import type { UploadProps, UploadFile, ButtonProps } from 'antd'
 import Papa from 'papaparse'
 import { contactsApi } from '../../services/api/contacts'
 import { contactListApi } from '../../services/api/contact_list'
@@ -49,12 +49,7 @@ const getProgressStorageKey = (
 interface BulkUpdateDrawerProps {
   workspaceId: string
   lists: List[]
-  buttonProps?: {
-    type?: 'primary' | 'default' | 'dashed' | 'link' | 'text'
-    buttonContent?: React.ReactNode
-    size?: 'large' | 'middle' | 'small'
-    disabled?: boolean
-  }
+  buttonProps?: ButtonProps
 }
 
 interface CSVData {
@@ -90,15 +85,7 @@ interface SavedProgress {
   timestamp: number
 }
 
-export function BulkUpdateDrawer({
-  workspaceId,
-  lists,
-  buttonProps = {
-    type: 'default',
-    buttonContent: 'Bulk Update',
-    size: 'middle'
-  }
-}: BulkUpdateDrawerProps) {
+export function BulkUpdateDrawer({ workspaceId, lists, buttonProps }: BulkUpdateDrawerProps) {
   const [open, setOpen] = useState(false)
   const [csvData, setCsvData] = useState<CSVData | null>(null)
   const [fileList, setFileList] = useState<UploadFile[]>([])
@@ -295,7 +282,7 @@ export function BulkUpdateDrawer({
 
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i]
-      let result: BulkOperationResult = { email, success: false }
+      const result: BulkOperationResult = { email, success: false }
 
       // Check if processing is cancelled using ref (persists across re-renders)
       if (processingRef.current.isCancelled) {
@@ -327,18 +314,19 @@ export function BulkUpdateDrawer({
           })
         }
         result.success = true
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Handle specific case where contact is not subscribed to the list
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         if (
           op === 'unsubscribe' &&
-          error.message &&
-          error.message.includes('contact list not found')
+          errorMessage &&
+          errorMessage.includes('contact list not found')
         ) {
           // Contact is not subscribed to this list, which means they're already "unsubscribed"
           result.success = true
           result.error = 'Not subscribed (skipped)'
         } else {
-          result.error = error.message || 'Unknown error'
+          result.error = errorMessage
         }
       }
 
@@ -555,14 +543,7 @@ export function BulkUpdateDrawer({
 
   return (
     <>
-      <Button
-        type={buttonProps.type}
-        onClick={() => setOpen(true)}
-        size={buttonProps.size}
-        disabled={buttonProps.disabled}
-      >
-        {buttonProps.buttonContent}
-      </Button>
+      <Button {...buttonProps} onClick={() => setOpen(true)} />
 
       <Drawer
         title="Bulk Update Contacts"

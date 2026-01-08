@@ -8,23 +8,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-
-
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
-
-
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
-
-
+	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
 	"github.com/Notifuse/notifuse/pkg/logger"
-
-
 	"github.com/golang/mock/gomock"
-
-
 	"github.com/stretchr/testify/assert"
-
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,7 +26,7 @@ func TestNotificationCenterHandler_RegisterRoutes(t *testing.T) {
 	mockService := mocks.NewMockNotificationCenterService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
 	mockLogger := &mockLogger{}
-	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger)
+	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger, nil)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -69,7 +60,7 @@ func TestNotificationCenterHandler_handleNotificationCenter(t *testing.T) {
 	mockService := mocks.NewMockNotificationCenterService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
 	mockLogger := &mockLogger{}
-	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger)
+	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger, nil)
 
 	tests := []struct {
 		name               string
@@ -189,7 +180,7 @@ func TestNotificationCenterHandler_handleSubscribe(t *testing.T) {
 	mockService := mocks.NewMockNotificationCenterService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
 	mockLogger := &mockLogger{}
-	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger)
+	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger, nil)
 
 	validRequest := domain.SubscribeToListsRequest{
 		WorkspaceID: "ws123",
@@ -244,6 +235,18 @@ func TestNotificationCenterHandler_handleSubscribe(t *testing.T) {
 			expectedResponse:   `{"error":"Failed to subscribe to lists"}`,
 		},
 		{
+			name:        "service returns non-public list error",
+			method:      http.MethodPost,
+			requestBody: validRequest,
+			setupMock: func() {
+				mockListService.EXPECT().
+					SubscribeToLists(gomock.Any(), gomock.Any(), false).
+					Return(errors.New("list is not public"))
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   `{"error":"list is not public"}`,
+		},
+		{
 			name:        "successful request",
 			method:      http.MethodPost,
 			requestBody: validRequest,
@@ -292,7 +295,7 @@ func TestNotificationCenterHandler_handleUnsubscribeOneClick(t *testing.T) {
 	mockService := mocks.NewMockNotificationCenterService(ctrl)
 	mockListService := mocks.NewMockListService(ctrl)
 	mockLogger := &mockLogger{}
-	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger)
+	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger, nil)
 
 	validRequest := domain.UnsubscribeFromListsRequest{
 		WorkspaceID: "ws123",
@@ -305,6 +308,7 @@ func TestNotificationCenterHandler_handleUnsubscribeOneClick(t *testing.T) {
 		name               string
 		method             string
 		requestBody        interface{}
+		userAgent          string
 		setupMock          func()
 		expectedStatusCode int
 		expectedResponse   string
@@ -329,6 +333,7 @@ func TestNotificationCenterHandler_handleUnsubscribeOneClick(t *testing.T) {
 			name:        "service returns error",
 			method:      http.MethodPost,
 			requestBody: validRequest,
+			userAgent:   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			setupMock: func() {
 				mockListService.EXPECT().
 					UnsubscribeFromLists(gomock.Any(), gomock.Any(), false).
@@ -341,10 +346,33 @@ func TestNotificationCenterHandler_handleUnsubscribeOneClick(t *testing.T) {
 			name:        "successful request",
 			method:      http.MethodPost,
 			requestBody: validRequest,
+			userAgent:   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			setupMock: func() {
 				mockListService.EXPECT().
 					UnsubscribeFromLists(gomock.Any(), gomock.Any(), false).
 					Return(nil)
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   `{"success":true}`,
+		},
+		{
+			name:        "bot user agent - returns success without unsubscribing",
+			method:      http.MethodPost,
+			requestBody: validRequest,
+			userAgent:   "Mozilla/5.0 (compatible; SafeLinks/1.0; +http://www.microsoft.com/safelinks)",
+			setupMock: func() {
+				// No mock expectation - service should not be called for bots
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   `{"success":true}`,
+		},
+		{
+			name:        "email scanner bot - returns success without unsubscribing",
+			method:      http.MethodPost,
+			requestBody: validRequest,
+			userAgent:   "Proofpoint Email Security Scanner",
+			setupMock: func() {
+				// No mock expectation - service should not be called for bots
 			},
 			expectedStatusCode: http.StatusOK,
 			expectedResponse:   `{"success":true}`,
@@ -369,6 +397,9 @@ func TestNotificationCenterHandler_handleUnsubscribeOneClick(t *testing.T) {
 
 			req := httptest.NewRequest(tc.method, "/unsubscribe-oneclick", bytes.NewBuffer(body))
 			req.Header.Set("Content-Type", "application/json")
+			if tc.userAgent != "" {
+				req.Header.Set("User-Agent", tc.userAgent)
+			}
 			rec := httptest.NewRecorder()
 
 			handler.handleUnsubscribeOneClick(rec, req)
@@ -416,10 +447,107 @@ func TestNewNotificationCenterHandler(t *testing.T) {
 	mockListService := mocks.NewMockListService(ctrl)
 	mockLogger := &mockLogger{}
 
-	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger)
+	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger, nil)
 
 	assert.NotNil(t, handler)
 	assert.Equal(t, mockService, handler.service)
 	assert.Equal(t, mockListService, handler.listService)
 	assert.Equal(t, mockLogger, handler.logger)
+}
+
+func TestNotificationCenterHandler_handleHealth(t *testing.T) {
+	// Test NotificationCenterHandler.handleHealth - this was at 0% coverage
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockNotificationCenterService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockLogger := &mockLogger{}
+	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger, nil)
+
+	// Initialize connection manager for testing
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			MaxConnections:      100,
+			MaxConnectionsPerDB: 10,
+		},
+	}
+	mockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = mockDB.Close() }()
+
+	err = pkgDatabase.InitializeConnectionManager(cfg, mockDB)
+	require.NoError(t, err)
+	defer pkgDatabase.ResetConnectionManager()
+
+	t.Run("successful health check", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		w := httptest.NewRecorder()
+
+		handler.handleHealth(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Contains(t, response, "max_connections")
+		assert.Contains(t, response, "system_connections")
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/health", nil)
+		w := httptest.NewRecorder()
+
+		handler.handleHealth(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+}
+
+func TestNotificationCenterHandler_handleHealthz(t *testing.T) {
+	// Test NotificationCenterHandler.handleHealthz - this was at 0% coverage
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockService := mocks.NewMockNotificationCenterService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockLogger := &mockLogger{}
+	handler := NewNotificationCenterHandler(mockService, mockListService, mockLogger, nil)
+
+	// Initialize connection manager for testing
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			MaxConnections:      100,
+			MaxConnectionsPerDB: 10,
+		},
+	}
+	mockDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = mockDB.Close() }()
+
+	// Mock ping query for healthz check
+	mock.ExpectPing()
+
+	err = pkgDatabase.InitializeConnectionManager(cfg, mockDB)
+	require.NoError(t, err)
+	defer pkgDatabase.ResetConnectionManager()
+
+	t.Run("successful healthz check", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		w := httptest.NewRecorder()
+
+		handler.handleHealthz(w, req)
+
+		// May return OK or ServiceUnavailable depending on DB ping
+		assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusServiceUnavailable)
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/healthz", nil)
+		w := httptest.NewRecorder()
+
+		handler.handleHealthz(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
 }

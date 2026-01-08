@@ -65,14 +65,17 @@ func (s *TaskState) Scan(value interface{}) error {
 	return json.Unmarshal(cloned, &s)
 }
 
-// SendBroadcastState contains state specific to broadcast sending tasks
+// SendBroadcastState contains state specific to broadcast enqueueing tasks
 type SendBroadcastState struct {
 	BroadcastID     string `json:"broadcast_id"`
 	TotalRecipients int    `json:"total_recipients"`
-	SentCount       int    `json:"sent_count"`
-	FailedCount     int    `json:"failed_count"`
+	EnqueuedCount   int    `json:"enqueued_count"` // Emails added to queue (was SentCount)
+	FailedCount     int    `json:"failed_count"`   // Template/build failures during enqueueing
 	ChannelType     string `json:"channel_type"`
 	RecipientOffset int64  `json:"recipient_offset"`
+	// LastProcessedEmail is the cursor for keyset pagination - stores the last email processed
+	// to enable deterministic pagination across task executions (fixes Issue #157)
+	LastProcessedEmail string `json:"last_processed_email,omitempty"`
 	// New fields for A/B testing phases
 	Phase                     string `json:"phase"` // "test", "winner", or "single"
 	TestPhaseCompleted        bool   `json:"test_phase_completed"`
@@ -167,9 +170,9 @@ type TaskRepository interface {
 	SaveState(ctx context.Context, workspace, id string, progress float64, state *TaskState) error
 	SaveStateTx(ctx context.Context, tx *sql.Tx, workspace, id string, progress float64, state *TaskState) error
 
-	// MarkAsCompleted marks a task as completed
-	MarkAsCompleted(ctx context.Context, workspace, id string) error
-	MarkAsCompletedTx(ctx context.Context, tx *sql.Tx, workspace, id string) error
+	// MarkAsCompleted marks a task as completed and saves the final state
+	MarkAsCompleted(ctx context.Context, workspace, id string, state *TaskState) error
+	MarkAsCompletedTx(ctx context.Context, tx *sql.Tx, workspace, id string, state *TaskState) error
 
 	// MarkAsFailed marks a task as failed
 	MarkAsFailed(ctx context.Context, workspace, id string, errorMsg string) error

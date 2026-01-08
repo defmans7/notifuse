@@ -55,8 +55,8 @@ export interface ContactsCsvUploadDrawerProps {
 
 interface CsvData {
   headers: string[]
-  rows: any[][]
-  preview: any[][]
+  rows: unknown[][]
+  preview: unknown[][]
 }
 
 interface SavedProgress {
@@ -97,9 +97,6 @@ export function ContactsCsvUploadDrawer({
     { key: 'postcode', label: 'Postcode' },
     { key: 'state', label: 'State' },
     { key: 'job_title', label: 'Job Title' },
-    { key: 'lifetime_value', label: 'Lifetime Value' },
-    { key: 'orders_count', label: 'Orders Count' },
-    { key: 'last_order_at', label: 'Last Order At' },
     { key: 'custom_string_1', label: getCustomFieldLabel('custom_string_1', currentWorkspace) },
     { key: 'custom_string_2', label: getCustomFieldLabel('custom_string_2', currentWorkspace) },
     { key: 'custom_string_3', label: getCustomFieldLabel('custom_string_3', currentWorkspace) },
@@ -489,7 +486,7 @@ export function ContactsCsvUploadDrawer({
       setUploadComplete(false)
 
       // Calculate total rows and batches if starting fresh
-      let startRow = currentRow
+      const startRow = currentRow
       if (startRow === 0) {
         const totalBatches = Math.ceil(dataToUse.rows.length / BATCH_SIZE)
         setTotalRows(dataToUse.rows.length)
@@ -504,7 +501,7 @@ export function ContactsCsvUploadDrawer({
       let batch = currentBatch || 1
       let successCount = 0
       let failureCount = 0
-      let errors: Array<{ line: number; email: string; error: string }> = []
+      const errors: Array<{ line: number; email: string; error: string }> = []
 
       const processNextBatch = async () => {
         if (processingCancelled) {
@@ -553,26 +550,22 @@ export function ContactsCsvUploadDrawer({
                 // Handle special field types
                 if (contactField.startsWith('custom_json_') && value) {
                   try {
-                    value = JSON.parse(value)
-                  } catch (e) {
+                    value = JSON.parse(String(value))
+                  } catch {
                     // Set to null if not valid JSON
                     value = null
                   }
-                } else if (
-                  contactField.startsWith('custom_number_') ||
-                  contactField === 'lifetime_value' ||
-                  contactField === 'orders_count'
-                ) {
-                  if (value && value.trim && value.trim() !== '') {
-                    value = Number(value)
+                } else if (contactField.startsWith('custom_number_')) {
+                  if (typeof value === 'string' && value.trim() !== '') {
+                    const numValue = Number(value)
                     // Handle NaN values
-                    if (isNaN(value)) value = null
+                    value = isNaN(numValue) ? null : numValue
                   } else {
                     value = null
                   }
                 }
 
-                ;(contact as any)[contactField] = value !== '' ? value : null
+                ;(contact as Record<string, unknown>)[contactField] = value !== '' ? value : null
               }
             }
           })
@@ -1064,7 +1057,7 @@ export function ContactsCsvUploadDrawer({
 
               // Find contact field this header is mapped to (if any)
               const mappedToField = Object.entries(mappings).find(
-                ([_, value]) => value === header
+                ([, value]) => value === header
               )?.[0]
 
               // Get up to 5 sample values for this column

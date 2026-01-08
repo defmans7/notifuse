@@ -276,6 +276,18 @@ func TestLiquidInHrefAttributes(t *testing.T) {
 			expectedHref: `href="{{ invalid syntax"`, // Should return original on error
 			expectError:  false,                      // We don't error, just log warning
 		},
+		{
+			name: "image with liquid alt text",
+			block: func() EmailBlock {
+				b := NewBaseBlock("img2", MJMLComponentMjImage)
+				b.Attributes["src"] = "https://example.com/product.jpg"
+				b.Attributes["alt"] = "{{ product.name }} - {{ product.category }}"
+				return &MJImageBlock{BaseBlock: b}
+			}(),
+			templateData: `{"product": {"name": "Blue Widget", "category": "Electronics"}}`,
+			expectedHref: `alt="Blue Widget - Electronics"`,
+			expectError:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -358,6 +370,14 @@ func TestProcessAttributeValue(t *testing.T) {
 			blockID:      "test",
 			expected:     "{{ some_var }}", // Should return original
 		},
+		{
+			name:         "alt attribute with liquid",
+			value:        "{{ product.name }} image",
+			attributeKey: "alt",
+			templateData: map[string]interface{}{"product": map[string]interface{}{"name": "Blue Widget"}},
+			blockID:      "test",
+			expected:     "Blue Widget image",
+		},
 	}
 
 	for _, tt := range tests {
@@ -366,6 +386,201 @@ func TestProcessAttributeValue(t *testing.T) {
 
 			if result != tt.expected {
 				t.Errorf("Expected '%s', got '%s'", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestSecureLiquidIntegration tests the security features in the MJML converter context
+func TestSecureLiquidIntegration(t *testing.T) {
+	t.Run("timeout protection in MJML conversion", func(t *testing.T) {
+		// Create a text block with template that would timeout
+		block := func() EmailBlock {
+			b := NewBaseBlock("text1", MJMLComponentMjText)
+			b.Content = stringPtr(`
+				{% for i in (1..1000000) %}
+					{% for j in (1..1000000) %}
+						<div>{{ i }} - {{ j }}</div>
+					{% endfor %}
+				{% endfor %}
+			`)
+			return &MJTextBlock{BaseBlock: b}
+		}()
+
+		templateData := `{}`
+
+		// Should complete (even if it returns original content due to timeout)
+		result, err := ConvertJSONToMJMLWithData(block, templateData)
+
+		// Should not hang or crash - either returns result or logs warning
+		if err != nil {
+			// Error is acceptable (conversion might fail if liquid fails)
+			t.Logf("Got error (acceptable): %v", err)
+		}
+
+		// The important thing is we didn't hang - test passes if we get here
+		_ = result
+	})
+
+	t.Run("normal email templates work correctly", func(t *testing.T) {
+		// Create a realistic email template
+		block := func() EmailBlock {
+			b := NewBaseBlock("text3", MJMLComponentMjText)
+			b.Content = stringPtr(`
+				<h1>Hello {{ user.name }}!</h1>
+				<p>Thank you for your order #{{ order.id }}.</p>
+				{% if order.tracking_url %}
+					<p>Track your order: <a href="{{ order.tracking_url }}">Click here</a></p>
+				{% endif %}
+			`)
+			return &MJTextBlock{BaseBlock: b}
+		}()
+
+		templateData := `{
+			"user": {"name": "John Doe"},
+			"order": {
+				"id": "12345",
+				"tracking_url": "https://example.com/track/12345"
+			}
+		}`
+
+		result, err := ConvertJSONToMJMLWithData(block, templateData)
+
+		if err != nil {
+			t.Fatalf("Expected no error for normal template, got: %v", err)
+		}
+
+		// Verify content was rendered
+		if !strings.Contains(result, "John Doe") {
+			t.Error("Expected rendered username in result")
+		}
+		if !strings.Contains(result, "12345") {
+			t.Error("Expected order ID in result")
+		}
+		if !strings.Contains(result, "https://example.com/track/12345") {
+			t.Error("Expected tracking URL in result")
+		}
+	})
+
+	t.Run("backward compatibility with existing templates", func(t *testing.T) {
+		// Test that existing tests still pass with secure engine
+		testCases := []struct {
+			content  string
+			data     string
+			expected string
+		}{
+			{"Hello {{ name }}", `{"name": "World"}`, "Hello World"},
+			{"Price: ${{ price }}", `{"price": 99.99}`, "Price: $99.99"},
+		}
+
+		for _, tc := range testCases {
+			block := func() EmailBlock {
+				b := NewBaseBlock("test", MJMLComponentMjText)
+				b.Content = stringPtr(tc.content)
+				return &MJTextBlock{BaseBlock: b}
+			}()
+
+			result, err := ConvertJSONToMJMLWithData(block, tc.data)
+			if err != nil {
+				t.Errorf("Unexpected error for %q: %v", tc.content, err)
+				continue
+			}
+
+			if !strings.Contains(result, tc.expected) {
+				t.Errorf("Expected %q in result for %q, got: %s", tc.expected, tc.content, result)
+			}
+		}
+	})
+
+	t.Run("realistic email with multiple blocks", func(t *testing.T) {
+		// Test a more complex email structure
+		section := func() EmailBlock {
+			s := NewBaseBlock("section1", MJMLComponentMjSection)
+
+			// Add text block
+			text := NewBaseBlock("text1", MJMLComponentMjText)
+			text.Content = stringPtr("Welcome {{ user.name }}!")
+			s.Children = []EmailBlock{&MJTextBlock{BaseBlock: text}}
+			return &MJSectionBlock{BaseBlock: s}
+		}()
+
+		templateData := `{"user": {"name": "Alice"}}`
+		result, err := ConvertJSONToMJMLWithData(section, templateData)
+
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if !strings.Contains(result, "Welcome Alice!") {
+			t.Error("Expected rendered content in result")
+		}
+	})
+}
+
+func TestFormatSingleAttribute(t *testing.T) {
+	// Test formatSingleAttribute - this was at 0% coverage
+	// formatSingleAttribute is a wrapper that calls formatSingleAttributeWithLiquid with nil template data
+	tests := []struct {
+		name     string
+		key      string
+		value    interface{}
+		expected string
+	}{
+		{
+			name:     "string value",
+			key:      "href",
+			value:    "https://example.com",
+			expected: ` href="https://example.com"`,
+		},
+		{
+			name:     "boolean true",
+			key:      "disabled",
+			value:    true,
+			expected: " disabled",
+		},
+		{
+			name:     "boolean false",
+			key:      "disabled",
+			value:    false,
+			expected: "",
+		},
+		{
+			name:     "empty string",
+			key:      "title",
+			value:    "",
+			expected: "",
+		},
+		{
+			name:     "numeric value",
+			key:      "width",
+			value:    100,
+			expected: ` width="100"`,
+		},
+		{
+			name:     "camelCase to kebab-case",
+			key:      "backgroundColor",
+			value:    "#ffffff",
+			expected: ` background-color="#ffffff"`,
+		},
+		{
+			name:     "pointer to string",
+			key:      "src",
+			value:    stringPtr("image.jpg"),
+			expected: ` src="image.jpg"`,
+		},
+		{
+			name:     "nil pointer",
+			key:      "optional",
+			value:    (*string)(nil),
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatSingleAttribute(tt.key, tt.value)
+			if result != tt.expected {
+				t.Errorf("formatSingleAttribute(%q, %v) = %q, want %q", tt.key, tt.value, result, tt.expected)
 			}
 		})
 	}

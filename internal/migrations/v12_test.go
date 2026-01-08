@@ -28,6 +28,12 @@ func TestV12Migration_HasWorkspaceUpdate(t *testing.T) {
 	assert.False(t, migration.HasWorkspaceUpdate(), "V12Migration should not have workspace updates")
 }
 
+func TestV12Migration_ShouldRestartServer(t *testing.T) {
+	// Test V12Migration.ShouldRestartServer - this was at 0% coverage
+	migration := &V12Migration{}
+	assert.False(t, migration.ShouldRestartServer(), "V12Migration should not require server restart")
+}
+
 func TestV12Migration_UpdateWorkspace(t *testing.T) {
 	migration := &V12Migration{}
 	ctx := context.Background()
@@ -40,7 +46,7 @@ func TestV12Migration_UpdateWorkspace(t *testing.T) {
 	t.Run("Success - No workspace updates", func(t *testing.T) {
 		db, _, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		err = migration.UpdateWorkspace(ctx, cfg, workspace, db)
 		assert.NoError(t, err, "UpdateWorkspace should succeed with no operations")
@@ -55,7 +61,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - No workspaces", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock query for workspaces - return no rows
 		rows := sqlmock.NewRows([]string{"id", "integrations"})
@@ -69,7 +75,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - Workspaces with no integrations", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock query for workspaces - return workspace with empty integrations
 		emptyIntegrations, _ := json.Marshal([]domain.Integration{})
@@ -85,7 +91,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - Workspace with email integration without rate limit", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Create integration without rate limit
 		integrations := []domain.Integration{
@@ -117,7 +123,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - Workspace with email integration with existing rate limit", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Create integration with existing rate limit
 		integrations := []domain.Integration{
@@ -146,7 +152,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - Multiple workspaces with mixed integrations", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Create different integration scenarios
 		integrations1 := []domain.Integration{
@@ -200,7 +206,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - Workspace with multiple email integrations", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Create multiple email integrations
 		integrations := []domain.Integration{
@@ -239,7 +245,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Error - Query workspaces fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock query error
 		mock.ExpectQuery("SELECT id, integrations FROM workspaces").
@@ -254,7 +260,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Error - Scan workspace row fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock query with invalid data that will fail scanning
 		rows := sqlmock.NewRows([]string{"id", "integrations"}).
@@ -270,7 +276,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Error - UPDATE workspaces fails", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Create integration without rate limit
 		integrations := []domain.Integration{
@@ -303,7 +309,7 @@ func TestV12Migration_UpdateSystem(t *testing.T) {
 	t.Run("Success - Workspace with NULL integrations", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Mock query for workspaces with NULL integrations
 		rows := sqlmock.NewRows([]string{"id", "integrations"}).

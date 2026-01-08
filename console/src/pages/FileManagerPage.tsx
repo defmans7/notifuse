@@ -10,7 +10,7 @@ import { Workspace, FileManagerSettings } from '../services/api/types'
 import { useWorkspacePermissions } from '../contexts/AuthContext'
 
 export function FileManagerPage() {
-  const { workspaceId } = useParams({ from: '/workspace/$workspaceId' })
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId' })
   const { workspaces, refreshWorkspaces } = useAuth()
   const { permissions } = useWorkspacePermissions(workspaceId)
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null)
@@ -21,12 +21,13 @@ export function FileManagerPage() {
     if (workspaceId && workspaces.length > 0) {
       const workspace = workspaces.find((w) => w.id === workspaceId)
       if (workspace) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCurrentWorkspace(workspace)
       }
     }
   }, [workspaceId, workspaces])
 
-  const handleError = (error: any) => {
+  const handleError = (error: Error) => {
     console.error('File manager error:', error)
     message.error('An error occurred with the file manager')
   }
@@ -49,14 +50,16 @@ export function FileManagerPage() {
         settings: {
           ...currentWorkspace.settings,
           file_manager: {
+            provider: newSettings.provider,
             endpoint: newSettings.endpoint,
             access_key: newSettings.access_key,
             bucket: newSettings.bucket,
             region: newSettings.region,
             secret_key: newSettings.secret_key,
-            cdn_endpoint: newSettings.cdn_endpoint
+            cdn_endpoint: newSettings.cdn_endpoint,
+            force_path_style: newSettings.force_path_style
           }
-        } as any // Use type assertion to bypass the type checking
+        }
       })
 
       // Refresh workspaces to get the updated data
@@ -79,12 +82,14 @@ export function FileManagerPage() {
     withSelection: true,
     multiple: true,
     settings: {
+      provider: currentWorkspace?.settings?.file_manager?.provider,
       endpoint: currentWorkspace?.settings?.file_manager?.endpoint || '',
       access_key: currentWorkspace?.settings?.file_manager?.access_key || '',
       bucket: currentWorkspace?.settings?.file_manager?.bucket || '',
       region: currentWorkspace?.settings?.file_manager?.region || '',
       secret_key: currentWorkspace?.settings?.file_manager?.secret_key || '',
-      cdn_endpoint: currentWorkspace?.settings?.file_manager?.cdn_endpoint || ''
+      cdn_endpoint: currentWorkspace?.settings?.file_manager?.cdn_endpoint || '',
+      force_path_style: currentWorkspace?.settings?.file_manager?.force_path_style
     },
     onUpdateSettings: handleUpdateSettings,
     readOnly: !permissions?.templates?.write

@@ -23,7 +23,7 @@ func TestConnectionPoolLimits(t *testing.T) {
 	t.Run("max connections respected", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		// Pool is configured with maxConnections=10 by default
 		// Create workspaces up to that limit (reduced to 8 for stability)
@@ -54,9 +54,10 @@ func TestConnectionPoolLimits(t *testing.T) {
 	})
 
 	t.Run("connection reuse within pool", func(t *testing.T) {
+		t.Parallel()
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_limits_reuse"
 
@@ -82,9 +83,10 @@ func TestConnectionPoolLimits(t *testing.T) {
 	})
 
 	t.Run("connection timeout handling", func(t *testing.T) {
+		t.Parallel()
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_limits_timeout"
 
@@ -102,7 +104,7 @@ func TestConnectionPoolLimits(t *testing.T) {
 		require.NoError(t, err, "Connection should be valid")
 
 		// Wait a bit and test again
-		time.Sleep(1 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 		err = db.Ping()
 		require.NoError(t, err, "Connection should still be valid after short wait")
 	})
@@ -110,7 +112,7 @@ func TestConnectionPoolLimits(t *testing.T) {
 	t.Run("idle connection cleanup", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		// Create multiple workspaces (reduced to 3 for stability)
 		numWorkspaces := 3
@@ -131,7 +133,7 @@ func TestConnectionPoolLimits(t *testing.T) {
 
 		// Let connections idle
 		t.Log("Waiting for connections to idle...")
-		time.Sleep(3 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 
 		// Connections should still exist (not automatically cleaned in test pool)
 		// But they should be idle in the underlying sql.DB pool
@@ -148,7 +150,7 @@ func TestConnectionPoolLimits(t *testing.T) {
 	t.Run("connection stats accuracy", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		// Initial count should be 0
 		assert.Equal(t, 0, pool.GetConnectionCount())
@@ -180,9 +182,10 @@ func TestConnectionPoolLimits(t *testing.T) {
 	})
 
 	t.Run("max open connections per database", func(t *testing.T) {
+		t.Parallel()
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_limits_per_db"
 
@@ -233,7 +236,7 @@ func TestConnectionPoolLimits(t *testing.T) {
 	t.Run("connection limit protects system", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		// Try to create many workspaces
 		// Note: Test pool is configured with maxConnections=10 but doesn't
@@ -282,7 +285,7 @@ func TestConnectionPoolResourceManagement(t *testing.T) {
 	t.Run("no connection leaks on error", func(t *testing.T) {
 		config := testutil.GetTestDatabaseConfig()
 		pool := testutil.NewTestConnectionPool(config)
-		defer pool.Cleanup()
+		defer func() { _ = pool.Cleanup() }()
 
 		workspaceID := "test_leaks_error"
 
@@ -353,7 +356,7 @@ func TestConnectionPoolResourceManagement(t *testing.T) {
 		require.NoError(t, err)
 
 		// Wait for connections to close
-		time.Sleep(1 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 
 		// Note: We can't verify from the pool's systemDB since it was closed
 		// This test verifies cleanup completes without error

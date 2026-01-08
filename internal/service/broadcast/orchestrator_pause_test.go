@@ -71,7 +71,7 @@ func TestBroadcastOrchestrator_Process_PausedBroadcast(t *testing.T) {
 			SendBroadcast: &domain.SendBroadcastState{
 				BroadcastID:     broadcastID,
 				TotalRecipients: 100,
-				SentCount:       25,
+				EnqueuedCount:       25,
 				FailedCount:     0,
 				RecipientOffset: 25,
 				Phase:           "single",
@@ -114,7 +114,7 @@ func TestBroadcastOrchestrator_Process_PausedBroadcast(t *testing.T) {
 		ID:     broadcastID,
 		Status: domain.BroadcastStatusPaused,
 		Audience: domain.AudienceSettings{
-			Lists: []string{"list-1"},
+			List: "list-1",
 		},
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled: false,
@@ -230,7 +230,7 @@ func TestBroadcastOrchestrator_Process_PausedDuringProcessing(t *testing.T) {
 			SendBroadcast: &domain.SendBroadcastState{
 				BroadcastID:     broadcastID,
 				TotalRecipients: 50,
-				SentCount:       0,
+				EnqueuedCount:       0,
 				FailedCount:     0,
 				RecipientOffset: 0,
 				Phase:           "single",
@@ -271,9 +271,9 @@ func TestBroadcastOrchestrator_Process_PausedDuringProcessing(t *testing.T) {
 	// Initially sending broadcast
 	sendingBroadcast := &domain.Broadcast{
 		ID:     broadcastID,
-		Status: domain.BroadcastStatusSending,
+		Status: domain.BroadcastStatusProcessing,
 		Audience: domain.AudienceSettings{
-			Lists: []string{"list-1"},
+			List: "list-1",
 		},
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled: false,
@@ -288,7 +288,7 @@ func TestBroadcastOrchestrator_Process_PausedDuringProcessing(t *testing.T) {
 		ID:     broadcastID,
 		Status: domain.BroadcastStatusPaused,
 		Audience: domain.AudienceSettings{
-			Lists: []string{"list-1"},
+			List: "list-1",
 		},
 		TestSettings: domain.BroadcastTestSettings{
 			Enabled: false,
@@ -348,7 +348,7 @@ func TestBroadcastOrchestrator_Process_PausedDuringProcessing(t *testing.T) {
 		{Contact: &domain.Contact{Email: "test2@example.com"}, ListID: "list-1"},
 	}
 	mockContactRepo.EXPECT().
-		GetContactsForBroadcast(gomock.Any(), workspaceID, sendingBroadcast.Audience, 10, 0).
+		GetContactsForBroadcast(gomock.Any(), workspaceID, sendingBroadcast.Audience, 10, "").
 		Return(mockContacts, nil).
 		MaxTimes(1)
 
@@ -446,7 +446,7 @@ func TestBroadcastOrchestrator_Process_PausedVsCancelled(t *testing.T) {
 					SendBroadcast: &domain.SendBroadcastState{
 						BroadcastID:     broadcastID,
 						TotalRecipients: 100,
-						SentCount:       50,
+						EnqueuedCount:       50,
 						FailedCount:     0,
 						RecipientOffset: 50,
 						Phase:           "single",
@@ -483,7 +483,7 @@ func TestBroadcastOrchestrator_Process_PausedVsCancelled(t *testing.T) {
 				ID:     broadcastID,
 				Status: tc.broadcastStatus,
 				Audience: domain.AudienceSettings{
-					Lists: []string{"list-1"},
+					List: "list-1",
 				},
 				TestSettings: domain.BroadcastTestSettings{
 					Enabled: false,

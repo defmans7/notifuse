@@ -18,7 +18,7 @@ import (
 )
 
 func TestListRepository(t *testing.T) {
-	repo, _, mockWorkspaceRepo := setupListRepositoryTest(t)
+	repo, mockWorkspaceRepo := setupListRepositoryTest(t)
 
 	// Create a test list
 	testList := &domain.List{
@@ -28,8 +28,6 @@ func TestListRepository(t *testing.T) {
 		IsPublic:            true,
 		Description:         "This is a test list",
 		DoubleOptInTemplate: nil,
-		WelcomeTemplate:     nil,
-		UnsubscribeTemplate: nil,
 		CreatedAt:           time.Now().UTC(),
 		UpdatedAt:           time.Now().UTC(),
 	}
@@ -37,7 +35,7 @@ func TestListRepository(t *testing.T) {
 	// Setup workspace connection mock
 	db, sqlMock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), "workspace123").
@@ -47,10 +45,9 @@ func TestListRepository(t *testing.T) {
 	t.Run("CreateList", func(t *testing.T) {
 		t.Run("successful creation", func(t *testing.T) {
 			sqlMock.ExpectExec(regexp.QuoteMeta(`
-				INSERT INTO lists (id, name, is_double_optin, is_public, description, 
-				                   double_optin_template, welcome_template, unsubscribe_template,
-				                   created_at, updated_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				INSERT INTO lists (id, name, is_double_optin, is_public, description,
+				                   double_optin_template, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			`)).WithArgs(
 				testList.ID,
 				testList.Name,
@@ -58,8 +55,6 @@ func TestListRepository(t *testing.T) {
 				testList.IsPublic,
 				testList.Description,
 				testList.DoubleOptInTemplate,
-				testList.WelcomeTemplate,
-				testList.UnsubscribeTemplate,
 				sqlmock.AnyArg(),
 				sqlmock.AnyArg(),
 			).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -70,10 +65,9 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			sqlMock.ExpectExec(regexp.QuoteMeta(`
-				INSERT INTO lists (id, name, is_double_optin, is_public, description, 
-				                   double_optin_template, welcome_template, unsubscribe_template,
-				                   created_at, updated_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				INSERT INTO lists (id, name, is_double_optin, is_public, description,
+				                   double_optin_template, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			`)).WithArgs(
 				testList.ID,
 				testList.Name,
@@ -81,8 +75,6 @@ func TestListRepository(t *testing.T) {
 				testList.IsPublic,
 				testList.Description,
 				testList.DoubleOptInTemplate,
-				testList.WelcomeTemplate,
-				testList.UnsubscribeTemplate,
 				sqlmock.AnyArg(),
 				sqlmock.AnyArg(),
 			).WillReturnError(errors.New("database error"))
@@ -97,8 +89,7 @@ func TestListRepository(t *testing.T) {
 		t.Run("list found", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
 				"id", "name", "is_double_optin", "is_public", "description", "double_optin_template",
-				"welcome_template", "unsubscribe_template", "created_at", "updated_at",
-				"deleted_at",
+				"created_at", "updated_at", "deleted_at",
 			}).AddRow(
 				testList.ID,
 				testList.Name,
@@ -106,16 +97,14 @@ func TestListRepository(t *testing.T) {
 				testList.IsPublic,
 				testList.Description,
 				testList.DoubleOptInTemplate,
-				testList.WelcomeTemplate,
-				testList.UnsubscribeTemplate,
 				testList.CreatedAt,
 				testList.UpdatedAt,
 				nil,
 			)
 
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
-				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template,
+				created_at, updated_at, deleted_at
 				FROM lists
 				WHERE id = $1 AND deleted_at IS NULL
 			`)).WithArgs(testList.ID).WillReturnRows(rows)
@@ -131,8 +120,8 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("list not found", func(t *testing.T) {
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
-				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template,
+				created_at, updated_at, deleted_at
 				FROM lists
 				WHERE id = $1 AND deleted_at IS NULL
 			`)).WithArgs(testList.ID).WillReturnError(sql.ErrNoRows)
@@ -145,8 +134,8 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
-				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template,
+				created_at, updated_at, deleted_at
 				FROM lists
 				WHERE id = $1 AND deleted_at IS NULL
 			`)).WithArgs(testList.ID).WillReturnError(errors.New("database error"))
@@ -162,9 +151,7 @@ func TestListRepository(t *testing.T) {
 		t.Run("successful retrieval", func(t *testing.T) {
 			rows := sqlmock.NewRows([]string{
 				"id", "name", "is_double_optin", "is_public", "description",
-				"double_optin_template",
-				"welcome_template", "unsubscribe_template", "created_at", "updated_at",
-				"deleted_at",
+				"double_optin_template", "created_at", "updated_at", "deleted_at",
 			}).AddRow(
 				testList.ID,
 				testList.Name,
@@ -172,16 +159,14 @@ func TestListRepository(t *testing.T) {
 				testList.IsPublic,
 				testList.Description,
 				testList.DoubleOptInTemplate,
-				testList.WelcomeTemplate,
-				testList.UnsubscribeTemplate,
 				testList.CreatedAt,
 				testList.UpdatedAt,
 				nil,
 			)
 
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
-				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template,
+				created_at, updated_at, deleted_at
 				FROM lists
 				WHERE deleted_at IS NULL
 				ORDER BY created_at DESC
@@ -199,8 +184,8 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT id, name, is_double_optin, is_public, description, double_optin_template, 
-				welcome_template, unsubscribe_template, created_at, updated_at, deleted_at
+				SELECT id, name, is_double_optin, is_public, description, double_optin_template,
+				created_at, updated_at, deleted_at
 				FROM lists
 				WHERE deleted_at IS NULL
 				ORDER BY created_at DESC
@@ -218,8 +203,8 @@ func TestListRepository(t *testing.T) {
 			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
 				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5,
-				    double_optin_template = $6, welcome_template = $7, unsubscribe_template = $8
-				WHERE id = $9 AND deleted_at IS NULL
+				    double_optin_template = $6
+				WHERE id = $7 AND deleted_at IS NULL
 			`)).WithArgs(
 				testList.Name,
 				testList.IsDoubleOptin,
@@ -227,8 +212,6 @@ func TestListRepository(t *testing.T) {
 				testList.Description,
 				sqlmock.AnyArg(),
 				testList.DoubleOptInTemplate,
-				testList.WelcomeTemplate,
-				testList.UnsubscribeTemplate,
 				testList.ID,
 			).WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -240,8 +223,8 @@ func TestListRepository(t *testing.T) {
 			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
 				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5,
-				    double_optin_template = $6, welcome_template = $7, unsubscribe_template = $8
-				WHERE id = $9 AND deleted_at IS NULL
+				    double_optin_template = $6
+				WHERE id = $7 AND deleted_at IS NULL
 			`)).WithArgs(
 				testList.Name,
 				testList.IsDoubleOptin,
@@ -249,8 +232,6 @@ func TestListRepository(t *testing.T) {
 				testList.Description,
 				sqlmock.AnyArg(),
 				testList.DoubleOptInTemplate,
-				testList.WelcomeTemplate,
-				testList.UnsubscribeTemplate,
 				testList.ID,
 			).WillReturnResult(sqlmock.NewResult(0, 0))
 
@@ -263,8 +244,8 @@ func TestListRepository(t *testing.T) {
 			sqlMock.ExpectExec(regexp.QuoteMeta(`
 				UPDATE lists
 				SET name = $1, is_double_optin = $2, is_public = $3, description = $4, updated_at = $5,
-				    double_optin_template = $6, welcome_template = $7, unsubscribe_template = $8
-				WHERE id = $9 AND deleted_at IS NULL
+				    double_optin_template = $6
+				WHERE id = $7 AND deleted_at IS NULL
 			`)).WithArgs(
 				testList.Name,
 				testList.IsDoubleOptin,
@@ -272,8 +253,6 @@ func TestListRepository(t *testing.T) {
 				testList.Description,
 				sqlmock.AnyArg(),
 				testList.DoubleOptInTemplate,
-				testList.WelcomeTemplate,
-				testList.UnsubscribeTemplate,
 				testList.ID,
 			).WillReturnError(errors.New("database error"))
 
@@ -365,12 +344,12 @@ func TestListRepository(t *testing.T) {
 			}).AddRow(10, 5, 3, 1, 0)
 
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT 
-					SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active,
-					SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as total_pending,
-					SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed,
-					SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
-					SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained
+				SELECT
+					COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as total_active,
+					COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as total_pending,
+					COALESCE(SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END), 0) as total_unsubscribed,
+					COALESCE(SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END), 0) as total_bounced,
+					COALESCE(SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END), 0) as total_complained
 				FROM contact_lists
 				WHERE list_id = $1 AND deleted_at IS NULL
 			`)).WithArgs(testList.ID).WillReturnRows(rows)
@@ -391,12 +370,12 @@ func TestListRepository(t *testing.T) {
 			}).AddRow(0, 0, 0, 0, 0)
 
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT 
-					SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active,
-					SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as total_pending,
-					SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed,
-					SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
-					SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained
+				SELECT
+					COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as total_active,
+					COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as total_pending,
+					COALESCE(SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END), 0) as total_unsubscribed,
+					COALESCE(SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END), 0) as total_bounced,
+					COALESCE(SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END), 0) as total_complained
 				FROM contact_lists
 				WHERE list_id = $1 AND deleted_at IS NULL
 			`)).WithArgs("nonexistent-list").WillReturnRows(rows)
@@ -412,12 +391,12 @@ func TestListRepository(t *testing.T) {
 
 		t.Run("database error", func(t *testing.T) {
 			sqlMock.ExpectQuery(regexp.QuoteMeta(`
-				SELECT 
-					SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active,
-					SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as total_pending,
-					SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as total_unsubscribed,
-					SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as total_bounced,
-					SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END) as total_complained
+				SELECT
+					COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as total_active,
+					COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as total_pending,
+					COALESCE(SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END), 0) as total_unsubscribed,
+					COALESCE(SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END), 0) as total_bounced,
+					COALESCE(SUM(CASE WHEN status = 'complained' THEN 1 ELSE 0 END), 0) as total_complained
 				FROM contact_lists
 				WHERE list_id = $1 AND deleted_at IS NULL
 			`)).WithArgs(testList.ID).WillReturnError(errors.New("database error"))
@@ -430,10 +409,11 @@ func TestListRepository(t *testing.T) {
 	})
 }
 
-func setupListRepositoryTest(t *testing.T) (*listRepository, sqlmock.Sqlmock, *mocks.MockWorkspaceRepository) {
+func setupListRepositoryTest(t *testing.T) (*listRepository, *mocks.MockWorkspaceRepository) {
 	ctrl := gomock.NewController(t)
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 
 	repo := NewListRepository(mockWorkspaceRepo).(*listRepository)
-	return repo, nil, mockWorkspaceRepo
+
+	return repo, mockWorkspaceRepo
 }
