@@ -173,34 +173,35 @@ export const FileManager = (props: FileManagerProps) => {
       // console.log('new items', newItems)
       setItems(newItems)
       setIsLoading(false)
+    }).catch((error: unknown) => {
+      console.error('Failed to fetch objects:', error)
+      message.error('Failed to fetch objects: ' + error)
+      setIsLoading(false)
     })
-  }, [props.settings?.bucket, props.settings?.cdn_endpoint, props.settings?.endpoint])
+  }, [props.settings, message])
 
-  // init
+  // Initialize or reinitialize S3 client when settings change
   useEffect(() => {
     // Don't initialize if settings are not provided or endpoint is empty/undefined
     if (!props.settings || !props.settings.endpoint || props.settings.endpoint === '') {
+      s3ClientRef.current = undefined
       return
     }
-    if (s3ClientRef.current) return
 
+    // Always recreate the S3 client when settings change
     s3ClientRef.current = new S3Client({
       endpoint: props.settings.endpoint,
       credentials: {
         accessKeyId: props.settings.access_key || '',
         secretAccessKey: props.settings.secret_key || ''
       },
-      region: props.settings.region || 'us-east-1'
+      region: props.settings.region || 'us-east-1',
+      forcePathStyle: props.settings.force_path_style ?? false
     })
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchObjects()
-  }, [
-    props.settings?.endpoint,
-    props.settings?.access_key,
-    props.settings?.secret_key,
-    props.settings?.region,
-    fetchObjects
-  ])
+  }, [props.settings, fetchObjects])
 
   const deleteObject = (key: string, isFolder: boolean) => {
     if (!s3ClientRef.current) {
@@ -229,9 +230,9 @@ export const FileManager = (props: FileManagerProps) => {
         // refresh
         fetchObjects()
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         message.error('Failed to delete file: ' + error)
-        props.onError(error)
+        props.onError(error instanceof Error ? error : new Error(String(error)))
       })
   }
 
@@ -331,16 +332,16 @@ export const FileManager = (props: FileManagerProps) => {
               setNewFolderLoading(false)
               fetchObjects()
             })
-            .catch((error) => {
+            .catch((error: unknown) => {
               message.error('Failed to create folder: ' + error)
               setNewFolderLoading(false)
-              props.onError(error)
+              props.onError(error instanceof Error ? error : new Error(String(error)))
             })
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           message.error('Failed to create folder: ' + error)
           setNewFolderLoading(false)
-          props.onError(error)
+          props.onError(error instanceof Error ? error : new Error(String(error)))
         })
 
       form.resetFields()
@@ -369,7 +370,7 @@ export const FileManager = (props: FileManagerProps) => {
 
     // console.log(e.target.files)
 
-    for (var i = 0; i < e.target.files.length; i++) {
+    for (let i = 0; i < e.target.files.length; i++) {
       setIsUploading(true)
       const file = e.target.files.item(i) as File
 
@@ -764,9 +765,16 @@ export const FileManager = (props: FileManagerProps) => {
           ]}
         >
           <Form form={form}>
+            <Form.Item label="Folder name" required>
+              <Space.Compact style={{ width: '100%' }}>
+                <Input
+                  style={{ width: 'auto', pointerEvents: 'none' }}
+                  value={currentPath !== '/' ? currentPath : '/'}
+                  readOnly
+                />
             <Form.Item
-              label="Folder name"
               name="name"
+                  noStyle
               rules={[
                 {
                   required: true,
@@ -785,12 +793,14 @@ export const FileManager = (props: FileManagerProps) => {
               ]}
             >
               <Input
-                addonBefore={currentPath !== '/' ? currentPath : '/'}
+                    style={{ flex: 1 }}
                 onChange={(e) => {
                   // trim spaces
-                  form.setFieldsValue({ folderName: e.target.value.trim() })
+                      form.setFieldsValue({ name: e.target.value.trim() })
                 }}
               />
+                </Form.Item>
+              </Space.Compact>
             </Form.Item>
           </Form>
         </Modal>
